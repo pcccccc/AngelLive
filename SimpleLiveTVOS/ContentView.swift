@@ -9,15 +9,11 @@ import SwiftUI
 import Kingfisher
 
 struct ContentView: View {
-    @State var size: CGFloat = 100.0
+    @State var size: CGFloat = 130
+    
+    
     var body: some View {
-//        VStack {
-//            Image(systemName: "globe")
-//                .imageScale(.large)
-//                .foregroundColor(.accentColor)
-//            Text("Hello, world!")
-//        }
-//        .padding()
+        
         TabView {
             HStack {
                 LeftMenu(size: $size)
@@ -129,7 +125,10 @@ struct ContentView: View {
                 Label("抖音", image: "douyin")
             }
         }
+        
     }
+    
+        
     
     func goToPlaylist() {
         

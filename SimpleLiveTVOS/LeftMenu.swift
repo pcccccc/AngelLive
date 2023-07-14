@@ -6,84 +6,87 @@
 //
 
 import SwiftUI
+import Kingfisher
 
 struct LeftMenu: View {
     
     @Binding var size : CGFloat
-    @State var leftMenuIsFocusedArray: Array<Bool> = [false, false, false, false, false]
+    @State var leftMenuIsFocusedArray: Array<Bool> = []
+    @State var leftSubMenuIsFocusedArray: Array<Bool> = []
     @State var isOpen: Bool = false
+    @State var isSubOpen: Bool = false
+    @State private var isShowSubList = false
+    @State private var mainList = [BilibiliMainListModel]()
+    @State private var currentIndex = -1
     
-    var body : some View{
-        VStack{
-            HStack{
+    
+    var body : some View {
+       
+        List(mainList.indices, id: \.self, rowContent: { index in
+            Section {
+
                 Button(action: {
-                    
-                }) {
-                    LeftMenuButton(index: 0, isToggleOn: $isOpen, doSomething: { index, isFocused in
-                        self.showOrHide(index: index, isFocused: isFocused)
-                    })
-                    
-                }
-                .frame(height: 100)
-                .buttonStyle(CardButtonStyle())
-            }
-            HStack{
-                Button(action: {
-                    
-                }) {
-                    LeftMenuButton(index: 1, isToggleOn: $isOpen, doSomething: { index, isFocused in
+                    isShowSubList.toggle()
+                    currentIndex = index
+                    leftSubMenuIsFocusedArray.removeAll()
+                    for _ in mainList[currentIndex].list ?? [] {
+                        leftSubMenuIsFocusedArray.append(false)
+                    }
+                }, label: {
+                    LeftMenuButton(index: 0, isToggleOn: $isOpen, title: mainList[index].name, doSomething: { index, isFocused in
                         self.showOrHide(index: index, isFocused: isFocused)
                     })
 
-                }
+                })
                 .frame(height: 100)
+                .listRowInsets(EdgeInsets(top: 15, leading: isOpen ? 35 : 15, bottom: 15, trailing: 15))
                 .buttonStyle(CardButtonStyle())
-            }
-            HStack{
-                Button(action: {
-                    
-                }) {
-                    LeftMenuButton(index: 2, isToggleOn: $isOpen, doSomething: { index, isFocused in
-                        self.showOrHide(index: index, isFocused: isFocused)
-                    })
-                  
+                if currentIndex == index && isShowSubList {
+                    ForEach((mainList[index].list ?? []).indices, id: \.self) { subIndex in
+                        Button(action: {}, label: {
+                            LeftMenuSubItem(index: subIndex, image: (mainList[index].list ?? [])[subIndex].pic, name: (mainList[index].list ?? [])[subIndex].name, doSomething: { subListCurrentFocusIndex, isFocused in
+                                self.leftSubMenuIsFocusedArray[subListCurrentFocusIndex] = isFocused
+                                var flag = 0
+                                for itemFocused in self.leftSubMenuIsFocusedArray {
+                                    if itemFocused == true {
+                                        flag = 1
+                                        self.isShowSubList = true
+                                        self.isOpen = true
+                                        self.isSubOpen = true
+                                        break
+                                    }
+                                }
+                                if flag == 0 {
+//                                    self.isShowSubList = false
+                                    self.isOpen = false
+                                    self.isSubOpen = false
+                                }
+                            })
+//
+                        })
+                        .buttonStyle(CardButtonStyle())
+                        .frame(height: 50)
+                    }
                 }
-                .frame(height: 100)
-                .buttonStyle(CardButtonStyle())
             }
-            HStack{
-                Button(action: {
-                    
-                }) {
-                    LeftMenuButton(index: 3, isToggleOn: $isOpen, doSomething: { index, isFocused in
-                        
-                        self.showOrHide(index: index, isFocused: isFocused)
-                    })
-
+        })
+        .onAppear {
+            Task {
+                self.mainList = try await Bilibili.getBiliBiliList().data ?? []
+                for _ in self.mainList {
+                    leftMenuIsFocusedArray.append(false)
                 }
-                .frame(height: 100)
-                .buttonStyle(CardButtonStyle())
             }
-            
-            HStack{
-                Button(action: {
-                    
-                }) {
-                    LeftMenuButton(index: 4, isToggleOn: $isOpen, doSomething: { index, isFocused in
-                        self.showOrHide(index: index, isFocused: isFocused)
-                    })
-
-                }
-                .frame(height: 100)
-                .buttonStyle(CardButtonStyle())
-            }
-            Spacer()
         }
-        .frame(width: self.size)
+        .frame(width: (isOpen || isSubOpen) ? 300 : 130)
         .padding(.top, 30)
+//        .background(Color.red)
         
     }
+    
+    
     func showOrHide(index: Int ,isFocused: Bool) {
+        
         withAnimation {
             self.leftMenuIsFocusedArray[index] = isFocused
             var flag = 0
@@ -93,13 +96,28 @@ struct LeftMenu: View {
                     self.size = 300
                     flag = 1
                     self.isOpen = true
+                    if self.isShowSubList == true {
+                        self.isSubOpen = true
+                    }
                     break
                 }
             }
             if flag == 0 {
-                self.size = 100
-                self.isOpen = false
+                self.size = 130
+                if self.isShowSubList == true {
+                    self.isOpen = true
+                    self.isSubOpen = true
+                }else {
+                    self.isOpen = false
+                    self.isSubOpen = false
+                    self.isShowSubList = false
+                }
             }
+            
+            print("isOpen:\(isOpen)")
+            print("isSubOpen:\(isSubOpen)")
+            print("isShowSubList:\(isShowSubList)")
+            print("currentIndex:\(currentIndex)")
         }
     }
     
@@ -110,25 +128,52 @@ struct LeftMenuButton: View {
     @Environment(\.isFocused) private var isFocused : Bool
     var index: Int
     @Binding var isToggleOn: Bool
+    var title: String
     var doSomething: (Int, Bool) -> Void = { _,_  in }
+    
     
     var body: some View {
         HStack {
             Image("bilibili")
                 .frame(width: 40, height: 40)
-                .padding(.leading, isToggleOn ? 20 : 0)
             if isToggleOn {
-                Text("英雄联盟")
+                Text(title)
 //                    .padding(.trailing, 20)
-                    .padding(.leading, -20)
+                    .padding(.leading, -25)
             }
-            
         }
-        .frame(width: isToggleOn ? 260 : 100, height: 100)
+        .frame(width: isToggleOn ? 230 : 100, height: 100)
         .onChange(of: isFocused) { newValue in
             print("index:\(index) isFocused:\(newValue)")
             self.doSomething(index, newValue)
         }
+
     }
+}
+
+struct LeftMenuSubItem: View {
+    @Environment(\.isFocused) private var isFocused : Bool
+    var index: Int
+    var image: String
+    var name: String
+    var doSomething: (Int, Bool) -> Void = { _,_  in }
+ 
+    var body: some View {
+        HStack {
+            KFImage(URL(string: image))
+                .resizable()
+                .frame(width: 30, height: 30)
+                .padding(.leading, 20)
+
+            Text(name)
+                .font(.system(size: 22))
+                .padding(.trailing, 20)
+                .padding(.leading, -20)
+        }
+        .onChange(of: isFocused) { newValue in
+            self.doSomething(index, newValue)
+        }
+    }
+        
 }
 

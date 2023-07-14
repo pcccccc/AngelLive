@@ -12,7 +12,7 @@ struct SimpleLiveTVOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-            
+                
         }
     }
 }
