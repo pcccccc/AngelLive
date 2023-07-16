@@ -18,6 +18,9 @@
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
 		4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */; };
 		4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */; };
+		FB41A8F12A64138600A4FE32 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB41A8F02A64138600A4FE32 /* PlayerView.swift */; };
+		FBF750802A641A2400C77E01 /* AZVideoPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBF7507F2A641A2400C77E01 /* AZVideoPlayer */; };
+		FBF750822A6430AD00C77E01 /* PlayView2.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF750812A6430AD00C77E01 /* PlayView2.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -51,6 +54,8 @@
 		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftMenu.swift; sourceTree = "<group>"; };
 		4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliModel.swift; sourceTree = "<group>"; };
+		FB41A8F02A64138600A4FE32 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		FBF750812A6430AD00C77E01 /* PlayView2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayView2.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +65,7 @@
 			files = (
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
+				FBF750802A641A2400C77E01 /* AZVideoPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +111,8 @@
 			children = (
 				4FC9B3912A53BEB100C0D3C8 /* Core */,
 				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
+				FB41A8F02A64138600A4FE32 /* PlayerView.swift */,
+				FBF750812A6430AD00C77E01 /* PlayView2.swift */,
 				4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */,
 				4FC3DCDF2A49382F00CA36B9 /* ContentView.swift */,
 				4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */,
@@ -174,6 +182,7 @@
 			packageProductDependencies = (
 				4FC3DD082A49725F00CA36B9 /* Kingfisher */,
 				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
+				FBF7507F2A641A2400C77E01 /* AZVideoPlayer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -250,6 +259,7 @@
 			packageReferences = (
 				4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */,
+				FBF7507E2A641A2400C77E01 /* XCRemoteSwiftPackageReference "AZVideoPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -296,6 +306,8 @@
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
+				FBF750822A6430AD00C77E01 /* PlayView2.swift in Sources */,
+				FB41A8F12A64138600A4FE32 /* PlayerView.swift in Sources */,
 				4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -457,10 +469,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"SimpleLiveTVOS/Preview Content\"";
-				DEVELOPMENT_TEAM = 8C384KUMC6;
+				DEVELOPMENT_TEAM = K395FM5HKR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SimpleLiveTVOS/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -473,7 +486,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 14.0;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
 			};
 			name = Debug;
 		};
@@ -485,10 +498,11 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"SimpleLiveTVOS/Preview Content\"";
-				DEVELOPMENT_TEAM = 8C384KUMC6;
+				DEVELOPMENT_TEAM = K395FM5HKR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SimpleLiveTVOS/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -501,7 +515,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 14.0;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
 			};
 			name = Release;
 		};
@@ -639,6 +653,14 @@
 				minimumVersion = 5.7.1;
 			};
 		};
+		FBF7507E2A641A2400C77E01 /* XCRemoteSwiftPackageReference "AZVideoPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/adamzarn/AZVideoPlayer";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -651,6 +673,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
+		};
+		FBF7507F2A641A2400C77E01 /* AZVideoPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FBF7507E2A641A2400C77E01 /* XCRemoteSwiftPackageReference "AZVideoPlayer" */;
+			productName = AZVideoPlayer;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
