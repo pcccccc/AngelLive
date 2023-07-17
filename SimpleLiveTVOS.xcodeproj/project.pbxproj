@@ -19,7 +19,6 @@
 		4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */; };
 		4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */; };
 		FB41A8F12A64138600A4FE32 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB41A8F02A64138600A4FE32 /* PlayerView.swift */; };
-		FBF750802A641A2400C77E01 /* AZVideoPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBF7507F2A641A2400C77E01 /* AZVideoPlayer */; };
 		FBF750822A6430AD00C77E01 /* PlayView2.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF750812A6430AD00C77E01 /* PlayView2.swift */; };
 /* End PBXBuildFile section */
 
@@ -65,7 +64,6 @@
 			files = (
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
-				FBF750802A641A2400C77E01 /* AZVideoPlayer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -182,7 +180,6 @@
 			packageProductDependencies = (
 				4FC3DD082A49725F00CA36B9 /* Kingfisher */,
 				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
-				FBF7507F2A641A2400C77E01 /* AZVideoPlayer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -259,7 +256,6 @@
 			packageReferences = (
 				4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */,
-				FBF7507E2A641A2400C77E01 /* XCRemoteSwiftPackageReference "AZVideoPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -402,7 +398,7 @@
 				SDKROOT = appletvos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				TVOS_DEPLOYMENT_TARGET = 16.4;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
 			};
 			name = Debug;
 		};
@@ -456,7 +452,7 @@
 				SDKROOT = appletvos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				TVOS_DEPLOYMENT_TARGET = 16.4;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -653,14 +649,6 @@
 				minimumVersion = 5.7.1;
 			};
 		};
-		FBF7507E2A641A2400C77E01 /* XCRemoteSwiftPackageReference "AZVideoPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/adamzarn/AZVideoPlayer";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -673,11 +661,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
-		};
-		FBF7507F2A641A2400C77E01 /* AZVideoPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBF7507E2A641A2400C77E01 /* XCRemoteSwiftPackageReference "AZVideoPlayer" */;
-			productName = AZVideoPlayer;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
