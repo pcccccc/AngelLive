@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Kingfisher
+import GameController
 
 struct LeftMenu: View {
     
@@ -24,15 +25,28 @@ struct LeftMenu: View {
                     currentIndex = index
                     isShowSubList.toggle()
                 }, label: {
-                    HStack {
-                        Image("bilibili")
-                            .frame(width: 40, height: 40)
-                        if size == leftMenuHighLightStateWidth {
+                    if size == leftMenuHighLightStateWidth {
+                        HStack {
+                            Image("bilibili")
+                                .resizable()
+                                .frame(width: 40, height: 40)
                             Text(mainList[index].name)
                                 .padding(.leading, -25)
+                            
                         }
+                        .frame(width: size - 40 ,height: 100)
+                    }else {
+                        VStack {
+                                Image("bilibili")
+                                    .resizable()
+                                    .frame(width: 40, height: 40)
+                                Text(mainList[index].name)
+                                    .font(.system(size: 15))
+                            
+                        }
+                        .frame(width: size - 40 ,height: 100)
                     }
-                    .frame(width: size - 40 ,height: 100)
+                    
                 })
                 .buttonStyle(CardButtonStyle())
                 if currentIndex == index && isShowSubList {
@@ -63,6 +77,36 @@ struct LeftMenu: View {
         .onAppear {
             Task {
                 self.mainList = try await Bilibili.getBiliBiliList().data ?? []
+                print(self.mainList.debugDescription)
+            }
+            if let gcController = GCController.controllers().first {
+                let microGamepad = gcController.microGamepad
+                microGamepad!.reportsAbsoluteDpadValues = true
+                microGamepad!.dpad.valueChangedHandler = { pad, x, y in
+                    let fingerDistanceFromSiriRemoteCenter: Float = 0.7
+                    let swipeValues: String = "x: \(x), y: \(y), pad.left: \(pad.left), pad.right: \(pad.right), pad.down: \(pad.down), pad.up: \(pad.up), pad.xAxis: \(pad.xAxis), pad.yAxis: \(pad.yAxis)"
+                    
+                    if y > fingerDistanceFromSiriRemoteCenter
+                    {
+                        print(">>> up \(swipeValues)")
+                    }
+                    else if y < -fingerDistanceFromSiriRemoteCenter
+                    {
+                        print(">>> down \(swipeValues)")
+                    }
+                    else if x < -fingerDistanceFromSiriRemoteCenter
+                    {
+                        print(">>> left \(swipeValues)")
+                    }
+                    else if x > fingerDistanceFromSiriRemoteCenter
+                    {
+                        print(">>> right \(swipeValues)")
+                    }
+                    else
+                    {
+                        //print(">>> tap \(swipeValues)")
+                    }
+                }
             }
         }
         .frame(width: size)

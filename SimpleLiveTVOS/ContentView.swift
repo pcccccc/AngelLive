@@ -51,13 +51,33 @@ struct ContentView: View {
     //
     //                                }
     //                                .buttonStyle(CardButtonStyle())
-                                    VStack {
+                                    VStack(spacing: 10, content: {
                                         KFImage(URL(string: roomContentArray[index].user_cover))
                                             .resizable()
                                             .frame(width: 320, height: 180)
-                                        Text(roomContentArray[index].uname)
-                                            .background(Color.clear)
-                                    }
+                                            
+                                        HStack {
+                                            KFImage(URL(string: roomContentArray[index].face))
+                                                .resizable()
+                                                .frame(width: 40, height: 40)
+                                                .cornerRadius(20)
+                                                
+                                            VStack (alignment: .leading, spacing: 10) {
+                                                Text(roomContentArray[index].uname)
+                                                    .font(.system(size: roomContentArray[index].uname.count > 5 ? 19 : 24))
+                                                    .padding(.top, 10)
+                                                    .frame(width: 200, height: roomContentArray[index].uname.count > 5 ? 19 : 24, alignment: .leading)
+                                                Text(roomContentArray[index].title)
+                                                    .font(.system(size: 15))
+//                                                    .padding(.bottom, 10)
+                                                    .frame(width: 200, height: 15 ,alignment: .leading)
+                                            }
+                                            .padding(.trailing, 0)
+                                            .padding(.leading, -35)
+                                           
+                                        }
+                                        Spacer(minLength: 0)
+                                    })
                                 }
                                 .buttonStyle(.card)
                                 .focused($focusState2, equals: index)
@@ -133,6 +153,9 @@ struct ContentView: View {
             let res = try await Bilibili.getCategoryRooms(category: currentCategoryModel!, page: page)
             if res.code == 0 {
                 if let listModelArray = res.data.list {
+                    if page == 1 {
+                        roomContentArray.removeAll()
+                    }
                     for listModel in listModelArray {
                         roomContentArray.append(listModel)
                     }
