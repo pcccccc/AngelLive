@@ -8,10 +8,16 @@
 import Foundation
 import Alamofire
 
-struct BilibiliMainData: Codable {
+struct BilibiliMainData<T: Codable>: Codable {
     var code: Int
     var msg: String
-    var data: Array<BilibiliMainListModel>?
+    var data: T
+    
+    enum CodingKeys: String, CodingKey {
+        case code
+        case msg = "message"
+        case data
+    }
 }
 
 struct BilibiliMainListModel: Codable {
@@ -34,12 +40,6 @@ struct BilibiliCategoryModel: Codable {
     let area_type: Int
 }
 
-struct BiliBiliCategoryRoomMainData: Codable {
-    let code: Int
-    let message: String
-    let data: BiliBiliCategoryRoomMainModel
-    
-}
 
 struct BiliBiliCategoryRoomMainModel: Codable {
     let banner: Array<BiliBiliCategoryBannerModel>?
@@ -119,11 +119,6 @@ struct BiliBiliWatchedShowModel: Codable {
     }
 }
 
-struct BiliBiliQualityMainData: Codable {
-    var code: Int
-    var message: String
-    var data: BiliBiliQualityModel
-}
 
 struct BiliBiliQualityModel: Codable {
     let current_qn: Int
@@ -136,12 +131,6 @@ struct BiliBiliQualityDetailModel: Codable {
     let desc: String
 }
 
-
-struct BiliBiliPlayURLInfoData: Codable {
-    var code: Int
-    var message: String
-    var data: BiliBiliPlayURLInfoMain
-}
 
 struct BiliBiliPlayURLInfoMain: Codable {
     var playurl_info: BiliBiliPlayURLPlayURLInfo
@@ -179,11 +168,11 @@ struct BilibiliPlayInfoModel: Codable {
 }
 
 class Bilibili {
-    public class func getBiliBiliList() async throws -> BilibiliMainData  {
+    public class func getBiliBiliList() async throws -> BilibiliMainData<[BilibiliMainListModel]> {
         return try await AF.request("https://api.live.bilibili.com/room/v1/Area/getList", method: .get).serializingDecodable(BilibiliMainData.self).value
     }
     
-    public class func getCategoryRooms(category: BilibiliCategoryModel, page: Int) async throws -> BiliBiliCategoryRoomMainData {
+    public class func getCategoryRooms(category: BilibiliCategoryModel, page: Int) async throws -> BilibiliMainData<BiliBiliCategoryRoomMainModel> {
         return try await AF.request(
             "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList",
             method: .get,
@@ -194,10 +183,10 @@ class Bilibili {
                 "sort_type": "",
                 "page": page
             ]
-        ).serializingDecodable(BiliBiliCategoryRoomMainData.self).value
+        ).serializingDecodable(BilibiliMainData.self).value
     }
-    
-    public class func getVideoQualites(roomModel: BiliBiliCategoryListModel) async throws -> BiliBiliQualityMainData {
+
+    public class func getVideoQualites(roomModel: BiliBiliCategoryListModel) async throws -> BilibiliMainData<BiliBiliQualityModel> {
         return try await AF.request(
             "https://api.live.bilibili.com/room/v1/Room/playUrl",
             method: .get,
@@ -206,10 +195,10 @@ class Bilibili {
                 "cid": roomModel.roomid,
                 "qn": ""
             ]
-        ).serializingDecodable(BiliBiliQualityMainData.self).value
+        ).serializingDecodable(BilibiliMainData.self).value
     }
-    
-    public class func getPlayUrl(roomModel: BiliBiliCategoryListModel, qn: Int) async throws -> BiliBiliPlayURLInfoData {
+
+    public class func getPlayUrl(roomModel: BiliBiliCategoryListModel, qn: Int) async throws -> BilibiliMainData<BiliBiliPlayURLInfoMain> {
         return try await AF.request(
             "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo",
             method: .get,
@@ -222,6 +211,6 @@ class Bilibili {
                 "codec": "0,1",
                 "mask": "0"
             ]
-        ).serializingDecodable(BiliBiliPlayURLInfoData.self).value
+        ).serializingDecodable(BilibiliMainData.self).value
     }
 }
