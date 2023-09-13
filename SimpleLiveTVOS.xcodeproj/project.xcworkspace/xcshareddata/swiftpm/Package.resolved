@@ -10,15 +10,6 @@
       }
     },
     {
-      "identity" : "azvideoplayer",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/adamzarn/AZVideoPlayer",
-      "state" : {
-        "branch" : "main",
-        "revision" : "7d4abac5d5a82b35d0ee08b23474f6653c4a115d"
-      }
-    },
-    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",

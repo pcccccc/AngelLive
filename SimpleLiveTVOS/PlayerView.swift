@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AVKit
-import AZVideoPlayer
 
 struct PlayerView: View {
     
@@ -19,7 +18,7 @@ struct PlayerView: View {
     var body: some View {
         
         VStack {
-            AZVideoPlayer(player: player)
+            VideoPlayer(player: $player)
                 .onAppear() {
                     Task {
                         let quality = try await Bilibili.getVideoQualites(roomModel:roomModel)
@@ -51,17 +50,6 @@ struct PlayerView: View {
                 }
         }
         
-    }
-    func willBeginFullScreen(_ playerViewController: AVPlayerViewController,
-                                 _ coordinator: UIViewControllerTransitionCoordinator) {
-        willBeginFullScreenPresentation = true
-    }
-        
-    func willEndFullScreen(_ playerViewController: AVPlayerViewController,
-                           _ coordinator: UIViewControllerTransitionCoordinator) {
-        // This is a static helper method provided by AZVideoPlayer to keep
-        // the video playing if it was playing when full screen presentation ended
-        AZVideoPlayer.continuePlayingIfPlaying(player, coordinator)
     }
 }
 
