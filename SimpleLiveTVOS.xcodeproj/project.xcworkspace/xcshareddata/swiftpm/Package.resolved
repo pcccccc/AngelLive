@@ -10,12 +10,30 @@
       }
     },
     {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/FFmpegKit.git",
+      "state" : {
+        "revision" : "5193677fe45cb4ebe42f59fba11e881d40964676",
+        "version" : "6.0.1"
+      }
+    },
+    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
         "revision" : "c1f60c63f356d364f4284ba82961acbe7de79bcc",
         "version" : "7.8.1"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/KSPlayer.git",
+      "state" : {
+        "revision" : "32d101122eb07b7ba7ca9590504e8e580cb2f8d3",
+        "version" : "2.1.2"
       }
     }
   ],
