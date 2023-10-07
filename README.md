@@ -12,7 +12,7 @@
 
 ## 背景
 
-遇到一个非常好的项目: https://github.com/xiaoyaocz/dart_simple_live/ ，但是由于原项目基于Flutter制作，不支持tvOS端，于是作为一个原项目的补充。目前已经实现了基本的播放功能。
+遇到一个非常好的项目: https://github.com/xiaoyaocz/dart_simple_live/ ，由于原项目基于Flutter制作，不支持tvOS端，于是作为一个原项目的补充。目前已经实现了基本的播放功能。
 
 ## TODO
 
@@ -31,6 +31,12 @@
 [AllLive](https://github.com/xiaoyaocz/AllLive) `本项目的C#版，有兴趣可以看看`
 
 [iceking2nd/real-url](https://github.com/iceking2nd/real-url) `虎牙解析参考`
+
+[Alamofire](https://github.com/Alamofire/Alamofire)
+
+[Kingfisher](https://github.com/onevcat/Kingfisher)
+
+[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放`
 
 [dart_tars_protocol](https://github.com/xiaoyaocz/dart_tars_protocol.git)
 
