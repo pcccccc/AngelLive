@@ -172,7 +172,7 @@ class Douyin {
         return []
     }
     
-    public class func getDouyinCategoryList(partitionId: String, partitionType: Int, page: Int) async throws -> DouyinRoomListData {
+    public class func getDouyinCategoryList(partitionId: String, partitionType: Int, page: Int) async throws -> Array<LiveModel> {
         let parameter: Dictionary<String, Any> = [
             "aid": 6383,
             "app_name": "douyin_web",
@@ -185,18 +185,23 @@ class Douyin {
             "req_from": 2
         ]
         let dataReq = try await AF.request("https://live.douyin.com/webcast/web/partition/detail/room/", method: .get, parameters: parameter, headers: headers).serializingDecodable(DouyinRoomMainResponse.self).value
-        return dataReq.data
+        let listModelArray = dataReq.data.data
+        var tempArray: Array<LiveModel> = []
+        for item in listModelArray {
+            tempArray.append(LiveModel(userName: item.room.owner.nickname, roomTitle: item.room.title, roomCover: item.room.cover.url_list.first ?? "", userHeadImg: item.room.owner.avatar_thumb.url_list.first ?? "", liveType: .douyin, liveState: "", userId: item.room.id_str, roomId: item.web_rid))
+        }
+        return tempArray
     }
     
-    public class func getDouyinRoomDetail(streamerData: DouyinStreamerData) async throws -> DouyinRoomPlayInfoMainData {
+    public class func getDouyinRoomDetail(streamerData: LiveModel) async throws -> DouyinRoomPlayInfoMainData {
         let parameter: Dictionary<String, Any> = [
             "aid": 6383,
             "app_name": "douyin_web",
             "live_id": 1,
             "device_platform": "web",
             "enter_from": "web_live",
-            "web_rid": streamerData.web_rid,
-            "room_id_str": streamerData.room.id_str,
+            "web_rid": streamerData.roomId,
+            "room_id_str": streamerData.userId,
             "enter_source": "",
             "Room-Enter-User-Login-Ab": 0,
             "is_need_double_stream": false,

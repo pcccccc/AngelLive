@@ -13,9 +13,9 @@ struct PlayerView: View {
     @State private var willBeginFullScreenPresentation: Bool = false
     @State private var player = AVPlayer()
     @State private var url = ""
-//    var roomModel: BiliBiliCategoryListModel
-    var roomModel: Any
+    var roomModel: LiveModel
     var liveType: LiveType
+
     
     var body: some View {
         
@@ -25,7 +25,7 @@ struct PlayerView: View {
                 .onAppear() {
                     Task {
                         if liveType == .bilibili {
-                            let quality = try await Bilibili.getVideoQualites(roomModel:roomModel as! BiliBiliCategoryListModel)
+                            let quality = try await Bilibili.getVideoQualites(roomModel:roomModel)
                             if quality.code == 0 {
                                 if let qualityDescription = quality.data.quality_description {
                                     var maxQn = 0
@@ -34,7 +34,7 @@ struct PlayerView: View {
                                             maxQn = item.qn
                                         }
                                     }
-                                    let playInfo = try await Bilibili.getPlayUrl(roomModel: roomModel as! BiliBiliCategoryListModel, qn: maxQn)
+                                    let playInfo = try await Bilibili.getPlayUrl(roomModel: roomModel, qn: maxQn)
                                     for streamInfo in playInfo.data.playurl_info.playurl.stream {
                                         if streamInfo.protocol_name == "http_hls" {
                                             url = (streamInfo.format.last?.codec.last?.url_info.last?.host ?? "") + (streamInfo.format.last?.codec.last?.base_url ?? "") + (streamInfo.format.last?.codec.last?.url_info.last?.extra ?? "")
@@ -44,11 +44,10 @@ struct PlayerView: View {
                                             break
                                         }
                                     }
-                                    print(url)
                                 }
                             }
                         }else if liveType == .douyin {
-                            let liveData = try await Douyin.getDouyinRoomDetail(streamerData: (roomModel as! DouyinStreamerData))
+                            let liveData = try await Douyin.getDouyinRoomDetail(streamerData: roomModel)
                             if liveData.data.data.count > 0 {
                                 let FULL_HD1 = liveData.data.data.first?.stream_url.hls_pull_url_map.FULL_HD1 ?? ""
                                 let HD1 = liveData.data.data.first?.stream_url.hls_pull_url_map.HD1 ?? ""
@@ -70,7 +69,7 @@ struct PlayerView: View {
                                 player.play()
                             }
                         }else if liveType == .douyu {
-                            let liveData = try await Douyu.getPlayArgs(rid: "\((roomModel as! DouyuRoomModel).rid)")
+                            let liveData = try await Douyu.getPlayArgs(rid: roomModel.roomId)
                             if liveData.error != -1 {
                                 print("\(liveData.data?.rtmp_url ?? "")")
                                 print("\(liveData.data?.rtmp_live ?? "")")
@@ -81,7 +80,7 @@ struct PlayerView: View {
 //                                print(player.error)
                             }
                         }else if liveType == .huya {
-                            let liveData = try await Huya.getPlayArgs(rid: "\((roomModel as! HuyaRoomModel).profileRoom)")
+                            let liveData = try await Huya.getPlayArgs(rid: roomModel.roomId)
                             if liveData != nil {
                                 let streamInfo = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
                                 var playQualitiesInfo: Dictionary<String, String> = [:]
@@ -126,12 +125,6 @@ struct PlayerView: View {
                                         break
                                     }
                                 }
-//
-//                                q["fm"][0] = base64.b64decode(q["fm"][0]).decode('utf-8').replace("$0", q["uid"][0]).replace("$1",
-//                                                                                                                             streamname).replace(
-//                                    "$2", ss).replace("$3", q["wsTime"][0])
-//                                q["wsSecret"][0] = hashlib.md5(q["fm"][0].encode("UTF-8")).hexdigest()
-//                                del q["fm"]
                             }
                         }
                     }

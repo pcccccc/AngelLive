@@ -11,13 +11,13 @@ import KSPlayer
 
 struct KSAudioView: UIViewControllerRepresentable {
     
-    var roomModel: Any
+    var roomModel: LiveModel
     
     typealias UIViewControllerType = DetailViewController
     //  这里修改返回值，返回你的UIViewController，我这里是DraftsViewController
     func makeUIViewController(context: Context) -> DetailViewController {
         let draftVC = DetailViewController()
-        draftVC.roomModel = roomModel as? DouyuRoomModel
+        draftVC.roomModel = roomModel
         return draftVC
     }
 

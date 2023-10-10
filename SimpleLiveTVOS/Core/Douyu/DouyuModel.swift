@@ -118,12 +118,16 @@ class Douyu {
         return dataReq.data.list
     }
     
-    public class func getCategoryRooms(category: DouyuSubListModel, page: Int) async throws -> DouyuRoomListData {
+    public class func getCategoryRooms(category: DouyuSubListModel, page: Int) async throws -> Array<LiveModel> {
         let dataReq = try await AF.request(
             "https://www.douyu.com/gapi/rkc/directory/mixList/2_\(category.cid2)/\(page)",
             method: .get
         ).serializingDecodable(DouyuRoomMain.self).value
-        return dataReq.data
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data.rl {
+            tempArray.append(LiveModel(userName: item.nn, roomTitle: item.rn, roomCover: item.rs16_avif, userHeadImg: item.av, liveType: .douyu, liveState: "", userId: "\(item.uid)", roomId: "\(item.rid)"))
+        }
+        return tempArray
     }
     
     

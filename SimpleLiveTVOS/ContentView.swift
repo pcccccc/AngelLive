@@ -20,19 +20,19 @@ struct ContentView: View {
                 .tabItem {
                     Label("收藏", systemImage: "heart.fill")
                 }
-                BiliBiliMainView()
+                ListMainView(liveType: .bilibili)
                 .tabItem {
                     Label("bilibi", image: "bilibili")
                 }
-                HuyaMainView()
+                ListMainView(liveType: .huya)
                 .tabItem {
                     Label("虎牙", image: "huya")
                 }
-                DouyuMainView()
+                ListMainView(liveType: .douyu)
                 .tabItem {
                     Label("斗鱼", image: "douyu")
                 }
-                DouyinMainView()
+                ListMainView(liveType: .douyin)
                 .tabItem {
                     Label("抖音", image: "douyin")
                 }

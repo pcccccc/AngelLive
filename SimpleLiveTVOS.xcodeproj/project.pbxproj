@@ -27,9 +27,12 @@
 		FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */; };
 		FBC2E6F02ACD0DB20036BFD4 /* HuyaMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6EF2ACD0DB20036BFD4 /* HuyaMainView.swift */; };
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
+		FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE4752AD42FD100F996BA /* LiveCardView.swift */; };
 		FBEBC1892ACC5DEC007F8CD1 /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */; };
 		FBEBC18C2ACC5F3E007F8CD1 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBEBC18B2ACC5F3E007F8CD1 /* KSPlayer */; };
 		FBF750822A6430AD00C77E01 /* KSAudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF750812A6430AD00C77E01 /* KSAudioView.swift */; };
+		FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */; };
+		FBFEDA4A2AD2A7B800D96D7D /* LiveModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,8 +75,11 @@
 		FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuyaModel.swift; sourceTree = "<group>"; };
 		FBC2E6EF2ACD0DB20036BFD4 /* HuyaMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuyaMainView.swift; sourceTree = "<group>"; };
 		FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extension.swift"; sourceTree = "<group>"; };
+		FBDEE4752AD42FD100F996BA /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
 		FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
 		FBF750812A6430AD00C77E01 /* KSAudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KSAudioView.swift; sourceTree = "<group>"; };
+		FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMainView.swift; sourceTree = "<group>"; };
+		FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,9 +134,11 @@
 			isa = PBXGroup;
 			children = (
 				FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */,
+				FBFEDA482AD2A79700D96D7D /* Model */,
 				FBC2E6F12ACD83350036BFD4 /* Tools */,
 				4FC9B3912A53BEB100C0D3C8 /* Core */,
 				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
+				FBDEE4752AD42FD100F996BA /* LiveCardView.swift */,
 				FB651C2C2AB2947E005BFA90 /* BiliBiliMainView.swift */,
 				FB651C332AB2A157005BFA90 /* DouyinMainView.swift */,
 				FBC2ADCF2ACAC47300E202D5 /* DouyuMainView.swift */,
@@ -142,6 +150,7 @@
 				4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */,
 				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
 				4FC3DCE32A49383100CA36B9 /* Preview Content */,
+				FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */,
 			);
 			path = SimpleLiveTVOS;
 			sourceTree = "<group>";
@@ -220,6 +229,14 @@
 				FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */,
 			);
 			path = Tools;
+			sourceTree = "<group>";
+		};
+		FBFEDA482AD2A79700D96D7D /* Model */ = {
+			isa = PBXGroup;
+			children = (
+				FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */,
+			);
+			path = Model;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -366,12 +383,15 @@
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */,
 				FBEBC1892ACC5DEC007F8CD1 /* DetailViewController.swift in Sources */,
+				FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */,
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
 				FBF750822A6430AD00C77E01 /* KSAudioView.swift in Sources */,
 				FB651C2D2AB2947E005BFA90 /* BiliBiliMainView.swift in Sources */,
 				FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */,
 				FBC2E6F02ACD0DB20036BFD4 /* HuyaMainView.swift in Sources */,
+				FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */,
 				FB651C342AB2A157005BFA90 /* DouyinMainView.swift in Sources */,
+				FBFEDA4A2AD2A7B800D96D7D /* LiveModel.swift in Sources */,
 				FBC2ADD02ACAC47300E202D5 /* DouyuMainView.swift in Sources */,
 				FB41A8F12A64138600A4FE32 /* PlayerView.swift in Sources */,
 				4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */,

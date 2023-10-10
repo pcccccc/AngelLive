@@ -23,7 +23,7 @@ struct BiliBiliMainView: View {
     @State private var leftMenuShowSubList = false
     @FocusState var focusState: FocusAreas?
     @FocusState var mainContentfocusState: Int?
-    @State private var roomContentArray: Array<BiliBiliCategoryListModel> = []
+    @State private var roomContentArray: Array<LiveModel> = []
     @State private var page = 1
     @State private var currentCategoryModel: BilibiliCategoryModel?
     
@@ -39,47 +39,7 @@ struct BiliBiliMainView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
                     ForEach(roomContentArray.indices, id: \.self) { index in
-                        NavigationLink {
-                            PlayerView(roomModel: roomContentArray[index], liveType: .bilibili)
-                                .edgesIgnoringSafeArea(.all)
-                        } label: {
-//                                Button(action: {
-//                                    goToPlaylist(roomModel: roomContentArray[index])
-//                                }) {
-//
-//                                }
-//                                .buttonStyle(CardButtonStyle())
-                            VStack(spacing: 10, content: {
-                                KFImage(URL(string: roomContentArray[index].user_cover))
-                                    .resizable()
-                                    .frame(width: 320, height: 180)
-                                    
-                                HStack {
-                                    KFImage(URL(string: roomContentArray[index].face))
-                                        .resizable()
-                                        .frame(width: 40, height: 40)
-                                        .cornerRadius(20)
-                                        
-                                    VStack (alignment: .leading, spacing: 10) {
-                                        Text(roomContentArray[index].uname)
-                                            .font(.system(size: roomContentArray[index].uname.count > 5 ? 19 : 24))
-                                            .padding(.top, 10)
-                                            .frame(width: 200, height: roomContentArray[index].uname.count > 5 ? 19 : 24, alignment: .leading)
-                                        Text(roomContentArray[index].title)
-                                            .font(.system(size: 15))
-//                                                    .padding(.bottom, 10)
-                                            .frame(width: 200, height: 15 ,alignment: .leading)
-                                    }
-                                    .padding(.trailing, 0)
-                                    .padding(.leading, -35)
-                                   
-                                }
-                                Spacer(minLength: 0)
-                            })
-                        }
-                        .buttonStyle(.card)
-                        .focused($mainContentfocusState, equals: index)
-                        .focusSection()
+                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index)
                     }
                 }
             }
@@ -115,19 +75,21 @@ struct BiliBiliMainView: View {
     func getRoomList() {
         Task {
             let res = try await Bilibili.getCategoryRooms(category: currentCategoryModel!, page: page)
-            if res.code == 0 {
-                if let listModelArray = res.data.list {
-                    if page == 1 {
-                        roomContentArray.removeAll()
-                    }
-                    for listModel in listModelArray {
-                        roomContentArray.append(listModel)
-                    }
+            DispatchQueue.main.async {
+                
+                if page == 1 {
+                    roomContentArray = []
+                }
+                
+                for item in res {
+                    roomContentArray.append(item)
+                    
                 }
             }
-            
         }
     }
+    
+    
 }
 
 struct BiliBiliMainView_Previews: PreviewProvider {

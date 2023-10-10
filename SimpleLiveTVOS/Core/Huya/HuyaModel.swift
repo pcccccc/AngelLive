@@ -113,7 +113,7 @@ class Huya {
         }
     }
     
-    public class func getCategoryRooms(category: HuyaSubListModel, page: Int) async throws -> Array<HuyaRoomModel> {
+    public class func getCategoryRooms(category: HuyaSubListModel, page: Int) async throws -> Array<LiveModel> {
         let dataReq = try await AF.request(
             "https://www.huya.com/cache.php",
             method: .get,
@@ -125,7 +125,11 @@ class Huya {
                 "page": page
             ]
         ).serializingDecodable(HuyaRoomMainData.self).value
-        return dataReq.data.datas
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data.datas {
+            tempArray.append(LiveModel(userName: item.nick, roomTitle: item.introduction, roomCover: item.screenshot, userHeadImg: item.avatar180, liveType: .huya, liveState: "", userId: item.uid, roomId: item.profileRoom))
+        }
+        return tempArray
     }
     
     public class func getPlayArgs(rid: String) async throws -> HuyaRoomInfoMainModel? {

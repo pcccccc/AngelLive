@@ -25,6 +25,7 @@ struct LeftMenu: View {
     @State private var huyaMainList = [HuyaMainListModel]()
     @State private var menuImg = ""
     var leftMenuDidClick: (Int, Int, Any) -> Void = { _,_,_   in }
+    @State private var firstLoad = false
 
     var body : some View {
        
@@ -119,7 +120,7 @@ struct LeftMenu: View {
                                         .padding(.leading, -40)
                                 }else if liveType == .huya {
                                     
-                                    KFImage(URL(string: douyuMainList[index].list[subIndex].squareIconUrlW))
+                                    KFImage(URL(string: huyaMainList[index].list[subIndex].pic))
                                         .resizable()
                                         .frame(width: 30, height: 30)
                                         .padding(.leading, 20)
@@ -142,6 +143,11 @@ struct LeftMenu: View {
         })
         .onAppear {
             Task {
+                
+                if firstLoad == true {
+                    return;
+                }
+                
                 switch self.liveType {
                     case .bilibili:
                         self.menuImg = "bilibili"
@@ -191,13 +197,13 @@ struct LeftMenu: View {
                     for i in 0..<huyaMainList.count  {
                         let res = try await Huya.getHuyaSubList(bussType: huyaMainList[i].id)
                         huyaMainList[i].list = res.data
+                        print(huyaMainList[i].list)
                     }
-                    print(99999999)
                     if huyaMainList.count > 0 {
-                        print(99999999)
                         self.leftMenuDidClick(0, 0, self.huyaMainList.first!.list.first!)
                     }
                 }
+                firstLoad = true
             }
         }
         .frame(width: size)

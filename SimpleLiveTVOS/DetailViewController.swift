@@ -37,7 +37,7 @@ class DetailViewController: UIViewController, DetailProtocol {
             }
         }
     }
-    var roomModel: DouyuRoomModel?
+    var roomModel: LiveModel?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -92,9 +92,22 @@ class DetailViewController: UIViewController, DetailProtocol {
     }
     
     func getDouyuPlay() async throws {
-        let dataReq = try await Douyu.getPlayArgs(rid: "\(roomModel?.rid ?? 0)")
-        print("\(dataReq.data?.rtmp_url ?? "")/\(dataReq.data?.rtmp_live ?? "")")
+        let dataReq = try await Douyu.getPlayArgs(rid: roomModel?.roomId ?? "")
         self.resource = KSPlayerResource(url: URL(string: "\(dataReq.data?.rtmp_url ?? "")/\(dataReq.data?.rtmp_live ?? "")")!)
+    }
+    
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        guard let buttonPress = presses.first?.type else { return }
+        print("buttonPress.rawValue=====\(buttonPress.rawValue)")
+        if buttonPress == .menu || buttonPress.rawValue == 2041 {
+            navigationController?.popViewController(animated: true)
+        }else if buttonPress == .playPause || buttonPress.rawValue == 2040 {
+            if playerView.playerLayer?.player.isPlaying ?? false == true {
+                playerView.pause()
+            }else {
+                playerView.play()
+            }
+        }
     }
 }
 
