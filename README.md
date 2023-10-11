@@ -1,34 +1,43 @@
 # SimpleLiveTVOS
 
+## 🚨 提示：
+>  该项目目前虽然已经实现主要功能，但尚未稳定。界面、代码结构可能随时会有较大修改，如果您在本地编译请保持更新。
+
 ## 支持直播平台：
 
 - 虎牙直播
-
 - 斗鱼直播
-
 - 哔哩哔哩直播
-
 - 抖音直播
 
-## 背景
+## 背景：
 
-遇到一个非常好的项目: https://github.com/xiaoyaocz/dart_simple_live/ ，由于原项目基于Flutter制作，不支持tvOS端，于是作为一个原项目的补充。目前已经实现了基本的播放功能。
+遇到一个非常好的项目: 
 
-## TODO
+[dart_simple_live]: https://github.com/xiaoyaocz/dart_simple_live/
 
-1、收藏功能实装、支持查询房间状态
+由于原项目基于Flutter制作，不支持tvOS端，于是作为一个原项目的补充。目前已经实现了基本的播放功能。
 
-2、房间搜索
+## 支持平台：
 
-3、清晰度切换
+tvOS 16+ （暂定） ，计划TODO列表内部分功能完成后提交TestFlight版本，如果您迫切需求请克隆代码自行编译。
 
-4、支持弹幕功能
 
-## 参考及引用
+## TODO：
 
-[dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live/) `原项目`
+* [x] 收藏功能
 
-[AllLive](https://github.com/xiaoyaocz/AllLive) `本项目的C#版，有兴趣可以看看`
+* [ ] 查询收藏房间状态
+
+* [ ] 房间搜索
+
+* [ ] 清晰度切换
+
+* [ ] 支持弹幕功能
+
+## 参考及引用：
+
+[dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live/) `原项目`  [AllLive](https://github.com/xiaoyaocz/AllLive) `原作者开发的C#版本`
 
 [iceking2nd/real-url](https://github.com/iceking2nd/real-url) `虎牙解析参考`
 
@@ -40,26 +49,18 @@
 
 [dart_tars_protocol](https://github.com/xiaoyaocz/dart_tars_protocol.git)
 
+[SQLite.swift](https://github.com/stephencelis/SQLite.swift)
+
+[SimpleToast](https://github.com/sanzaru/SimpleToast)
+
 [wbt5/real-url](https://github.com/wbt5/real-url)
 
-[lovelyyoshino/Bilibili-Live-API](https://github.com/lovelyyoshino/Bilibili-Live-API/blob/master/API.WebSocket.md)
 
-[IsoaSFlus/danmaku](https://github.com/IsoaSFlus/danmaku)
-
-[BacooTang/huya-danmu](https://github.com/BacooTang/huya-danmu)
-
-[TarsCloud/Tars](https://github.com/TarsCloud/Tars)
-
-[YunzhiYike/douyin-live](https://github.com/YunzhiYike/douyin-live)
-
-[5ime/Tiktok_Signature](https://github.com/5ime/Tiktok_Signature)
-
-## 声明
+## 声明：
 
 本项目的所有功能都是基于互联网上公开的资料开发，无任何破解、逆向工程等行为。
 
 本项目仅用于学习交流编程技术，严禁将本项目用于商业目的。如有任何商业行为，均与本项目无关。
 
 如果本项目存在侵犯您的合法权益的情况，请及时与开发者联系，开发者将会及时删除有关内容。
-
 

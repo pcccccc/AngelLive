@@ -9,8 +9,12 @@ import SwiftUI
 import Kingfisher
 import GameController
 
-enum LiveType {
-    case bilibili,huya,douyin,douyu,qie
+enum LiveType: String,Codable {
+    case bilibili = "0",
+         huya = "1",
+         douyin = "2",
+         douyu = "3",
+         qie = "4"
 }
 
 struct LeftMenu: View {
@@ -143,11 +147,9 @@ struct LeftMenu: View {
         })
         .onAppear {
             Task {
-                
                 if firstLoad == true {
                     return;
                 }
-                
                 switch self.liveType {
                     case .bilibili:
                         self.menuImg = "bilibili"

@@ -35,6 +35,24 @@
         "revision" : "32d101122eb07b7ba7ca9590504e8e580cb2f8d3",
         "version" : "2.1.2"
       }
+    },
+    {
+      "identity" : "simpletoast",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sanzaru/SimpleToast.git",
+      "state" : {
+        "revision" : "6637b95dfc49d3d688ad2d7b6e0655c0f6862f83",
+        "version" : "0.8.0"
+      }
+    },
+    {
+      "identity" : "sqlite.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stephencelis/SQLite.swift",
+      "state" : {
+        "revision" : "7a2e3cd27de56f6d396e84f63beefd0267b55ccb",
+        "version" : "0.14.1"
+      }
     }
   ],
   "version" : 2

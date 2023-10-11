@@ -7,14 +7,15 @@
 
 import SwiftUI
 import Kingfisher
-//
-//let leftMenuNormalStateWidth = 130.0
-//let leftMenuHighLightStateWidth = 330.0
-//
-//enum FocusAreas {
-//    case leftMenu
-//    case mainContent
-//}
+import SimpleToast
+
+let leftMenuNormalStateWidth = 130.0
+let leftMenuHighLightStateWidth = 330.0
+
+enum FocusAreas {
+    case leftMenu
+    case mainContent
+}
 
 struct ListMainView: View {
     
@@ -27,7 +28,14 @@ struct ListMainView: View {
     @State private var page = 1
     @State private var currentCategoryModel: Any?
     @State public var liveType: LiveType
-    
+    @State var showToast: Bool = false
+    @State var toastTitle: String = ""
+    @State var toastTypeIsSuccess: Bool = false
+    private let toastOptions = SimpleToastOptions(
+        hideAfter: 1
+    )
+        
+
     var body: some View {
         HStack {
             LeftMenu(liveType:liveType, size: $size, currentIndex: $leftMenuCurrentSelectIndex, isShowSubList: $leftMenuShowSubList, leftMenuDidClick: { _, _, categoryModel in
@@ -40,7 +48,11 @@ struct ListMainView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
                     ForEach(roomContentArray.indices, id: \.self) { index in
-                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index)
+                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index) { success, delete, hint in
+                            toastTypeIsSuccess = success
+                            toastTitle = hint
+                            showToast.toggle()
+                        }
                     }
                 }
             }
@@ -59,11 +71,19 @@ struct ListMainView: View {
             }
         })
         .onChange(of: mainContentfocusState, perform: { newValue in
-            if newValue ?? 0 > self.roomContentArray.count - 6 {
+            if newValue ?? 0 > 6 && newValue ?? 0 > self.roomContentArray.count - 6 {
                 page += 1
                 getRoomList()
             }
         })
+        .simpleToast(isPresented: $showToast, options: toastOptions) {
+            Label(toastTitle, systemImage: "checkmark.circle")
+            .padding()
+            .background(toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+            .foregroundColor(Color.white)
+            .cornerRadius(10)
+            .padding(.top)
+        }
     }
     
     func getRoomList() {

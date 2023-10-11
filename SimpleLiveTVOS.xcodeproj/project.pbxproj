@@ -19,15 +19,15 @@
 		4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */; };
 		4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */; };
 		FB41A8F12A64138600A4FE32 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB41A8F02A64138600A4FE32 /* PlayerView.swift */; };
-		FB651C2D2AB2947E005BFA90 /* BiliBiliMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB651C2C2AB2947E005BFA90 /* BiliBiliMainView.swift */; };
 		FB651C322AB2A0F5005BFA90 /* DouyinModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */; };
-		FB651C342AB2A157005BFA90 /* DouyinMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB651C332AB2A157005BFA90 /* DouyinMainView.swift */; };
 		FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */; };
-		FBC2ADD02ACAC47300E202D5 /* DouyuMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2ADCF2ACAC47300E202D5 /* DouyuMainView.swift */; };
 		FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */; };
-		FBC2E6F02ACD0DB20036BFD4 /* HuyaMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6EF2ACD0DB20036BFD4 /* HuyaMainView.swift */; };
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
 		FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE4752AD42FD100F996BA /* LiveCardView.swift */; };
+		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
+		FBDEE47C2AD63B3100F996BA /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE47B2AD63B3100F996BA /* SQLite */; };
+		FBDEE47E2AD64FD000F996BA /* SQLiteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */; };
+		FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */; };
 		FBEBC1892ACC5DEC007F8CD1 /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */; };
 		FBEBC18C2ACC5F3E007F8CD1 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBEBC18B2ACC5F3E007F8CD1 /* KSPlayer */; };
 		FBF750822A6430AD00C77E01 /* KSAudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBF750812A6430AD00C77E01 /* KSAudioView.swift */; };
@@ -67,15 +67,13 @@
 		4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftMenu.swift; sourceTree = "<group>"; };
 		4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliModel.swift; sourceTree = "<group>"; };
 		FB41A8F02A64138600A4FE32 /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
-		FB651C2C2AB2947E005BFA90 /* BiliBiliMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiliBiliMainView.swift; sourceTree = "<group>"; };
 		FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DouyinModel.swift; sourceTree = "<group>"; };
-		FB651C332AB2A157005BFA90 /* DouyinMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyinMainView.swift; sourceTree = "<group>"; };
 		FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyuModel.swift; sourceTree = "<group>"; };
-		FBC2ADCF2ACAC47300E202D5 /* DouyuMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyuMainView.swift; sourceTree = "<group>"; };
 		FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuyaModel.swift; sourceTree = "<group>"; };
-		FBC2E6EF2ACD0DB20036BFD4 /* HuyaMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuyaMainView.swift; sourceTree = "<group>"; };
 		FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extension.swift"; sourceTree = "<group>"; };
 		FBDEE4752AD42FD100F996BA /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
+		FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteManager.swift; sourceTree = "<group>"; };
+		FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteMainView.swift; sourceTree = "<group>"; };
 		FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
 		FBF750812A6430AD00C77E01 /* KSAudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KSAudioView.swift; sourceTree = "<group>"; };
 		FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMainView.swift; sourceTree = "<group>"; };
@@ -87,6 +85,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBDEE47C2AD63B3100F996BA /* SQLite in Frameworks */,
+				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				FBEBC18C2ACC5F3E007F8CD1 /* KSPlayer in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
@@ -139,10 +139,6 @@
 				4FC9B3912A53BEB100C0D3C8 /* Core */,
 				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
 				FBDEE4752AD42FD100F996BA /* LiveCardView.swift */,
-				FB651C2C2AB2947E005BFA90 /* BiliBiliMainView.swift */,
-				FB651C332AB2A157005BFA90 /* DouyinMainView.swift */,
-				FBC2ADCF2ACAC47300E202D5 /* DouyuMainView.swift */,
-				FBC2E6EF2ACD0DB20036BFD4 /* HuyaMainView.swift */,
 				FB41A8F02A64138600A4FE32 /* PlayerView.swift */,
 				FBF750812A6430AD00C77E01 /* KSAudioView.swift */,
 				4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */,
@@ -151,6 +147,7 @@
 				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
 				4FC3DCE32A49383100CA36B9 /* Preview Content */,
 				FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */,
+				FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */,
 			);
 			path = SimpleLiveTVOS;
 			sourceTree = "<group>";
@@ -227,6 +224,7 @@
 			isa = PBXGroup;
 			children = (
 				FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */,
+				FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */,
 			);
 			path = Tools;
 			sourceTree = "<group>";
@@ -259,6 +257,8 @@
 				4FC3DD082A49725F00CA36B9 /* Kingfisher */,
 				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
 				FBEBC18B2ACC5F3E007F8CD1 /* KSPlayer */,
+				FBDEE4782AD5874900F996BA /* SimpleToast */,
+				FBDEE47B2AD63B3100F996BA /* SQLite */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -336,6 +336,8 @@
 				4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */,
 				FBEBC18A2ACC5F3E007F8CD1 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */,
+				FBDEE47A2AD63B3100F996BA /* XCRemoteSwiftPackageReference "SQLite" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -380,19 +382,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
+				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */,
 				FBEBC1892ACC5DEC007F8CD1 /* DetailViewController.swift in Sources */,
 				FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */,
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
 				FBF750822A6430AD00C77E01 /* KSAudioView.swift in Sources */,
-				FB651C2D2AB2947E005BFA90 /* BiliBiliMainView.swift in Sources */,
 				FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */,
-				FBC2E6F02ACD0DB20036BFD4 /* HuyaMainView.swift in Sources */,
 				FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */,
-				FB651C342AB2A157005BFA90 /* DouyinMainView.swift in Sources */,
+				FBDEE47E2AD64FD000F996BA /* SQLiteManager.swift in Sources */,
 				FBFEDA4A2AD2A7B800D96D7D /* LiveModel.swift in Sources */,
-				FBC2ADD02ACAC47300E202D5 /* DouyuMainView.swift in Sources */,
 				FB41A8F12A64138600A4FE32 /* PlayerView.swift in Sources */,
 				4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */,
 				FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */,
@@ -574,7 +574,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 15.0;
+				TVOS_DEPLOYMENT_TARGET = 16.0;
 			};
 			name = Debug;
 		};
@@ -603,7 +603,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 15.0;
+				TVOS_DEPLOYMENT_TARGET = 16.0;
 			};
 			name = Release;
 		};
@@ -741,6 +741,22 @@
 				minimumVersion = 5.7.1;
 			};
 		};
+		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sanzaru/SimpleToast.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.8.0;
+			};
+		};
+		FBDEE47A2AD63B3100F996BA /* XCRemoteSwiftPackageReference "SQLite" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stephencelis/SQLite.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.14.1;
+			};
+		};
 		FBEBC18A2ACC5F3E007F8CD1 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
@@ -761,6 +777,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
+		};
+		FBDEE4782AD5874900F996BA /* SimpleToast */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */;
+			productName = SimpleToast;
+		};
+		FBDEE47B2AD63B3100F996BA /* SQLite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FBDEE47A2AD63B3100F996BA /* XCRemoteSwiftPackageReference "SQLite" */;
+			productName = SQLite;
 		};
 		FBEBC18B2ACC5F3E007F8CD1 /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
