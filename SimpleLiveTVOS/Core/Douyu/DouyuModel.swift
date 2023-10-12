@@ -196,4 +196,26 @@ class Douyu {
         return DouyuPlayInfoData(error: -1, msg: "error", data: nil)
     }
     
+    public class func getLiveStatus(rid: String) async throws -> Int {
+        let dataReq = try await AF.request(
+            "https://www.douyu.com/betard/\(rid)",
+            method: .get,
+            headers: HTTPHeaders([
+                HTTPHeader.init(name: "referer", value: "https://www.douyu.com/\(rid)"),
+                HTTPHeader.init(name: "user-agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43"),
+            ])
+        ).serializingData().value
+        let json = try JSONSerialization.jsonObject(with: dataReq, options: .mutableContainers)
+        let jsonDict = json as! Dictionary<String, Any>
+        let roomDict = jsonDict["room"] as! Dictionary<String, Any>
+        let liveStatus = roomDict["show_status"] as? Int ?? -1
+        let videoLoop = roomDict["videoLoop"] as? Int ?? -1
+        if liveStatus == 1 && videoLoop == 0 {
+            return 1
+        }else if liveStatus == 0 && videoLoop == 1 {
+            return 2
+        }else {
+            return 0
+        }
+    }
 }

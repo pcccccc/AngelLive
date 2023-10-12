@@ -75,6 +75,7 @@ struct HuyaRoomInfoMainModel: Codable {
 }
 
 struct HuyaRoomInfoModel: Codable {
+    let eLiveStatus: Int
     let tLiveInfo: HuyaRoomTLiveInfo
 }
 

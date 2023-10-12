@@ -25,7 +25,7 @@ struct FavoriteMainView: View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
                 ForEach(roomContentArray.indices, id: \.self) { index in
-                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index) { success, delete, hint in
+                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, isFavorite: true) { success, delete, hint in
                         toastTypeIsSuccess = success
                         toastTitle = hint
                         showToast.toggle()

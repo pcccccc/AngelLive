@@ -226,4 +226,20 @@ class Bilibili {
             ]
         ).serializingDecodable(BilibiliMainData.self).value
     }
+    
+    public class func getLiveStatus(roomId: String) async throws -> Int {
+        let dataReq = try await AF.request(
+            "https://api.live.bilibili.com/room/v1/Room/get_info",
+            method: .get,
+            parameters: [
+                "room_id": roomId
+            ]
+        ).serializingData().value
+        
+        let json = try JSONSerialization.jsonObject(with: dataReq, options: .mutableContainers)
+        let jsonDict = json as! Dictionary<String, Any>
+        let dataDict = jsonDict["data"] as! Dictionary<String, Any>
+        let liveStatus = dataDict["live_status"] as? Int ?? -1
+        return liveStatus
+    }
 }

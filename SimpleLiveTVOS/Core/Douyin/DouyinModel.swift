@@ -77,7 +77,7 @@ struct DouyinRoomCoverData: Codable {
 
 
 struct DouyinRoomStreamUrlData: Codable {
-    let hls_pull_url_map: DouyinRoomLiveQualityData
+    let hls_pull_url_map: DouyinRoomLiveQualityData?
     let default_resolution: String
     let stream_orientation: Int
 }
@@ -122,15 +122,16 @@ struct DouyinRoomViewStatsData: Codable {
 }
 
 struct DouyinRoomPlayInfoMainData: Codable {
-    let data: DouyinRoomPlayInfoData
+    let data: DouyinRoomPlayInfoData?
 }
 
 struct DouyinRoomPlayInfoData: Codable {
-    let data: Array<DouyinPlayQualitiesInfo>
+    let data: Array<DouyinPlayQualitiesInfo>?
 }
 
 struct DouyinPlayQualitiesInfo: Codable {
-    let stream_url: DouyinPlayQualities
+    let status: Int
+    let stream_url: DouyinPlayQualities?
 }
 
 struct DouyinPlayQualities: Codable {
@@ -138,10 +139,10 @@ struct DouyinPlayQualities: Codable {
 }
 
 struct DouyinPlayQualitiesHlsMap: Codable {
-    let FULL_HD1: String
-    let HD1: String
-    let SD1: String
-    let SD2: String
+    let FULL_HD1: String?
+    let HD1: String?
+    let SD1: String?
+    let SD2: String?
 }
 
 var headers = HTTPHeaders.init([

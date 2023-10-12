@@ -32,14 +32,34 @@ struct LiveCardView: View {
                     KFImage(URL(string: liveModel.roomCover))
                         .resizable()
                         .frame(width: 320, height: 180)
-                    Image(uiImage: .init(named: getImage())!)
-                        .resizable()
-                        .frame(width: 40, height: 40)
-                        .background(liveModel.liveType == .bilibili ? Color.black.opacity(0.3) : Color.clear)
-                        .cornerRadius(5)
-                        .padding(0)
+                    if isFavorite {
+                        HStack{
+                            Image(uiImage: .init(named: getImage())!)
+                                .resizable()
+                                .frame(width: 40, height: 40)
+                                .background(liveModel.liveType == .bilibili ? Color.black.opacity(0.3) : Color.clear)
+                                .cornerRadius(5)
+                                .padding(.top, 5)
+                                .padding(.leading, 5)
+                            Spacer()
+                            HStack(spacing: 5) {
+                                
+                                if liveModel.liveState ?? "" == "" {
+                                    ProgressView()
+                                        .scaleEffect(0.5)
+                                }else {
+                                    Circle()
+                                        .fill(liveModel.liveState ?? "" == "正在直播" ? Color.green : Color.gray)
+                                        .frame(width: 10, height: 10)
+                                    Text(liveModel.liveState ?? "")
+                                        .font(.system(size: 18))
+                                }
+                            }
+                            .padding(.trailing, 5)
+                        }
+                    }
                 })
-                    
+                .frame(width: 320, height: 180)
                 HStack {
                     KFImage(URL(string: liveModel.userHeadImg))
                             .resizable()
@@ -93,6 +113,15 @@ struct LiveCardView: View {
                 })
             }
         })
+        .task {
+            do {
+                if isFavorite == true {
+                    try await liveModel.getLiveState()
+                }
+            }catch {
+                
+            }
+        }
     }
     
     func favoriteAction() {

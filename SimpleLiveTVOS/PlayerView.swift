@@ -48,11 +48,11 @@ struct PlayerView: View {
                             }
                         }else if liveType == .douyin {
                             let liveData = try await Douyin.getDouyinRoomDetail(streamerData: roomModel)
-                            if liveData.data.data.count > 0 {
-                                let FULL_HD1 = liveData.data.data.first?.stream_url.hls_pull_url_map.FULL_HD1 ?? ""
-                                let HD1 = liveData.data.data.first?.stream_url.hls_pull_url_map.HD1 ?? ""
-                                let SD1 = liveData.data.data.first?.stream_url.hls_pull_url_map.SD1 ?? ""
-                                let SD2 = liveData.data.data.first?.stream_url.hls_pull_url_map.SD2 ?? ""
+                            if liveData.data?.data?.count ?? 0 > 0 {
+                                let FULL_HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.FULL_HD1 ?? ""
+                                let HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.HD1 ?? ""
+                                let SD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD1 ?? ""
+                                let SD2 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD2 ?? ""
                                 if FULL_HD1.count > 0 {
                                     url = FULL_HD1
                                 }else if HD1.count > 0 {
