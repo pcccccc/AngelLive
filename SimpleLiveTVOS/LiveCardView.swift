@@ -19,7 +19,7 @@ struct LiveCardView: View {
     
     var body: some View {
         NavigationLink {
-            if liveModel.liveType == .douyu {
+            if liveModel.liveType == .douyu || liveModel.liveType == .huya {
                 KSAudioView(roomModel: liveModel)
                     .edgesIgnoringSafeArea(.all)
             }else {

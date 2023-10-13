@@ -75,7 +75,11 @@ class DetailViewController: UIViewController, DetailProtocol {
         }
         playerView.becomeFirstResponder()
         Task {
-            try await getDouyuPlay()
+            if roomModel?.liveType == .douyu {
+                try await getDouyuPlay()
+            }else if roomModel?.liveType == .huya {
+                try await getHuyaPlay()
+            }
         }
     }
 
@@ -94,6 +98,52 @@ class DetailViewController: UIViewController, DetailProtocol {
     func getDouyuPlay() async throws {
         let dataReq = try await Douyu.getPlayArgs(rid: roomModel?.roomId ?? "")
         self.resource = KSPlayerResource(url: URL(string: "\(dataReq.data?.rtmp_url ?? "")/\(dataReq.data?.rtmp_live ?? "")")!)
+    }
+    
+    func getHuyaPlay() async throws {
+        let liveData = try await Huya.getPlayArgs(rid: roomModel?.roomId ?? "")
+        if liveData != nil {
+            let streamInfo = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
+            var playQualitiesInfo: Dictionary<String, String> = [:]
+            if let urlComponent = URLComponents(string: "?\(streamInfo?.sFlvAntiCode ?? "")") {
+                if let queryItems = urlComponent.queryItems {
+                    for item in queryItems {
+                        playQualitiesInfo.updateValue(item.value ?? "", forKey: item.name)
+                    }
+                }
+            }
+            playQualitiesInfo.updateValue("1", forKey: "ver")
+            playQualitiesInfo.updateValue("2110211124", forKey: "sv")
+            let uid = try await Huya.getAnonymousUid()
+            let now = Date().timeIntervalSince1970 * 1000
+            playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
+            playQualitiesInfo.updateValue(uid, forKey: "uid")
+            playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
+            let ss = "\(playQualitiesInfo["seqid"] ?? "")|\(playQualitiesInfo["ctype"] ?? "")|\(playQualitiesInfo["t"] ?? "")".md5
+            let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
+            if let data = Data(base64Encoded: base64EncodedData) {
+                let fm = String(data: data, encoding: .utf8)!
+                var nsFM = fm as NSString
+                nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
+                playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
+                playQualitiesInfo.removeValue(forKey: "fm")
+                var playInfo: Array<URLQueryItem> = []
+                for key in playQualitiesInfo.keys {
+                    let value = playQualitiesInfo[key] ?? ""
+                    playInfo.append(URLQueryItem(name: key, value: value))
+                }
+                var urlComps = URLComponents(string: "")!
+                urlComps.queryItems = playInfo
+                let result = urlComps.url!
+                var res = result.absoluteString as NSString
+                for streamInfo in liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value ?? [] {
+                    print("\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)")
+                    print("\(streamInfo.sHlsUrl)/\(streamInfo.sStreamName).\(streamInfo.sHlsUrlSuffix)\(res)")
+                    self.resource = KSPlayerResource(url: URL(string: "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)")!)
+                    break
+                }
+            }
+        }
     }
     
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
