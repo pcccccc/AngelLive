@@ -42,6 +42,8 @@ class DetailViewController: UIViewController, DetailProtocol {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.addSubview(playerView)
+        playerView.controllerView.isHidden = true
+        playerView.topMaskView.isHidden = true
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
         playerView.delegate = self

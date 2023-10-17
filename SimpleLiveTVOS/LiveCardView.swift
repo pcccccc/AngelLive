@@ -15,6 +15,7 @@ struct LiveCardView: View {
     @State var index: Int
     @State var isFavorite = false
     @State private var showAlert = false
+    @State private var isCellVisible: Bool = false
     var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
     
     var body: some View {
@@ -29,9 +30,11 @@ struct LiveCardView: View {
         } label: {
             VStack(spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
-                    KFImage(URL(string: liveModel.roomCover))
-                        .resizable()
-                        .frame(width: 320, height: 180)
+                    if isCellVisible {
+                        KFImage(URL(string: liveModel.roomCover))
+                            .resizable()
+                            .frame(width: 320, height: 180)
+                    }
                     if isFavorite {
                         HStack{
                             Image(uiImage: .init(named: getImage())!)
@@ -61,10 +64,12 @@ struct LiveCardView: View {
                 })
                 .frame(width: 320, height: 180)
                 HStack {
-                    KFImage(URL(string: liveModel.userHeadImg))
-                            .resizable()
-                            .frame(width: 40, height: 40)
-                            .cornerRadius(20)
+                    if isCellVisible {
+                        KFImage(URL(string: liveModel.userHeadImg))
+                                .resizable()
+                                .frame(width: 40, height: 40)
+                                .cornerRadius(20)
+                    }
                     VStack (alignment: .leading, spacing: 10) {
                         Text(liveModel.userName)
                             .font(.system(size: liveModel.userName.count > 5 ? 19 : 24))
@@ -113,6 +118,13 @@ struct LiveCardView: View {
                 })
             }
         })
+        .onAppear {
+            self.isCellVisible = true
+        }
+        .onDisappear {
+            self.isCellVisible = false
+            ImageCache.default.clearMemoryCache()
+        }
         .task {
             do {
                 if isFavorite == true {
