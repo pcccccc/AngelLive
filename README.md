@@ -13,9 +13,7 @@
 
 ## 背景：
 
-遇到一个非常好的项目: 
-
-[dart_simple_live]: https://github.com/xiaoyaocz/dart_simple_live/
+遇到一个非常好的项目:  [dart_simple_live]: https://github.com/xiaoyaocz/dart_simple_live/
 
 由于原项目基于Flutter制作，不支持tvOS端，于是作为一个原项目的补充。目前已经实现了基本的播放功能。
 
