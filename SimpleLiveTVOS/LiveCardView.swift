@@ -13,9 +13,10 @@ struct LiveCardView: View {
     @Binding var liveModel: LiveModel
     @FocusState var mainContentfocusState: Int?
     @State var index: Int
-    @State var isFavorite = false
+    @State var isFavoritePage = false
     @State private var showAlert = false
     @State private var isCellVisible: Bool = false
+    @State private var favorited: Bool = false
     var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
     
     var body: some View {
@@ -35,7 +36,7 @@ struct LiveCardView: View {
                             .resizable()
                             .frame(width: 320, height: 180)
                     }
-                    if isFavorite {
+                    if isFavoritePage {
                         HStack{
                             Image(uiImage: .init(named: getImage())!)
                                 .resizable()
@@ -56,9 +57,18 @@ struct LiveCardView: View {
                                         .frame(width: 10, height: 10)
                                     Text(liveModel.liveState ?? "")
                                         .font(.system(size: 18))
+                                        .foregroundColor(Color.white)
                                 }
                             }
                             .padding(.trailing, 5)
+                        }.task {
+                            do {
+                                if self.isFavoritePage == true {
+                                    try await liveModel.getLiveState()
+                                }
+                            }catch {
+                                
+                            }
                         }
                     }
                 })
@@ -91,7 +101,11 @@ struct LiveCardView: View {
         .focused($mainContentfocusState, equals: index)
         .focusSection()
         .alert("提示", isPresented: $showAlert) {
-            Button("取消收藏", role: .destructive, action: cancelFavoriteAction)
+            Button("取消收藏", role: .destructive, action: {
+                Task {
+                    await cancelFavoriteAction()
+                }
+            })
             Button("再想想",role: .cancel) {
                 showAlert = false
             }
@@ -99,7 +113,7 @@ struct LiveCardView: View {
             Text("确认取消收藏吗")
         }
         .contextMenu(menuItems: {
-            if SQLiteManager.manager.search(roomId: liveModel.roomId) != nil {
+            if favorited {
                 Button(action: {
                     showAlert = true
                 }, label: {
@@ -110,7 +124,11 @@ struct LiveCardView: View {
                 })
                 
             }else {
-                Button(action: favoriteAction, label: {
+                Button(action: {
+                    Task {
+                        await favoriteAction()
+                    }
+                }, label: {
                     HStack {
                         Image(systemName: "heart.fill")
                         Text("收藏")
@@ -123,31 +141,45 @@ struct LiveCardView: View {
         }
         .onDisappear {
             self.isCellVisible = false
-            ImageCache.default.clearMemoryCache()
+//            ImageCache.default.clearMemoryCache()
         }
         .task {
             do {
-                if isFavorite == true {
-                    try await liveModel.getLiveState()
-                }
+                await getFavoriteState()
             }catch {
                 
             }
         }
     }
     
-    func favoriteAction() {
-        if SQLiteManager.manager.insert(item: liveModel) {
+    func favoriteAction() async {
+        do {
+            try await CloudSQLManager.saveRecord(liveModel: liveModel)
             self.showToast(true, false, "收藏成功")
-        }else {
+        }catch {
             self.showToast(false, false, "收藏失败")
+        }
+       
+    }
+    
+    func getFavoriteState() async {
+        do {
+            favorited = try await CloudSQLManager.searchRecord(roomId: liveModel.roomId).count > 0
+        }catch {
+            favorited = false
         }
     }
     
-    func cancelFavoriteAction() {
-        if SQLiteManager.manager.delete(roomId: liveModel.roomId) {
+    func cancelFavoriteAction() async {
+//        if SQLiteManager.manager.delete(roomId: liveModel.roomId) {
+//            self.showToast(true, true, "取消收藏成功")
+//        }else {
+//            self.showToast(false, true, "取消收藏失败")
+//        }
+        do {
+            try await CloudSQLManager.deleteRecord(liveModel: liveModel)
             self.showToast(true, true, "取消收藏成功")
-        }else {
+        }catch {
             self.showToast(false, true, "取消收藏失败")
         }
     }

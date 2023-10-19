@@ -37,7 +37,7 @@ struct ListMainView: View {
         
 
     var body: some View {
-        HStack {
+        HStack(spacing: 15) {
             LeftMenu(liveType:liveType, size: $size, currentIndex: $leftMenuCurrentSelectIndex, isShowSubList: $leftMenuShowSubList, leftMenuDidClick: { _, _, categoryModel in
                 page = 1
                 currentCategoryModel = categoryModel

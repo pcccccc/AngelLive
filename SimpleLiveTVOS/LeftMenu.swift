@@ -60,7 +60,8 @@ struct LeftMenu: View {
                                     .font(.system(size: 25))
                             }
                         }
-                        .frame(width: size - 40 ,height: 100)
+                        .frame(width: size - 80,height: 100)
+                        
                     }else {
                         VStack {
                             Image(self.menuImg)
@@ -80,7 +81,7 @@ struct LeftMenu: View {
                                     .font(.system(size: 20))
                             }
                         }
-                        .frame(width: size - 40 ,height: 100)
+                        .frame(width: size - 50,height: 100)
                     }
                     
                 })
@@ -136,14 +137,17 @@ struct LeftMenu: View {
                                 }
    
                             }
-                            .frame(width: size - 30 - 70, height: 50)
+                            .frame(width: size - 60, height: 50)
                         })
                         .buttonStyle(CardButtonStyle())
                 
-                        .padding(.leading, 30)
+     
                     }
                 }
             }
+            .padding(.leading, size == leftMenuHighLightStateWidth ? 20 : 0)
+            .padding(.top, 5)
+            .padding(.bottom, 5)
         })
         .onAppear {
             Task {

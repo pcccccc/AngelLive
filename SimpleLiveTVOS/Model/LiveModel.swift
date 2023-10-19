@@ -7,6 +7,7 @@
 
 import Foundation
 import Alamofire
+import CloudKit
 
 struct LiveModel: Codable {
     let userName: String

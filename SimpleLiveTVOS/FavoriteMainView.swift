@@ -25,7 +25,7 @@ struct FavoriteMainView: View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
                 ForEach(roomContentArray.indices, id: \.self) { index in
-                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, isFavorite: true) { success, delete, hint in
+                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, isFavoritePage: true) { success, delete, hint in
                         toastTypeIsSuccess = success
                         toastTitle = hint
                         showToast.toggle()
@@ -36,23 +36,23 @@ struct FavoriteMainView: View {
                 }
             }
         }
-        .onChange(of: mainContentfocusState, perform: { newValue in
-            if newValue ?? 0 > 6 && newValue ?? 0 > self.roomContentArray.count - 6 {
-                page += 1
-                getRoomList()
-            }
-        })
-        .onAppear {
-            page = 1
-            getRoomList()
+        .task {
+            await getRoomList()
         }
     }
     
-    func getRoomList() {
-        if page == 1 {
-            roomContentArray.removeAll()
+    func getRoomList() async {
+        do {
+            let newItem = try await CloudSQLManager.searchRecord()
+            for item in newItem {
+                if roomContentArray.contains(where: { $0.roomId == item.roomId }) == false {
+                    roomContentArray.append(item)
+                }
+            }
+        }catch {
+            
+            
         }
-        roomContentArray += SQLiteManager.manager.search(page: page)
     }
 }
 

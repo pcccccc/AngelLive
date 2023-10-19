@@ -27,7 +27,7 @@ class SQLiteManager: NSObject {
     
     func getDB() -> Connection {
         if db == nil {
-            let path = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first!
+            let path = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first!
             db = try! Connection("\(path)/db.sqlite3")
             db?.busyTimeout = 3
         }
@@ -65,7 +65,7 @@ class SQLiteManager: NSObject {
             liveType_column <- item.liveType.rawValue,
             liveState_column <- item.liveState ?? ""
         )
-        if let rowId = try? getDB().run(insert) {
+        if (try? getDB().run(insert)) != nil {
             return true
         }else {
             return false
@@ -90,7 +90,7 @@ class SQLiteManager: NSObject {
     }
     
     func search(page: Int) -> [LiveModel] {
-        var query = getTable().select([id_column, roomId_column, userId_column, userName_column, roomTitle_column, roomCover_column, userHeadImg_column, liveType_column, liveState_column]).limit(10, offset: page)
+        let query = getTable().select([id_column, roomId_column, userId_column, userName_column, roomTitle_column, roomCover_column, userHeadImg_column, liveType_column, liveState_column]).limit(10, offset: page)
         let res = try! getDB().prepare(query)
         var array: Array<LiveModel> = []
         for item in res {
@@ -100,7 +100,7 @@ class SQLiteManager: NSObject {
     }
     
     func search(roomId: String) -> LiveModel? {
-        var query = getTable().select([id_column, roomId_column, userId_column, userName_column, roomTitle_column, roomCover_column, userHeadImg_column, liveType_column, liveState_column]).filter(roomId == roomId_column)
+        let query = getTable().select([id_column, roomId_column, userId_column, userName_column, roomTitle_column, roomCover_column, userHeadImg_column, liveType_column, liveState_column]).filter(roomId == roomId_column)
          let res = try! getDB().prepare(query)
         var array: Array<LiveModel> = []
         for item in res {
