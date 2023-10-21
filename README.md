@@ -1,7 +1,10 @@
 # SimpleLiveTVOS
 
+## 下载地址：
+
+[https://testflight.apple.com/join/2oZuwSHJ](https://testflight.apple.com/join/2oZuwSHJ) `Testflight安装链接`
+
 ## 🚨 提示：
->  软件第一个版本已经提交Testflight，第一次审核失败，正在进行第二次审核，敬请期待。
 >  该项目目前虽然已经实现主要功能，但尚未稳定。
 >  第一次使用SwiftUI写App，代码较烂请大佬多多指点。
 
