@@ -1,19 +1,22 @@
 # SimpleLiveTVOS
 
+## 下载地址：
+
+[https://testflight.apple.com/join/2oZuwSHJ](https://testflight.apple.com/join/2oZuwSHJ) `Testflight安装链接`
+
 ## 🚨 提示：
->  软件第一个版本已经提交Testflight，第一次审核失败，正在进行第二次审核，敬请期待。
 >  该项目目前虽然已经实现主要功能，但尚未稳定。
 >  第一次使用SwiftUI写App，代码较烂请大佬多多指点。
 
-- <img src="./ScreenShot/normal.png" alt="浅色模式" style="zoom:30%;" />
+## 截图：
+
+  <img src="./ScreenShot/normal.png" alt="浅色模式" style="zoom:30%;" />
 
   <img src="./ScreenShot/dark_mode.png" alt="深色模式" style="zoom:30%;" />
 
 ## 背景：
 
-遇到一个非常好的项目: 
-
-[dart_simple_live]: https://github.com/xiaoyaocz/dart_simple_live/
+遇到一个非常好的项目:  [dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live/) `原项目`
 
 由于原项目基于Flutter制作，不支持tvOS端，于是作为一个原项目的补充。目前已经实现了基本的播放功能。
 
@@ -24,13 +27,11 @@ tvOS 16+
 
 ## TODO：
 
-* [x] 收藏功能
+* [ ] 添加loading动画 （重要）
 
-* [x] 查询收藏房间状态
+* [ ] 统一播放器页面：支持房间内切换同频道或已收藏直播间、清晰度切换（重要）
 
 * [ ] 房间搜索
-
-* [ ] 清晰度切换
 
 * [ ] 支持弹幕功能
 
