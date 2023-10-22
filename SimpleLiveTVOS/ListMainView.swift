@@ -31,33 +31,49 @@ struct ListMainView: View {
     @State var showToast: Bool = false
     @State var toastTitle: String = ""
     @State var toastTypeIsSuccess: Bool = false
+    @State var loadingText: String = "正在获取内容"
+    @State var needFullScreenLoading: Bool = false
     private let toastOptions = SimpleToastOptions(
-        hideAfter: 1
+        hideAfter: 2
     )
-        
-
+    
     var body: some View {
-        HStack(spacing: 15) {
-            LeftMenu(liveType:liveType, size: $size, currentIndex: $leftMenuCurrentSelectIndex, isShowSubList: $leftMenuShowSubList, leftMenuDidClick: { _, _, categoryModel in
-                page = 1
-                currentCategoryModel = categoryModel
-                getRoomList()
-            })
+        ZStack(alignment: .top) {
+            if needFullScreenLoading == true {
+                GeometryReader { proxy in
+                    LoadingView(loadingText: $loadingText)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+                .zIndex(1)
+            }
+            HStack(spacing: 15) {
+                LeftMenu(liveType:liveType, size: $size, currentIndex: $leftMenuCurrentSelectIndex, isShowSubList: $leftMenuShowSubList, leftMenuDidClick: { _, _, categoryModel in
+                    page = 1
+                    currentCategoryModel = categoryModel
+                    getRoomList()
+                })
                 .cornerRadius(20)
                 .focused($focusState, equals: .leftMenu)
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
-                    ForEach(0..<roomContentArray.count, id: \.self) { index in
-                        autoreleasepool {
-                            LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index) { success, delete, hint in
-                                toastTypeIsSuccess = success
-                                toastTitle = hint
-                                showToast.toggle()
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
+                        ForEach(0..<roomContentArray.count, id: \.self) { index in
+                            autoreleasepool {
+                                LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
+                                    self.loadingText = loadingText
+                                    needFullScreenLoading = true
+                                }, showToast: { success, delete, hint in
+                                    toastTypeIsSuccess = success
+                                    toastTitle = hint
+                                    needFullScreenLoading = false
+                                    showToast.toggle()
+                                })
+                                
                             }
                         }
                     }
                 }
             }
+            .blur(radius: needFullScreenLoading == true ? 10 : 0)
         }
         .onChange(of: focusState, perform: { newFocus in
             if newFocus == .leftMenu {
@@ -80,11 +96,11 @@ struct ListMainView: View {
         })
         .simpleToast(isPresented: $showToast, options: toastOptions) {
             Label(toastTitle, systemImage: "checkmark.circle")
-            .padding()
-            .background(toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-            .foregroundColor(Color.white)
-            .cornerRadius(10)
-            .padding(.top)
+                .padding()
+                .background(toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                .foregroundColor(Color.white)
+                .cornerRadius(10)
+                .padding(.top)
         }
     }
     
@@ -93,7 +109,7 @@ struct ListMainView: View {
             if currentCategoryModel == nil {
                 return
             }
-
+            
             if liveType == .bilibili {
                 let res = try await Bilibili.getCategoryRooms(category: currentCategoryModel as! BilibiliCategoryModel, page: page)
                 DispatchQueue.main.async {
@@ -129,3 +145,4 @@ struct ListMainView: View {
     
     
 }
+

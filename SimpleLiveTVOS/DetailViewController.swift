@@ -46,6 +46,7 @@ class DetailViewController: UIViewController, DetailProtocol {
         playerView.topMaskView.isHidden = true
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
+        KSOptions.isAutoPlay = true
         playerView.delegate = self
         playerView.translatesAutoresizingMaskIntoConstraints = false
         #if os(iOS)

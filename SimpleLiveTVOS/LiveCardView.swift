@@ -17,6 +17,7 @@ struct LiveCardView: View {
     @State private var showAlert = false
     @State private var isCellVisible: Bool = false
     @State private var favorited: Bool = false
+    var showLoading: (String) -> Void = { _ in }
     var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
     
     var body: some View {
@@ -154,10 +155,12 @@ struct LiveCardView: View {
     
     func favoriteAction() async {
         do {
+            self.showLoading("正在收藏")
             try await CloudSQLManager.saveRecord(liveModel: liveModel)
             self.showToast(true, false, "收藏成功")
         }catch {
-            self.showToast(false, false, "收藏失败")
+            print(error)
+            self.showToast(false, false, "收藏失败，错误码：\(error.localizedDescription)")
         }
        
     }
@@ -177,6 +180,7 @@ struct LiveCardView: View {
 //            self.showToast(false, true, "取消收藏失败")
 //        }
         do {
+            self.showLoading("正在取消收藏")
             try await CloudSQLManager.deleteRecord(liveModel: liveModel)
             self.showToast(true, true, "取消收藏成功")
         }catch {

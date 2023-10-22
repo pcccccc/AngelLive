@@ -40,7 +40,7 @@ struct LeftMenu: View {
                     isShowSubList.toggle()
                 }, label: {
                     if size == leftMenuHighLightStateWidth {
-                        HStack {
+                        HStack(spacing: 30 ) {
                             Image(self.menuImg)
                                 .resizable()
                                 .frame(width: 40, height: 40)
@@ -81,7 +81,7 @@ struct LeftMenu: View {
                                     .font(.system(size: 20))
                             }
                         }
-                        .frame(width: size - 50,height: 100)
+                        .frame(width: size - 30,height: 100)
                     }
                     
                 })
