@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Kingfisher
+import GameController
 
 
 struct ContentView: View {
@@ -41,11 +42,18 @@ struct ContentView: View {
                     Label("抖音", image: "douyin")
                 }
                 .tag(4)
+                ListMainView(liveType: .douyin)
+                .tabItem {
+//                    Label("设置", systemImage: "gearshape.fill")
+                    Label("关于", systemImage: "info.circle.fill")
+                }
+                .tag(5)
             }
         }
         .onAppear {
             Task {
                 try await Douyin.getRequestHeaders()
+                GCController.controllers()
             }
         }
     }

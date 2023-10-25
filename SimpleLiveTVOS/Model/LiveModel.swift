@@ -9,7 +9,7 @@ import Foundation
 import Alamofire
 import CloudKit
 
-struct LiveModel: Codable {
+public struct LiveModel: Codable {
     let userName: String
     let roomTitle: String
     let roomCover: String
@@ -81,6 +81,116 @@ struct LiveModel: Codable {
                     liveState = "已下播"
             }
         }
+    }
+
+    func getPlayArgs() async throws -> String? {
+        if liveType == .bilibili {
+            do {
+                let quality = try await Bilibili.getVideoQualites(roomModel:self)
+                if quality.code == 0 {
+                    if let qualityDescription = quality.data.quality_description {
+                        var maxQn = 0
+                        for item in qualityDescription {
+                            if item.qn > maxQn {
+                                maxQn = item.qn
+                            }
+                        }
+                        let playInfo = try await Bilibili.getPlayUrl(roomModel: self, qn: maxQn)
+                        for streamInfo in playInfo.data.playurl_info.playurl.stream {
+                            if streamInfo.protocol_name == "http_hls" {
+                                let url = (streamInfo.format.last?.codec.last?.url_info.last?.host ?? "") + (streamInfo.format.last?.codec.last?.base_url ?? "") + (streamInfo.format.last?.codec.last?.url_info.last?.extra ?? "")
+                                return url
+                            }
+                        }
+                    }
+                }
+                return nil
+            }catch {
+                return nil
+            }
+        }else if liveType == .douyin {
+            do {
+                let liveData = try await Douyin.getDouyinRoomDetail(streamerData: self)
+                if liveData.data?.data?.count ?? 0 > 0 {
+                    let FULL_HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.FULL_HD1 ?? ""
+                    let HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.HD1 ?? ""
+                    let SD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD1 ?? ""
+                    let SD2 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD2 ?? ""
+                    var url = ""
+                    if FULL_HD1.count > 0 {
+                        url = FULL_HD1
+                    }else if HD1.count > 0 {
+                        url = HD1
+                    }else if SD1.count > 0 {
+                        url = SD1
+                    }else if SD2.count > 0 {
+                        url = SD2
+                    }else {
+                        url = ""
+                    }
+                    return url
+                }
+                return nil
+            }catch {
+                return nil
+            }
+        }else if liveType == .douyu {
+            do {
+                let dataReq = try await Douyu.getPlayArgs(rid: roomId)
+                return "\(dataReq.data?.rtmp_url ?? "")/\(dataReq.data?.rtmp_live ?? "")"
+            }catch {
+                return nil
+            }
+        }else if liveType == .huya {
+            do {
+                let liveData = try await Huya.getPlayArgs(rid: roomId)
+                if liveData != nil {
+                    let streamInfo = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
+                    var playQualitiesInfo: Dictionary<String, String> = [:]
+                    if let urlComponent = URLComponents(string: "?\(streamInfo?.sFlvAntiCode ?? "")") {
+                        if let queryItems = urlComponent.queryItems {
+                            for item in queryItems {
+                                playQualitiesInfo.updateValue(item.value ?? "", forKey: item.name)
+                            }
+                        }
+                    }
+                    playQualitiesInfo.updateValue("1", forKey: "ver")
+                    playQualitiesInfo.updateValue("2110211124", forKey: "sv")
+                    let uid = try await Huya.getAnonymousUid()
+                    let now = Date().timeIntervalSince1970 * 1000
+                    playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
+                    playQualitiesInfo.updateValue(uid, forKey: "uid")
+                    playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
+                    let ss = "\(playQualitiesInfo["seqid"] ?? "")|\(playQualitiesInfo["ctype"] ?? "")|\(playQualitiesInfo["t"] ?? "")".md5
+                    let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
+                    if let data = Data(base64Encoded: base64EncodedData) {
+                        let fm = String(data: data, encoding: .utf8)!
+                        var nsFM = fm as NSString
+                        nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
+                        playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
+                        playQualitiesInfo.removeValue(forKey: "fm")
+                        var playInfo: Array<URLQueryItem> = []
+                        for key in playQualitiesInfo.keys {
+                            let value = playQualitiesInfo[key] ?? ""
+                            playInfo.append(URLQueryItem(name: key, value: value))
+                        }
+                        var urlComps = URLComponents(string: "")!
+                        urlComps.queryItems = playInfo
+                        let result = urlComps.url!
+                        let res = result.absoluteString as NSString
+                        for streamInfo in liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value ?? [] {
+                            print("\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)")
+                            print("\(streamInfo.sHlsUrl)/\(streamInfo.sStreamName).\(streamInfo.sHlsUrlSuffix)\(res)")
+                            return "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)"
+                        }
+                    }
+                }
+                return nil
+            }catch {
+                return nil
+            }
+        }
+        return nil
     }
 }
 

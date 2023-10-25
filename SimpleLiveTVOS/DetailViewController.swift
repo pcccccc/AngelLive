@@ -42,8 +42,8 @@ class DetailViewController: UIViewController, DetailProtocol {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.addSubview(playerView)
-        playerView.controllerView.isHidden = true
-        playerView.topMaskView.isHidden = true
+//        playerView.controllerView.isHidden = true
+//        playerView.topMaskView.isHidden = true
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
         KSOptions.isAutoPlay = true
@@ -118,11 +118,13 @@ class DetailViewController: UIViewController, DetailProtocol {
             playQualitiesInfo.updateValue("1", forKey: "ver")
             playQualitiesInfo.updateValue("2110211124", forKey: "sv")
             let uid = try await Huya.getAnonymousUid()
-            let now = Date().timeIntervalSince1970 * 1000
+            let now = Int(Date().timeIntervalSince1970) * 1000
             playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
             playQualitiesInfo.updateValue(uid, forKey: "uid")
             playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
-            let ss = "\(playQualitiesInfo["seqid"] ?? "")|\(playQualitiesInfo["ctype"] ?? "")|\(playQualitiesInfo["t"] ?? "")".md5
+            playQualitiesInfo.updateValue("100", forKey: "t")
+            playQualitiesInfo.updateValue("huya_live", forKey: "ctype")
+            let ss = "\(playQualitiesInfo["seqid"] ?? "")|\("huya_live")|\("100")".md5
             let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
             if let data = Data(base64Encoded: base64EncodedData) {
                 let fm = String(data: data, encoding: .utf8)!
@@ -130,10 +132,11 @@ class DetailViewController: UIViewController, DetailProtocol {
                 nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
                 playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
                 playQualitiesInfo.removeValue(forKey: "fm")
+                playQualitiesInfo.removeValue(forKey: "txyp")
                 var playInfo: Array<URLQueryItem> = []
                 for key in playQualitiesInfo.keys {
                     let value = playQualitiesInfo[key] ?? ""
-                    playInfo.append(URLQueryItem(name: key, value: value))
+                    playInfo.append(.init(name: key, value: value))
                 }
                 var urlComps = URLComponents(string: "")!
                 urlComps.queryItems = playInfo
@@ -151,9 +154,15 @@ class DetailViewController: UIViewController, DetailProtocol {
     
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard let buttonPress = presses.first?.type else { return }
-        print("buttonPress.rawValue=====\(buttonPress.rawValue)")
+//        print("buttonPress.rawValue=====\(buttonPress.rawValue)")
+//        let alertCtl = UIAlertController(title: "提示", message:"rawValue:\(buttonPress.rawValue)", preferredStyle: .alert)
+//        alertCtl.addAction(.init(title: "cancel", style: .cancel))
+//        self.present(alertCtl, animated: true)
         if buttonPress == .menu || buttonPress.rawValue == 2041 {
-            navigationController?.popViewController(animated: true)
+//            navigationController?.popViewController(animated: true)
+            if playerView.isMaskShow {
+                playerView.isMaskShow.toggle()
+            }
         }else if buttonPress == .playPause || buttonPress.rawValue == 2040 {
             if playerView.playerLayer?.player.isPlaying ?? false == true {
                 playerView.pause()

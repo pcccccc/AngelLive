@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Kingfisher
+import KSPlayer
 
 struct LiveCardView: View {
     
@@ -22,11 +23,13 @@ struct LiveCardView: View {
     
     var body: some View {
         NavigationLink {
-            if liveModel.liveType == .douyu || liveModel.liveType == .huya {
-                KSAudioView(roomModel: liveModel)
+//            MainPlayerView(liveModel: liveModel)
+//                .edgesIgnoringSafeArea(.all)
+            if liveModel.liveType == .bilibili || liveModel.liveType == .douyin {
+                PlayerView(roomModel: liveModel, liveType: liveModel.liveType)
                     .edgesIgnoringSafeArea(.all)
             }else {
-                PlayerView(roomModel: liveModel, liveType: liveModel.liveType)
+                KSAudioView(roomModel: liveModel)
                     .edgesIgnoringSafeArea(.all)
             }
         } label: {

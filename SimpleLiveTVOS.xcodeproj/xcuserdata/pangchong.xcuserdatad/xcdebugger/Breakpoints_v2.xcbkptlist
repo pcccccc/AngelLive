@@ -7,16 +7,158 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "E86E97B5-4B5C-4623-8C6D-74653203E0E4"
+            uuid = "510E1C48-0E63-4F20-8A19-C7FFB8AB9449"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "../../../Library/Developer/Xcode/DerivedData/SimpleLiveTVOS-drziltdnidqlfzabkrebhfsbifhh/SourcePackages/checkouts/KSPlayer/Sources/KSPlayer/Video/VideoPlayerView.swift"
+            filePath = "SimpleLiveTVOS/MainPlayerView.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "139"
-            endingLineNumber = "139"
-            landmarkName = "onButtonPressed(type:button:)"
+            startingLineNumber = "294"
+            endingLineNumber = "294"
+            landmarkName = "body"
+            landmarkType = "24">
+            <Locations>
+               <Location
+                  uuid = "510E1C48-0E63-4F20-8A19-C7FFB8AB9449 - e8583037a9c7d567"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "SimpleLiveTVOS.VideoTimeShowView.body.getter : some"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/MainPlayerView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "303"
+                  endingLineNumber = "303"
+                  offsetFromSymbolStart = "1104">
+               </Location>
+               <Location
+                  uuid = "510E1C48-0E63-4F20-8A19-C7FFB8AB9449 - e8a8367586a0ab57"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #4 (SwiftUI.MoveCommandDirection) -&gt; () in SimpleLiveTVOS.VideoTimeShowView.body.getter : some"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/MainPlayerView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "294"
+                  endingLineNumber = "294"
+                  offsetFromSymbolStart = "432">
+               </Location>
+               <Location
+                  uuid = "510E1C48-0E63-4F20-8A19-C7FFB8AB9449 - e8a8367586a0ab57"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #4 (SwiftUI.MoveCommandDirection) -&gt; () in SimpleLiveTVOS.VideoTimeShowView.body.getter : some"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/MainPlayerView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "294"
+                  endingLineNumber = "294"
+                  offsetFromSymbolStart = "304">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "5C91941C-88B2-40C3-86A1-4CEC72AE4E68"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SimpleLiveTVOS/MainPlayerView.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "300"
+            endingLineNumber = "300"
+            landmarkName = "body"
+            landmarkType = "24">
+            <Locations>
+               <Location
+                  uuid = "5C91941C-88B2-40C3-86A1-4CEC72AE4E68 - e8583037a9c7d567"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "SimpleLiveTVOS.VideoTimeShowView.body.getter : some"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/MainPlayerView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "303"
+                  endingLineNumber = "303"
+                  offsetFromSymbolStart = "1104">
+               </Location>
+               <Location
+                  uuid = "5C91941C-88B2-40C3-86A1-4CEC72AE4E68 - e8a8367586a0a41d"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #4 (SwiftUI.MoveCommandDirection) -&gt; () in SimpleLiveTVOS.VideoTimeShowView.body.getter : some"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/MainPlayerView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "300"
+                  endingLineNumber = "300"
+                  offsetFromSymbolStart = "720">
+               </Location>
+               <Location
+                  uuid = "5C91941C-88B2-40C3-86A1-4CEC72AE4E68 - e8a8367586a0a47c"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #4 (SwiftUI.MoveCommandDirection) -&gt; () in SimpleLiveTVOS.VideoTimeShowView.body.getter : some"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/MainPlayerView.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "301"
+                  endingLineNumber = "301"
+                  offsetFromSymbolStart = "720">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "21EAABFC-0D3F-4C53-8C08-0ADAE885C2FE"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SimpleLiveTVOS/Model/LiveModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "147"
+            endingLineNumber = "147"
+            landmarkName = "getPlayArgs()"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "F3360B48-8843-4082-AC76-DD5F42959374"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SimpleLiveTVOS/Model/LiveModel.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "157"
+            endingLineNumber = "157"
+            landmarkName = "getPlayArgs()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>

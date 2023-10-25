@@ -32,8 +32,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kingslay/KSPlayer.git",
       "state" : {
-        "revision" : "32d101122eb07b7ba7ca9590504e8e580cb2f8d3",
-        "version" : "2.1.2"
+        "branch" : "develop",
+        "revision" : "0e6bf4e8ec07f019962d259d802d97af74331a11"
       }
     },
     {
