@@ -8,6 +8,12 @@
 >  该项目目前虽然已经实现主要功能，但尚未稳定。
 >  第一次使用SwiftUI写App，代码较烂请大佬多多指点。
 
+## 问题反馈
+
+[Telegram](https://t.me/+N1BDeo05leU0OWVl)
+
+[提交issue](https://github.com/pcccccc/SimpleLiveTVOS/issues/new/choose)
+
 ## 截图：
 
   <img src="./ScreenShot/normal.png" alt="浅色模式" style="zoom:30%;" />
