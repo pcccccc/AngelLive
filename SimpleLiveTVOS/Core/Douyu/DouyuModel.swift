@@ -58,37 +58,38 @@ struct DouyuRoomListData: Codable {
 
 struct DouyuRoomModel: Codable {
     let type: Int
-    let rid: Int
-    let rn: String
-    let uid: Int
-    let nn: String
-    let cid1: Int
-    let cid2: Int
-    let cid3: Int
-    let iv: Int
-    let av: String
-    let ol: Int
-    let c2url: String
-    let c2name: String
-    let rs16_avif: String
+    let rid: Int?
+    let rn: String?
+    let uid: Int?
+    let nn: String?
+    let cid1: Int?
+    let cid2: Int?
+    let cid3: Int?
+    let iv: Int?
+    let av: String?
+    let ol: Int?
+    let c2url: String?
+    let c2name: String?
+    let rs16_avif: String?
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.type = try container.decode(Int.self, forKey: .type)
-        self.rid = try container.decode(Int.self, forKey: .rid)
-        self.rn = try container.decode(String.self, forKey: .rn)
-        self.uid = try container.decode(Int.self, forKey: .uid)
-        self.nn = try container.decode(String.self, forKey: .nn)
-        self.cid1 = try container.decode(Int.self, forKey: .cid1)
-        self.cid2 = try container.decode(Int.self, forKey: .cid2)
-        self.cid3 = try container.decode(Int.self, forKey: .cid3)
-        self.iv = try container.decode(Int.self, forKey: .iv)
-        let av = try container.decode(String.self, forKey: .av)
-        self.av = "https://apic.douyucdn.cn/upload/\(av)_middle.jpg"
-        self.ol = try container.decode(Int.self, forKey: .ol)
-        self.c2url = try container.decode(String.self, forKey: .c2url)
-        self.c2name = try container.decode(String.self, forKey: .c2name)
-        self.rs16_avif = try container.decode(String.self, forKey: .rs16_avif)
+        self.rid = try container.decodeIfPresent(Int.self, forKey: .rid)
+        self.rn = try container.decodeIfPresent(String.self, forKey: .rn)
+        self.uid = try container.decodeIfPresent(Int.self, forKey: .uid)
+        self.nn = try container.decodeIfPresent(String.self, forKey: .nn)
+        self.cid1 = try container.decodeIfPresent(Int.self, forKey: .cid1)
+        self.cid2 = try container.decodeIfPresent(Int.self, forKey: .cid2)
+        self.cid3 = try container.decodeIfPresent(Int.self, forKey: .cid3)
+        self.iv = try container.decodeIfPresent(Int.self, forKey: .iv)
+        let av = try container.decodeIfPresent(String.self, forKey: .av)
+        self.av = "https://apic.douyucdn.cn/upload/\(av ?? "")_middle.jpg"
+        self.ol = try container.decodeIfPresent(Int.self, forKey: .ol)
+        self.c2url = try container.decodeIfPresent(String.self, forKey: .c2url)
+        self.c2name = try container.decodeIfPresent(String.self, forKey: .c2name)
+        self.rs16_avif = try container.decodeIfPresent(String.self, forKey: .rs16_avif)
+        
     }
 }
 
@@ -119,15 +120,32 @@ class Douyu {
     }
     
     public class func getCategoryRooms(category: DouyuSubListModel, page: Int) async throws -> Array<LiveModel> {
-        let dataReq = try await AF.request(
-            "https://www.douyu.com/gapi/rkc/directory/mixList/2_\(category.cid2)/\(page)",
-            method: .get
-        ).serializingDecodable(DouyuRoomMain.self).value
-        var tempArray: Array<LiveModel> = []
-        for item in dataReq.data.rl {
-            tempArray.append(LiveModel(userName: item.nn, roomTitle: item.rn, roomCover: item.rs16_avif, userHeadImg: item.av, liveType: .douyu, liveState: "", userId: "\(item.uid)", roomId: "\(item.rid)"))
+        do {
+            let dataReq = try await AF.request(
+                "https://www.douyu.com/gapi/rkc/directory/mixList/2_\(category.cid2)/\(page)",
+                method: .get
+            ).serializingDecodable(DouyuRoomMain.self).value
+            var tempArray: Array<LiveModel> = []
+            for item in dataReq.data.rl {
+                if item.type == 1 {
+                    tempArray.append(LiveModel(userName: item.nn!, roomTitle: item.rn!, roomCover: item.rs16_avif!, userHeadImg: item.av!, liveType: .douyu, liveState: "", userId: "\(item.uid!)", roomId: "\(item.rid!)"))
+                }
+            }
+            return tempArray
+        }catch {
+            print(error)
+            let dataReq = try await AF.request(
+                "https://www.douyu.com/gapi/rkc/directory/mixList/2_\(category.cid2)/\(page)",
+                method: .get
+            ).serializingDecodable(DouyuRoomMain.self).value
+            var tempArray: Array<LiveModel> = []
+            for item in dataReq.data.rl {
+                if item.type == 1 {
+                    tempArray.append(LiveModel(userName: item.nn!, roomTitle: item.rn!, roomCover: item.rs16_avif!, userHeadImg: item.av!, liveType: .douyu, liveState: "", userId: "\(item.uid!)", roomId: "\(item.rid!)"))
+                }
+            }
+            return tempArray
         }
-        return tempArray
     }
     
     

@@ -15,21 +15,9 @@ protocol DetailProtocol: UIViewController {
 }
 
 class DetailViewController: UIViewController, DetailProtocol {
-    #if os(iOS)
-    override var preferredStatusBarStyle: UIStatusBarStyle {
-        .lightContent
-    }
 
-    override var prefersStatusBarHidden: Bool {
-        !playerView.isMaskShow
-    }
-
-    private let playerView = IOSVideoPlayerView()
-    #elseif os(tvOS)
     private let playerView = VideoPlayerView()
-    #else
-    private let playerView = CustomVideoPlayerView()
-    #endif
+
     var resource: KSPlayerResource? {
         didSet {
             if let resource {
@@ -42,39 +30,22 @@ class DetailViewController: UIViewController, DetailProtocol {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.addSubview(playerView)
-//        playerView.controllerView.isHidden = true
-//        playerView.topMaskView.isHidden = true
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
         KSOptions.isAutoPlay = true
         playerView.delegate = self
         playerView.translatesAutoresizingMaskIntoConstraints = false
-        #if os(iOS)
-        NSLayoutConstraint.activate([
-            playerView.topAnchor.constraint(equalTo: view.readableContentGuide.topAnchor),
-            playerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            playerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            playerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-        #else
+
         NSLayoutConstraint.activate([
             playerView.topAnchor.constraint(equalTo: view.topAnchor),
             playerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             playerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             playerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-        #endif
+        
         view.layoutIfNeeded()
         playerView.backBlock = { [unowned self] in
-            #if os(iOS)
-            if UIApplication.shared.statusBarOrientation.isLandscape {
-                playerView.updateUI(isLandscape: false)
-            } else {
-                navigationController?.popViewController(animated: true)
-            }
-            #else
             navigationController?.popViewController(animated: true)
-            #endif
         }
         playerView.becomeFirstResponder()
         Task {
