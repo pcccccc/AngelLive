@@ -188,7 +188,7 @@ class Bilibili {
             if let listModelArray = dataReq.data.list {
                 var tempArray: Array<LiveModel> = []
                 for item in listModelArray {
-                    tempArray.append(LiveModel(userName: item.uname, roomTitle: item.title, roomCover: item.cover, userHeadImg: item.user_cover, liveType: .bilibili, liveState: "", userId: "\(item.uid)", roomId: "\(item.roomid)"))
+                    tempArray.append(LiveModel(userName: item.uname, roomTitle: item.title, roomCover: item.cover, userHeadImg: item.face, liveType: .bilibili, liveState: "", userId: "\(item.uid)", roomId: "\(item.roomid)"))
                 }
                 return tempArray
             }else {

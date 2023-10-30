@@ -21,12 +21,13 @@
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
 		FB288AC02AEC229900FA6586 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB288ABF2AEC229900FA6586 /* PlayerView.swift */; };
 		FB651C322AB2A0F5005BFA90 /* DouyinModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */; };
+		FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8DFD112AEFF487002644AD /* DetailViewController.swift */; };
 		FBA907842AE5100500A69FBE /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907832AE5100500A69FBE /* LoadingView.swift */; };
 		FBA907922AE6A6EB00A69FBE /* MainPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907912AE6A6EB00A69FBE /* MainPlayerView.swift */; };
-		FBA907952AE6A93000A69FBE /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBA907942AE6A93000A69FBE /* KSPlayer */; };
 		FBA907972AE812BB00A69FBE /* SwipeGestureActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */; };
 		FBA907D12AEBF7E500A69FBE /* AboutUSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907D02AEBF7E500A69FBE /* AboutUSView.swift */; };
 		FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907D42AEBFE9200A69FBE /* KSAudioView.swift */; };
+		FBBEB5402AEFF31F00F2601A /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBBEB53F2AEFF31F00F2601A /* KSPlayer */; };
 		FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */; };
 		FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */; };
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
@@ -35,7 +36,6 @@
 		FBDEE47C2AD63B3100F996BA /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE47B2AD63B3100F996BA /* SQLite */; };
 		FBDEE47E2AD64FD000F996BA /* SQLiteManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */; };
 		FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */; };
-		FBEBC1892ACC5DEC007F8CD1 /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */; };
 		FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */; };
 		FBFEDA4A2AD2A7B800D96D7D /* LiveModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */; };
 /* End PBXBuildFile section */
@@ -75,6 +75,7 @@
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
 		FB288ABF2AEC229900FA6586 /* PlayerView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DouyinModel.swift; sourceTree = "<group>"; };
+		FB8DFD112AEFF487002644AD /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
 		FBA907832AE5100500A69FBE /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		FBA907912AE6A6EB00A69FBE /* MainPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayerView.swift; sourceTree = "<group>"; };
 		FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeGestureActions.swift; sourceTree = "<group>"; };
@@ -86,7 +87,6 @@
 		FBDEE4752AD42FD100F996BA /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
 		FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteManager.swift; sourceTree = "<group>"; };
 		FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteMainView.swift; sourceTree = "<group>"; };
-		FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
 		FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMainView.swift; sourceTree = "<group>"; };
 		FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -97,7 +97,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FBDEE47C2AD63B3100F996BA /* SQLite in Frameworks */,
-				FBA907952AE6A93000A69FBE /* KSPlayer in Frameworks */,
+				FBBEB5402AEFF31F00F2601A /* KSPlayer in Frameworks */,
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
@@ -144,8 +144,8 @@
 		4FC3DCDC2A49382F00CA36B9 /* SimpleLiveTVOS */ = {
 			isa = PBXGroup;
 			children = (
+				FB8DFD112AEFF487002644AD /* DetailViewController.swift */,
 				FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */,
-				FBEBC1882ACC5DEC007F8CD1 /* DetailViewController.swift */,
 				FBFEDA482AD2A79700D96D7D /* Model */,
 				FBC2E6F12ACD83350036BFD4 /* Tools */,
 				4FC9B3912A53BEB100C0D3C8 /* Core */,
@@ -275,7 +275,7 @@
 				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
 				FBDEE4782AD5874900F996BA /* SimpleToast */,
 				FBDEE47B2AD63B3100F996BA /* SQLite */,
-				FBA907942AE6A93000A69FBE /* KSPlayer */,
+				FBBEB53F2AEFF31F00F2601A /* KSPlayer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -354,7 +354,7 @@
 				4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */,
 				FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */,
 				FBDEE47A2AD63B3100F996BA /* XCRemoteSwiftPackageReference "SQLite" */,
-				FBA907932AE6A93000A69FBE /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				FBBEB53E2AEFF31F00F2601A /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -403,8 +403,8 @@
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */,
-				FBEBC1892ACC5DEC007F8CD1 /* DetailViewController.swift in Sources */,
 				FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */,
+				FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */,
 				FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */,
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
 				FB288AC02AEC229900FA6586 /* PlayerView.swift in Sources */,
@@ -769,9 +769,9 @@
 				minimumVersion = 5.7.1;
 			};
 		};
-		FBA907932AE6A93000A69FBE /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+		FBBEB53E2AEFF31F00F2601A /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
+			repositoryURL = "https://github.com/pcccccc/KSPlayer.git";
 			requirement = {
 				branch = develop;
 				kind = branch;
@@ -806,9 +806,9 @@
 			package = 4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
 		};
-		FBA907942AE6A93000A69FBE /* KSPlayer */ = {
+		FBBEB53F2AEFF31F00F2601A /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = FBA907932AE6A93000A69FBE /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			package = FBBEB53E2AEFF31F00F2601A /* XCRemoteSwiftPackageReference "KSPlayer" */;
 			productName = KSPlayer;
 		};
 		FBDEE4782AD5874900F996BA /* SimpleToast */ = {

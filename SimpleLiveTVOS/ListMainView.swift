@@ -33,6 +33,7 @@ struct ListMainView: View {
     @State var toastTypeIsSuccess: Bool = false
     @State var loadingText: String = "正在获取内容"
     @State var needFullScreenLoading: Bool = false
+    private static let topId = "topIdHere"
     private let toastOptions = SimpleToastOptions(
         hideAfter: 2
     )
@@ -54,24 +55,35 @@ struct ListMainView: View {
                 })
                 .cornerRadius(20)
                 .focused($focusState, equals: .leftMenu)
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
-                        ForEach(0..<roomContentArray.count, id: \.self) { index in
-                            autoreleasepool {
-                                LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
-                                    self.loadingText = loadingText
-                                    needFullScreenLoading = true
-                                }, showToast: { success, delete, hint in
-                                    toastTypeIsSuccess = success
-                                    toastTitle = hint
-                                    needFullScreenLoading = false
-                                    showToast.toggle()
-                                })
-                                
+                ScrollViewReader { reader in
+                    ScrollView {
+                        ZStack {
+                            
+                        }.id(Self.topId)
+                        LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
+                            ForEach(0..<roomContentArray.count, id: \.self) { index in
+                                autoreleasepool {
+                                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
+                                        self.loadingText = loadingText
+                                        needFullScreenLoading = true
+                                    }, showToast: { success, delete, hint in
+                                        toastTypeIsSuccess = success
+                                        toastTitle = hint
+                                        needFullScreenLoading = false
+                                        showToast.toggle()
+                                    })
+                                    
+                                }
                             }
                         }
                     }
+                    .onPlayPauseCommand(perform: {
+                        page = 1
+                        getRoomList()
+                    })
+                    
                 }
+                
             }
             .blur(radius: needFullScreenLoading == true ? 10 : 0)
         }
@@ -102,6 +114,7 @@ struct ListMainView: View {
                 .cornerRadius(10)
                 .padding(.top)
         }
+        
     }
     
     func getRoomList() {
@@ -112,12 +125,15 @@ struct ListMainView: View {
             
             if liveType == .bilibili {
                 let res = try await Bilibili.getCategoryRooms(category: currentCategoryModel as! BilibiliCategoryModel, page: page)
-                DispatchQueue.main.async {
-                    
-                    if page == 1 {
-                        roomContentArray = []
-                    }
-                    roomContentArray += res
+                if page == 1 {
+                    roomContentArray.removeAll()
+                    toastTypeIsSuccess = true
+                    toastTitle = "已为您获取最新内容"
+                    showToast.toggle()
+                }
+                roomContentArray += res
+                if page == 1 {
+                    mainContentfocusState = 0
                 }
             }else if liveType == .douyin {
                 let partitionId = (currentCategoryModel as! DouyinCategoryData).partition.id_str
@@ -125,20 +141,39 @@ struct ListMainView: View {
                 let res = try await Douyin.getDouyinCategoryList(partitionId: partitionId, partitionType: partitionType, page: page)
                 if page == 1 {
                     roomContentArray.removeAll()
+                    toastTypeIsSuccess = true
+                    toastTitle = "已为您获取最新内容"
+                    showToast.toggle()
                 }
                 roomContentArray += res
+                if page == 1 {
+                    mainContentfocusState = 0
+                }
             }else if liveType == .douyu {
                 let res = try await Douyu.getCategoryRooms(category: currentCategoryModel as! DouyuSubListModel, page: page)
                 if page == 1 {
                     roomContentArray.removeAll()
+                    toastTypeIsSuccess = true
+                    toastTitle = "已为您获取最新内容"
+                    showToast.toggle()
+                   
                 }
                 roomContentArray += res
+                if page == 1 {
+                    mainContentfocusState = 0
+                }
             }else if liveType == .huya {
                 let res = try await Huya.getCategoryRooms(category: currentCategoryModel as! HuyaSubListModel, page: page)
                 if page == 1 {
                     roomContentArray.removeAll()
+                    toastTypeIsSuccess = true
+                    toastTitle = "已为您获取最新内容"
+                    showToast.toggle()
                 }
                 roomContentArray += res
+                if page == 1 {
+                    mainContentfocusState = 0
+                }
             }
         }
     }

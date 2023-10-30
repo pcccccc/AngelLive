@@ -30,10 +30,10 @@
     {
       "identity" : "ksplayer",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kingslay/KSPlayer.git",
+      "location" : "https://github.com/pcccccc/KSPlayer.git",
       "state" : {
         "branch" : "develop",
-        "revision" : "0e6bf4e8ec07f019962d259d802d97af74331a11"
+        "revision" : "b845168b9152ce1ec3a07f195435a4f8ff5e5045"
       }
     },
     {
