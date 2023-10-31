@@ -23,15 +23,8 @@ struct LiveCardView: View {
     
     var body: some View {
         NavigationLink {
-//            MainPlayerView(liveModel: liveModel)
-//                .edgesIgnoringSafeArea(.all)
-            if liveModel.liveType == .bilibili || liveModel.liveType == .douyin {
-                PlayerView(roomModel: liveModel, liveType: liveModel.liveType)
-                    .edgesIgnoringSafeArea(.all)
-            }else {
-                KSAudioView(roomModel: liveModel)
-                    .edgesIgnoringSafeArea(.all)
-            }
+            KSAudioView(roomModel: liveModel)
+                .edgesIgnoringSafeArea(.all)
         } label: {
             VStack(spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {

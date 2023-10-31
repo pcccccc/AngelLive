@@ -39,53 +39,51 @@ struct ListMainView: View {
     )
     
     var body: some View {
-        ZStack(alignment: .top) {
-            if needFullScreenLoading == true {
-                GeometryReader { proxy in
-                    LoadingView(loadingText: $loadingText)
-                        .frame(width: proxy.size.width, height: proxy.size.height)
+        ScrollViewReader { reader in
+            ZStack(alignment: .top) {
+                if needFullScreenLoading == true {
+                    GeometryReader { proxy in
+                        LoadingView(loadingText: $loadingText)
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                    }
+                    .zIndex(1)
                 }
-                .zIndex(1)
-            }
-            HStack(spacing: 15) {
-                LeftMenu(liveType:liveType, size: $size, currentIndex: $leftMenuCurrentSelectIndex, isShowSubList: $leftMenuShowSubList, leftMenuDidClick: { _, _, categoryModel in
-                    page = 1
-                    currentCategoryModel = categoryModel
-                    getRoomList()
-                })
-                .cornerRadius(20)
-                .focused($focusState, equals: .leftMenu)
-                ScrollViewReader { reader in
+                HStack(spacing: 15) {
+                    LeftMenu(liveType:liveType, size: $size, currentIndex: $leftMenuCurrentSelectIndex, isShowSubList: $leftMenuShowSubList, leftMenuDidClick: { _, _, categoryModel in
+                        page = 1
+                        currentCategoryModel = categoryModel
+                        getRoomList()
+                    })
+                    .cornerRadius(20)
+                    .focused($focusState, equals: .leftMenu)
+                    
                     ScrollView {
                         ZStack {
                             
-                        }.id(Self.topId)
+                        }
+                        .id(Self.topId)
                         LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
                             ForEach(0..<roomContentArray.count, id: \.self) { index in
-                                autoreleasepool {
-                                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
-                                        self.loadingText = loadingText
-                                        needFullScreenLoading = true
-                                    }, showToast: { success, delete, hint in
-                                        toastTypeIsSuccess = success
-                                        toastTitle = hint
-                                        needFullScreenLoading = false
-                                        showToast.toggle()
-                                    })
-                                    
-                                }
+                                LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
+                                    self.loadingText = loadingText
+                                    needFullScreenLoading = true
+                                }, showToast: { success, delete, hint in
+                                    toastTypeIsSuccess = success
+                                    toastTitle = hint
+                                    needFullScreenLoading = false
+                                    showToast.toggle()
+                                })
                             }
                         }
                     }
-                    .onPlayPauseCommand(perform: {
-                        page = 1
-                        getRoomList()
-                    })
-                    
                 }
-                
             }
             .blur(radius: needFullScreenLoading == true ? 10 : 0)
+            .onPlayPauseCommand(perform: {
+                page = 1
+                getRoomList()
+                reader.scrollTo(Self.topId)
+            })
         }
         .onChange(of: focusState, perform: { newFocus in
             if newFocus == .leftMenu {
@@ -113,6 +111,7 @@ struct ListMainView: View {
                 .foregroundColor(Color.white)
                 .cornerRadius(10)
                 .padding(.top)
+
         }
         
     }
@@ -132,9 +131,6 @@ struct ListMainView: View {
                     showToast.toggle()
                 }
                 roomContentArray += res
-                if page == 1 {
-                    mainContentfocusState = 0
-                }
             }else if liveType == .douyin {
                 let partitionId = (currentCategoryModel as! DouyinCategoryData).partition.id_str
                 let partitionType = (currentCategoryModel as! DouyinCategoryData).partition.type
@@ -146,9 +142,6 @@ struct ListMainView: View {
                     showToast.toggle()
                 }
                 roomContentArray += res
-                if page == 1 {
-                    mainContentfocusState = 0
-                }
             }else if liveType == .douyu {
                 let res = try await Douyu.getCategoryRooms(category: currentCategoryModel as! DouyuSubListModel, page: page)
                 if page == 1 {
@@ -159,9 +152,6 @@ struct ListMainView: View {
                    
                 }
                 roomContentArray += res
-                if page == 1 {
-                    mainContentfocusState = 0
-                }
             }else if liveType == .huya {
                 let res = try await Huya.getCategoryRooms(category: currentCategoryModel as! HuyaSubListModel, page: page)
                 if page == 1 {
@@ -171,9 +161,6 @@ struct ListMainView: View {
                     showToast.toggle()
                 }
                 roomContentArray += res
-                if page == 1 {
-                    mainContentfocusState = 0
-                }
             }
         }
     }

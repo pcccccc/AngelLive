@@ -95,7 +95,7 @@ public struct LiveModel: Codable {
                                 maxQn = item.qn
                             }
                         }
-                        let playInfo = try await Bilibili.getPlayUrl(roomModel: self, qn: maxQn)
+                        let playInfo = try await Bilibili.getPlayUrl(roomId: roomId, qn: maxQn)
                         for streamInfo in playInfo.data.playurl_info.playurl.stream {
                             if streamInfo.protocol_name == "http_hls" {
                                 let url = (streamInfo.format.last?.codec.last?.url_info.last?.host ?? "") + (streamInfo.format.last?.codec.last?.base_url ?? "") + (streamInfo.format.last?.codec.last?.url_info.last?.extra ?? "")
@@ -143,7 +143,7 @@ public struct LiveModel: Codable {
             }
         }else if liveType == .huya {
             do {
-                let liveData = try await Huya.getPlayArgs(rid: roomId)
+                let liveData = try await Huya.getPlayArgs(rid: self.roomId)
                 if liveData != nil {
                     let streamInfo = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
                     var playQualitiesInfo: Dictionary<String, String> = [:]
@@ -157,11 +157,13 @@ public struct LiveModel: Codable {
                     playQualitiesInfo.updateValue("1", forKey: "ver")
                     playQualitiesInfo.updateValue("2110211124", forKey: "sv")
                     let uid = try await Huya.getAnonymousUid()
-                    let now = Date().timeIntervalSince1970 * 1000
+                    let now = Int(Date().timeIntervalSince1970) * 1000
                     playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
                     playQualitiesInfo.updateValue(uid, forKey: "uid")
                     playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
-                    let ss = "\(playQualitiesInfo["seqid"] ?? "")|\(playQualitiesInfo["ctype"] ?? "")|\(playQualitiesInfo["t"] ?? "")".md5
+                    playQualitiesInfo.updateValue("100", forKey: "t")
+                    playQualitiesInfo.updateValue("huya_live", forKey: "ctype")
+                    let ss = "\(playQualitiesInfo["seqid"] ?? "")|\("huya_live")|\("100")".md5
                     let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
                     if let data = Data(base64Encoded: base64EncodedData) {
                         let fm = String(data: data, encoding: .utf8)!
@@ -169,33 +171,72 @@ public struct LiveModel: Codable {
                         nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
                         playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
                         playQualitiesInfo.removeValue(forKey: "fm")
+                        playQualitiesInfo.removeValue(forKey: "txyp")
                         var playInfo: Array<URLQueryItem> = []
                         for key in playQualitiesInfo.keys {
                             let value = playQualitiesInfo[key] ?? ""
-                            playInfo.append(URLQueryItem(name: key, value: value))
+                            playInfo.append(.init(name: key, value: value))
                         }
                         var urlComps = URLComponents(string: "")!
                         urlComps.queryItems = playInfo
                         let result = urlComps.url!
-                        let res = result.absoluteString as NSString
+                        var res = result.absoluteString as NSString
+
+                        var url = ""
+                        var maxRate = 0
                         for streamInfo in liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value ?? [] {
-                            print("\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)")
-                            print("\(streamInfo.sHlsUrl)/\(streamInfo.sStreamName).\(streamInfo.sHlsUrlSuffix)\(res)")
-                            return "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)"
+                            if maxRate < streamInfo.iMobilePriorityRate {
+                                maxRate = streamInfo.iMobilePriorityRate
+                                url = "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)"
+                            }
                         }
+                        return url
                     }
                 }
-                return nil
+                
             }catch {
                 return nil
             }
         }
         return nil
     }
+    
+    func getPlayArgsV2() async throws -> Array<LiveQuality> {
+        var liveQualtys: Array<LiveQuality> = []
+        if liveType == .bilibili {
+            do {
+                let quality = try await Bilibili.getVideoQualites(roomModel:self)
+                if quality.code == 0 {
+                    if let qualityDescription = quality.data.quality_description {
+                        for item in qualityDescription {
+                            liveQualtys.append(.init(roomId: self.roomId, title: item.desc, qn: item.qn, liveType: .bilibili))
+                        }
+                    }
+                }
+                return liveQualtys
+            }catch {
+                return liveQualtys
+            }
+        }
+        return liveQualtys
+    }
 }
 
 struct LiveQuality {
+    var roomId: String
     var title: String
-    var url: String
     var qn: Int //bilibili用qn请求地址
+    var liveType: LiveType
+    
+    func getPlayURL() async throws -> String?  {
+        let playInfo = try await Bilibili.getPlayUrl(roomId: roomId, qn: qn)
+        var urls:Array<String> = []
+        for streamInfo in playInfo.data.playurl_info.playurl.stream {
+            if streamInfo.protocol_name == "http_hls" {
+                let url = (streamInfo.format.last?.codec.last?.url_info.last?.host ?? "") + (streamInfo.format.last?.codec.last?.base_url ?? "") + (streamInfo.format.last?.codec.last?.url_info.last?.extra ?? "")
+                urls.append(url)
+            }
+        }
+        return urls.first
+    }
 }

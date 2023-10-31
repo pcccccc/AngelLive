@@ -101,6 +101,8 @@ struct HuyaRoomLiveQualityModel: Codable {
     let sHlsUrl: String
     let sHlsUrlSuffix: String
     let sHlsAntiCode: String
+    let sCodec: String?
+    let iMobilePriorityRate: Int
 }
     
 class Huya {
