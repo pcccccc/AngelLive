@@ -68,7 +68,9 @@ class DetailViewController: UIViewController, DetailProtocol {
     func getPlayURL() async {
         do {
             let url = try await roomModel?.getPlayArgs()
-            self.resource = KSPlayerResource(url: URL(string: url ?? "")!)
+            if url != nil {
+                self.resource = KSPlayerResource(url: URL(string: url!)!)
+            }
         }catch {
             
         }

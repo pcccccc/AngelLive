@@ -202,15 +202,25 @@ class Bilibili {
     }
 
     public class func getVideoQualites(roomModel: LiveModel) async throws -> BilibiliMainData<BiliBiliQualityModel> {
-        return try await AF.request(
-            "https://api.live.bilibili.com/room/v1/Room/playUrl",
-            method: .get,
-            parameters: [
-                "platform": "web",
-                "cid": roomModel.roomId,
-                "qn": ""
-            ]
-        ).serializingDecodable(BilibiliMainData.self).value
+        do {
+            let dataReq = try await AF.request(
+                "https://api.live.bilibili.com/room/v1/Room/playUrl",
+                method: .get,
+                parameters: [
+                    "platform": "web",
+                    "cid": roomModel.roomId,
+                    "qn": ""
+                ]
+            ).serializingDecodable(BilibiliMainData<BiliBiliQualityModel>.self).value
+            if dataReq.code != 0 {
+                return BilibiliMainData(code: 0, msg: "解析清晰度错误", data: .init(current_qn: 10000, quality_description: [.init(qn: 10000, desc: "清晰")]))
+            }else {
+                return dataReq
+            }
+            
+        }catch {
+            return BilibiliMainData(code: 0, msg: "解析清晰度错误", data: .init(current_qn: 10000, quality_description: [.init(qn: 10000, desc: "清晰")]))
+        }
     }
 
     public class func getPlayUrl(roomId: String, qn: Int) async throws -> BilibiliMainData<BiliBiliPlayURLInfoMain> {
@@ -222,12 +232,9 @@ class Bilibili {
                 "room_id": roomId,
                 "qn": qn,
                 "protocol": "0,1",
-                "format": "0,1,2",
+                "format": "0,2",
                 "codec": "0,1",
                 "mask": "0"
-            ],
-            headers: [
-                .init(name: "Cookie", value: "buvid3=21C2409A-1902-E664-C2C7-E4B0277E3EA717526infoc; b_nut=1695029917; i-wanna-go-back=-1; b_ut=7; _uuid=810F8A10E6-A1058-6182-5987-9B5D7497F51117769infoc; CURRENT_FNVAL=4048; header_theme_version=CLOSE; DedeUserID=277251; DedeUserID__ckMd5=e1aa46f292203adb; LIVE_BUVID=AUTO6316960484733796; rpdid=|(u|kY)J~RlR0J'uYmY|R)lJR; buvid_fp_plain=undefined; hit-dyn-v2=1; enable_web_push=DISABLE; CURRENT_QUALITY=80; Hm_lvt_8a6e55dbd2870f0f5bc9194cddf32a02=1696048512,1696860032,1697030813,1698244104; SESSDATA=a570c9cb%2C1714104112%2C547d4%2Aa2CjAp21DyaMW878Y2wms_RuDYuDHJe7YHuROiBa4TVGu0gwdo6BfV4JK2PDI4qTzLdRASVnF3M1pWLVpYRmMyeDZtNnQ0NDRQUDZOR1VvV2l2UWlWTWtwRHdwWUxtcDFyU3AwU2xFZkh5RGFJeE8yVFJSRnlHSkhTb3E4ejF4eDBNMGh1QmhSdmhRIIEC; bili_jct=b7664cb94e6c26886c5f26fcf4f4c715; share_source_origin=QQ; bsource=share_source_qqchat; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2OTg4MzgwMjAsImlhdCI6MTY5ODU3ODc2MCwicGx0IjotMX0.FYJMT8aL--mo4XDgaYnazKUESpAMOeQBpcKpNOM3epU; bili_ticket_expires=1698837960; bp_video_offset_277251=857885091353853973; buvid4=C5A06120-C77B-549C-B4AA-8ABAD948791618054-023091817-er7Sqx3IN%2FompSIqzTjSUg%3D%3D; fingerprint=7c51aeaf16f9f95f89f25a1b6261d423; buvid_fp=7c51aeaf16f9f95f89f25a1b6261d423; sid=78a9dcbi; innersign=0; b_lsid=271841B1_18B85CCADEE; home_feed_column=5; browser_resolution=1633-923; PVID=3")
             ]
         ).serializingDecodable(BilibiliMainData.self).value
     }
