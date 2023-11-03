@@ -36,6 +36,15 @@ struct FavoriteMainView: View {
                 }
             }
         }
+        .simpleToast(isPresented: $showToast, options: toastOptions) {
+            Label(toastTitle, systemImage:toastTypeIsSuccess == true ? "checkmark.circle":"info.circle.fill")
+                .padding()
+                .background(toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                .foregroundColor(Color.white)
+                .cornerRadius(10)
+                .padding(.top)
+
+        }
         .task {
             await getRoomList()
         }

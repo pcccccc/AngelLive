@@ -1,11 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "douyu.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "douyu.png",
       "idiom" : "universal",
       "scale" : "2x"
     },

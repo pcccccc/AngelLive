@@ -24,7 +24,7 @@ struct ContentView: View {
                 .tag(0)
                 ListMainView(liveType: .bilibili)
                 .tabItem {
-                    Label("bilibi", image: "bilibili")
+                    Label("bilibili", image: "bilibili_2")
                 }
                 .tag(1)
                 ListMainView(liveType: .huya)

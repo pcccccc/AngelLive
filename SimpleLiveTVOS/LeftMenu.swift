@@ -156,7 +156,7 @@ struct LeftMenu: View {
                 }
                 switch self.liveType {
                     case .bilibili:
-                        self.menuImg = "bilibili"
+                        self.menuImg = "bilibili_2"
                     case .douyu:
                         self.menuImg = "douyu"
                     case .huya:

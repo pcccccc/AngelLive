@@ -18,16 +18,32 @@ struct LiveCardView: View {
     @State private var showAlert = false
     @State private var isCellVisible: Bool = false
     @State private var favorited: Bool = false
+    @State private var isLive: Bool = false
     var showLoading: (String) -> Void = { _ in }
     var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
     
     var body: some View {
-        NavigationLink {
-            KSAudioView(roomModel: liveModel)
-                .edgesIgnoringSafeArea(.all)
+        Button {
+            if isFavoritePage == true && liveModel.liveState == "正在直播" {
+                isLive = true
+            }else if isFavoritePage == false {
+                isLive = true
+            }else {
+                self.showToast(false, false, "该主播正在休息哦")
+                isLive = false
+            }
         } label: {
             VStack(spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
+                    NavigationLink(isActive: $isLive) {
+                        KSAudioView(roomModel: liveModel)
+                            .edgesIgnoringSafeArea(.all)
+                    } label: {
+                        EmptyView()
+                    }
+                    .frame(width: 0, height: 0)
+                    .hidden()
+                    .opacity(0.0)
                     if isCellVisible {
                         KFImage(URL(string: liveModel.roomCover))
                             .resizable()
@@ -38,7 +54,7 @@ struct LiveCardView: View {
                             Image(uiImage: .init(named: getImage())!)
                                 .resizable()
                                 .frame(width: 40, height: 40)
-                                .background(liveModel.liveType == .bilibili ? Color.black.opacity(0.3) : Color.clear)
+//                                .background(liveModel.liveType == .bilibili ? Color.black.opacity(0.3) : Color.clear)
                                 .cornerRadius(5)
                                 .padding(.top, 5)
                                 .padding(.leading, 5)
@@ -49,16 +65,26 @@ struct LiveCardView: View {
                                     ProgressView()
                                         .scaleEffect(0.5)
                                 }else {
-                                    Circle()
-                                        .fill(liveModel.liveState ?? "" == "正在直播" ? Color.green : Color.gray)
-                                        .frame(width: 10, height: 10)
-                                    Text(liveModel.liveState ?? "")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(Color.white)
+                                    HStack(spacing: 5) {
+                                        Circle()
+                                            .fill(liveModel.liveState ?? "" == "正在直播" ? Color.green : Color.gray)
+                                            .frame(width: 10, height: 10)
+                                            .padding(.leading, 5)
+                                        Text(liveModel.liveState ?? "")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(Color.white)
+                                            .padding(.trailing, 5)
+                                            .padding(.top, 5)
+                                            .padding(.bottom, 5)
+                                    }
+                                    .background(Color("favorite_right_hint"))
+                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                                    
                                 }
                             }
                             .padding(.trailing, 5)
-                        }.task {
+                        }
+                        .task {
                             do {
                                 if self.isFavoritePage == true {
                                     try await liveModel.getLiveState()
@@ -187,7 +213,7 @@ struct LiveCardView: View {
     func getImage() -> String {
         switch liveModel.liveType {
             case .bilibili:
-                return "bilibili"
+                return "bilibili_2"
             case .douyu:
                 return "douyu"
             case .huya:

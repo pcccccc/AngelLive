@@ -1,11 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "bilibili_2.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "bilibili_2.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
