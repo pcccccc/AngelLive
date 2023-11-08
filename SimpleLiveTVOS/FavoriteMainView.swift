@@ -17,33 +17,45 @@ struct FavoriteMainView: View {
     @State var showToast: Bool = false
     @State var toastTitle: String = ""
     @State var toastTypeIsSuccess: Bool = false
+    @State var loadingText: String = "正在获取内容"
+    @State var needFullScreenLoading: Bool = false
     private let toastOptions = SimpleToastOptions(
         hideAfter: 1
     )
     
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
-                ForEach(roomContentArray.indices, id: \.self) { index in
-                    LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, isFavoritePage: true) { success, delete, hint in
-                        toastTypeIsSuccess = success
-                        toastTitle = hint
-                        showToast.toggle()
-                        if delete {
-                            roomContentArray.remove(at: index)
+        ZStack {
+            if needFullScreenLoading == true && roomContentArray.isEmpty {
+                GeometryReader { proxy in
+                    LoadingView(loadingText: $loadingText)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+                .zIndex(1)
+            }else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
+                        ForEach(roomContentArray.indices, id: \.self) { index in
+                            LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, isFavoritePage: true) { success, delete, hint in
+                                toastTypeIsSuccess = success
+                                toastTitle = hint
+                                showToast.toggle()
+                                if delete {
+                                    roomContentArray.remove(at: index)
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-        .simpleToast(isPresented: $showToast, options: toastOptions) {
-            Label(toastTitle, systemImage:toastTypeIsSuccess == true ? "checkmark.circle":"info.circle.fill")
-                .padding()
-                .background(toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-                .foregroundColor(Color.white)
-                .cornerRadius(10)
-                .padding(.top)
+                .simpleToast(isPresented: $showToast, options: toastOptions) {
+                    Label(toastTitle, systemImage:toastTypeIsSuccess == true ? "checkmark.circle":"info.circle.fill")
+                        .padding()
+                        .background(toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                        .foregroundColor(Color.white)
+                        .cornerRadius(10)
+                        .padding(.top)
 
+                }
+            }
         }
         .task {
             await getRoomList()
@@ -52,15 +64,18 @@ struct FavoriteMainView: View {
     
     func getRoomList() async {
         do {
+            needFullScreenLoading = true
             let newItem = try await CloudSQLManager.searchRecord()
             for item in newItem {
                 if roomContentArray.contains(where: { $0.roomId == item.roomId }) == false {
                     roomContentArray.append(item)
                 }
             }
+            if roomContentArray.isEmpty == false {
+                needFullScreenLoading = false
+            }
         }catch {
-            
-            
+            loadingText = error.localizedDescription
         }
     }
 }

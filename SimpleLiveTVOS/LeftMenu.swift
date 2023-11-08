@@ -30,6 +30,8 @@ struct LeftMenu: View {
     @State private var menuImg = ""
     var leftMenuDidClick: (Int, Int, Any) -> Void = { _,_,_   in }
     @State private var firstLoad = false
+    @State private var showAlert = false
+    @State private var errorMsg = ""
 
     var body : some View {
        
@@ -171,10 +173,15 @@ struct LeftMenu: View {
                         self.leftMenuDidClick(0, 0, category!)
                     }
                 }else if liveType == .douyin {
-                    self.douyinMainList = try await Douyin.getDouyinList()
-                    if self.douyinMainList.count > 0 {
-                        let category = self.douyinMainList.first
-                        self.leftMenuDidClick(0, 0, category!)
+                    do {
+                        self.douyinMainList = try await Douyin.getDouyinList()
+                        if self.douyinMainList.count > 0 {
+                            let category = self.douyinMainList.first
+                            self.leftMenuDidClick(0, 0, category!)
+                        }
+                    }catch {
+                        errorMsg = error.localizedDescription
+                        showAlert = true
                     }
                 }else if liveType == .douyu {
                     self.douyuMainList = [
@@ -214,6 +221,14 @@ struct LeftMenu: View {
         }
         .frame(width: size)
         .padding(.top, 30)
+        .alert("提示", isPresented: $showAlert) {
+            Button("确认", role: .destructive, action: {
+                showAlert = false
+            })
+           
+        } message: {
+            Text(errorMsg)
+        }
     }
     
     func getCategoryRooms(subIndex: Int) {

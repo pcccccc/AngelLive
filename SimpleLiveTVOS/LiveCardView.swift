@@ -35,15 +35,6 @@ struct LiveCardView: View {
         } label: {
             VStack(spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
-                    NavigationLink(isActive: $isLive) {
-                        KSAudioView(roomModel: liveModel)
-                            .edgesIgnoringSafeArea(.all)
-                    } label: {
-                        EmptyView()
-                    }
-                    .frame(width: 0, height: 0)
-                    .hidden()
-                    .opacity(0.0)
                     if isCellVisible {
                         KFImage(URL(string: liveModel.roomCover))
                             .resizable()
@@ -54,7 +45,6 @@ struct LiveCardView: View {
                             Image(uiImage: .init(named: getImage())!)
                                 .resizable()
                                 .frame(width: 40, height: 40)
-//                                .background(liveModel.liveType == .bilibili ? Color.black.opacity(0.3) : Color.clear)
                                 .cornerRadius(5)
                                 .padding(.top, 5)
                                 .padding(.leading, 5)
@@ -173,6 +163,18 @@ struct LiveCardView: View {
                 
             }
         }
+        .fullScreenCover(isPresented: $isLive, content: {
+            KSAudioView(roomModel: liveModel) { needShowHint, hintString in
+                isLive = false
+                if needShowHint {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        self.showToast(false, false, hintString)
+                    }
+                }
+            }
+            
+            .edgesIgnoringSafeArea(.all)
+        })
     }
     
     func favoriteAction() async {

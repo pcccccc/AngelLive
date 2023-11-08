@@ -38,6 +38,7 @@ struct ListMainView: View {
         hideAfter: 2
     )
     
+    
     var body: some View {
         ScrollViewReader { reader in
             ZStack(alignment: .top) {
@@ -122,45 +123,52 @@ struct ListMainView: View {
                 return
             }
             
-            if liveType == .bilibili {
-                let res = try await Bilibili.getCategoryRooms(category: currentCategoryModel as! BilibiliCategoryModel, page: page)
-                if page == 1 {
-                    roomContentArray.removeAll()
-                    toastTypeIsSuccess = true
-                    toastTitle = "已为您获取最新内容"
-                    showToast.toggle()
+            do {
+                if liveType == .bilibili {
+                    let res = try await Bilibili.getCategoryRooms(category: currentCategoryModel as! BilibiliCategoryModel, page: page)
+                    if page == 1 {
+                        roomContentArray.removeAll()
+                        toastTypeIsSuccess = true
+                        toastTitle = "已为您获取最新内容"
+                        showToast.toggle()
+                    }
+                    roomContentArray += res
+                }else if liveType == .douyin {
+                    let partitionId = (currentCategoryModel as! DouyinCategoryData).partition.id_str
+                    let partitionType = (currentCategoryModel as! DouyinCategoryData).partition.type
+                    let res = try await Douyin.getDouyinCategoryList(partitionId: partitionId, partitionType: partitionType, page: page)
+                    if page == 1 {
+                        roomContentArray.removeAll()
+                        toastTypeIsSuccess = true
+                        toastTitle = "已为您获取最新内容"
+                        showToast.toggle()
+                    }
+                    roomContentArray += res
+                }else if liveType == .douyu {
+                    let res = try await Douyu.getCategoryRooms(category: currentCategoryModel as! DouyuSubListModel, page: page)
+                    if page == 1 {
+                        roomContentArray.removeAll()
+                        toastTypeIsSuccess = true
+                        toastTitle = "已为您获取最新内容"
+                        showToast.toggle()
+                       
+                    }
+                    roomContentArray += res
+                }else if liveType == .huya {
+                    let res = try await Huya.getCategoryRooms(category: currentCategoryModel as! HuyaSubListModel, page: page)
+                    if page == 1 {
+                        roomContentArray.removeAll()
+                        toastTypeIsSuccess = true
+                        toastTitle = "已为您获取最新内容"
+                        showToast.toggle()
+                    }
+                    roomContentArray += res
                 }
-                roomContentArray += res
-            }else if liveType == .douyin {
-                let partitionId = (currentCategoryModel as! DouyinCategoryData).partition.id_str
-                let partitionType = (currentCategoryModel as! DouyinCategoryData).partition.type
-                let res = try await Douyin.getDouyinCategoryList(partitionId: partitionId, partitionType: partitionType, page: page)
-                if page == 1 {
-                    roomContentArray.removeAll()
-                    toastTypeIsSuccess = true
-                    toastTitle = "已为您获取最新内容"
-                    showToast.toggle()
-                }
-                roomContentArray += res
-            }else if liveType == .douyu {
-                let res = try await Douyu.getCategoryRooms(category: currentCategoryModel as! DouyuSubListModel, page: page)
-                if page == 1 {
-                    roomContentArray.removeAll()
-                    toastTypeIsSuccess = true
-                    toastTitle = "已为您获取最新内容"
-                    showToast.toggle()
-                   
-                }
-                roomContentArray += res
-            }else if liveType == .huya {
-                let res = try await Huya.getCategoryRooms(category: currentCategoryModel as! HuyaSubListModel, page: page)
-                if page == 1 {
-                    roomContentArray.removeAll()
-                    toastTypeIsSuccess = true
-                    toastTitle = "已为您获取最新内容"
-                    showToast.toggle()
-                }
-                roomContentArray += res
+            }catch {
+                toastTypeIsSuccess = false
+                toastTitle = error.localizedDescription
+                needFullScreenLoading = false
+                showToast.toggle()
             }
         }
     }

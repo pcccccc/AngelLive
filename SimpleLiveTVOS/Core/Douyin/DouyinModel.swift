@@ -160,8 +160,8 @@ class Douyin {
     }
     
     public class func getDouyinList() async throws -> Array<DouyinCategoryData> {
-        let dataReq = try await AF.request("https://live.douyin.com/hot_live", method: .get, headers: headers).serializingString().value
-        let regex = try NSRegularExpression(pattern: "\\{\\\\\"pathname\\\\\":\\\\\"/hot_live\\\\\",\\\\\"categoryData.*?\\]\\)", options: [])
+        let dataReq = try await AF.request("https://live.douyin.com", method: .get, headers: headers).serializingString().value
+        let regex = try NSRegularExpression(pattern: "\\{\\\\\"pathname\\\\\":\\\\\"/\\\\\",\\\\\"categoryData.*?\\]\\)", options: [])
         let matchs =  regex.matches(in: dataReq, range: NSRange(location: 0, length:  dataReq.count))
         for match in matchs {
             let matchRange = Range(match.range, in: dataReq)!

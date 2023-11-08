@@ -28,6 +28,8 @@ class DetailViewController: UIViewController, DetailProtocol {
             }
         }
     }
+    public var didExitView: (Bool, String) -> Void = {_, _ in}
+    private var isLiving: Bool = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -37,7 +39,7 @@ class DetailViewController: UIViewController, DetailProtocol {
         KSOptions.secondPlayerType = KSMEPlayer.self
         KSOptions.isAutoPlay = true
         playerView.didExitView =  { [weak self] in
-            self?.navigationController?.popViewController(animated: true)
+            self?.didExitView(false, "")
         }
         playerView.translatesAutoresizingMaskIntoConstraints = false
         #if os(iOS)
@@ -67,12 +69,69 @@ class DetailViewController: UIViewController, DetailProtocol {
     
     func getPlayURL() async {
         do {
-            let url = try await roomModel?.getPlayArgs()
-            if url != nil {
-                self.resource = KSPlayerResource(url: URL(string: url!)!)
+            if try await getLiveState() == true {
+                let url = try await roomModel?.getPlayArgs()
+                if url != nil {
+                    self.resource = KSPlayerResource(url: URL(string: url!)!)
+                }
+            }else {
+                self.didExitView(true, "该主播正在休息哦")
             }
         }catch {
-            
+            self.didExitView(true, "无法获取房间状态")
+        }
+    }
+
+    func getLiveState() async throws -> Bool {
+        if roomModel == nil {
+            return false
+        }
+        if roomModel!.liveType == .bilibili { //1 正在直播 0 已下播
+            let liveStatus = try await Bilibili.getLiveStatus(roomId: roomModel!.roomId)
+            switch liveStatus {
+                case 0:
+                    return false
+                case 1:
+                    return true
+                default:
+                    return false
+            }
+        }else if roomModel!.liveType == .douyin {
+            do {
+                let dataReq = try await Douyin.getDouyinRoomDetail(streamerData: roomModel!)
+                switch dataReq.data?.data?.first?.status {
+                    case 4:
+                        return false
+                    case 2:
+                        return true
+                    default:
+                        return false
+                }
+            }catch {
+                return false
+            }
+        }else if roomModel!.liveType == .douyu {
+            let liveStatus = try await Douyu.getLiveStatus(rid: roomModel!.roomId)
+            switch liveStatus {
+                case 0:
+                    return false
+                case 1:
+                    return true
+                case 2:
+                    return false
+                default:
+                    return false
+            }
+        }else if roomModel!.liveType == .huya {
+            let liveStatus = try await Huya.getPlayArgs(rid: roomModel!.roomId)?.roomInfo.eLiveStatus
+            switch liveStatus {
+                case 2:
+                    return true
+                default:
+                    return false
+            }
+        }else {
+            return false
         }
     }
 
