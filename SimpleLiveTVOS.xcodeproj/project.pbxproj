@@ -22,6 +22,7 @@
 		FB288AC02AEC229900FA6586 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB288ABF2AEC229900FA6586 /* PlayerView.swift */; };
 		FB651C322AB2A0F5005BFA90 /* DouyinModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */; };
 		FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8DFD112AEFF487002644AD /* DetailViewController.swift */; };
+		FB952EC92B03250C007A24F9 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952EC82B03250C007A24F9 /* Common.swift */; };
 		FBA907842AE5100500A69FBE /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907832AE5100500A69FBE /* LoadingView.swift */; };
 		FBA907922AE6A6EB00A69FBE /* MainPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907912AE6A6EB00A69FBE /* MainPlayerView.swift */; };
 		FBA907972AE812BB00A69FBE /* SwipeGestureActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */; };
@@ -76,6 +77,7 @@
 		FB288ABF2AEC229900FA6586 /* PlayerView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DouyinModel.swift; sourceTree = "<group>"; };
 		FB8DFD112AEFF487002644AD /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
+		FB952EC82B03250C007A24F9 /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
 		FBA907832AE5100500A69FBE /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		FBA907912AE6A6EB00A69FBE /* MainPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainPlayerView.swift; sourceTree = "<group>"; };
 		FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeGestureActions.swift; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 				FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */,
 				FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */,
 				FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */,
+				FB952EC82B03250C007A24F9 /* Common.swift */,
 			);
 			path = Tools;
 			sourceTree = "<group>";
@@ -402,6 +405,7 @@
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
+				FB952EC92B03250C007A24F9 /* Common.swift in Sources */,
 				FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */,
 				FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */,
 				FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */,

@@ -36,7 +36,7 @@ class DetailViewController: UIViewController, DetailProtocol {
         view.addSubview(playerView)
         playerView.delegate = self
         KSOptions.firstPlayerType = KSMEPlayer.self
-        KSOptions.secondPlayerType = KSMEPlayer.self
+        KSOptions.secondPlayerType = KSAVPlayer.self
         KSOptions.isAutoPlay = true
         playerView.didExitView =  { [weak self] in
             self?.didExitView(false, "")
@@ -71,6 +71,7 @@ class DetailViewController: UIViewController, DetailProtocol {
         do {
             if try await getLiveState() == true {
                 let url = try await roomModel?.getPlayArgs()
+                try await roomModel?.getPlayArgsV2()
                 if url != nil {
                     self.resource = KSPlayerResource(url: URL(string: url!)!)
                 }

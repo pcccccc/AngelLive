@@ -85,13 +85,18 @@ struct HuyaRoomTLiveInfo: Codable {
 
 struct HuyaRoomTLiveStreamInfo: Codable {
     let vStreamInfo: HuyaRoomVStreamInfo
+    let vBitRateInfo:HuyaRoomBitRateInfo
 }
 
-struct HuyaRoomVStreamInfo: Codable {
+struct HuyaRoomBitRateInfo: Codable {
     let value: Array<HuyaRoomLiveQualityModel>
 }
 
-struct HuyaRoomLiveQualityModel: Codable {
+struct HuyaRoomVStreamInfo: Codable {
+    let value: Array<HuyaRoomLiveStreamModel>
+}
+
+struct HuyaRoomLiveStreamModel: Codable {
     let sCdnType: String //'AL': '阿里', 'TX': '腾讯', 'HW': '华为', 'HS': '火山', 'WS': '网宿', 'HY': '虎牙'
     let iIsMaster: Int
     let sStreamName: String
@@ -103,6 +108,14 @@ struct HuyaRoomLiveQualityModel: Codable {
     let sHlsAntiCode: String
     let sCodec: String?
     let iMobilePriorityRate: Int
+}
+
+struct HuyaRoomLiveQualityModel: Codable {
+    let sDisplayName: String
+    let iBitRate: Int
+    let iCodecType: Int
+    let iCompatibleFlag: Int
+    let iHEVCBitRate: Int
 }
     
 class Huya {

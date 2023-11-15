@@ -103,6 +103,16 @@ struct DouyuPlayInfoModel: Codable {
     let rtmp_url: String
     let rtmp_live: String
     let play_url: String
+    let cdnsWithName: Array<Dictionary<String, String>>
+    let multirates: Array<DouyuPlayQuality>
+}
+
+struct DouyuPlayQuality: Codable {
+    let highBit: Int
+    let bit: Int
+    let name: String
+    let diamondFan: Int
+    let rate: Int
 }
 
 class Douyu {
@@ -207,7 +217,15 @@ class Douyu {
                 let resJson = try JSONSerialization.jsonObject(with: resData, options: .mutableContainers)
                 let resDict = resJson as! Dictionary<String, Any>
                 let dataDict = resDict["data"] as! Dictionary<String, Any>
-                let model = DouyuPlayInfoModel(rtmp_url: dataDict["rtmp_url"] as? String ?? "", rtmp_live: dataDict["rtmp_live"] as? String ?? "", play_url: "")
+                var playQualitys: Array<DouyuPlayQuality> = []
+                if let multirates = dataDict["multirates"] as? Array<Dictionary<String, Any>> {
+                    for item in multirates {
+                        let playQualityData = Common.jsonToData(jsonDic: item)
+                        let playQuality = try JSONDecoder().decode(DouyuPlayQuality.self, from: playQualityData ?? Data())
+                        playQualitys.append(playQuality)
+                    }
+                }
+                let model = DouyuPlayInfoModel(rtmp_url: dataDict["rtmp_url"] as? String ?? "", rtmp_live: dataDict["rtmp_live"] as? String ?? "", play_url: "", cdnsWithName: dataDict["cdnsWithName"] as? Array<Dictionary<String, String>> ?? [], multirates: playQualitys)
                 return DouyuPlayInfoData(error: resDict["error"] as? Int ?? -1, msg: resDict["msg"] as? String ?? "error", data: model)
             }
         }
