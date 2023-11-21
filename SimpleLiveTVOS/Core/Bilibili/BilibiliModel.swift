@@ -8,6 +8,10 @@
 import Foundation
 import Alamofire
 
+struct BiliBiliCookie {
+    static let cookie = UserDefaults.standard.value(forKey: "BilibiliCookie") as? String ?? ""
+}
+
 struct BilibiliMainData<T: Codable>: Codable {
     var code: Int
     var msg: String
@@ -169,6 +173,23 @@ struct BilibiliPlayInfoModel: Codable {
     let extra: String
 }
 
+struct BilibiliQRMainModel: Codable {
+    let code: Int
+    let message: String
+    let ttl: Int
+    let data: BilibiliQRMainData
+}
+
+struct BilibiliQRMainData: Codable {
+    let url: String?
+    let qrcode_key: String?
+    let refresh_token: String?
+    let timestamp: Int?
+    let code: Int?
+    let message: String?
+}
+
+
 class Bilibili {
     public class func getBiliBiliList() async throws -> BilibiliMainData<[BilibiliMainListModel]> {
         return try await AF.request("https://api.live.bilibili.com/room/v1/Area/getList", method: .get).serializingDecodable(BilibiliMainData.self).value
@@ -184,6 +205,8 @@ class Bilibili {
                 "area_id": category.id,
                 "sort_type": "",
                 "page": page
+            ],
+            headers: [
             ]
         ).serializingDecodable(BilibiliMainData<BiliBiliCategoryRoomMainModel>.self).value
         if dataReq.code == 0 {
@@ -210,6 +233,9 @@ class Bilibili {
                     "platform": "web",
                     "cid": roomModel.roomId,
                     "qn": ""
+                ],
+                headers: BiliBiliCookie.cookie == "" ? nil : [
+                    "cookie": BiliBiliCookie.cookie
                 ]
             ).serializingDecodable(BilibiliMainData<BiliBiliQualityModel>.self).value
             if dataReq.code != 0 {
@@ -235,6 +261,9 @@ class Bilibili {
                 "format": "0,2",
                 "codec": "0,1",
                 "mask": "0"
+            ],
+            headers: BiliBiliCookie.cookie == "" ? nil : [
+                "cookie": BiliBiliCookie.cookie
             ]
         ).serializingDecodable(BilibiliMainData.self).value
     }
@@ -245,6 +274,9 @@ class Bilibili {
             method: .get,
             parameters: [
                 "room_id": roomId
+            ],
+            headers: BiliBiliCookie.cookie == "" ? nil : [
+                "cookie": BiliBiliCookie.cookie
             ]
         ).serializingData().value
         
@@ -253,5 +285,29 @@ class Bilibili {
         let dataDict = jsonDict["data"] as! Dictionary<String, Any>
         let liveStatus = dataDict["live_status"] as? Int ?? -1
         return liveStatus
+    }
+    
+    public class func getQRCodeUrl() async throws -> BilibiliQRMainModel {
+        let dataReq = try await AF.request(
+            "https://passport.bilibili.com/x/passport-login/web/qrcode/generate",
+            method: .get
+        ).serializingDecodable(BilibiliQRMainModel.self).value
+        return dataReq
+    }
+    
+    public class func getQRCodeState(qrcode_key: String) async throws -> BilibiliQRMainModel {
+        let resp = AF.request(
+            "https://passport.bilibili.com/x/passport-login/web/qrcode/poll",
+            method: .get,
+            parameters: [
+                "qrcode_key": qrcode_key
+            ]
+        )
+        
+        let dataReq = try await resp.serializingDecodable(BilibiliQRMainModel.self).value
+        if dataReq.data.code == 0 {
+            UserDefaults.standard.setValue(resp.response?.headers["Set-Cookie"] ?? "", forKey: "BilibiliCookie")
+        }
+        return dataReq
     }
 }

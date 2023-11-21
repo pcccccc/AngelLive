@@ -268,6 +268,8 @@ public struct LiveModel: Codable {
                         var urlComps = URLComponents(string: "")!
                         urlComps.queryItems = playInfo
                         let result = urlComps.url!
+                        var res = result.absoluteString as NSString
+                        var url = ""
                         var maxRate = 0
                         for streamInfo in liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value ?? [] {
                             if maxRate < streamInfo.iMobilePriorityRate {
