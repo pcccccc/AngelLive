@@ -7,6 +7,7 @@
 
 import Foundation
 import Alamofire
+import SwiftyJSON
 
 struct DouyinMainModel: Codable {
     let pathname: String
@@ -146,6 +147,7 @@ struct DouyinPlayQualitiesHlsMap: Codable {
 }
 
 var headers = HTTPHeaders.init([
+    "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Authority": "live.douyin.com",
     "Referer": "https://live.douyin.com",
     "User-Agent":
@@ -174,6 +176,7 @@ class Douyin {
     }
     
     public class func getDouyinCategoryList(partitionId: String, partitionType: Int, page: Int) async throws -> Array<LiveModel> {
+       
         let parameter: Dictionary<String, Any> = [
             "aid": 6383,
             "app_name": "douyin_web",
@@ -195,6 +198,7 @@ class Douyin {
     }
     
     public class func getDouyinRoomDetail(streamerData: LiveModel) async throws -> DouyinRoomPlayInfoMainData {
+        
         let parameter: Dictionary<String, Any> = [
             "aid": 6383,
             "app_name": "douyin_web",
@@ -214,22 +218,10 @@ class Douyin {
             "browser_name": "Edge",
             "browser_version": "114.0.1823.51"
         ]
-        let dataReq = try await AF.request("https://live.douyin.com/webcast/room/web/enter/", method: .get, parameters: parameter, headers: headers).serializingDecodable(DouyinRoomPlayInfoMainData.self).value
-        return dataReq
+        let res = try await AF.request("https://live.douyin.com/webcast/room/web/enter/", method: .get, parameters: parameter, headers: headers).serializingDecodable(DouyinRoomPlayInfoMainData.self).value
+        return res
     }
-    
-    func getDouyinWebRoomDetail(roomId: String) async throws {
-        var httpHeaders = headers
-        httpHeaders.add(name: "Cookie", value: "__ac_nonce=\(Douyin.randomHexString(length: 21))")
-        let dataReq = try await AF.request("https://live.douyin.com/\(roomId)", method: .get, headers: httpHeaders).serializingString().value
-        let regex = try NSRegularExpression(pattern: "\\{\\\\\"state\\\\\":\\{\\\\\"isLiveModal.*?\\]\\\\n", options: [])
-        let matchs =  regex.matches(in: dataReq, range: NSRange(location: 0, length:  dataReq.count))
-        for match in matchs {
-            let matchRange = Range(match.range, in: dataReq)!
-            let matchedSubstring = dataReq[matchRange]
-            print(matchedSubstring)
-        }
-    }
+
     
     
     class func randomHexString(length: Int) -> String {
@@ -246,5 +238,36 @@ class Douyin {
         return randomString
     }
     
+    class func getUserUniqueId(roomId: String) async throws -> String {
+        var httpHeaders = headers
+        httpHeaders.add(name: "Cookie", value: "__ac_nonce=\(Douyin.randomHexString(length: 21))")
+        let dataReq = try await AF.request("https://live.douyin.com/\(roomId)", method: .get, headers: httpHeaders).serializingString().value
+        do {
+            let regex = try NSRegularExpression(pattern: "user_unique_id.*?,", options: [])
+            let userUniqueIdMatchs = regex.matches(in: dataReq, range: NSRange(location: 0, length:  dataReq.count))
+            for sub in userUniqueIdMatchs {
+                let matchRange = Range(sub.range, in: dataReq)!
+                var matchedSubstring = String(describing: dataReq[matchRange])
+                print(matchedSubstring)
+                let uidRegex = try NSRegularExpression(pattern: "[1-9]+\\.?[0-9]*", options: [])
+                let uidMatchs = uidRegex.matches(in: matchedSubstring, range: NSRange(location: 0, length:  matchedSubstring.count))
+                for uid in uidMatchs {
+                    let matchRange = Range(uid.range, in: matchedSubstring)!
+                    var matchedSubstring = String(describing: matchedSubstring[matchRange])
+                    return matchedSubstring
+                }
+            }
+        }catch {
+            return ""
+        }
+        return ""
+    }
+    
+    class func getCookie(roomId: String) async throws -> String {
+        var httpHeaders = headers
+        httpHeaders.add(name: "Cookie", value: "__ac_nonce=\(Douyin.randomHexString(length: 21))")
+        let dataReq = try await AF.request("https://live.douyin.com/\(roomId)", method: .get, headers: httpHeaders).serializingString().response.response?.allHeaderFields
+        return dataReq?["Set-Cookie"] as? String ?? ""
+    }
 }
 

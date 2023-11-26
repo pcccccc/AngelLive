@@ -189,6 +189,27 @@ struct BilibiliQRMainData: Codable {
     let message: String?
 }
 
+struct BilibiliBuvidModel: Codable {
+    let b_3: String
+    let b_4: String
+}
+
+struct BilibiliDanmuModel: Codable {
+    let group: String
+    let business_id: Int
+    let refresh_row_factor: Double
+    let refresh_rate: Int
+    let max_delay: Int
+    let token: String
+    let host_list: Array<BilibiliDanmuServerInfo>
+}
+
+struct BilibiliDanmuServerInfo: Codable {
+    let host: String
+    let port: Int
+    let wss_port: Int
+    let ws_port: Int
+}
 
 class Bilibili {
     public class func getBiliBiliList() async throws -> BilibiliMainData<[BilibiliMainListModel]> {
@@ -309,5 +330,46 @@ class Bilibili {
             UserDefaults.standard.setValue(resp.response?.headers["Set-Cookie"] ?? "", forKey: "BilibiliCookie")
         }
         return dataReq
+    }
+    
+    public class func getBuvid() async throws -> String {
+        do {
+            let cookie = BiliBiliCookie.cookie
+            if NSString(string: cookie).contains("buvid3") {
+                let regex = try NSRegularExpression(pattern: "buvid3=(.*?);", options: [])
+                let matchs =  regex.matches(in: cookie, range: NSRange(location: 0, length: cookie.count))
+                for match in matchs {
+                    let matchRange = Range(match.range, in: cookie)!
+                    let matchedSubstring = cookie[matchRange]
+                    return "\(matchedSubstring)"
+                }
+            }else {
+                let dataReq = try await AF.request(
+                    "https://api.bilibili.com/x/frontend/finger/spi",
+                    method: .get,
+                    headers: BiliBiliCookie.cookie == "" ? nil : [
+                        "cookie": BiliBiliCookie.cookie
+                    ]
+                ).serializingDecodable(BilibiliMainData<BilibiliBuvidModel>.self).value
+                return dataReq.data.b_3
+            }
+        }catch {
+            return ""
+        }
+        return ""
+    }
+    
+    public class func getRoomDanmuDetail(roomId: String) async throws -> BilibiliDanmuModel {
+        let dataReq = try await AF.request(
+            "https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo",
+            method: .get,
+            parameters: [
+                "id":roomId
+            ],
+            headers: BiliBiliCookie.cookie == "" ? nil : [
+                "cookie": BiliBiliCookie.cookie
+            ]
+        ).serializingDecodable(BilibiliMainData<BilibiliDanmuModel>.self).value
+        return dataReq.data
     }
 }
