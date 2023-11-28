@@ -20,6 +20,8 @@
 		4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */; };
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
 		FB1BB6442B0D0CB600C54BCF /* SettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB1BB6432B0D0CB600C54BCF /* SettingView.swift */; };
+		FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A22B14DEE70068100B /* DanmuSettingView.swift */; };
+		FB2175A52B14DF0D0068100B /* Setting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* Setting.swift */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
 		FB5101922B0E3FEC00A1AE0D /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */; };
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
@@ -92,6 +94,8 @@
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
 		FB1BB6432B0D0CB600C54BCF /* SettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingView.swift; sourceTree = "<group>"; };
+		FB2175A22B14DEE70068100B /* DanmuSettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingView.swift; sourceTree = "<group>"; };
+		FB2175A42B14DF0D0068100B /* Setting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Setting.swift; sourceTree = "<group>"; };
 		FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
 		FB5101992B0EDE3F00A1AE0D /* WebSocket.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebSocket.swift; sourceTree = "<group>"; };
 		FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Extension.swift"; sourceTree = "<group>"; };
@@ -197,6 +201,7 @@
 				FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */,
 				FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */,
 				FB1BB6432B0D0CB600C54BCF /* SettingView.swift */,
+				FB2175A22B14DEE70068100B /* DanmuSettingView.swift */,
 				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
 				4FC3DCE32A49383100CA36B9 /* Preview Content */,
 			);
@@ -295,6 +300,7 @@
 				FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */,
 				FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */,
 				FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */,
+				FB2175A42B14DF0D0068100B /* Setting.swift */,
 			);
 			path = Tools;
 			sourceTree = "<group>";
@@ -471,6 +477,8 @@
 				FB5101C72B1227E800A1AE0D /* dy.pb.swift in Sources */,
 				FB5101C42B11DD3D00A1AE0D /* BABulletModel.swift in Sources */,
 				FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */,
+				FB2175A52B14DF0D0068100B /* Setting.swift in Sources */,
+				FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */,
 				FB51019A2B0EDE4000A1AE0D /* WebSocket.swift in Sources */,
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,

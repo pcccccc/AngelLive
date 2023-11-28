@@ -17,7 +17,7 @@ protocol DetailProtocol: UIViewController {
 
 class DetailViewController: UIViewController, DetailProtocol {
 
-    private let playerView = LivePlayerView()
+    private let playerView = LivePlayerView(frame: UIScreen.main.bounds, showDanmu: SettingStore.shared.showDanmu, showColorDanmu: SettingStore.shared.showColorDanmu, danmuFontSize: Float(SettingStore.shared.danmuFontSize), danmuSpeed: SettingStore.shared.danmuSpeed, danmuTopMargin: SettingStore.shared.danmuTopMargin, danmuBottonMargin: SettingStore.shared.danmuBottomMargin, danmuAlpha: SettingStore.shared.danmuAlpha)
     
     var roomModel: LiveModel?
 
@@ -61,6 +61,7 @@ class DetailViewController: UIViewController, DetailProtocol {
             playerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             playerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        
         view.layoutIfNeeded()
         playerView.backBlock = { [unowned self] in
             navigationController?.popViewController(animated: true)

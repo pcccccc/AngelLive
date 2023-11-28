@@ -9,7 +9,10 @@ import SwiftUI
 
 struct SettingView: View {
     
+    let titles = ["哔哩哔哩登录", "弹幕设置", "关于"]
+    @State var currentTitle: String?
     @State var isLogin = false
+    @State var isPushed = false
     
     var body: some View {
         ScrollView(.vertical) {
@@ -21,13 +24,9 @@ struct SettingView: View {
     }
     
     var items: some View {
-        ForEach(["哔哩哔哩登录","关于"], id: \.self) { title in
-            NavigationLink(destination: {
-                if title == "哔哩哔哩登录" {
-                    BilibiliLoginView()
-                }else {
-                    AboutUSView()
-                }
+        ForEach(titles, id: \.self) { title in
+            Button(action: {
+                currentTitle = title
             }, label: {
                 HStack(alignment: .firstTextBaseline) {
                     Text(title)
@@ -44,6 +43,21 @@ struct SettingView: View {
                     isLogin = BiliBiliCookie.cookie == ""
                 }
             })
+            .fullScreenCover(item: $currentTitle) { title in
+                if title == "哔哩哔哩登录" {
+                    BilibiliLoginView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.background)
+                }else if title == "弹幕设置" {
+                    DanmuSettingView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.background)
+                }else {
+                    AboutUSView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.background)
+                }
+            }
         }
     }
 }
