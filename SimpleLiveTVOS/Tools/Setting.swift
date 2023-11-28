@@ -45,7 +45,7 @@ class SettingStore : ObservableObject {
             UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuTopMargin)
         }
         get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuTopMargin) as? Float ?? 500
+            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuTopMargin) as? Float ?? 0
         }
     }
     
@@ -54,7 +54,7 @@ class SettingStore : ObservableObject {
             UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuBottomMargin)
         }
         get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuBottomMargin) as? Float ?? 100
+            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuBottomMargin) as? Float ?? 0
         }
     }
     
