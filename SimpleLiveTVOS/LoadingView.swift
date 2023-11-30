@@ -13,8 +13,12 @@ struct LoadingView: View {
     
     var body: some View {
         VStack {
-            ProgressView()
-                .progressViewStyle(.circular)
+            if loadingText == "暂无内容" {
+                Image(systemName: "folder.badge.questionmark")
+            }else {
+                ProgressView()
+                    .progressViewStyle(.circular)
+            }
             Text(loadingText)
                 .font(.title3)
                 .foregroundColor(.gray)

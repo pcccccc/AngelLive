@@ -18,4 +18,14 @@ extension String {
         }
         return hash.map { String(format: "%02x", $0) }.joined()
     }
+    
+    static func generateRandomString(length: Int) -> String {
+        var randomString = ""
+        for _ in 0..<length {
+            let randomNumber = Int(arc4random_uniform(16))
+            let hexString = String(format: "%X", randomNumber)
+            randomString += hexString
+        }
+        return randomString
+    }
 }

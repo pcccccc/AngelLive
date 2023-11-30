@@ -47,6 +47,7 @@
 		FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */; };
 		FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */; };
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
+		FBC8F5622B18C524006C5887 /* SearchRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC8F5612B18C524006C5887 /* SearchRoomView.swift */; };
 		FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE4752AD42FD100F996BA /* LiveCardView.swift */; };
 		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
 		FBDEE47C2AD63B3100F996BA /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE47B2AD63B3100F996BA /* SQLite */; };
@@ -115,6 +116,7 @@
 		FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyuModel.swift; sourceTree = "<group>"; };
 		FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuyaModel.swift; sourceTree = "<group>"; };
 		FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extension.swift"; sourceTree = "<group>"; };
+		FBC8F5612B18C524006C5887 /* SearchRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchRoomView.swift; sourceTree = "<group>"; };
 		FBDEE4752AD42FD100F996BA /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
 		FBDEE47D2AD64FD000F996BA /* SQLiteManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteManager.swift; sourceTree = "<group>"; };
 		FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteMainView.swift; sourceTree = "<group>"; };
@@ -202,6 +204,7 @@
 				FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */,
 				FB1BB6432B0D0CB600C54BCF /* SettingView.swift */,
 				FB2175A22B14DEE70068100B /* DanmuSettingView.swift */,
+				FBC8F5612B18C524006C5887 /* SearchRoomView.swift */,
 				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
 				4FC3DCE32A49383100CA36B9 /* Preview Content */,
 			);
@@ -501,6 +504,7 @@
 				FB651C322AB2A0F5005BFA90 /* DouyinModel.swift in Sources */,
 				FB1BB6442B0D0CB600C54BCF /* SettingView.swift in Sources */,
 				FB5101A02B104D5600A1AE0D /* UIColor+Extension.swift in Sources */,
+				FBC8F5622B18C524006C5887 /* SearchRoomView.swift in Sources */,
 				FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */,
 				FBA907842AE5100500A69FBE /* LoadingView.swift in Sources */,
 			);

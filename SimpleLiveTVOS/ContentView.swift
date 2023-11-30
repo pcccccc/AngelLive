@@ -18,37 +18,41 @@ struct ContentView: View {
         NavigationView {
             TabView(selection:$selection) {
                 FavoriteMainView()
-                .tabItem {
-                    Label("收藏", systemImage: "heart.fill")
-                }
-                .tag(0)
+                    .tabItem {
+                        Label("收藏", systemImage: "heart.fill")
+                    }
+                    .tag(0)
                 ListMainView(liveType: .bilibili)
-                .tabItem {
-                    Label("bilibili", image: "bilibili_2")
-                }
-                .tag(1)
+                    .tabItem {
+                        Label("bilibili", image: "bilibili_2")
+                    }
+                    .tag(1)
                 ListMainView(liveType: .huya)
-                .tabItem {
-                    Label("虎牙", image: "huya")
-                }
-                .tag(2)
+                    .tabItem {
+                        Label("虎牙", image: "huya")
+                    }
+                    .tag(2)
                 ListMainView(liveType: .douyu)
-                .tabItem {
-                    Label("斗鱼", image: "douyu")
-                }
-                .tag(3)
+                    .tabItem {
+                        Label("斗鱼", image: "douyu")
+                    }
+                    .tag(3)
                 ListMainView(liveType: .douyin)
-                .tabItem {
-                    Label("抖音", image: "douyin")
-                }
-                .tag(4)
-//                AboutUSView()
+                    .tabItem {
+                        Label("抖音", image: "douyin")
+                    }
+                    .tag(4)
+                SearchRoomView()
+                    .tabItem {
+                        Label("搜索", systemImage: "magnifyingglass.circle.fill")
+                    }
+                    .tag(5)
                 SettingView()
-                .tabItem {
-//                    Label("设置", systemImage: "gearshape.fill")
-                    Label("关于", systemImage: "info.circle.fill")
-                }
-                .tag(5)
+                    .tabItem {
+                        Label("设置", systemImage: "gearshape.fill")
+                    }
+                    .tag(6)
+                
             }
         }
         .onAppear {
