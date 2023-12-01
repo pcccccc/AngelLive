@@ -69,6 +69,28 @@ class CloudSQLManager: NSObject {
             try await database.deleteRecord(withID: recordArray.first!.recordID)
         }
     }
+    
+    class func getCloudState() async -> String {
+        do {
+            let status = try await CKContainer(identifier: ck_identifier).accountStatus()
+            switch status {
+                case .available:
+                    return "正常"
+                case .couldNotDetermine:
+                    return "无法确定状态"
+                case .restricted:
+                    return "受限"
+                case .noAccount:
+                    return "请登录iCloud"
+                case .temporarilyUnavailable:
+                    return "暂时不可用，请尝试更新Apple ID设置"
+                default:
+                    return "无法确定状态"
+            }
+        }catch {
+            return error.localizedDescription
+        }
+    }
 }
 
 

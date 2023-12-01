@@ -86,7 +86,12 @@ struct SearchRoomView: View {
                 }
                 needFullScreenLoading = true
                 let dataReq = try await Douyin.getSearchURL(keyword: searchText, page:page)
-                roomContentArray.append(contentsOf: dataReq)
+                
+                for item in dataReq {
+                    var newItem = item
+                    try await newItem.getLiveState()
+                    roomContentArray.append(newItem)
+                }
                 if roomContentArray.count == 0 {
                     loadingText = "暂无内容"
                 }

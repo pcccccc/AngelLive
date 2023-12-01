@@ -77,6 +77,9 @@ struct LiveCardView: View {
                         .task {
                             do {
                                 if self.isFavoritePage == true {
+                                    if liveModel == nil {
+                                        return
+                                    }
                                     try await liveModel.getLiveState()
                                 }
                             }catch {
