@@ -25,9 +25,10 @@ struct SearchRoomView: View {
     
     var body: some View {
         VStack {
-            Text("请输入要搜索的主播名/房间号（目前仅支持抖音，其他平台正在制作中）")
-            TextField("搜索主播名/房间号", text: $searchText)
+            Text("请输入要搜索的主播名")
+            TextField("搜索主播名", text: $searchText)
                 .onSubmit {
+                    page = 1
                     beginSearch(research: true)
                 }
             if roomContentArray.count == 0 {
@@ -75,23 +76,20 @@ struct SearchRoomView: View {
     }
     
     func beginSearch(research: Bool) {
+        loadingText = "正在搜索"
         Task {
             do {
                 if searchText.count == 0 {
                     return
                 }
-                loadingText = "正在搜索"
                 if research == true {
                     roomContentArray.removeAll()
                 }
                 needFullScreenLoading = true
-                let dataReq = try await Douyin.getSearchURL(keyword: searchText, page:page)
-                
-                for item in dataReq {
-                    var newItem = item
-                    try await newItem.getLiveState()
-                    roomContentArray.append(newItem)
-                }
+                try await searchBilibiliStreamer()
+                try await searchDouyuStreamer()
+                try await searchHuyaStreamer()
+                try await searchDouyinStreamer()
                 if roomContentArray.count == 0 {
                     loadingText = "暂无内容"
                 }
@@ -102,6 +100,34 @@ struct SearchRoomView: View {
                 toastTypeIsSuccess = false
             }
         }
+    }
+    
+    func searchBilibiliStreamer() async throws {
+        let dataReq = try await Bilibili.searchRooms(keyword: searchText, page: page)
+        for item in dataReq {
+            if roomContentArray.contains(where: { $0.roomId == item.roomId }) == false {
+                roomContentArray.append(item)
+            }
+        }
+    }
+    
+    func searchDouyinStreamer() async throws {
+        let dataReq = try await Douyin.getSearchURL(keyword: searchText, page:page)
+        for item in dataReq {
+            var newItem = item
+            try await newItem.getLiveState()
+            roomContentArray.append(newItem)
+        }
+    }
+    
+    func searchDouyuStreamer() async throws {
+        let dataReq = try await Douyu.searchRooms(keyword: searchText, page: page)
+        roomContentArray.append(contentsOf: dataReq)
+    }
+    
+    func searchHuyaStreamer() async throws {
+        let dataReq = try await Huya.searchRooms(keyword: searchText, page: page)
+        roomContentArray.append(contentsOf: dataReq)
     }
 }
 

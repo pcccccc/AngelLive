@@ -121,6 +121,31 @@ struct HuyaRoomLiveQualityModel: Codable {
     let iHEVCBitRate: Int
     
 }
+
+struct HuyaSearchResult: Codable {
+    let response: HuyaSearchResponse
+}
+
+struct HuyaSearchResponse: Codable {
+    let three: HuyaSearchDocses
+    
+    enum CodingKeys: String, CodingKey {
+    case three = "3"
+}
+}
+
+struct HuyaSearchDocses: Codable {
+    let docs: Array<HuyaSearchDocs>
+}
+
+struct HuyaSearchDocs: Codable {
+    let game_nick: String
+    let room_id: Int
+    let uid: Int
+    let game_introduction: String
+    let game_imgUrl: String
+    let game_screenshot: String
+}
     
 class Huya {
     
@@ -207,5 +232,27 @@ class Huya {
             return data?["uid"] as? String ?? ""
         }
         return ""
+    }
+    
+    public class func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+        let dataReq = try await AF.request(
+            "https://search.cdn.huya.com/",
+            parameters: [
+                "m": "Search",
+                "do": "getSearchContent",
+                "q": keyword,
+                "uid": 0,
+                "v": 4,
+                "typ": -5,
+                "livestate": 0,
+                "rows": 20,
+                "start": (page - 1) * 20,
+            ]
+        ).serializingDecodable(HuyaSearchResult.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.response.three.docs {
+            tempArray.append(LiveModel(userName: item.game_nick, roomTitle: item.game_introduction, roomCover: item.game_screenshot, userHeadImg: item.game_imgUrl, liveType: .huya, liveState: "正在直播", userId: "\(item.uid)", roomId: "\(item.room_id)"))
+        }
+        return tempArray
     }
 }

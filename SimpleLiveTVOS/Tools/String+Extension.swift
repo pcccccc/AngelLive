@@ -28,4 +28,21 @@ extension String {
         }
         return randomString
     }
+    
+    static func stripHTML(from input: String) -> String {
+        guard let data = input.data(using: .utf8) else {
+            return input
+        }
+
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+
+        if let attributedString = try? NSAttributedString(data: data, options: options, documentAttributes: nil) {
+            return attributedString.string
+        } else {
+            return input
+        }
+    }
 }

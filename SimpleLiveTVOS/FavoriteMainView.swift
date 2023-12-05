@@ -29,8 +29,6 @@ struct FavoriteMainView: View {
     var body: some View {
         VStack {
             HStack {
-                Text("iCloud状态：\(iCloudStatus)")
-                    .font(.headline)
                 if iCloudStatusLoading == true {
                     ProgressView()
                 }else {
@@ -41,7 +39,9 @@ struct FavoriteMainView: View {
                     .font(.system(size: 25))
                     .focused($refreshButtonFocues, equals: true)
                 }
-                
+                Spacer()
+                Text("iCloud状态：\(iCloudStatus)")
+                    .font(.headline)
             }
             
             ZStack {

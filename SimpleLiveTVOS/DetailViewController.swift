@@ -42,12 +42,7 @@ class DetailViewController: UIViewController, DetailProtocol {
         super.viewDidLoad()
         view.addSubview(playerView)
         playerView.delegate = self
-        if roomModel?.liveType == .bilibili {
-            KSOptions.firstPlayerType = KSAVPlayer.self
-        }else {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-        }
-       
+        
         KSOptions.secondPlayerType = KSMEPlayer.self
         KSOptions.isAutoPlay = true
         
@@ -78,6 +73,16 @@ class DetailViewController: UIViewController, DetailProtocol {
             if try await getLiveState() == true {
                 let url = try await roomModel?.getPlayArgs()
 //                try await roomModel?.getPlayArgsV2()
+                if roomModel?.liveType == .bilibili || roomModel?.liveType == .douyin {
+                    if url?.contains("flv") == true {
+                        KSOptions.firstPlayerType = KSMEPlayer.self
+                    }else {
+                        KSOptions.firstPlayerType = KSAVPlayer.self
+                    }
+                    
+                }else {
+                    KSOptions.firstPlayerType = KSMEPlayer.self
+                }
                 if url != nil {
                     self.resource = KSPlayerResource(url: URL(string: url!)!)
                 }
@@ -147,6 +152,7 @@ class DetailViewController: UIViewController, DetailProtocol {
                     return false
                 case 1:
                     return true
+                
                 default:
                     return false
             }

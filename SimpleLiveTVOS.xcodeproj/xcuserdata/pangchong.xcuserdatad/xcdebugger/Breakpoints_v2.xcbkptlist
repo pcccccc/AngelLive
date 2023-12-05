@@ -322,69 +322,6 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "1BB77413-3273-4C29-AC4D-7CE8254D8DA5"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SimpleLiveTVOS/Core/Huya/HuyaModel.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "176"
-            endingLineNumber = "176"
-            landmarkName = "getPlayArgs(rid:)"
-            landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "1BB77413-3273-4C29-AC4D-7CE8254D8DA5 - 6bbe8d50f343eb66"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(3) suspend resume partial function for static SimpleLiveTVOS.Huya.getPlayArgs(rid: Swift.String) async throws -&gt; Swift.Optional&lt;SimpleLiveTVOS.HuyaRoomInfoMainModel&gt;"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Core/Huya/HuyaModel.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "177"
-                  endingLineNumber = "177"
-                  offsetFromSymbolStart = "2808">
-               </Location>
-               <Location
-                  uuid = "1BB77413-3273-4C29-AC4D-7CE8254D8DA5 - 6bbe8d50f343eb07"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(3) suspend resume partial function for static SimpleLiveTVOS.Huya.getPlayArgs(rid: Swift.String) async throws -&gt; Swift.Optional&lt;SimpleLiveTVOS.HuyaRoomInfoMainModel&gt;"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Core/Huya/HuyaModel.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "176"
-                  endingLineNumber = "176"
-                  offsetFromSymbolStart = "3200">
-               </Location>
-               <Location
-                  uuid = "1BB77413-3273-4C29-AC4D-7CE8254D8DA5 - e7a8bd5fdae84c4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(4) suspend resume partial function for static SimpleLiveTVOS.Huya.getPlayArgs(rid: Swift.String) async throws -&gt; Swift.Optional&lt;SimpleLiveTVOS.HuyaRoomInfoMainModel&gt;"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Core/Huya/HuyaModel.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "176"
-                  endingLineNumber = "176"
-                  offsetFromSymbolStart = "360">
-               </Location>
-            </Locations>
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
             uuid = "EE1F70E0-FF5B-4906-9D97-EE0266846F2F"
             shouldBeEnabled = "No"
             ignoreCount = "0"

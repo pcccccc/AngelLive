@@ -43,6 +43,8 @@ public struct LiveModel: Codable {
                     liveState = "已下播"
                 case 1:
                     liveState = "正在直播"
+                case 2:
+                    liveState = "已下播"
                 default:
                     liveState = "获取状态失败"
             }
@@ -99,6 +101,12 @@ public struct LiveModel: Codable {
                         for streamInfo in playInfo.data.playurl_info.playurl.stream {
                             if streamInfo.protocol_name == "http_hls" {
                                 let url = (streamInfo.format.last?.codec.last?.url_info.last?.host ?? "") + (streamInfo.format.last?.codec.last?.base_url ?? "") + (streamInfo.format.last?.codec.last?.url_info.last?.extra ?? "")
+                                return url
+                            }
+                        }
+                        for streamInfo in playInfo.data.playurl_info.playurl.stream {
+                            if streamInfo.protocol_name == "http_stream" {
+                                let url = (streamInfo.format.first?.codec.first?.url_info.first?.host ?? "") + (streamInfo.format.first?.codec.first?.base_url ?? "") + (streamInfo.format.first?.codec.first?.url_info.first?.extra ?? "")
                                 return url
                             }
                         }

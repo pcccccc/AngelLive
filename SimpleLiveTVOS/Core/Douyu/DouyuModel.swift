@@ -115,6 +115,23 @@ struct DouyuPlayQuality: Codable {
     let rate: Int
 }
 
+struct DouyuSearchResult: Codable {
+    let data: DouyuSearchResultData
+}
+
+struct DouyuSearchResultData: Codable {
+    let relateShow: Array<DouyuSearchRelateShow>
+}
+
+struct DouyuSearchRelateShow: Codable {
+    let rid: Int
+    let roomName: String
+    let roomSrc: String
+    let roomType: Int
+    let nickName: String
+    let avatar: String
+}
+
 class Douyu {
     public class func getCategoryList(id: String) async throws -> Array<DouyuSubListModel> {
         let dataReq = try await AF.request(
@@ -252,6 +269,33 @@ class Douyu {
             return 2
         }else {
             return 0
+        }
+    }
+    
+    public class func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+        do {
+            let did = String.generateRandomString(length: 32)
+            let dataReq =  try await AF.request(
+                "https://www.douyu.com/japi/search/api/searchShow",
+                method: .get,
+                parameters: [
+                    "kw": keyword,
+                    "page": page,
+                    "pageSize": 20
+                ],
+                headers: HTTPHeaders([
+                    HTTPHeader.init(name: "referer", value: "https://www.douyu.com/search/"),
+                    HTTPHeader.init(name: "user-agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43"),
+                    HTTPHeader.init(name: "Cookie", value: "dy_did=\(did);acf_did=\(did)"),
+                ])
+            ).serializingDecodable(DouyuSearchResult.self).value
+            var tempArray: Array<LiveModel> = []
+            for item in dataReq.data.relateShow {
+                tempArray.append(LiveModel(userName: item.nickName, roomTitle: item.roomName, roomCover: item.roomSrc, userHeadImg: item.avatar, liveType: .douyu, liveState: item.roomType == 0 ? "正在直播" :"已下播", userId: "\(item.rid)", roomId: "\(item.rid)"))
+            }
+            return tempArray
+        }catch {
+            return []
         }
     }
 }

@@ -70,47 +70,51 @@ struct BiliBiliCategoryBannerModel: Codable {
 struct BiliBiliCategoryListModel: Codable {
     let roomid: Int
     let uid: Int
-    let title: String
+    let title: String?
     let uname: String
-    let online: Int
-    let user_cover: String
-    let user_cover_flag: Int
-    let system_cover: String
-    let cover: String
-    let show_cover: String
-    let link: String
-    let face: String
-    let parent_id: Int
-    let parent_name: String
-    let area_id: Int
-    let area_name: String
-    let area_v2_parent_id: Int
-    let area_v2_parent_name: String
-    let area_v2_id: Int
-    let area_v2_name: String
-    let session_id: String
-    let group_id: Int
-    let show_callback: String
-    let click_callback: String
-    let verify: BiliBiliVerifyModel
-    let watched_show: BiliBiliWatchedShowModel
+    let online: Int?
+    let user_cover: String?
+    let user_cover_flag: Int?
+    let system_cover: String?
+    let cover: String?
+    let show_cover: String?
+    let link: String?
+    let face: String?
+    let uface: String?
+    let parent_id: Int?
+    let parent_name: String?
+    let area_id: Int?
+    let area_name: String?
+    let area_v2_parent_id: Int?
+    let area_v2_parent_name: String?
+    let area_v2_id: Int?
+    let area_v2_name: String?
+    let session_id: String?
+    let group_id: Int?
+    let show_callback: String?
+    let click_callback: String?
+    let live_status: Int?
+    let attentions: Int?
+    let cate_name: String?
+//    let verify: BiliBiliVerifyModel?
+//    let watched_show: BiliBiliWatchedShowModel?
 }
 
 struct BiliBiliVerifyModel: Codable {
-    let role: Int
-    let desc: String
-    let type: Int
+    let role: Int?
+    let desc: String?
+    let type: Int?
 }
 
 struct BiliBiliWatchedShowModel: Codable {
 
-    let the_switch: Bool
-    let num: Int
-    let text_small: String
-    let text_large: String
-    let icon: String
-    let icon_location: Int
-    let icon_web: String
+    let the_switch: Bool?
+    let num: Int?
+    let text_small: String?
+    let text_large: String?
+    let icon: String?
+    let icon_location: Int?
+    let icon_web: String?
     
     private enum CodingKeys: String, CodingKey {
         case the_switch = "switch"
@@ -211,6 +215,27 @@ struct BilibiliDanmuServerInfo: Codable {
     let ws_port: Int
 }
 
+struct BilibiliSearchMainData: Codable {
+    var code: Int
+    var msg: String
+    var data: BilibiliSearchResultData?
+    
+    enum CodingKeys: String, CodingKey {
+        case code
+        case msg = "message"
+        case data
+    }
+}
+
+struct BilibiliSearchResultData: Codable {
+    let result: BilibiliSearchResultMain?
+}
+
+struct BilibiliSearchResultMain: Codable {
+    let live_room: Array<BiliBiliCategoryListModel>?
+    let live_user: Array<BiliBiliCategoryListModel>?
+}
+
 class Bilibili {
     public class func getBiliBiliList() async throws -> BilibiliMainData<[BilibiliMainListModel]> {
         return try await AF.request("https://api.live.bilibili.com/room/v1/Area/getList", method: .get).serializingDecodable(BilibiliMainData.self).value
@@ -234,7 +259,7 @@ class Bilibili {
             if let listModelArray = dataReq.data.list {
                 var tempArray: Array<LiveModel> = []
                 for item in listModelArray {
-                    tempArray.append(LiveModel(userName: item.uname, roomTitle: item.title, roomCover: item.cover, userHeadImg: item.face, liveType: .bilibili, liveState: "", userId: "\(item.uid)", roomId: "\(item.roomid)"))
+                    tempArray.append(LiveModel(userName: item.uname, roomTitle: item.title ?? "", roomCover: item.cover ?? "", userHeadImg: item.face ?? "", liveType: .bilibili, liveState: "", userId: "\(item.uid)", roomId: "\(item.roomid)"))
                 }
                 return tempArray
             }else {
@@ -372,4 +397,57 @@ class Bilibili {
         ).serializingDecodable(BilibiliMainData<BilibiliDanmuModel>.self).value
         return dataReq.data
     }
+    
+    public class func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+        let dataReq = try await AF.request(
+            "https://api.bilibili.com/x/web-interface/search/type?context=&search_type=live&cover_type=user_cover",
+            method: .get,
+            parameters: [
+                "order": "",
+                "keyword": keyword,
+                "category_id": "",
+                "__refresh__": "",
+                "_extra": "",
+                "highlight": 0,
+                "single_column": 0,
+                "page": page
+            ],
+            headers: BiliBiliCookie.cookie == "" ?
+            ["buvid3": "infoc"] :
+            ["cookie": BiliBiliCookie.cookie]
+        ).serializingDecodable(BilibiliSearchMainData.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data?.result?.live_room ?? [] {
+            tempArray.append(LiveModel(userName: item.uname, roomTitle: item.title ?? "", roomCover: "https:\(item.cover ?? "")", userHeadImg: "https:\(item.uface ?? "")", liveType: .bilibili, liveState: Bilibili.getBilibiliLiveStateString(liveStatus: item.live_status ?? 0), userId: "\(item.uid)", roomId: "\(item.roomid)"))
+        }
+        for item in dataReq.data?.result?.live_user ?? [] {
+            let flowCount = item.attentions ?? 0
+            var flowFormatString = ""
+            if flowCount > 10000 {
+                flowFormatString = String(format: "%.2f 万人关注直播间", Float(flowCount) / 10000.0)
+            }else {
+                flowFormatString = "\(flowCount) 人关注直播间"
+            }
+            let userName = String.stripHTML(from: item.uname)
+            tempArray.append(LiveModel(userName: userName, roomTitle: item.title ?? "\(item.cate_name ?? "无分区") · \(flowFormatString)", roomCover: "https:\(item.uface ?? "")", userHeadImg: "https:\(item.uface ?? "")", liveType: .bilibili, liveState: Bilibili.getBilibiliLiveStateString(liveStatus: item.live_status ?? 0), userId: "\(item.uid)", roomId: "\(item.roomid)"))
+        }
+        return tempArray
+    }
+    
+    class func getBilibiliLiveStateString(liveStatus: Int) -> String {
+        var liveState = ""
+        let liveStatus = liveStatus
+        switch liveStatus {
+            case 0:
+                liveState = "已下播"
+            case 1:
+                liveState = "正在直播"
+            case 2:
+                liveState = "已下播"
+            default:
+                liveState = "获取状态失败"
+        }
+        return liveState
+    }
+    
 }

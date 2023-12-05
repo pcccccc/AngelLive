@@ -24,7 +24,7 @@ struct LiveCardView: View {
     
     var body: some View {
         Button {
-            if isFavoritePage == true && liveModel.liveState == "正在直播" {
+            if isFavoritePage == true && (liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") {
                 isLive = true
             }else if isFavoritePage == false {
                 isLive = true
@@ -57,7 +57,7 @@ struct LiveCardView: View {
                                 }else {
                                     HStack(spacing: 5) {
                                         Circle()
-                                            .fill(liveModel.liveState ?? "" == "正在直播" ? Color.green : Color.gray)
+                                            .fill((liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") ? Color.green : Color.gray)
                                             .frame(width: 10, height: 10)
                                             .padding(.leading, 5)
                                         Text(liveModel.liveState ?? "")
