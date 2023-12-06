@@ -587,11 +587,10 @@ extension biliLiveWebSocket: WebSocketDelegate {
             }else if liveType == .douyu {
                 socket?.write(data: dyEncode(msg: "type@=loginreq/roomid@=\(roomId ?? "")/")) {
                     print("============login")
-                    
-                }
-                socket?.write(data: self.dyEncode(msg: "type@=joingroup/rid@=\(self.roomId ?? "")/gid@=-9999/")) {
-                    print("============group")
-                    self.performSelector(onMainThread: #selector(self.sendHeartbeat), with: nil, waitUntilDone: false) // NSObject
+                    self.socket?.write(data: self.dyEncode(msg: "type@=joingroup/rid@=\(self.roomId ?? "")/gid@=-9999/")) {
+                        print("============group")
+                        self.performSelector(onMainThread: #selector(self.sendHeartbeat), with: nil, waitUntilDone: false) // NSObject
+                    }
                 }
             }else if liveType == .huya {
                 if let huyaFilePath = Bundle.main.path(forResource: "huya", ofType: "js") {

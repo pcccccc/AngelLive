@@ -413,7 +413,7 @@ class Bilibili {
                 "page": page
             ],
             headers: BiliBiliCookie.cookie == "" ?
-            ["buvid3": "infoc"] :
+            ["cookie": "buvid3=infoc"] :
             ["cookie": BiliBiliCookie.cookie]
         ).serializingDecodable(BilibiliSearchMainData.self).value
         var tempArray: Array<LiveModel> = []
