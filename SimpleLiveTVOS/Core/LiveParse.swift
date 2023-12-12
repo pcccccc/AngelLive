@@ -7,14 +7,12 @@
 
 import Foundation
 
-struct LiveCategoryModel {
-    
-}
 
-protocol LiveParse {
-    func getCategoryList() -> [LiveCategoryModel]
-    func getRoomList() -> [LiveModel]
-    func getPlayArgs(roomId: String) -> [LiveQuality]
-    func searchRooms(keyword: String, page: Int) -> [LiveModel]
-    func getLiveLastestInfo() -> LiveModel
+ protocol LiveParse {
+    func getCategoryList() async throws -> [LiveMainListModel]
+    func getRoomList(id: String, parentId: String?, page: Int) async throws -> [LiveModel]
+    func getPlayArgs(roomId: String) async throws -> [LiveQuality]
+    func searchRooms(keyword: String, page: Int) async throws -> [LiveModel]
+    func getLiveLastestInfo() async throws -> LiveModel
+    func getLiveState() async throws -> LiveState
 }

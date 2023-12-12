@@ -214,128 +214,130 @@ public struct LiveModel: Codable {
         return nil
     }
     
-    func getPlayArgsV2() async throws -> Array<LiveQuality> {
-        var liveQualtys: Array<LiveQuality> = []
-        if liveType == .bilibili {
-            do {
-                let quality = try await Bilibili.getVideoQualites(roomModel:self)
-                if quality.code == 0 {
-                    if let qualityDescription = quality.data.quality_description {
-                        for item in qualityDescription {
-                            liveQualtys.append(.init(roomId: self.roomId, title: item.desc, qn: item.qn, liveType: .bilibili))
-                        }
-                    }
-                }
-                return liveQualtys
-            }catch {
-                return liveQualtys
-            }
-        }else if liveType == .douyu {
-            do {
-                let dataReq = try await Douyu.getPlayArgs(rid: roomId)
-                if let data = dataReq.data {
-                    for item in data.multirates {
-                        liveQualtys.append(.init(roomId: self.roomId, title: item.name, qn: item.rate, liveType: .douyu))
-                    }
-                }
-                return liveQualtys
-            }catch {
-                return liveQualtys
-            }
-        }else if liveType == .huya {
-            do {
-                let liveData = try await Huya.getPlayArgs(rid: self.roomId)
-                if liveData != nil {
-                    let streamInfo = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
-                    var playQualitiesInfo: Dictionary<String, String> = [:]
-                    if let urlComponent = URLComponents(string: "?\(streamInfo?.sFlvAntiCode ?? "")") {
-                        if let queryItems = urlComponent.queryItems {
-                            for item in queryItems {
-                                playQualitiesInfo.updateValue(item.value ?? "", forKey: item.name)
-                            }
-                        }
-                    }
-                    playQualitiesInfo.updateValue("1", forKey: "ver")
-                    playQualitiesInfo.updateValue("2110211124", forKey: "sv")
-                    let uid = try await Huya.getAnonymousUid()
-                    let now = Int(Date().timeIntervalSince1970) * 1000
-                    playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
-                    playQualitiesInfo.updateValue(uid, forKey: "uid")
-                    playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
-                    playQualitiesInfo.updateValue("100", forKey: "t")
-                    playQualitiesInfo.updateValue("huya_live", forKey: "ctype")
-                    let ss = "\(playQualitiesInfo["seqid"] ?? "")|\("huya_live")|\("100")".md5
-                    let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
-                    if let data = Data(base64Encoded: base64EncodedData) {
-                        let fm = String(data: data, encoding: .utf8)!
-                        var nsFM = fm as NSString
-                        nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
-                        playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
-                        playQualitiesInfo.removeValue(forKey: "fm")
-                        playQualitiesInfo.removeValue(forKey: "txyp")
-                        var playInfo: Array<URLQueryItem> = []
-                        for key in playQualitiesInfo.keys {
-                            let value = playQualitiesInfo[key] ?? ""
-                            playInfo.append(.init(name: key, value: value))
-                        }
-                        var urlComps = URLComponents(string: "")!
-                        urlComps.queryItems = playInfo
-                        let result = urlComps.url!
-                        var res = result.absoluteString as NSString
-                        var url = ""
-                        var maxRate = 0
-                        for streamInfo in liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value ?? [] {
-                            if maxRate < streamInfo.iMobilePriorityRate {
-                                maxRate = streamInfo.iMobilePriorityRate
-                                url = "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)"
-                            }
-                        }
-                        let bitRateInfoArray  = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vBitRateInfo.value ?? []
-                        for index in 0 ..< bitRateInfoArray.count {
-                            let bitRateInfo = bitRateInfoArray[index]
-                            liveQualtys.append(.init(roomId: self.roomId, title: "线路\(index + 1)", qn: bitRateInfo.iBitRate, liveType: .huya))
-                        }
-                        return liveQualtys
-                    }
-                }
-                
-            }catch {
-                return liveQualtys
-            }
-        }else if (liveType == .douyin) {
-            do {
-                let liveData = try await Douyin.getDouyinRoomDetail(streamerData: self)
-                if liveData.data?.data?.count ?? 0 > 0 {
-                    let FULL_HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.FULL_HD1 ?? ""
-                    let HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.HD1 ?? ""
-                    let SD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD1 ?? ""
-                    let SD2 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD2 ?? ""
-                    var url = ""
-                    if FULL_HD1.count > 0 {
-                        liveQualtys.append(.init(roomId: self.roomId, title: "超清", qn: 0, liveType: .douyin))
-                    }else if HD1.count > 0 {
-                        liveQualtys.append(.init(roomId: self.roomId, title: "高清", qn: 0, liveType: .douyin))
-                    }else if SD1.count > 0 {
-                        liveQualtys.append(.init(roomId: self.roomId, title: "标清1", qn: 0, liveType: .douyin))
-                    }else if SD2.count > 0 {
-                        liveQualtys.append(.init(roomId: self.roomId, title: "标清2", qn: 0, liveType: .douyin))
-                    }
-                    return liveQualtys
-                }
-                return liveQualtys
-            }catch {
-                return liveQualtys
-            }
-        }
-        return liveQualtys
-        
-    }
+//    func getPlayArgsV2() async throws -> Array<LiveQuality> {
+//        var liveQualtys: Array<LiveQuality> = []
+//        if liveType == .bilibili {
+//            do {
+//                let quality = try await Bilibili.getVideoQualites(roomModel:self)
+//                if quality.code == 0 {
+//                    if let qualityDescription = quality.data.quality_description {
+//                        for item in qualityDescription {
+//                            liveQualtys.append(.init(roomId: self.roomId, title: item.desc, qn: item.qn, liveType: .bilibili))
+//                        }
+//                    }
+//                }
+//                return liveQualtys
+//            }catch {
+//                return liveQualtys
+//            }
+//        }else if liveType == .douyu {
+//            do {
+//                let dataReq = try await Douyu.getPlayArgs(rid: roomId)
+//                if let data = dataReq.data {
+//                    for item in data.multirates {
+//                        liveQualtys.append(.init(roomId: self.roomId, title: item.name, qn: item.rate, liveType: .douyu))
+//                    }
+//                }
+//                return liveQualtys
+//            }catch {
+//                return liveQualtys
+//            }
+//        }else if liveType == .huya {
+//            do {
+//                let liveData = try await Huya.getPlayArgs(rid: self.roomId)
+//                if liveData != nil {
+//                    let streamInfo = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
+//                    var playQualitiesInfo: Dictionary<String, String> = [:]
+//                    if let urlComponent = URLComponents(string: "?\(streamInfo?.sFlvAntiCode ?? "")") {
+//                        if let queryItems = urlComponent.queryItems {
+//                            for item in queryItems {
+//                                playQualitiesInfo.updateValue(item.value ?? "", forKey: item.name)
+//                            }
+//                        }
+//                    }
+//                    playQualitiesInfo.updateValue("1", forKey: "ver")
+//                    playQualitiesInfo.updateValue("2110211124", forKey: "sv")
+//                    let uid = try await Huya.getAnonymousUid()
+//                    let now = Int(Date().timeIntervalSince1970) * 1000
+//                    playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
+//                    playQualitiesInfo.updateValue(uid, forKey: "uid")
+//                    playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
+//                    playQualitiesInfo.updateValue("100", forKey: "t")
+//                    playQualitiesInfo.updateValue("huya_live", forKey: "ctype")
+//                    let ss = "\(playQualitiesInfo["seqid"] ?? "")|\("huya_live")|\("100")".md5
+//                    let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
+//                    if let data = Data(base64Encoded: base64EncodedData) {
+//                        let fm = String(data: data, encoding: .utf8)!
+//                        var nsFM = fm as NSString
+//                        nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
+//                        playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
+//                        playQualitiesInfo.removeValue(forKey: "fm")
+//                        playQualitiesInfo.removeValue(forKey: "txyp")
+//                        var playInfo: Array<URLQueryItem> = []
+//                        for key in playQualitiesInfo.keys {
+//                            let value = playQualitiesInfo[key] ?? ""
+//                            playInfo.append(.init(name: key, value: value))
+//                        }
+//                        var urlComps = URLComponents(string: "")!
+//                        urlComps.queryItems = playInfo
+//                        let result = urlComps.url!
+//                        var res = result.absoluteString as NSString
+//                        var url = ""
+//                        var maxRate = 0
+//                        for streamInfo in liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value ?? [] {
+//                            if maxRate < streamInfo.iMobilePriorityRate {
+//                                maxRate = streamInfo.iMobilePriorityRate
+//                                url = "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)"
+//                            }
+//                        }
+//                        let bitRateInfoArray  = liveData?.roomInfo.tLiveInfo.tLiveStreamInfo.vBitRateInfo.value ?? []
+//                        for index in 0 ..< bitRateInfoArray.count {
+//                            let bitRateInfo = bitRateInfoArray[index]
+//                            liveQualtys.append(.init(roomId: self.roomId, title: "线路\(index + 1)", qn: bitRateInfo.iBitRate, liveType: .huya, url: url, ))
+//                        }
+//                        return liveQualtys
+//                    }
+//                }
+//                
+//            }catch {
+//                return liveQualtys
+//            }
+//        }else if (liveType == .douyin) {
+//            do {
+//                let liveData = try await Douyin.getDouyinRoomDetail(streamerData: self)
+//                if liveData.data?.data?.count ?? 0 > 0 {
+//                    let FULL_HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.FULL_HD1 ?? ""
+//                    let HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.HD1 ?? ""
+//                    let SD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD1 ?? ""
+//                    let SD2 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD2 ?? ""
+//                    var url = ""
+//                    if FULL_HD1.count > 0 {
+//                        liveQualtys.append(.init(roomId: self.roomId, title: "超清", qn: 0, liveType: .douyin))
+//                    }else if HD1.count > 0 {
+//                        liveQualtys.append(.init(roomId: self.roomId, title: "高清", qn: 0, liveType: .douyin))
+//                    }else if SD1.count > 0 {
+//                        liveQualtys.append(.init(roomId: self.roomId, title: "标清1", qn: 0, liveType: .douyin))
+//                    }else if SD2.count > 0 {
+//                        liveQualtys.append(.init(roomId: self.roomId, title: "标清2", qn: 0, liveType: .douyin))
+//                    }
+//                    return liveQualtys
+//                }
+//                return liveQualtys
+//            }catch {
+//                return liveQualtys
+//            }
+//        }
+//        return liveQualtys
+//        
+//    }
 }
 
-struct LiveQuality {
+struct LiveQuality: Codable {
     var roomId: String
     var title: String
     var qn: Int //bilibili用qn请求地址
+    var url: String
+    var liveCodeType: LiveCodeType
     var liveType: LiveType
     
     func getPlayURL() async throws -> String?  {
@@ -349,4 +351,38 @@ struct LiveQuality {
         }
         return urls.first
     }
+}
+
+struct LiveCategoryModel {
+    let id: String //B站: id; Douyu:cid2; Huya: gid; Douyin: partitionId
+    let parentId: String //B站: parent_id; Douyu: 不需要; Huya: 不需要; Douyin: partitionType
+    let title: String
+    let icon: String
+}
+
+struct LiveMainListModel {
+    let id: Int
+    let title: String
+    let icon: String
+    var subList: [LiveCategoryModel]
+}
+
+enum LiveType: String, Codable {
+    case bilibili = "0",
+         huya = "1",
+         douyin = "2",
+         douyu = "3",
+         qie = "4"
+}
+
+enum LiveState: String, Codable {
+    case close = "0", //关播
+         live = "1", //直播中
+         video = "2", //录播、轮播
+         unknow = "3" //未知
+}
+
+enum LiveCodeType: String, Codable {
+    case flv = "flv",
+         hls = "m3u8"
 }

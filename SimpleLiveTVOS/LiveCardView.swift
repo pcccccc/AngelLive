@@ -167,16 +167,16 @@ struct LiveCardView: View {
             }
         }
         .fullScreenCover(isPresented: $isLive, content: {
-            KSAudioView(roomModel: liveModel) { needShowHint, hintString in
-                isLive = false
-                if needShowHint {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        self.showToast(false, false, hintString)
-                    }
-                }
-            }
-            
-            .edgesIgnoringSafeArea(.all)
+//            KSAudioView(roomModel: liveModel) { needShowHint, hintString in
+//                isLive = false
+//                if needShowHint {
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+//                        self.showToast(false, false, hintString)
+//                    }
+//                }
+//            }
+//            
+//            .edgesIgnoringSafeArea(.all)
         })
     }
     

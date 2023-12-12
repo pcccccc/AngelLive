@@ -19,6 +19,15 @@
       }
     },
     {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/FFmpegKit.git",
+      "state" : {
+        "revision" : "ce7d13b161ad527417cfda9f00eaad2f8f7f9330",
+        "version" : "6.1.0"
+      }
+    },
+    {
       "identity" : "gzipswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1024jp/GzipSwift",
@@ -37,21 +46,21 @@
       }
     },
     {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/KSPlayer",
+      "state" : {
+        "branch" : "develop",
+        "revision" : "1502c6315adf5b88612806dec5f4cad48468bd23"
+      }
+    },
+    {
       "identity" : "simpletoast",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sanzaru/SimpleToast.git",
       "state" : {
         "revision" : "6637b95dfc49d3d688ad2d7b6e0655c0f6862f83",
         "version" : "0.8.0"
-      }
-    },
-    {
-      "identity" : "sqlite.swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stephencelis/SQLite.swift",
-      "state" : {
-        "revision" : "7a2e3cd27de56f6d396e84f63beefd0267b55ccb",
-        "version" : "0.14.1"
       }
     },
     {

@@ -131,7 +131,7 @@ struct HuyaSearchResponse: Codable {
     
     enum CodingKeys: String, CodingKey {
     case three = "3"
-}
+    }
 }
 
 struct HuyaSearchDocses: Codable {
@@ -147,7 +147,119 @@ struct HuyaSearchDocs: Codable {
     let game_screenshot: String
 }
     
-class Huya {
+class Huya: LiveParse {
+
+    func getCategoryList() async throws -> [LiveMainListModel] {
+        return [
+            LiveMainListModel(id: 1, title: "网游", icon: "", subList: try await getCategorySubList(id: "1")),
+            LiveMainListModel(id: 2, title: "单机", icon: "", subList: try await getCategorySubList(id: "2")),
+            LiveMainListModel(id: 8, title: "娱乐", icon: "", subList: try await getCategorySubList(id: "8")),
+            LiveMainListModel(id: 3, title: "手游", icon: "", subList: try await getCategorySubList(id: "3")),
+        ]
+    }
+    
+    func getCategorySubList(id: String) async throws -> [LiveCategoryModel] {
+        let dataReq = try await AF.request("https://live.cdn.huya.com/liveconfig/game/bussLive", method: .get, parameters: ["bussType": id]).serializingDecodable(HuyaMainData<[HuyaSubListModel]>.self).value
+        var tempArray: [LiveCategoryModel] = []
+        for item in dataReq.data {
+            tempArray.append(LiveCategoryModel(id: "\(item.gid)", parentId: "", title: item.gameFullName, icon: item.pic))
+        }
+        return tempArray
+    }
+    
+    func getRoomList(id: String, parentId: String?, page: Int = 1) async throws -> [LiveModel] {
+        let dataReq = try await AF.request(
+            "https://www.huya.com/cache.php",
+            method: .get,
+            parameters: [
+                "m": "LiveList",
+                "do": "getLiveListByPage",
+                "tagAll": 0,
+                "gameId": id,
+                "page": page
+            ]
+        ).serializingDecodable(HuyaRoomMainData.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data.datas {
+            tempArray.append(LiveModel(userName: item.nick, roomTitle: item.introduction, roomCover: item.screenshot, userHeadImg: item.avatar180, liveType: .huya, liveState: "", userId: item.uid, roomId: item.profileRoom))
+        }
+        return tempArray
+    }
+    
+    func getPlayArgs(roomId: String) async throws -> [LiveQuality] {
+        let dataReq = try await AF.request(
+            "https://m.huya.com/\(roomId)",
+            method: .get,
+            headers: [
+                HTTPHeader(name: "user-agent", value: "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1 Edg/91.0.4472.69")
+            ]
+        ).serializingString().value
+        let regex = try NSRegularExpression(pattern: "window\\.HNF_GLOBAL_INIT.=.\\{(.*?)\\}.</script>", options: [])
+        let matchs =  regex.matches(in: dataReq, range: NSRange(location: 0, length:  dataReq.count))
+        for match in matchs {
+            let matchRange = Range(match.range, in: dataReq)!
+            let matchedSubstring = dataReq[matchRange]
+            var nsstr = NSString(string: "\(matchedSubstring.prefix(matchedSubstring.count - 10))")
+            nsstr = nsstr.replacingOccurrences(of: "window.HNF_GLOBAL_INIT =", with: "") as NSString
+            let liveData = try JSONDecoder().decode(HuyaRoomInfoMainModel.self, from: (nsstr as String).data(using: .utf8)!)
+            if liveData != nil {
+                let streamInfo = liveData.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value.first
+                var playQualitiesInfo: Dictionary<String, String> = [:]
+                if let urlComponent = URLComponents(string: "?\(streamInfo?.sFlvAntiCode ?? "")") {
+                    if let queryItems = urlComponent.queryItems {
+                        for item in queryItems {
+                            playQualitiesInfo.updateValue(item.value ?? "", forKey: item.name)
+                        }
+                    }
+                }
+                playQualitiesInfo.updateValue("1", forKey: "ver")
+                playQualitiesInfo.updateValue("2110211124", forKey: "sv")
+                let uid = try await Huya.getAnonymousUid()
+                let now = Int(Date().timeIntervalSince1970) * 1000
+                playQualitiesInfo.updateValue("\((Int(uid) ?? 0) + Int(now))", forKey: "seqid")
+                playQualitiesInfo.updateValue(uid, forKey: "uid")
+                playQualitiesInfo.updateValue(Huya.getUUID(), forKey: "uuid")
+                playQualitiesInfo.updateValue("100", forKey: "t")
+                playQualitiesInfo.updateValue("huya_live", forKey: "ctype")
+                let ss = "\(playQualitiesInfo["seqid"] ?? "")|\("huya_live")|\("100")".md5
+                let base64EncodedData = (playQualitiesInfo["fm"] ?? "").data(using: .utf8)!
+                if let data = Data(base64Encoded: base64EncodedData) {
+                    let fm = String(data: data, encoding: .utf8)!
+                    var nsFM = fm as NSString
+                    nsFM = nsFM.replacingOccurrences(of: "$0", with: uid).replacingOccurrences(of: "$1", with: streamInfo?.sStreamName ?? "").replacingOccurrences(of: "$2", with: ss).replacingOccurrences(of: "$3", with: playQualitiesInfo["wsTime"] ?? "") as NSString
+                    playQualitiesInfo.updateValue((nsFM as String).md5, forKey: "wsSecret")
+                    playQualitiesInfo.removeValue(forKey: "fm")
+                    playQualitiesInfo.removeValue(forKey: "txyp")
+                    var playInfo: Array<URLQueryItem> = []
+                    for key in playQualitiesInfo.keys {
+                        let value = playQualitiesInfo[key] ?? ""
+                        playInfo.append(.init(name: key, value: value))
+                    }
+                    var urlComps = URLComponents(string: "")!
+                    urlComps.queryItems = playInfo
+                    let result = urlComps.url!
+                    var res = result.absoluteString as NSString
+                    var url = ""
+                    var maxRate = 0
+                    for streamInfo in liveData.roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value {
+                        if maxRate < streamInfo.iMobilePriorityRate {
+                            maxRate = streamInfo.iMobilePriorityRate
+                            url = "\(streamInfo.sFlvUrl)/\(streamInfo.sStreamName).\(streamInfo.sFlvUrlSuffix)\(res)"
+                        }
+                    }
+                    let bitRateInfoArray  = liveData.roomInfo.tLiveInfo.tLiveStreamInfo.vBitRateInfo.value
+                    var liveQualtys: [LiveQuality] = []
+                    for index in 0 ..< bitRateInfoArray.count {
+                        let bitRateInfo = bitRateInfoArray[index]
+                        liveQualtys.append(.init(roomId: roomId, title: "线路\(index + 1)", qn: bitRateInfo.iBitRate, url: url, liveCodeType: .flv, liveType: .huya))
+                    }
+                    return liveQualtys
+                }
+            }
+        }
+    }
+    
+    
     
     public class func getHuyaSubList(bussType: String) async throws -> HuyaMainData<Array<HuyaSubListModel>> {
         do {
@@ -234,7 +346,7 @@ class Huya {
         return ""
     }
     
-    public class func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+    public func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
         let dataReq = try await AF.request(
             "https://search.cdn.huya.com/",
             parameters: [

@@ -9,14 +9,6 @@ import SwiftUI
 import Kingfisher
 import GameController
 
-enum LiveType: String,Codable {
-    case bilibili = "0",
-         huya = "1",
-         douyin = "2",
-         douyu = "3",
-         qie = "4"
-}
-
 struct LeftMenu: View {
     
     var liveType: LiveType
