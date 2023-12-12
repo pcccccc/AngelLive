@@ -189,7 +189,6 @@
 			isa = PBXGroup;
 			children = (
 				FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */,
-				FBFEDA482AD2A79700D96D7D /* Model */,
 				FBC2E6F12ACD83350036BFD4 /* Tools */,
 				4FC9B3912A53BEB100C0D3C8 /* Core */,
 				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
@@ -310,13 +309,6 @@
 				FB2175A42B14DF0D0068100B /* Setting.swift */,
 			);
 			path = Tools;
-			sourceTree = "<group>";
-		};
-		FBFEDA482AD2A79700D96D7D /* Model */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Model;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

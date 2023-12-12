@@ -148,17 +148,17 @@ struct HuyaSearchDocs: Codable {
 }
     
 class Huya: LiveParse {
-
-    func getCategoryList() async throws -> [LiveMainListModel] {
+    
+    static func getCategoryList() async throws -> [LiveMainListModel] {
         return [
-            LiveMainListModel(id: 1, title: "网游", icon: "", subList: try await getCategorySubList(id: "1")),
-            LiveMainListModel(id: 2, title: "单机", icon: "", subList: try await getCategorySubList(id: "2")),
-            LiveMainListModel(id: 8, title: "娱乐", icon: "", subList: try await getCategorySubList(id: "8")),
-            LiveMainListModel(id: 3, title: "手游", icon: "", subList: try await getCategorySubList(id: "3")),
+            LiveMainListModel(id: "1", title: "网游", icon: "", subList: try await getCategorySubList(id: "1")),
+            LiveMainListModel(id: "2", title: "单机", icon: "", subList: try await getCategorySubList(id: "2")),
+            LiveMainListModel(id: "8", title: "娱乐", icon: "", subList: try await getCategorySubList(id: "8")),
+            LiveMainListModel(id: "3", title: "手游", icon: "", subList: try await getCategorySubList(id: "3")),
         ]
     }
     
-    func getCategorySubList(id: String) async throws -> [LiveCategoryModel] {
+    static func getCategorySubList(id: String) async throws -> [LiveCategoryModel] {
         let dataReq = try await AF.request("https://live.cdn.huya.com/liveconfig/game/bussLive", method: .get, parameters: ["bussType": id]).serializingDecodable(HuyaMainData<[HuyaSubListModel]>.self).value
         var tempArray: [LiveCategoryModel] = []
         for item in dataReq.data {
@@ -167,7 +167,7 @@ class Huya: LiveParse {
         return tempArray
     }
     
-    func getRoomList(id: String, parentId: String?, page: Int = 1) async throws -> [LiveModel] {
+    static func getRoomList(id: String, parentId: String?, page: Int = 1) async throws -> [LiveModel] {
         let dataReq = try await AF.request(
             "https://www.huya.com/cache.php",
             method: .get,
@@ -186,7 +186,7 @@ class Huya: LiveParse {
         return tempArray
     }
     
-    func getPlayArgs(roomId: String) async throws -> [LiveQuality] {
+    static func getPlayArgs(roomId: String, userId: String?) async throws -> [LiveQuality] {
         let dataReq = try await AF.request(
             "https://m.huya.com/\(roomId)",
             method: .get,
@@ -257,9 +257,44 @@ class Huya: LiveParse {
                 }
             }
         }
+        return []
     }
     
+    static func getLiveLastestInfo(roomId: String, userId: String?) async throws -> LiveModel {
+        return LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "")
+    }
     
+    static func getLiveState(roomId: String, userId: String?) async throws -> LiveState {
+        let liveStatus = try await Huya.getPlayArgs(rid: roomId)?.roomInfo.eLiveStatus
+        switch liveStatus {
+            case 2:
+                return .live
+            default:
+                return .close
+        }
+    }
+    
+    static func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+        let dataReq = try await AF.request(
+            "https://search.cdn.huya.com/",
+            parameters: [
+                "m": "Search",
+                "do": "getSearchContent",
+                "q": keyword,
+                "uid": 0,
+                "v": 4,
+                "typ": -5,
+                "livestate": 0,
+                "rows": 20,
+                "start": (page - 1) * 20,
+            ]
+        ).serializingDecodable(HuyaSearchResult.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.response.three.docs {
+            tempArray.append(LiveModel(userName: item.game_nick, roomTitle: item.game_introduction, roomCover: item.game_screenshot, userHeadImg: item.game_imgUrl, liveType: .huya, liveState: "正在直播", userId: "\(item.uid)", roomId: "\(item.room_id)"))
+        }
+        return tempArray
+    }
     
     public class func getHuyaSubList(bussType: String) async throws -> HuyaMainData<Array<HuyaSubListModel>> {
         do {
@@ -346,25 +381,5 @@ class Huya: LiveParse {
         return ""
     }
     
-    public func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
-        let dataReq = try await AF.request(
-            "https://search.cdn.huya.com/",
-            parameters: [
-                "m": "Search",
-                "do": "getSearchContent",
-                "q": keyword,
-                "uid": 0,
-                "v": 4,
-                "typ": -5,
-                "livestate": 0,
-                "rows": 20,
-                "start": (page - 1) * 20,
-            ]
-        ).serializingDecodable(HuyaSearchResult.self).value
-        var tempArray: Array<LiveModel> = []
-        for item in dataReq.response.three.docs {
-            tempArray.append(LiveModel(userName: item.game_nick, roomTitle: item.game_introduction, roomCover: item.game_screenshot, userHeadImg: item.game_imgUrl, liveType: .huya, liveState: "正在直播", userId: "\(item.uid)", roomId: "\(item.room_id)"))
-        }
-        return tempArray
-    }
+    
 }

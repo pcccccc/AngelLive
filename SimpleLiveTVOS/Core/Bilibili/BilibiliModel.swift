@@ -236,7 +236,136 @@ struct BilibiliSearchResultMain: Codable {
     let live_user: Array<BiliBiliCategoryListModel>?
 }
 
-class Bilibili {
+class Bilibili: LiveParse {
+    static func getCategoryList() async throws -> [LiveMainListModel] {
+        let dataReq = try await AF.request("https://api.live.bilibili.com/room/v1/Area/getList", method: .get).serializingDecodable(BilibiliMainData<[BilibiliMainListModel]>.self).value
+        var tempArray: [LiveMainListModel] = []
+        for item in dataReq.data {
+            var subList: [LiveCategoryModel] = []
+            guard let subCategoryList = item.list else {
+                continue
+            }
+            for subItem in subCategoryList {
+                subList.append(.init(id: subItem.id, parentId: subItem.parent_id, title: subItem.name, icon: subItem.pic))
+            }
+            tempArray.append(.init(id: "\(item.id)", title: item.name, icon: "", subList: subList))
+        }
+        return tempArray
+    }
+    
+    static func getRoomList(id: String, parentId: String?, page: Int) async throws -> [LiveModel] {
+        let dataReq = try await AF.request(
+            "https://api.live.bilibili.com/xlive/web-interface/v1/second/getList",
+            method: .get,
+            parameters: [
+                "platform": "web",
+                "parent_area_id": parentId,
+                "area_id": id,
+                "sort_type": "",
+                "page": page
+            ],
+            headers: [
+            ]
+        ).serializingDecodable(BilibiliMainData<BiliBiliCategoryRoomMainModel>.self).value
+        if let listModelArray = dataReq.data.list {
+            var tempArray: Array<LiveModel> = []
+            for item in listModelArray {
+                tempArray.append(LiveModel(userName: item.uname, roomTitle: item.title ?? "", roomCover: item.cover ?? "", userHeadImg: item.face ?? "", liveType: .bilibili, liveState: "", userId: "\(item.uid)", roomId: "\(item.roomid)"))
+            }
+            return tempArray
+        }else {
+            return []
+        }
+    }
+    
+    static func getPlayArgs(roomId: String, userId: String?) async throws -> [LiveQuality] {
+        
+        let dataReq = try await AF.request(
+            "https://api.live.bilibili.com/room/v1/Room/playUrl",
+            method: .get,
+            parameters: [
+                "platform": "web",
+                "cid": roomId,
+                "qn": ""
+            ],
+            headers: BiliBiliCookie.cookie == "" ? nil : [
+                "cookie": BiliBiliCookie.cookie
+            ]
+        ).serializingDecodable(BilibiliMainData<BiliBiliQualityModel>.self).value
+        var liveQualitys: [LiveQuality] = []
+        if let qualityDescription = dataReq.data.quality_description {
+            for item in qualityDescription {
+//                    liveQualtys.append(.init(roomId: roomId, title: item.desc, qn: item.qn, liveType: .bilibili))
+                let dataReq = try await AF.request(
+                    "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo",
+                    method: .get,
+                    parameters: [
+                        "platform": "web",
+                        "room_id": roomId,
+                        "qn": item.qn,
+                        "protocol": "0,1",
+                        "format": "0,2",
+                        "codec": "0,1",
+                        "mask": "0"
+                    ],
+                    headers: BiliBiliCookie.cookie == "" ? nil : [
+                        "cookie": BiliBiliCookie.cookie
+                    ]
+                ).serializingDecodable(BilibiliMainData<BiliBiliPlayURLInfoMain>.self).value
+                for streamInfo in dataReq.data.playurl_info.playurl.stream {
+                    if streamInfo.protocol_name == "http_hls" {
+                        let url = (streamInfo.format.last?.codec.last?.url_info.last?.host ?? "") + (streamInfo.format.last?.codec.last?.base_url ?? "") + (streamInfo.format.last?.codec.last?.url_info.last?.extra ?? "")
+                        liveQualitys.append(.init(roomId: roomId, title: item.desc, qn: item.qn, url: url, liveCodeType: .hls, liveType: .bilibili))
+                    }
+                }
+                for streamInfo in dataReq.data.playurl_info.playurl.stream {
+                    if streamInfo.protocol_name == "http_stream" {
+                        let url = (streamInfo.format.first?.codec.first?.url_info.first?.host ?? "") + (streamInfo.format.first?.codec.first?.base_url ?? "") + (streamInfo.format.first?.codec.first?.url_info.first?.extra ?? "")
+                        liveQualitys.append(.init(roomId: roomId, title: item.desc, qn: item.qn, url: url, liveCodeType: .flv, liveType: .bilibili))
+                    }
+                }
+                return liveQualitys
+            }
+        }
+        return liveQualitys
+    }
+    
+    static func getLiveLastestInfo(roomId: String, userId: String?) async throws -> LiveModel {
+        return LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "")
+    }
+    
+    static func getLiveState(roomId: String, userId: String?) async throws -> LiveState {
+        let dataReq = try await AF.request(
+            "https://api.live.bilibili.com/room/v1/Room/get_info",
+            method: .get,
+            parameters: [
+                "room_id": roomId
+            ],
+            headers: BiliBiliCookie.cookie == "" ? nil : [
+                "cookie": BiliBiliCookie.cookie
+            ]
+        ).serializingData().value
+        let json = try JSONSerialization.jsonObject(with: dataReq, options: .mutableContainers)
+        let jsonDict = json as! Dictionary<String, Any>
+        let dataDict = jsonDict["data"] as! Dictionary<String, Any>
+        let liveStatus = dataDict["live_status"] as? Int ?? -1
+        switch liveStatus {
+            case 0:
+                return .close
+            case 1:
+                return .live
+            case 2:
+                return .close
+            default:
+                return .unknow
+        }
+    }
+    
+    
+    
+    
+    
+    
     public class func getBiliBiliList() async throws -> BilibiliMainData<[BilibiliMainListModel]> {
         return try await AF.request("https://api.live.bilibili.com/room/v1/Area/getList", method: .get).serializingDecodable(BilibiliMainData.self).value
     }
@@ -270,14 +399,14 @@ class Bilibili {
         }
     }
 
-    public class func getVideoQualites(roomModel: LiveModel) async throws -> BilibiliMainData<BiliBiliQualityModel> {
+    public class func getVideoQualites(roomId: String) async throws -> BilibiliMainData<BiliBiliQualityModel> {
         do {
             let dataReq = try await AF.request(
                 "https://api.live.bilibili.com/room/v1/Room/playUrl",
                 method: .get,
                 parameters: [
                     "platform": "web",
-                    "cid": roomModel.roomId,
+                    "cid": roomId,
                     "qn": ""
                 ],
                 headers: BiliBiliCookie.cookie == "" ? nil : [

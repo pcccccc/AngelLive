@@ -50,7 +50,7 @@ public struct LiveModel: Codable {
             }
         }else if liveType == .douyin {
             do {
-                let dataReq = try await Douyin.getDouyinRoomDetail(streamerData: self)
+                let dataReq = try await Douyin.getDouyinRoomDetail(roomId: roomId, userId: userId)
                 switch dataReq.data?.data?.first?.status {
                     case 4:
                         liveState = "已下播"
@@ -93,7 +93,7 @@ public struct LiveModel: Codable {
         
         if liveType == .bilibili {
             do {
-                let quality = try await Bilibili.getVideoQualites(roomModel:self)
+                let quality = try await Bilibili.getVideoQualites(roomId: roomId)
                 if quality.code == 0 {
                     if let qualityDescription = quality.data.quality_description {
                         var maxQn = 0
@@ -123,7 +123,7 @@ public struct LiveModel: Codable {
             }
         }else if liveType == .douyin {
             do {
-                let liveData = try await Douyin.getDouyinRoomDetail(streamerData: self)
+                let liveData = try await Douyin.getDouyinRoomDetail(roomId: roomId, userId: userId)
                 if liveData.data?.data?.count ?? 0 > 0 {
                     let FULL_HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.FULL_HD1 ?? ""
                     let HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.HD1 ?? ""
@@ -361,7 +361,7 @@ struct LiveCategoryModel {
 }
 
 struct LiveMainListModel {
-    let id: Int
+    let id: String
     let title: String
     let icon: String
     var subList: [LiveCategoryModel]

@@ -181,7 +181,156 @@ var headers = HTTPHeaders.init([
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.51",
 ])
 
-class Douyin {
+class Douyin: LiveParse {
+    
+    static func getCategoryList() async throws -> [LiveMainListModel] {
+        let dataReq = try await AF.request("https://live.douyin.com", method: .get, headers: headers).serializingString().value
+        let regex = try NSRegularExpression(pattern: "\\{\\\\\"pathname\\\\\":\\\\\"/\\\\\",\\\\\"categoryData.*?\\]\\)", options: [])
+        let matchs =  regex.matches(in: dataReq, range: NSRange(location: 0, length:  dataReq.count))
+        for match in matchs {
+            let matchRange = Range(match.range, in: dataReq)!
+            let matchedSubstring = dataReq[matchRange]
+            let nsstr = NSString(string: "\(matchedSubstring.prefix(matchedSubstring.count - 6))")
+            let data = try JSONDecoder().decode(DouyinMainModel.self, from: nsstr.replacingOccurrences(of: "\\", with: "").data(using: .utf8)!)
+//            return data.categoryData
+            var tempArray: [LiveMainListModel] = []
+            for item in data.categoryData {
+                var subList: [LiveCategoryModel] = []
+                for subItem in item.sub_partition {
+                    subList.append(.init(id: subItem.partition.id_str, parentId: "\(subItem.partition.type)", title: subItem.partition.title, icon: ""))
+                }
+                tempArray.append(.init(id: item.partition.id_str, title: item.partition.title, icon: "", subList: subList))
+            }
+            
+        }
+        return []
+    }
+    
+    static func getRoomList(id: String, parentId: String?, page: Int) async throws -> [LiveModel] {
+        let parameter: Dictionary<String, Any> = [
+            "aid": 6383,
+            "app_name": "douyin_web",
+            "live_id": 1,
+            "device_platform": "web",
+            "count": 15,
+            "offset": (page - 1) * 15,
+            "partition": id,
+            "partition_type": parentId ?? "",
+            "req_from": 2
+        ]
+        let dataReq = try await AF.request("https://live.douyin.com/webcast/web/partition/detail/room/", method: .get, parameters: parameter, headers: headers).serializingDecodable(DouyinRoomMainResponse.self).value
+        let listModelArray = dataReq.data.data
+        var tempArray: Array<LiveModel> = []
+        for item in listModelArray {
+            tempArray.append(LiveModel(userName: item.room.owner.nickname, roomTitle: item.room.title, roomCover: item.room.cover.url_list.first ?? "", userHeadImg: item.room.owner.avatar_thumb.url_list.first ?? "", liveType: .douyin, liveState: "", userId: item.room.id_str, roomId: item.web_rid))
+        }
+        return tempArray
+    }
+    
+    static func getPlayArgs(roomId: String, userId: String?) async throws -> [LiveQuality] {
+        let liveData = try await Douyin.getDouyinRoomDetail(roomId: roomId, userId: userId ?? "")
+        if liveData.data?.data?.count ?? 0 > 0 {
+            let FULL_HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.FULL_HD1 ?? ""
+            let HD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.HD1 ?? ""
+            let SD1 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD1 ?? ""
+            let SD2 = liveData.data?.data?.first?.stream_url?.hls_pull_url_map.SD2 ?? ""
+            var url = ""
+            var tempArray: [LiveQuality] = []
+            if FULL_HD1 != "" {
+                tempArray.append(.init(roomId: roomId, title: "超清", qn: 0, url: FULL_HD1, liveCodeType: .hls, liveType: .douyin))
+            }
+            if HD1 != "" {
+                tempArray.append(.init(roomId: roomId, title: "高清", qn: 0, url: HD1, liveCodeType: .hls, liveType: .douyin))
+            }
+            if SD1 != "" {
+                tempArray.append(.init(roomId: roomId, title: "标清 1", qn: 0, url: SD1, liveCodeType: .hls, liveType: .douyin))
+            }
+            if SD2 != "" {
+                tempArray.append(.init(roomId: roomId, title: "标清 2", qn: 0, url: SD2, liveCodeType: .hls, liveType: .douyin))
+            }
+            return tempArray
+        }
+        return []
+    }
+    
+    static func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+        let serverUrl = "https://www.douyin.com/aweme/v1/web/live/search/"
+        var components = URLComponents(string: serverUrl)!
+        components.scheme = "https"
+        components.port = 443
+        let text = keyword.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+        let queryItems = [
+            URLQueryItem(name: "device_platform", value: "webapp"),
+            URLQueryItem(name: "aid", value: "6383"),
+            URLQueryItem(name: "channel", value: "channel_pc_web"),
+            URLQueryItem(name: "search_channel", value: "aweme_live"),
+            URLQueryItem(name: "keyword", value: keyword),
+            URLQueryItem(name: "search_source", value: "switch_tab"),
+            URLQueryItem(name: "query_correct_type", value: "1"),
+            URLQueryItem(name: "is_filter_search", value: "0"),
+            URLQueryItem(name: "from_group_id", value: ""),
+            URLQueryItem(name: "offset", value: "\((page - 1) * 10)"),
+            URLQueryItem(name: "count", value: "10"),
+            URLQueryItem(name: "pc_client_type", value: "1"),
+            URLQueryItem(name: "version_code", value: "170400"),
+            URLQueryItem(name: "version_name", value: "17.4.0"),
+            URLQueryItem(name: "cookie_enabled", value: "true"),
+            URLQueryItem(name: "screen_width", value: "1980"),
+            URLQueryItem(name: "screen_height", value: "1080"),
+            URLQueryItem(name: "browser_language", value: "zh-CN"),
+            URLQueryItem(name: "browser_platform", value: "Win32"),
+            URLQueryItem(name: "browser_name", value: "Edge"),
+            URLQueryItem(name: "browser_version", value: "114.0.1823.58"),
+            URLQueryItem(name: "browser_online", value: "true"),
+            URLQueryItem(name: "engine_name", value: "Blink"),
+            URLQueryItem(name: "engine_version", value: "114.0.0.0"),
+            URLQueryItem(name: "os_name", value: "Windows"),
+            URLQueryItem(name: "os_version", value: "10"),
+            URLQueryItem(name: "cpu_core_num", value: "12"),
+            URLQueryItem(name: "device_memory", value: "8"),
+            URLQueryItem(name: "platform", value: "PC"),
+            URLQueryItem(name: "downlink", value: "4.7"),
+            URLQueryItem(name: "effective_type", value: "4g"),
+            URLQueryItem(name: "round_trip_time", value: "100"),
+            URLQueryItem(name: "webid", value: "7247041636524377637")
+        ]
+
+        components.queryItems = queryItems
+        let douyinTK = try await Douyin.signURL(components.url!.absoluteString)
+        let requestUrl = douyinTK.url
+        var reqHeaders = HTTPHeaders.init([
+            "Accept":"application/json, text/plain, */*",
+            "Authority": "live.douyin.com",
+            "Referer": "https://www.douyin.com/search/\(text ?? "")?source=switch_tab&type=live",
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.51",
+            "Cookie": "ttwid=\(douyinTK.ttwid);msToken=\(douyinTK.mstoken);__ac_nonce=\(String.generateRandomString(length: 21))"
+        ])
+        let dataReq = try await AF.request(requestUrl, method: .get, headers:reqHeaders).serializingDecodable(DouyinSearchMain.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data {
+            let dict = try JSON(data: item.lives.rawdata.data(using: .utf8) ?? Data())
+            tempArray.append(LiveModel(userName: dict["owner"]["nickname"].stringValue, roomTitle: dict["title"].stringValue, roomCover: dict["cover"]["url_list"][0].stringValue, userHeadImg: dict["owner"]["avatar_thumb"]["url_list"][0].stringValue, liveType: .douyin, liveState: "", userId: dict["id_str"].stringValue, roomId: dict["owner"]["web_rid"].stringValue))
+        }
+        return tempArray
+    }
+    
+    static func getLiveLastestInfo(roomId: String, userId: String?) async throws -> LiveModel {
+        return LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "")
+    }
+    
+    static func getLiveState(roomId: String, userId: String?) async throws -> LiveState {
+        let dataReq = try await Douyin.getDouyinRoomDetail(roomId: roomId, userId: userId ?? "")
+        switch dataReq.data?.data?.first?.status {
+            case 4:
+                return .close
+            case 2:
+                return .live
+            default:
+                return .unknow
+        }
+    }
+    
     
     public class func getRequestHeaders() async throws {
         let dataReq = await AF.request("https://live.douyin.com", headers: headers).serializingData().response
@@ -224,7 +373,7 @@ class Douyin {
         return tempArray
     }
     
-    public class func getDouyinRoomDetail(streamerData: LiveModel) async throws -> DouyinRoomPlayInfoMainData {
+    public class func getDouyinRoomDetail(roomId: String, userId: String) async throws -> DouyinRoomPlayInfoMainData {
         
         let parameter: Dictionary<String, Any> = [
             "aid": 6383,
@@ -232,8 +381,8 @@ class Douyin {
             "live_id": 1,
             "device_platform": "web",
             "enter_from": "web_live",
-            "web_rid": streamerData.roomId,
-            "room_id_str": streamerData.userId,
+            "web_rid": roomId,
+            "room_id_str": userId,
             "enter_source": "",
             "Room-Enter-User-Login-Ab": 0,
             "is_need_double_stream": false,

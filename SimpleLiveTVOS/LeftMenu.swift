@@ -186,8 +186,8 @@ struct LeftMenu: View {
                         DouyuMainListModel(id: "yp", name: "语言互动", list:[]),
                     ]
                     for i in 0..<douyuMainList.count {
-                        let res = try await Douyu.getCategoryList(id: self.douyuMainList[i].id)
-                        self.douyuMainList[i].list = res
+//                        let res = try await Douyu.getCategoryList(id: self.douyuMainList[i].id)
+//                        self.douyuMainList[i].list = res
                     }
                     if self.douyuMainList.count > 0 {
                         self.leftMenuDidClick(0, 0, self.douyuMainList.first!.list.first!)

@@ -132,8 +132,160 @@ struct DouyuSearchRelateShow: Codable {
     let avatar: String
 }
 
-class Douyu {
-    public class func getCategoryList(id: String) async throws -> Array<DouyuSubListModel> {
+class Douyu: LiveParse {
+    
+    static func getCategoryList() async throws -> [LiveMainListModel] {
+        return [
+            LiveMainListModel(id: "PCgame", title: "网游竞技", icon: "", subList: try await getCategoryList(id: "PCgame")),
+            LiveMainListModel(id: "djry", title: "单机热游", icon: "", subList: try await getCategoryList(id: "djry")),
+            LiveMainListModel(id: "syxx", title: "手游休闲", icon: "", subList: try await getCategoryList(id: "syxx")),
+            LiveMainListModel(id: "yl", title: "娱乐天地", icon: "", subList: try await getCategoryList(id: "yl")),
+            LiveMainListModel(id: "yz", title: "颜值", icon: "", subList: try await getCategoryList(id: "yz")),
+            LiveMainListModel(id: "kjwh", title: "科技文化", icon: "", subList: try await getCategoryList(id: "kjwh")),
+            LiveMainListModel(id: "yp", title: "语言互动", icon: "", subList: try await getCategoryList(id: "yp")),
+        ]
+    }
+    
+    static func getRoomList(id: String, parentId: String?, page: Int) async throws -> [LiveModel] {
+        let dataReq = try await AF.request(
+            "https://www.douyu.com/gapi/rkc/directory/mixList/2_\(id)/\(page)",
+            method: .get
+        ).serializingDecodable(DouyuRoomMain.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data.rl {
+            if item.type == 1 {
+                tempArray.append(LiveModel(userName: item.nn!, roomTitle: item.rn!, roomCover: item.rs16_avif!, userHeadImg: item.av!, liveType: .douyu, liveState: "", userId: "\(item.uid!)", roomId: "\(item.rid!)"))
+            }
+        }
+        return tempArray
+    }
+    
+    static func getPlayArgs(roomId: String, userId: String?) async throws -> [LiveQuality] {
+        let jsEncReq = try await AF.request(
+            "https://www.douyu.com/swf_api/homeH5Enc?rids=\(roomId)",
+            method: .get,
+            headers: HTTPHeaders([
+                HTTPHeader.init(name: "referer", value: "https://www.douyu.com/\(roomId)"),
+                HTTPHeader.init(name: "user-agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43"),
+            ])
+        ).serializingData().value
+        let jsEncJson = try JSONSerialization.jsonObject(with: jsEncReq, options: .mutableContainers)
+        let jsEncDict = jsEncJson as! Dictionary<String, Any>
+        let jsEncData = jsEncDict["data"] as! Dictionary<String, Any>
+        let cryText = jsEncData["room\(roomId)"] as? String ?? ""
+        
+        let regex = try NSRegularExpression(pattern: "(vdwdae325w_64we[\\s\\S]*function ub98484234[\\s\\S]*?)function", options: [])
+        let matchs =  regex.matches(in: cryText, range: NSRange(location: 0, length:  cryText.count))
+        if matchs.count > 0 {
+            let match = matchs.first!
+            let matchRange = Range(match.range, in: cryText)!
+            let matchedSubstring = cryText[matchRange]
+            let nsstr = NSString(string: "\(matchedSubstring.prefix(matchedSubstring.count - 9))")
+            let regex = "eval.*?;\\}"
+            let RE = try NSRegularExpression(pattern: regex, options: .caseInsensitive)
+            let res = RE.stringByReplacingMatches(in: String(nsstr), options: .reportProgress, range: NSRange(location: 0, length: String(nsstr).count), withTemplate: "strc;}")
+            var request = URLRequest(url: URL(string: "http://alive.nsapps.cn/api/AllLive/DouyuSign")!)
+            request.httpMethod = "post"
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("application/json;charset=UTF-8", forHTTPHeaderField: "Content-Type")
+            let parameter = [
+                "html": res,
+                "rid": roomId
+            ]
+            request.httpBody = try JSONSerialization.data(withJSONObject: parameter)
+            let dataReq = try await AF.request(request).serializingData().value
+            let json = try JSONSerialization.jsonObject(with: dataReq, options: .mutableContainers)
+            let jsonDict = json as! Dictionary<String, Any>
+            if jsonDict["code"] as? Int ?? -1 == 0 {
+                var playData = NSString(string: "{\"\(jsonDict["data"] as? String ?? "")\"}")
+                playData = playData.replacingOccurrences(of: "&", with: "\",\"") as NSString
+                playData = playData.replacingOccurrences(of: "=", with: "\":\"") as NSString
+                let finalData = (playData as String).data(using: .utf8) ?? Data()
+                let jsEncJson = try JSONSerialization.jsonObject(with: finalData, options: .mutableContainers)
+                var jsEncDict = jsEncJson as! Dictionary<String, Any>
+                //\("&cdn=scdncuhubwh2&rate=0&hevc=0&fa=0&ver=Douyu_223061205&ive=1&iar=1")
+                jsEncDict.updateValue(0, forKey: "rate")
+                let dataReq = try await AF.request(
+                    "https://www.douyu.com/lapi/live/getH5Play/\(roomId)",
+                    method: .post,
+                    parameters: jsEncDict,
+                    headers: HTTPHeaders([
+                        HTTPHeader.init(name: "referer", value: "https://www.douyu.com/\(roomId)"),
+                        HTTPHeader.init(name: "user-agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43"),
+                    ])
+                ).serializingString().value
+                let resData = dataReq.data(using: .utf8) ?? Data()
+                let resJson = try JSONSerialization.jsonObject(with: resData, options: .mutableContainers)
+                let resDict = resJson as! Dictionary<String, Any>
+                let dataDict = resDict["data"] as! Dictionary<String, Any>
+                var playQualitys: Array<DouyuPlayQuality> = []
+                if let multirates = dataDict["multirates"] as? Array<Dictionary<String, Any>> {
+                    for item in multirates {
+                        let playQualityData = Common.jsonToData(jsonDic: item)
+                        let playQuality = try JSONDecoder().decode(DouyuPlayQuality.self, from: playQualityData ?? Data())
+                        playQualitys.append(playQuality)
+                    }
+                }
+                let model = DouyuPlayInfoModel(rtmp_url: dataDict["rtmp_url"] as? String ?? "", rtmp_live: dataDict["rtmp_live"] as? String ?? "", play_url: "", cdnsWithName: dataDict["cdnsWithName"] as? Array<Dictionary<String, String>> ?? [], multirates: playQualitys)
+                var tempArray: [LiveQuality] = []
+                for i in 0..<playQualitys.count {
+                    let item = playQualitys[i]
+                    tempArray.append(.init(roomId: roomId, title: "线路 \(i + 1)", qn: item.bit, url: "\(model.rtmp_url)/\(model.rtmp_live)", liveCodeType: .flv, liveType: .douyu))
+                }
+                return tempArray
+            }
+        }
+        return []
+    }
+    
+    static func getLiveLastestInfo(roomId: String, userId: String?) async throws -> LiveModel {
+        return LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "")
+    }
+    
+    static func getLiveState(roomId: String, userId: String?) async throws -> LiveState {
+        let liveStatus = try await Douyu.getLiveStatus(rid: roomId)
+        switch liveStatus {
+            case 0:
+                return .close
+            case 1:
+                return .live
+            case 2:
+                return .video
+            default:
+                return .unknow
+        }
+    }
+    
+    static func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
+        let did = String.generateRandomString(length: 32)
+        let dataReq =  try await AF.request(
+            "https://www.douyu.com/japi/search/api/searchShow",
+            method: .get,
+            parameters: [
+                "kw": keyword,
+                "page": page,
+                "pageSize": 20
+            ],
+            headers: HTTPHeaders([
+                HTTPHeader.init(name: "referer", value: "https://www.douyu.com/search/"),
+                HTTPHeader.init(name: "user-agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43"),
+                HTTPHeader.init(name: "Cookie", value: "dy_did=\(did);acf_did=\(did)"),
+            ])
+        ).serializingDecodable(DouyuSearchResult.self).value
+        var tempArray: Array<LiveModel> = []
+        for item in dataReq.data.relateShow {
+            tempArray.append(LiveModel(userName: item.nickName, roomTitle: item.roomName, roomCover: item.roomSrc, userHeadImg: item.avatar, liveType: .douyu, liveState: item.roomType == 0 ? "正在直播" :"已下播", userId: "\(item.rid)", roomId: "\(item.rid)"))
+        }
+        return tempArray
+    }
+    
+    
+    
+    
+    
+    
+    
+    public class func getCategoryList(id: String) async throws -> Array<LiveCategoryModel> {
         let dataReq = try await AF.request(
             "https://www.douyu.com/japi/weblist/api/getC2List",
             method: .get,
@@ -143,7 +295,11 @@ class Douyu {
                 "limit": 200,
             ]
         ).serializingDecodable(DouyuSubListMain.self).value
-        return dataReq.data.list
+        var tempArray: [LiveCategoryModel] = []
+        for item in dataReq.data.list {
+            tempArray.append(.init(id: "\(item.cid2)", parentId: "\(item.cid1)", title: item.cname2, icon: item.squareIconUrlW))
+        }
+        return tempArray
     }
     
     public class func getCategoryRooms(category: DouyuSubListModel, page: Int) async throws -> Array<LiveModel> {
@@ -272,30 +428,5 @@ class Douyu {
         }
     }
     
-    public class func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
-        do {
-            let did = String.generateRandomString(length: 32)
-            let dataReq =  try await AF.request(
-                "https://www.douyu.com/japi/search/api/searchShow",
-                method: .get,
-                parameters: [
-                    "kw": keyword,
-                    "page": page,
-                    "pageSize": 20
-                ],
-                headers: HTTPHeaders([
-                    HTTPHeader.init(name: "referer", value: "https://www.douyu.com/search/"),
-                    HTTPHeader.init(name: "user-agent", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43"),
-                    HTTPHeader.init(name: "Cookie", value: "dy_did=\(did);acf_did=\(did)"),
-                ])
-            ).serializingDecodable(DouyuSearchResult.self).value
-            var tempArray: Array<LiveModel> = []
-            for item in dataReq.data.relateShow {
-                tempArray.append(LiveModel(userName: item.nickName, roomTitle: item.roomName, roomCover: item.roomSrc, userHeadImg: item.avatar, liveType: .douyu, liveState: item.roomType == 0 ? "正在直播" :"已下播", userId: "\(item.rid)", roomId: "\(item.rid)"))
-            }
-            return tempArray
-        }catch {
-            return []
-        }
-    }
+    
 }
