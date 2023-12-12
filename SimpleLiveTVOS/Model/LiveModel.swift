@@ -86,6 +86,11 @@ public struct LiveModel: Codable {
     }
 
     func getPlayArgs() async throws -> String? {
+        
+        if roomId == "" {
+            return ""
+        }
+        
         if liveType == .bilibili {
             do {
                 let quality = try await Bilibili.getVideoQualites(roomModel:self)
