@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -37,6 +37,8 @@
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8DFD112AEFF487002644AD /* DetailViewController.swift */; };
+		FB90B96C2B29436E00D7CE22 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = FB90B96B2B29436E00D7CE22 /* FFmpegKit */; };
+		FB90B96F2B2943B500D7CE22 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB90B96E2B2943B500D7CE22 /* KSPlayer */; };
 		FB952EC92B03250C007A24F9 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952EC82B03250C007A24F9 /* Common.swift */; };
 		FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
@@ -132,8 +134,10 @@
 				FBDEE47C2AD63B3100F996BA /* SQLite in Frameworks */,
 				FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */,
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
+				FB90B96F2B2943B500D7CE22 /* KSPlayer in Frameworks */,
 				FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */,
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
+				FB90B96C2B29436E00D7CE22 /* FFmpegKit in Frameworks */,
 				FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */,
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
@@ -347,6 +351,8 @@
 				FB89E1602B1340870083116D /* KSPlayer */,
 				FB89E1632B1340DA0083116D /* KSPlayer */,
 				FB99EA452B1346A400C0C5DA /* KSPlayer */,
+				FB90B96B2B29436E00D7CE22 /* FFmpegKit */,
+				FB90B96E2B2943B500D7CE22 /* KSPlayer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -430,7 +436,8 @@
 				FB5101962B0ED76A00A1AE0D /* XCRemoteSwiftPackageReference "SWCompression" */,
 				FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 				FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */,
-				FB99EA442B1346A400C0C5DA /* XCLocalSwiftPackageReference "../KSPlayer" */,
+				FB90B96A2B29436E00D7CE22 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
+				FB90B96D2B2943B500D7CE22 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -842,13 +849,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		FB99EA442B1346A400C0C5DA /* XCLocalSwiftPackageReference "../KSPlayer" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../KSPlayer;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
 		4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -888,6 +888,22 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 4.8.5;
+			};
+		};
+		FB90B96A2B29436E00D7CE22 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/FFmpegKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.1.0;
+			};
+		};
+		FB90B96D2B2943B500D7CE22 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pcccccc/KSPlayer";
+			requirement = {
+				branch = develop;
+				kind = branch;
 			};
 		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
@@ -956,6 +972,16 @@
 		};
 		FB89E1632B1340DA0083116D /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
+			productName = KSPlayer;
+		};
+		FB90B96B2B29436E00D7CE22 /* FFmpegKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB90B96A2B29436E00D7CE22 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = FFmpegKit;
+		};
+		FB90B96E2B2943B500D7CE22 /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB90B96D2B2943B500D7CE22 /* XCRemoteSwiftPackageReference "KSPlayer" */;
 			productName = KSPlayer;
 		};
 		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {

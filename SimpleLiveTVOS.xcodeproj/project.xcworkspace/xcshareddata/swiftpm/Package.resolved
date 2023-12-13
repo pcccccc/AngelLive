@@ -19,6 +19,15 @@
       }
     },
     {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/FFmpegKit.git",
+      "state" : {
+        "revision" : "ce7d13b161ad527417cfda9f00eaad2f8f7f9330",
+        "version" : "6.1.0"
+      }
+    },
+    {
       "identity" : "gzipswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1024jp/GzipSwift",
@@ -34,6 +43,15 @@
       "state" : {
         "revision" : "c1f60c63f356d364f4284ba82961acbe7de79bcc",
         "version" : "7.8.1"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/KSPlayer",
+      "state" : {
+        "branch" : "develop",
+        "revision" : "a80dfd3600198b40599fd7573a962c99dc8ca180"
       }
     },
     {
