@@ -8,6 +8,7 @@
 import SwiftUI
 import Kingfisher
 import GameController
+import LiveParse
 
 
 struct ContentView: View {

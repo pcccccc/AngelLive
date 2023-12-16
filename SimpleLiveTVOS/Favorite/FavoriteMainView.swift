@@ -8,6 +8,7 @@
 import SwiftUI
 import Kingfisher
 import SimpleToast
+import LiveParse
 
 struct FavoriteMainView: View {
     
@@ -90,23 +91,23 @@ struct FavoriteMainView: View {
     
     func getRoomList() async {
         do {
-            
-            needFullScreenLoading = true
-            var newItem = try await CloudSQLManager.searchRecord()
-            for item in newItem {
-                var new = item
-                try await new.getLiveState()
-                if roomContentArray.contains(where: { $0.roomId == item.roomId }) == false {
-                    if new.liveState ?? "" == "正在直播" {
-                        roomContentArray.insert(new, at: 0)
-                    }else{
-                        roomContentArray.append(new)
-                    }
-                }
-            }
-            if roomContentArray.isEmpty == false {
-                needFullScreenLoading = false
-            }
+//            
+//            needFullScreenLoading = true
+//            var newItem = try await CloudSQLManager.searchRecord()
+//            for item in newItem {
+//                var new = item
+//                try await new.getLiveState()
+//                if roomContentArray.contains(where: { $0.roomId == item.roomId }) == false {
+//                    if new.liveState ?? "" == "正在直播" {
+//                        roomContentArray.insert(new, at: 0)
+//                    }else{
+//                        roomContentArray.append(new)
+//                    }
+//                }
+//            }
+//            if roomContentArray.isEmpty == false {
+//                needFullScreenLoading = false
+//            }
         }catch {
             loadingText = error.localizedDescription
         }

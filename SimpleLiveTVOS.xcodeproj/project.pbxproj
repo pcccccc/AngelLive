@@ -19,7 +19,6 @@
 		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
 		4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */; };
-		4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */; };
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
 		FB1BB6442B0D0CB600C54BCF /* SettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB1BB6432B0D0CB600C54BCF /* SettingView.swift */; };
 		FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A22B14DEE70068100B /* DanmuSettingView.swift */; };
@@ -35,27 +34,23 @@
 		FB5101C42B11DD3D00A1AE0D /* BABulletModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101B72B11DD3D00A1AE0D /* BABulletModel.swift */; };
 		FB5101C72B1227E800A1AE0D /* dy.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101C62B1227E800A1AE0D /* dy.pb.swift */; };
 		FB5101C92B1227F600A1AE0D /* dy.proto in Sources */ = {isa = PBXBuildFile; fileRef = FB5101C82B1227F500A1AE0D /* dy.proto */; };
-		FB651C322AB2A0F5005BFA90 /* DouyinModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */; };
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8DFD112AEFF487002644AD /* DetailViewController.swift */; };
+		FB90B9782B2ADF1100D7CE22 /* LiveListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB90B9772B2ADF1100D7CE22 /* LiveListViewModel.swift */; };
+		FB90B97B2B2C94C600D7CE22 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB90B97A2B2C94C600D7CE22 /* LiveParse */; };
 		FB952EC92B03250C007A24F9 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952EC82B03250C007A24F9 /* Common.swift */; };
 		FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
 		FBA907842AE5100500A69FBE /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907832AE5100500A69FBE /* LoadingView.swift */; };
-		FBA907972AE812BB00A69FBE /* SwipeGestureActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */; };
 		FBA907D12AEBF7E500A69FBE /* AboutUSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907D02AEBF7E500A69FBE /* AboutUSView.swift */; };
 		FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907D42AEBFE9200A69FBE /* KSAudioView.swift */; };
-		FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */; };
-		FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */; };
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
 		FBC8F5622B18C524006C5887 /* SearchRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC8F5612B18C524006C5887 /* SearchRoomView.swift */; };
-		FBC8F59C2B2722E6006C5887 /* LiveParse.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC8F59B2B2722E6006C5887 /* LiveParse.swift */; };
 		FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE4752AD42FD100F996BA /* LiveCardView.swift */; };
 		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
 		FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */; };
 		FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */; };
-		FBFEDA4A2AD2A7B800D96D7D /* LiveModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */; };
 		FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F52B122B5100B19C3E /* SwiftProtobuf */; };
 		FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F72B122B5100B19C3E /* SwiftProtobufPluginLibrary */; };
 		FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F92B122B5100B19C3E /* protoc-gen-swift */; };
@@ -93,7 +88,6 @@
 		4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftMenu.swift; sourceTree = "<group>"; };
-		4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliModel.swift; sourceTree = "<group>"; };
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
 		FB1BB6432B0D0CB600C54BCF /* SettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingView.swift; sourceTree = "<group>"; };
@@ -107,23 +101,18 @@
 		FB5101B72B11DD3D00A1AE0D /* BABulletModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BABulletModel.swift; sourceTree = "<group>"; };
 		FB5101C62B1227E800A1AE0D /* dy.pb.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = dy.pb.swift; sourceTree = "<group>"; };
 		FB5101C82B1227F500A1AE0D /* dy.proto */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.protobuf; path = dy.proto; sourceTree = "<group>"; };
-		FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DouyinModel.swift; sourceTree = "<group>"; };
 		FB8DFD112AEFF487002644AD /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
+		FB90B9772B2ADF1100D7CE22 /* LiveListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListViewModel.swift; sourceTree = "<group>"; };
 		FB952EC82B03250C007A24F9 /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
 		FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliLoginView.swift; sourceTree = "<group>"; };
 		FBA907832AE5100500A69FBE /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
-		FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeGestureActions.swift; sourceTree = "<group>"; };
 		FBA907D02AEBF7E500A69FBE /* AboutUSView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutUSView.swift; sourceTree = "<group>"; };
 		FBA907D42AEBFE9200A69FBE /* KSAudioView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = KSAudioView.swift; sourceTree = "<group>"; };
-		FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyuModel.swift; sourceTree = "<group>"; };
-		FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HuyaModel.swift; sourceTree = "<group>"; };
 		FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extension.swift"; sourceTree = "<group>"; };
 		FBC8F5612B18C524006C5887 /* SearchRoomView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchRoomView.swift; sourceTree = "<group>"; };
-		FBC8F59B2B2722E6006C5887 /* LiveParse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveParse.swift; sourceTree = "<group>"; };
 		FBDEE4752AD42FD100F996BA /* LiveCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCardView.swift; sourceTree = "<group>"; };
 		FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteMainView.swift; sourceTree = "<group>"; };
 		FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMainView.swift; sourceTree = "<group>"; };
-		FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,6 +126,7 @@
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
 				FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */,
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
+				FB90B97B2B2C94C600D7CE22 /* LiveParse in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
 				FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */,
@@ -189,26 +179,17 @@
 			isa = PBXGroup;
 			children = (
 				FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */,
+				FB90B9742B2ADB3B00D7CE22 /* DetailPlayer */,
+				FB90B9752B2ADB3B00D7CE22 /* Favorite */,
+				FB90B9762B2ADB3B00D7CE22 /* List */,
+				FB90B9732B2ADB3B00D7CE22 /* Setting */,
 				FBC2E6F12ACD83350036BFD4 /* Tools */,
-				4FC9B3912A53BEB100C0D3C8 /* Core */,
 				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
-				FBA907832AE5100500A69FBE /* LoadingView.swift */,
-				FBDEE4752AD42FD100F996BA /* LiveCardView.swift */,
 				4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */,
 				4FC3DCDF2A49382F00CA36B9 /* ContentView.swift */,
-				4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */,
-				FBA907D02AEBF7E500A69FBE /* AboutUSView.swift */,
-				FB8DFD112AEFF487002644AD /* DetailViewController.swift */,
-				FBA907D42AEBFE9200A69FBE /* KSAudioView.swift */,
-				FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */,
-				FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */,
-				FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */,
-				FB1BB6432B0D0CB600C54BCF /* SettingView.swift */,
-				FB2175A22B14DEE70068100B /* DanmuSettingView.swift */,
 				FBC8F5612B18C524006C5887 /* SearchRoomView.swift */,
 				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
 				4FC3DCE32A49383100CA36B9 /* Preview Content */,
-				4F1524302B284AA900E82845 /* DetailPlayerView.swift */,
 			);
 			path = SimpleLiveTVOS;
 			sourceTree = "<group>";
@@ -238,27 +219,6 @@
 			path = SimpleLiveTVOSUITests;
 			sourceTree = "<group>";
 		};
-		4FC9B3912A53BEB100C0D3C8 /* Core */ = {
-			isa = PBXGroup;
-			children = (
-				FBFEDA492AD2A7B800D96D7D /* LiveModel.swift */,
-				FBC2E6EC2ACD0B700036BFD4 /* Huya */,
-				FBC2ADCC2ACABFE400E202D5 /* Douyu */,
-				FB651C302AB2A0F5005BFA90 /* Douyin */,
-				4FC9B3922A53BEC000C0D3C8 /* Bilibili */,
-				FBC8F59B2B2722E6006C5887 /* LiveParse.swift */,
-			);
-			path = Core;
-			sourceTree = "<group>";
-		};
-		4FC9B3922A53BEC000C0D3C8 /* Bilibili */ = {
-			isa = PBXGroup;
-			children = (
-				4FC9B3952A53BFA800C0D3C8 /* BilibiliModel.swift */,
-			);
-			path = Bilibili;
-			sourceTree = "<group>";
-		};
 		FB5101A52B11DD3D00A1AE0D /* HuyaBulletGet */ = {
 			isa = PBXGroup;
 			children = (
@@ -267,40 +227,56 @@
 			path = HuyaBulletGet;
 			sourceTree = "<group>";
 		};
-		FB651C302AB2A0F5005BFA90 /* Douyin */ = {
+		FB90B9732B2ADB3B00D7CE22 /* Setting */ = {
 			isa = PBXGroup;
 			children = (
-				FB651C312AB2A0F5005BFA90 /* DouyinModel.swift */,
+				FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */,
+				FB1BB6432B0D0CB600C54BCF /* SettingView.swift */,
+				FB2175A22B14DEE70068100B /* DanmuSettingView.swift */,
+				FBA907D02AEBF7E500A69FBE /* AboutUSView.swift */,
 			);
-			path = Douyin;
+			path = Setting;
 			sourceTree = "<group>";
 		};
-		FBC2ADCC2ACABFE400E202D5 /* Douyu */ = {
+		FB90B9742B2ADB3B00D7CE22 /* DetailPlayer */ = {
 			isa = PBXGroup;
 			children = (
-				FBC2ADCD2ACABFEF00E202D5 /* DouyuModel.swift */,
+				FB8DFD112AEFF487002644AD /* DetailViewController.swift */,
+				4F1524302B284AA900E82845 /* DetailPlayerView.swift */,
+				FBA907D42AEBFE9200A69FBE /* KSAudioView.swift */,
 			);
-			path = Douyu;
+			path = DetailPlayer;
 			sourceTree = "<group>";
 		};
-		FBC2E6EC2ACD0B700036BFD4 /* Huya */ = {
+		FB90B9752B2ADB3B00D7CE22 /* Favorite */ = {
 			isa = PBXGroup;
 			children = (
-				FBC2E6ED2ACD0B780036BFD4 /* HuyaModel.swift */,
+				FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */,
 			);
-			path = Huya;
+			path = Favorite;
+			sourceTree = "<group>";
+		};
+		FB90B9762B2ADB3B00D7CE22 /* List */ = {
+			isa = PBXGroup;
+			children = (
+				FBDEE4752AD42FD100F996BA /* LiveCardView.swift */,
+				4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */,
+				FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */,
+				FB90B9772B2ADF1100D7CE22 /* LiveListViewModel.swift */,
+			);
+			path = List;
 			sourceTree = "<group>";
 		};
 		FBC2E6F12ACD83350036BFD4 /* Tools */ = {
 			isa = PBXGroup;
 			children = (
+				FBA907832AE5100500A69FBE /* LoadingView.swift */,
 				FB5101C82B1227F500A1AE0D /* dy.proto */,
 				FB5101C62B1227E800A1AE0D /* dy.pb.swift */,
 				FB5101A52B11DD3D00A1AE0D /* HuyaBulletGet */,
 				FB5101A32B11D9F600A1AE0D /* huya.js */,
 				FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */,
 				FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */,
-				FBA907962AE812BB00A69FBE /* SwipeGestureActions.swift */,
 				FB952EC82B03250C007A24F9 /* Common.swift */,
 				FB5101992B0EDE3F00A1AE0D /* WebSocket.swift */,
 				FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */,
@@ -342,6 +318,7 @@
 				FB89E1632B1340DA0083116D /* KSPlayer */,
 				FB99EA452B1346A400C0C5DA /* KSPlayer */,
 				4F15242E2B28491C00E82845 /* KSPlayer */,
+				FB90B97A2B2C94C600D7CE22 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -425,6 +402,7 @@
 				FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 				FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */,
 				4F15242D2B28491C00E82845 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -469,8 +447,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FBA907972AE812BB00A69FBE /* SwipeGestureActions.swift in Sources */,
-				FBC8F59C2B2722E6006C5887 /* LiveParse.swift in Sources */,
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
 				FB5101C72B1227E800A1AE0D /* dy.pb.swift in Sources */,
 				FB5101C42B11DD3D00A1AE0D /* BABulletModel.swift in Sources */,
@@ -480,23 +456,19 @@
 				FB51019A2B0EDE4000A1AE0D /* WebSocket.swift in Sources */,
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
+				FB90B9782B2ADF1100D7CE22 /* LiveListViewModel.swift in Sources */,
 				FB952EC92B03250C007A24F9 /* Common.swift in Sources */,
 				FB5101922B0E3FEC00A1AE0D /* WebSocketManager.swift in Sources */,
-				FBC2ADCE2ACABFEF00E202D5 /* DouyuModel.swift in Sources */,
 				FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */,
 				FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */,
 				4F1524312B284AA900E82845 /* DetailPlayerView.swift in Sources */,
 				FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */,
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
-				FBC2E6EE2ACD0B780036BFD4 /* HuyaModel.swift in Sources */,
 				FBA907D12AEBF7E500A69FBE /* AboutUSView.swift in Sources */,
 				FB51019C2B0EECCB00A1AE0D /* Data+Extension.swift in Sources */,
 				FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */,
-				FBFEDA4A2AD2A7B800D96D7D /* LiveModel.swift in Sources */,
-				4FC9B3962A53BFA800C0D3C8 /* BilibiliModel.swift in Sources */,
 				FB5101C92B1227F600A1AE0D /* dy.proto in Sources */,
 				FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */,
-				FB651C322AB2A0F5005BFA90 /* DouyinModel.swift in Sources */,
 				FB1BB6442B0D0CB600C54BCF /* SettingView.swift in Sources */,
 				FB5101A02B104D5600A1AE0D /* UIColor+Extension.swift in Sources */,
 				FBC8F5622B18C524006C5887 /* SearchRoomView.swift in Sources */,
@@ -886,6 +858,14 @@
 				minimumVersion = 4.8.5;
 			};
 		};
+		FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pcccccc/LiveParse";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.1;
+			};
+		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sanzaru/SimpleToast.git";
@@ -950,6 +930,11 @@
 		FB89E1632B1340DA0083116D /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KSPlayer;
+		};
+		FB90B97A2B2C94C600D7CE22 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */;
+			productName = LiveParse;
 		};
 		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -8,6 +8,7 @@
 import SwiftUI
 import Kingfisher
 import KSPlayer
+import LiveParse
 
 struct LiveCardView: View {
     
@@ -80,7 +81,7 @@ struct LiveCardView: View {
                                     if liveModel == nil {
                                         return
                                     }
-                                    try await liveModel.getLiveState()
+//                                    try await liveModel.getLiveState()
                                 }
                             }catch {
                                 

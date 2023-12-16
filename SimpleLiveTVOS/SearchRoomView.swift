@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SimpleToast
+import LiveParse
 
 struct SearchRoomView: View {
     
@@ -112,12 +113,12 @@ struct SearchRoomView: View {
     }
     
     func searchDouyinStreamer() async throws {
-        let dataReq = try await Douyin.getSearchURL(keyword: searchText, page:page)
-        for item in dataReq {
-            var newItem = item
-            try await newItem.getLiveState()
-            roomContentArray.append(newItem)
-        }
+//        let dataReq = try await Douyin.getSearchURL(keyword: searchText, page:page)
+//        for item in dataReq {
+//            var newItem = item
+//            try await newItem.getLiveState()
+//            roomContentArray.append(newItem)
+//        }
     }
     
     func searchDouyuStreamer() async throws {

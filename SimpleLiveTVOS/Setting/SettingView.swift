@@ -48,7 +48,7 @@ struct SettingView: View {
                         .frame(width: 500, height: 45)
                         .buttonStyle(.card)
                         .onAppear {
-                            isLogin = BiliBiliCookie.cookie == ""
+//                            isLogin = BiliBiliCookie.cookie == ""
                         }
                     })
                     .fullScreenCover(item: $currentTitle) { title in

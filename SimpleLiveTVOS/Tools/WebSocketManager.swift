@@ -28,7 +28,7 @@ class WebSocketManager: NSObject {
     /// 是否连接
     var isConnected : Bool = false
     /// 代理
-    weak var delegate: WebSocketManagerDelegate?
+//    weak var delegate: WebSocketManagerDelegate?
     
     private var heartbeatInterval: TimeInterval = 1
     

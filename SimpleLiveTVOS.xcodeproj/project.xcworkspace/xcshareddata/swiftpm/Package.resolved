@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Alamofire/Alamofire.git",
       "state" : {
-        "revision" : "bc268c28fb170f494de9e9927c371b8342979ece",
-        "version" : "5.7.1"
+        "revision" : "3dc6a42c7727c49bf26508e29b0a0b35f9c7e1ad",
+        "version" : "5.8.1"
       }
     },
     {
@@ -51,7 +51,16 @@
       "location" : "https://github.com/kingslay/KSPlayer",
       "state" : {
         "branch" : "develop",
-        "revision" : "1502c6315adf5b88612806dec5f4cad48468bd23"
+        "revision" : "f69518d9c9aa58c38e7133d6e0236853ccfe241d"
+      }
+    },
+    {
+      "identity" : "liveparse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/LiveParse",
+      "state" : {
+        "revision" : "6aedf1b62b2cf70e9565ec604cca1892adc8fb50",
+        "version" : "1.0.1"
       }
     },
     {

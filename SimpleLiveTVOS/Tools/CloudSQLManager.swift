@@ -7,6 +7,7 @@
 
 import Foundation
 import CloudKit
+import LiveParse
 
 let roomId_colum_cloud = "room_id"
 let userId_column_cloud = "user_id"
