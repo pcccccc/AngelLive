@@ -13,22 +13,13 @@ import LiveParse
 let leftMenuNormalStateWidth = 130.0
 let leftMenuHighLightStateWidth = 330.0
 
-enum FocusAreas {
-    case leftMenu
-    case mainContent
+enum FocusAreas: Hashable {
+    case leftMenu(Int)
+    case mainContent(Int)
 }
 
 struct ListMainView: View {
-    
-    @State private var size: CGFloat = leftMenuNormalStateWidth
-    @State private var leftMenuCurrentSelectIndex = -1
-    @State private var leftMenuShowSubList = false
-    @FocusState var focusState: FocusAreas?
-    @FocusState var mainContentfocusState: Int?
-    @State private var roomContentArray: Array<LiveModel> = []
-    @State private var page = 1
-    @State private var currentCategoryModel: Any?
-    
+
     @State var showToast: Bool = false
     @State var toastTitle: String = ""
     @State var toastTypeIsSuccess: Bool = false
@@ -41,6 +32,7 @@ struct ListMainView: View {
     
     var liveType: LiveType
     @StateObject var liveListViewModel: LiveListViewModel
+    @FocusState var focusState: FocusAreas?
     
     init(liveType: LiveType) {
         self.liveType = liveType
@@ -49,39 +41,63 @@ struct ListMainView: View {
     
     var body: some View {
         ZStack {
-            VStack {
-                Button("1") {
-                    liveListViewModel.showOverlay.toggle()
-                }
-                Button("2") {
+            ScrollView {
+                ZStack {
                     
                 }
-                Button("3") {
-                    
+                .id(Self.topId)
+                LazyVGrid(columns: [GridItem(.fixed(420)), GridItem(.fixed(420)), GridItem(.fixed(420)), GridItem(.fixed(420))], spacing: 35) {
+                    ForEach(liveListViewModel.roomList.indices, id: \.self) { index in
+//                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
+//                            self.loadingText = loadingText
+//                            needFullScreenLoading = true
+//                        }, showToast: { success, delete, hint in
+//                            toastTypeIsSuccess = success
+//                            toastTitle = hint
+//                            needFullScreenLoading = false
+//                            showToast.toggle()
+//                        })
+                        LiveCardView(index: index)
+                            .environmentObject(liveListViewModel)
+                            .onMoveCommand(perform: { direction in
+                                switch direction {
+//                                case .right:
+//                                    liveListViewModel.showOverlay = false
+                                case .left:
+//                                    liveListViewModel.showOverlay = true
+                                    if index % 4 == 0 {
+                                        liveListViewModel.showOverlay = true
+                                        focusState = .leftMenu(index / 4)
+                                    }
+                                default:
+                                    print(222)
+                                }
+                            })
+                            
+                    }
                 }
+            }.overlay {
+                
+                HStack {
+                    LeftMenu(focusState: _focusState)
+                       .offset(x: liveListViewModel.leftListOverlay)
+                       .animation(.spring(duration: 1.0), value: liveListViewModel.leftListOverlay)
+                       .environmentObject(liveListViewModel)
+                       .onMoveCommand(perform: { direction in
+                           switch direction {
+                           case .right:
+                               liveListViewModel.showOverlay = false
+                           case .left:
+                               liveListViewModel.showOverlay = true
+                           default:
+                               print(222)
+                           }
+                       })
+                       
+                    Spacer()
+                }
+                .background(liveListViewModel.showOverlay == true ? Color.black.opacity(0.5) : Color.clear)
             }
-            .frame(width: 1920, height: 1080)
-        }.overlay {
-            
-            HStack {
-                LeftMenu()
-                    .offset(x: liveListViewModel.leftListOverlay)
-                    .animation(.spring(duration: 1.0), value: liveListViewModel.leftListOverlay)
-                    .environmentObject(liveListViewModel)
-                    .onMoveCommand(perform: { direction in
-                        switch direction {
-                        case .right:
-                            liveListViewModel.showOverlay = false
-                        case .left:
-                            liveListViewModel.showOverlay = true
-                        default:
-                            print(222)
-                        }
-                    })
-                Spacer()
-            }
-            .background(liveListViewModel.showOverlay == true ? Color.black.opacity(0.5) : Color.clear)
-            .edgesIgnoringSafeArea(.all)
         }
         
 //        ScrollViewReader { reader in
@@ -160,5 +176,6 @@ struct ListMainView: View {
 //
 //        }
     }
+    
 }
 

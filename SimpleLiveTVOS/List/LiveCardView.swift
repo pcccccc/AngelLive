@@ -11,98 +11,99 @@ import KSPlayer
 import LiveParse
 
 struct LiveCardView: View {
-    
-    @Binding var liveModel: LiveModel
-    @FocusState var mainContentfocusState: Int?
+    @EnvironmentObject var liveListViewModel: LiveListViewModel
     @State var index: Int
-    @State var isFavoritePage = false
+//    @Binding var liveModel: LiveModel
+//    @FocusState var mainContentfocusState: Int?
+//    @State var isFavoritePage = false
     @State private var showAlert = false
     @State private var isCellVisible: Bool = false
     @State private var favorited: Bool = false
     @State private var isLive: Bool = false
     var showLoading: (String) -> Void = { _ in }
     var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
+    @FocusState var focusState: FocusAreas?
     
     var body: some View {
         Button {
-            if isFavoritePage == true && (liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") {
-                isLive = true
-            }else if isFavoritePage == false {
-                isLive = true
-            }else {
-                self.showToast(false, false, "该主播正在休息哦")
-                isLive = false
-            }
+//            if isFavoritePage == true && (liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") {
+//                isLive = true
+//            }else if isFavoritePage == false {
+//                isLive = true
+//            }else {
+//                self.showToast(false, false, "该主播正在休息哦")
+//                isLive = false
+//            }
         } label: {
             VStack(spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
                     if isCellVisible {
-                        KFImage(URL(string: liveModel.roomCover))
+                        KFImage(URL(string: liveListViewModel.roomList[index].roomCover))
                             .resizable()
                             .frame(width: 320, height: 180)
                     }
-                    if isFavoritePage {
-                        HStack{
-                            Image(uiImage: .init(named: getImage())!)
-                                .resizable()
-                                .frame(width: 40, height: 40)
-                                .cornerRadius(5)
-                                .padding(.top, 5)
-                                .padding(.leading, 5)
-                            Spacer()
-                            HStack(spacing: 5) {
-                                
-                                if liveModel.liveState ?? "" == "" {
-                                    ProgressView()
-                                        .scaleEffect(0.5)
-                                }else {
-                                    HStack(spacing: 5) {
-                                        Circle()
-                                            .fill((liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") ? Color.green : Color.gray)
-                                            .frame(width: 10, height: 10)
-                                            .padding(.leading, 5)
-                                        Text(liveModel.liveState ?? "")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(Color.white)
-                                            .padding(.trailing, 5)
-                                            .padding(.top, 5)
-                                            .padding(.bottom, 5)
-                                    }
-                                    .background(Color("favorite_right_hint"))
-                                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                                    
-                                }
-                            }
-                            .padding(.trailing, 5)
-                        }
-                        .task {
-                            do {
-                                if self.isFavoritePage == true {
-                                    if liveModel == nil {
-                                        return
-                                    }
-//                                    try await liveModel.getLiveState()
-                                }
-                            }catch {
-                                
-                            }
-                        }
-                    }
+//                    if isFavoritePage {
+//                        HStack{
+//                            Image(uiImage: .init(named: getImage())!)
+//                                .resizable()
+//                                .frame(width: 40, height: 40)
+//                                .cornerRadius(5)
+//                                .padding(.top, 5)
+//                                .padding(.leading, 5)
+//                            Spacer()
+//                            HStack(spacing: 5) {
+//                                
+//                                if liveModel.liveState ?? "" == "" {
+//                                    ProgressView()
+//                                        .scaleEffect(0.5)
+//                                }else {
+//                                    HStack(spacing: 5) {
+//                                        Circle()
+//                                            .fill((liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") ? Color.green : Color.gray)
+//                                            .frame(width: 10, height: 10)
+//                                            .padding(.leading, 5)
+//                                        Text(liveModel.liveState ?? "")
+//                                            .font(.system(size: 18))
+//                                            .foregroundColor(Color.white)
+//                                            .padding(.trailing, 5)
+//                                            .padding(.top, 5)
+//                                            .padding(.bottom, 5)
+//                                    }
+//                                    .background(Color("favorite_right_hint"))
+//                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+//                                    
+//                                }
+//                            }
+//                            .padding(.trailing, 5)
+//                        }
+//                        .task {
+//                            do {
+//                                if self.isFavoritePage == true {
+//                                    if liveModel == nil {
+//                                        return
+//                                    }
+////                                    try await liveModel.getLiveState()
+//                                }
+//                            }catch {
+//                                
+//                            }
+//                        }
+//                    }
                 })
                 .frame(width: 320, height: 180)
                 HStack {
                     if isCellVisible {
-                        KFImage(URL(string: liveModel.userHeadImg))
+                        KFImage(URL(string: liveListViewModel.roomList[index].userHeadImg))
                                 .resizable()
                                 .frame(width: 40, height: 40)
                                 .cornerRadius(20)
                     }
                     VStack (alignment: .leading, spacing: 10) {
-                        Text(liveModel.userName)
-                            .font(.system(size: liveModel.userName.count > 5 ? 19 : 24))
+                        Text(liveListViewModel.roomList[index].userName)
+                            .font(.system(size: liveListViewModel.roomList[index].userName.count > 5 ? 19 : 24))
                             .padding(.top, 10)
-                            .frame(width: 200, height: liveModel.userName.count > 5 ? 19 : 24, alignment: .leading)
-                        Text(liveModel.roomTitle)
+                            .frame(width: 200, height: liveListViewModel.roomList[index].userName.count > 5 ? 19 : 24, alignment: .leading)
+                        Text(liveListViewModel.roomList[index].roomTitle)
                             .font(.system(size: 15))
                             .frame(width: 200, height: 15 ,alignment: .leading)
                     }
@@ -115,7 +116,8 @@ struct LiveCardView: View {
             
         }
         .buttonStyle(.card)
-        .focused($mainContentfocusState, equals: index)
+//        .focused($mainContentfocusState, equals: index)
+        .focused($focusState, equals: .mainContent(index))
         .focusSection()
         .alert("提示", isPresented: $showAlert) {
             Button("取消收藏", role: .destructive, action: {
@@ -184,7 +186,7 @@ struct LiveCardView: View {
     func favoriteAction() async {
         do {
             self.showLoading("正在收藏")
-            try await CloudSQLManager.saveRecord(liveModel: liveModel)
+//            try await CloudSQLManager.saveRecord(liveModel: liveListViewModel.roomList[index])
             self.showToast(true, false, "收藏成功")
         }catch {
             print(error)
@@ -195,9 +197,9 @@ struct LiveCardView: View {
     
     func getFavoriteState() async {
         do {
-            favorited = try await CloudSQLManager.searchRecord(roomId: liveModel.roomId).count > 0
+//            favorited = try await CloudSQLManager.searchRecord(roomId: liveModel.roomId).count > 0
         }catch {
-            favorited = false
+//            favorited = false
         }
     }
     
@@ -209,23 +211,23 @@ struct LiveCardView: View {
 //        }
         do {
             self.showLoading("正在取消收藏")
-            try await CloudSQLManager.deleteRecord(liveModel: liveModel)
+//            try await CloudSQLManager.deleteRecord(liveModel: liveModel)
             self.showToast(true, true, "取消收藏成功")
         }catch {
             self.showToast(false, true, "取消收藏失败")
         }
     }
     
-    func getImage() -> String {
-        switch liveModel.liveType {
-            case .bilibili:
-                return "bilibili_2"
-            case .douyu:
-                return "douyu"
-            case .huya:
-                return "huya"
-            default:
-                return "douyin"
-        }
-    }
+//    func getImage() -> String {
+//        switch liveModel.liveType {
+//            case .bilibili:
+//                return "bilibili_2"
+//            case .douyu:
+//                return "douyu"
+//            case .huya:
+//                return "huya"
+//            default:
+//                return "douyin"
+//        }
+//    }
 }

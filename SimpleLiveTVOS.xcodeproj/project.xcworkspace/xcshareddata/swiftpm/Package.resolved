@@ -19,6 +19,15 @@
       }
     },
     {
+      "identity" : "colorfulx",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/ColorfulX.git",
+      "state" : {
+        "revision" : "f8d18d8edee384ecd25cb71683fe78b31aaa7d83",
+        "version" : "2.1.3"
+      }
+    },
+    {
       "identity" : "ffmpegkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kingslay/FFmpegKit.git",
@@ -70,6 +79,15 @@
       "state" : {
         "revision" : "6637b95dfc49d3d688ad2d7b6e0655c0f6862f83",
         "version" : "0.8.0"
+      }
+    },
+    {
+      "identity" : "springinterpolation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/SpringInterpolation.git",
+      "state" : {
+        "revision" : "a0dbf95e13d516ca368e93992bae0ea17d305e0c",
+        "version" : "1.0.5"
       }
     },
     {
