@@ -17,7 +17,7 @@ struct LeftMenu: View {
     @State var colors: [Color] = ColorfulPreset.winter.colors
     @State var speed = 0.5
     @Environment(\.colorScheme) var colorScheme
-    @FocusState var focusState: FocusAreas?
+    @FocusState var focusState: FocusableField?
 
     var body : some View {
         ScrollView {
@@ -45,6 +45,18 @@ struct LeftMenu: View {
                         .buttonStyle(.plain)
                         .background(Color.clear)
                         .focused($focusState, equals: .leftMenu(index))
+                        .contextMenu(menuItems: {
+                            Button(action: {
+                                Task {
+//                                    await favoriteAction()
+                                }
+                            }, label: {
+                                HStack {
+                                    Image(systemName: "heart.fill")
+                                    Text("收藏频道")
+                                }
+                            })
+                        })
                         if liveListViewModel.selectedMainListCategory?.title == liveListViewModel.categories[index].title {
                             ForEach((liveListViewModel.selectedSubCategory).indices, id: \.self) { index in
                                 VStack(alignment: .leading) {

@@ -7,6 +7,7 @@
 
 import Foundation
 import LiveParse
+import KSPlayer
 
 
 class LiveListViewModel: ObservableObject {
@@ -33,7 +34,11 @@ class LiveListViewModel: ObservableObject {
     
     @Published var roomPage: Int = 1
     @Published var roomList: [LiveModel] = []
-
+    
+    @Published var currentRoom: LiveModel?
+    @Published var currentRoomPlayArgs: [LiveQualityModel]?
+    @Published var currentPlayURL: URL?
+    
     init(liveType: LiveType) {
         self.liveType = liveType
         switch liveType {
@@ -51,8 +56,6 @@ class LiveListViewModel: ObservableObject {
         Task {
             do {
                 let categories  = try await fetchCategoryList()
-                
-                print(categories)
                 DispatchQueue.main.async {
                     self.categories = categories
                     self.getRoomList(index: -1)
@@ -116,6 +119,76 @@ class LiveListViewModel: ObservableObject {
         }else {
             self.selectedSubCategory = []
         }
+    }
+    
+    func getPlayArgs() async throws {
+        do {
+            var playArgs: [LiveQualityModel] = []
+            switch liveType {
+                case .bilibili:
+                    playArgs = try await Bilibili.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: nil)
+                case .huya:
+                    playArgs =  try await Huya.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: nil)
+                case .douyin:
+                    playArgs =  try await Douyin.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: currentRoom?.userId ?? "")
+                case .douyu:
+                    playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: nil)
+                default: break
+            }
+            DispatchQueue.main.async {
+                self.currentRoomPlayArgs = playArgs
+                self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+            }
+        }catch {
+            
+        }
+    }
+    
+    func getCurrentRoomLiveState() async throws -> LiveState {
+        switch liveType {
+        case .bilibili:
+            return try await Bilibili.getLiveState(roomId: currentRoom?.roomId ?? "", userId: nil)
+        case .huya:
+            return try await Huya.getLiveState(roomId: currentRoom?.roomId ?? "", userId: nil)
+        case .douyin:
+            return try await Douyin.getLiveState(roomId: currentRoom?.roomId ?? "", userId: currentRoom?.userId ?? "")
+        case .douyu:
+            return try await Douyu.getLiveState(roomId: currentRoom?.roomId ?? "", userId: nil)
+        default:
+            return .unknow
+        }
+    }
+    
+    func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
+        KSOptions.isAutoPlay = true
+        KSOptions.isSecondOpen = true
+        guard currentRoomPlayArgs != nil else {
+            return
+        }
+        let currentCdn = currentRoomPlayArgs![cdnIndex]
+        let currentQuality = currentCdn.qualitys[urlIndex]
+        if currentQuality.liveCodeType == .flv {
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = KSAVPlayer.self
+        }else {
+            KSOptions.firstPlayerType = KSAVPlayer.self
+            KSOptions.secondPlayerType = KSMEPlayer.self
+        }
+        if liveType == .bilibili {
+            for item in currentRoomPlayArgs! {
+                for liveQuality in item.qualitys {
+                    if liveQuality.liveCodeType == .hls {
+                        KSOptions.firstPlayerType = KSAVPlayer.self
+                        KSOptions.secondPlayerType = KSMEPlayer.self
+                        self.currentPlayURL = URL(string: liveQuality.url)!
+                        return
+                    }
+                }
+            }
+        }
+        
+        
+        self.currentPlayURL = URL(string: currentQuality.url)!
     }
     
     func fetchRoomList(liveCategory: LiveCategoryModel) async throws -> [LiveModel] {

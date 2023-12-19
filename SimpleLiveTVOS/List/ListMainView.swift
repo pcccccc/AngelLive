@@ -13,7 +13,7 @@ import LiveParse
 let leftMenuNormalStateWidth = 130.0
 let leftMenuHighLightStateWidth = 330.0
 
-enum FocusAreas: Hashable {
+enum FocusableField: Hashable {
     case leftMenu(Int)
     case mainContent(Int)
 }
@@ -32,7 +32,7 @@ struct ListMainView: View {
     
     var liveType: LiveType
     @StateObject var liveListViewModel: LiveListViewModel
-    @FocusState var focusState: FocusAreas?
+    @FocusState var focusState: FocusableField?
     
     init(liveType: LiveType) {
         self.liveType = liveType
@@ -46,7 +46,7 @@ struct ListMainView: View {
                     
                 }
                 .id(Self.topId)
-                LazyVGrid(columns: [GridItem(.fixed(420)), GridItem(.fixed(420)), GridItem(.fixed(420)), GridItem(.fixed(420))], spacing: 35) {
+                LazyVGrid(columns: [GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400))], spacing: 35) {
                     ForEach(liveListViewModel.roomList.indices, id: \.self) { index in
 //                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
 //                            self.loadingText = loadingText
@@ -67,12 +67,13 @@ struct ListMainView: View {
 //                                    liveListViewModel.showOverlay = true
                                     if index % 4 == 0 {
                                         liveListViewModel.showOverlay = true
-                                        focusState = .leftMenu(index / 4)
+                                        focusState = .leftMenu(0)
                                     }
                                 default:
                                     print(222)
                                 }
-                            })
+                        })
+                            .frame(width: 400, height: 240)
                             
                     }
                 }

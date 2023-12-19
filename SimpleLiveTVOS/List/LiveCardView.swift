@@ -22,12 +22,31 @@ struct LiveCardView: View {
     @State private var isLive: Bool = false
     var showLoading: (String) -> Void = { _ in }
     var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
-    @FocusState var focusState: FocusAreas?
+    @FocusState var focusState: FocusableField?
     
     var body: some View {
         Button {
+            
+            Task {
+                do {
+                    if try await self.liveListViewModel.getCurrentRoomLiveState() == .live {
+                        try await self.liveListViewModel.getPlayArgs()
+                        DispatchQueue.main.async {
+                            isLive = true
+                        }
+                    }else {
+                        DispatchQueue.main.async {
+                            isLive = false
+                        }
+                    }
+                }catch {
+                    DispatchQueue.main.async {
+                        isLive = false
+                    }
+                }
+            }
 //            if isFavoritePage == true && (liveModel.liveState == "正在直播" || liveModel.liveState == "视频轮播" || liveModel.liveState == "轮播中") {
-//                isLive = true
+//
 //            }else if isFavoritePage == false {
 //                isLive = true
 //            }else {
@@ -40,7 +59,8 @@ struct LiveCardView: View {
                     if isCellVisible {
                         KFImage(URL(string: liveListViewModel.roomList[index].roomCover))
                             .resizable()
-                            .frame(width: 320, height: 180)
+                            .frame(width: 360, height: 180)
+                            
                     }
 //                    if isFavoritePage {
 //                        HStack{
@@ -90,7 +110,6 @@ struct LiveCardView: View {
 //                        }
 //                    }
                 })
-                .frame(width: 320, height: 180)
                 HStack {
                     if isCellVisible {
                         KFImage(URL(string: liveListViewModel.roomList[index].userHeadImg))
@@ -118,7 +137,9 @@ struct LiveCardView: View {
         .buttonStyle(.card)
 //        .focused($mainContentfocusState, equals: index)
         .focused($focusState, equals: .mainContent(index))
-        .focusSection()
+        .onChange(of: focusState, perform: { value in
+            liveListViewModel.currentRoom = liveListViewModel.roomList[index]
+        })
         .alert("提示", isPresented: $showAlert) {
             Button("取消收藏", role: .destructive, action: {
                 Task {
@@ -170,16 +191,19 @@ struct LiveCardView: View {
             }
         }
         .fullScreenCover(isPresented: $isLive, content: {
-//            KSAudioView(roomModel: liveModel) { needShowHint, hintString in
-//                isLive = false
-//                if needShowHint {
-//                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-//                        self.showToast(false, false, hintString)
-//                    }
-//                }
-//            }
-//            
-//            .edgesIgnoringSafeArea(.all)
+////            KSAudioView(roomModel: liveModel) { needShowHint, hintString in
+////                isLive = false
+////                if needShowHint {
+////                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+////                        self.showToast(false, false, hintString)
+////                    }
+////                }
+////            }
+            DetailPlayerView(url: liveListViewModel.currentPlayURL!.absoluteString, didExitView: { isLive, hint in
+                self.isLive = isLive
+            })
+                .environmentObject(liveListViewModel)
+                .edgesIgnoringSafeArea(.all)
         })
     }
     
