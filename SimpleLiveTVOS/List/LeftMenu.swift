@@ -22,6 +22,29 @@ struct LeftMenu: View {
     var body : some View {
         ScrollView {
             VStack(alignment: .center) {
+                if liveListViewModel.selectedSubCategory.count > 0 {
+                    HStack(spacing: 10) {
+                        Image(liveListViewModel.selectedSubCategory[liveListViewModel.selectedSubListIndex].icon == "" ? liveListViewModel.menuTitleIcon : liveListViewModel.selectedSubCategory[liveListViewModel.selectedSubListIndex].icon)
+                            .resizable()
+                            .frame(width: 30, height: 30, alignment: .leading)
+                            .padding(.leading, -20)
+                        Text(liveListViewModel.selectedSubCategory[liveListViewModel.selectedSubListIndex].title)
+                            .font(.system(size: 25))
+                            .frame(width: 110, height: 30, alignment: .leading)
+                            .multilineTextAlignment(.leading)
+                    }
+                }else {
+                    HStack(spacing: 10) {
+                        Image(liveListViewModel.menuTitleIcon)
+                            .resizable()
+                            .frame(width: 30, height: 30, alignment: .leading)
+                            .padding(.leading, -20)
+                        Text("英雄联盟")
+                            .font(.system(size: 25))
+                            .frame(width: 110, height: 30, alignment: .leading)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
                 ForEach(liveListViewModel.categories.indices, id: \.self) { index in
                     VStack {
                         Button(action: {
@@ -89,7 +112,7 @@ struct LeftMenu: View {
             .listStyle(.plain)
             
         }
-        .frame(maxWidth: 300, maxHeight: .infinity)
+        .frame(maxWidth: liveListViewModel.leftWidth, maxHeight: liveListViewModel.leftHeight)
         .background(ColorfulView(colors: $colors, speedFactor: $speed))
         .cornerRadius(10)
         .padding([.top, .bottom], 50)

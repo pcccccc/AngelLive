@@ -17,16 +17,20 @@ class LiveListViewModel: ObservableObject {
     //当前选中的主分类与子分类
     @Published var selectedMainListCategory: LiveMainListModel?
     @Published var selectedSubCategory: [LiveCategoryModel] = []
+    @Published var selectedSubListIndex: Int = -1
     
     //加载状态
     @Published var isLoading = false
     var liveType: LiveType
     @Published var showOverlay: Bool = false {
         didSet {
-            leftListOverlay = showOverlay == true ? 0 : -350
+            leftWidth = showOverlay == true ? 300 : 180
+            leftHeight = showOverlay == true ? 900 : 50
         }
     }
-    @Published var leftListOverlay: CGFloat = -350
+    @Published var leftListOverlay: CGFloat = 0
+    @Published var leftWidth: CGFloat = 180
+    @Published var leftHeight: CGFloat = 50
     @Published var menuTitleIcon: String = ""
     
     @Published var subPageNumber = 0
@@ -59,7 +63,7 @@ class LiveListViewModel: ObservableObject {
                 let categories  = try await fetchCategoryList()
                 DispatchQueue.main.async {
                     self.categories = categories
-                    self.getRoomList(index: -1)
+                    self.getRoomList(index: self.selectedSubListIndex)
                     self.isLoading = false
                     
                 }
@@ -83,15 +87,17 @@ class LiveListViewModel: ObservableObject {
                         DispatchQueue.main.async {
                             self.roomList = roomList
                             self.isLoading = false
+                            self.selectedSubListIndex = 0
                         }
                     }
                 }else {
+                    self.selectedSubListIndex = index
                     let subListCategory = self.selectedSubCategory[index]
                     let roomList  = try await fetchRoomList(liveCategory: subListCategory)
                     print(categories)
                     DispatchQueue.main.async {
                         self.roomList = roomList
-                        self.isLoading = false
+                        self.isLoading = false                        
                     }
                 }
                 

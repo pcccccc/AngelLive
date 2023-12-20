@@ -78,10 +78,8 @@ struct ListMainView: View {
                     }
                 }
             }.overlay {
-                HStack {
+                ZStack {
                     LeftMenu(focusState: _focusState)
-                       .offset(x: liveListViewModel.leftListOverlay)
-                       .animation(.spring(duration: 1.0), value: liveListViewModel.leftListOverlay)
                        .environmentObject(liveListViewModel)
                        .onMoveCommand(perform: { direction in
                            switch direction {
@@ -93,9 +91,13 @@ struct ListMainView: View {
                                print(222)
                            }
                        })
-                    Spacer()
+                       .offset(x: -(1920/2) + (liveListViewModel.leftWidth / 2), y: -(1080/2) + (liveListViewModel.leftHeight / 2))
+                       
+//                       .animation(.spring(duration: 1.0), value: liveListViewModel.leftWidth)
+//                       .animation(.spring(duration: 1.0), value: liveListViewModel.leftHeight)
                 }
-                .background(liveListViewModel.showOverlay == true ? Color.black.opacity(0.5) : Color.clear)
+//                .frame(minWidth: 1920 , maxWidth: .infinity, minHeight: 1080, maxHeight: .infinity)
+//                .background(Color.black.opacity(0.5))
             }
         }
         
