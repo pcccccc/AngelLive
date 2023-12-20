@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		4F1524312B284AA900E82845 /* DetailPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F1524302B284AA900E82845 /* DetailPlayerView.swift */; };
 		4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73D21B2B2D3BA500689369 /* ColorfulX */; };
-		4FB850C52B31A8980046CB47 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB850C42B31A8980046CB47 /* KSPlayer */; };
 		4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */; };
 		4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCDF2A49382F00CA36B9 /* ContentView.swift */; };
 		4FC3DCE22A49383100CA36B9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FC3DCE12A49383100CA36B9 /* Assets.xcassets */; };
@@ -48,6 +47,7 @@
 		FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBA907D42AEBFE9200A69FBE /* KSAudioView.swift */; };
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
 		FBC8F5622B18C524006C5887 /* SearchRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC8F5612B18C524006C5887 /* SearchRoomView.swift */; };
+		FBD737822B31CD260093C1CA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBD737812B31CD260093C1CA /* KSPlayer */; };
 		FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE4752AD42FD100F996BA /* LiveCardView.swift */; };
 		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
 		FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEE47F2AD6CD4400F996BA /* FavoriteMainView.swift */; };
@@ -124,7 +124,7 @@
 				FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */,
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
 				FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */,
-				4FB850C52B31A8980046CB47 /* KSPlayer in Frameworks */,
+				FBD737822B31CD260093C1CA /* KSPlayer in Frameworks */,
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
 				FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */,
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
@@ -321,7 +321,7 @@
 				FB99EA452B1346A400C0C5DA /* KSPlayer */,
 				FB90B97A2B2C94C600D7CE22 /* LiveParse */,
 				4F73D21B2B2D3BA500689369 /* ColorfulX */,
-				4FB850C42B31A8980046CB47 /* KSPlayer */,
+				FBD737812B31CD260093C1CA /* KSPlayer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -406,7 +406,7 @@
 				FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */,
 				FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */,
 				4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */,
-				4FB850C32B31A8980046CB47 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				FBD737802B31CD260093C1CA /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -822,14 +822,6 @@
 				minimumVersion = 2.1.3;
 			};
 		};
-		4FB850C32B31A8980046CB47 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/kingslay/KSPlayer.git";
-			requirement = {
-				kind = exactVersion;
-				version = 2.2.0;
-			};
-		};
 		4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher";
@@ -878,6 +870,14 @@
 				minimumVersion = 1.0.1;
 			};
 		};
+		FBD737802B31CD260093C1CA /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/KSPlayer";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.2.2;
+			};
+		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sanzaru/SimpleToast.git";
@@ -909,11 +909,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */;
 			productName = ColorfulX;
-		};
-		4FB850C42B31A8980046CB47 /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FB850C32B31A8980046CB47 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
 		};
 		4FC3DD082A49725F00CA36B9 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -955,6 +950,11 @@
 		};
 		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
+			productName = KSPlayer;
+		};
+		FBD737812B31CD260093C1CA /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FBD737802B31CD260093C1CA /* XCRemoteSwiftPackageReference "KSPlayer" */;
 			productName = KSPlayer;
 		};
 		FBDEE4782AD5874900F996BA /* SimpleToast */ = {

@@ -38,6 +38,7 @@ class LiveListViewModel: ObservableObject {
     @Published var currentRoom: LiveModel?
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
+    @Published var isLeftFocused: Bool = false
     
     init(liveType: LiveType) {
         self.liveType = liveType
@@ -180,6 +181,7 @@ class LiveListViewModel: ObservableObject {
                     if liveQuality.liveCodeType == .hls {
                         KSOptions.firstPlayerType = KSAVPlayer.self
                         KSOptions.secondPlayerType = KSMEPlayer.self
+                        
                         self.currentPlayURL = URL(string: liveQuality.url)!
                         return
                     }

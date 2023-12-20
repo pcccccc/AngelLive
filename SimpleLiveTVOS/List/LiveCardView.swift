@@ -139,6 +139,14 @@ struct LiveCardView: View {
         .focused($focusState, equals: .mainContent(index))
         .onChange(of: focusState, perform: { value in
             liveListViewModel.currentRoom = liveListViewModel.roomList[index]
+    
+            if focusState == .mainContent(0) {
+                liveListViewModel.showOverlay = false
+            }else {
+                liveListViewModel.showOverlay = true
+                focusState = .leftMenu(0)
+            }
+
         })
         .alert("提示", isPresented: $showAlert) {
             Button("取消收藏", role: .destructive, action: {

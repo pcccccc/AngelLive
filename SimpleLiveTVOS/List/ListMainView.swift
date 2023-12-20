@@ -43,7 +43,6 @@ struct ListMainView: View {
         ZStack {
             ScrollView {
                 ZStack {
-                    
                 }
                 .id(Self.topId)
                 LazyVGrid(columns: [GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400))], spacing: 35) {
@@ -73,12 +72,12 @@ struct ListMainView: View {
                                     print(222)
                                 }
                         })
+                           
                             .frame(width: 400, height: 240)
                             
                     }
                 }
             }.overlay {
-                
                 HStack {
                     LeftMenu(focusState: _focusState)
                        .offset(x: liveListViewModel.leftListOverlay)
@@ -94,7 +93,6 @@ struct ListMainView: View {
                                print(222)
                            }
                        })
-                       
                     Spacer()
                 }
                 .background(liveListViewModel.showOverlay == true ? Color.black.opacity(0.5) : Color.clear)

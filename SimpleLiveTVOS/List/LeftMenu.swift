@@ -97,7 +97,12 @@ struct LeftMenu: View {
         .onAppear {
             colors = colorScheme == .dark ? [Color.init(hex: 0x1A1E1C, alpha: 1), Color.init(hex: 0x1A1E1C, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
         }
-        
+        .onChange(of: liveListViewModel.showOverlay) { oldValue, newValue in
+            print(11111111)
+            if liveListViewModel.showOverlay == true {
+                focusState = .leftMenu(0)
+            }
+        }
     }
 }
 
