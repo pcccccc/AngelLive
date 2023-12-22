@@ -112,11 +112,12 @@ struct LeftMenu: View {
             .listStyle(.plain)
             
         }
-        .frame(maxWidth: liveListViewModel.leftWidth, maxHeight: liveListViewModel.leftHeight)
-        .background(ColorfulView(colors: $colors, speedFactor: $speed))
+        .frame(minWidth: 150 ,maxWidth: .infinity, minHeight: 30, maxHeight: .infinity)
+//        .background(ColorfulView(colors: $colors, speedFactor: $speed))
+        .background(Color.white)
         .cornerRadius(10)
-        .padding([.top, .bottom], 50)
-        .padding(.leading, 10)
+//        .padding([.top, .bottom], 50)
+//        .padding(.leading, 10)
         .onAppear {
             colors = colorScheme == .dark ? [Color.init(hex: 0x1A1E1C, alpha: 1), Color.init(hex: 0x1A1E1C, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
         }

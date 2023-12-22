@@ -25,7 +25,7 @@ class LiveListViewModel: ObservableObject {
     @Published var showOverlay: Bool = false {
         didSet {
             leftWidth = showOverlay == true ? 300 : 180
-            leftHeight = showOverlay == true ? 900 : 50
+            leftHeight = showOverlay == true ? 500 : 50
         }
     }
     @Published var leftListOverlay: CGFloat = 0

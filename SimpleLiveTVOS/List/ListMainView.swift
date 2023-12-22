@@ -78,26 +78,42 @@ struct ListMainView: View {
                     }
                 }
             }.overlay {
-                ZStack {
-                    LeftMenu(focusState: _focusState)
-                       .environmentObject(liveListViewModel)
-                       .onMoveCommand(perform: { direction in
-                           switch direction {
-                           case .right:
-                               liveListViewModel.showOverlay = false
-                           case .left:
-                               liveListViewModel.showOverlay = true
-                           default:
-                               print(222)
-                           }
-                       })
-                       .offset(x: -(1920/2) + (liveListViewModel.leftWidth / 2), y: -(1080/2) + (liveListViewModel.leftHeight / 2))
-                       
-//                       .animation(.spring(duration: 1.0), value: liveListViewModel.leftWidth)
-//                       .animation(.spring(duration: 1.0), value: liveListViewModel.leftHeight)
+                
+                ZStack(alignment: .topLeading) {
+                    VStack {
+                        HStack {
+                            LeftMenu(focusState: _focusState)
+                               .environmentObject(liveListViewModel)
+                               .onMoveCommand(perform: { direction in
+                                   switch direction {
+                                   case .right:
+
+                                           liveListViewModel.showOverlay = false
+
+
+                                   case .left:
+
+                                           liveListViewModel.showOverlay = true
+
+                                   default:
+                                       print(222)
+                                   }
+                               })
+                               .animation(.linear(duration: 0.5), value: liveListViewModel.showOverlay)
+                               .edgesIgnoringSafeArea(.all)
+                               .frame(width: liveListViewModel.showOverlay == true ? 300 : 180, height: liveListViewModel.showOverlay == true ? 500 : 50)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(width: 300)
+                        .background(Color.red)
+                        Spacer(minLength: 0)
+                        
+                    }
+                    .frame(width: liveListViewModel.showOverlay == true ? 180 : 300, height: liveListViewModel.showOverlay == true ? 50 : 500)
+                    .background(Color.blue)
                 }
-//                .frame(minWidth: 1920 , maxWidth: .infinity, minHeight: 1080, maxHeight: .infinity)
-//                .background(Color.black.opacity(0.5))
+                .frame(minWidth: 1920 , maxWidth: .infinity, minHeight: 1080, maxHeight: .infinity)
+                .background(Color.black.opacity(0.5))
             }
         }
         
