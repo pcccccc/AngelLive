@@ -37,7 +37,7 @@
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8DFD112AEFF487002644AD /* DetailViewController.swift */; };
-		FB90B9782B2ADF1100D7CE22 /* LiveListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB90B9772B2ADF1100D7CE22 /* LiveListViewModel.swift */; };
+		FB90B9782B2ADF1100D7CE22 /* LiveListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB90B9772B2ADF1100D7CE22 /* LiveListStore.swift */; };
 		FB90B97B2B2C94C600D7CE22 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB90B97A2B2C94C600D7CE22 /* LiveParse */; };
 		FB952EC92B03250C007A24F9 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952EC82B03250C007A24F9 /* Common.swift */; };
 		FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */; };
@@ -103,7 +103,7 @@
 		FB5101C62B1227E800A1AE0D /* dy.pb.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = dy.pb.swift; sourceTree = "<group>"; };
 		FB5101C82B1227F500A1AE0D /* dy.proto */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.protobuf; path = dy.proto; sourceTree = "<group>"; };
 		FB8DFD112AEFF487002644AD /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
-		FB90B9772B2ADF1100D7CE22 /* LiveListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListViewModel.swift; sourceTree = "<group>"; };
+		FB90B9772B2ADF1100D7CE22 /* LiveListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListStore.swift; sourceTree = "<group>"; };
 		FB952EC82B03250C007A24F9 /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
 		FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliLoginView.swift; sourceTree = "<group>"; };
 		FBA907832AE5100500A69FBE /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
@@ -264,7 +264,7 @@
 				FBDEE4752AD42FD100F996BA /* LiveCardView.swift */,
 				4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */,
 				FBFEDA462AD2A4CB00D96D7D /* ListMainView.swift */,
-				FB90B9772B2ADF1100D7CE22 /* LiveListViewModel.swift */,
+				FB90B9772B2ADF1100D7CE22 /* LiveListStore.swift */,
 			);
 			path = List;
 			sourceTree = "<group>";
@@ -460,7 +460,7 @@
 				FB51019A2B0EDE4000A1AE0D /* WebSocket.swift in Sources */,
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
-				FB90B9782B2ADF1100D7CE22 /* LiveListViewModel.swift in Sources */,
+				FB90B9782B2ADF1100D7CE22 /* LiveListStore.swift in Sources */,
 				FB952EC92B03250C007A24F9 /* Common.swift in Sources */,
 				FB5101922B0E3FEC00A1AE0D /* WebSocketManager.swift in Sources */,
 				FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */,

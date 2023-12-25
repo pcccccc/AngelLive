@@ -1,5 +1,5 @@
 //
-//  LiveListViewModel.swift
+//  LiveListStore.swift
 //  SimpleLiveTVOS
 //
 //  Created by pangchong on 2023/12/14.
@@ -10,7 +10,7 @@ import LiveParse
 import KSPlayer
 
 
-class LiveListViewModel: ObservableObject {
+class LiveListStore: ObservableObject {
     //菜单列表
     @Published var categories: [LiveMainListModel] = []
     
@@ -25,18 +25,24 @@ class LiveListViewModel: ObservableObject {
     @Published var showOverlay: Bool = false {
         didSet {
             leftWidth = showOverlay == true ? 300 : 180
-            leftHeight = showOverlay == true ? 500 : 50
+            leftHeight = showOverlay == true ? 700 : 50
+            leftMenuCornerRadius = showOverlay == true ? 10 : 25
         }
     }
     @Published var leftListOverlay: CGFloat = 0
     @Published var leftWidth: CGFloat = 180
     @Published var leftHeight: CGFloat = 50
+    @Published var leftMenuCornerRadius: CGFloat = 25
     @Published var menuTitleIcon: String = ""
     
     @Published var subPageNumber = 0
     @Published var subPageSize = 20
     
-    @Published var roomPage: Int = 1
+    @Published var roomPage: Int = 1 {
+        didSet {
+            getRoomList(index: selectedSubListIndex)
+        }
+    }
     @Published var roomList: [LiveModel] = []
     
     @Published var currentRoom: LiveModel?
@@ -78,35 +84,40 @@ class LiveListViewModel: ObservableObject {
     
     func getRoomList(index: Int) {
         isLoading = true
-        Task {
-            do {
-                if index == -1 {
-                    if let subListCategory = self.categories.first?.subList.first {
+        
+        do {
+            if index == -1 {
+                if let subListCategory = self.categories.first?.subList.first {
+                    Task {
                         let roomList  = try await fetchRoomList(liveCategory: subListCategory)
-                        print(categories)
                         DispatchQueue.main.async {
-                            self.roomList = roomList
+                            if self.roomPage == 1 {
+                                self.roomList.removeAll()
+                            }
+                            self.roomList += roomList
                             self.isLoading = false
-                            self.selectedSubListIndex = 0
+//                            self.selectedSubListIndex = 0
                         }
                     }
-                }else {
-                    self.selectedSubListIndex = index
-                    let subListCategory = self.selectedSubCategory[index]
-                    let roomList  = try await fetchRoomList(liveCategory: subListCategory)
-                    print(categories)
+                }
+            }else {
+                let subListCategory = self.selectedMainListCategory?.subList[index]
+                Task {
+                    let roomList  = try await fetchRoomList(liveCategory: subListCategory!)
                     DispatchQueue.main.async {
-                        self.roomList = roomList
-                        self.isLoading = false                        
+                        if self.roomPage == 1 {
+                            self.roomList.removeAll()
+                        }
+                        self.roomList += roomList
+                        self.isLoading = false
                     }
                 }
-                
-            }catch {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                }
             }
+            
+        }catch {
+            self.isLoading = false
         }
+        
     }
     
     func showSubCategoryList(currentCategory: LiveMainListModel) {

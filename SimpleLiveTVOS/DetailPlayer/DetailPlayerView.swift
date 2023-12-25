@@ -12,7 +12,7 @@ import AVKit
 
 struct DetailPlayerView: View {
     
-    @EnvironmentObject var liveListViewModel: LiveListViewModel
+    @EnvironmentObject var liveListViewModel: LiveListStore
     @State var url = ""
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     var option = KSOptions()
