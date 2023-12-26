@@ -41,7 +41,7 @@ class CloudSQLManager: NSObject {
         let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
         var temp: Array<LiveModel> = []
         for record in recordArray {
-            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? ""))
+            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "", liveWatchedCount: nil))
         }
         return temp
     }
@@ -54,7 +54,7 @@ class CloudSQLManager: NSObject {
         let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
         var temp: Array<LiveModel> = []
         for record in recordArray {
-            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? ""))
+            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "", liveWatchedCount: nil))
         }
         return temp
     }

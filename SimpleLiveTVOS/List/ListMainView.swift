@@ -97,20 +97,20 @@ struct ListMainView: View {
                                         
                                     Spacer(minLength: 0)
                                 }
-                                .frame(width: 300, height: liveListViewModel.leftHeight)
+                                .frame(width: liveListViewModel.leftMenuMaxWidth, height: liveListViewModel.leftHeight)
                                 Spacer(minLength: 0)
                                 
                             }
-                            .frame(width: liveListViewModel.showOverlay == true ? 150: 300, height: liveListViewModel.showOverlay == true ? 50: 700)
+                            .frame(width: liveListViewModel.showOverlay == true ? 150: 300, height: liveListViewModel.showOverlay == true ? liveListViewModel.leftMenuMinHeight:  liveListViewModel.leftMenuMaxHeight)
                         }
-                        .frame(width: 300, height: 700)
+                        .frame(width: liveListViewModel.leftMenuMaxWidth, height: liveListViewModel.leftMenuMaxHeight)
                         Spacer()
                     }
                     Spacer()
                 }
                 .edgesIgnoringSafeArea(.all)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .offset(x: 1,y: 1)
+                .offset(x: 1,y: 30)
             }
             
         }

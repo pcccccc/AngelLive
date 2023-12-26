@@ -10,7 +10,13 @@ import LiveParse
 import KSPlayer
 
 
+
 class LiveListStore: ObservableObject {
+    
+    let leftMenuMinWidth: CGFloat = 180
+    let leftMenuMaxWidth: CGFloat = 300
+    let leftMenuMinHeight: CGFloat = 50
+    let leftMenuMaxHeight: CGFloat = 830
     //菜单列表
     @Published var categories: [LiveMainListModel] = []
     
@@ -24,8 +30,8 @@ class LiveListStore: ObservableObject {
     var liveType: LiveType
     @Published var showOverlay: Bool = false {
         didSet {
-            leftWidth = showOverlay == true ? 300 : 180
-            leftHeight = showOverlay == true ? 700 : 50
+            leftWidth = showOverlay == true ? leftMenuMaxWidth : leftMenuMinWidth
+            leftHeight = showOverlay == true ? leftMenuMaxHeight : leftMenuMinHeight
             leftMenuCornerRadius = showOverlay == true ? 10 : 25
         }
     }
