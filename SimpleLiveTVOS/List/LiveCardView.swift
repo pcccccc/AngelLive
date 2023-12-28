@@ -11,7 +11,7 @@ import KSPlayer
 import LiveParse
 
 struct LiveCardView: View {
-    @EnvironmentObject var liveListViewModel: LiveListStore
+    @EnvironmentObject var liveViewModel: LiveStore
     @State var index: Int
     //    @Binding var liveModel: LiveModel
     //    @FocusState var mainContentfocusState: Int?
@@ -28,8 +28,8 @@ struct LiveCardView: View {
         Button {
             Task {
                 do {
-                    if try await self.liveListViewModel.getCurrentRoomLiveState() == .live {
-                        try await self.liveListViewModel.getPlayArgs()
+                    if try await self.liveViewModel.getCurrentRoomLiveState() == .live {
+                        try await self.liveViewModel.getPlayArgs()
                         DispatchQueue.main.async {
                             isLive = true
                         }
@@ -53,11 +53,11 @@ struct LiveCardView: View {
             //                isLive = false
             //            }
         } label: {
-            if index < liveListViewModel.roomList.count {
+            if index < liveViewModel.roomList.count {
                 VStack(spacing: 10, content: {
                     ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
                         if isCellVisible {
-                            KFImage(URL(string: liveListViewModel.roomList[index].roomCover))
+                            KFImage(URL(string: liveViewModel.roomList[index].roomCover))
                                 .resizable()
                                 .frame(width: 360, height: 200)
                             
@@ -112,17 +112,17 @@ struct LiveCardView: View {
                     })
                     HStack {
                         if isCellVisible {
-                            KFImage(URL(string: liveListViewModel.roomList[index].userHeadImg))
+                            KFImage(URL(string: liveViewModel.roomList[index].userHeadImg))
                                 .resizable()
                                 .frame(width: 40, height: 40)
                                 .cornerRadius(20)
                         }
                         VStack (alignment: .leading, spacing: 10) {
-                            Text(liveListViewModel.roomList[index].userName)
-                                .font(.system(size: liveListViewModel.roomList[index].userName.count > 5 ? 19 : 24))
+                            Text(liveViewModel.roomList[index].userName)
+                                .font(.system(size: liveViewModel.roomList[index].userName.count > 5 ? 19 : 24))
                                 .padding(.top, 10)
-                                .frame(width: 250, height: liveListViewModel.roomList[index].userName.count > 5 ? 19 : 24, alignment: .leading)
-                            Text(liveListViewModel.roomList[index].roomTitle)
+                                .frame(width: 250, height: liveViewModel.roomList[index].userName.count > 5 ? 19 : 24, alignment: .leading)
+                            Text(liveViewModel.roomList[index].roomTitle)
                                 .font(.system(size: 15))
                                 .frame(width: 250, height: 15 ,alignment: .leading)
                         }
@@ -138,24 +138,24 @@ struct LiveCardView: View {
         .buttonStyle(.card)
         //        .focused($mainContentfocusState, equals: index)
         .focused($focusState, equals: .mainContent(index))
-        .onChange(of: focusState) { oldValue, newValue in
-            liveListViewModel.currentRoom = liveListViewModel.roomList[index]
-            switch newValue {
-                case .mainContent(let value):
-                    if value >= liveListViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
-                        liveListViewModel.roomPage += 1
+        .onChange(of: focusState, perform: { value in
+            liveViewModel.currentRoom = liveViewModel.roomList[index]
+            switch value {
+                case .mainContent(let index):
+                    if index >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
+                        liveViewModel.roomPage += 1
                         
                     }
-                case .leftMenu(let value): break
+                case .leftMenu(let index): break
                 default: break
+                    //            if focusState == .mainContent(0) {
+                    //                liveViewModel.showOverlay = false
+                    //            }else {
+                    //                liveViewModel.showOverlay = true
+                    //                focusState = .leftMenu(0)
+                    //            }
             }
-            //            if focusState == .mainContent(0) {
-            //                liveListViewModel.showOverlay = false
-            //            }else {
-            //                liveListViewModel.showOverlay = true
-            //                focusState = .leftMenu(0)
-            //            }
-        }
+        })
         .alert("提示", isPresented: $showAlert) {
             Button("取消收藏", role: .destructive, action: {
                 Task {
@@ -215,10 +215,10 @@ struct LiveCardView: View {
             ////                    }
             ////                }
             ////            }
-            DetailPlayerView(url: liveListViewModel.currentPlayURL!.absoluteString, didExitView: { isLive, hint in
+            DetailPlayerView(url: liveViewModel.currentPlayURL!.absoluteString, didExitView: { isLive, hint in
                 self.isLive = isLive
             })
-            .environmentObject(liveListViewModel)
+            .environmentObject(liveViewModel)
             .edgesIgnoringSafeArea(.all)
         })
     }
@@ -226,7 +226,7 @@ struct LiveCardView: View {
     func favoriteAction() async {
         do {
             self.showLoading("正在收藏")
-            //            try await CloudSQLManager.saveRecord(liveModel: liveListViewModel.roomList[index])
+            //            try await CloudSQLManager.saveRecord(liveModel: liveViewModel.roomList[index])
             self.showToast(true, false, "收藏成功")
         }catch {
             print(error)

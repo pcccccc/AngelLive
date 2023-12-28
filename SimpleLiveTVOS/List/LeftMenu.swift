@@ -13,7 +13,7 @@ import ColorfulX
 
 struct LeftMenu: View {
     
-    @EnvironmentObject var liveListViewModel: LiveListStore
+    @EnvironmentObject var liveViewModel: LiveStore
     @State var colors: [Color] = ColorfulPreset.winter.colors
     @State var speed = 0.5
     @Environment(\.colorScheme) var colorScheme
@@ -22,23 +22,23 @@ struct LeftMenu: View {
     var body : some View {
         ScrollView {
             VStack(alignment: .center) {
-                if liveListViewModel.showOverlay == false {
-                    if liveListViewModel.selectedSubCategory.count > 0 {
+                if liveViewModel.showOverlay == false {
+                    if liveViewModel.selectedSubCategory.count > 0 {
                         HStack(spacing: 10) {
-                            if liveListViewModel.selectedSubCategory[liveListViewModel.selectedSubListIndex].icon == "" {
-                                Image(liveListViewModel.menuTitleIcon)
+                            if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
+                                Image(liveViewModel.menuTitleIcon)
                                 .resizable()
                                 .frame(width: 30, height: 30, alignment: .leading)
                                 .padding(.leading, -5)
                             }else {
-                                KFImage(URL(string: liveListViewModel.selectedSubCategory[liveListViewModel.selectedSubListIndex].icon))
+                                KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
                                 .resizable()
                                 .frame(width: 30, height: 30, alignment: .leading)
                                 .padding(.leading, -5)
                             }
                                 
                                 
-                            Text(liveListViewModel.selectedSubCategory[liveListViewModel.selectedSubListIndex].title)
+                            Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
                                 .font(.system(size: 20))
                                 .frame(width: 110, height: 30, alignment: .leading)
                                 .multilineTextAlignment(.leading)
@@ -48,7 +48,7 @@ struct LeftMenu: View {
                         .edgesIgnoringSafeArea(.all)
                     }else {
                         HStack(spacing: 10) {
-                            Image(liveListViewModel.menuTitleIcon)
+                            Image(liveViewModel.menuTitleIcon)
                                 .resizable()
                                 .frame(width: 30, height: 30, alignment: .leading)
                                 .padding(.leading, -5)
@@ -62,17 +62,17 @@ struct LeftMenu: View {
                         .edgesIgnoringSafeArea(.all)
                     }
                 }else {
-                    ForEach(liveListViewModel.categories.indices, id: \.self) { index in
+                    ForEach(liveViewModel.categories.indices, id: \.self) { index in
                         VStack {
                             Button(action: {
-                                liveListViewModel.showSubCategoryList(currentCategory: liveListViewModel.categories[index])
+                                liveViewModel.showSubCategoryList(currentCategory: liveViewModel.categories[index])
                             }, label: {
                                 HStack(spacing: 10) {
-                                    Image(liveListViewModel.categories[index].icon == "" ? liveListViewModel.menuTitleIcon : liveListViewModel.categories[index].icon)
+                                    Image(liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon)
                                         .resizable()
                                         .frame(width: 30, height: 30, alignment: .leading)
                                         .padding(.leading, -20)
-                                    Text(liveListViewModel.categories[index].title)
+                                    Text(liveViewModel.categories[index].title)
                                         .font(.system(size: 25))
                                         .frame(width: 110, height: 30, alignment: .leading)
                                         .multilineTextAlignment(.leading)
@@ -80,7 +80,7 @@ struct LeftMenu: View {
                             })
                             .frame(width: 250)
                             .padding(.top, index == 0 ? 50 : 15)
-                            .padding(.bottom, index == liveListViewModel.categories.count - 1 ? 50 : 15)
+                            .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 15)
                             .padding([.leading, .trailing], 30)
                             .buttonStyle(.plain)
                             .background(Color.clear)
@@ -97,20 +97,20 @@ struct LeftMenu: View {
                                     }
                                 })
                             })
-                            if liveListViewModel.selectedMainListCategory?.title == liveListViewModel.categories[index].title {
-                                ForEach((liveListViewModel.selectedSubCategory).indices, id: \.self) { index in
+                            if liveViewModel.selectedMainListCategory?.title == liveViewModel.categories[index].title {
+                                ForEach((liveViewModel.selectedSubCategory).indices, id: \.self) { index in
                                     VStack(alignment: .leading) {
                                         HStack {
                                             Button(action: {
-                                                liveListViewModel.selectedSubListIndex = index
-                                                liveListViewModel.roomPage = 1
-//                                                liveListViewModel.getRoomList(index: index)
+                                                liveViewModel.selectedSubListIndex = index
+                                                liveViewModel.roomPage = 1
+//                                                liveViewModel.getRoomList(index: index)
                                             }, label: {
-                                                KFImage(URL(string: liveListViewModel.selectedSubCategory[index].icon == "" ? liveListViewModel.menuTitleIcon : liveListViewModel.selectedSubCategory[index].icon))
+                                                KFImage(URL(string: liveViewModel.selectedSubCategory[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.selectedSubCategory[index].icon))
                                                     .resizable()
                                                     .frame(width: 20, height: 20, alignment: .leading)
                                                     .padding(.leading, -20)
-                                                Text(liveListViewModel.selectedSubCategory[index].title)
+                                                Text(liveViewModel.selectedSubCategory[index].title)
                                                     .font(.system(size: 20))
                                                     .frame(width: 110, height: 20, alignment: .leading)
                                                     .multilineTextAlignment(.leading)
@@ -138,9 +138,8 @@ struct LeftMenu: View {
         .onAppear {
             colors = colorScheme == .dark ? [Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1), Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
         }
-        .onChange(of: liveListViewModel.showOverlay) { oldValue, newValue in
-            print(11111111)
-            if liveListViewModel.showOverlay == true {
+        .onChange(of: liveViewModel.showOverlay) { value in
+            if liveViewModel.showOverlay == true {
                 focusState = .leftMenu(0)
             }
         }
@@ -149,5 +148,5 @@ struct LeftMenu: View {
 
 #Preview {
     LeftMenu()
-        .environmentObject(LiveListStore(liveType: .bilibili))
+        .environmentObject(LiveStore(liveType: .bilibili))
 }

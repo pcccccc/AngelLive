@@ -28,12 +28,12 @@ struct ListMainView: View {
     )
     
     var liveType: LiveType
-    @StateObject var liveListViewModel: LiveListStore
+    @StateObject var liveViewModel: LiveStore
     @FocusState var focusState: FocusableField?
     
     init(liveType: LiveType) {
         self.liveType = liveType
-        self._liveListViewModel = StateObject(wrappedValue: LiveListStore(liveType: liveType))
+        self._liveViewModel = StateObject(wrappedValue: LiveStore(liveType: liveType))
     }
     
     var body: some View {
@@ -43,7 +43,7 @@ struct ListMainView: View {
                 }
                 .id(Self.topId)
                 LazyVGrid(columns: [GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400))], spacing: 70) {
-                    ForEach(liveListViewModel.roomList.indices, id: \.self) { index in
+                    ForEach(liveViewModel.roomList.indices, id: \.self) { index in
 //                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
 //                            self.loadingText = loadingText
 //                            needFullScreenLoading = true
@@ -54,15 +54,15 @@ struct ListMainView: View {
 //                            showToast.toggle()
 //                        })
                         LiveCardView(index: index)
-                            .environmentObject(liveListViewModel)
+                            .environmentObject(liveViewModel)
                             .onMoveCommand(perform: { direction in
                                 switch direction {
 //                                case .right:
-//                                    liveListViewModel.showOverlay = false
+//                                    liveViewModel.showOverlay = false
                                 case .left:
-//                                    liveListViewModel.showOverlay = true
+//                                    liveViewModel.showOverlay = true
                                     if index % 4 == 0 {
-                                        liveListViewModel.showOverlay = true
+                                        liveViewModel.showOverlay = true
                                         focusState = .leftMenu(0)
                                     }
                                 default:
@@ -79,31 +79,31 @@ struct ListMainView: View {
                             VStack(alignment: .leading) {
                                 HStack {
                                     LeftMenu(focusState: _focusState)
-                                        .environmentObject(liveListViewModel)
+                                        .environmentObject(liveViewModel)
                                         .onMoveCommand(perform: { direction in
                                             switch direction {
                                             case .right:
-                                                liveListViewModel.showOverlay = false
+                                                liveViewModel.showOverlay = false
                                             case .left:
-                                                liveListViewModel.showOverlay = true
+                                                liveViewModel.showOverlay = true
                                             default:
                                                 print(222)
                                             }
                                         })
-                                        .animation(.easeInOut(duration: 0.25), value: liveListViewModel.showOverlay)
+                                        .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
                                         .edgesIgnoringSafeArea(.all)
-                                        .frame(width: liveListViewModel.leftWidth, height: liveListViewModel.leftHeight)
-                                        .cornerRadius(liveListViewModel.leftMenuCornerRadius)
+                                        .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
+                                        .cornerRadius(liveViewModel.leftMenuCornerRadius)
                                         
                                     Spacer(minLength: 0)
                                 }
-                                .frame(width: liveListViewModel.leftMenuMaxWidth, height: liveListViewModel.leftHeight)
+                                .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftHeight)
                                 Spacer(minLength: 0)
                                 
                             }
-                            .frame(width: liveListViewModel.showOverlay == true ? 150: 300, height: liveListViewModel.showOverlay == true ? liveListViewModel.leftMenuMinHeight:  liveListViewModel.leftMenuMaxHeight)
+                            .frame(width: liveViewModel.showOverlay == true ? 150: 300, height: liveViewModel.showOverlay == true ? liveViewModel.leftMenuMinHeight:  liveViewModel.leftMenuMaxHeight)
                         }
-                        .frame(width: liveListViewModel.leftMenuMaxWidth, height: liveListViewModel.leftMenuMaxHeight)
+                        .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftMenuMaxHeight)
                         Spacer()
                     }
                     Spacer()

@@ -6,11 +6,11 @@
 //
 
 import Foundation
-
+import SwiftUI
 
 class SettingStore : ObservableObject {
     
-    private init(){}
+    init(){}
     
     static let globalShowDanmu = "SimpleLive.Setting.showDanmu"
     static let globalShowColorDanmu = "SimpleLive.Setting.showColorDanmu"
@@ -21,68 +21,12 @@ class SettingStore : ObservableObject {
     static let globalDanmuAlpha = "SimpleLive.Setting.danmuAlpha"
     static let shared = SettingStore()
     
-    public var showDanmu: Bool {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalShowDanmu)
-        }
-        get {
-            print(UserDefaults.standard.value(forKey: SettingStore.globalShowDanmu))
-            return UserDefaults.standard.value(forKey: SettingStore.globalShowDanmu) as? Bool ?? true
-        }
-    }
-    
-    var showColorDanmu: Bool {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalShowColorDanmu)
-        }
-        get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalShowColorDanmu) as? Bool ?? true
-        }
-    }
-    
-    var danmuTopMargin: Float {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuTopMargin)
-        }
-        get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuTopMargin) as? Float ?? 0
-        }
-    }
-    
-    var danmuBottomMargin: Float {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuBottomMargin)
-        }
-        get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuBottomMargin) as? Float ?? 0
-        }
-    }
-    
-    var danmuFontSize: Int {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuFontSize)
-        }
-        get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuFontSize) as? Int ?? 50
-        }
-    }
-    
-    var danmuSpeed: Float {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuSpeed)
-        }
-        get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuSpeed) as? Float ?? 0.5
-        }
-    }
-    
-    var danmuAlpha: Float {
-        set {
-            UserDefaults.standard.setValue(newValue, forKey: SettingStore.globalDanmuAlpha)
-        }
-        get {
-            return UserDefaults.standard.value(forKey: SettingStore.globalDanmuAlpha) as? Float ?? 1.0
-        }
-    }
+    @AppStorage(globalShowDanmu) public var showDanmu: Bool = true
+    @AppStorage(globalShowColorDanmu) public var showColorDanmu: Bool = true
+    @AppStorage(globalDanmuTopMargin) public var danmuTopMargin: Double = 0.0
+    @AppStorage(globalDanmuBottomMargin) public var danmuBottomMargin: Double = 0.0
+    @AppStorage(globalDanmuFontSize) public var danmuFontSize: Int = 50
+    @AppStorage(globalDanmuSpeed) public var danmuSpeed: Double = 0.5
+    @AppStorage(globalDanmuAlpha) var danmuAlpha: Double = 1.0
 }
 

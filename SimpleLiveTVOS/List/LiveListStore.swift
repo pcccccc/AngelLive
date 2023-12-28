@@ -1,5 +1,5 @@
 //
-//  LiveListStore.swift
+//  LiveStore.swift
 //  SimpleLiveTVOS
 //
 //  Created by pangchong on 2023/12/14.
@@ -11,7 +11,7 @@ import KSPlayer
 
 
 
-class LiveListStore: ObservableObject {
+class LiveStore: ObservableObject {
     
     let leftMenuMinWidth: CGFloat = 180
     let leftMenuMaxWidth: CGFloat = 300
@@ -55,6 +55,7 @@ class LiveListStore: ObservableObject {
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
     @Published var isLeftFocused: Bool = false
+    @Published var playerCoordinator = KSVideoPlayer.Coordinator()
     
     init(liveType: LiveType) {
         self.liveType = liveType
@@ -190,7 +191,7 @@ class LiveListStore: ObservableObject {
             return
         }
         let currentCdn = currentRoomPlayArgs![cdnIndex]
-        let currentQuality = currentCdn.qualitys[urlIndex]
+        var currentQuality = currentCdn.qualitys[urlIndex]
         if currentQuality.liveCodeType == .flv {
             KSOptions.firstPlayerType = KSMEPlayer.self
             KSOptions.secondPlayerType = KSAVPlayer.self
@@ -208,6 +209,13 @@ class LiveListStore: ObservableObject {
                         self.currentPlayURL = URL(string: liveQuality.url)!
                         return
                     }
+                }
+            }
+        }
+        if liveType == .huya {
+            if currentQuality.title.contains("HDR") {
+                if urlIndex + 1 < currentCdn.qualitys.count {
+                    currentQuality = currentCdn.qualitys[urlIndex + 1]
                 }
             }
         }

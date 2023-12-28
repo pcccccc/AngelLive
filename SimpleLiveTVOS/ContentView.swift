@@ -58,23 +58,7 @@ struct ContentView: View {
         }
         .onAppear {
             Task {
-//                private var socketManager = WebSocketManager.shard
                 try await Douyin.getRequestHeaders()
-                GCController.controllers()
-                let userId = "7301566163372279337"
-                let webRid = "913642684249"
-                let roomId = "913642684249"
-                let cookie = try await Douyin.getCookie(roomId: "913642684249")
-                let socket = biliLiveWebSocket()
-                socket.userId = userId
-                socket.webRid = webRid
-                socket.dyRoomId = roomId
-                socket.cookie = cookie
-            
-
-                socket.liveType = .douyin
-//                socket.delegate = self
-                socket.connect(url: "", cookie: "")
             }
         }
     }

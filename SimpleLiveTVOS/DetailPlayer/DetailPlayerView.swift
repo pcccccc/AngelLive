@@ -12,7 +12,7 @@ import AVKit
 
 struct DetailPlayerView: View {
     
-    @EnvironmentObject var liveListViewModel: LiveListStore
+    @EnvironmentObject var liveViewModel: LiveStore
     @State var url = ""
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     var option = KSOptions()
@@ -22,29 +22,17 @@ struct DetailPlayerView: View {
     }
     
     var body: some View {
-//        KSVideoPlayer(coordinator: playerCoordinator, url:liveListViewModel.currentPlayURL ?? URL(string: "")!, options: option)
-//            .background(Color.black)
-//            .onAppear {
-//                
-//            }
-//            .onExitCommand(perform: {
-//                self.didExitView(false, "")
-//            }
-//        )
-        KSVideoPlayerView(url: URL(string: url)!, options: KSOptions())
+        KSVideoPlayer(coordinator: liveViewModel.playerCoordinator, url:liveViewModel.currentPlayURL ?? URL(string: "")!, options: option)
             .background(Color.black)
             .onAppear {
                 
             }
-//        VideoPlayer(player: player)
-//            .onAppear {
-//                player.play()
-//            }
+            .overlay {
+                PlayerControlView()
+                    .environmentObject(liveViewModel)
+            }
     }
 }
 
 
-#Preview {
-    DetailPlayerView()
-}
 
