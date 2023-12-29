@@ -17,15 +17,9 @@ enum FocusableField: Hashable {
 
 struct ListMainView: View {
 
-    @State var showToast: Bool = false
-    @State var toastTitle: String = ""
-    @State var toastTypeIsSuccess: Bool = false
-    @State var loadingText: String = "正在获取内容"
+  
     @State var needFullScreenLoading: Bool = false
     private static let topId = "topIdHere"
-    private let toastOptions = SimpleToastOptions(
-        hideAfter: 2
-    )
     
     var liveType: LiveType
     @StateObject var liveViewModel: LiveStore
@@ -44,15 +38,6 @@ struct ListMainView: View {
                 .id(Self.topId)
                 LazyVGrid(columns: [GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400))], spacing: 70) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
-//                        LiveCardView(liveModel: $roomContentArray[index], mainContentfocusState: _mainContentfocusState, index: index, showLoading: { loadingText in
-//                            self.loadingText = loadingText
-//                            needFullScreenLoading = true
-//                        }, showToast: { success, delete, hint in
-//                            toastTypeIsSuccess = success
-//                            toastTitle = hint
-//                            needFullScreenLoading = false
-//                            showToast.toggle()
-//                        })
                         LiveCardView(index: index)
                             .environmentObject(liveViewModel)
                             .onMoveCommand(perform: { direction in
@@ -114,7 +99,15 @@ struct ListMainView: View {
             }
             
         }
-        
+        .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
+            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastImage)
+//                .symbolEffect(.appear.down.wholeSymbol)
+                .padding()
+                .background(Color.red.opacity(0.8))
+                .foregroundColor(Color.white)
+                .cornerRadius(10)
+                .padding(.top)
+            }
     }
     
 }

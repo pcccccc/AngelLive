@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		4F1524312B284AA900E82845 /* DetailPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F1524302B284AA900E82845 /* DetailPlayerView.swift */; };
+		4F55883E2B3E6C7200B1BA88 /* ApiManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */; };
 		4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73D21B2B2D3BA500689369 /* ColorfulX */; };
+		4F839BF32B3E5BC400305784 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F839BF22B3E5BC400305784 /* LiveParse */; };
 		4FA6C5272B3A7D1B0034F23C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */; };
 		4FB68B252B3BBBF90031FA9C /* PlayerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB68B242B3BBBF90031FA9C /* PlayerControlView.swift */; };
 		4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */; };
@@ -26,21 +28,14 @@
 		FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A22B14DEE70068100B /* DanmuSettingView.swift */; };
 		FB2175A52B14DF0D0068100B /* Setting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* Setting.swift */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
-		FB5101922B0E3FEC00A1AE0D /* WebSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */; };
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
 		FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101972B0ED76A00A1AE0D /* SWCompression */; };
-		FB51019A2B0EDE4000A1AE0D /* WebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101992B0EDE3F00A1AE0D /* WebSocket.swift */; };
 		FB51019C2B0EECCB00A1AE0D /* Data+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */; };
 		FB5101A02B104D5600A1AE0D /* UIColor+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */; };
-		FB5101A42B11D9F600A1AE0D /* huya.js in Resources */ = {isa = PBXBuildFile; fileRef = FB5101A32B11D9F600A1AE0D /* huya.js */; };
-		FB5101C42B11DD3D00A1AE0D /* BABulletModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101B72B11DD3D00A1AE0D /* BABulletModel.swift */; };
-		FB5101C72B1227E800A1AE0D /* dy.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5101C62B1227E800A1AE0D /* dy.pb.swift */; };
-		FB5101C92B1227F600A1AE0D /* dy.proto in Sources */ = {isa = PBXBuildFile; fileRef = FB5101C82B1227F500A1AE0D /* dy.proto */; };
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8DFD112AEFF487002644AD /* DetailViewController.swift */; };
 		FB90B9782B2ADF1100D7CE22 /* LiveListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB90B9772B2ADF1100D7CE22 /* LiveListStore.swift */; };
-		FB90B97B2B2C94C600D7CE22 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB90B97A2B2C94C600D7CE22 /* LiveParse */; };
 		FB952EC92B03250C007A24F9 /* Common.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952EC82B03250C007A24F9 /* Common.swift */; };
 		FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB952ECA2B0CF327007A24F9 /* BilibiliLoginView.swift */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
@@ -79,6 +74,7 @@
 
 /* Begin PBXFileReference section */
 		4F1524302B284AA900E82845 /* DetailPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailPlayerView.swift; sourceTree = "<group>"; };
+		4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiManager.swift; sourceTree = "<group>"; };
 		4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4FB68B242B3BBBF90031FA9C /* PlayerControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlView.swift; sourceTree = "<group>"; };
 		4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimpleLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -91,21 +87,15 @@
 		4FC3DCF42A49383100CA36B9 /* SimpleLiveTVOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SimpleLiveTVOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FC3DCF82A49383100CA36B9 /* SimpleLiveTVOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITests.swift; sourceTree = "<group>"; };
 		4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4FC9B38F2A52E41300C0D3C8 /* LeftMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeftMenu.swift; sourceTree = "<group>"; };
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
 		FB1BB6432B0D0CB600C54BCF /* SettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingView.swift; sourceTree = "<group>"; };
 		FB2175A22B14DEE70068100B /* DanmuSettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingView.swift; sourceTree = "<group>"; };
 		FB2175A42B14DF0D0068100B /* Setting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Setting.swift; sourceTree = "<group>"; };
-		FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketManager.swift; sourceTree = "<group>"; };
-		FB5101992B0EDE3F00A1AE0D /* WebSocket.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WebSocket.swift; sourceTree = "<group>"; };
 		FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Extension.swift"; sourceTree = "<group>"; };
 		FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIColor+Extension.swift"; sourceTree = "<group>"; };
-		FB5101A32B11D9F600A1AE0D /* huya.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = huya.js; sourceTree = "<group>"; };
-		FB5101B72B11DD3D00A1AE0D /* BABulletModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BABulletModel.swift; sourceTree = "<group>"; };
-		FB5101C62B1227E800A1AE0D /* dy.pb.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = dy.pb.swift; sourceTree = "<group>"; };
-		FB5101C82B1227F500A1AE0D /* dy.proto */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.protobuf; path = dy.proto; sourceTree = "<group>"; };
 		FB8DFD112AEFF487002644AD /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
 		FB90B9772B2ADF1100D7CE22 /* LiveListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveListStore.swift; sourceTree = "<group>"; };
 		FB952EC82B03250C007A24F9 /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
@@ -129,10 +119,10 @@
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
 				FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */,
 				FBD737822B31CD260093C1CA /* KSPlayer in Frameworks */,
+				4F839BF32B3E5BC400305784 /* LiveParse in Frameworks */,
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
 				FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */,
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
-				FB90B97B2B2C94C600D7CE22 /* LiveParse in Frameworks */,
 				4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
@@ -161,6 +151,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		4F55883C2B3E6BC500B1BA88 /* Other */ = {
+			isa = PBXGroup;
+			children = (
+				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
+				4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */,
+				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
+				4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */,
+				4FC3DCDF2A49382F00CA36B9 /* ContentView.swift */,
+			);
+			path = Other;
+			sourceTree = "<group>";
+		};
 		4FC3DCD12A49382F00CA36B9 = {
 			isa = PBXGroup;
 			children = (
@@ -185,18 +187,14 @@
 			isa = PBXGroup;
 			children = (
 				FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */,
+				4F55883C2B3E6BC500B1BA88 /* Other */,
 				FB90B9742B2ADB3B00D7CE22 /* DetailPlayer */,
 				FB90B9752B2ADB3B00D7CE22 /* Favorite */,
 				FB90B9762B2ADB3B00D7CE22 /* List */,
 				FB90B9732B2ADB3B00D7CE22 /* Setting */,
 				FBC2E6F12ACD83350036BFD4 /* Tools */,
-				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
-				4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */,
-				4FC3DCDF2A49382F00CA36B9 /* ContentView.swift */,
 				FBC8F5612B18C524006C5887 /* SearchRoomView.swift */,
-				4FC3DCE12A49383100CA36B9 /* Assets.xcassets */,
 				4FC3DCE32A49383100CA36B9 /* Preview Content */,
-				4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */,
 			);
 			path = SimpleLiveTVOS;
 			sourceTree = "<group>";
@@ -224,14 +222,6 @@
 				4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */,
 			);
 			path = SimpleLiveTVOSUITests;
-			sourceTree = "<group>";
-		};
-		FB5101A52B11DD3D00A1AE0D /* HuyaBulletGet */ = {
-			isa = PBXGroup;
-			children = (
-				FB5101B72B11DD3D00A1AE0D /* BABulletModel.swift */,
-			);
-			path = HuyaBulletGet;
 			sourceTree = "<group>";
 		};
 		FB90B9732B2ADB3B00D7CE22 /* Setting */ = {
@@ -279,18 +269,13 @@
 			isa = PBXGroup;
 			children = (
 				FBA907832AE5100500A69FBE /* LoadingView.swift */,
-				FB5101C82B1227F500A1AE0D /* dy.proto */,
-				FB5101C62B1227E800A1AE0D /* dy.pb.swift */,
-				FB5101A52B11DD3D00A1AE0D /* HuyaBulletGet */,
-				FB5101A32B11D9F600A1AE0D /* huya.js */,
 				FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */,
 				FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */,
 				FB952EC82B03250C007A24F9 /* Common.swift */,
-				FB5101992B0EDE3F00A1AE0D /* WebSocket.swift */,
-				FB5101912B0E3FEC00A1AE0D /* WebSocketManager.swift */,
 				FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */,
 				FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */,
 				FB2175A42B14DF0D0068100B /* Setting.swift */,
+				4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */,
 			);
 			path = Tools;
 			sourceTree = "<group>";
@@ -325,9 +310,9 @@
 				FB89E1602B1340870083116D /* KSPlayer */,
 				FB89E1632B1340DA0083116D /* KSPlayer */,
 				FB99EA452B1346A400C0C5DA /* KSPlayer */,
-				FB90B97A2B2C94C600D7CE22 /* LiveParse */,
 				4F73D21B2B2D3BA500689369 /* ColorfulX */,
 				FBD737812B31CD260093C1CA /* KSPlayer */,
+				4F839BF22B3E5BC400305784 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -410,9 +395,9 @@
 				FB5101962B0ED76A00A1AE0D /* XCRemoteSwiftPackageReference "SWCompression" */,
 				FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 				FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */,
-				FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */,
 				4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				FBD737802B31CD260093C1CA /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				4F839BF12B3E5BC400305784 /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -430,7 +415,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FB5101A42B11D9F600A1AE0D /* huya.js in Resources */,
 				4FA6C5272B3A7D1B0034F23C /* LaunchScreen.storyboard in Resources */,
 				4FC3DCE52A49383100CA36B9 /* Preview Assets.xcassets in Resources */,
 				4FC3DCE22A49383100CA36B9 /* Assets.xcassets in Resources */,
@@ -459,18 +443,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
-				FB5101C72B1227E800A1AE0D /* dy.pb.swift in Sources */,
-				FB5101C42B11DD3D00A1AE0D /* BABulletModel.swift in Sources */,
 				FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */,
 				FB2175A52B14DF0D0068100B /* Setting.swift in Sources */,
 				FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */,
-				FB51019A2B0EDE4000A1AE0D /* WebSocket.swift in Sources */,
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				FB90B9782B2ADF1100D7CE22 /* LiveListStore.swift in Sources */,
 				FB952EC92B03250C007A24F9 /* Common.swift in Sources */,
 				4FB68B252B3BBBF90031FA9C /* PlayerControlView.swift in Sources */,
-				FB5101922B0E3FEC00A1AE0D /* WebSocketManager.swift in Sources */,
 				FBA907D52AEBFE9200A69FBE /* KSAudioView.swift in Sources */,
 				FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */,
 				4F1524312B284AA900E82845 /* DetailPlayerView.swift in Sources */,
@@ -478,8 +458,8 @@
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
 				FBA907D12AEBF7E500A69FBE /* AboutUSView.swift in Sources */,
 				FB51019C2B0EECCB00A1AE0D /* Data+Extension.swift in Sources */,
+				4F55883E2B3E6C7200B1BA88 /* ApiManager.swift in Sources */,
 				FBFEDA472AD2A4CB00D96D7D /* ListMainView.swift in Sources */,
-				FB5101C92B1227F600A1AE0D /* dy.proto in Sources */,
 				FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */,
 				FB1BB6442B0D0CB600C54BCF /* SettingView.swift in Sources */,
 				FB5101A02B104D5600A1AE0D /* UIColor+Extension.swift in Sources */,
@@ -651,7 +631,7 @@
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = SimpleLiveTVOS/Info.plist;
+				INFOPLIST_FILE = SimpleLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -685,7 +665,7 @@
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = SimpleLiveTVOS/Info.plist;
+				INFOPLIST_FILE = SimpleLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -832,6 +812,14 @@
 				minimumVersion = 2.1.3;
 			};
 		};
+		4F839BF12B3E5BC400305784 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pcccccc/LiveParse.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.3;
+			};
+		};
 		4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher";
@@ -870,14 +858,6 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 4.8.5;
-			};
-		};
-		FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pcccccc/LiveParse";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.2;
 			};
 		};
 		FBD737802B31CD260093C1CA /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
@@ -920,6 +900,11 @@
 			package = 4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */;
 			productName = ColorfulX;
 		};
+		4F839BF22B3E5BC400305784 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F839BF12B3E5BC400305784 /* XCRemoteSwiftPackageReference "LiveParse" */;
+			productName = LiveParse;
+		};
 		4FC3DD082A49725F00CA36B9 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */;
@@ -952,11 +937,6 @@
 		FB89E1632B1340DA0083116D /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KSPlayer;
-		};
-		FB90B97A2B2C94C600D7CE22 /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FB90B9792B2C94C600D7CE22 /* XCRemoteSwiftPackageReference "LiveParse" */;
-			productName = LiveParse;
 		};
 		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;

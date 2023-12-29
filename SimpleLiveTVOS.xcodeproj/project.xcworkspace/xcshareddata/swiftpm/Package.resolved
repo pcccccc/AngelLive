@@ -66,10 +66,10 @@
     {
       "identity" : "liveparse",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/LiveParse",
+      "location" : "https://github.com/pcccccc/LiveParse.git",
       "state" : {
-        "revision" : "25b35ce83d6341e78528838f4fffcf782d1d493b",
-        "version" : "1.0.2"
+        "revision" : "f933a539e7ad53f4d924563e106e00f3af23cc1f",
+        "version" : "1.0.3"
       }
     },
     {

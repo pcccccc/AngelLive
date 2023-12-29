@@ -20,15 +20,13 @@ struct LiveCardView: View {
     @State private var isCellVisible: Bool = false
     @State private var favorited: Bool = false
     @State private var isLive: Bool = false
-    var showLoading: (String) -> Void = { _ in }
-    var showToast: (Bool, Bool, String) -> Void = { _,_,_   in }
     @FocusState var focusState: FocusableField?
     
     var body: some View {
         Button {
             Task {
                 do {
-                    if try await self.liveViewModel.getCurrentRoomLiveState() == .live {
+                    if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live {
                         try await self.liveViewModel.getPlayArgs()
                         DispatchQueue.main.async {
                             isLive = true
@@ -182,7 +180,7 @@ struct LiveCardView: View {
             }else {
                 Button(action: {
                     Task {
-                        await favoriteAction()
+                        liveViewModel.showToast(true, title:"success")
                     }
                 }, label: {
                     HStack {
@@ -197,7 +195,6 @@ struct LiveCardView: View {
         }
         .onDisappear {
             self.isCellVisible = false
-            //            ImageCache.default.clearMemoryCache()
         }
         .task {
             do {
@@ -225,12 +222,12 @@ struct LiveCardView: View {
     
     func favoriteAction() async {
         do {
-            self.showLoading("正在收藏")
+//            self.showLoading("正在收藏")
             //            try await CloudSQLManager.saveRecord(liveModel: liveViewModel.roomList[index])
-            self.showToast(true, false, "收藏成功")
+//            self.showToast(true, false, "收藏成功")
         }catch {
             print(error)
-            self.showToast(false, false, "收藏失败，错误码：\(error.localizedDescription)")
+//            self.showToast(false, false, "收藏失败，错误码：\(error.localizedDescription)")
         }
         
     }
@@ -250,11 +247,11 @@ struct LiveCardView: View {
         //            self.showToast(false, true, "取消收藏失败")
         //        }
         do {
-            self.showLoading("正在取消收藏")
-            //            try await CloudSQLManager.deleteRecord(liveModel: liveModel)
-            self.showToast(true, true, "取消收藏成功")
+//            self.showLoading("正在取消收藏")
+//            //            try await CloudSQLManager.deleteRecord(liveModel: liveModel)
+//            self.showToast(true, true, "取消收藏成功")
         }catch {
-            self.showToast(false, true, "取消收藏失败")
+//            self.showToast(false, true, "取消收藏失败")
         }
     }
 }
