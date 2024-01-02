@@ -12,25 +12,24 @@ import AVKit
 
 struct DetailPlayerView: View {
     
-    @EnvironmentObject var liveViewModel: LiveStore
-    @State var url = ""
+    @EnvironmentObject var roomInfoViewModel: RoomInfoStore
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     var option = KSOptions()
-    private var player: AVPlayer {
-           // 替换成您的视频 URL
-           AVPlayer(url: URL(string: url)!)
-    }
     
     var body: some View {
-        KSVideoPlayer(coordinator: liveViewModel.playerCoordinator, url:liveViewModel.currentPlayURL ?? URL(string: "")!, options: option)
-            .background(Color.black)
-            .onAppear {
-                
-            }
-            .overlay {
-                PlayerControlView()
-                    .environmentObject(liveViewModel)
-            }
+        if roomInfoViewModel.currentPlayURL == nil {
+            ProgressView()
+        }else {
+            KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: option)
+                .background(Color.black)
+                .onAppear {
+                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                }
+                .overlay {
+                    PlayerControlView()
+                        .environmentObject(roomInfoViewModel)
+                }
+        }
     }
 }
 

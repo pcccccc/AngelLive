@@ -7,8 +7,13 @@
 
 import Foundation
 import LiveParse
-import KSPlayer
 import SimpleToast
+
+enum LiveRoomListType {
+    case live
+    case favorite
+    case history
+}
 
 
 class LiveStore: ObservableObject {
@@ -17,6 +22,11 @@ class LiveStore: ObservableObject {
     let leftMenuMaxWidth: CGFloat = 300
     let leftMenuMinHeight: CGFloat = 50
     let leftMenuMaxHeight: CGFloat = 830
+    
+    //房间列表分类
+    var roomListType: LiveRoomListType
+    //直播分类
+    var liveType: LiveType
     
     //菜单列表
     @Published var categories: [LiveMainListModel] = []
@@ -37,12 +47,10 @@ class LiveStore: ObservableObject {
     @Published var selectedMainListCategory: LiveMainListModel?
     @Published var selectedSubCategory: [LiveCategoryModel] = []
     @Published var selectedSubListIndex: Int = -1
+    @Published var selectedRoomListIndex: Int = -1
     
     //加载状态
     @Published var isLoading = false
-    
-    //直播分类
-    var liveType: LiveType
    
     //直播列表分页
     @Published var subPageNumber = 0
@@ -54,11 +62,11 @@ class LiveStore: ObservableObject {
     }
     @Published var roomList: [LiveModel] = []
     @Published var currentRoom: LiveModel?
-    @Published var currentRoomPlayArgs: [LiveQualityModel]?
-    @Published var currentPlayURL: URL?
-    @Published var isLeftFocused: Bool = false
-    @Published var playerCoordinator = KSVideoPlayer.Coordinator()
     
+    //当前选择房间ViewModel
+    @Published var roomInfoViewModel: RoomInfoStore?
+
+    @Published var isLeftFocused: Bool = false
     @Published var showToast: Bool = false
     @Published var toastTitle: String = ""
     @Published var toastTypeIsSuccess: Bool = false
@@ -73,8 +81,9 @@ class LiveStore: ObservableObject {
     
     @Published var loadingText: String = "正在获取内容"
     
-    init(liveType: LiveType) {
+    init(roomListType: LiveRoomListType, liveType: LiveType) {
         self.liveType = liveType
+        self.roomListType = roomListType
         switch liveType {
             case .bilibili: menuTitleIcon = "bilibili_2"
             case .douyu: menuTitleIcon = "douyu"
@@ -82,7 +91,13 @@ class LiveStore: ObservableObject {
             case .douyin: menuTitleIcon = "douyin"
             default: menuTitleIcon = "douyin"
         }
-        getCategoryList()
+        switch roomListType {
+            case .live:
+                getCategoryList()
+            case .favorite, .history:
+                getRoomList(index: 0)
+                
+        }
     }
     
     //MARK: 操作相关
@@ -92,50 +107,7 @@ class LiveStore: ObservableObject {
         self.toastTitle = title
         self.toastTypeIsSuccess = success
     }
-    
-    /**
-     切换清晰度
-    */
-    func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
-        KSOptions.isAutoPlay = true
-        KSOptions.isSecondOpen = true
-        guard currentRoomPlayArgs != nil else {
-            return
-        }
-        let currentCdn = currentRoomPlayArgs![cdnIndex]
-        var currentQuality = currentCdn.qualitys[urlIndex]
-        if currentQuality.liveCodeType == .flv {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSAVPlayer.self
-        }else {
-            KSOptions.firstPlayerType = KSAVPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
-        }
-        if liveType == .bilibili {
-            for item in currentRoomPlayArgs! {
-                for liveQuality in item.qualitys {
-                    if liveQuality.liveCodeType == .hls {
-                        KSOptions.firstPlayerType = KSAVPlayer.self
-                        KSOptions.secondPlayerType = KSMEPlayer.self
-                        
-                        self.currentPlayURL = URL(string: liveQuality.url)!
-                        return
-                    }
-                }
-            }
-        }
-        if liveType == .huya {
-            if currentQuality.title.contains("HDR") {
-                if urlIndex + 1 < currentCdn.qualitys.count {
-                    currentQuality = currentCdn.qualitys[urlIndex + 1]
-                }
-            }
-        }
-        
-        
-        self.currentPlayURL = URL(string: currentQuality.url)!
-    }
-    
+
     /**
      获取平台直播分类。
      
@@ -185,32 +157,52 @@ class LiveStore: ObservableObject {
     */
     func getRoomList(index: Int) {
         isLoading = true
-        if index == -1 {
-            if let subListCategory = self.categories.first?.subList.first {
+        switch roomListType {
+            case .live:
+                if index == -1 {
+                    if let subListCategory = self.categories.first?.subList.first {
+                        Task {
+                            let roomList  = try await ApiManager.fetchRoomList(liveCategory: subListCategory, page: self.roomPage, liveType: liveType)
+                            DispatchQueue.main.async {
+                                if self.roomPage == 1 {
+                                    self.roomList.removeAll()
+                                }
+                                self.roomList += roomList
+                                self.isLoading = false
+        //                            self.selectedSubListIndex = 0
+                            }
+                        }
+                    }
+                }else {
+                    let subListCategory = self.selectedMainListCategory?.subList[index]
+                    Task {
+                        let roomList  = try await ApiManager.fetchRoomList(liveCategory: subListCategory!, page: self.roomPage, liveType: liveType)
+                        DispatchQueue.main.async {
+                            if self.roomPage == 1 {
+                                self.roomList.removeAll()
+                            }
+                            self.roomList += roomList
+                            self.isLoading = false
+                        }
+                    }
+                }
+            case .favorite:
                 Task {
-                    let roomList  = try await ApiManager.fetchRoomList(liveCategory: subListCategory, page: self.roomPage, liveType: liveType)
+                    let resList = try await CloudSQLManager.searchRecord()
                     DispatchQueue.main.async {
                         if self.roomPage == 1 {
                             self.roomList.removeAll()
                         }
-                        self.roomList += roomList
+                        for item in resList {
+                            if self.roomList.contains(item) == false {
+                                self.roomList.append(item)
+                           }
+                        }
                         self.isLoading = false
-//                            self.selectedSubListIndex = 0
                     }
                 }
-            }
-        }else {
-            let subListCategory = self.selectedMainListCategory?.subList[index]
-            Task {
-                let roomList  = try await ApiManager.fetchRoomList(liveCategory: subListCategory!, page: self.roomPage, liveType: liveType)
-                DispatchQueue.main.async {
-                    if self.roomPage == 1 {
-                        self.roomList.removeAll()
-                    }
-                    self.roomList += roomList
-                    self.isLoading = false
-                }
-            }
+            case .history:
+                break
         }
     }
     /**
@@ -227,33 +219,44 @@ class LiveStore: ObservableObject {
         }
     }
     
-    /**
-     获取播放参数。
-     
-     - Returns: 播放清晰度、url等参数
-    */
-    func getPlayArgs() async throws {
-        do {
-            var playArgs: [LiveQualityModel] = []
-            switch liveType {
-                case .bilibili:
-                    playArgs = try await Bilibili.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: nil)
-                case .huya:
-                    playArgs =  try await Huya.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: nil)
-                case .douyin:
-                    playArgs =  try await Douyin.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: currentRoom?.userId ?? "")
-                case .douyu:
-                    playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom?.roomId ?? "", userId: nil)
-                default: break
-            }
+    func getLastestRoomInfo(_ index: Int) {
+        isLoading = true
+        Task {
+            let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
             DispatchQueue.main.async {
-                self.currentRoomPlayArgs = playArgs
-                self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+                self.roomList[index] = newLiveModel
+                self.isLoading = false
+                let endLoading = self.roomList.contains{ $0.liveState != nil && $0.liveState != "" }
+                if endLoading {
+                    self.roomList = self.roomList.sorted(by: {
+                        if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
+                            return true
+                        }else {
+                            return false
+                        }
+                    })
+                    var hasIndex: [Int] = []
+                    for index in 0 ..< self.roomList.count { // 排序后再做一次去重
+                        let item = self.roomList[index]
+                        var flag = 0
+                        for sub in self.roomList {
+                            if item == sub {
+                                flag += 1
+                            }
+                        }
+                        if (item.liveState == nil || item.liveState == "") && flag == 2 {
+                            hasIndex.append(index)
+                        }
+                    }
+                    for index in hasIndex {
+                        self.roomList.remove(at: index)
+                    }
+                }
             }
-        }catch {
-            
         }
     }
     
-    
+    func createCurrentRoomViewModel() {
+        roomInfoViewModel = RoomInfoStore(currentRoom: roomList[selectedRoomListIndex])
+    }
 }

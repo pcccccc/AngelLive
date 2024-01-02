@@ -56,7 +56,22 @@ class ApiManager {
                 return try await Douyu.getCategoryList()
             default:
                 return []
-            }
+        }
+    }
+    
+    class func fetchLastestLiveInfo(liveModel: LiveModel) async throws -> LiveModel {
+        switch liveModel.liveType {
+            case .bilibili:
+                return try await Bilibili.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+            case .huya:
+                return try await Huya.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+            case .douyin:
+                return try await Douyin.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+            case .douyu:
+                return try await Douyu.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+            default:
+                return try await Bilibili.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+        }
     }
 
 }

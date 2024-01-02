@@ -20,37 +20,37 @@ struct ContentView: View {
             TabView(selection:$selection) {
                 FavoriteMainView()
                     .tabItem {
-                        Label("收藏", systemImage: "heart.fill")
+                        Text("收藏")
                     }
                     .tag(0)
                 ListMainView(liveType: .bilibili)
                     .tabItem {
-                        Label("bilibili", image: "bilibili_2")
+                        Text("B站")
                     }
                     .tag(1)
                 ListMainView(liveType: .huya)
                     .tabItem {
-                        Label("虎牙", image: "huya")
+                        Text("虎牙")
                     }
                     .tag(2)
                 ListMainView(liveType: .douyu)
                     .tabItem {
-                        Label("斗鱼", image: "douyu")
+                        Text("斗鱼")
                     }
                     .tag(3)
                 ListMainView(liveType: .douyin)
                     .tabItem {
-                        Label("抖音", image: "douyin")
+                        Text("抖音")
                     }
                     .tag(4)
                 SearchRoomView()
                     .tabItem {
-                        Label("搜索", systemImage: "magnifyingglass.circle.fill")
+                        Text("搜索")
                     }
                     .tag(5)
                 SettingView()
                     .tabItem {
-                        Label("设置", systemImage: "gearshape.fill")
+                        Text("设置")
                     }
                     .tag(6)
                 

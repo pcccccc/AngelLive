@@ -52,7 +52,7 @@ struct LeftMenu: View {
                                 .resizable()
                                 .frame(width: 30, height: 30, alignment: .leading)
                                 .padding(.leading, -5)
-                            Text("英雄联盟")
+                            Text("Simple Live")
                                 .font(.system(size: 20))
                                 .frame(width: 110, height: 30, alignment: .leading)
                                 .multilineTextAlignment(.leading)
@@ -104,7 +104,7 @@ struct LeftMenu: View {
                                             Button(action: {
                                                 liveViewModel.selectedSubListIndex = index
                                                 liveViewModel.roomPage = 1
-//                                                liveViewModel.getRoomList(index: index)
+                                                liveViewModel.getRoomList(index: index)
                                             }, label: {
                                                 KFImage(URL(string: liveViewModel.selectedSubCategory[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.selectedSubCategory[index].icon))
                                                     .resizable()
@@ -148,5 +148,5 @@ struct LeftMenu: View {
 
 #Preview {
     LeftMenu()
-        .environmentObject(LiveStore(liveType: .bilibili))
+        .environmentObject(LiveStore(roomListType: .live, liveType: .bilibili))
 }

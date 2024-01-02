@@ -27,7 +27,7 @@ struct ListMainView: View {
     
     init(liveType: LiveType) {
         self.liveType = liveType
-        self._liveViewModel = StateObject(wrappedValue: LiveStore(liveType: liveType))
+        self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .live, liveType: liveType))
     }
     
     var body: some View {
@@ -36,7 +36,7 @@ struct ListMainView: View {
                 ZStack {
                 }
                 .id(Self.topId)
-                LazyVGrid(columns: [GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400)), GridItem(.fixed(400))], spacing: 70) {
+                LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environmentObject(liveViewModel)
@@ -54,7 +54,7 @@ struct ListMainView: View {
                                     print(222)
                                 }
                         })
-                        .frame(width: 400, height: 240)
+                        .frame(width: 370, height: 240)
                     }
                 }
             }.overlay {
@@ -75,6 +75,17 @@ struct ListMainView: View {
                                                 print(222)
                                             }
                                         })
+                                        .onExitCommand {
+                                            switch focusState {
+                                                case .leftMenu(_):
+                                                    liveViewModel.showOverlay = false
+                                                    focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                                                case .mainContent(_):
+                                                    break
+                                                case .none:
+                                                    break
+                                            }
+                                        }
                                         .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
                                         .edgesIgnoringSafeArea(.all)
                                         .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)

@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SettingView: View {
     
-    let titles = ["哔哩哔哩登录", "弹幕设置", "关于"]
+    let titles = ["哔哩哔哩登录", "弹幕设置", "历史记录", "关于"]
     @State var currentTitle: String?
     @State var isLogin = false
     @State var isPushed = false

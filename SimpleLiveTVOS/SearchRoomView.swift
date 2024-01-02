@@ -20,18 +20,29 @@ struct SearchRoomView: View {
     @State var needFullScreenLoading: Bool = false
     @State private var page = 1
     @State private var roomContentArray: Array<LiveModel> = []
+    @State private var searchTypeArray = ["全平台关键词", "B站链接/分享口令/房间号", "斗鱼链接/房间号", "虎牙链接/分享口令/房间号", "抖音链接/抖音码/房间号"]
+    @State private var searchTypeIndex = 0
     private let toastOptions = SimpleToastOptions(
         hideAfter: 2
     )
     
     var body: some View {
         VStack {
-            Text("请输入要搜索的主播名")
-            TextField("搜索主播名", text: $searchText)
-                .onSubmit {
-                    page = 1
-                    beginSearch(research: true)
+            Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
+            HStack {
+                Menu(searchTypeArray[searchTypeIndex]) {
+                    ForEach(searchTypeArray.indices, id: \.self) { index in
+                        Button(searchTypeArray[index]) {
+                            searchTypeIndex = index
+                        }
+                    }
                 }
+                TextField("搜索", text: $searchText)
+                    .onSubmit {
+                        page = 1
+                        beginSearch(research: true)
+                    }
+            }
             if roomContentArray.count == 0 {
                 if needFullScreenLoading == true && roomContentArray.isEmpty {
                     GeometryReader { proxy in

@@ -1,0 +1,97 @@
+//
+//  RoomInfoStore.swift
+//  SimpleLiveTVOS
+//
+//  Created by pc on 2024/1/2.
+//
+
+import Foundation
+import KSPlayer
+import LiveParse
+
+class RoomInfoStore: ObservableObject {
+    
+    @Published var roomList: [LiveModel] = []
+    @Published var currentRoom: LiveModel
+    @Published var playerCoordinator = KSVideoPlayer.Coordinator()
+    @Published var currentRoomPlayArgs: [LiveQualityModel]?
+    @Published var currentPlayURL: URL?
+    
+    init(currentRoom: LiveModel) {
+        self.currentRoom = currentRoom
+        getPlayArgs()
+    }
+    
+    /**
+     切换清晰度
+    */
+    func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
+        KSOptions.isAutoPlay = true
+        KSOptions.isSecondOpen = true
+        guard currentRoomPlayArgs != nil else {
+            return
+        }
+        let currentCdn = currentRoomPlayArgs![cdnIndex]
+        let currentQuality = currentCdn.qualitys[urlIndex]
+        if currentQuality.liveCodeType == .flv {
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = KSAVPlayer.self
+        }else {
+            KSOptions.firstPlayerType = KSAVPlayer.self
+            KSOptions.secondPlayerType = KSMEPlayer.self
+        }
+        if currentRoom.liveType == .bilibili {
+            for item in currentRoomPlayArgs! {
+                for liveQuality in item.qualitys {
+                    if liveQuality.liveCodeType == .hls {
+                        KSOptions.firstPlayerType = KSAVPlayer.self
+                        KSOptions.secondPlayerType = KSMEPlayer.self
+                        
+                        self.currentPlayURL = URL(string: liveQuality.url)!
+                        return
+                    }
+                }
+            }
+        }
+//        if currentRoom.liveType == .huya {
+//            if currentQuality.title.contains("HDR") {
+//                if urlIndex + 1 < currentCdn.qualitys.count {
+//                    currentQuality = currentCdn.qualitys[urlIndex + 1]
+//                }
+//            }
+//        }
+        
+        
+        self.currentPlayURL = URL(string: currentQuality.url)!
+    }
+    
+    /**
+     获取播放参数。
+     
+     - Returns: 播放清晰度、url等参数
+    */
+    func getPlayArgs() {
+        Task {
+            do {
+                var playArgs: [LiveQualityModel] = []
+                switch currentRoom.liveType {
+                    case .bilibili:
+                        playArgs = try await Bilibili.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
+                    case .huya:
+                        playArgs =  try await Huya.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
+                    case .douyin:
+                        playArgs =  try await Douyin.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .douyu:
+                        playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
+                    default: break
+                }
+                DispatchQueue.main.async {
+                    self.currentRoomPlayArgs = playArgs
+                    self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+                }
+            }catch {
+                
+            }
+        }
+    }
+}

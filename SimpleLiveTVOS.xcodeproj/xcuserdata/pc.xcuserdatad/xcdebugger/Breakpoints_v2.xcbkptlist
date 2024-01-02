@@ -8,7 +8,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
             uuid = "66F5BBAA-26CE-4F5A-9455-0A53FD7FA08F"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "../../../Library/Developer/Xcode/DerivedData/SimpleLiveTVOS-hilgolwnvceqjpbtebyhjovawalo/SourcePackages/checkouts/KSPlayer/Sources/KSPlayer/SwiftUI/KSVideoPlayerView.swift"
