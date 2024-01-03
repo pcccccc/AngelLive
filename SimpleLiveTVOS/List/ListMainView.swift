@@ -11,7 +11,7 @@ import SimpleToast
 import LiveParse
 
 enum FocusableField: Hashable {
-    case leftMenu(Int)
+    case leftMenu(Int, Int)
     case mainContent(Int)
 }
 
@@ -48,7 +48,7 @@ struct ListMainView: View {
 //                                    liveViewModel.showOverlay = true
                                     if index % 4 == 0 {
                                         liveViewModel.showOverlay = true
-                                        focusState = .leftMenu(0)
+                                        focusState = .leftMenu(0, 0)
                                     }
                                 default:
                                     print(222)
@@ -110,6 +110,14 @@ struct ListMainView: View {
             }
             
         }
+        .onChange(of: focusState, { oldValue, newValue in
+            switch newValue {
+                case .leftMenu(let mainIndex, let subIndex):
+                    liveViewModel.showOverlay = true
+                default:
+                    liveViewModel.showOverlay = false
+            }
+        })
         .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
             Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastImage)
 //                .symbolEffect(.appear.down.wholeSymbol)

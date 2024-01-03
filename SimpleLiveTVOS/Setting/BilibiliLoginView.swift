@@ -7,6 +7,7 @@
 
 import SwiftUI
 import CoreImage.CIFilterBuiltins
+import LiveParse
 
 struct BilibiliLoginView: View {
     
@@ -57,39 +58,39 @@ struct BilibiliLoginView: View {
     }
     
     func getQRCode() async {
-//        do {
-//            let dataReq = try await Bilibili.getQRCodeUrl()
-//            if dataReq.code == 0 {
-//                qrcode_key = dataReq.data.qrcode_key!
-//                qrcode_url = dataReq.data.url ?? ""
-//                timer?.fire()
-//            }else {
-//                message = dataReq.message
-//            }
-//        }catch {
-//            print(error)
-//        }
+        do {
+            let dataReq = try await Bilibili.getQRCodeUrl()
+            if dataReq.code == 0 {
+                qrcode_key = dataReq.data.qrcode_key!
+                qrcode_url = dataReq.data.url ?? ""
+                timer?.fire()
+            }else {
+                message = dataReq.message
+            }
+        }catch {
+            print(error)
+        }
     }
     
     func getQRCodeScanState() async {
         
         Task {
             do {
-//                let dataReq = try await Bilibili.getQRCodeState(qrcode_key: qrcode_key)
-//                if message == "授权成功，请退出页面" {
-//                    return;
-//                } 
-//                if dataReq.data.code == 86090 {
-//                    message = "扫描成功，请操作手机进行授权"
-//                }else if dataReq.data.code == 86038 {
-//                    message = "二维码已经过期，请刷新再试"
-//                
-//                }else if dataReq.data.code == 0 {
-//                    message = "授权成功，请退出页面"
-//                    timer?.invalidate()
-//                }else if dataReq.data.code == 86101 {
-//                    message = "请打开哔哩哔哩APP扫描二维码:等待扫码"
-//                }
+                let dataReq = try await Bilibili.getQRCodeState(qrcode_key: qrcode_key)
+                if message == "授权成功，请退出页面" {
+                    return;
+                } 
+                if dataReq.data.code == 86090 {
+                    message = "扫描成功，请操作手机进行授权"
+                }else if dataReq.data.code == 86038 {
+                    message = "二维码已经过期，请刷新再试"
+                
+                }else if dataReq.data.code == 0 {
+                    message = "授权成功，请退出页面"
+                    timer?.invalidate()
+                }else if dataReq.data.code == 86101 {
+                    message = "请打开哔哩哔哩APP扫描二维码:等待扫码"
+                }
             }catch {
                 timer?.invalidate()
             }

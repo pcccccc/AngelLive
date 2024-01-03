@@ -8,6 +8,7 @@
 import Foundation
 import LiveParse
 import SimpleToast
+import SwiftUI
 
 enum LiveRoomListType {
     case live
@@ -79,16 +80,46 @@ class LiveStore: ObservableObject {
         hideAfter: 1.5
     )
     
+    @AppStorage("SimpleLive.Favorite.Category.Bilibili") public var bilibiliFavoriteLiveCategoryList: Array<LiveMainListModel> = []
+    @AppStorage("SimpleLive.Favorite.Category.Huya") public var huyaFavoriteLiveCategoryList: Array<LiveMainListModel> = []
+    @AppStorage("SimpleLive.Favorite.Category.Douyu") public var douyuFavoriteLiveCategoryList: Array<LiveMainListModel> = []
+    @AppStorage("SimpleLive.Favorite.Category.Douyin") public var douyinFavoriteLiveCategoryList: Array<LiveMainListModel> = []
+    @Published public var currentLiveTypeFavoriteCategoryList: Array<LiveMainListModel> = [] {
+        didSet {
+            switch liveType {
+                case .bilibili:
+                    bilibiliFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
+                case .douyu:
+                    douyuFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
+                case .huya:
+                    huyaFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
+                case .douyin:
+                    douyinFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
+                default:
+                    break
+            }
+        }
+    }
+    
+    
     @Published var loadingText: String = "正在获取内容"
     
     init(roomListType: LiveRoomListType, liveType: LiveType) {
         self.liveType = liveType
         self.roomListType = roomListType
         switch liveType {
-            case .bilibili: menuTitleIcon = "bilibili_2"
-            case .douyu: menuTitleIcon = "douyu"
-            case .huya: menuTitleIcon = "huya"
-            case .douyin: menuTitleIcon = "douyin"
+            case .bilibili: 
+                menuTitleIcon = "bilibili_2"
+                currentLiveTypeFavoriteCategoryList = bilibiliFavoriteLiveCategoryList
+            case .douyu:
+                menuTitleIcon = "douyu"
+                currentLiveTypeFavoriteCategoryList = douyuFavoriteLiveCategoryList
+            case .huya:
+                menuTitleIcon = "huya"
+                currentLiveTypeFavoriteCategoryList = huyaFavoriteLiveCategoryList
+            case .douyin:
+                menuTitleIcon = "douyin"
+                currentLiveTypeFavoriteCategoryList = douyinFavoriteLiveCategoryList
             default: menuTitleIcon = "douyin"
         }
         switch roomListType {
@@ -114,12 +145,12 @@ class LiveStore: ObservableObject {
      - 展示左侧列表子列表
     */
     func showSubCategoryList(currentCategory: LiveMainListModel) {
-        if self.selectedMainListCategory?.title != currentCategory.title || self.selectedSubCategory.count == 0 {
+        if self.selectedSubCategory.count == 0 {
             self.selectedMainListCategory = currentCategory
-            self.selectedSubCategory = []
+            self.selectedSubCategory.removeAll()
             self.getSubCategoryList()
         }else {
-            self.selectedSubCategory = []
+            self.selectedSubCategory.removeAll()
         }
     }
     
@@ -211,16 +242,15 @@ class LiveStore: ObservableObject {
      - Returns: 子分类列表
     */
     func getSubCategoryList() {
-        if self.selectedSubCategory.count == 0 {
-            let subList = self.selectedMainListCategory?.subList ?? []
-            self.selectedSubCategory = subList
-        }else {
-            self.selectedSubCategory = []
-        }
+        let subList = self.selectedMainListCategory?.subList ?? []
+        self.selectedSubCategory = subList
     }
     
     func getLastestRoomInfo(_ index: Int) {
         isLoading = true
+        if self.roomList.count < index {
+            return
+        }
         Task {
             let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
             DispatchQueue.main.async {
@@ -258,5 +288,9 @@ class LiveStore: ObservableObject {
     
     func createCurrentRoomViewModel() {
         roomInfoViewModel = RoomInfoStore(currentRoom: roomList[selectedRoomListIndex])
+    }
+    
+    func addFavoriteCategory(_ category: LiveMainListModel) {
+        currentLiveTypeFavoriteCategoryList.append(category)
     }
 }
