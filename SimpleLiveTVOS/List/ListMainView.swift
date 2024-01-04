@@ -9,10 +9,12 @@ import SwiftUI
 import Kingfisher
 import SimpleToast
 import LiveParse
+import GameController
 
 enum FocusableField: Hashable {
     case leftMenu(Int, Int)
     case mainContent(Int)
+    case leftFavorite(Int, Int)
 }
 
 struct ListMainView: View {
@@ -48,71 +50,105 @@ struct ListMainView: View {
 //                                    liveViewModel.showOverlay = true
                                     if index % 4 == 0 {
                                         liveViewModel.showOverlay = true
-                                        focusState = .leftMenu(0, 0)
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
+                                            if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty {
+                                                focusState = .leftMenu(0, 0)
+                                            }else {
+                                                focusState = .leftFavorite(0, 0)
+                                            }
+                                        })
                                     }
                                 default:
                                     print(222)
                                 }
-                        })
-                        .frame(width: 370, height: 240)
+                            })
+                            .frame(width: 370, height: 240)
                     }
                 }
             }.overlay {
-                VStack(alignment: .leading, spacing: 50) {
-                    HStack(alignment: .top) {
-                        ZStack {
-                            VStack(alignment: .leading) {
-                                HStack {
-                                    LeftMenu(focusState: _focusState)
-                                        .environmentObject(liveViewModel)
-                                        .onMoveCommand(perform: { direction in
-                                            switch direction {
-                                            case .right:
-                                                liveViewModel.showOverlay = false
-                                            case .left:
-                                                liveViewModel.showOverlay = true
-                                            default:
-                                                print(222)
-                                            }
-                                        })
-                                        .onExitCommand {
-                                            switch focusState {
-                                                case .leftMenu(_):
-                                                    liveViewModel.showOverlay = false
-                                                    focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                                                case .mainContent(_):
-                                                    break
-                                                case .none:
-                                                    break
-                                            }
-                                        }
-                                        .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
-                                        .edgesIgnoringSafeArea(.all)
-                                        .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
-                                        .cornerRadius(liveViewModel.leftMenuCornerRadius)
+                ZStack {
+                    VStack(alignment: .leading, spacing: 50) {
+                        HStack(alignment: .top) {
+                            ZStack {
+                                VStack(alignment: .leading) {
+                                    HStack {
+                                        LeftMenu(focusState: _focusState)
+                                            .environmentObject(liveViewModel)
+                                            .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
+                                            .edgesIgnoringSafeArea(.all)
+                                            .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
+                                            .cornerRadius(liveViewModel.leftMenuCornerRadius)
+                                            
+                                        Spacer(minLength: 0)
+                                    }
+                                    .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftHeight)
+                                    Button {
                                         
-                                    Spacer(minLength: 0)
+                                    } label: {
+                                        Text("")
+                                            .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftMenuMaxHeight - liveViewModel.leftHeight)
+                                    }
+                                    .background(Color.clear)
+                                    .buttonStyle(.plain)
+                                    .focusable(true) { focus in
+                                        if focus {
+                                            liveViewModel.showOverlay = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
+                                                if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty {
+                                                    focusState = .leftMenu(0, 0)
+                                                }else {
+                                                    focusState = .leftFavorite(0, 0)
+                                                }
+                                            })
+                                        }
+                                    }
                                 }
-                                .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftHeight)
-                                Spacer(minLength: 0)
                                 
+                                .frame(width: liveViewModel.showOverlay == true ? 150: 300, height: liveViewModel.showOverlay == true ? liveViewModel.leftMenuMinHeight:  liveViewModel.leftMenuMaxHeight)
                             }
-                            .frame(width: liveViewModel.showOverlay == true ? 150: 300, height: liveViewModel.showOverlay == true ? liveViewModel.leftMenuMinHeight:  liveViewModel.leftMenuMaxHeight)
+                            .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftMenuMaxHeight)
+                            Spacer()
                         }
-                        .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftMenuMaxHeight)
                         Spacer()
                     }
-                    Spacer()
+                    
+                    .edgesIgnoringSafeArea(.all)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    
                 }
-                .edgesIgnoringSafeArea(.all)
+                .onMoveCommand(perform: { direction in
+                    if direction == .left {
+//                        liveViewModel.showOverlay = true
+                    }else if direction == .right {
+//                        liveViewModel.showOverlay = false
+                        focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                    }
+                })
+                .onExitCommand {
+                    switch focusState {
+                        case .leftMenu(_, _):
+//                            liveViewModel.showOverlay = false
+                            focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                        case .leftFavorite(_, _):
+//                            liveViewModel.showOverlay = false
+                            focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                        case .mainContent(_):
+                            break
+                        case .none:
+                            break
+                    }
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .offset(x: 1,y: 30)
+                .padding(.top, 50)
+                .padding(.leading, 10)
             }
             
         }
         .onChange(of: focusState, { oldValue, newValue in
             switch newValue {
-                case .leftMenu(let mainIndex, let subIndex):
+                case .leftMenu(_, _):
+                    liveViewModel.showOverlay = true
+                case .leftFavorite(_, _):
                     liveViewModel.showOverlay = true
                 default:
                     liveViewModel.showOverlay = false

@@ -119,12 +119,7 @@ struct LiveCardView: View {
                                 }
                             case .leftMenu(let index): break
                             default: break
-                                //            if focusState == .mainContent(0) {
-                                //                liveViewModel.showOverlay = false
-                                //            }else {
-                                //                liveViewModel.showOverlay = true
-                                //                focusState = .leftMenu(0)
-                                //            }
+                                            
                         }
                     })
                     .alert("提示", isPresented: $showAlert) {

@@ -13,6 +13,7 @@
 		4F55883E2B3E6C7200B1BA88 /* ApiManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */; };
 		4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73D21B2B2D3BA500689369 /* ColorfulX */; };
 		4F9D56652B45721B00F2DECC /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9D56642B45721B00F2DECC /* LiveParse */; };
+		4F9D56672B464F6800F2DECC /* SwipeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9D56662B464F6800F2DECC /* SwipeView.swift */; };
 		4FA6C5272B3A7D1B0034F23C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */; };
 		4FB68B252B3BBBF90031FA9C /* PlayerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB68B242B3BBBF90031FA9C /* PlayerControlView.swift */; };
 		4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */; };
@@ -77,6 +78,7 @@
 		4F0F73582B442566003CE12B /* RoomInfoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomInfoStore.swift; sourceTree = "<group>"; };
 		4F1524302B284AA900E82845 /* DetailPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailPlayerView.swift; sourceTree = "<group>"; };
 		4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiManager.swift; sourceTree = "<group>"; };
+		4F9D56662B464F6800F2DECC /* SwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeView.swift; sourceTree = "<group>"; };
 		4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4FB68B242B3BBBF90031FA9C /* PlayerControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlView.swift; sourceTree = "<group>"; };
 		4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimpleLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -278,6 +280,7 @@
 				FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */,
 				FB2175A42B14DF0D0068100B /* Setting.swift */,
 				4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */,
+				4F9D56662B464F6800F2DECC /* SwipeView.swift */,
 			);
 			path = Tools;
 			sourceTree = "<group>";
@@ -458,6 +461,7 @@
 				FB8DFD122AEFF487002644AD /* DetailViewController.swift in Sources */,
 				4F1524312B284AA900E82845 /* DetailPlayerView.swift in Sources */,
 				FBDEE4762AD42FD100F996BA /* LiveCardView.swift in Sources */,
+				4F9D56672B464F6800F2DECC /* SwipeView.swift in Sources */,
 				4FC9B3902A52E41300C0D3C8 /* LeftMenu.swift in Sources */,
 				FBA907D12AEBF7E500A69FBE /* AboutUSView.swift in Sources */,
 				FB51019C2B0EECCB00A1AE0D /* Data+Extension.swift in Sources */,

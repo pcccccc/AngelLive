@@ -56,14 +56,16 @@ struct LeftMenu: View {
                                 .frame(width: 110, height: 30, alignment: .leading)
                                 .multilineTextAlignment(.leading)
                         }
-                        .padding(.top, 10)
+                        .padding(.top, 160)
                         .padding(.leading, 5)
                         .edgesIgnoringSafeArea(.all)
                     }
                 }else {
                     if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty == false {
                         Text("收藏")
-                        ForEach(liveViewModel.categories.indices, id: \.self) { index in
+                            .padding(.top, liveViewModel.currentLiveTypeFavoriteCategoryList.count < 2 ? 60 : 50)
+                            .background(Color.red)
+                        ForEach(liveViewModel.currentLiveTypeFavoriteCategoryList.indices, id: \.self) { index in
                             MenuItem(favorite: true, icon: liveViewModel.currentLiveTypeFavoriteCategoryList[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.currentLiveTypeFavoriteCategoryList[index].icon, title: liveViewModel.currentLiveTypeFavoriteCategoryList[index].title, index: index, subItems: liveViewModel.currentLiveTypeFavoriteCategoryList[index].subList)
                                 .frame(width: 250)
                                 .padding(.top, index == 0 ? 50 : 15)
@@ -71,7 +73,7 @@ struct LeftMenu: View {
                                 .padding([.leading, .trailing], 30)
                                 .buttonStyle(.plain)
                                 .background(Color.clear)
-                                .focused($focusState, equals: .leftMenu(index, 0))
+                                .focused($focusState, equals: .leftFavorite(index, 0))
                                 .contextMenu(menuItems: {
                                     Button(action: {
                                         liveViewModel.addFavoriteCategory(liveViewModel.categories[index])
@@ -82,7 +84,10 @@ struct LeftMenu: View {
                                         }
                                     })
                                 })
+                            
                         }
+                        .background(Color.red)
+                        Text("全部")
                     }
                     ForEach(liveViewModel.categories.indices, id: \.self) { index in
                         MenuItem(favorite: false, icon: liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon, title: liveViewModel.categories[index].title, index: index, subItems: liveViewModel.categories[index].subList)
@@ -110,15 +115,10 @@ struct LeftMenu: View {
             .listStyle(.plain)
             
         }
-        .frame(minWidth: 150 ,maxWidth: .infinity, minHeight: 30, maxHeight: .infinity)
+        .frame(minWidth: 150, maxWidth: .infinity, minHeight: 30, maxHeight: .infinity)
         .background(ColorfulView(colors: $colors, speedFactor: $speed))
         .onAppear {
             colors = colorScheme == .dark ? [Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1), Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
-        }
-        .onChange(of: liveViewModel.showOverlay) { value in
-            if liveViewModel.showOverlay == true {
-                focusState = .leftMenu(0, 0)
-            }
         }
     }
 }
