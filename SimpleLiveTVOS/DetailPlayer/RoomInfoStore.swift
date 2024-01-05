@@ -16,6 +16,8 @@ class RoomInfoStore: ObservableObject {
     @Published var playerCoordinator = KSVideoPlayer.Coordinator()
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
+    var socketConnection: WebSocketConnection?
+    var danmuCoordinator = DanmuView.Coordinator()
     
     init(currentRoom: LiveModel) {
         self.currentRoom = currentRoom
@@ -53,15 +55,7 @@ class RoomInfoStore: ObservableObject {
                 }
             }
         }
-//        if currentRoom.liveType == .huya {
-//            if currentQuality.title.contains("HDR") {
-//                if urlIndex + 1 < currentCdn.qualitys.count {
-//                    currentQuality = currentCdn.qualitys[urlIndex + 1]
-//                }
-//            }
-//        }
-        
-        
+
         self.currentPlayURL = URL(string: currentQuality.url)!
     }
     
@@ -93,5 +87,43 @@ class RoomInfoStore: ObservableObject {
                 
             }
         }
+    }
+    
+    func getDanmuInfo() {
+        Task {
+            var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
+            switch currentRoom.liveType {
+                case .bilibili:
+                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId)
+                case .huya:
+                    danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId)
+                case .douyin:
+                    danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId)
+                case .douyu:
+                    danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId)
+                default: break
+            }
+            socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: currentRoom.liveType)
+            socketConnection?.delegate = self
+            socketConnection?.connect()
+        }
+    }
+    
+    func shootDanmu() {
+        
+    }
+}
+
+extension RoomInfoStore: WebSocketConnectionDelegate {
+    func webSocketDidConnect() {
+        
+    }
+    
+    func webSocketDidDisconnect(error: Error?) {
+        
+    }
+    
+    func webSocketDidReceiveMessage(text: String, color: UInt32) {
+        danmuCoordinator.shoot(text: text, color: color)
     }
 }

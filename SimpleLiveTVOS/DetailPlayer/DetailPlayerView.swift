@@ -24,10 +24,16 @@ struct DetailPlayerView: View {
                 .background(Color.black)
                 .onAppear {
                     roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                    roomInfoViewModel.getDanmuInfo()
                 }
                 .overlay {
-                    PlayerControlView()
-                        .environmentObject(roomInfoViewModel)
+                    ZStack {
+                        PlayerControlView()
+                            .environmentObject(roomInfoViewModel)
+                            .zIndex(2)
+                        DanmuView(coordinator: roomInfoViewModel.danmuCoordinator)
+                            .zIndex(1)
+                    }
                 }
         }
     }

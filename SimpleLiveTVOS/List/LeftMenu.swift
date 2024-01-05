@@ -63,8 +63,7 @@ struct LeftMenu: View {
                 }else {
                     if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty == false {
                         Text("收藏")
-                            .padding(.top, liveViewModel.currentLiveTypeFavoriteCategoryList.count < 2 ? 60 : 50)
-                            .background(Color.red)
+                            .padding(.top, liveViewModel.currentLiveTypeFavoriteCategoryList.count < 2 ? 160 : 150)
                         ForEach(liveViewModel.currentLiveTypeFavoriteCategoryList.indices, id: \.self) { index in
                             MenuItem(favorite: true, icon: liveViewModel.currentLiveTypeFavoriteCategoryList[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.currentLiveTypeFavoriteCategoryList[index].icon, title: liveViewModel.currentLiveTypeFavoriteCategoryList[index].title, index: index, subItems: liveViewModel.currentLiveTypeFavoriteCategoryList[index].subList)
                                 .frame(width: 250)
