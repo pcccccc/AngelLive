@@ -79,7 +79,7 @@ class DanmakuTextCellModel: DanmakuCellModel, Equatable {
 
     init(dm: Danmu) {
         text = dm.isUp ? "up: " + dm.text : dm.text // TODO: UP主弹幕样式
-//        color = UIColor(hex: dm.color)
+        color = UIColor(rgb: Int(dm.color))
 
         switch dm.mode {
         case 4:

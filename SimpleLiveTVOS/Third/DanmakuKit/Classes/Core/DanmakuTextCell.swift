@@ -24,7 +24,10 @@ class DanmakuTextCell: DanmakuCell {
     override func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {
         guard let model = model as? DanmakuTextCellModel else { return }
         
-        backgroundColor = model.backgroundColor
+        DispatchQueue.main.async {
+            self.backgroundColor = model.backgroundColor
+        }
+        
         
         var red: CGFloat = 0
         var green: CGFloat = 0

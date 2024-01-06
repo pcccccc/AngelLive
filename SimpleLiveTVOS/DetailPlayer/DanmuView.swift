@@ -46,7 +46,7 @@ struct DanmuView: UIViewRepresentable {
                 model.backgroundColor = .orange
                 model.color = .white
             }else {
-                model.color = .white
+                model.color = UIColor(rgb: Int(color))
             }
 //            model.font = .systemFont(ofSize: CGFloat(danmuFontSize ?? 50))
             DispatchQueue.main.async {

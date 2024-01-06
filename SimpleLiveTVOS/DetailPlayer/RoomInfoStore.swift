@@ -109,8 +109,8 @@ class RoomInfoStore: ObservableObject {
         }
     }
     
-    func shootDanmu() {
-        
+    func disConnectSocket() {
+        self.socketConnection?.disconnect()
     }
 }
 

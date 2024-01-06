@@ -34,6 +34,9 @@ struct DetailPlayerView: View {
                         DanmuView(coordinator: roomInfoViewModel.danmuCoordinator)
                             .zIndex(1)
                     }
+            }
+                .onDisappear {
+                    roomInfoViewModel.disConnectSocket()
                 }
         }
     }
