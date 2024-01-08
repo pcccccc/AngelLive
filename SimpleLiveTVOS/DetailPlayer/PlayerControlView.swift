@@ -9,7 +9,7 @@ import SwiftUI
 
 struct PlayerControlView: View {
     
-    @StateObject var danmuSetting = SettingStore()
+    @StateObject var danmuSetting = DanmuSettingStore()
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
     @FocusState var isFocused: Bool
     let gradient = LinearGradient(
@@ -65,8 +65,8 @@ struct PlayerControlView: View {
                     }
                 } label: {
                     Text("清晰度")
-                        .font(.subheadline)
-                        .bold()
+                        .frame(width: 150, height: 40, alignment: .center)
+                        .clipped()
                 }
                 .padding(.top, 55)
                 .frame(height: 40)

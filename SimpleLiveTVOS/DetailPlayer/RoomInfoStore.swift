@@ -16,6 +16,8 @@ class RoomInfoStore: ObservableObject {
     @Published var playerCoordinator = KSVideoPlayer.Coordinator()
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
+    @Published var danmuSettingModel = DanmuSettingStore()
+    
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
@@ -124,6 +126,6 @@ extension RoomInfoStore: WebSocketConnectionDelegate {
     }
     
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
-        danmuCoordinator.shoot(text: text, color: color)
+        danmuCoordinator.shoot(text: text, showColorDanmu: danmuSettingModel.showColorDanmu, color: color, alpha: danmuSettingModel.danmuAlpha, font: CGFloat(danmuSettingModel.danmuFontSize))
     }
 }

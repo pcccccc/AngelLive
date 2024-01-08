@@ -13,6 +13,7 @@ struct SettingView: View {
     @State var currentTitle: String?
     @State var isLogin = false
     @State var isPushed = false
+    @StateObject var danmuSettingModel = DanmuSettingStore()
     
     var body: some View {
         GeometryReader { geometry in
@@ -53,9 +54,10 @@ struct SettingView: View {
                                 BilibiliLoginView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }else if title == "弹幕设置" {
-    //                            DanmuSettingView()
-    //                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-    //                                .background(.background)
+                                DanmuSettingView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(.background)
+                                    .environmentObject(danmuSettingModel)
                             }else {
                                 AboutUSView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -13,6 +13,7 @@ import AVKit
 struct DetailPlayerView: View {
     
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
+    
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     var option = KSOptions()
     
@@ -31,8 +32,19 @@ struct DetailPlayerView: View {
                         PlayerControlView()
                             .environmentObject(roomInfoViewModel)
                             .zIndex(2)
-                        DanmuView(coordinator: roomInfoViewModel.danmuCoordinator)
-                            .zIndex(1)
+                        VStack {
+                            if roomInfoViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
+                                Spacer()
+                            }
+                            DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
+                                .zIndex(1)
+                                .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
+                                .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
+                                .background(Color.red)
+                            if roomInfoViewModel.danmuSettingModel.danmuAreaIndex < 3 {
+                                Spacer()
+                            }
+                        }
                     }
             }
                 .onDisappear {

@@ -10,6 +10,8 @@ import UIKit
 
 struct DanmuView: UIViewRepresentable {
     var coordinator: Coordinator
+    var height: CGFloat
+    @EnvironmentObject var danmuSettingModel: DanmuSettingStore
 
     func makeUIView(context: Context) -> DanmakuView {
         let view = DanmakuView(frame: .init(x: 0, y: 0, width: 1920, height: 1080))
@@ -39,16 +41,16 @@ struct DanmuView: UIViewRepresentable {
             self.uiView = view
         }
 
-        func shoot(text: String, color: UInt32) {
+        func shoot(text: String, showColorDanmu: Bool, color: UInt32, alpha: CGFloat, font: CGFloat) {
             let model = DanmakuTextCellModel(str: text)
             if NSString(string: text).contains("醒目留言") {
     //            model.backgroundColor = UIColor(rgb: Int(color))
                 model.backgroundColor = .orange
                 model.color = .white
             }else {
-                model.color = UIColor(rgb: Int(color))
+                model.color = showColorDanmu ? UIColor(rgb: Int(color), alpha: alpha) : .white
             }
-//            model.font = .systemFont(ofSize: CGFloat(danmuFontSize ?? 50))
+            model.font = .systemFont(ofSize: font)
             DispatchQueue.main.async {
                 self.uiView?.shoot(danmaku: model)
             }
