@@ -63,7 +63,7 @@ struct LiveCardView: View {
                                     HStack(spacing: 5) {
                                         Image(systemName: "eye")
                                             .font(.system(size: 14))
-                                        Text(liveViewModel.roomList[index].liveWatchedCount!)
+                                        Text(liveViewModel.roomList[index].liveWatchedCount!.formatWatchedCount())
                                             .font(.system(size: 18))
                                     }
                                     

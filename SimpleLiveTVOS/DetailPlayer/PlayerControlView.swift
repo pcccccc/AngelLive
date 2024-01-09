@@ -12,7 +12,12 @@ struct PlayerControlView: View {
     @StateObject var danmuSetting = DanmuSettingStore()
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
     @FocusState var isFocused: Bool
-    let gradient = LinearGradient(
+    let topGradient = LinearGradient(
+        gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
+        startPoint: .top,
+        endPoint: .bottom
+    )
+    let bottomGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.1), Color.black.opacity(0.5)]),
         startPoint: .top,
         endPoint: .bottom
@@ -22,12 +27,25 @@ struct PlayerControlView: View {
         VStack() {
             HStack {
                 Text(roomInfoViewModel.currentRoom.roomTitle)
-                    .font(.title2)
+                    .font(.title3)
+                    .padding(.leading, 15)
                 Spacer()
             }
+            .background {
+                Rectangle()
+                    .fill(topGradient)
+                    .shadow(radius: 10)
+                    .frame(height: 150)
+            }
+            .frame(height: 150)
             Spacer()
             HStack(alignment: .center, spacing: 15) {
                 Button(action: {
+                    if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
+                        roomInfoViewModel.playerCoordinator.playerLayer?.pause()
+                    }else {
+                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                    }
                     
                 }, label: {
                     Image(systemName: roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false ? "pause.fill" : "play.fill")
@@ -65,11 +83,12 @@ struct PlayerControlView: View {
                     }
                 } label: {
                     Text("清晰度")
-                        .frame(width: 150, height: 40, alignment: .center)
-                        .clipped()
+                        .frame(height: 50, alignment: .center)
+                        .padding(.top, 10)
                 }
-                .padding(.top, 55)
-                .frame(height: 40)
+                .frame(height: 60)
+                .clipShape(.capsule)
+                
                 Button(action: {
                     danmuSetting.showDanmu.toggle()
                 }, label: {
@@ -83,12 +102,13 @@ struct PlayerControlView: View {
             }
             .background {
                 Rectangle()
-                    .fill(gradient)
+                    .fill(bottomGradient)
                     .shadow(radius: 10)
-                    .frame(height: 100)
+                    .frame(height: 150)
             }
+            .frame(height: 150)
             
-            .edgesIgnoringSafeArea(.bottom)
+//            .edgesIgnoringSafeArea(.all)
         }
     }
 }

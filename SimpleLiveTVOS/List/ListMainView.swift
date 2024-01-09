@@ -34,37 +34,44 @@ struct ListMainView: View {
     
     var body: some View {
         ZStack {
-            ScrollView {
-                ZStack {
-                }
-                .id(Self.topId)
-                LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
-                    ForEach(liveViewModel.roomList.indices, id: \.self) { index in
-                        LiveCardView(index: index)
-                            .environmentObject(liveViewModel)
-                            .onMoveCommand(perform: { direction in
-                                switch direction {
-//                                case .right:
-//                                    liveViewModel.showOverlay = false
-                                case .left:
-//                                    liveViewModel.showOverlay = true
-                                    if index % 4 == 0 {
-                                        liveViewModel.showOverlay = true
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
-                                            if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty {
-                                                focusState = .leftMenu(0, 0)
-                                            }else {
-                                                focusState = .leftFavorite(0, 0)
-                                            }
-                                        })
-                                    }
-                                default:
-                                    print(222)
-                                }
-                            })
-                            .frame(width: 370, height: 240)
+            ScrollViewReader { reader in
+                ScrollView {
+                    ZStack {
                     }
+                    .id(Self.topId)
+                    LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
+                        ForEach(liveViewModel.roomList.indices, id: \.self) { index in
+                            LiveCardView(index: index)
+                                .environmentObject(liveViewModel)
+                                .onMoveCommand(perform: { direction in
+                                    switch direction {
+    //                                case .right:
+    //                                    liveViewModel.showOverlay = false
+                                    case .left:
+    //                                    liveViewModel.showOverlay = true
+                                        if index % 4 == 0 {
+                                            liveViewModel.showOverlay = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
+                                                if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty {
+                                                    focusState = .leftMenu(0, 0)
+                                                }else {
+                                                    focusState = .leftFavorite(0, 0)
+                                                }
+                                            })
+                                        }
+                                    default:
+                                        print(222)
+                                    }
+                                })
+                                .onPlayPauseCommand(perform: {
+                                    liveViewModel.roomPage = 1
+                                    liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+                                    reader.scrollTo(Self.topId)
+                                })
+                                .frame(width: 370, height: 240)
+                        }
                 }
+            }
             }.overlay {
                 ZStack {
                     VStack(alignment: .leading, spacing: 50) {
@@ -156,7 +163,6 @@ struct ListMainView: View {
         })
         .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
             Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastImage)
-//                .symbolEffect(.appear.down.wholeSymbol)
                 .padding()
                 .background(Color.red.opacity(0.8))
                 .foregroundColor(Color.white)

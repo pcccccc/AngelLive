@@ -14,7 +14,7 @@ struct DanmuView: UIViewRepresentable {
     @EnvironmentObject var danmuSettingModel: DanmuSettingStore
 
     func makeUIView(context: Context) -> DanmakuView {
-        let view = DanmakuView(frame: .init(x: 0, y: 0, width: 1920, height: 1080))
+        let view = DanmakuView(frame: .init(x: 0, y: 0, width: 1920, height: height))
         view.playingSpeed = 0.5
         view.play()
         coordinator.uiView = view
@@ -23,8 +23,9 @@ struct DanmuView: UIViewRepresentable {
 
     func updateUIView(_ uiView: DanmakuView, context: Context) {
         // 更新 UIView，如果有必要
+        uiView.frame = .init(x: 0, y: 0, width: 1920, height: height)
         uiView.paddingTop = 5
-        uiView.trackHeight = 70
+        uiView.trackHeight = CGFloat(danmuSettingModel.danmuFontSize * 2)
         uiView.displayArea = 1
         uiView.recalculateTracks()
         
@@ -42,7 +43,7 @@ struct DanmuView: UIViewRepresentable {
         }
 
         func shoot(text: String, showColorDanmu: Bool, color: UInt32, alpha: CGFloat, font: CGFloat) {
-            let model = DanmakuTextCellModel(str: text)
+            let model = DanmakuTextCellModel(str: text, strFont: .systemFont(ofSize: font))
             if NSString(string: text).contains("醒目留言") {
     //            model.backgroundColor = UIColor(rgb: Int(color))
                 model.backgroundColor = .orange
@@ -50,7 +51,6 @@ struct DanmuView: UIViewRepresentable {
             }else {
                 model.color = showColorDanmu ? UIColor(rgb: Int(color), alpha: alpha) : .white
             }
-            model.font = .systemFont(ofSize: font)
             DispatchQueue.main.async {
                 self.uiView?.shoot(danmaku: model)
             }

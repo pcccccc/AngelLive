@@ -17,6 +17,7 @@ class RoomInfoStore: ObservableObject {
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
     @Published var danmuSettingModel = DanmuSettingStore()
+    @Published var showControlView: Bool = true
     
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
@@ -91,6 +92,10 @@ class RoomInfoStore: ObservableObject {
         }
     }
     
+    func setPlayerDelegate() {
+        playerCoordinator.playerLayer?.delegate = self
+    }
+    
     func getDanmuInfo() {
         Task {
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
@@ -128,4 +133,32 @@ extension RoomInfoStore: WebSocketConnectionDelegate {
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
         danmuCoordinator.shoot(text: text, showColorDanmu: danmuSettingModel.showColorDanmu, color: color, alpha: danmuSettingModel.danmuAlpha, font: CGFloat(danmuSettingModel.danmuFontSize))
     }
+}
+
+extension RoomInfoStore: KSPlayerLayerDelegate {
+    
+    func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
+        if state == .paused {
+            showControlView = true
+        }
+        if layer.player.isPlaying == true {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                self.showControlView = false
+            })
+        }
+    }
+    
+    func player(layer: KSPlayer.KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
+        
+    }
+    
+    func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
+        
+    }
+    
+    func player(layer: KSPlayer.KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {
+        
+    }
+    
+    
 }

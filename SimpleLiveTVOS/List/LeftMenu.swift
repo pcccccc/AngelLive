@@ -85,7 +85,6 @@ struct LeftMenu: View {
                                 })
                             
                         }
-                        .background(Color.red)
                         Text("全部")
                     }
                     ForEach(liveViewModel.categories.indices, id: \.self) { index in

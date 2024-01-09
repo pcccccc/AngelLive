@@ -41,7 +41,7 @@
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
 		FB1BB6442B0D0CB600C54BCF /* SettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB1BB6432B0D0CB600C54BCF /* SettingView.swift */; };
 		FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A22B14DEE70068100B /* DanmuSettingView.swift */; };
-		FB2175A52B14DF0D0068100B /* Setting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* Setting.swift */; };
+		FB2175A52B14DF0D0068100B /* DanmuSettingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
 		FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101972B0ED76A00A1AE0D /* SWCompression */; };
@@ -121,7 +121,7 @@
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
 		FB1BB6432B0D0CB600C54BCF /* SettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingView.swift; sourceTree = "<group>"; };
 		FB2175A22B14DEE70068100B /* DanmuSettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingView.swift; sourceTree = "<group>"; };
-		FB2175A42B14DF0D0068100B /* Setting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Setting.swift; sourceTree = "<group>"; };
+		FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingStore.swift; sourceTree = "<group>"; };
 		FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Extension.swift"; sourceTree = "<group>"; };
 		FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIColor+Extension.swift"; sourceTree = "<group>"; };
 		FB8DFD112AEFF487002644AD /* DetailViewController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailViewController.swift; sourceTree = "<group>"; };
@@ -354,7 +354,7 @@
 				FB952EC82B03250C007A24F9 /* Common.swift */,
 				FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */,
 				FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */,
-				FB2175A42B14DF0D0068100B /* Setting.swift */,
+				FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */,
 				4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */,
 				4F9D56662B464F6800F2DECC /* SwipeView.swift */,
 			);
@@ -528,7 +528,7 @@
 				FB952ECB2B0CF327007A24F9 /* BilibiliLoginView.swift in Sources */,
 				4FBAB9122B47A42200A77A5C /* DanmakuAsyncLayer.swift in Sources */,
 				4F0F73592B442566003CE12B /* RoomInfoStore.swift in Sources */,
-				FB2175A52B14DF0D0068100B /* Setting.swift in Sources */,
+				FB2175A52B14DF0D0068100B /* DanmuSettingStore.swift in Sources */,
 				FB2175A32B14DEE70068100B /* DanmuSettingView.swift in Sources */,
 				FBDEE4802AD6CD4400F996BA /* FavoriteMainView.swift in Sources */,
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,

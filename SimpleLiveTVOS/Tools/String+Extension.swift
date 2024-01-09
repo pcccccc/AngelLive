@@ -45,4 +45,18 @@ extension String {
             return input
         }
     }
+    
+    func formatWatchedCount() -> String {
+        let isNumeric = self.allSatisfy { $0.isNumber }
+        if isNumeric {
+            let count = Double(self) ?? 0.0
+            if count > 10000 {
+                return String(format: "%.1f万", count / 10000)
+            }else {
+                return self
+            }
+        }else {
+            return self
+        }
+    }
 }

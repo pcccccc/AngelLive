@@ -59,8 +59,8 @@ class DanmakuTextCellModel: DanmakuCellModel, Equatable {
 
     func calculateSize() {
         let fontSize = NSString(string: text).boundingRect(with: CGSize(width: CGFloat(Float.infinity
-        ), height: 35), options: [.usesFontLeading, .usesLineFragmentOrigin], attributes: [.font: font], context: nil).size
-        size = CGSizeMake(fontSize.width + 50, fontSize.height + 10)
+        ), height: font.lineHeight), options: [.usesFontLeading, .usesLineFragmentOrigin], attributes: [.font: font], context: nil).size
+        size = CGSizeMake(fontSize.width + 30, fontSize.height)
     }
 
     static func == (lhs: DanmakuTextCellModel, rhs: DanmakuTextCellModel) -> Bool {
@@ -71,8 +71,9 @@ class DanmakuTextCellModel: DanmakuCellModel, Equatable {
         return identifier == cellModel.identifier
     }
 
-    init(str: String) {
+    init(str: String, strFont: UIFont) {
         text = str
+        font = strFont
         type = .floating
         calculateSize()
     }

@@ -19,12 +19,17 @@ struct DetailPlayerView: View {
     
     var body: some View {
         if roomInfoViewModel.currentPlayURL == nil {
-            ProgressView()
+            VStack {
+                ProgressView()
+            }
+            .frame(width: 1920, height: 1080)
+            .background(.ultraThickMaterial)
         }else {
             KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: option)
                 .background(Color.black)
                 .onAppear {
                     roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                    roomInfoViewModel.setPlayerDelegate()
                     roomInfoViewModel.getDanmuInfo()
                 }
                 .overlay {
@@ -32,6 +37,8 @@ struct DetailPlayerView: View {
                         PlayerControlView()
                             .environmentObject(roomInfoViewModel)
                             .zIndex(2)
+                            .frame(width: 1920, height: 1080)
+                            .opacity(roomInfoViewModel.showControlView ? 1 : 0)
                         VStack {
                             if roomInfoViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
                                 Spacer()
@@ -40,16 +47,23 @@ struct DetailPlayerView: View {
                                 .zIndex(1)
                                 .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
                                 .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
-                                .background(Color.red)
+                                .environmentObject(roomInfoViewModel.danmuSettingModel)
                             if roomInfoViewModel.danmuSettingModel.danmuAreaIndex < 3 {
                                 Spacer()
                             }
                         }
                     }
             }
-                .onDisappear {
-                    roomInfoViewModel.disConnectSocket()
+            .onDisappear {
+                roomInfoViewModel.disConnectSocket()
+            }
+            .onTapGesture {
+                if roomInfoViewModel.showControlView == true {
+                    
+                }else {
+                    roomInfoViewModel.showControlView = true
                 }
+            }
         }
     }
 }

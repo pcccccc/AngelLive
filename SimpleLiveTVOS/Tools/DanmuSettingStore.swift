@@ -18,6 +18,8 @@ class DanmuSettingStore : ObservableObject {
     static let globalDanmuSpeed = "SimpleLive.Setting.danmuSpeed"
     static let globalDanmuAlpha = "SimpleLive.Setting.danmuAlpha"
     static let globalDanmuAreaIndex = "SimpleLive.Setting.danmuAreaIndex"
+    static let globalDanmuFontSizeIndex = "SimpleLive.Setting.danmuFontSizeIndex"
+    static let globalDanmuSpeedIndex = "SimpleLive.Setting.danmuSpeedIndex"
 
     @AppStorage(globalShowDanmu) public var showDanmu: Bool = true
     @AppStorage(globalShowColorDanmu) public var showColorDanmu: Bool = true
@@ -27,8 +29,12 @@ class DanmuSettingStore : ObservableObject {
     @AppStorage(globalDanmuSpeed) public var danmuSpeed: Double = 0.5
     @AppStorage(globalDanmuAlpha) var danmuAlpha: Double = 1.0
     @AppStorage(globalDanmuAreaIndex) var danmuAreaIndex: Int = 2
+    @AppStorage(globalDanmuFontSizeIndex) var danmuFontSizeIndex: Int = 1
+    @AppStorage(globalDanmuSpeedIndex) var danmuSpeedIndex: Int = 1 
     
-    @Published var danmuArea: [String] = ["顶部1/4", "顶部1/2", "全屏", "底部1/2", "底部1/4"]
+    @Published var danmuAreaArray: [String] = ["顶部1/4", "顶部1/2", "全屏", "底部1/2", "底部1/4"]
+    @Published var danmuSpeedArray: [String] = ["慢速", "正常", "快速"]
+    @Published var danmuFontSizeArray: [String] = ["小", "中", "大"]
     
     func getDanmuArea() -> (CGFloat, CGFloat) {
         switch danmuAreaIndex {

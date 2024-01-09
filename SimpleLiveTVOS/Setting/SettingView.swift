@@ -52,11 +52,12 @@ struct SettingView: View {
                         .fullScreenCover(item: $currentTitle) { title in
                             if title == "哔哩哔哩登录" {
                                 BilibiliLoginView()
+                                    .background(.ultraThickMaterial)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }else if title == "弹幕设置" {
                                 DanmuSettingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.background)
+                                    .background(.ultraThickMaterial)
                                     .environmentObject(danmuSettingModel)
                             }else {
                                 AboutUSView()
