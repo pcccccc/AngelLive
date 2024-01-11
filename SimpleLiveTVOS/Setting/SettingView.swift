@@ -59,6 +59,10 @@ struct SettingView: View {
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.ultraThickMaterial)
                                     .environmentObject(danmuSettingModel)
+                            }else if title == "历史记录" {
+                                HistoryListView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(.ultraThickMaterial)
                             }else {
                                 AboutUSView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -101,6 +101,8 @@ class LiveStore: ObservableObject {
         }
     }
     
+    @AppStorage("SimpleLive.History.WatchList") public var watchList: Array<LiveModel> = []
+    
     
     @Published var loadingText: String = "正在获取内容"
     
@@ -233,6 +235,7 @@ class LiveStore: ObservableObject {
                     }
                 }
             case .history:
+                self.roomList = self.watchList
                 break
         }
     }
@@ -248,7 +251,7 @@ class LiveStore: ObservableObject {
     
     func getLastestRoomInfo(_ index: Int) {
         isLoading = true
-        if self.roomList.count < index {
+        if self.roomList.count <= index {
             return
         }
         Task {
@@ -257,7 +260,7 @@ class LiveStore: ObservableObject {
                 self.roomList[index] = newLiveModel
                 self.isLoading = false
                 let endLoading = self.roomList.contains{ $0.liveState != nil && $0.liveState != "" }
-                if endLoading {
+                if endLoading && self.roomListType == .favorite {
                     self.roomList = self.roomList.sorted(by: {
                         if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
                             return true
@@ -279,7 +282,9 @@ class LiveStore: ObservableObject {
                         }
                     }
                     for index in hasIndex {
-                        self.roomList.remove(at: index)
+                        if index < self.roomList.count {
+                            self.roomList.remove(at: index)
+                        }
                     }
                 }
             }
@@ -292,5 +297,10 @@ class LiveStore: ObservableObject {
     
     func addFavoriteCategory(_ category: LiveMainListModel) {
         currentLiveTypeFavoriteCategoryList.append(category)
+    }
+    
+    func deleteHistory(index: Int) {
+        self.watchList.remove(at: index)
+        self.roomList.remove(at: index)
     }
 }

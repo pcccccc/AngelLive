@@ -19,7 +19,35 @@ let liveType_column_cloud =  "live_type"
 let liveState_column_cloud = "live_state"
 let ck_identifier = "iCloud.icloud.dev.igod.simplelive"
 
+class FavoriteStore: ObservableObject {
+    
+    @Published var roomList: [LiveModel] = []
+    @Published var isLoading: Bool = false
+    
+    init() {
+        self.fetchFavoriteRoomList()
+    }
+    
+    func fetchFavoriteRoomList() {
+        isLoading = true
+        Task {
+            let roomList = try await CloudSQLManager.searchRecord()
+            DispatchQueue.main.async {
+                do {
+                    self.isLoading = false
+                    self.roomList = roomList
+                }catch {
+                    self.isLoading = false
+                }
+            }
+        }
+    }
+    
+    
+}
+
 class CloudSQLManager: NSObject {
+    
     class func saveRecord(liveModel: LiveModel) async throws {
         let rec = CKRecord(recordType: "favorite_streamers")
         rec.setValue(liveModel.roomId, forKey: roomId_colum_cloud)

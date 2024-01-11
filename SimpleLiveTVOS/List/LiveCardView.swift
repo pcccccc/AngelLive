@@ -32,7 +32,9 @@ struct LiveCardView: View {
                         Task {
                             do {
                                 if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
-//                                    try await self.liveViewModel.getPlayArgs()
+                                    if self.liveViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
+                                        self.liveViewModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+                                    }
                                     liveViewModel.createCurrentRoomViewModel()
                                     DispatchQueue.main.async {
                                         isLive = true
@@ -110,16 +112,16 @@ struct LiveCardView: View {
                     .focused($focusState, equals: .mainContent(index))
                     .onChange(of: focusState, perform: { value in
                         liveViewModel.currentRoom = liveViewModel.roomList[index]
-                        switch value {
-                            case .mainContent(let index):
-                                liveViewModel.selectedRoomListIndex = index
-                                if index >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
-                                    liveViewModel.roomPage += 1
-                                    
-                                }
-                            case .leftMenu(let index): break
-                            default: break
-                                            
+                        if liveViewModel.roomListType != .history {
+                            switch value {
+                                case .mainContent(let index):
+                                    liveViewModel.selectedRoomListIndex = index
+                                    if index >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
+                                        liveViewModel.roomPage += 1
+                                    }
+                                case .leftMenu(let index): break
+                                default: break
+                            }
                         }
                     })
                     .alert("提示", isPresented: $showAlert) {
@@ -154,6 +156,16 @@ struct LiveCardView: View {
                                 HStack {
                                     Image(systemName: "heart.fill")
                                     Text("收藏")
+                                }
+                            })
+                        }
+                        if liveViewModel.roomListType == .history {
+                            Button(action: {
+                                liveViewModel.deleteHistory(index: index)
+                            }, label: {
+                                HStack {
+                                    Image(systemName: "trash.circle")
+                                    Text("删除")
                                 }
                             })
                         }
@@ -225,16 +237,19 @@ struct LiveCardView: View {
 //            self.showToast(false, true, "取消收藏失败")
         }
     }
+    
+    
+    
     func getImage() -> String {
         switch liveViewModel.roomList[index].liveType {
             case .bilibili:
-                return "bilibili_2"
+                return "live_card_bili"
             case .douyu:
-                return "douyu"
+                return "live_card_douyu"
             case .huya:
-                return "huya"
+                return "live_card_huya"
             default:
-                return "douyin"
+                return "live_card_douyin"
         }
     }
 }

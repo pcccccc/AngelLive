@@ -90,7 +90,7 @@ struct LeftMenu: View {
                     ForEach(liveViewModel.categories.indices, id: \.self) { index in
                         MenuItem(favorite: false, icon: liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon, title: liveViewModel.categories[index].title, index: index, subItems: liveViewModel.categories[index].subList)
                             .frame(width: 250)
-                            .padding(.top, index == 0 ? 50 : 15)
+                            .padding(.top, index == 0 ? (liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty ? 190 : 50) : 15)
                             .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 15)
                             .padding([.leading, .trailing], 30)
                             .buttonStyle(.plain)

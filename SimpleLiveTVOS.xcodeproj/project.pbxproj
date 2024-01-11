@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		4F0F73592B442566003CE12B /* RoomInfoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F0F73582B442566003CE12B /* RoomInfoStore.swift */; };
+		4F137FAC2B4E2FC3006432A0 /* HistoryListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F137FAB2B4E2FC3006432A0 /* HistoryListView.swift */; };
 		4F1492412B44F4FC004073DB /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F1492402B44F4FC004073DB /* LiveParse */; };
 		4F1524312B284AA900E82845 /* DetailPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F1524302B284AA900E82845 /* DetailPlayerView.swift */; };
 		4F55883E2B3E6C7200B1BA88 /* ApiManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */; };
@@ -88,6 +89,7 @@
 
 /* Begin PBXFileReference section */
 		4F0F73582B442566003CE12B /* RoomInfoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomInfoStore.swift; sourceTree = "<group>"; };
+		4F137FAB2B4E2FC3006432A0 /* HistoryListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryListView.swift; sourceTree = "<group>"; };
 		4F1524302B284AA900E82845 /* DetailPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailPlayerView.swift; sourceTree = "<group>"; };
 		4F55883D2B3E6C7200B1BA88 /* ApiManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiManager.swift; sourceTree = "<group>"; };
 		4F9D56662B464F6800F2DECC /* SwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeView.swift; sourceTree = "<group>"; };
@@ -310,6 +312,7 @@
 				FB1BB6432B0D0CB600C54BCF /* SettingView.swift */,
 				FB2175A22B14DEE70068100B /* DanmuSettingView.swift */,
 				FBA907D02AEBF7E500A69FBE /* AboutUSView.swift */,
+				4F137FAB2B4E2FC3006432A0 /* HistoryListView.swift */,
 			);
 			path = Setting;
 			sourceTree = "<group>";
@@ -561,6 +564,7 @@
 				FBC8F5622B18C524006C5887 /* SearchRoomView.swift in Sources */,
 				FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */,
 				FBA907842AE5100500A69FBE /* LoadingView.swift in Sources */,
+				4F137FAC2B4E2FC3006432A0 /* HistoryListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
