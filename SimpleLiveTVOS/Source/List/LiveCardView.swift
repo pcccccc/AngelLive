@@ -127,7 +127,7 @@ struct LiveCardView: View {
                     .alert("提示", isPresented: $showAlert) {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
-                                await cancelFavoriteAction()
+                                
                             }
                         })
                         Button("再想想",role: .cancel) {
@@ -202,44 +202,7 @@ struct LiveCardView: View {
         }
         
     }
-    
-    func favoriteAction() async {
-        do {
-//            self.showLoading("正在收藏")
-            //            try await CloudSQLManager.saveRecord(liveModel: liveViewModel.roomList[index])
-//            self.showToast(true, false, "收藏成功")
-        }catch {
-            print(error)
-//            self.showToast(false, false, "收藏失败，错误码：\(error.localizedDescription)")
-        }
-        
-    }
-    
-    func getFavoriteState() async {
-        do {
-            //            favorited = try await CloudSQLManager.searchRecord(roomId: liveModel.roomId).count > 0
-        }catch {
-            //            favorited = false
-        }
-    }
-    
-    func cancelFavoriteAction() async {
-        //        if SQLiteManager.manager.delete(roomId: liveModel.roomId) {
-        //            self.showToast(true, true, "取消收藏成功")
-        //        }else {
-        //            self.showToast(false, true, "取消收藏失败")
-        //        }
-        do {
-//            self.showLoading("正在取消收藏")
-//            //            try await CloudSQLManager.deleteRecord(liveModel: liveModel)
-//            self.showToast(true, true, "取消收藏成功")
-        }catch {
-//            self.showToast(false, true, "取消收藏失败")
-        }
-    }
-    
-    
-    
+
     func getImage() -> String {
         switch liveViewModel.roomList[index].liveType {
             case .bilibili:

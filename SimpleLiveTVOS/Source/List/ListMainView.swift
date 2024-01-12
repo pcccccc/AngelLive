@@ -19,7 +19,6 @@ enum FocusableField: Hashable {
 
 struct ListMainView: View {
 
-  
     @State var needFullScreenLoading: Bool = false
     private static let topId = "topIdHere"
     

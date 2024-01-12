@@ -83,7 +83,6 @@ struct LeftMenu: View {
                                         }
                                     })
                                 })
-                            
                         }
                         Text("全部")
                     }

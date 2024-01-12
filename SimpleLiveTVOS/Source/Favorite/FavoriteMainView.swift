@@ -32,8 +32,6 @@ struct FavoriteMainView: View {
                 .safeAreaPadding(.top, 15)
             }
         }
-        .task {
-        }
         .onPlayPauseCommand(perform: {
         })
     }

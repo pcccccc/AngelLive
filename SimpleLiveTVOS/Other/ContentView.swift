@@ -14,6 +14,7 @@ import LiveParse
 struct ContentView: View {
     
     @State private var selection = 1
+    @StateObject var favoriteStore = FavoriteStore()
     
     var body: some View {
         NavigationView {
@@ -22,38 +23,44 @@ struct ContentView: View {
                     .tabItem {
                         Text("收藏")
                     }
-                    .tag(0)
+                .tag(0)
+                .environmentObject(favoriteStore)
                 ListMainView(liveType: .bilibili)
                     .tabItem {
                         Text("B站")
                     }
-                    .tag(1)
+                .tag(1)
+                .environmentObject(favoriteStore)
                 ListMainView(liveType: .huya)
                     .tabItem {
                         Text("虎牙")
                     }
-                    .tag(2)
+                .tag(2)
+                .environmentObject(favoriteStore)
                 ListMainView(liveType: .douyu)
                     .tabItem {
                         Text("斗鱼")
                     }
-                    .tag(3)
+                .tag(3)
+                .environmentObject(favoriteStore)
                 ListMainView(liveType: .douyin)
                     .tabItem {
                         Text("抖音")
                     }
-                    .tag(4)
+                .tag(4)
+                .environmentObject(favoriteStore)
                 SearchRoomView()
                     .tabItem {
                         Text("搜索")
                     }
-                    .tag(5)
+                .tag(5)
+                .environmentObject(favoriteStore)
                 SettingView()
                     .tabItem {
                         Text("设置")
                     }
-                    .tag(6)
-                
+                .tag(6)
+                .environmentObject(favoriteStore)
             }
         }
         .onAppear {

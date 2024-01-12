@@ -14,6 +14,7 @@ enum LiveRoomListType {
     case live
     case favorite
     case history
+    case search
 }
 
 
@@ -102,9 +103,13 @@ class LiveStore: ObservableObject {
     }
     
     @AppStorage("SimpleLive.History.WatchList") public var watchList: Array<LiveModel> = []
-    
+    @Published public var favoriteList: Array<LiveModel> = []
     
     @Published var loadingText: String = "正在获取内容"
+    @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号"]
+    @Published var searchTypeIndex = 0
+    @Published var searchText: String = "正在获取内容"
+    
     
     init(roomListType: LiveRoomListType, liveType: LiveType) {
         self.liveType = liveType
@@ -129,6 +134,8 @@ class LiveStore: ObservableObject {
                 getCategoryList()
             case .favorite, .history:
                 getRoomList(index: 0)
+            default:
+                break
                 
         }
     }
@@ -237,6 +244,8 @@ class LiveStore: ObservableObject {
             case .history:
                 self.roomList = self.watchList
                 break
+            default:
+                break
         }
     }
     /**
@@ -302,5 +311,43 @@ class LiveStore: ObservableObject {
     func deleteHistory(index: Int) {
         self.watchList.remove(at: index)
         self.roomList.remove(at: index)
+    }
+    
+    func searchRoomWithText(text: String) {
+        Task {
+            isLoading = true
+            let bilibiliResList = try await Bilibili.searchRooms(keyword: text, page: roomPage)
+            let douyinResList = try await Douyin.searchRooms(keyword: text, page: roomPage)
+            let huyaResList = try await Huya.searchRooms(keyword: text, page: roomPage)
+            let douyuResList = try await Douyu.searchRooms(keyword: text, page: roomPage)
+            roomList.append(contentsOf: bilibiliResList)
+            roomList.append(contentsOf: douyinResList)
+            roomList.append(contentsOf: huyaResList)
+            roomList.append(contentsOf: douyuResList)
+            isLoading = false
+        }
+    }
+    
+    func searchRoomWithShareCode(text: String) {
+        Task {
+            isLoading = true
+            let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
+            let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+            let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
+            let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+            if bilibiliResRoom.roomId != "" {
+                roomList.append(bilibiliResRoom)
+            }
+            if douyinResRoom.roomId != "" {
+                roomList.append(douyinResRoom)
+            }
+            if huyaResRoom.roomId != "" {
+                roomList.append(huyaResRoom)
+            }
+            if douyuResRoom.roomId != "" {
+                roomList.append(douyuResRoom)
+            }
+            isLoading = false
+        }
     }
 }
