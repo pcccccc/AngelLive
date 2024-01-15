@@ -28,6 +28,8 @@ struct LiveCardView: View {
             VStack(alignment: .leading, spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
                     Button {
+                        liveViewModel.currentRoom = liveViewModel.roomList[index]
+                        liveViewModel.selectedRoomListIndex = index
                         Task {
                             do {
                                 if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {

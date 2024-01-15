@@ -14,6 +14,7 @@ class RoomInfoStore: ObservableObject {
     @Published var roomList: [LiveModel] = []
     @Published var currentRoom: LiveModel
     @Published var playerCoordinator = KSVideoPlayer.Coordinator()
+    @Published var option = KSOptions()
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
     @Published var danmuSettingModel = DanmuSettingStore()
@@ -39,27 +40,32 @@ class RoomInfoStore: ObservableObject {
         }
         let currentCdn = currentRoomPlayArgs![cdnIndex]
         let currentQuality = currentCdn.qualitys[urlIndex]
-        if currentQuality.liveCodeType == .flv {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSAVPlayer.self
-        }else {
-            KSOptions.firstPlayerType = KSAVPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
-        }
+        
         if currentRoom.liveType == .bilibili {
             for item in currentRoomPlayArgs! {
                 for liveQuality in item.qualitys {
                     if liveQuality.liveCodeType == .hls {
                         KSOptions.firstPlayerType = KSAVPlayer.self
                         KSOptions.secondPlayerType = KSMEPlayer.self
-                        
                         self.currentPlayURL = URL(string: liveQuality.url)!
                         return
                     }
                 }
             }
+            if self.currentPlayURL == nil {
+                KSOptions.firstPlayerType = KSMEPlayer.self
+                KSOptions.secondPlayerType = KSMEPlayer.self
+                option.userAgent = "libmpv"
+            }
+        }else {
+            if currentQuality.liveCodeType == .flv {
+                KSOptions.firstPlayerType = KSMEPlayer.self
+                KSOptions.secondPlayerType = KSMEPlayer.self
+            }else {
+                KSOptions.firstPlayerType = KSAVPlayer.self
+                KSOptions.secondPlayerType = KSMEPlayer.self
+            }
         }
-
         self.currentPlayURL = URL(string: currentQuality.url)!
     }
     

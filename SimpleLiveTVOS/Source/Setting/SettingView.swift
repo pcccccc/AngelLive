@@ -14,7 +14,6 @@ struct SettingView: View {
     @State var isLogin = false
     @State var isPushed = false
     @StateObject var danmuSettingModel = DanmuSettingStore()
-    @EnvironmentObject var favoriteStore: FavoriteStore
     
     var body: some View {
         GeometryReader { geometry in

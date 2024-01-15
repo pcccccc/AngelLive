@@ -314,8 +314,8 @@ class LiveStore: ObservableObject {
     }
     
     func searchRoomWithText(text: String) {
+        isLoading = true
         Task {
-            isLoading = true
             let bilibiliResList = try await Bilibili.searchRooms(keyword: text, page: roomPage)
             let douyinResList = try await Douyin.searchRooms(keyword: text, page: roomPage)
             let huyaResList = try await Huya.searchRooms(keyword: text, page: roomPage)
@@ -328,38 +328,77 @@ class LiveStore: ObservableObject {
             DispatchQueue.main.async {
                 self.roomList.removeAll()
                 self.roomList.append(contentsOf: resArray)
+                self.isLoading = false
             }
-            isLoading = false
+            
         }
     }
     
     func searchRoomWithShareCode(text: String) {
+        isLoading = true
+        self.roomList.removeAll()
         Task {
-            do {
-                isLoading = true
+            if text.contains("b23.tv") || text.contains("bilibili") {
                 let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
-                let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
-                let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
-                let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
-                var resArray: [LiveModel] = []
-                if bilibiliResRoom.roomId != "" {
-                    resArray.append(bilibiliResRoom)
-                }
-                if douyinResRoom.roomId != "" {
-                    resArray.append(douyinResRoom)
-                }
-                if huyaResRoom.roomId != "" {
-                    resArray.append(huyaResRoom)
-                }
-                if douyuResRoom.roomId != "" {
-                    resArray.append(douyuResRoom)
-                }
                 DispatchQueue.main.async {
-                    self.roomList.removeAll()
-                    self.roomList.append(contentsOf: resArray)
+                    self.roomList.append(bilibiliResRoom)
+                    self.isLoading = false
                 }
-                isLoading = false
-            }catch {
+            }else if text.contains("douyin") {
+                let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+                DispatchQueue.main.async {
+                    self.roomList.append(douyinResRoom)
+                    self.isLoading = false
+                }
+            }else if text.contains("huya") {
+                let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
+                DispatchQueue.main.async {
+                    self.roomList.append(huyaResRoom)
+                    self.isLoading = false
+                }
+            }else if text.contains("douyu") {
+                let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+                DispatchQueue.main.async {
+                    self.roomList.append(douyuResRoom)
+                    self.isLoading = false
+                }
+            }else { //如果是房间号?
+                do {
+                    let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
+                    DispatchQueue.main.async {
+                        self.roomList.append(bilibiliResRoom)
+                        self.isLoading = false
+                    }
+                }catch {
+                    
+                }
+                do {
+                    let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+                    DispatchQueue.main.async {
+                        self.roomList.append(douyinResRoom)
+                        self.isLoading = false
+                    }
+                }catch {
+                    
+                }
+                do {
+                    let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
+                    DispatchQueue.main.async {
+                        self.roomList.append(huyaResRoom)
+                        self.isLoading = false
+                    }
+                }catch {
+                    
+                }
+                do {
+                    let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+                    DispatchQueue.main.async {
+                        self.roomList.append(douyuResRoom)
+                        self.isLoading = false
+                    }
+                }catch {
+                    
+                }
                 
             }
         }

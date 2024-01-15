@@ -13,6 +13,7 @@ struct SearchRoomView: View {
     
     @StateObject var liveViewModel = LiveStore(roomListType: .search, liveType: .bilibili)
     @FocusState var focusState: Int?
+    @EnvironmentObject var favoriteStore: FavoriteStore
     
     var body: some View {
         VStack {
@@ -38,12 +39,16 @@ struct SearchRoomView: View {
             }
             Spacer()
             ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360)), GridItem(.fixed(360))], spacing: 35) {
+                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 70), GridItem(.fixed(370), spacing: 70), GridItem(.fixed(370), spacing: 70), GridItem(.fixed(370), spacing: 70)], spacing: 70) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environmentObject(liveViewModel)
+                            .environmentObject(favoriteStore)
+                            .frame(width: 370, height: 240)
                     }
                 }
+                .safeAreaPadding(.top, 50)
+                
             }
         }
         .simpleToast(isPresented: Binding(get: {

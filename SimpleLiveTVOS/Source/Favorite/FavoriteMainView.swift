@@ -23,7 +23,7 @@ struct FavoriteMainView: View {
     var body: some View {
         VStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(370)), GridItem(.fixed(370)), GridItem(.fixed(370)), GridItem(.fixed(370))], spacing: 60) {
+                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environmentObject(liveViewModel)

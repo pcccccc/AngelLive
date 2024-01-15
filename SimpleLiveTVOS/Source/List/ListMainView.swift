@@ -39,7 +39,7 @@ struct ListMainView: View {
                     ZStack {
                     }
                     .id(Self.topId)
-                    LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
+                    LazyVGrid(columns: [GridItem(.fixed(380), spacing: 60), GridItem(.fixed(380), spacing: 60), GridItem(.fixed(380), spacing: 60), GridItem(.fixed(380), spacing: 60)], spacing: 60) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
                                 .environmentObject(liveViewModel)

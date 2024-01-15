@@ -15,7 +15,7 @@ struct DetailPlayerView: View {
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
     
     public var didExitView: (Bool, String) -> Void = {_, _ in}
-    var option = KSOptions()
+    
     
     var body: some View {
         if roomInfoViewModel.currentPlayURL == nil {
@@ -25,7 +25,7 @@ struct DetailPlayerView: View {
             .frame(width: 1920, height: 1080)
             .background(.ultraThickMaterial)
         }else {
-            KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: option)
+            KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.option)
                 .background(Color.black)
                 .onAppear {
                     roomInfoViewModel.playerCoordinator.playerLayer?.play()
