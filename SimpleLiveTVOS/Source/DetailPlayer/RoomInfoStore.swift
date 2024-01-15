@@ -18,6 +18,7 @@ class RoomInfoStore: ObservableObject {
     @Published var currentPlayURL: URL?
     @Published var danmuSettingModel = DanmuSettingStore()
     @Published var showControlView: Bool = true
+    @Published var isPlaying = false
     
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
@@ -138,6 +139,7 @@ extension RoomInfoStore: WebSocketConnectionDelegate {
 extension RoomInfoStore: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
+        isPlaying = layer.player.isPlaying
         if state == .paused {
             showControlView = true
         }

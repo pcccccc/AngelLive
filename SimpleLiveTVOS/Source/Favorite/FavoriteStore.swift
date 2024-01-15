@@ -31,4 +31,25 @@ class FavoriteStore: ObservableObject {
             }
         }
     }
+    
+    func addFavorite(room: LiveModel) async throws {
+        try await CloudSQLManager.saveRecord(liveModel: room)
+        DispatchQueue.main.async {
+            self.roomList.append(room)
+        }
+    }
+    
+    func removeFavoriteRoom(room: LiveModel) async throws {
+        try await CloudSQLManager.deleteRecord(liveModel: room)
+        let index = roomList.firstIndex(of: room)
+        if index != nil {
+            DispatchQueue.main.async {
+                self.roomList.remove(at: index!)
+            }
+        }
+    }
+    
+    func getState() async throws -> String {
+        return await CloudSQLManager.getCloudState()
+    }
 }

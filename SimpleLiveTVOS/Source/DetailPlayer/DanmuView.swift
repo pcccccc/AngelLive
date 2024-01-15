@@ -25,7 +25,7 @@ struct DanmuView: UIViewRepresentable {
         // 更新 UIView，如果有必要
         uiView.frame = .init(x: 0, y: 0, width: 1920, height: height)
         uiView.paddingTop = 5
-        uiView.trackHeight = CGFloat(danmuSettingModel.danmuFontSize * 2)
+        uiView.trackHeight = CGFloat(Double(danmuSettingModel.danmuFontSize) * 1.2)
         uiView.displayArea = 1
         uiView.recalculateTracks()
         

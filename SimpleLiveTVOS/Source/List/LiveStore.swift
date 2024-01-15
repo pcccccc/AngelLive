@@ -63,7 +63,14 @@ class LiveStore: ObservableObject {
         }
     }
     @Published var roomList: [LiveModel] = []
-    @Published var currentRoom: LiveModel?
+    @Published var currentRoom: LiveModel? {
+        didSet {
+            if favoriteStore != nil {
+                currentRoomIsFavorited = favoriteStore!.roomList.contains{ $0.roomId == currentRoom!.roomId }
+                print(currentRoomIsFavorited)
+            }
+        }
+    }
     
     //当前选择房间ViewModel
     @Published var roomInfoViewModel: RoomInfoStore?
@@ -103,12 +110,14 @@ class LiveStore: ObservableObject {
     }
     
     @AppStorage("SimpleLive.History.WatchList") public var watchList: Array<LiveModel> = []
-    @Published public var favoriteList: Array<LiveModel> = []
+    @Published public var favoriteStore: FavoriteStore?
     
     @Published var loadingText: String = "正在获取内容"
     @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号"]
     @Published var searchTypeIndex = 0
-    @Published var searchText: String = "正在获取内容"
+    @Published var searchText: String = "请输入需要搜索的内容"
+    @Published var showAlert: Bool = false
+    @Published var currentRoomIsFavorited: Bool = false
     
     
     init(roomListType: LiveRoomListType, liveType: LiveType) {
@@ -230,20 +239,24 @@ class LiveStore: ObservableObject {
                 Task {
                     let resList = try await CloudSQLManager.searchRecord()
                     DispatchQueue.main.async {
-                        if self.roomPage == 1 {
-                            self.roomList.removeAll()
-                        }
+                        self.roomList.removeAll()
                         for item in resList {
                             if self.roomList.contains(item) == false {
                                 self.roomList.append(item)
                            }
+                        }
+                        for index in 0 ..< self.roomList.count {
+                            self.getLastestRoomInfo(index)
                         }
                         self.isLoading = false
                     }
                 }
             case .history:
                 self.roomList = self.watchList
-                break
+                for index in 0 ..< self.roomList.count {
+                    self.getLastestRoomInfo(index)
+                }
+            break
             default:
                 break
         }
@@ -266,9 +279,10 @@ class LiveStore: ObservableObject {
         Task {
             let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
             DispatchQueue.main.async {
+                if index >= self.roomList.count { return }
                 self.roomList[index] = newLiveModel
                 self.isLoading = false
-                let endLoading = self.roomList.contains{ $0.liveState != nil && $0.liveState != "" }
+                let endLoading = self.roomList.allSatisfy{ $0.liveState != "" && $0.liveState != nil }
                 if endLoading && self.roomListType == .favorite {
                     self.roomList = self.roomList.sorted(by: {
                         if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
@@ -277,24 +291,7 @@ class LiveStore: ObservableObject {
                             return false
                         }
                     })
-                    var hasIndex: [Int] = []
-                    for index in 0 ..< self.roomList.count { // 排序后再做一次去重
-                        let item = self.roomList[index]
-                        var flag = 0
-                        for sub in self.roomList {
-                            if item == sub {
-                                flag += 1
-                            }
-                        }
-                        if (item.liveState == nil || item.liveState == "") && flag == 2 {
-                            hasIndex.append(index)
-                        }
-                    }
-                    for index in hasIndex {
-                        if index < self.roomList.count {
-                            self.roomList.remove(at: index)
-                        }
-                    }
+                    
                 }
             }
         }

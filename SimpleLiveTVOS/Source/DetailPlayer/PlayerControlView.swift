@@ -11,7 +11,7 @@ struct PlayerControlView: View {
     
     @StateObject var danmuSetting = DanmuSettingStore()
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
-    @FocusState var isFocused: Bool
+    @FocusState var isFocused: Int?
     let topGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
         startPoint: .top,
@@ -29,6 +29,7 @@ struct PlayerControlView: View {
                 Text(roomInfoViewModel.currentRoom.roomTitle)
                     .font(.title3)
                     .padding(.leading, 15)
+                    .foregroundStyle(.white)
                 Spacer()
             }
             .background {
@@ -41,14 +42,19 @@ struct PlayerControlView: View {
             Spacer()
             HStack(alignment: .center, spacing: 15) {
                 Button(action: {
-                    if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
-                        roomInfoViewModel.playerCoordinator.playerLayer?.pause()
+                    if (roomInfoViewModel.showControlView == false) {
+                        roomInfoViewModel.showControlView = true
                     }else {
-                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                        if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
+                            roomInfoViewModel.playerCoordinator.playerLayer?.pause()
+                        }else {
+                            roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                        }
                     }
                     
+                    
                 }, label: {
-                    Image(systemName: roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false ? "pause.fill" : "play.fill")
+                    Image(systemName: roomInfoViewModel.isPlaying ? "pause.fill" : "play.fill")
                         .frame(width: 40, height: 40)
                 })
                 .clipShape(.circle)
@@ -56,11 +62,14 @@ struct PlayerControlView: View {
                     .cornerRadius(10)
                     .frame(width: 20, height: 20)
                 Text("Live")
+                    .foregroundStyle(.white)
                 Spacer()
                 Menu {
                     ForEach(roomInfoViewModel.currentRoomPlayArgs?.indices ?? 0..<1, id: \.self) { index in
                         Button(action: {
-                            
+                            if (roomInfoViewModel.showControlView == false) {
+                                roomInfoViewModel.showControlView = true
+                            }else {}
                         }, label: {
                             if roomInfoViewModel.currentRoomPlayArgs == nil {
                                 Text("测试")
@@ -68,6 +77,9 @@ struct PlayerControlView: View {
                                 Menu {
                                     ForEach(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys.indices ?? 0 ..< 1, id: \.self) { subIndex in
                                         Button {
+                                            if roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].url ?? "" != "" {
+                                                roomInfoViewModel.currentPlayURL = URL(string: roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].url ?? "")
+                                            }
                                             
                                         } label: {
                                             Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
@@ -85,12 +97,17 @@ struct PlayerControlView: View {
                     Text("清晰度")
                         .frame(height: 50, alignment: .center)
                         .padding(.top, 10)
+                        .foregroundStyle(.white)
                 }
                 .frame(height: 60)
                 .clipShape(.capsule)
                 
                 Button(action: {
-                    danmuSetting.showDanmu.toggle()
+                    if (roomInfoViewModel.showControlView == false) {
+                        roomInfoViewModel.showControlView = true
+                    }else {
+                        danmuSetting.showDanmu.toggle()
+                    }
                 }, label: {
                     Image(danmuSetting.showDanmu ? "icon-danmu-open-normal" : "icon-danmu-open-focus")
                         .resizable()
@@ -107,8 +124,6 @@ struct PlayerControlView: View {
                     .frame(height: 150)
             }
             .frame(height: 150)
-            
-//            .edgesIgnoringSafeArea(.all)
         }
     }
 }

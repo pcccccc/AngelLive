@@ -21,7 +21,18 @@ struct ContentView: View {
             TabView(selection:$selection) {
                 FavoriteMainView()
                     .tabItem {
-                        Text("收藏")
+                        if favoriteStore.isLoading == true {
+                            Label(
+                                title: {  },
+                                icon: {
+                                    Image(systemName: favoriteStore.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : "checkmark.circle" )
+                                        .symbolEffect(.variableColor, value: favoriteStore.isLoading)
+                                    
+                                }
+                            )
+                        }else {
+                            Text("收藏")
+                        }
                     }
                 .tag(0)
                 .environmentObject(favoriteStore)

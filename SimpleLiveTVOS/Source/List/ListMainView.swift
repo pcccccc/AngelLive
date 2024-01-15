@@ -18,13 +18,14 @@ enum FocusableField: Hashable {
 }
 
 struct ListMainView: View {
-
+    
     @State var needFullScreenLoading: Bool = false
     private static let topId = "topIdHere"
     
     var liveType: LiveType
     @StateObject var liveViewModel: LiveStore
     @FocusState var focusState: FocusableField?
+    @EnvironmentObject var favoriteStore: FavoriteStore
     
     init(liveType: LiveType) {
         self.liveType = liveType
@@ -44,10 +45,10 @@ struct ListMainView: View {
                                 .environmentObject(liveViewModel)
                                 .onMoveCommand(perform: { direction in
                                     switch direction {
-    //                                case .right:
-    //                                    liveViewModel.showOverlay = false
+                                        //                                case .right:
+                                        //                                    liveViewModel.showOverlay = false
                                     case .left:
-    //                                    liveViewModel.showOverlay = true
+                                        //                                    liveViewModel.showOverlay = true
                                         if index % 4 == 0 {
                                             liveViewModel.showOverlay = true
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
@@ -69,8 +70,8 @@ struct ListMainView: View {
                                 })
                                 .frame(width: 370, height: 240)
                         }
+                    }
                 }
-            }
             }.overlay {
                 ZStack {
                     VStack(alignment: .leading, spacing: 50) {
@@ -84,7 +85,7 @@ struct ListMainView: View {
                                             .edgesIgnoringSafeArea(.all)
                                             .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
                                             .cornerRadius(liveViewModel.leftMenuCornerRadius)
-                                            
+                                        
                                         Spacer(minLength: 0)
                                     }
                                     .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftHeight)
@@ -124,24 +125,24 @@ struct ListMainView: View {
                 }
                 .onMoveCommand(perform: { direction in
                     if direction == .left {
-//                        liveViewModel.showOverlay = true
+                        //                        liveViewModel.showOverlay = true
                     }else if direction == .right {
-//                        liveViewModel.showOverlay = false
+                        //                        liveViewModel.showOverlay = false
                         focusState = .mainContent(liveViewModel.selectedRoomListIndex)
                     }
                 })
                 .onExitCommand {
                     switch focusState {
-                        case .leftMenu(_, _):
-//                            liveViewModel.showOverlay = false
-                            focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                        case .leftFavorite(_, _):
-//                            liveViewModel.showOverlay = false
-                            focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                        case .mainContent(_):
-                            break
-                        case .none:
-                            break
+                    case .leftMenu(_, _):
+                        //                            liveViewModel.showOverlay = false
+                        focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                    case .leftFavorite(_, _):
+                        //                            liveViewModel.showOverlay = false
+                        focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                    case .mainContent(_):
+                        break
+                    case .none:
+                        break
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -152,12 +153,12 @@ struct ListMainView: View {
         }
         .onChange(of: focusState, { oldValue, newValue in
             switch newValue {
-                case .leftMenu(_, _):
-                    liveViewModel.showOverlay = true
-                case .leftFavorite(_, _):
-                    liveViewModel.showOverlay = true
-                default:
-                    liveViewModel.showOverlay = false
+            case .leftMenu(_, _):
+                liveViewModel.showOverlay = true
+            case .leftFavorite(_, _):
+                liveViewModel.showOverlay = true
+            default:
+                liveViewModel.showOverlay = false
             }
         })
         .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
@@ -167,7 +168,7 @@ struct ListMainView: View {
                 .foregroundColor(Color.white)
                 .cornerRadius(10)
                 .padding(.top)
-            }
+        }
     }
     
 }

@@ -57,13 +57,7 @@ struct DetailPlayerView: View {
             .onDisappear {
                 roomInfoViewModel.disConnectSocket()
             }
-            .onTapGesture {
-                if roomInfoViewModel.showControlView == true {
-                    
-                }else {
-                    roomInfoViewModel.showControlView = true
-                }
-            }
+            
         }
     }
 }
