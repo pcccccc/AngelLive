@@ -115,7 +115,7 @@ class LiveStore: ObservableObject {
     @Published var loadingText: String = "正在获取内容"
     @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号"]
     @Published var searchTypeIndex = 0
-    @Published var searchText: String = "请输入需要搜索的内容"
+    @Published var searchText: String = ""
     @Published var showAlert: Bool = false
     @Published var currentRoomIsFavorited: Bool = false
     
@@ -206,6 +206,9 @@ class LiveStore: ObservableObject {
     */
     func getRoomList(index: Int) {
         isLoading = true
+        if roomListType == .search {
+            return
+        }
         switch roomListType {
             case .live:
                 if index == -1 {
@@ -317,34 +320,48 @@ class LiveStore: ObservableObject {
             let douyinResList = try await Douyin.searchRooms(keyword: text, page: roomPage)
             let huyaResList = try await Huya.searchRooms(keyword: text, page: roomPage)
             let douyuResList = try await Douyu.searchRooms(keyword: text, page: roomPage)
-            roomList.append(contentsOf: bilibiliResList)
-            roomList.append(contentsOf: douyinResList)
-            roomList.append(contentsOf: huyaResList)
-            roomList.append(contentsOf: douyuResList)
+            var resArray: [LiveModel] = []
+            resArray.append(contentsOf: bilibiliResList)
+            resArray.append(contentsOf: douyinResList)
+            resArray.append(contentsOf: huyaResList)
+            resArray.append(contentsOf: douyuResList)
+            DispatchQueue.main.async {
+                self.roomList.removeAll()
+                self.roomList.append(contentsOf: resArray)
+            }
             isLoading = false
         }
     }
     
     func searchRoomWithShareCode(text: String) {
         Task {
-            isLoading = true
-            let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
-            let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
-            let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
-            let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
-            if bilibiliResRoom.roomId != "" {
-                roomList.append(bilibiliResRoom)
+            do {
+                isLoading = true
+                let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
+                let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+                let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
+                let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+                var resArray: [LiveModel] = []
+                if bilibiliResRoom.roomId != "" {
+                    resArray.append(bilibiliResRoom)
+                }
+                if douyinResRoom.roomId != "" {
+                    resArray.append(douyinResRoom)
+                }
+                if huyaResRoom.roomId != "" {
+                    resArray.append(huyaResRoom)
+                }
+                if douyuResRoom.roomId != "" {
+                    resArray.append(douyuResRoom)
+                }
+                DispatchQueue.main.async {
+                    self.roomList.removeAll()
+                    self.roomList.append(contentsOf: resArray)
+                }
+                isLoading = false
+            }catch {
+                
             }
-            if douyinResRoom.roomId != "" {
-                roomList.append(douyinResRoom)
-            }
-            if huyaResRoom.roomId != "" {
-                roomList.append(huyaResRoom)
-            }
-            if douyuResRoom.roomId != "" {
-                roomList.append(douyuResRoom)
-            }
-            isLoading = false
         }
     }
 }

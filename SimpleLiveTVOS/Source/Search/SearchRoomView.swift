@@ -25,11 +25,7 @@ struct SearchRoomView: View {
                         }
                     }
                 }
-                TextField("搜索", text: Binding(get: {
-                    liveViewModel.searchText
-                }, set: { newValue in
-                    liveViewModel.searchText = newValue
-                }))
+                TextField("搜索", text: $liveViewModel.searchText)
                 .onSubmit {
                     if liveViewModel.searchTypeIndex == 0 {
                         liveViewModel.roomPage = 1
