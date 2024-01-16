@@ -18,7 +18,7 @@ struct LiveCardView: View {
     @FocusState var focusState: FocusableField?
     
     let gradient = LinearGradient(
-        gradient: Gradient(colors: [Color.black.opacity(0.05), Color.black.opacity(0.4)]),
+        gradient: Gradient(colors: [Color.black.opacity(0.05), Color.black.opacity(0.3)]),
         startPoint: .top,
         endPoint: .bottom
     )
@@ -123,7 +123,7 @@ struct LiveCardView: View {
                             switch value {
                                 case .mainContent(let index):
                                     liveViewModel.selectedRoomListIndex = index
-                                    if liveViewModel.roomListType == .live {
+                                    if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search  {
                                         if index >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
                                             liveViewModel.roomPage += 1
                                         }
@@ -154,7 +154,14 @@ struct LiveCardView: View {
                     .contextMenu(menuItems: {
                         if liveViewModel.currentRoomIsFavorited {
                             Button(action: {
-                                liveViewModel.showAlert.toggle()
+                                Task {
+                                    do {
+                                        try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        liveViewModel.showToast(true, title:"取消收藏成功")
+                                    }catch {
+                                        liveViewModel.showToast(false, title:error.localizedDescription)
+                                    }
+                                }
                             }, label: {
                                 HStack {
                                     Image(systemName: "heart.fill")
@@ -165,8 +172,12 @@ struct LiveCardView: View {
                         }else {
                             Button(action: {
                                 Task {
-                                    try await favoriteStore.addFavorite(room: liveViewModel.currentRoom!)
-                                    liveViewModel.showToast(true, title:"收藏成功")
+                                    do {
+                                        try await favoriteStore.addFavorite(room: liveViewModel.currentRoom!)
+                                        liveViewModel.showToast(true, title:"收藏成功")
+                                    }catch {
+                                        liveViewModel.showToast(false, title:error.localizedDescription)
+                                    }
                                 }
                             }, label: {
                                 HStack {

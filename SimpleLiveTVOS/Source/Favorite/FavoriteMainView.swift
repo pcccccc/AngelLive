@@ -22,16 +22,21 @@ struct FavoriteMainView: View {
     
     var body: some View {
         VStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
-                    ForEach(liveViewModel.roomList.indices, id: \.self) { index in
-                        LiveCardView(index: index)
-                            .environmentObject(liveViewModel)
-                            .environmentObject(favoriteStore)
-                            .frame(width: 370, height: 240)
+            if favoriteStore.cloudKitReady {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
+                        ForEach(liveViewModel.roomList.indices, id: \.self) { index in
+                            LiveCardView(index: index)
+                                .environmentObject(liveViewModel)
+                                .environmentObject(favoriteStore)
+                                .frame(width: 370, height: 240)
+                        }
                     }
+                    .safeAreaPadding(.top, 15)
                 }
-                .safeAreaPadding(.top, 15)
+            }else {
+                Text(favoriteStore.cloudKitStateString)
+                    .font(.title3)
             }
         }
         .onPlayPauseCommand(perform: {
@@ -48,9 +53,9 @@ struct FavoriteMainView: View {
             liveViewModel.roomPage = 1
         }
         .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
-            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastImage)
+            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                 .padding()
-                .background(Color.red.opacity(0.8))
+                .background(liveViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
                 .foregroundColor(Color.white)
                 .cornerRadius(10)
                 .padding(.top)

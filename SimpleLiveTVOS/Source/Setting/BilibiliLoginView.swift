@@ -15,6 +15,7 @@ struct BilibiliLoginView: View {
     @State private var message = "请打开哔哩哔哩APP扫描二维码"
     @State private var qrcode_key = ""
     @State private var timer: Timer?
+    @EnvironmentObject var settingStore: SettingStore
     
     
     var body: some View {
@@ -45,6 +46,7 @@ struct BilibiliLoginView: View {
             Text(message)
             Spacer()
         }
+        .frame(width: 1920, height: 1080)
         .task {
             await getQRCode()
             timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
@@ -80,15 +82,16 @@ struct BilibiliLoginView: View {
                 if message == "授权成功，请退出页面" {
                     return;
                 } 
-                if dataReq.data.code == 86090 {
+                if dataReq.0.data.code == 86090 {
                     message = "扫描成功，请操作手机进行授权"
-                }else if dataReq.data.code == 86038 {
+                }else if dataReq.0.data.code == 86038 {
                     message = "二维码已经过期，请刷新再试"
                 
-                }else if dataReq.data.code == 0 {
+                }else if dataReq.0.data.code == 0 {
                     message = "授权成功，请退出页面"
+                    settingStore.bilibiliCookie = dataReq.1
                     timer?.invalidate()
-                }else if dataReq.data.code == 86101 {
+                }else if dataReq.0.data.code == 86101 {
                     message = "请打开哔哩哔哩APP扫描二维码:等待扫码"
                 }
             }catch {

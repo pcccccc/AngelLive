@@ -6,23 +6,33 @@
 //
 
 import SwiftUI
+import Shimmer
 
 struct LoadingView: View {
     
-    @Binding var loadingText: String
-    
     var body: some View {
         VStack {
-            if loadingText == "暂无内容" {
-                Image(systemName: "folder.badge.questionmark")
-            }else {
-                ProgressView()
-                    .progressViewStyle(.circular)
+            Image("placeholder")
+                .resizable()
+                .frame(height: 210)
+                .cornerRadius(5)
+            HStack(spacing: 15) {
+                Image("placeholder")
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .cornerRadius(20)
+                    .shimmering(active: true)
+                VStack (alignment: .leading, spacing: 5) {
+                    Text("loading....")
+                        .font(.system(size: 22))
+                        .shimmering(active: true)
+                    Text("loading....")
+                        .font(.system(size: 16))
+                        .shimmering(active: true)
+                }
+                Spacer()
             }
-            Text(loadingText)
-                .font(.title3)
-                .foregroundColor(.gray)
-                .padding()
+            .frame(height: 50)
         }
     }
 }

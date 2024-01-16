@@ -20,6 +20,7 @@ class RoomInfoStore: ObservableObject {
     @Published var danmuSettingModel = DanmuSettingStore()
     @Published var showControlView: Bool = true
     @Published var isPlaying = false
+    @Published var douyuFirstLoad = true
     
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
@@ -33,8 +34,10 @@ class RoomInfoStore: ObservableObject {
      切换清晰度
     */
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
+        
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
+        option.userAgent = "libmpv"
         guard currentRoomPlayArgs != nil else {
             return
         }
@@ -55,7 +58,6 @@ class RoomInfoStore: ObservableObject {
             if self.currentPlayURL == nil {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
-                option.userAgent = "libmpv"
             }
         }else {
             if currentQuality.liveCodeType == .flv {
@@ -66,7 +68,23 @@ class RoomInfoStore: ObservableObject {
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }
         }
-        self.currentPlayURL = URL(string: currentQuality.url)!
+        
+        if currentRoom.liveType == .douyu && douyuFirstLoad == false {
+            Task {
+                let currentCdn = currentRoomPlayArgs![cdnIndex]
+                let currentQuality = currentCdn.qualitys[urlIndex]
+                let playArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: currentQuality.qn, cdn: currentCdn.douyuCdnName)
+                DispatchQueue.main.async {
+                    let currentQuality = playArgs.first?.qualitys[urlIndex]
+                    self.playerCoordinator.playerLayer?.resetPlayer()
+                    self.currentPlayURL = URL(string: currentQuality?.url ?? "")!
+                }
+            }
+        }else {
+            douyuFirstLoad = false
+            self.currentPlayURL = URL(string: currentQuality.url)!
+        }
+        
     }
     
     /**

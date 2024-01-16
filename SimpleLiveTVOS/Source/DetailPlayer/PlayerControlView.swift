@@ -77,10 +77,7 @@ struct PlayerControlView: View {
                                 Menu {
                                     ForEach(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys.indices ?? 0 ..< 1, id: \.self) { subIndex in
                                         Button {
-                                            if roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].url ?? "" != "" {
-                                                roomInfoViewModel.currentPlayURL = URL(string: roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].url ?? "")
-                                            }
-                                            
+                                            roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
                                         } label: {
                                             Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
                                         }

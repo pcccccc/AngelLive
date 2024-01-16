@@ -10,6 +10,7 @@ import Kingfisher
 import SimpleToast
 import LiveParse
 import GameController
+import Shimmer
 
 enum FocusableField: Hashable {
     case leftMenu(Int, Int)
@@ -39,16 +40,13 @@ struct ListMainView: View {
                     ZStack {
                     }
                     .id(Self.topId)
-                    LazyVGrid(columns: [GridItem(.fixed(380), spacing: 60), GridItem(.fixed(380), spacing: 60), GridItem(.fixed(380), spacing: 60), GridItem(.fixed(380), spacing: 60)], spacing: 60) {
+                    LazyVGrid(columns: [GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50)], spacing: 50) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
                                 .environmentObject(liveViewModel)
                                 .onMoveCommand(perform: { direction in
                                     switch direction {
-                                        //                                case .right:
-                                        //                                    liveViewModel.showOverlay = false
                                     case .left:
-                                        //                                    liveViewModel.showOverlay = true
                                         if index % 4 == 0 {
                                             liveViewModel.showOverlay = true
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
@@ -60,7 +58,7 @@ struct ListMainView: View {
                                             })
                                         }
                                     default:
-                                        print(222)
+                                        print("default")
                                     }
                                 })
                                 .onPlayPauseCommand(perform: {
@@ -68,7 +66,7 @@ struct ListMainView: View {
                                     liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
                                     reader.scrollTo(Self.topId)
                                 })
-                                .frame(width: 370, height: 240)
+                                .frame(width: 370, height: 280)
                         }
                     }
                 }
@@ -162,9 +160,9 @@ struct ListMainView: View {
             }
         })
         .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
-            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastImage)
+            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                 .padding()
-                .background(Color.red.opacity(0.8))
+                .background(liveViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
                 .foregroundColor(Color.white)
                 .cornerRadius(10)
                 .padding(.top)

@@ -80,13 +80,13 @@ class CloudSQLManager: NSObject {
                 case .available:
                     return "正常"
                 case .couldNotDetermine:
-                    return "无法确定状态"
+                    return "无法确定状态,请检查iCloud服务/网络连接是否正常"
                 case .restricted:
-                    return "受限"
+                    return "iCloud用户受限"
                 case .noAccount:
-                    return "请登录iCloud"
+                    return "未登录iCloud，请进入 系统设置-用户和账户 登录Apple ID"
                 case .temporarilyUnavailable:
-                    return "暂时不可用，请尝试更新Apple ID设置"
+                    return "iCloud服务不可用，请进入 系统设置-用户和账户 更新用户状态"
                 default:
                     return "无法确定状态"
             }

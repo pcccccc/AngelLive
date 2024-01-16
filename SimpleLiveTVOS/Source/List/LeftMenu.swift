@@ -23,7 +23,7 @@ struct LeftMenu: View {
         ScrollView {
             VStack(alignment: .center) {
                 if liveViewModel.showOverlay == false {
-                    if liveViewModel.selectedSubCategory.count > 0 {
+                    if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedSubListIndex != -1 {
                         HStack(spacing: 10) {
                             if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
                                 Image(liveViewModel.menuTitleIcon)
@@ -42,7 +42,7 @@ struct LeftMenu: View {
                                 .frame(width: 110, height: 30, alignment: .leading)
                                 .multilineTextAlignment(.leading)
                         }
-                        .padding(.top, 10)
+                        .padding(.top, 160)
                         .padding(.leading, 5)
                         .edgesIgnoringSafeArea(.all)
                     }else {

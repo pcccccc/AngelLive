@@ -50,6 +50,7 @@
 		4FC3DCF92A49383100CA36B9 /* SimpleLiveTVOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCF82A49383100CA36B9 /* SimpleLiveTVOSUITests.swift */; };
 		4FC3DCFB2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */; };
 		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
+		4FC475422B563C8D006A102D /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC475412B563C8D006A102D /* Shimmer */; };
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
 		FB2175A52B14DF0D0068100B /* DanmuSettingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */; };
@@ -160,6 +161,7 @@
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
 				FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */,
+				4FC475422B563C8D006A102D /* Shimmer in Frameworks */,
 				FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
 				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
@@ -420,6 +422,7 @@
 				FBD737812B31CD260093C1CA /* KSPlayer */,
 				4F1492402B44F4FC004073DB /* LiveParse */,
 				4F9D56642B45721B00F2DECC /* LiveParse */,
+				4FC475412B563C8D006A102D /* Shimmer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -505,6 +508,7 @@
 				4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				FBD737802B31CD260093C1CA /* XCRemoteSwiftPackageReference "KSPlayer" */,
 				4F9D56632B45721B00F2DECC /* XCRemoteSwiftPackageReference "LiveParse" */,
+				4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -953,6 +957,14 @@
 				minimumVersion = 7.0.0;
 			};
 		};
+		4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/markiv/SwiftUI-Shimmer";
+			requirement = {
+				branch = "iOS17-animate-start-end-points";
+				kind = branch;
+			};
+		};
 		4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/Alamofire/Alamofire.git";
@@ -1038,6 +1050,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
+		};
+		4FC475412B563C8D006A102D /* Shimmer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
+			productName = Shimmer;
 		};
 		4FC9B38D2A52E39400C0D3C8 /* Alamofire */ = {
 			isa = XCSwiftPackageProductDependency;

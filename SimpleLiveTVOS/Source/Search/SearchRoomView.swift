@@ -8,6 +8,7 @@
 import SwiftUI
 import SimpleToast
 import LiveParse
+import Shimmer
 
 struct SearchRoomView: View {
     
@@ -32,6 +33,7 @@ struct SearchRoomView: View {
                         liveViewModel.roomPage = 1
                         liveViewModel.searchRoomWithText(text: liveViewModel.searchText)
                     }else {
+                        liveViewModel.roomPage = 1
                         liveViewModel.searchRoomWithShareCode(text: liveViewModel.searchText)
                     }
                     
@@ -39,23 +41,25 @@ struct SearchRoomView: View {
             }
             Spacer()
             ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 70), GridItem(.fixed(370), spacing: 70), GridItem(.fixed(370), spacing: 70), GridItem(.fixed(370), spacing: 70)], spacing: 70) {
+                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environmentObject(liveViewModel)
                             .environmentObject(favoriteStore)
-                            .frame(width: 370, height: 240)
+                            .frame(width: 370, height: 280)
+                    }
+                    if liveViewModel.isLoading {
+                        LoadingView()
+                            .frame(width: 370, height: 280)
+                            .cornerRadius(5)
+                            .shimmering(active: true)
+                            .redacted(reason: .placeholder)
                     }
                 }
                 .safeAreaPadding(.top, 50)
-                
             }
         }
-        .simpleToast(isPresented: Binding(get: {
-            liveViewModel.showToast
-        }, set: { newValue in
-            liveViewModel.showToast = newValue
-        }), options: liveViewModel.toastOptions) {
+        .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
             Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess == true ? "checkmark.circle":"info.circle.fill")
                 .padding()
                 .background(liveViewModel.toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
@@ -63,12 +67,6 @@ struct SearchRoomView: View {
                 .cornerRadius(10)
                 .padding(.top)
         }
-        .onChange(of: focusState, perform: { newValue in
-            if newValue ?? 0 > 6 && newValue ?? 0 > liveViewModel.roomList.count - 6 {
-                liveViewModel.roomPage += 1
-//                beginSearch(research: false)
-            }
-        })
     }
 }
 

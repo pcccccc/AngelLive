@@ -21,15 +21,15 @@ struct ContentView: View {
             TabView(selection:$selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if favoriteStore.isLoading == true {
+                        if favoriteStore.isLoading == true || favoriteStore.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: favoriteStore.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : "checkmark.circle" )
-                                        .symbolEffect(.variableColor, value: favoriteStore.isLoading)
-                                    
+                                    Image(systemName: favoriteStore.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteStore.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                                          
                                 }
                             )
+                            .contentTransition(.symbolEffect(.replace))
                         }else {
                             Text("收藏")
                         }

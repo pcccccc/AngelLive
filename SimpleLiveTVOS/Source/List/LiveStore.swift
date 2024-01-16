@@ -79,11 +79,6 @@ class LiveStore: ObservableObject {
     @Published var showToast: Bool = false
     @Published var toastTitle: String = ""
     @Published var toastTypeIsSuccess: Bool = false
-    @Published var toastImage: String = "checkmark.circle" {
-        didSet {
-            toastImage = toastTypeIsSuccess == true ? "checkmark.circle" : "xmark.circle"
-        }
-    }
     @Published var toastOptions = SimpleToastOptions(
         hideAfter: 1.5
     )
@@ -207,6 +202,7 @@ class LiveStore: ObservableObject {
     func getRoomList(index: Int) {
         isLoading = true
         if roomListType == .search {
+            searchRoomWithText(text: searchText)
             return
         }
         switch roomListType {
@@ -315,19 +311,35 @@ class LiveStore: ObservableObject {
     
     func searchRoomWithText(text: String) {
         isLoading = true
+        if roomPage == 1 {
+            self.roomList.removeAll()
+        }
         Task {
             let bilibiliResList = try await Bilibili.searchRooms(keyword: text, page: roomPage)
             let douyinResList = try await Douyin.searchRooms(keyword: text, page: roomPage)
+            var finalDouyinResList: [LiveModel] = []
+            for room in douyinResList {
+                let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                finalDouyinResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
+            }
             let huyaResList = try await Huya.searchRooms(keyword: text, page: roomPage)
             let douyuResList = try await Douyu.searchRooms(keyword: text, page: roomPage)
+            var finalDouyuResList: [LiveModel] = []
+            for room in douyuResList {
+                let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                finalDouyuResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
+            }
             var resArray: [LiveModel] = []
             resArray.append(contentsOf: bilibiliResList)
-            resArray.append(contentsOf: douyinResList)
+            resArray.append(contentsOf: finalDouyinResList)
             resArray.append(contentsOf: huyaResList)
-            resArray.append(contentsOf: douyuResList)
+            resArray.append(contentsOf: finalDouyuResList)
             DispatchQueue.main.async {
-                self.roomList.removeAll()
-                self.roomList.append(contentsOf: resArray)
+                for item in resArray {
+                    if self.roomList.contains(where: { $0 == item }) == false {
+                        self.roomList.append(item)
+                    }
+                }
                 self.isLoading = false
             }
             
@@ -345,9 +357,11 @@ class LiveStore: ObservableObject {
                     self.isLoading = false
                 }
             }else if text.contains("douyin") {
-                let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+                let room = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+                let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                let finalDouyinResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
                 DispatchQueue.main.async {
-                    self.roomList.append(douyinResRoom)
+                    self.roomList.append(finalDouyinResRoom)
                     self.isLoading = false
                 }
             }else if text.contains("huya") {
@@ -357,9 +371,11 @@ class LiveStore: ObservableObject {
                     self.isLoading = false
                 }
             }else if text.contains("douyu") {
-                let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+                let room = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+                let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                let finalDouyuResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
                 DispatchQueue.main.async {
-                    self.roomList.append(douyuResRoom)
+                    self.roomList.append(finalDouyuResRoom)
                     self.isLoading = false
                 }
             }else { //如果是房间号?

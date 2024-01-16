@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+class SettingStore: ObservableObject {
+    @AppStorage("SimpleLive.Setting.BilibiliCookie") var bilibiliCookie = ""
+}
+
 struct SettingView: View {
     
     let titles = ["哔哩哔哩登录", "弹幕设置", "历史记录", "关于"]
@@ -14,6 +18,7 @@ struct SettingView: View {
     @State var isLogin = false
     @State var isPushed = false
     @StateObject var danmuSettingModel = DanmuSettingStore()
+    @StateObject var settingStore = SettingStore()
     
     var body: some View {
         GeometryReader { geometry in
@@ -40,7 +45,7 @@ struct SettingView: View {
                                 Text(title)
                                 Spacer()
                                 if title == "哔哩哔哩登录" {
-                                    Text(isLogin ? "未登录" : "已登录")
+                                    Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
                                         .font(.system(size: 30))
                                         .foregroundStyle(.gray)
                                 }
@@ -54,6 +59,7 @@ struct SettingView: View {
                                 BilibiliLoginView()
                                     .background(.ultraThickMaterial)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .environmentObject(settingStore)
                             }else if title == "弹幕设置" {
                                 DanmuSettingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)

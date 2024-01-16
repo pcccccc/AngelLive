@@ -50,8 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "add0a87ec4e31e2ca2a0b2085f0559201e4f5918",
-        "version" : "7.10.1"
+        "revision" : "3ec0ab0bca4feb56e8b33e289c9496e89059dd08",
+        "version" : "7.10.2"
       }
     },
     {
@@ -68,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse.git",
       "state" : {
-        "revision" : "e4a440e132adbe5049300f7f544d2703503c0e65",
-        "version" : "1.0.7"
+        "revision" : "c1d03d12126ee308174af4fcc0b35121ca484b47",
+        "version" : "1.0.9"
       }
     },
     {
@@ -115,6 +115,15 @@
       "state" : {
         "revision" : "07f7f26ded8df9645c072f220378879c4642e063",
         "version" : "1.25.1"
+      }
+    },
+    {
+      "identity" : "swiftui-shimmer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/markiv/SwiftUI-Shimmer",
+      "state" : {
+        "branch" : "iOS17-animate-start-end-points",
+        "revision" : "72769ccb238c86cfac69dd6aaa3239553188b27c"
       }
     },
     {

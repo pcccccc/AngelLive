@@ -7,28 +7,41 @@
 
 import Foundation
 import LiveParse
+import SwiftUI
 
 class FavoriteStore: ObservableObject {
     
     @Published var roomList: [LiveModel] = []
     @Published var isLoading: Bool = false
+    @Published var cloudKitReady: Bool = false
+    @Published var cloudKitStateString: String = "正在检查状态"
     
     init() {
         self.fetchFavoriteRoomList()
+        self.getState()
     }
     
     func fetchFavoriteRoomList() {
-        isLoading = true
+        withAnimation(.easeInOut(duration: 0.25)) {
+            self.isLoading = true
+        }
         Task {
-            let roomList = try await CloudSQLManager.searchRecord()
-            DispatchQueue.main.async {
-                do {
-                    self.isLoading = false
+            do {
+                let roomList = try await CloudSQLManager.searchRecord()
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        self.isLoading = false
+                    }
                     self.roomList = roomList
-                }catch {
-                    self.isLoading = false
+                }
+            }catch {
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        self.isLoading = false
+                    }
                 }
             }
+            
         }
     }
     
@@ -49,7 +62,21 @@ class FavoriteStore: ObservableObject {
         }
     }
     
-    func getState() async throws -> String {
-        return await CloudSQLManager.getCloudState()
+    func getState() {
+        Task {
+            let stateString = await CloudSQLManager.getCloudState()
+            DispatchQueue.main.async {
+                self.cloudKitStateString = stateString
+                if stateString == "正常" {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        self.cloudKitReady = true
+                    }
+                }else {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        self.cloudKitReady = false
+                    }
+                }
+            }
+        }
     }
 }
