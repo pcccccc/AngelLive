@@ -202,6 +202,7 @@ struct LiveCardView: View {
                             self.isLive = isLive
                         })
                         .environmentObject(liveViewModel.roomInfoViewModel ?? RoomInfoStore(currentRoom: LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "", liveWatchedCount: "")))
+                        .environmentObject(favoriteStore)
                         .edgesIgnoringSafeArea(.all)
                     })
                 })

@@ -8,24 +8,47 @@
 import Foundation
 import KSPlayer
 import LiveParse
+import SimpleToast
 
 class RoomInfoStore: ObservableObject {
     
     @Published var roomList: [LiveModel] = []
     @Published var currentRoom: LiveModel
     @Published var playerCoordinator = KSVideoPlayer.Coordinator()
-    @Published var option = KSOptions()
+    @Published var option: KSOptions = {
+        let options = KSOptions()
+        options.userAgent = "libmpv"
+        return options
+    }()
     @Published var currentRoomPlayArgs: [LiveQualityModel]?
     @Published var currentPlayURL: URL?
+    @Published var currentPlayQualityString = "清晰度"
     @Published var danmuSettingModel = DanmuSettingStore()
     @Published var showControlView: Bool = true
     @Published var isPlaying = false
     @Published var douyuFirstLoad = true
     
+    @Published var isLoading = false
+    @Published var rotationAngle = 0.0
+    
+    @Published var isLeftFocused: Bool = false
+    @Published var showToast: Bool = false
+    @Published var toastTitle: String = ""
+    @Published var toastTypeIsSuccess: Bool = false
+    @Published var toastOptions = SimpleToastOptions(
+        hideAfter: 1.5
+    )
+
+    @Published var debugTimerIsActive = false
+    @Published var dynamicInfo: DynamicInfo?
+    @Published var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
     init(currentRoom: LiveModel) {
+        KSOptions.isAutoPlay = true
+        KSOptions.isSecondOpen = true
         self.currentRoom = currentRoom
         getPlayArgs()
     }
@@ -34,23 +57,25 @@ class RoomInfoStore: ObservableObject {
      切换清晰度
     */
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
-        
-        KSOptions.isAutoPlay = true
-        KSOptions.isSecondOpen = true
-        option.userAgent = "libmpv"
         guard currentRoomPlayArgs != nil else {
+            isLoading = false
             return
         }
+
         let currentCdn = currentRoomPlayArgs![cdnIndex]
         let currentQuality = currentCdn.qualitys[urlIndex]
+        currentPlayQualityString = currentQuality.title
         
-        if currentRoom.liveType == .bilibili {
+        option.userAgent = "libmpv"
+        
+        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 {
             for item in currentRoomPlayArgs! {
                 for liveQuality in item.qualitys {
                     if liveQuality.liveCodeType == .hls {
                         KSOptions.firstPlayerType = KSAVPlayer.self
                         KSOptions.secondPlayerType = KSMEPlayer.self
                         self.currentPlayURL = URL(string: liveQuality.url)!
+                        currentPlayQualityString = liveQuality.title
                         return
                     }
                 }
@@ -60,11 +85,11 @@ class RoomInfoStore: ObservableObject {
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }
         }else {
-            if currentQuality.liveCodeType == .flv {
-                KSOptions.firstPlayerType = KSMEPlayer.self
+            if currentQuality.liveCodeType == .hls {
+                KSOptions.firstPlayerType = KSAVPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }else {
-                KSOptions.firstPlayerType = KSAVPlayer.self
+                KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }
         }
@@ -76,15 +101,15 @@ class RoomInfoStore: ObservableObject {
                 let playArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: currentQuality.qn, cdn: currentCdn.douyuCdnName)
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
-                    self.playerCoordinator.playerLayer?.resetPlayer()
                     self.currentPlayURL = URL(string: currentQuality?.url ?? "")!
                 }
             }
         }else {
             douyuFirstLoad = false
             self.currentPlayURL = URL(string: currentQuality.url)!
+//            self.playerCoordinator.playerLayer?.resetPlayer()
         }
-        
+        isLoading = false
     }
     
     /**
@@ -93,6 +118,7 @@ class RoomInfoStore: ObservableObject {
      - Returns: 播放清晰度、url等参数
     */
     func getPlayArgs() {
+        isLoading = true
         Task {
             do {
                 var playArgs: [LiveQualityModel] = []
@@ -118,6 +144,7 @@ class RoomInfoStore: ObservableObject {
     }
     
     func setPlayerDelegate() {
+        playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
     }
     
@@ -144,6 +171,30 @@ class RoomInfoStore: ObservableObject {
     func disConnectSocket() {
         self.socketConnection?.disconnect()
     }
+    
+    func showToast(_ success: Bool, title: String) {
+        self.showToast = true
+        self.toastTitle = title
+        self.toastTypeIsSuccess = success
+    }
+    
+    func toggleTimer() {
+        if debugTimerIsActive == false {
+            startTimer()
+        }else {
+            stopTimer()
+        }
+    }
+    
+    func startTimer() {
+        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+        debugTimerIsActive = true
+    }
+
+    func stopTimer() {
+        timer.upstream.connect().cancel()
+        debugTimerIsActive = false
+    }
 }
 
 extension RoomInfoStore: WebSocketConnectionDelegate {
@@ -164,6 +215,7 @@ extension RoomInfoStore: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying
+        self.dynamicInfo = layer.player.dynamicInfo
         if state == .paused {
             showControlView = true
         }

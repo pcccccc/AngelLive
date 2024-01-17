@@ -6,12 +6,16 @@
 //
 
 import SwiftUI
+import SimpleToast
+import KSPlayer
 
 struct PlayerControlView: View {
     
     @StateObject var danmuSetting = DanmuSettingStore()
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
+    @EnvironmentObject var favoriteStore: FavoriteStore
     @FocusState var isFocused: Int?
+    
     let topGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
         startPoint: .top,
@@ -39,11 +43,30 @@ struct PlayerControlView: View {
                     .frame(height: 150)
             }
             .frame(height: 150)
+            HStack {
+                Spacer()
+                if roomInfoViewModel.debugTimerIsActive {
+                    VStack {
+                        Text("Display FPS:\(roomInfoViewModel.dynamicInfo!.displayFPS)")
+                        LabeledContent("Display FPS", value: roomInfoViewModel.dynamicInfo!.displayFPS, format: .number)
+//                        LabeledContent("Audio Video sync", value: roomInfoViewModel.dynamicInfo!.audioVideoSyncDiff, format: .number)
+//                        LabeledContent("Dropped Frames", value: roomInfoViewModel.dynamicInfo!.droppedVideoFrameCount + roomInfoViewModel.dynamicInfo!.droppedVideoPacketCount, format: .number)
+//                        LabeledContent("Bytes Read", value: roomInfoViewModel.dynamicInfo!.bytesRead.kmFormatted + "B")
+//                        LabeledContent("Audio bitrate", value: roomInfoViewModel.dynamicInfo!.audioBitrate.kmFormatted + "bps")
+//                        LabeledContent("Video bitrate", value: roomInfoViewModel.dynamicInfo!.videoBitrate.kmFormatted + "bps")
+                    }
+                }
+            }
             Spacer()
             HStack(alignment: .center, spacing: 15) {
                 Button(action: {
                     if (roomInfoViewModel.showControlView == false) {
                         roomInfoViewModel.showControlView = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                            if roomInfoViewModel.showControlView == true {
+                                roomInfoViewModel.showControlView = false
+                            }
+                        })
                     }else {
                         if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
                             roomInfoViewModel.playerCoordinator.playerLayer?.pause()
@@ -51,13 +74,68 @@ struct PlayerControlView: View {
                             roomInfoViewModel.playerCoordinator.playerLayer?.play()
                         }
                     }
-                    
-                    
                 }, label: {
                     Image(systemName: roomInfoViewModel.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                })
+                .contextMenu(menuItems: {
+                    Button("debug mode") {
+//                        roomInfoViewModel.toggleTimer()
+                    }
+                })
+                .clipShape(.circle)
+                Button(action: {
+                    if (roomInfoViewModel.showControlView == false) {
+                        roomInfoViewModel.showControlView = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                            if roomInfoViewModel.showControlView == true {
+                                roomInfoViewModel.showControlView = false
+                            }
+                        })
+                    }else {
+                        roomInfoViewModel.getPlayArgs()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+                            if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                                roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                                    roomInfoViewModel.showControlView = false
+                                })
+                            }
+                        })
+                    }
+                }, label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .foregroundColor(.white)
+                        .font(.system(size: 30, weight: .bold))
                         .frame(width: 40, height: 40)
                 })
                 .clipShape(.circle)
+                .padding(.leading, -20)
+                Button(action: {
+                    if (roomInfoViewModel.showControlView == false) {
+                        roomInfoViewModel.showControlView = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                            if roomInfoViewModel.showControlView == true {
+                                roomInfoViewModel.showControlView = false
+                            }
+                        })
+                    }else {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            favoriteAction()
+                        }
+                    }
+                }, label: {
+                    Image(systemName:  favoriteStore.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
+                        .foregroundColor(favoriteStore.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? .red : .white)
+                        .font(.system(size: 30, weight: .bold))
+                        .frame(width: 40, height: 40)
+                        .padding(.top, 3)
+                        .contentTransition(.symbolEffect(.replace))
+                })
+                .clipShape(.circle)
+                .padding(.leading, -20)
                 Color.green
                     .cornerRadius(10)
                     .frame(width: 20, height: 20)
@@ -69,6 +147,11 @@ struct PlayerControlView: View {
                         Button(action: {
                             if (roomInfoViewModel.showControlView == false) {
                                 roomInfoViewModel.showControlView = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                                    if roomInfoViewModel.showControlView == true {
+                                        roomInfoViewModel.showControlView = false
+                                    }
+                                })
                             }else {}
                         }, label: {
                             if roomInfoViewModel.currentRoomPlayArgs == nil {
@@ -78,20 +161,27 @@ struct PlayerControlView: View {
                                     ForEach(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys.indices ?? 0 ..< 1, id: \.self) { subIndex in
                                         Button {
                                             roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+                                                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                                                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                                                        roomInfoViewModel.showControlView = false
+                                                    })
+                                                }
+                                            })
                                         } label: {
                                             Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
                                         }
-
                                     }
                                 } label: {
                                     Text(roomInfoViewModel.currentRoomPlayArgs?[index].cdn ?? "")
                                 }
-
                             }
                         })
                     }
                 } label: {
-                    Text("清晰度")
+                    Text(roomInfoViewModel.currentPlayQualityString)
+                        .font(.system(size: 30, weight: .bold))
                         .frame(height: 50, alignment: .center)
                         .padding(.top, 10)
                         .foregroundStyle(.white)
@@ -102,15 +192,18 @@ struct PlayerControlView: View {
                 Button(action: {
                     if (roomInfoViewModel.showControlView == false) {
                         roomInfoViewModel.showControlView = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                            if roomInfoViewModel.showControlView == true {
+                                roomInfoViewModel.showControlView = false
+                            }
+                        })
                     }else {
                         danmuSetting.showDanmu.toggle()
                     }
                 }, label: {
-                    Image(danmuSetting.showDanmu ? "icon-danmu-open-normal" : "icon-danmu-open-focus")
+                    Image(danmuSetting.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
                         .resizable()
                         .frame(width: 40, height: 40)
-                        
-                        
                 })
                 .clipShape(.circle)
             }
@@ -121,6 +214,31 @@ struct PlayerControlView: View {
                     .frame(height: 150)
             }
             .frame(height: 150)
+        }
+        .onReceive(roomInfoViewModel.timer, perform: { _ in
+            roomInfoViewModel.dynamicInfo = roomInfoViewModel.playerCoordinator.playerLayer?.player.dynamicInfo
+        })
+        .simpleToast(isPresented: $roomInfoViewModel.showToast, options: roomInfoViewModel.toastOptions) {
+            Label(roomInfoViewModel.toastTitle, systemImage: roomInfoViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                .padding()
+                .background(roomInfoViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                .foregroundColor(Color.white)
+                .cornerRadius(10)
+                .padding(.top)
+        }
+    }
+    
+    func favoriteAction() {
+        if favoriteStore.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
+            Task {
+                try await favoriteStore.addFavorite(room: roomInfoViewModel.currentRoom)
+                roomInfoViewModel.showToast(true, title: "收藏成功")
+            }
+        }else {
+            Task {
+                try await  favoriteStore.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
+                roomInfoViewModel.showToast(true, title: "取消收藏成功")
+            }
         }
     }
 }

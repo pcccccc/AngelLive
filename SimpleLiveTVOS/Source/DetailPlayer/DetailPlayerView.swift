@@ -13,6 +13,7 @@ import AVKit
 struct DetailPlayerView: View {
     
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
+    @EnvironmentObject var favoriteStore: FavoriteStore
     
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
@@ -48,6 +49,7 @@ struct DetailPlayerView: View {
                                 .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
                                 .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
                                 .environmentObject(roomInfoViewModel.danmuSettingModel)
+                                .environmentObject(favoriteStore)
                             if roomInfoViewModel.danmuSettingModel.danmuAreaIndex < 3 {
                                 Spacer()
                             }
@@ -57,7 +59,13 @@ struct DetailPlayerView: View {
             .onDisappear {
                 roomInfoViewModel.disConnectSocket()
             }
-            
+            .onExitCommand(perform: {
+                if roomInfoViewModel.showControlView == true {
+                    roomInfoViewModel.showControlView = false
+                }else {
+                    didExitView(false, "")
+                }
+            })
         }
     }
 }
