@@ -6,9 +6,7 @@
 
 ## 问题反馈
 
-[Telegram](https://t.me/+N1BDeo05leU0OWVl)
-
-[提交issue](https://github.com/pcccccc/SimpleLiveTVOS/issues/new/choose)
+[Telegram](https://t.me/+N1BDeo05leU0OWVl) 或 [提交issue](https://github.com/pcccccc/SimpleLiveTVOS/issues/new/choose)
 
 ## 截图：
 
@@ -48,44 +46,46 @@ tvOS 17+
 
 [wbt5/real-url](https://github.com/wbt5/real-url)
 
+[Lakr233/ColorfulX](https://github.com/Lakr233/ColorfulX) `感谢大佬的Rayon帮我学习了SwiftUI开发`
+
 [Alamofire](https://github.com/Alamofire/Alamofire)
-
-[Kingfisher](https://github.com/onevcat/Kingfisher)
-
-[ColorfulX](https://github.com/Lakr233/ColorfulX) 
-
-[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` [FFMPEG](https://github.com/FFmpeg/FFmpeg)
-
-[dart_tars_protocol](https://github.com/xiaoyaocz/dart_tars_protocol.git)
-
-[Shimmer](https://github.com/markiv/SwiftUI-Shimmer)
-
-[SimpleToast](https://github.com/sanzaru/SimpleToast)
 
 [DanmakuKit](https://github.com/qyz777/DanmakuKit)
 
 [GZipSwift](https://github.com/1024jp/GzipSwift)
 
-[SWCompression](https://github.com/tsolomko/SWCompression)
+[Kingfisher](https://github.com/onevcat/Kingfisher)
+
+[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` [FFMPEG](https://github.com/FFmpeg/FFmpeg)
+
+[Shimmer](https://github.com/markiv/SwiftUI-Shimmer)
+
+[SimpleToast](https://github.com/sanzaru/SimpleToast)
 
 [Starscream](https://github.com/daltoniam/Starscream)
+
+[SWCompression](https://github.com/tsolomko/SWCompression)
 
 
 ## 特别感谢：
 
 感谢以上开源仓库作者为开发者做出的贡献。
 
-Dazzle开发者: Groot 
+---
 
-Trunip Player开发者: 萝卜 
+Dazzle开发者: Groot 、Trunip Player开发者: 萝卜 
 
-特别感谢以上开发者给予软件改版中的指导和支持。
+感谢以上开发者给予软件改版中的指导和支持。
+
+---
 
 感谢Telegram群组中的各位发现的问题与建议。
 
-感谢JetBrains提供开源许可，在此表达我的感谢。
+---
 
 <a href="https://jb.gg/OpenSourceSupport" target="_blank"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo (Main) logo." width="150"></a>
+
+感谢JetBrains提供开源许可，在此表达我的感谢。
 
 ## 免责声明：
 
