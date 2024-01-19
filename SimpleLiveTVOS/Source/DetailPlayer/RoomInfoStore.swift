@@ -61,8 +61,17 @@ class RoomInfoStore: ObservableObject {
             isLoading = false
             return
         }
+        
+        if cdnIndex >= currentRoomPlayArgs?.count ?? 0 {
+            return
+        }
 
         let currentCdn = currentRoomPlayArgs![cdnIndex]
+        
+        if urlIndex >= currentCdn.qualitys.count {
+            return
+        }
+        
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
         
@@ -138,7 +147,7 @@ class RoomInfoStore: ObservableObject {
                     self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
                 }
             }catch {
-                
+                print(error)
             }
         }
     }

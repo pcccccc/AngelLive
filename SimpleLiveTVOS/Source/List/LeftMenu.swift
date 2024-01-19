@@ -117,6 +117,11 @@ struct LeftMenu: View {
         .onAppear {
             colors = colorScheme == .dark ? [Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1), Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
         }
+        .onExitCommand(perform: {
+            if liveViewModel.showOverlay == true {
+                liveViewModel.showOverlay = false
+            }
+        })
     }
 }
 
@@ -174,10 +179,17 @@ struct SubMenuItem: View {
                     liveViewModel.roomPage = 1
                     liveViewModel.getRoomList(index: index)
                 }, label: {
-                    KFImage(URL(string: icon))
-                        .resizable()
-                        .frame(width: 20, height: 20, alignment: .leading)
-                        .padding(.leading, -20)
+                    if icon == "douyin" {
+                        Image(icon)
+                            .resizable()
+                            .frame(width: 20, height: 20, alignment: .leading)
+                            .padding(.leading, -20)
+                    }else {
+                        KFImage(URL(string: icon))
+                            .resizable()
+                            .frame(width: 20, height: 20, alignment: .leading)
+                            .padding(.leading, -20)
+                    }
                     Text(title)
                         .font(.system(size: 20))
                         .frame(width: 110, height: 20, alignment: .leading)
