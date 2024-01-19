@@ -46,7 +46,7 @@ tvOS 17+
 
 [wbt5/real-url](https://github.com/wbt5/real-url)
 
-[Lakr233/ColorfulX](https://github.com/Lakr233/ColorfulX) `感谢大佬的Rayon帮我学习了SwiftUI开发`
+[Lakr233/ColorfulX](https://github.com/Lakr233/ColorfulX)
 
 [Alamofire](https://github.com/Alamofire/Alamofire)
 
