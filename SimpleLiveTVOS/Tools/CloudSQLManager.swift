@@ -7,6 +7,7 @@
 
 import Foundation
 import CloudKit
+import LiveParse
 
 let roomId_colum_cloud = "room_id"
 let userId_column_cloud = "user_id"
@@ -18,7 +19,9 @@ let liveType_column_cloud =  "live_type"
 let liveState_column_cloud = "live_state"
 let ck_identifier = "iCloud.icloud.dev.igod.simplelive"
 
+
 class CloudSQLManager: NSObject {
+    
     class func saveRecord(liveModel: LiveModel) async throws {
         let rec = CKRecord(recordType: "favorite_streamers")
         rec.setValue(liveModel.roomId, forKey: roomId_colum_cloud)
@@ -40,7 +43,7 @@ class CloudSQLManager: NSObject {
         let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
         var temp: Array<LiveModel> = []
         for record in recordArray {
-            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? ""))
+            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "", liveWatchedCount: nil))
         }
         return temp
     }
@@ -53,7 +56,7 @@ class CloudSQLManager: NSObject {
         let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
         var temp: Array<LiveModel> = []
         for record in recordArray {
-            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? ""))
+            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "", liveWatchedCount: nil))
         }
         return temp
     }
@@ -77,13 +80,13 @@ class CloudSQLManager: NSObject {
                 case .available:
                     return "正常"
                 case .couldNotDetermine:
-                    return "无法确定状态"
+                    return "无法确定状态,请检查iCloud服务/网络连接是否正常"
                 case .restricted:
-                    return "受限"
+                    return "iCloud用户受限"
                 case .noAccount:
-                    return "请登录iCloud"
+                    return "未登录iCloud，请进入 系统设置-用户和账户 登录Apple ID"
                 case .temporarilyUnavailable:
-                    return "暂时不可用，请尝试更新Apple ID设置"
+                    return "iCloud服务不可用，请进入 系统设置-用户和账户 更新用户状态"
                 default:
                     return "无法确定状态"
             }
