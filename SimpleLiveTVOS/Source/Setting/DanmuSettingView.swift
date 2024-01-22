@@ -64,15 +64,18 @@ struct DanmuSettingView: View {
                         .frame(width: 500, height: 45)
                         HStack {
                             Text("    透明度：")
-                            TextField("透明度：(0.1-1.0)", text: Binding(
-                                get: {
-                                    "\(danmuSettingModel.danmuAlpha)"
-                                }, set: {
-                                    danmuSettingModel.danmuAlpha = Double($0) ?? 1.0
-                                }
-                            ))
+                            TextField("透明度：(0.1-1.0)", text: $danmuSettingModel.danmuAlphaString)
                                 .keyboardType(.decimalPad)
                                 .submitLabel(.done)
+                                .onChange(of: danmuSettingModel.danmuAlphaString) { oldValue, newValue in
+                                    if Double(newValue) != nil && Double(newValue) ?? 0 > 0.09 && Double(newValue) ?? 0 < 1.01  {
+                                        danmuSettingModel.danmuAlpha = Double(newValue)!
+                                    }
+                                }
+                                .onAppear {
+                                    danmuSettingModel.danmuAlphaString = "\(danmuSettingModel.danmuAlpha)"
+                                }
+                                
                         }
                         .frame(width: 500, height: 45)
                         HStack {

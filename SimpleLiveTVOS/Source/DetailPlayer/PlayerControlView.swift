@@ -216,7 +216,7 @@ struct PlayerControlView: View {
             .frame(height: 150)
         }
         .onReceive(roomInfoViewModel.timer, perform: { _ in
-            roomInfoViewModel.dynamicInfo = roomInfoViewModel.playerCoordinator.playerLayer?.player.dynamicInfo
+//            roomInfoViewModel.dynamicInfo = roomInfoViewModel.playerCoordinator.playerLayer?.player.dynamicInfo
         })
         .simpleToast(isPresented: $roomInfoViewModel.showToast, options: roomInfoViewModel.toastOptions) {
             Label(roomInfoViewModel.toastTitle, systemImage: roomInfoViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
