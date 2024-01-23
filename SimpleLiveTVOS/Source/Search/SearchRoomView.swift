@@ -20,24 +20,26 @@ struct SearchRoomView: View {
         VStack {
             Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
             HStack {
-                Menu(liveViewModel.searchTypeArray[liveViewModel.searchTypeIndex]) {
+                Picker(selection: $liveViewModel.searchTypeIndex) {
                     ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
-                        Button(liveViewModel.searchTypeArray[index]) {
-                            liveViewModel.searchTypeIndex = index
-                        }
+                        // 需要有一个变量text。不然会自动帮忙加很多0
+                        let text = liveViewModel.searchTypeArray[index]
+                        Text(text)
                     }
+                } label: {
+                    Text("字体大小")
                 }
-                TextField("搜索", text: $liveViewModel.searchText)
-                .onSubmit {
-                    if liveViewModel.searchTypeIndex == 0 {
-                        liveViewModel.roomPage = 1
-                        liveViewModel.searchRoomWithText(text: liveViewModel.searchText)
-                    }else {
-                        liveViewModel.roomPage = 1
-                        liveViewModel.searchRoomWithShareCode(text: liveViewModel.searchText)
-                    }
-                    
+            }
+            TextField("搜索", text: $liveViewModel.searchText)
+            .onSubmit {
+                if liveViewModel.searchTypeIndex == 0 {
+                    liveViewModel.roomPage = 1
+                    liveViewModel.searchRoomWithText(text: liveViewModel.searchText)
+                }else {
+                    liveViewModel.roomPage = 1
+                    liveViewModel.searchRoomWithShareCode(text: liveViewModel.searchText)
                 }
+                
             }
             Spacer()
             ScrollView {

@@ -204,6 +204,7 @@ struct LiveCardView: View {
                         .environmentObject(liveViewModel.roomInfoViewModel ?? RoomInfoStore(currentRoom: LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "", liveWatchedCount: "")))
                         .environmentObject(favoriteStore)
                         .edgesIgnoringSafeArea(.all)
+                        .frame(width: 1920, height: 1080)
                     })
                 })
                 HStack(spacing: 15) {

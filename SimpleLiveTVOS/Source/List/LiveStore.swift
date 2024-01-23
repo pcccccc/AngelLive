@@ -108,7 +108,7 @@ class LiveStore: ObservableObject {
     @Published public var favoriteStore: FavoriteStore?
     
     @Published var loadingText: String = "正在获取内容"
-    @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号"]
+    @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号(抖音码选这个)"]
     @Published var searchTypeIndex = 0
     @Published var searchText: String = ""
     @Published var showAlert: Bool = false
