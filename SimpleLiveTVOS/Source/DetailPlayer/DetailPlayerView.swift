@@ -58,7 +58,6 @@ struct DetailPlayerView: View {
                         Spacer()
                     }
                     DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
-                        .zIndex(2)
                         .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
                         .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
                         .environmentObject(roomInfoViewModel.danmuSettingModel)
@@ -67,6 +66,7 @@ struct DetailPlayerView: View {
                         Spacer()
                     }
                 }
+                .zIndex(2)
             }
             .onExitCommand(perform: {
                 if roomInfoViewModel.showControlView == true {
