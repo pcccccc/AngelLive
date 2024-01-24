@@ -45,7 +45,7 @@ struct DetailPlayerView: View {
                                 }
                         }
                     }
-                    .ignoresSafeArea(.all)
+                    .safeAreaPadding(.all)
                     .zIndex(1)
                 PlayerControlView()
                     .environmentObject(roomInfoViewModel)
@@ -73,6 +73,13 @@ struct DetailPlayerView: View {
                     roomInfoViewModel.showControlView = false
                 }else {
                     didExitView(false, "")
+                }
+            })
+            .onPlayPauseCommand(perform: {
+                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying == true {
+                    roomInfoViewModel.playerCoordinator.playerLayer?.pause()
+                }else {
+                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
                 }
             })
         }
