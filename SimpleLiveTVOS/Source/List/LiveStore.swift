@@ -247,7 +247,6 @@ class LiveStore: ObservableObject {
                         for index in 0 ..< self.roomList.count {
                             self.getLastestRoomInfo(index)
                         }
-                        self.isLoading = false
                     }
                 }
             case .history:
@@ -276,22 +275,31 @@ class LiveStore: ObservableObject {
             return
         }
         Task {
-            let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
-            DispatchQueue.main.async {
-                if index >= self.roomList.count { return }
-                self.roomList[index] = newLiveModel
-                self.isLoading = false
-                let endLoading = self.roomList.allSatisfy{ $0.liveState != "" && $0.liveState != nil }
-                if endLoading && self.roomListType == .favorite {
-                    self.roomList = self.roomList.sorted(by: {
-                        if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
-                            return true
-                        }else {
-                            return false
-                        }
-                    })
-                    
+            do {
+                var newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
+                if newLiveModel.liveState == "" || newLiveModel.liveState == nil {
+                    newLiveModel.liveState = "0"
                 }
+                DispatchQueue.main.async {
+                    if index >= self.roomList.count { return }
+                    self.roomList[index] = newLiveModel
+                    let endLoading = self.roomList.allSatisfy{ $0.liveState != "" && $0.liveState != nil }
+                    if endLoading && self.roomListType == .favorite {
+                        self.roomList = self.roomList.sorted(by: {
+                            if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
+                                return true
+                            }else {
+                                return false
+                            }
+                        })
+                        self.roomList = self.roomList
+                        self.isLoading = false
+                    }else {
+                        self.isLoading = true
+                    }
+                }
+            }catch {
+                print(error)
             }
         }
     }

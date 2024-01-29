@@ -116,6 +116,10 @@ struct LeftMenu: View {
         .background(ColorfulView(colors: $colors, speedFactor: $speed))
         .onAppear {
             colors = colorScheme == .dark ? [Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1), Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
+            speed = 0.5
+        }
+        .onDisappear {
+            speed = 0
         }
         .onExitCommand(perform: {
             if liveViewModel.showOverlay == true {

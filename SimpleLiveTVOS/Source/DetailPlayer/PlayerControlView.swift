@@ -14,7 +14,10 @@ struct PlayerControlView: View {
     @StateObject var danmuSetting = DanmuSettingStore()
     @EnvironmentObject var roomInfoViewModel: RoomInfoStore
     @EnvironmentObject var favoriteStore: FavoriteStore
-    @FocusState var isFocused: Int?
+    @FocusState var leftFocusState: Bool
+    @FocusState var rightFocusState: Bool
+    @FocusState var playFocusState: Bool
+    @FocusState var danmuFocusState: Bool
     
     let topGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
@@ -59,6 +62,13 @@ struct PlayerControlView: View {
             }
             Spacer()
             HStack(alignment: .center, spacing: 15) {
+                Button(action: {}, label: {
+                    
+                })
+                .padding(.leading, -80)
+                .clipShape(.circle)
+                .frame(width: 40, height: 40)
+                .focused($leftFocusState)
                 Button(action: {
                     if (roomInfoViewModel.showControlView == false) {
                         roomInfoViewModel.showControlView = true
@@ -80,12 +90,15 @@ struct PlayerControlView: View {
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
                 })
+                .focusSection()
                 .contextMenu(menuItems: {
                     Button("debug mode") {
 //                        roomInfoViewModel.toggleTimer()
                     }
                 })
+                .focused($playFocusState)
                 .clipShape(.circle)
+                .padding(.leading, -20)
                 Button(action: {
                     if (roomInfoViewModel.showControlView == false) {
                         roomInfoViewModel.showControlView = true
@@ -205,8 +218,31 @@ struct PlayerControlView: View {
                         .resizable()
                         .frame(width: 40, height: 40)
                 })
+                .focused($danmuFocusState)
+                .focusSection()
                 .clipShape(.circle)
+                
+                Button(action: {}, label: {
+                    
+                })
+                .focused($rightFocusState)
+                .padding(.trailing, 110)
+                .clipShape(.circle)
+                .frame(width: 40, height: 40)
             }
+            .onAppear {
+                playFocusState = true
+            }
+            .onChange(of: leftFocusState, { oldValue, newValue in
+                if leftFocusState == true {
+                    danmuFocusState = true
+                }
+            })
+            .onChange(of: rightFocusState, { oldValue, newValue in
+                if rightFocusState == true {
+                    playFocusState = true
+                }
+            })
             .background {
                 Rectangle()
                     .fill(bottomGradient)
