@@ -63,6 +63,7 @@ class LiveStore: ObservableObject {
         }
     }
     @Published var roomList: [LiveModel] = []
+    @Published var favoriteRoomList: [LiveModel] = []
     @Published var currentRoom: LiveModel? {
         didSet {
             if favoriteStore != nil {
@@ -238,13 +239,13 @@ class LiveStore: ObservableObject {
                 Task {
                     let resList = try await CloudSQLManager.searchRecord()
                     DispatchQueue.main.async {
-                        self.roomList.removeAll()
+                        self.favoriteRoomList.removeAll()
                         for item in resList {
-                            if self.roomList.contains(item) == false {
-                                self.roomList.append(item)
+                            if self.favoriteRoomList.contains(item) == false {
+                                self.favoriteRoomList.append(item)
                            }
                         }
-                        for index in 0 ..< self.roomList.count {
+                        for index in 0 ..< self.favoriteRoomList.count {
                             self.getLastestRoomInfo(index)
                         }
                     }
@@ -271,29 +272,34 @@ class LiveStore: ObservableObject {
     
     func getLastestRoomInfo(_ index: Int) {
         isLoading = true
-        if self.roomList.count <= index {
+        if self.favoriteRoomList.count <= index {
             return
         }
         Task {
             do {
-                var newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
+                var newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:favoriteRoomList[index])
                 if newLiveModel.liveState == "" || newLiveModel.liveState == nil {
                     newLiveModel.liveState = "0"
                 }
                 DispatchQueue.main.async {
-                    if index >= self.roomList.count { return }
-                    self.roomList[index] = newLiveModel
-                    let endLoading = self.roomList.allSatisfy{ $0.liveState != "" && $0.liveState != nil }
+                    if index >= self.favoriteRoomList.count { return }
+                    self.favoriteRoomList[index] = newLiveModel
+                    let endLoading = self.favoriteRoomList.allSatisfy{ $0.liveState != "" && $0.liveState != nil }
                     if endLoading && self.roomListType == .favorite {
-                        self.roomList = self.roomList.sorted(by: {
+                        var tempArray: Array<LiveModel> = []
+                        tempArray.append(contentsOf: self.favoriteRoomList)
+                        tempArray = tempArray.sorted(by: {
                             if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
                                 return true
                             }else {
                                 return false
                             }
                         })
-                        self.roomList = self.roomList
-                        self.isLoading = false
+                        self.roomList.removeAll()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+                            self.roomList.append(contentsOf: tempArray)
+                            self.isLoading = false
+                        })
                     }else {
                         self.isLoading = true
                     }

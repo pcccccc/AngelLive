@@ -9,6 +9,7 @@ import SwiftUI
 import Kingfisher
 import SimpleToast
 import LiveParse
+import Shimmer
 
 struct FavoriteMainView: View {
     
@@ -31,6 +32,13 @@ struct FavoriteMainView: View {
                                 .environmentObject(favoriteStore)
                                 .frame(width: 370, height: 240)
                         }
+                        if liveViewModel.isLoading {
+                            LoadingView()
+                                .frame(width: 370, height: 240)
+                                .cornerRadius(5)
+                                .shimmering(active: true)
+                                .redacted(reason: .placeholder)
+                        }
                     }
                     .safeAreaPadding(.top, 15)
                 }
@@ -42,11 +50,6 @@ struct FavoriteMainView: View {
         .onPlayPauseCommand(perform: {
             favoriteStore.fetchFavoriteRoomList()
             liveViewModel.roomPage = 1
-        })
-        .onChange(of: focusState, perform: { index in
-            if index ?? 0 >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
-                liveViewModel.roomPage += 1
-            }
         })
         .task {
             favoriteStore.fetchFavoriteRoomList()
