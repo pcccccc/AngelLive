@@ -157,6 +157,11 @@ struct LiveCardView: View {
                                 Task {
                                     do {
                                         try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        if liveViewModel.roomListType == .favorite {
+                                            DispatchQueue.main.async {
+                                                liveViewModel.roomList.remove(at: index)
+                                            }
+                                        }
                                         liveViewModel.showToast(true, title:"取消收藏成功")
                                     }catch {
                                         liveViewModel.showToast(false, title:error.localizedDescription)

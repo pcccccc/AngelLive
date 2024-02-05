@@ -297,7 +297,11 @@ class LiveStore: ObservableObject {
                         })
                         self.roomList.removeAll()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                            self.roomList.append(contentsOf: tempArray)
+                            for item in tempArray {
+                                if self.roomList.contains(item) == false {
+                                    self.roomList.append(contentsOf: tempArray)
+                               }
+                            }
                             self.isLoading = false
                         })
                     }else {
