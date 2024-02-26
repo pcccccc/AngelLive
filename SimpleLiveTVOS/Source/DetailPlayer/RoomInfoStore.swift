@@ -75,7 +75,12 @@ class RoomInfoStore: ObservableObject {
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
         
-        option.userAgent = "libmpv"
+        if currentRoom.liveType == .huya {
+            option.userAgent = "HYPlayer"
+        }else {
+            option.userAgent = "libmpv"
+        }
+        
         
         if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 {
             for item in currentRoomPlayArgs! {
