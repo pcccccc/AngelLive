@@ -98,6 +98,9 @@ class RoomInfoStore: ObservableObject {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }
+        }else if (currentRoom.liveType == .douyin) {
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = KSMEPlayer.self
         }else {
             if currentQuality.liveCodeType == .hls {
                 KSOptions.firstPlayerType = KSAVPlayer.self
@@ -107,6 +110,7 @@ class RoomInfoStore: ObservableObject {
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }
         }
+        
         
         if currentRoom.liveType == .douyu && douyuFirstLoad == false {
             Task {

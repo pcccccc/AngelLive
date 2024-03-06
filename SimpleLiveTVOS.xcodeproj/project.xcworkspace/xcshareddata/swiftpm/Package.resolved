@@ -1,5 +1,15 @@
 {
+  "originHash" : "6d649a6c9c3709491197f9424c5cc8d5c010d42f58cf80fa608362794792de8e",
   "pins" : [
+    {
+      "identity" : "acknowlist",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/AcknowList",
+      "state" : {
+        "branch" : "main",
+        "revision" : "7648ed852ba8b9fb5460f8b57436ddd6847d2043"
+      }
+    },
     {
       "identity" : "alamofire",
       "kind" : "remoteSourceControl",
@@ -32,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kingslay/FFmpegKit.git",
       "state" : {
-        "revision" : "ce7d13b161ad527417cfda9f00eaad2f8f7f9330",
-        "version" : "6.1.0"
+        "revision" : "4bd5fb4cbb8b9bcf980e7920491c654bde33c275",
+        "version" : "6.1.2"
       }
     },
     {
@@ -68,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse.git",
       "state" : {
-        "revision" : "1581cf1a0eb07b747f12b5bd868da446d1f459ee",
-        "version" : "1.1.5"
+        "revision" : "f32c20f4c50012eb4e91b79e7ab1531fad316b39",
+        "version" : "1.1.6"
       }
     },
     {
@@ -136,5 +146,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

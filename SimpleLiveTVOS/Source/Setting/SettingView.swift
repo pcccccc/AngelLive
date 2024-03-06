@@ -13,7 +13,7 @@ class SettingStore: ObservableObject {
 
 struct SettingView: View {
     
-    let titles = ["哔哩哔哩登录", "弹幕设置", "历史记录", "关于"]
+    let titles = ["哔哩哔哩登录", "弹幕设置", "历史记录", "开源许可", "关于"]
     @State var currentTitle: String?
     @State var isLogin = false
     @State var isPushed = false
@@ -67,6 +67,10 @@ struct SettingView: View {
                                     .environmentObject(danmuSettingModel)
                             }else if title == "历史记录" {
                                 HistoryListView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(.ultraThickMaterial)
+                            }else if title == "开源许可" {
+                                OpenSourceListView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.ultraThickMaterial)
                             }else {
