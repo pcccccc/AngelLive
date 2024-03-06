@@ -34,7 +34,6 @@
 		4FB732372B9882C100F02249 /* OpenSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB732362B9882C100F02249 /* OpenSourceListView.swift */; };
 		4FB7323F2B98884400F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB7323E2B98884400F02249 /* AcknowList */; };
 		4FB732422B988CDF00F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732412B988CDF00F02249 /* AcknowList */; };
-		4FB732442B98903700F02249 /* Package-version-1.resolved in Resources */ = {isa = PBXBuildFile; fileRef = 4FB732432B98903700F02249 /* Package-version-1.resolved */; };
 		4FB732472B98944C00F02249 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732462B98944C00F02249 /* FFmpegKit */; };
 		4FBAB9102B47A42200A77A5C /* DanmakuCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBAB9032B47A42200A77A5C /* DanmakuCell.swift */; };
 		4FBAB9112B47A42200A77A5C /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBAB9042B47A42200A77A5C /* DanmakuView.swift */; };
@@ -58,6 +57,7 @@
 		4FC475422B563C8D006A102D /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC475412B563C8D006A102D /* Shimmer */; };
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
+		FB21249D2B989E1A004C916F /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB21249C2B989E1A004C916F /* Package.resolved */; };
 		FB2175A52B14DF0D0068100B /* DanmuSettingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
@@ -118,7 +118,6 @@
 		4F9D56662B464F6800F2DECC /* SwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeView.swift; sourceTree = "<group>"; };
 		4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4FB732362B9882C100F02249 /* OpenSourceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceListView.swift; sourceTree = "<group>"; };
-		4FB732432B98903700F02249 /* Package-version-1.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = "Package-version-1.resolved"; path = "SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package-version-1.resolved"; sourceTree = "<group>"; };
 		4FBAB9032B47A42200A77A5C /* DanmakuCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmakuCell.swift; sourceTree = "<group>"; };
 		4FBAB9042B47A42200A77A5C /* DanmakuView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmakuView.swift; sourceTree = "<group>"; };
 		4FBAB9052B47A42200A77A5C /* DanmakuAsyncLayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmakuAsyncLayer.swift; sourceTree = "<group>"; };
@@ -143,6 +142,7 @@
 		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
+		FB21249C2B989E1A004C916F /* Package.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = Package.resolved; path = SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
 		FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingStore.swift; sourceTree = "<group>"; };
 		FB51019B2B0EECCB00A1AE0D /* Data+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+Extension.swift"; sourceTree = "<group>"; };
 		FB51019F2B104D5600A1AE0D /* UIColor+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIColor+Extension.swift"; sourceTree = "<group>"; };
@@ -328,7 +328,7 @@
 		4FC3DCD12A49382F00CA36B9 = {
 			isa = PBXGroup;
 			children = (
-				4FB732432B98903700F02249 /* Package-version-1.resolved */,
+				FB21249C2B989E1A004C916F /* Package.resolved */,
 				4FC3DCDC2A49382F00CA36B9 /* SimpleLiveTVOS */,
 				4FC3DCED2A49383100CA36B9 /* SimpleLiveTVOSTests */,
 				4FC3DCF72A49383100CA36B9 /* SimpleLiveTVOSUITests */,
@@ -544,8 +544,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4FA6C5272B3A7D1B0034F23C /* LaunchScreen.storyboard in Resources */,
-				4FB732442B98903700F02249 /* Package-version-1.resolved in Resources */,
 				4FC3DCE52A49383100CA36B9 /* Preview Assets.xcassets in Resources */,
+				FB21249D2B989E1A004C916F /* Package.resolved in Resources */,
 				4FC3DCE22A49383100CA36B9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
