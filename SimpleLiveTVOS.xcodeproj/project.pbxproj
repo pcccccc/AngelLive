@@ -32,9 +32,10 @@
 		4F9D56672B464F6800F2DECC /* SwipeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9D56662B464F6800F2DECC /* SwipeView.swift */; };
 		4FA6C5272B3A7D1B0034F23C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */; };
 		4FB732372B9882C100F02249 /* OpenSourceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB732362B9882C100F02249 /* OpenSourceListView.swift */; };
-		4FB7323C2B9884C500F02249 /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = 4FB7323B2B9884C500F02249 /* Package.resolved */; };
 		4FB7323F2B98884400F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB7323E2B98884400F02249 /* AcknowList */; };
 		4FB732422B988CDF00F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732412B988CDF00F02249 /* AcknowList */; };
+		4FB732442B98903700F02249 /* Package-version-1.resolved in Resources */ = {isa = PBXBuildFile; fileRef = 4FB732432B98903700F02249 /* Package-version-1.resolved */; };
+		4FB732472B98944C00F02249 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732462B98944C00F02249 /* FFmpegKit */; };
 		4FBAB9102B47A42200A77A5C /* DanmakuCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBAB9032B47A42200A77A5C /* DanmakuCell.swift */; };
 		4FBAB9112B47A42200A77A5C /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBAB9042B47A42200A77A5C /* DanmakuView.swift */; };
 		4FBAB9122B47A42200A77A5C /* DanmakuAsyncLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBAB9052B47A42200A77A5C /* DanmakuAsyncLayer.swift */; };
@@ -117,7 +118,7 @@
 		4F9D56662B464F6800F2DECC /* SwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeView.swift; sourceTree = "<group>"; };
 		4FA6C5262B3A7D1B0034F23C /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4FB732362B9882C100F02249 /* OpenSourceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenSourceListView.swift; sourceTree = "<group>"; };
-		4FB7323B2B9884C500F02249 /* Package.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = Package.resolved; path = SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
+		4FB732432B98903700F02249 /* Package-version-1.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = "Package-version-1.resolved"; path = "SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package-version-1.resolved"; sourceTree = "<group>"; };
 		4FBAB9032B47A42200A77A5C /* DanmakuCell.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmakuCell.swift; sourceTree = "<group>"; };
 		4FBAB9042B47A42200A77A5C /* DanmakuView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmakuView.swift; sourceTree = "<group>"; };
 		4FBAB9052B47A42200A77A5C /* DanmakuAsyncLayer.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmakuAsyncLayer.swift; sourceTree = "<group>"; };
@@ -172,6 +173,7 @@
 				FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */,
 				4FC475422B563C8D006A102D /* Shimmer in Frameworks */,
 				FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */,
+				4FB732472B98944C00F02249 /* FFmpegKit in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
 				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
 				FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */,
@@ -326,7 +328,7 @@
 		4FC3DCD12A49382F00CA36B9 = {
 			isa = PBXGroup;
 			children = (
-				4FB7323B2B9884C500F02249 /* Package.resolved */,
+				4FB732432B98903700F02249 /* Package-version-1.resolved */,
 				4FC3DCDC2A49382F00CA36B9 /* SimpleLiveTVOS */,
 				4FC3DCED2A49383100CA36B9 /* SimpleLiveTVOSTests */,
 				4FC3DCF72A49383100CA36B9 /* SimpleLiveTVOSUITests */,
@@ -435,6 +437,7 @@
 				4F6037EC2B8F3F620069413D /* LiveParse */,
 				4FB7323E2B98884400F02249 /* AcknowList */,
 				4FB732412B988CDF00F02249 /* AcknowList */,
+				4FB732462B98944C00F02249 /* FFmpegKit */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -522,6 +525,7 @@
 				4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
 				4F6037EB2B8F3F620069413D /* XCRemoteSwiftPackageReference "LiveParse" */,
 				4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */,
+				4FB732452B98944C00F02249 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -540,8 +544,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4FA6C5272B3A7D1B0034F23C /* LaunchScreen.storyboard in Resources */,
+				4FB732442B98903700F02249 /* Package-version-1.resolved in Resources */,
 				4FC3DCE52A49383100CA36B9 /* Preview Assets.xcassets in Resources */,
-				4FB7323C2B9884C500F02249 /* Package.resolved in Resources */,
 				4FC3DCE22A49383100CA36B9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -972,6 +976,14 @@
 				kind = branch;
 			};
 		};
+		4FB732452B98944C00F02249 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/FFmpegKit";
+			requirement = {
+				kind = exactVersion;
+				version = 6.1.2;
+			};
+		};
 		4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher";
@@ -1077,6 +1089,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */;
 			productName = AcknowList;
+		};
+		4FB732462B98944C00F02249 /* FFmpegKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FB732452B98944C00F02249 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = FFmpegKit;
 		};
 		4FC3DD082A49725F00CA36B9 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;

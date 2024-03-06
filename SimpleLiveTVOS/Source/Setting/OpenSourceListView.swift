@@ -11,7 +11,7 @@ import AcknowList
 struct OpenSourceListView: View {
     
     @State var acknowList: AcknowList = {
-        let url = Bundle.main.url(forResource: "Package", withExtension: "resolved")
+        let url = Bundle.main.url(forResource: "Package-version-1", withExtension: "resolved")
         let data = try? Data(contentsOf: url!)
         let acknowList = try? AcknowPackageDecoder().decode(from: data!)
         return acknowList!
