@@ -56,6 +56,11 @@
 		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
 		4FC475422B563C8D006A102D /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC475412B563C8D006A102D /* Shimmer */; };
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
+		4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */; };
+		4FCA39172BBA4EB800506675 /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCA39162BBA4EB800506675 /* SyncView.swift */; };
+		4FCA391A2BBA4F8E00506675 /* SyncSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCA39192BBA4F8E00506675 /* SyncSocketManager.swift */; };
+		4FCA391D2BBA5A8600506675 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391C2BBA5A8600506675 /* NIO */; };
+		4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391E2BBA5A8600506675 /* NIOHTTP1 */; };
 		FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */; };
 		FB21249D2B989E1A004C916F /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB21249C2B989E1A004C916F /* Package.resolved */; };
 		FB2175A52B14DF0D0068100B /* DanmuSettingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB2175A42B14DF0D0068100B /* DanmuSettingStore.swift */; };
@@ -143,6 +148,8 @@
 		4FC3DCF82A49383100CA36B9 /* SimpleLiveTVOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITests.swift; sourceTree = "<group>"; };
 		4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4FCA39162BBA4EB800506675 /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
+		4FCA39192BBA4F8E00506675 /* SyncSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSocketManager.swift; sourceTree = "<group>"; };
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB168FC42AE0C9730099B286 /* CloudSQLManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
 		FB21249C2B989E1A004C916F /* Package.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = Package.resolved; path = SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
@@ -173,8 +180,11 @@
 				4F1492412B44F4FC004073DB /* LiveParse in Frameworks */,
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
 				FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */,
+				4FCA391D2BBA5A8600506675 /* NIO in Frameworks */,
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
+				4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */,
 				4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */,
+				4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
 				FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */,
@@ -266,6 +276,7 @@
 				4F05A6B22B50CAD90033214E /* SettingView.swift */,
 				4F05A6B32B50CAD90033214E /* HistoryListView.swift */,
 				4FB732362B9882C100F02249 /* OpenSourceListView.swift */,
+				4FCA39162BBA4EB800506675 /* SyncView.swift */,
 			);
 			path = Setting;
 			sourceTree = "<group>";
@@ -285,6 +296,7 @@
 		4FBAB8FF2B47A3B000A77A5C /* Third */ = {
 			isa = PBXGroup;
 			children = (
+				4FCA39182BBA4F7600506675 /* Sync */,
 				4FBAB9002B47A42200A77A5C /* DanmakuKit */,
 			);
 			path = Third;
@@ -392,6 +404,14 @@
 			path = SimpleLiveTVOSUITests;
 			sourceTree = "<group>";
 		};
+		4FCA39182BBA4F7600506675 /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				4FCA39192BBA4F8E00506675 /* SyncSocketManager.swift */,
+			);
+			path = Sync;
+			sourceTree = "<group>";
+		};
 		FBC2E6F12ACD83350036BFD4 /* Tools */ = {
 			isa = PBXGroup;
 			children = (
@@ -456,6 +476,9 @@
 				4F70CD1F2BAAE75F00F21EDA /* LiveParse */,
 				FB525FD72BB9D1E800BFA18C /* FFmpegKit */,
 				FB525FDA2BB9D51900BFA18C /* UDPBroadcast */,
+				4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */,
+				4FCA391C2BBA5A8600506675 /* NIO */,
+				4FCA391E2BBA5A8600506675 /* NIOHTTP1 */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -545,6 +568,8 @@
 				4F70CD1E2BAAE75F00F21EDA /* XCRemoteSwiftPackageReference "LiveParse" */,
 				FB525FD62BB9D1E800BFA18C /* XCRemoteSwiftPackageReference "FFmpegKit" */,
 				FB525FD92BB9D51900BFA18C /* XCRemoteSwiftPackageReference "UDPBroadcastConnection" */,
+				4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */,
+				4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -599,6 +624,7 @@
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				4F05A6BD2B50CAD90033214E /* LeftMenu.swift in Sources */,
+				4FCA39172BBA4EB800506675 /* SyncView.swift in Sources */,
 				4F05A6C72B50CF6C0033214E /* FavoriteStore.swift in Sources */,
 				FB952EC92B03250C007A24F9 /* Common.swift in Sources */,
 				4F05A6C12B50CAD90033214E /* BilibiliLoginView.swift in Sources */,
@@ -629,6 +655,7 @@
 				4FBAB9172B47A42200A77A5C /* DanmakuGifCellModel.swift in Sources */,
 				FB168FC52AE0C9730099B286 /* CloudSQLManager.swift in Sources */,
 				4F05A6B92B50CAD90033214E /* FavoriteMainView.swift in Sources */,
+				4FCA391A2BBA4F8E00506675 /* SyncSocketManager.swift in Sources */,
 				FBA907842AE5100500A69FBE /* LoadingView.swift in Sources */,
 				4F05A6C52B50CB6E0033214E /* SearchStore.swift in Sources */,
 			);
@@ -1019,6 +1046,22 @@
 				minimumVersion = 5.7.1;
 			};
 		};
+		4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/robbiehanson/CocoaAsyncSocket";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.6.5;
+			};
+		};
+		4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.64.0;
+			};
+		};
 		FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/daltoniam/Starscream";
@@ -1135,6 +1178,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
+		};
+		4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */;
+			productName = CocoaAsyncSocket;
+		};
+		4FCA391C2BBA5A8600506675 /* NIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIO;
+		};
+		4FCA391E2BBA5A8600506675 /* NIOHTTP1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */;
+			productName = NIOHTTP1;
 		};
 		FB51018F2B0E35A900A1AE0D /* Starscream */ = {
 			isa = XCSwiftPackageProductDependency;
