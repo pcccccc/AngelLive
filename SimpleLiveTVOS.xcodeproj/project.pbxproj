@@ -74,8 +74,6 @@
 		FBC2E6F52ACD8EDA0036BFD4 /* String+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */; };
 		FBD737822B31CD260093C1CA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FBD737812B31CD260093C1CA /* KSPlayer */; };
 		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
-		FBDEF8352BB9CA41002EE8FF /* SyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEF8342BB9CA41002EE8FF /* SyncView.swift */; };
-		FBDEF8372BB9CA64002EE8FF /* UDPServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBDEF8362BB9CA64002EE8FF /* UDPServer.swift */; };
 		FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */; };
 		FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F52B122B5100B19C3E /* SwiftProtobuf */; };
 		FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F72B122B5100B19C3E /* SwiftProtobufPluginLibrary */; };
@@ -154,8 +152,6 @@
 		FB952EC82B03250C007A24F9 /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
 		FBA907832AE5100500A69FBE /* LoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		FBC2E6F42ACD8EDA0036BFD4 /* String+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Extension.swift"; sourceTree = "<group>"; };
-		FBDEF8342BB9CA41002EE8FF /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
-		FBDEF8362BB9CA64002EE8FF /* UDPServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UDPServer.swift; sourceTree = "<group>"; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -270,7 +266,6 @@
 				4F05A6B22B50CAD90033214E /* SettingView.swift */,
 				4F05A6B32B50CAD90033214E /* HistoryListView.swift */,
 				4FB732362B9882C100F02249 /* OpenSourceListView.swift */,
-				FBDEF8342BB9CA41002EE8FF /* SyncView.swift */,
 			);
 			path = Setting;
 			sourceTree = "<group>";
@@ -283,7 +278,6 @@
 				4FC3DD0A2A4972FB00CA36B9 /* Info.plist */,
 				4FC3DCDD2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift */,
 				4FC3DCDF2A49382F00CA36B9 /* ContentView.swift */,
-				FBDEF8362BB9CA64002EE8FF /* UDPServer.swift */,
 			);
 			path = Other;
 			sourceTree = "<group>";
@@ -597,7 +591,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
-				FBDEF8372BB9CA64002EE8FF /* UDPServer.swift in Sources */,
 				4F05A6B62B50CAD90033214E /* PlayerControlView.swift in Sources */,
 				4FBAB9122B47A42200A77A5C /* DanmakuAsyncLayer.swift in Sources */,
 				4F05A6B72B50CAD90033214E /* RoomInfoStore.swift in Sources */,
@@ -606,7 +599,6 @@
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				4F05A6BD2B50CAD90033214E /* LeftMenu.swift in Sources */,
-				FBDEF8352BB9CA41002EE8FF /* SyncView.swift in Sources */,
 				4F05A6C72B50CF6C0033214E /* FavoriteStore.swift in Sources */,
 				FB952EC92B03250C007A24F9 /* Common.swift in Sources */,
 				4F05A6C12B50CAD90033214E /* BilibiliLoginView.swift in Sources */,

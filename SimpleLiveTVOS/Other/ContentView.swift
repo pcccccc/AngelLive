@@ -84,60 +84,6 @@ struct ContentView: View {
             }
             Task {
                 try await Douyin.getRequestHeaders()
-                
-                let port = 23235
-                let backlog = 10
-                let bufferSize = 4096
-
-                // 创建服务器端套接字
-                let serverSocket = socket(AF_INET, SOCK_STREAM, 0)
-                guard serverSocket != -1 else {
-                    print("Error creating server socket")
-                    exit(-1)
-                }
-
-                // 绑定服务器套接字到指定端口
-                var serverAddress = sockaddr_in()
-                serverAddress.sin_family = sa_family_t(AF_INET)
-                serverAddress.sin_addr.s_addr = INADDR_ANY.bigEndian
-                serverAddress.sin_port = in_port_t(Int16(port).bigEndian)
-
-                let bindResult = bind(serverSocket, UnsafePointer<sockaddr>(&serverAddress), socklen_t(MemoryLayout<sockaddr_in>.size))
-                guard bindResult != -1 else {
-                    print("Error binding server socket to port")
-                    exit(-1)
-                }
-
-                // 监听客户端连接请求
-                listen(serverSocket, Int32(backlog))
-
-                while true {
-                    // 接受客户端连接
-                    var clientAddress = sockaddr()
-                    var clientAddressLength = socklen_t(MemoryLayout<sockaddr>.size)
-                    let clientSocket = accept(serverSocket, &clientAddress, &clientAddressLength)
-                    guard clientSocket != -1 else {
-                        print("Error accepting client connection")
-                        continue
-                    }
-                    
-                    // 处理客户端请求
-                    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-                    let bytesRead = recv(clientSocket, buffer, bufferSize, 0)
-                    let request = String(cString: buffer)
-                    print("Received request: \(request)")
-                    
-                    // 发送响应数据到客户端
-                    let response = "Hello, client!"
-                    let bytesSent = send(clientSocket, response, response.count, 0)
-                    print("Sent response: \(response)")
-                    
-                    // 关闭客户端套接字
-                    close(clientSocket)
-                    buffer.deallocate()
-                }
-
-                
             }
         }
     }
