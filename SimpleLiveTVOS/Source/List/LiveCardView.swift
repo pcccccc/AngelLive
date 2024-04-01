@@ -136,13 +136,17 @@ struct LiveCardView: View {
                     .alert("提示", isPresented: $liveViewModel.showAlert) {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
-                                try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                                if liveViewModel.roomListType == .favorite {
-                                    DispatchQueue.main.async {
-                                        liveViewModel.roomList.remove(at: index)
+                                do {
+                                    try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    if liveViewModel.roomListType == .favorite {
+                                        DispatchQueue.main.async {
+                                            liveViewModel.roomList.remove(at: index)
+                                        }
                                     }
+                                    liveViewModel.showToast(true, title:"取消收藏成功")
+                                }catch {
+                                    liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
                                 }
-                                liveViewModel.showToast(true, title:"取消收藏成功")
                             }
                         })
                         Button("再想想",role: .cancel) {
@@ -164,7 +168,7 @@ struct LiveCardView: View {
                                         }
                                         liveViewModel.showToast(true, title:"取消收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:error.localizedDescription)
+                                        liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -181,7 +185,7 @@ struct LiveCardView: View {
                                         try await favoriteStore.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:error.localizedDescription)
+                                        liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {

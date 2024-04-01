@@ -24,23 +24,28 @@ struct FavoriteMainView: View {
     var body: some View {
         VStack {
             if favoriteStore.cloudKitReady {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
-                        ForEach(liveViewModel.roomList.indices, id: \.self) { index in
-                            LiveCardView(index: index)
-                                .environmentObject(liveViewModel)
-                                .environmentObject(favoriteStore)
-                                .frame(width: 370, height: 240)
+                if liveViewModel.roomList.isEmpty {
+                    Text("暂无喜欢的主播哦，请先去添加吧～")
+                        .font(.title3)
+                }else {
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
+                            ForEach(liveViewModel.roomList.indices, id: \.self) { index in
+                                LiveCardView(index: index)
+                                    .environmentObject(liveViewModel)
+                                    .environmentObject(favoriteStore)
+                                    .frame(width: 370, height: 240)
+                            }
+                            if liveViewModel.isLoading {
+                                LoadingView()
+                                    .frame(width: 370, height: 240)
+                                    .cornerRadius(5)
+                                    .shimmering(active: true)
+                                    .redacted(reason: .placeholder)
+                            }
                         }
-                        if liveViewModel.isLoading {
-                            LoadingView()
-                                .frame(width: 370, height: 240)
-                                .cornerRadius(5)
-                                .shimmering(active: true)
-                                .redacted(reason: .placeholder)
-                        }
+                        .safeAreaPadding(.top, 15)
                     }
-                    .safeAreaPadding(.top, 15)
                 }
             }else {
                 Text(favoriteStore.cloudKitStateString)
