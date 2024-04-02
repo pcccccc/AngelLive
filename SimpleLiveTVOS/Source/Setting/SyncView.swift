@@ -10,11 +10,20 @@ import SwiftUI
 
 struct SyncView: View {
     
+    @EnvironmentObject var favoriteStore: FavoriteStore
+    @StateObject var qrCodeStore = QRCodeStore()
+    
     var body: some View {
-        Text("Hello, World!")
-            .onAppear {
-                
-            }
+        VStack {
+            Spacer(minLength: 30)
+            QRCodeView()
+            .environmentObject(qrCodeStore)
+            Spacer()
+        }
+        .frame(width: 1920, height: 1080)
+        .onAppear {
+            qrCodeStore.qrCodeType = .syncServer
+        }
     }
 }
 

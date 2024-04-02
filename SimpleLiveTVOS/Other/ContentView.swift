@@ -19,8 +19,6 @@ struct ContentView: View {
     @State private var selection = 1
     @StateObject var favoriteStore = FavoriteStore()
     @State var broadcastConnection: UDPBroadcastConnection?
-    var syncManager = SyncManager()
-    let udp = UDPListener()
     
     var body: some View {
         NavigationView {

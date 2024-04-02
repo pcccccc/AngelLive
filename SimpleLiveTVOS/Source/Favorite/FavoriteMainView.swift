@@ -24,7 +24,7 @@ struct FavoriteMainView: View {
     var body: some View {
         VStack {
             if favoriteStore.cloudKitReady {
-                if liveViewModel.roomList.isEmpty {
+                if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text("暂无喜欢的主播哦，请先去添加吧～")
                         .font(.title3)
                 }else {

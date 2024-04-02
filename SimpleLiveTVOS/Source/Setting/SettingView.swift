@@ -7,9 +7,6 @@
 
 import SwiftUI
 
-class SettingStore: ObservableObject {
-    @AppStorage("SimpleLive.Setting.BilibiliCookie") var bilibiliCookie = ""
-}
 
 struct SettingView: View {
     
@@ -19,6 +16,7 @@ struct SettingView: View {
     @State var isPushed = false
     @StateObject var danmuSettingModel = DanmuSettingStore()
     @StateObject var settingStore = SettingStore()
+    @EnvironmentObject var favoriteStore: FavoriteStore
     
     var body: some View {
         GeometryReader { geometry in
@@ -77,6 +75,7 @@ struct SettingView: View {
                                 SyncView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.ultraThickMaterial)
+                                    .environmentObject(favoriteStore)
                             }else {
                                 AboutUSView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)

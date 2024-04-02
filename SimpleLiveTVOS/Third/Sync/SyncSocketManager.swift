@@ -19,9 +19,13 @@ enum SimpleSyncType {
     case bilibiliCookie
 }
 
+let httpPort = 23234
+let udpPort = 23235
+
 class SyncManager {
     
     let httpHandler = HTTPHandler()
+    var serverChannel: Channel?
     
     init() {
         
@@ -41,13 +45,20 @@ class SyncManager {
             .childChannelOption(ChannelOptions.recvAllocator, value: AdaptiveRecvByteBufferAllocator())
 
         do {
-            let serverChannel = try bootstrap.bind(host: getWiFiIPAddress() ?? "localhost", port: 23234).wait()
-            print("Server is running on \(serverChannel.localAddress!)")
+            serverChannel = try bootstrap.bind(host: Common.getWiFiIPAddress() ?? "localhost", port: httpPort).wait()
+            print("Server is running on \(serverChannel?.localAddress?.ipAddress ?? "")")
 //            try serverChannel.closeFuture.wait() // This line will block to keep the server running.
         } catch {
             fatalError("Failed to start server: \(error)")
         }
+        
     }
+    
+    func closeServer() {
+        try? serverChannel?.close().wait()
+    }
+    
+    
 }
 
 
@@ -59,13 +70,16 @@ class UDPListener: NSObject, GCDAsyncUdpSocketDelegate {
         super.init()
         udpSocket = GCDAsyncUdpSocket(delegate: self, delegateQueue: DispatchQueue.main)
         do {
-            try udpSocket?.bind(toPort: 23235) // 绑定到任意可用端口
+            try udpSocket?.bind(toPort: UInt16(udpPort)) // 绑定到任意可用端口
             try udpSocket?.beginReceiving() // 开始接收数据
         } catch {
             print("Failed to start UDP server: \(error)")
         }
     }
     
+    func closeServer() {
+        udpSocket?.close()
+    }
     
     // GCDAsyncUdpSocketDelegate 方法
     func udpSocket(_ sock: GCDAsyncUdpSocket, didReceive data: Data, fromAddress address: Data, withFilterContext filterContext: Any?) {
@@ -76,7 +90,7 @@ class UDPListener: NSObject, GCDAsyncUdpSocketDelegate {
                 let json = try JSON(data: data)
                 if json["type"] == "hello" {
 //                    udpSocket?.send(try JSON(["id": UUID().uuidString, "type": "tv", "name": hostName()]).rawData(), withTimeout: 10, tag: 0)
-                    udpSocket?.send(try JSON(["id": UUID().uuidString, "type": "tv", "name": hostName()]).rawData(), toAddress: address, withTimeout: 10, tag: 0)
+                    udpSocket?.send(try JSON(["id": UUID().uuidString, "type": "tv", "name": Common.hostName()]).rawData(), toAddress: address, withTimeout: 10, tag: 0)
                 }
             }catch {
                 
@@ -110,10 +124,10 @@ final class HTTPHandler: ChannelInboundHandler {
                 let resp = JSON([
                     "id": UUID().uuidString,
                     "type": "tv",
-                    "name": hostName() ?? "Apple TV",
+                    "name": Common.hostName() ?? "Apple TV",
                     "version": "1.1.0",
-                    "address": getWiFiIPAddress() ?? "127.0.0.1",
-                    "port": 23234
+                    "address": Common.getWiFiIPAddress() ?? "127.0.0.1",
+                    "port": httpPort
                 ]).rawString()
                 
                 responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
@@ -181,47 +195,4 @@ final class HTTPHandler: ChannelInboundHandler {
             context.close(promise: nil)
         }
     }
-}
-
-func getWiFiIPAddress() -> String? {
-    var address: String?
-    // Get list of all interfaces on the local machine:
-    var ifaddr: UnsafeMutablePointer<ifaddrs>?
-    guard getifaddrs(&ifaddr) == 0 else { return nil }
-    guard let firstAddr = ifaddr else { return nil }
-
-    // For each interface ...
-    for ifptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
-        let interface = ifptr.pointee
-
-        // Check for IPv4 or IPv6 interface:
-        let addrFamily = interface.ifa_addr.pointee.sa_family
-        if addrFamily == UInt8(AF_INET) {
-
-            // Check if interface is en0 which is the Wi-Fi connection on the iPhone
-            let name = String(cString: interface.ifa_name)
-            if name == "en0" || name == "en1" {
-                // Convert interface address to a human readable string:
-                var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len),
-                            &hostname, socklen_t(hostname.count),
-                            nil, socklen_t(0), NI_NUMERICHOST)
-                address = String(cString: hostname)
-            }
-        }
-    }
-    freeifaddrs(ifaddr)
-
-    return address
-}
-
-func hostName() -> String? {
-    let ptr = UnsafeMutablePointer<CChar>.allocate(capacity: Int(MAXHOSTNAMELEN))
-    let ret = gethostname(ptr, Int(MAXHOSTNAMELEN))
-    var name: String?
-    if ret == 0 {
-        name = String(cString: ptr)
-    }
-    ptr.deallocate()
-    return name
 }
