@@ -33,7 +33,7 @@ struct PlayerControlView: View {
     var body: some View {
         VStack() {
             HStack {
-                Text(roomInfoViewModel.currentRoom.roomTitle)
+                Text("\(roomInfoViewModel.currentRoom.userName) - \(roomInfoViewModel.currentRoom.roomTitle)")
                     .font(.title3)
                     .padding(.leading, 15)
                     .foregroundStyle(.white)

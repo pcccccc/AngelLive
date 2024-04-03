@@ -36,53 +36,5 @@
             landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "08DA5011-640A-44B3-9AF3-C896FA3042CD"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "SimpleLiveTVOS/Third/Sync/SyncSocketManager.swift"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "219"
-            endingLineNumber = "219"
-            landmarkName = "formatDatas(bodyString:)"
-            landmarkType = "9">
-            <Locations>
-               <Location
-                  uuid = "08DA5011-640A-44B3-9AF3-C896FA3042CD - 2f0e9e4d8aa4fcb2"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "formatDatas(bodyString: Swift.String) -&gt; Swift.Array&lt;LiveParse.LiveModel&gt;"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Third/Sync/SyncSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "219"
-                  endingLineNumber = "219"
-                  offsetFromSymbolStart = "668">
-               </Location>
-               <Location
-                  uuid = "08DA5011-640A-44B3-9AF3-C896FA3042CD - 2f0e9e4d8aa4fcb2"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "formatDatas(bodyString: Swift.String) -&gt; Swift.Array&lt;LiveParse.LiveModel&gt;"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Third/Sync/SyncSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "219"
-                  endingLineNumber = "219"
-                  offsetFromSymbolStart = "1320">
-               </Location>
-            </Locations>
-         </BreakpointContent>
-      </BreakpointProxy>
    </Breakpoints>
 </Bucket>

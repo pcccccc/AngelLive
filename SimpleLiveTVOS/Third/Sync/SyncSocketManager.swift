@@ -158,9 +158,16 @@ final class HTTPHandler: ChannelInboundHandler {
                     }
                     if requestHeaderT?.uri.contains("sync/history") == true {
                         let resp = JSON([
-                            "status": true,
-                            "message": "success",
+                            "status": false,
+                            "message": "正在开发中，请耐心等待",
                         ]).rawString()
+                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                        return
+//                        let resp = JSON([
+//                            "status": true,
+//                            "message": "success",
+//                        ]).rawString()
                         let respList = formatDatas(bodyString: bodyString)
                         let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
                         if self.syncSuccess != nil {
