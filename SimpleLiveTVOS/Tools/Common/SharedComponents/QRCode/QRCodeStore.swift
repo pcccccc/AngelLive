@@ -8,6 +8,7 @@
 import SwiftUI
 import LiveParse
 import SimpleToast
+import CloudKit
 
 
 enum QRCodeType {
@@ -120,7 +121,7 @@ class QRCodeStore: ObservableObject {
                 if let newRoomList = self.roomList {
                     for index in newRoomList.indices {
                         DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在添加第\(index + 1)个新收藏"
+                            self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
                         }
                         let roomModel = newRoomList[index]
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
@@ -128,40 +129,55 @@ class QRCodeStore: ObservableObject {
                     }
                     DispatchQueue.main.async {
                         self.showFullScreenLoading = false
-                        self.showToast(true, title: "同步收藏成功")
+                        self.showToast(true, title: "同步\(newRoomList.count)个收藏成功")
                     }
                 }
             }catch {
-                showFullScreenLoadingText = error.localizedDescription
+                if type(of: error) == CKError.self {
+                    showFullScreenLoadingText = favoriteStore?.formatErrorCode(error: error as! CKError) ?? ""
+                }else {
+                    showFullScreenLoadingText = "\(error)"
+                }
             }
         }else {
             do {
+                var repeatCount = 0
                 if let newRoomList = self.roomList {
                     for index in newRoomList.indices {
+                        var has = false
                         let roomModel = newRoomList[index]
                         DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在添加第\(index + 1)个新收藏"
+                            self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
                         }
                         if let deviceFavoriteRoomList = favoriteStore?.roomList {
                             for room in deviceFavoriteRoomList {
                                 if room.roomId == roomModel.roomId {
+                                    has = true
                                     DispatchQueue.main.async {
                                         self.showFullScreenLoadingText = "第\(index + 1)个新收藏重复，已经跳过"
                                     }
-                                    continue
                                 }
                             }
+                        }
+                        if has == true {
+                            repeatCount += 1
+                            continue
                         }
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
                         try await favoriteStore?.addFavorite(room: newLiveModel)
                     }
+                    let repeatString = repeatCount > 0 ? "(重复\(repeatCount)个）": ""
                     DispatchQueue.main.async {
                         self.showFullScreenLoading = false
-                        self.showToast(true, title: "同步收藏成功")
+                        self.showToast(true, title: "同步\(newRoomList.count)个收藏成功\(repeatString)")
                     }
                 }
             }catch {
-                showFullScreenLoadingText = error.localizedDescription
+                if type(of: error) == CKError.self {
+                    showFullScreenLoadingText = favoriteStore?.formatErrorCode(error: error as! CKError) ?? ""
+                }else {
+                    showFullScreenLoadingText = "\(error)"
+                }
             }
         }
     }
@@ -195,7 +211,7 @@ class QRCodeStore: ObservableObject {
             }
         }catch {
             DispatchQueue.main.async {
-                self.showFullScreenLoadingText = error.localizedDescription
+                self.showFullScreenLoadingText = "\(error)"
             }
         }
         
@@ -204,6 +220,13 @@ class QRCodeStore: ObservableObject {
     deinit {
         syncManager?.closeServer()
         udpManager?.closeServer()
+    }
+    
+    func closeServer() {
+        syncManager?.closeServer()
+        udpManager?.closeServer()
+        syncManager = nil
+        udpManager = nil
     }
     
     @MainActor func updateSyncInfo(type: SimpleSyncType, needOverlay: Bool, info: [LiveModel]) {
@@ -218,8 +241,14 @@ class QRCodeStore: ObservableObject {
 }
 
 extension QRCodeStore: SyncManagerDelegate {
+    func syncManagerDidConnectError(error: Error) {
+        message = "服务启动失败，错误原因\(error),如果错误原因为端口占用，请关闭App几分钟后再试。"
+    }
+    
     
     @MainActor func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any) {
         updateSyncInfo(type: type, needOverlay: needOverlay, info: info as? [LiveModel] ?? [])
     }
+    
+    
 }

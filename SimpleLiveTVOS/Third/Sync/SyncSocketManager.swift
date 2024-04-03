@@ -23,6 +23,7 @@ let httpPort = 23234
 let udpPort = 23235
 
 protocol SyncManagerDelegate: AnyObject {
+    func syncManagerDidConnectError(error: Error)
     func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any)
 }
 
@@ -52,6 +53,7 @@ class SyncManager {
             serverChannel = try bootstrap.bind(host: Common.getWiFiIPAddress() ?? "localhost", port: httpPort).wait()
             print("Server is running on \(serverChannel?.localAddress?.ipAddress ?? "")")
         } catch {
+            self.delegate?.syncManagerDidConnectError(error: error)
             print("Failed to start server: \(error)")
         }
         
@@ -116,6 +118,7 @@ final class HTTPHandler: ChannelInboundHandler {
         headers.add(name: "Content-Type", value: "application/json")
         switch reqPart {
         case .head(let requestHeader):
+            requestBody = nil
             requestHeaderT = requestHeader
             if requestHeader.uri == "/" {
                 responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: "Hello, World!")))
@@ -133,9 +136,13 @@ final class HTTPHandler: ChannelInboundHandler {
                 responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                 response = .head(HTTPResponseHead(version: requestHeader.version, status: .ok, headers: headers))
             }
-        case .body(let byteBuffer):
+        case .body(var byteBuffer):
             // 处理请求体
-            requestBody = byteBuffer
+            if requestBody == nil {
+                requestBody = byteBuffer
+            } else {
+                requestBody?.writeBuffer(&byteBuffer)
+            }
         case .end:
             // 请求体已完全接收，处理请求
             if let body = requestBody, let bodyString = body.getString(at: 0, length: body.readableBytes) {
@@ -151,27 +158,24 @@ final class HTTPHandler: ChannelInboundHandler {
                         let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
                         if self.syncSuccess != nil {
                             self.syncSuccess!(.favorite, overlay, respList)
+                            // 重置为下一个请求
+                            requestBody = nil
                         }
-
+                        
                         responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                         response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                     }
                     if requestHeaderT?.uri.contains("sync/history") == true {
                         let resp = JSON([
-                            "status": false,
-                            "message": "正在开发中，请耐心等待",
+                            "status": true,
+                            "message": "success",
                         ]).rawString()
-                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
-                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
-                        return
-//                        let resp = JSON([
-//                            "status": true,
-//                            "message": "success",
-//                        ]).rawString()
                         let respList = formatDatas(bodyString: bodyString)
                         let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
                         if self.syncSuccess != nil {
                             self.syncSuccess!(.history, overlay, respList)
+                            // 重置为下一个请求
+                            requestBody = nil
                         }
                         responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                         response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
@@ -183,6 +187,8 @@ final class HTTPHandler: ChannelInboundHandler {
                         ]).rawString()
                         responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                         response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                        // 重置为下一个请求
+                        requestBody = nil
                     }
                     if requestHeaderT?.uri.contains("account/bilibili") == true {
                         let resp = JSON([
@@ -191,6 +197,8 @@ final class HTTPHandler: ChannelInboundHandler {
                         ]).rawString()
                         responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                         response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                        // 重置为下一个请求
+                        requestBody = nil
                     }
                     
                 }catch {
@@ -200,6 +208,8 @@ final class HTTPHandler: ChannelInboundHandler {
                     ]).rawString()
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                    // 重置为下一个请求
+                    requestBody = nil
                 }
             }
             // Create and write the response
@@ -211,7 +221,8 @@ final class HTTPHandler: ChannelInboundHandler {
                 responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: "welcome")))
             }
             context.write(self.wrapOutboundOut(responseBody!), promise: nil)
-            
+            // 重置为下一个请求
+            requestBody = nil
             let end = HTTPServerResponsePart.end(nil)
             context.writeAndFlush(self.wrapOutboundOut(end), promise: nil)
             context.close(promise: nil)

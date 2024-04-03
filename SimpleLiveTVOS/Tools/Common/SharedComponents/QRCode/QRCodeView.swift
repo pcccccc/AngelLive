@@ -46,6 +46,9 @@ struct QRCodeView: View {
             }
         }
         .frame(width: 1920, height: 1080)
+        .onDisappear {
+            qrCodeStore.closeServer()
+        }
         .alert("提示", isPresented: $qrCodeStore.showAlert) {
             Button("确认", role: .destructive, action: {
                 Task {

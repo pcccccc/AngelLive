@@ -19,6 +19,7 @@ struct FullScreenLoadingView: View {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 Text(loadingText)
+                    .font(.title)
             }
         }
     }
