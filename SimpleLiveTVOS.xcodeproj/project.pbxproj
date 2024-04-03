@@ -59,6 +59,7 @@
 		4FCA391A2BBA4F8E00506675 /* SyncSocketManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCA39192BBA4F8E00506675 /* SyncSocketManager.swift */; };
 		4FCA391D2BBA5A8600506675 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391C2BBA5A8600506675 /* NIO */; };
 		4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391E2BBA5A8600506675 /* NIOHTTP1 */; };
+		4FE0E4282BBD5D720053D69F /* FullScreenLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE0E4272BBD5D720053D69F /* FullScreenLoadingView.swift */; };
 		4FF2D3722BBC0369002822DD /* LoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D3692BBC0369002822DD /* LoadingView.swift */; };
 		4FF2D3732BBC0369002822DD /* UIColor+Extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D36C2BBC0369002822DD /* UIColor+Extension.swift */; };
 		4FF2D3742BBC0369002822DD /* CloudSQLManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D36D2BBC0369002822DD /* CloudSQLManager.swift */; };
@@ -151,6 +152,7 @@
 		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4FCA39162BBA4EB800506675 /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
 		4FCA39192BBA4F8E00506675 /* SyncSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSocketManager.swift; sourceTree = "<group>"; };
+		4FE0E4272BBD5D720053D69F /* FullScreenLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenLoadingView.swift; sourceTree = "<group>"; };
 		4FF2D3692BBC0369002822DD /* LoadingView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LoadingView.swift; sourceTree = "<group>"; };
 		4FF2D36C2BBC0369002822DD /* UIColor+Extension.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = "UIColor+Extension.swift"; sourceTree = "<group>"; };
 		4FF2D36D2BBC0369002822DD /* CloudSQLManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = CloudSQLManager.swift; sourceTree = "<group>"; };
@@ -450,6 +452,7 @@
 			isa = PBXGroup;
 			children = (
 				4FF2D3692BBC0369002822DD /* LoadingView.swift */,
+				4FE0E4272BBD5D720053D69F /* FullScreenLoadingView.swift */,
 			);
 			path = Loading;
 			sourceTree = "<group>";
@@ -673,6 +676,7 @@
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				4FF2D3772BBC0369002822DD /* String+Extension.swift in Sources */,
+				4FE0E4282BBD5D720053D69F /* FullScreenLoadingView.swift in Sources */,
 				4F05A6BD2B50CAD90033214E /* LeftMenu.swift in Sources */,
 				4FCA39172BBA4EB800506675 /* SyncView.swift in Sources */,
 				4F05A6C72B50CF6C0033214E /* FavoriteStore.swift in Sources */,

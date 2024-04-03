@@ -22,15 +22,20 @@ enum SimpleSyncType {
 let httpPort = 23234
 let udpPort = 23235
 
+protocol SyncManagerDelegate: AnyObject {
+    func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any)
+}
+
 class SyncManager {
     
     let httpHandler = HTTPHandler()
     var serverChannel: Channel?
+    var delegate: SyncManagerDelegate?
     
     init() {
         
-        httpHandler.syncSuccess = { type, result in
-            print(result)
+        httpHandler.syncSuccess = { type, needOverlay, result in
+            self.delegate?.syncManagerDidReciveRequest(type: type, needOverlay: needOverlay, info: result)
         }
         
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -40,16 +45,14 @@ class SyncManager {
                     channel.pipeline.addHandler(self.httpHandler)
                 }
             }
-//            .childChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
             .childChannelOption(ChannelOptions.recvAllocator, value: AdaptiveRecvByteBufferAllocator())
 
         do {
             serverChannel = try bootstrap.bind(host: Common.getWiFiIPAddress() ?? "localhost", port: httpPort).wait()
             print("Server is running on \(serverChannel?.localAddress?.ipAddress ?? "")")
-//            try serverChannel.closeFuture.wait() // This line will block to keep the server running.
         } catch {
-            fatalError("Failed to start server: \(error)")
+            print("Failed to start server: \(error)")
         }
         
     }
@@ -57,8 +60,6 @@ class SyncManager {
     func closeServer() {
         try? serverChannel?.close().wait()
     }
-    
-    
 }
 
 
@@ -89,7 +90,6 @@ class UDPListener: NSObject, GCDAsyncUdpSocketDelegate {
             do {
                 let json = try JSON(data: data)
                 if json["type"] == "hello" {
-//                    udpSocket?.send(try JSON(["id": UUID().uuidString, "type": "tv", "name": hostName()]).rawData(), withTimeout: 10, tag: 0)
                     udpSocket?.send(try JSON(["id": UUID().uuidString, "type": "tv", "name": Common.hostName()]).rawData(), toAddress: address, withTimeout: 10, tag: 0)
                 }
             }catch {
@@ -108,7 +108,7 @@ final class HTTPHandler: ChannelInboundHandler {
     var responseBody: HTTPServerResponsePart?
     private var requestBody: ByteBuffer?
     var requestHeaderT: HTTPRequestHead?
-    var syncSuccess: ((SimpleSyncType, Any) -> Void)?
+    var syncSuccess: ((SimpleSyncType, Bool, Any) -> Void)?
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let reqPart = self.unwrapInboundIn(data)
@@ -146,31 +146,46 @@ final class HTTPHandler: ChannelInboundHandler {
                             "status": true,
                             "message": "success",
                         ]).rawString()
-                        if let respFollowList = try? JSON(data: bodyString.data(using: .utf8)!) {
-                            var tempArray:[LiveModel] = []
-                            for item in respFollowList.arrayValue {
-                                var liveType = LiveType.bilibili
-                                switch item["siteId"].stringValue {
-                                    case "bilibili":
-                                        liveType = .bilibili
-                                    case "huya":
-                                        liveType = .huya
-                                    case "douyu":
-                                        liveType = .douyu
-                                    case "douyin":
-                                        liveType = .douyin
-                                    default:
-                                        liveType = .bilibili
-                                }
-                                tempArray.append(LiveModel(userName: item["userName"].stringValue, roomTitle: "", roomCover: "", userHeadImg: item["face"].stringValue, liveType: liveType, liveState: nil, userId: "", roomId: item["roomId"].stringValue, liveWatchedCount: nil))
-                            }
-                            if self.syncSuccess != nil {
-                                self.syncSuccess!(.favorite, tempArray)
-                            }
+                        
+                        let respList = formatDatas(bodyString: bodyString)
+                        let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
+                        if self.syncSuccess != nil {
+                            self.syncSuccess!(.favorite, overlay, respList)
+                        }
+
+                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                    }
+                    if requestHeaderT?.uri.contains("sync/history") == true {
+                        let resp = JSON([
+                            "status": true,
+                            "message": "success",
+                        ]).rawString()
+                        let respList = formatDatas(bodyString: bodyString)
+                        let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
+                        if self.syncSuccess != nil {
+                            self.syncSuccess!(.history, overlay, respList)
                         }
                         responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                         response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                     }
+                    if requestHeaderT?.uri.contains("blocked_word") == true {
+                        let resp = JSON([
+                            "status": false,
+                            "message": "Apple TV 端暂不支持此功能",
+                        ]).rawString()
+                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                    }
+                    if requestHeaderT?.uri.contains("account/bilibili") == true {
+                        let resp = JSON([
+                            "status": false,
+                            "message": "Apple TV 端暂不支持此功能",
+                        ]).rawString()
+                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                    }
+                    
                 }catch {
                     let resp = JSON([
                         "status": false,
@@ -193,6 +208,49 @@ final class HTTPHandler: ChannelInboundHandler {
             let end = HTTPServerResponsePart.end(nil)
             context.writeAndFlush(self.wrapOutboundOut(end), promise: nil)
             context.close(promise: nil)
+        }
+    
+    func formatDatas(bodyString: String) -> [LiveModel] {
+        let resp = JSON([
+            "status": true,
+            "message": "success",
+        ]).rawString()
+        var tempArray:[LiveModel] = []
+        if let respFollowList = try? JSON(data: bodyString.data(using: .utf8)!) {
+            for item in respFollowList.arrayValue {
+                var liveType = LiveType.bilibili
+                switch item["siteId"].stringValue {
+                    case "bilibili":
+                        liveType = .bilibili
+                    case "huya":
+                        liveType = .huya
+                    case "douyu":
+                        liveType = .douyu
+                    case "douyin":
+                        liveType = .douyin
+                    default:
+                        liveType = .bilibili
+                }
+                tempArray.append(LiveModel(userName: item["userName"].stringValue, roomTitle: "", roomCover: "", userHeadImg: item["face"].stringValue, liveType: liveType, liveState: nil, userId: "", roomId: item["roomId"].stringValue, liveWatchedCount: nil))
+            }
+        }
+        return tempArray
+    }
+        
+        func getOverlayFormat(url: String) -> Bool {
+            do {
+                let pattern = "\\?overlay=(\\d+)"
+                let regex = try NSRegularExpression(pattern: pattern)
+                let nsString = url as NSString
+                let results = regex.matches(in: url, options: [], range: NSMakeRange(0, nsString.length))
+                var overlay = "0"
+                for result in results {
+                    overlay = nsString.substring(with: result.range(at: 1))
+                }
+                return Int(overlay) == 1 ? true : false
+            }catch {
+                return false
+            }
         }
     }
 }

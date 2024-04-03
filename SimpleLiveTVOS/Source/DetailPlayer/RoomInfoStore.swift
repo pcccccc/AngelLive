@@ -82,7 +82,7 @@ class RoomInfoStore: ObservableObject {
         }
         
         
-        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 {
+        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 { //bilibili 优先HLS播放
             for item in currentRoomPlayArgs! {
                 for liveQuality in item.qualitys {
                     if liveQuality.liveCodeType == .hls {
@@ -98,9 +98,22 @@ class RoomInfoStore: ObservableObject {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }
-        }else if (currentRoom.liveType == .douyin) {
+        }else if (currentRoom.liveType == .douyin) { //douyin 优先HLS播放
             KSOptions.firstPlayerType = KSMEPlayer.self
             KSOptions.secondPlayerType = KSMEPlayer.self
+            if cdnIndex == 0 && urlIndex == 0 {
+                for item in currentRoomPlayArgs! {
+                    for liveQuality in item.qualitys {
+                        if liveQuality.liveCodeType == .hls {
+                            KSOptions.firstPlayerType = KSAVPlayer.self
+                            KSOptions.secondPlayerType = KSMEPlayer.self
+                            self.currentPlayURL = URL(string: liveQuality.url)!
+                            currentPlayQualityString = liveQuality.title
+                            return
+                        }
+                    }
+                }
+            }
         }else {
             if currentQuality.liveCodeType == .hls {
                 KSOptions.firstPlayerType = KSAVPlayer.self
@@ -151,14 +164,16 @@ class RoomInfoStore: ObservableObject {
                         playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
                     default: break
                 }
-                DispatchQueue.main.async {
-                    self.currentRoomPlayArgs = playArgs
-                    self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
-                }
+                await updateCurrentRoomPlayArgs(playArgs)
             }catch {
                 print(error)
             }
         }
+    }
+    
+    @MainActor func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel]) {
+        self.currentRoomPlayArgs = playArgs
+        self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
     }
     
     func setPlayerDelegate() {

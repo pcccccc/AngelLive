@@ -253,7 +253,7 @@ class LiveStore: ObservableObject {
             case .history:
                 self.roomList = self.watchList
                 for index in 0 ..< self.roomList.count {
-                    self.getLastestRoomInfo(index)
+                    self.getLastestHistoryRoomInfo(index)
                 }
             break
             default:
@@ -268,6 +268,25 @@ class LiveStore: ObservableObject {
     func getSubCategoryList() {
         let subList = self.selectedMainListCategory?.subList ?? []
         self.selectedSubCategory = subList
+    }
+    
+    func getLastestHistoryRoomInfo(_ index: Int) { //后续会优化掉这个方法
+        isLoading = true
+        Task {
+            do {
+                var newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
+                if newLiveModel.liveState == "" || newLiveModel.liveState == nil {
+                    newLiveModel.liveState = "0"
+                }
+                await updateList(newLiveModel, index: index)
+            }catch {
+                
+            }
+        }
+    }
+    
+    @MainActor func updateList(_ newModel: LiveModel, index: Int) { //后续会优化掉这个方法
+        self.roomList[index] = newModel
     }
     
     func getLastestRoomInfo(_ index: Int) {

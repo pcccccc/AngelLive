@@ -33,8 +33,9 @@ struct SettingView: View {
                         .font(.subheadline)
                     Spacer()
                 }
-                .frame(width: geometry.size.width / 2)
+                .frame(width: geometry.size.width / 2, height: geometry.size.height)
                 VStack(spacing: 45) {
+                    Spacer()
                     ForEach(titles, id: \.self) { title in
                         Button(action: {
                             currentTitle = title
@@ -88,7 +89,6 @@ struct SettingView: View {
                 }
                 .frame(width: geometry.size.width / 2 - 50)
                 .padding(.trailing, 50)
-                .padding(.top, 50)
             }
         }
     }

@@ -86,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse.git",
       "state" : {
-        "revision" : "aaf7d1e1590db32027c056d6cb786bc7b882ad15",
-        "version" : "1.2.0"
+        "revision" : "c1b255c6c993d68f8e4668215cf19d1b3930ede9",
+        "version" : "1.2.2"
       }
     },
     {

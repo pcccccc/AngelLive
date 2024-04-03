@@ -34,7 +34,7 @@ class DanmuSettingStore : ObservableObject {
     
     @Published var danmuAreaArray: [String] = ["顶部1/4", "顶部1/2", "全屏", "底部1/2", "底部1/4"]
     @Published var danmuSpeedArray: [String] = ["慢速", "正常", "快速"]
-    @Published var danmuFontSizeArray: [String] = ["小", "中", "大"]
+    @Published var danmuFontSizeArray: [String] = ["30", "40", "50", "60", "65"]
     @Published var danmuAlphaString = ""
     
     func getDanmuArea() -> (CGFloat, CGFloat) {
@@ -51,6 +51,23 @@ class DanmuSettingStore : ObservableObject {
                 return (1080 * 0.25, 1080 / 4)
             default:
                 return (1080, 0)
+        }
+    }
+    
+    func getDanmuSize() {
+        switch danmuFontSizeIndex {
+            case 0:
+                danmuFontSize = 30
+            case 1:
+                danmuFontSize = 40
+            case 2:
+                danmuFontSize = 50
+            case 3:
+                danmuFontSize = 60
+            case 4:
+                danmuFontSize = 65
+            default:
+                danmuFontSize = 50
         }
     }
 }

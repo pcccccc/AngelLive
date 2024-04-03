@@ -22,8 +22,13 @@ struct SyncView: View {
         }
         .frame(width: 1920, height: 1080)
         .onAppear {
-            qrCodeStore.qrCodeType = .syncServer
+            startQRService()
         }
+    }
+    
+    @MainActor func startQRService() {
+        qrCodeStore.qrCodeType = .syncServer
+        qrCodeStore.favoriteStore = favoriteStore
     }
 }
 
