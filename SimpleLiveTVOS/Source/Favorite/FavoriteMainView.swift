@@ -38,7 +38,7 @@ struct FavoriteMainView: View {
                             }
                             if liveViewModel.isLoading {
                                 LoadingView()
-                                    .frame(width: 370, height: 240)
+                                    .frame(width: 370, height: 275)
                                     .cornerRadius(5)
                                     .shimmering(active: true)
                                     .redacted(reason: .placeholder)

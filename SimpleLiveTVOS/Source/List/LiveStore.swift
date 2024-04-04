@@ -238,16 +238,63 @@ class LiveStore: ObservableObject {
             case .favorite:
                 Task {
                     let resList = try await CloudSQLManager.searchRecord()
-                    DispatchQueue.main.async {
+                    var fetchedModels: [LiveModel] = []
+                    // 使用异步的任务组来并行处理所有的请求
+                    var bilibiliModels: [LiveModel] = []
+                    await withTaskGroup(of: LiveModel?.self, body: { group in
+                        for liveModel in resList {
+//                            print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType)")
+                            if liveModel.liveType == .bilibili {
+                                bilibiliModels.append(liveModel)
+                            }else {
+                                group.addTask {
+                                    do {
+                                        let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
+                                        return dataReq
+                                    } catch {
+                                        print(Date())
+                                        print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
+                                        var errorModel = liveModel
+                                        errorModel.liveState = LiveState.unknow.rawValue
+                                        return errorModel
+                                    }
+                                }
+                            }
+                        }
+                        // 收集任务组中每个任务的结果
+                        for await result in group {
+                            if let newLiveModel = result {
+                                fetchedModels.append(newLiveModel)
+                            }
+                        }
+                    })
+                    
+                    for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
+                        do {
+                            try? await Task.sleep(nanoseconds: 500_000_000) // 等待2秒
+                            let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
+                            fetchedModels.append(dataReq)
+                        }catch {
+                            print(error)
+                        }
+                    }
+
+                    let sortedModels = fetchedModels.sorted { firstModel, secondModel in
+                        if firstModel.liveState == "1", secondModel.liveState != "1" {
+                            return true
+                        } else if firstModel.liveState != "1", secondModel.liveState == "1" {
+                            return false
+                        }
+                        return true // 如果两个模型的liveState相同，保持它们的当前顺序不变
+                    }
+
+                    // 最后，更新tempArray
+                    await MainActor.run {
                         self.favoriteRoomList.removeAll()
-                        for item in resList {
-                            if self.favoriteRoomList.contains(item) == false {
-                                self.favoriteRoomList.append(item)
-                           }
-                        }
-                        for index in 0 ..< self.favoriteRoomList.count {
-                            self.getLastestRoomInfo(index)
-                        }
+                        self.roomList.removeAll()
+                        self.roomList = sortedModels
+                        self.favoriteRoomList = self.roomList
+                        self.isLoading = false
                     }
                 }
             case .history:
@@ -270,7 +317,7 @@ class LiveStore: ObservableObject {
         self.selectedSubCategory = subList
     }
     
-    func getLastestHistoryRoomInfo(_ index: Int) { //后续会优化掉这个方法
+    func getLastestHistoryRoomInfo(_ index: Int) {
         isLoading = true
         Task {
             do {
@@ -287,50 +334,6 @@ class LiveStore: ObservableObject {
     
     @MainActor func updateList(_ newModel: LiveModel, index: Int) { //后续会优化掉这个方法
         self.roomList[index] = newModel
-    }
-    
-    func getLastestRoomInfo(_ index: Int) {
-        isLoading = true
-        if self.favoriteRoomList.count <= index {
-            return
-        }
-        Task {
-            do {
-                var newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:favoriteRoomList[index])
-                if newLiveModel.liveState == "" || newLiveModel.liveState == nil {
-                    newLiveModel.liveState = "0"
-                }
-                DispatchQueue.main.async {
-                    if index >= self.favoriteRoomList.count { return }
-                    self.favoriteRoomList[index] = newLiveModel
-                    let endLoading = self.favoriteRoomList.allSatisfy{ $0.liveState != "" && $0.liveState != nil }
-                    if endLoading && self.roomListType == .favorite {
-                        var tempArray: Array<LiveModel> = []
-                        tempArray.append(contentsOf: self.favoriteRoomList)
-                        tempArray = tempArray.sorted(by: {
-                            if $0.liveState ?? "3" == "1" && $1.liveState ?? "3" != "1" {
-                                return true
-                            }else {
-                                return false
-                            }
-                        })
-                        self.roomList.removeAll()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                            for item in tempArray {
-                                if self.roomList.contains(item) == false {
-                                    self.roomList.append(contentsOf: tempArray)
-                               }
-                            }
-                            self.isLoading = false
-                        })
-                    }else {
-                        self.isLoading = true
-                    }
-                }
-            }catch {
-                print(error)
-            }
-        }
     }
     
     func createCurrentRoomViewModel() {

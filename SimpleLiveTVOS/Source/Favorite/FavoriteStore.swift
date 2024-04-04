@@ -36,6 +36,7 @@ class FavoriteStore: ObservableObject {
                     self.roomList = roomList
                 }
             }catch {
+                print(error)
                 DispatchQueue.main.async {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         self.isLoading = false
