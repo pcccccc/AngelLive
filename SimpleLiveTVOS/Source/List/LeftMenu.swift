@@ -24,27 +24,29 @@ struct LeftMenu: View {
             VStack(alignment: .center) {
                 if liveViewModel.showOverlay == false {
                     if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedSubListIndex != -1 {
-                        HStack(spacing: 10) {
-                            if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
-                                Image(liveViewModel.menuTitleIcon)
-                                .resizable()
-                                .frame(width: 30, height: 30, alignment: .leading)
-                                .padding(.leading, -5)
-                            }else {
-                                KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
-                                .resizable()
-                                .frame(width: 30, height: 30, alignment: .leading)
-                                .padding(.leading, -5)
-                            }
+                        if liveViewModel.selectedSubListIndex < liveViewModel.selectedSubCategory.count {
+                            HStack(spacing: 10) {
+                                if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
+                                    Image(liveViewModel.menuTitleIcon)
+                                    .resizable()
+                                    .frame(width: 30, height: 30, alignment: .leading)
+                                    .padding(.leading, -5)
+                                }else {
+                                    KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
+                                    .resizable()
+                                    .frame(width: 30, height: 30, alignment: .leading)
+                                    .padding(.leading, -5)
+                                }
 
-                            Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
-                                .font(.system(size: 20))
-                                .frame(width: 110, height: 30, alignment: .leading)
-                                .multilineTextAlignment(.leading)
+                                Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
+                                    .font(.system(size: 20))
+                                    .frame(width: 110, height: 30, alignment: .leading)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .padding(.top, 160)
+                            .padding(.leading, 5)
+                            .edgesIgnoringSafeArea(.all)
                         }
-                        .padding(.top, 160)
-                        .padding(.leading, 5)
-                        .edgesIgnoringSafeArea(.all)
                     }else {
                         HStack(spacing: 10) {
                             Image(liveViewModel.menuTitleIcon)
@@ -159,7 +161,9 @@ struct MenuItem: View {
             
             if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedMainListCategory?.title == title  {
                 ForEach(liveViewModel.selectedSubCategory.indices, id: \.self) { index in
-                    SubMenuItem(favorite: favorite, icon: liveViewModel.selectedSubCategory[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.selectedSubCategory[index].icon, title: liveViewModel.selectedSubCategory[index].title, index: index)
+                    if index < liveViewModel.selectedSubCategory.count {
+                        SubMenuItem(favorite: favorite, icon: liveViewModel.selectedSubCategory[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.selectedSubCategory[index].icon, title: liveViewModel.selectedSubCategory[index].title, index: index)
+                    }
                 }
             }
         }

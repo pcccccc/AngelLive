@@ -132,7 +132,8 @@ class RoomInfoStore: ObservableObject {
                 let playArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: currentQuality.qn, cdn: currentCdn.douyuCdnName)
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
-                    self.currentPlayURL = URL(string: currentQuality?.url ?? "")!
+                    let lastCurrentPlayURL = self.currentPlayURL
+                    self.currentPlayURL = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
                 }
             }
         }else {
