@@ -235,7 +235,9 @@ struct LiveCardView: View {
                 .frame(height: 50)
             })
             .onAppear {
-                liveViewModel.favoriteStore = favoriteStore
+                if favoriteStore != nil {
+                    liveViewModel.favoriteStore = favoriteStore
+                }
             }
         }
         

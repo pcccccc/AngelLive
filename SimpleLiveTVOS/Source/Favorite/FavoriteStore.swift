@@ -18,8 +18,8 @@ class FavoriteStore: ObservableObject {
     @Published var cloudKitStateString: String = "正在检查状态"
     
     init() {
-        self.fetchFavoriteRoomList()
         self.getState()
+        self.fetchFavoriteRoomList()
     }
     
     func fetchFavoriteRoomList() {
@@ -39,11 +39,12 @@ class FavoriteStore: ObservableObject {
                 print(error)
                 DispatchQueue.main.async {
                     withAnimation(.easeInOut(duration: 0.25)) {
+                        self.cloudKitStateString = self.formatErrorCode(error: error)
                         self.isLoading = false
+                        self.cloudKitReady = false
                     }
                 }
             }
-            
         }
     }
     
@@ -143,6 +144,8 @@ class FavoriteStore: ObservableObject {
             return "未找到共享区域"
         case .managedAccountRestricted:
             return "由于管理账户限制，请求被拒绝"
+        case .accountTemporarilyUnavailable:
+            return "账户暂时不可用，请尝试在系统设置中重新登录默认账户后再试"
         default:
             return "未知错误"
         }

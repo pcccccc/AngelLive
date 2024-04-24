@@ -7,8 +7,11 @@
 
 import Foundation
 import SwiftUI
+import Observation
 
-class DanmuSettingStore : ObservableObject {
+
+@Observable
+final class DanmuSettingStore {
     
     static let globalShowDanmu = "SimpleLive.Setting.showDanmu"
     static let globalShowColorDanmu = "SimpleLive.Setting.showColorDanmu"
@@ -32,10 +35,10 @@ class DanmuSettingStore : ObservableObject {
     @AppStorage(globalDanmuFontSizeIndex) var danmuFontSizeIndex: Int = 1
     @AppStorage(globalDanmuSpeedIndex) var danmuSpeedIndex: Int = 1 
     
-    @Published var danmuAreaArray: [String] = ["顶部1/4", "顶部1/2", "全屏", "底部1/2", "底部1/4"]
-    @Published var danmuSpeedArray: [String] = ["慢速", "正常", "快速"]
-    @Published var danmuFontSizeArray: [String] = ["30", "40", "50", "60", "65"]
-    @Published var danmuAlphaString = ""
+    var danmuAreaArray: [String] = ["顶部1/4", "顶部1/2", "全屏", "底部1/2", "底部1/4"]
+    var danmuSpeedArray: [String] = ["慢速", "正常", "快速"]
+    var danmuFontSizeArray: [String] = ["30", "40", "50", "60", "65"]
+    var danmuAlphaString = ""
     
     func getDanmuArea() -> (CGFloat, CGFloat) {
         switch danmuAreaIndex {

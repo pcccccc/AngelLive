@@ -34,26 +34,10 @@ struct SettingView: View {
                     Spacer()
                 }
                 .frame(width: geometry.size.width / 2, height: geometry.size.height)
-                VStack(spacing: 45) {
+                VStack(spacing: 15) {
                     Spacer()
                     ForEach(titles, id: \.self) { title in
-                        Button(action: {
-                            currentTitle = title
-                        }, label: {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(title)
-                                Spacer()
-                                if title == "哔哩哔哩登录" {
-                                    Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
-                                        .font(.system(size: 30))
-                                        .foregroundStyle(.gray)
-                                }
-                            }
-                            .onAppear {
-                            }
-                        })
-                        .frame(height: 40)
-                        .fullScreenCover(item: $currentTitle) { title in
+                        NavigationLink {
                             if title == "哔哩哔哩登录" {
                                 BilibiliLoginView()
                                     .background(.ultraThickMaterial)
@@ -82,8 +66,28 @@ struct SettingView: View {
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.ultraThickMaterial)
                             }
+                        } label: {
+//                            Button(action: {
+//                                currentTitle = title
+//                            }, label: {
+//                                HStack(alignment: .firstTextBaseline) {
+//
+//                                }
+//                                .onAppear {
+//                                }
+//                            })
+//                            .frame(height: 40)
+                            Text(title)
+                            Spacer()
+                            if title == "哔哩哔哩登录" {
+                                Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(.gray)
+                            }
+//                            .fullScreenCover(item: $currentTitle) { title in
+//                                
+//                            }
                         }
-                        
                     }
                     Spacer()
                 }
