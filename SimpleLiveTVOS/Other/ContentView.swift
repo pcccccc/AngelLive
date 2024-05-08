@@ -16,8 +16,10 @@ import Darwin
 
 struct ContentView: View {
     
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
+    @Environment(FavoriteModel.self) var favoriteModel
     @State private var selection = 1
-    @StateObject var favoriteStore = FavoriteStore()
+    
     @State var broadcastConnection: UDPBroadcastConnection?
     
     var body: some View {
@@ -25,12 +27,11 @@ struct ContentView: View {
             TabView(selection:$selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if favoriteStore.isLoading == true || favoriteStore.cloudKitReady == false {
+                        if favoriteModel.isLoading == true || favoriteModel.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: favoriteStore.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteStore.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
-                                                          
+                                    Image(systemName: favoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
                                 }
                             )
                             .contentTransition(.symbolEffect(.replace))
@@ -39,43 +40,44 @@ struct ContentView: View {
                         }
                     }
                 .tag(0)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
                 ListMainView(liveType: .bilibili)
                     .tabItem {
                         Text("B站")
                     }
                 .tag(1)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
                 ListMainView(liveType: .huya)
                     .tabItem {
                         Text("虎牙")
                     }
                 .tag(2)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
                 ListMainView(liveType: .douyu)
                     .tabItem {
                         Text("斗鱼")
                     }
                 .tag(3)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
                 ListMainView(liveType: .douyin)
                     .tabItem {
                         Text("抖音")
                     }
                 .tag(4)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
                 SearchRoomView()
                     .tabItem {
                         Text("搜索")
                     }
                 .tag(5)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
                 SettingView()
                     .tabItem {
                         Text("设置")
                     }
                 .tag(6)
-                .environmentObject(favoriteStore)
+                .environmentObject(favoriteModel)
+                .environment(danmuSettingModel)
             }
         }
         .onAppear {

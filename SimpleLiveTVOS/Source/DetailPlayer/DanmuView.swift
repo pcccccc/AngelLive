@@ -11,7 +11,7 @@ import UIKit
 struct DanmuView: UIViewRepresentable {
     var coordinator: Coordinator
     var height: CGFloat
-    @EnvironmentObject var danmuSettingModel: DanmuSettingStore
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
 
     func makeUIView(context: Context) -> DanmakuView {
         let view = DanmakuView(frame: .init(x: 0, y: 0, width: 1920, height: height))

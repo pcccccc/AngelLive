@@ -9,9 +9,12 @@ import SwiftUI
 
 struct DanmuSettingView: View {
     
-    @EnvironmentObject var danmuSettingModel: DanmuSettingStore
-
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
+    
     var body: some View {
+        
+        @Bindable var danmuModel = danmuSettingModel
+        
         GeometryReader { geometry in
             HStack {
                 VStack {
@@ -30,9 +33,9 @@ struct DanmuSettingView: View {
                 .frame(width: geometry.size.width / 2, height: geometry.size.height)
                 VStack(spacing: 50) {
                     Spacer()
-                    Toggle("开启弹幕", isOn: $danmuSettingModel.showDanmu)
+                    Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
                         .frame(height: 45)
-                    Toggle("开启彩色弹幕", isOn: $danmuSettingModel.showColorDanmu)
+                    Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
                         .frame(height: 45)
                     HStack {
                         Text("字体大小：")
@@ -90,7 +93,7 @@ struct DanmuSettingView: View {
                     .frame(height: 45)
                     HStack {
                         Text("    透明度：")
-                        TextField("透明度：(0.1-1.0)", text: $danmuSettingModel.danmuAlphaString)
+                        TextField("透明度：(0.1-1.0)", text: $danmuModel.danmuAlphaString)
                             .keyboardType(.decimalPad)
                             .submitLabel(.done)
                             .onChange(of: danmuSettingModel.danmuAlphaString) { oldValue, newValue in
@@ -157,4 +160,5 @@ struct DanmuSettingView: View {
 
 #Preview {
     DanmuSettingView()
+        .environment(DanmuSettingModel())
 }

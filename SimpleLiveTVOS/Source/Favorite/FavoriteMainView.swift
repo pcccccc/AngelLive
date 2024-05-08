@@ -15,7 +15,7 @@ struct FavoriteMainView: View {
     
     @StateObject var liveViewModel: LiveStore
     @FocusState var focusState: Int?
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    @EnvironmentObject var favoriteModel: FavoriteModel
     
     init() {
         self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .favorite, liveType: .bilibili))
@@ -23,7 +23,7 @@ struct FavoriteMainView: View {
     
     var body: some View {
         VStack {
-            if favoriteStore.cloudKitReady {
+            if favoriteModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text("暂无喜欢的主播哦，请先去添加吧～")
                         .font(.title3)
@@ -33,7 +33,7 @@ struct FavoriteMainView: View {
                             ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                                 LiveCardView(index: index)
                                     .environmentObject(liveViewModel)
-                                    .environmentObject(favoriteStore)
+                                    .environmentObject(favoriteModel)
                                     .frame(width: 370, height: 240)
                             }
                             if liveViewModel.isLoading {
@@ -48,16 +48,16 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(favoriteStore.cloudKitStateString)
+                Text(favoriteModel.cloudKitStateString)
                     .font(.title3)
             }
         }
         .onPlayPauseCommand(perform: {
-            favoriteStore.fetchFavoriteRoomList()
+            favoriteModel.fetchFavoriteRoomList()
             liveViewModel.roomPage = 1
         })
         .task {
-            favoriteStore.fetchFavoriteRoomList()
+            favoriteModel.fetchFavoriteRoomList()
             liveViewModel.roomPage = 1
         }
         .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {

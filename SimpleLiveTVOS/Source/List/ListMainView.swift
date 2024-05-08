@@ -26,7 +26,7 @@ struct ListMainView: View {
     var liveType: LiveType
     @StateObject var liveViewModel: LiveStore
     @FocusState var focusState: FocusableField?
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    @EnvironmentObject var favoriteModel: FavoriteModel
     
     init(liveType: LiveType) {
         self.liveType = liveType

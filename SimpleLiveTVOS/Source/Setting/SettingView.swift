@@ -8,15 +8,16 @@
 import SwiftUI
 
 
+
 struct SettingView: View {
     
     let titles = ["哔哩哔哩登录", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
     @State var currentTitle: String?
     @State var isLogin = false
     @State var isPushed = false
-    @StateObject var danmuSettingModel = DanmuSettingStore()
     @StateObject var settingStore = SettingStore()
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    @EnvironmentObject var favoriteModel: FavoriteModel
+    @Environment(DanmuSettingModel.self) var danmuSettingModel: DanmuSettingModel
     
     var body: some View {
         GeometryReader { geometry in
@@ -47,7 +48,7 @@ struct SettingView: View {
                                 DanmuSettingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.ultraThickMaterial)
-                                    .environmentObject(danmuSettingModel)
+                                    .environment(danmuSettingModel)
                             }else if title == "历史记录" {
                                 HistoryListView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -60,7 +61,7 @@ struct SettingView: View {
                                 SyncView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.ultraThickMaterial)
-                                    .environmentObject(favoriteStore)
+                                    .environmentObject(favoriteModel)
                             }else {
                                 AboutUSView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)

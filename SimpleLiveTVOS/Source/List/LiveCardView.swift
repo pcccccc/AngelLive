@@ -12,7 +12,7 @@ import LiveParse
 
 struct LiveCardView: View {
     @EnvironmentObject var liveViewModel: LiveStore
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    @EnvironmentObject var favoriteModel: FavoriteModel
     @State var index: Int
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
@@ -137,7 +137,7 @@ struct LiveCardView: View {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
                                             liveViewModel.roomList.remove(at: index)
@@ -145,7 +145,7 @@ struct LiveCardView: View {
                                     }
                                     liveViewModel.showToast(true, title:"取消收藏成功")
                                 }catch {
-                                    liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
+                                    liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                 }
                             }
                         })
@@ -160,7 +160,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        try await favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
                                                 liveViewModel.roomList.remove(at: index)
@@ -168,7 +168,7 @@ struct LiveCardView: View {
                                         }
                                         liveViewModel.showToast(true, title:"取消收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -182,10 +182,10 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await favoriteStore.addFavorite(room: liveViewModel.currentRoom!)
+                                        try await favoriteModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -207,13 +207,13 @@ struct LiveCardView: View {
                         }
                     })
                     .fullScreenCover(isPresented: $isLive, content: {
-                        DetailPlayerView(didExitView: { isLive, hint in
-                            self.isLive = isLive
-                        })
-                        .environmentObject(liveViewModel.roomInfoViewModel ?? RoomInfoStore(currentRoom: LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "", liveWatchedCount: "")))
-                        .environmentObject(favoriteStore)
-                        .edgesIgnoringSafeArea(.all)
-                        .frame(width: 1920, height: 1080)
+//                        DetailPlayerView(didExitView: { isLive, hint in
+//                            self.isLive = isLive
+//                        })
+//                        .environmentObject(liveViewModel.roomInfoViewModel ?? RoomInfoStore(currentRoom: LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "", liveWatchedCount: "")))
+//                        .environmentObject(favoriteModel)
+//                        .edgesIgnoringSafeArea(.all)
+//                        .frame(width: 1920, height: 1080)
                     })
                 })
                 HStack(spacing: 15) {
@@ -235,8 +235,8 @@ struct LiveCardView: View {
                 .frame(height: 50)
             })
             .onAppear {
-                if favoriteStore != nil {
-                    liveViewModel.favoriteStore = favoriteStore
+                if favoriteModel != nil {
+                    liveViewModel.favoriteModel = favoriteModel
                 }
             }
         }

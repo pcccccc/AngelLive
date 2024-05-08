@@ -9,9 +9,14 @@ import SwiftUI
 
 @main
 struct SimpleLiveTVOSApp: App {
+    
+    var danmuSettingModel = DanmuSettingModel()
+    var favoriteModel = FavoriteModel()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(danmuSettingModel)
         }
     }
 }

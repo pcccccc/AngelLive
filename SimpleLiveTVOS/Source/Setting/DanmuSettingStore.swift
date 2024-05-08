@@ -11,7 +11,7 @@ import Observation
 
 
 @Observable
-final class DanmuSettingStore {
+final class DanmuSettingModel {
     
     static let globalShowDanmu = "SimpleLive.Setting.showDanmu"
     static let globalShowColorDanmu = "SimpleLive.Setting.showColorDanmu"
@@ -24,16 +24,126 @@ final class DanmuSettingStore {
     static let globalDanmuFontSizeIndex = "SimpleLive.Setting.danmuFontSizeIndex"
     static let globalDanmuSpeedIndex = "SimpleLive.Setting.danmuSpeedIndex"
 
-    @AppStorage(globalShowDanmu) public var showDanmu: Bool = true
-    @AppStorage(globalShowColorDanmu) public var showColorDanmu: Bool = true
-    @AppStorage(globalDanmuTopMargin) public var danmuTopMargin: Double = 0.0
-    @AppStorage(globalDanmuBottomMargin) public var danmuBottomMargin: Double = 0.0
-    @AppStorage(globalDanmuFontSize) public var danmuFontSize: Int = 50
-    @AppStorage(globalDanmuSpeed) public var danmuSpeed: Double = 0.5
-    @AppStorage(globalDanmuAlpha) var danmuAlpha: Double = 1.0
-    @AppStorage(globalDanmuAreaIndex) var danmuAreaIndex: Int = 2
-    @AppStorage(globalDanmuFontSizeIndex) var danmuFontSizeIndex: Int = 1
-    @AppStorage(globalDanmuSpeedIndex) var danmuSpeedIndex: Int = 1 
+    @ObservationIgnored
+    public var showDanmu: Bool {
+        get {
+            access(keyPath: \.showDanmu)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalShowDanmu) as? Bool ?? true
+        }
+        set {
+            withMutation(keyPath: \.showDanmu) {
+                 UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalShowDanmu)
+            }
+        }
+    }
+    
+    public var showColorDanmu: Bool {
+        get {
+            access(keyPath: \.showColorDanmu)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalShowColorDanmu) as? Bool ?? true
+        }
+        set {
+            withMutation(keyPath: \.showColorDanmu) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalShowColorDanmu)
+            }
+        }
+    }
+    
+    public var danmuTopMargin: Double {
+        get {
+            access(keyPath: \.danmuTopMargin)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuTopMargin) as? Double ?? 0.0
+        }
+        set {
+            withMutation(keyPath: \.danmuTopMargin) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuTopMargin)
+            }
+        }
+    }
+    
+    public var danmuBottomMargin: Double {
+        get {
+            access(keyPath: \.danmuBottomMargin)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuBottomMargin) as? Double ?? 0.0
+        }
+        set {
+            withMutation(keyPath: \.danmuBottomMargin) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuBottomMargin)
+            }
+        }
+    }
+    
+    public var danmuFontSize: Int {
+        get {
+            access(keyPath: \.danmuFontSize)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuFontSize) as? Int ?? 50
+        }
+        set {
+            withMutation(keyPath: \.danmuFontSize) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuFontSize)
+            }
+        }
+    }
+    
+    public var danmuSpeed: Double {
+        get {
+            access(keyPath: \.danmuSpeed)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuSpeed) as? Double ?? 0.5
+        }
+        set {
+            withMutation(keyPath: \.danmuSpeed) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuSpeed)
+            }
+        }
+    }
+    
+    var danmuAlpha: Double {
+        get {
+            access(keyPath: \.danmuAlpha)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuAlpha) as? Double ?? 1.0
+        }
+        set {
+            withMutation(keyPath: \.danmuAlpha) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuAlpha)
+            }
+        }
+    }
+    
+    var danmuAreaIndex: Int {
+        get {
+            access(keyPath: \.danmuAreaIndex)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuAreaIndex) as? Int ?? 2
+        }
+        set {
+            withMutation(keyPath: \.danmuAreaIndex) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuAreaIndex)
+            }
+        }
+    }
+    
+    var danmuFontSizeIndex: Int {
+        get {
+            access(keyPath: \.danmuFontSizeIndex)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuFontSizeIndex) as? Int ?? 1
+        }
+        set {
+            withMutation(keyPath: \.danmuFontSizeIndex) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuFontSizeIndex)
+            }
+        }
+    }
+    
+    var danmuSpeedIndex: Int {
+        get {
+            access(keyPath: \.danmuSpeedIndex)
+            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuSpeedIndex) as? Int ?? 1
+        }
+        set {
+            withMutation(keyPath: \.danmuSpeedIndex) {
+                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuSpeedIndex)
+            }
+        }
+    }
     
     var danmuAreaArray: [String] = ["顶部1/4", "顶部1/2", "全屏", "底部1/2", "底部1/4"]
     var danmuSpeedArray: [String] = ["慢速", "正常", "快速"]

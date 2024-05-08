@@ -14,7 +14,7 @@ struct SearchRoomView: View {
     
     @StateObject var liveViewModel = LiveStore(roomListType: .search, liveType: .bilibili)
     @FocusState var focusState: Int?
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    @EnvironmentObject var favoriteModel: FavoriteModel
     
     var body: some View {
         VStack {
@@ -47,7 +47,7 @@ struct SearchRoomView: View {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environmentObject(liveViewModel)
-                            .environmentObject(favoriteStore)
+                            .environmentObject(favoriteModel)
                             .frame(width: 370, height: 280)
                     }
                     if liveViewModel.isLoading {

@@ -66,8 +66,8 @@ class LiveStore: ObservableObject {
     @Published var favoriteRoomList: [LiveModel] = []
     @Published var currentRoom: LiveModel? {
         didSet {
-            if favoriteStore != nil {
-                currentRoomIsFavorited = favoriteStore!.roomList.contains{ $0.roomId == currentRoom!.roomId }
+            if favoriteModel != nil {
+                currentRoomIsFavorited = favoriteModel!.roomList.contains{ $0.roomId == currentRoom!.roomId }
                 print(currentRoomIsFavorited)
             }
         }
@@ -106,7 +106,7 @@ class LiveStore: ObservableObject {
     }
     
     @AppStorage("SimpleLive.History.WatchList") public var watchList: Array<LiveModel> = []
-    @Published public var favoriteStore: FavoriteStore?
+    @Published public var favoriteModel: FavoriteModel?
     
     @Published var loadingText: String = "正在获取内容"
     @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号(抖音码选这个)"]
@@ -337,7 +337,7 @@ class LiveStore: ObservableObject {
     }
     
     func createCurrentRoomViewModel() {
-        roomInfoViewModel = RoomInfoStore(currentRoom: roomList[selectedRoomListIndex])
+        roomInfoViewModel = RoomInfoStore(currentRoom: roomList[selectedRoomListIndex], danmuSettingModel: DanmuSettingModel())
     }
     
     func addFavoriteCategory(_ category: LiveMainListModel) {

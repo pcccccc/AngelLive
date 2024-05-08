@@ -9,47 +9,51 @@ import Foundation
 import KSPlayer
 import LiveParse
 import SimpleToast
+import Observation
 
-class RoomInfoStore: ObservableObject {
+@Observable
+final class RoomInfoStore {
     
-    @Published var roomList: [LiveModel] = []
-    @Published var currentRoom: LiveModel
-    @Published var playerCoordinator = KSVideoPlayer.Coordinator()
-    @Published var option: KSOptions = {
+    var danmuSettingModel: DanmuSettingModel
+    
+    var roomList: [LiveModel] = []
+    var currentRoom: LiveModel
+    var playerCoordinator = KSVideoPlayer.Coordinator()
+    var option: KSOptions = {
         let options = KSOptions()
         options.userAgent = "libmpv"
         return options
     }()
-    @Published var currentRoomPlayArgs: [LiveQualityModel]?
-    @Published var currentPlayURL: URL?
-    @Published var currentPlayQualityString = "清晰度"
-    @Published var danmuSettingModel = DanmuSettingStore()
-    @Published var showControlView: Bool = true
-    @Published var isPlaying = false
-    @Published var douyuFirstLoad = true
+    var currentRoomPlayArgs: [LiveQualityModel]?
+    var currentPlayURL: URL?
+    var currentPlayQualityString = "清晰度"
+    var showControlView: Bool = true
+    var isPlaying = false
+    var douyuFirstLoad = true
     
-    @Published var isLoading = false
-    @Published var rotationAngle = 0.0
+    var isLoading = false
+    var rotationAngle = 0.0
     
-    @Published var isLeftFocused: Bool = false
-    @Published var showToast: Bool = false
-    @Published var toastTitle: String = ""
-    @Published var toastTypeIsSuccess: Bool = false
-    @Published var toastOptions = SimpleToastOptions(
+    var isLeftFocused: Bool = false
+    var showToast: Bool = false
+    var toastTitle: String = ""
+    var toastTypeIsSuccess: Bool = false
+    var toastOptions = SimpleToastOptions(
         hideAfter: 1.5
     )
 
-    @Published var debugTimerIsActive = false
-    @Published var dynamicInfo: DynamicInfo?
-    @Published var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    var debugTimerIsActive = false
+    var dynamicInfo: DynamicInfo?
+    var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
-    init(currentRoom: LiveModel) {
+    init(currentRoom: LiveModel, danmuSettingModel: DanmuSettingModel) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = currentRoom
+        self.danmuSettingModel = danmuSettingModel
         getPlayArgs()
     }
     

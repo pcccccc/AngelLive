@@ -12,8 +12,8 @@ import AVKit
 
 struct DetailPlayerView: View {
     
-    @EnvironmentObject var roomInfoViewModel: RoomInfoStore
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    var roomInfoViewModel: RoomInfoStore
+    @EnvironmentObject var favoriteModel: FavoriteModel
     
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
@@ -47,8 +47,7 @@ struct DetailPlayerView: View {
                     }
                     .safeAreaPadding(.all)
                     .zIndex(1)
-                PlayerControlView()
-                    .environmentObject(roomInfoViewModel)
+                PlayerControlView(roomInfoViewModel: roomInfoViewModel, danmuSettingModel: DanmuSettingModel())
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)
                     .opacity(roomInfoViewModel.showControlView ? 1 : 0)
@@ -60,8 +59,7 @@ struct DetailPlayerView: View {
                     DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
                         .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
                         .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
-                        .environmentObject(roomInfoViewModel.danmuSettingModel)
-                        .environmentObject(favoriteStore)
+                        .environmentObject(favoriteModel)
                     if roomInfoViewModel.danmuSettingModel.danmuAreaIndex < 3 {
                         Spacer()
                     }

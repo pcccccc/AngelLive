@@ -11,9 +11,9 @@ import KSPlayer
 
 struct PlayerControlView: View {
     
-    @StateObject var danmuSetting = DanmuSettingStore()
-    @EnvironmentObject var roomInfoViewModel: RoomInfoStore
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    var roomInfoViewModel: RoomInfoStore
+    var danmuSettingModel: DanmuSettingModel
+    @EnvironmentObject var favoriteModel: FavoriteModel
     @FocusState var leftFocusState: Bool
     @FocusState var rightFocusState: Bool
     @FocusState var playFocusState: Bool
@@ -31,6 +31,9 @@ struct PlayerControlView: View {
     )
     
     var body: some View {
+        
+        @Bindable var roomInfoModel = roomInfoViewModel
+        
         VStack() {
             HStack {
                 Text("\(roomInfoViewModel.currentRoom.userName) - \(roomInfoViewModel.currentRoom.roomTitle)")
@@ -140,8 +143,8 @@ struct PlayerControlView: View {
                         }
                     }
                 }, label: {
-                    Image(systemName:  favoriteStore.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
-                        .foregroundColor(favoriteStore.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? .red : .white)
+                    Image(systemName:  favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
+                        .foregroundColor(favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? .red : .white)
                         .font(.system(size: 30, weight: .bold))
                         .frame(width: 40, height: 40)
                         .padding(.top, 3)
@@ -211,10 +214,10 @@ struct PlayerControlView: View {
                             }
                         })
                     }else {
-                        danmuSetting.showDanmu.toggle()
+                        danmuSettingModel.showDanmu.toggle()
                     }
                 }, label: {
-                    Image(danmuSetting.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
+                    Image(danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
                         .resizable()
                         .frame(width: 40, height: 40)
                 })
@@ -254,7 +257,7 @@ struct PlayerControlView: View {
         .onReceive(roomInfoViewModel.timer, perform: { _ in
 //            roomInfoViewModel.dynamicInfo = roomInfoViewModel.playerCoordinator.playerLayer?.player.dynamicInfo
         })
-        .simpleToast(isPresented: $roomInfoViewModel.showToast, options: roomInfoViewModel.toastOptions) {
+        .simpleToast(isPresented: $roomInfoModel.showToast, options: roomInfoViewModel.toastOptions) {
             Label(roomInfoViewModel.toastTitle, systemImage: roomInfoViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                 .padding()
                 .background(roomInfoViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
@@ -265,21 +268,21 @@ struct PlayerControlView: View {
     }
     
     func favoriteAction() {
-        if favoriteStore.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
+        if favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
-                try await favoriteStore.addFavorite(room: roomInfoViewModel.currentRoom)
+                try await favoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
                 roomInfoViewModel.showToast(true, title: "收藏成功")
             }
         }else {
             Task {
-                try await  favoriteStore.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
+                try await  favoriteModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
                 roomInfoViewModel.showToast(true, title: "取消收藏成功")
             }
         }
     }
 }
 
-#Preview {
-    PlayerControlView()
-        .environmentObject(LiveStore(roomListType: .live, liveType: .bilibili))
-}
+//#Preview {
+//    PlayerControlView()
+//        .environmentObject(LiveStore(roomListType: .live, liveType: .bilibili))
+//}
