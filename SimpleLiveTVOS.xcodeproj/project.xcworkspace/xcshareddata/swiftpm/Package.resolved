@@ -50,8 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kingslay/FFmpegKit.git",
       "state" : {
-        "revision" : "ce7d13b161ad527417cfda9f00eaad2f8f7f9330",
-        "version" : "6.1.0"
+        "revision" : "85b77c589de0360c111de16752db86b60496d70b",
+        "version" : "6.1.3"
       }
     },
     {
@@ -77,8 +77,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kingslay/KSPlayer",
       "state" : {
-        "revision" : "191ad95b75384cac4ce879e99134b7acaa660d5c",
-        "version" : "2.2.2"
+        "revision" : "b696eb51b5ed66443009b66fe4a909dd9861b1af",
+        "version" : "2.2.4"
       }
     },
     {
@@ -86,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse.git",
       "state" : {
-        "revision" : "df99a876dba4eab1394b0edf0d42a0d704ac6c52",
-        "version" : "1.2.3"
+        "revision" : "1a11d1fbe377dd2c7d1aecefc8dc886ec5db78d3",
+        "version" : "1.2.4"
       }
     },
     {

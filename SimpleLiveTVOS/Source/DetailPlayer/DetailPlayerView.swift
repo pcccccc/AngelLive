@@ -72,6 +72,7 @@ struct DetailPlayerView: View {
                 if roomInfoViewModel.showControlView == true {
                     roomInfoViewModel.showControlView = false
                 }else {
+                    roomInfoViewModel.playerCoordinator.playerLayer?.resetPlayer()
                     didExitView(false, "")
                 }
             })
