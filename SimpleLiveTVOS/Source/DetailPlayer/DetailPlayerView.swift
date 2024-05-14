@@ -32,7 +32,9 @@ struct DetailPlayerView: View {
                     .onAppear {
                         roomInfoViewModel.playerCoordinator.playerLayer?.play()
                         roomInfoViewModel.setPlayerDelegate()
-                        roomInfoViewModel.getDanmuInfo()
+                        if roomInfoViewModel.danmuSettingModel.showDanmu {
+                            roomInfoViewModel.getDanmuInfo()
+                        }
                     }
                     .onDisappear {
                         roomInfoViewModel.disConnectSocket()

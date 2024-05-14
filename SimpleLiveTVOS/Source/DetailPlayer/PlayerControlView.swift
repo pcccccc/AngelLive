@@ -212,6 +212,11 @@ struct PlayerControlView: View {
                         })
                     }else {
                         danmuSetting.showDanmu.toggle()
+                        if danmuSetting.showDanmu == false {
+                            roomInfoViewModel.disConnectSocket()
+                        }else {
+                            roomInfoViewModel.getDanmuInfo()
+                        }
                     }
                 }, label: {
                     Image(danmuSetting.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
