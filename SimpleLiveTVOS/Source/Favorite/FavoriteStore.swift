@@ -21,7 +21,6 @@ class FavoriteModel: ObservableObject {
     
     init() {
         self.getState()
-        self.fetchFavoriteRoomList()
     }
     
     func fetchFavoriteRoomList() {
@@ -73,6 +72,7 @@ class FavoriteModel: ObservableObject {
             DispatchQueue.main.async {
                 self.cloudKitStateString = stateString
                 if stateString == "正常" {
+                    self.fetchFavoriteRoomList()
                     withAnimation(.easeInOut(duration: 0.25)) {
                         self.cloudKitReady = true
                     }

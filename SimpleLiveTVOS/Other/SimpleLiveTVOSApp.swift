@@ -17,6 +17,7 @@ struct SimpleLiveTVOSApp: App {
         WindowGroup {
             ContentView()
                 .environment(danmuSettingModel)
+                .environment(favoriteModel)
         }
     }
 }
