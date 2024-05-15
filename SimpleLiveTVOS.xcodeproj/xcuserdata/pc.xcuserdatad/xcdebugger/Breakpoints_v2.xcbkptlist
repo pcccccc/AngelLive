@@ -52,8 +52,7 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "75"
-                  endingLineNumber = "75"
-                  offsetFromSymbolStart = "168">
+                  endingLineNumber = "75">
                </Location>
                <Location
                   uuid = "711286AB-D762-41A1-9CDF-6670CC8F2A0D - 232bdcdf99a13dec"
@@ -67,8 +66,7 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "75"
-                  endingLineNumber = "75"
-                  offsetFromSymbolStart = "252">
+                  endingLineNumber = "75">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -100,8 +98,7 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "27"
-                  endingLineNumber = "27"
-                  offsetFromSymbolStart = "108">
+                  endingLineNumber = "27">
                </Location>
                <Location
                   uuid = "F3D143E8-657B-4E26-A330-3DAFCF51476B - f02b2ffabc79b12b"
@@ -115,8 +112,7 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "27"
-                  endingLineNumber = "27"
-                  offsetFromSymbolStart = "124">
+                  endingLineNumber = "27">
                </Location>
                <Location
                   uuid = "F3D143E8-657B-4E26-A330-3DAFCF51476B - 2a7b916c067a9c1f"
@@ -130,8 +126,7 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "27"
-                  endingLineNumber = "27"
-                  offsetFromSymbolStart = "40">
+                  endingLineNumber = "27">
                </Location>
             </Locations>
          </BreakpointContent>

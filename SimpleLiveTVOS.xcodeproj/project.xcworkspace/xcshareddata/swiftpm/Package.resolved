@@ -1,4 +1,5 @@
 {
+  "originHash" : "49a8c9df21db5c100238b830312daba8259a7832307dbf2cd3d5db4b00e6d7f5",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -46,15 +47,6 @@
       }
     },
     {
-      "identity" : "ffmpegkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kingslay/FFmpegKit.git",
-      "state" : {
-        "revision" : "ce7d13b161ad527417cfda9f00eaad2f8f7f9330",
-        "version" : "6.1.0"
-      }
-    },
-    {
       "identity" : "gzipswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1024jp/GzipSwift",
@@ -70,15 +62,6 @@
       "state" : {
         "revision" : "5b92f029fab2cce44386d28588098b5be0824ef5",
         "version" : "7.11.0"
-      }
-    },
-    {
-      "identity" : "ksplayer",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kingslay/KSPlayer",
-      "state" : {
-        "revision" : "191ad95b75384cac4ce879e99134b7acaa660d5c",
-        "version" : "2.2.2"
       }
     },
     {
@@ -199,5 +182,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
