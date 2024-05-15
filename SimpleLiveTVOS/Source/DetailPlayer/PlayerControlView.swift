@@ -289,5 +289,5 @@ struct PlayerControlView: View {
 
 //#Preview {
 //    PlayerControlView()
-//        .environmentObject(LiveStore(roomListType: .live, liveType: .bilibili))
+//        .environmentObject(LiveViewModel(roomListType: .live, liveType: .bilibili))
 //}

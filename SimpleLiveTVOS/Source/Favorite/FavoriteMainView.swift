@@ -13,15 +13,15 @@ import Shimmer
 
 struct FavoriteMainView: View {
     
-    @StateObject var liveViewModel: LiveStore
+    var liveViewModel: LiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili)
     @FocusState var focusState: Int?
-    @EnvironmentObject var favoriteModel: FavoriteModel
-    
-    init() {
-        self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .favorite, liveType: .bilibili))
-    }
+    @Environment(FavoriteModel.self) var favoriteModel
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
     
     var body: some View {
+        
+        @Bindable var liveModel = liveViewModel
+        
         VStack {
             if favoriteModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
@@ -32,8 +32,9 @@ struct FavoriteMainView: View {
                         LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
                             ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                                 LiveCardView(index: index)
-                                    .environmentObject(liveViewModel)
-                                    .environmentObject(favoriteModel)
+                                    .environment(liveViewModel)
+                                    .environment(favoriteModel)
+                                    .environment(danmuSettingModel)
                                     .frame(width: 370, height: 240)
                             }
                             if liveViewModel.isLoading {
@@ -60,7 +61,7 @@ struct FavoriteMainView: View {
             favoriteModel.fetchFavoriteRoomList()
             liveViewModel.roomPage = 1
         }
-        .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
+        .simpleToast(isPresented: $liveModel.showToast, options: liveViewModel.toastOptions) {
             Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                 .padding()
                 .background(liveViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))

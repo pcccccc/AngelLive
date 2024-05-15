@@ -39,36 +39,6 @@
             endingLineNumber = "75"
             landmarkName = "getState()"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "711286AB-D762-41A1-9CDF-6670CC8F2A0D - 232bdcdf99a13dec"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "closure #1 @Swift.MainActor @Sendable () -&gt; () in closure #1 @Sendable () async -&gt; () in SimpleLiveTVOS.FavoriteModel.getState() -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/Favorite/FavoriteStore.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "75"
-                  endingLineNumber = "75">
-               </Location>
-               <Location
-                  uuid = "711286AB-D762-41A1-9CDF-6670CC8F2A0D - 232bdcdf99a13dec"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "closure #1 @Swift.MainActor @Sendable () -&gt; () in closure #1 @Sendable () async -&gt; () in SimpleLiveTVOS.FavoriteModel.getState() -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/Favorite/FavoriteStore.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "75"
-                  endingLineNumber = "75">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -86,20 +56,6 @@
             landmarkName = "fetchFavoriteRoomList()"
             landmarkType = "7">
             <Locations>
-               <Location
-                  uuid = "F3D143E8-657B-4E26-A330-3DAFCF51476B - f02b2ffabc79b12b"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.FavoriteModel.fetchFavoriteRoomList() -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/Favorite/FavoriteStore.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "27"
-                  endingLineNumber = "27">
-               </Location>
                <Location
                   uuid = "F3D143E8-657B-4E26-A330-3DAFCF51476B - f02b2ffabc79b12b"
                   shouldBeEnabled = "Yes"

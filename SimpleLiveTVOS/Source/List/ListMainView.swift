@@ -24,16 +24,21 @@ struct ListMainView: View {
     private static let topId = "topIdHere"
     
     var liveType: LiveType
-    @StateObject var liveViewModel: LiveStore
+    var liveViewModel: LiveViewModel
     @FocusState var focusState: FocusableField?
-    @EnvironmentObject var favoriteModel: FavoriteModel
+
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
+    @Environment(FavoriteModel.self) var favoriteModel
     
     init(liveType: LiveType) {
         self.liveType = liveType
-        self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .live, liveType: liveType))
+        self.liveViewModel = LiveViewModel(roomListType: .live, liveType: liveType)
     }
     
     var body: some View {
+        
+        @Bindable var liveModel = liveViewModel
+        
         ZStack {
             ScrollViewReader { reader in
                 ScrollView {
@@ -43,18 +48,14 @@ struct ListMainView: View {
                     LazyVGrid(columns: [GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50)], spacing: 50) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
-                                .environmentObject(liveViewModel)
+                                .environment(liveViewModel)
                                 .onMoveCommand(perform: { direction in
                                     switch direction {
                                     case .left:
                                         if index % 4 == 0 {
                                             liveViewModel.showOverlay = true
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
-                                                if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty {
-                                                    focusState = .leftMenu(0, 0)
-                                                }else {
-                                                    focusState = .leftFavorite(0, 0)
-                                                }
+                                                focusState = .leftMenu(0, 0)
                                             })
                                         }
                                     default:
@@ -70,6 +71,12 @@ struct ListMainView: View {
                         }
                     }
                 }
+//                .scrollTransition { content, phase in
+//                    content
+//                        .opacity(phase.isIdentity ? 1 : 1)
+//                        .scaleEffect(phase.isIdentity ? 1 : 0.75)
+//                        .blur(radius: phase.isIdentity ? 0 : 10)
+//                }
             }.overlay {
                 ZStack {
                     VStack(alignment: .leading, spacing: 50) {
@@ -78,7 +85,7 @@ struct ListMainView: View {
                                 VStack(alignment: .leading) {
                                     HStack {
                                         LeftMenu(focusState: _focusState)
-                                            .environmentObject(liveViewModel)
+                                            .environment(liveViewModel)
                                             .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
                                             .edgesIgnoringSafeArea(.all)
                                             .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
@@ -99,11 +106,7 @@ struct ListMainView: View {
                                         if focus {
                                             liveViewModel.showOverlay = true
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
-                                                if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty {
-                                                    focusState = .leftMenu(0, 0)
-                                                }else {
-                                                    focusState = .leftFavorite(0, 0)
-                                                }
+                                                focusState = .leftMenu(0, 0)
                                             })
                                         }
                                     }
@@ -159,7 +162,7 @@ struct ListMainView: View {
                 liveViewModel.showOverlay = false
             }
         })
-        .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
+        .simpleToast(isPresented: $liveModel.showToast, options: liveViewModel.toastOptions) {
             Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                 .padding()
                 .background(liveViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))

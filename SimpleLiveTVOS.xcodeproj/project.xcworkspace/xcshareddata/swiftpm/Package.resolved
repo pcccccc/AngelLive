@@ -1,5 +1,5 @@
 {
-  "originHash" : "49a8c9df21db5c100238b830312daba8259a7832307dbf2cd3d5db4b00e6d7f5",
+  "originHash" : "374790657c54acff434a4f93d6be9187349b7e2809f3cbf653c1c7d31469e79a",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -47,6 +47,15 @@
       }
     },
     {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
+      "state" : {
+        "revision" : "06798e5025b029858b8864f6f4a9ec4dcb484884",
+        "version" : "7.0.1"
+      }
+    },
+    {
       "identity" : "gzipswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1024jp/GzipSwift",
@@ -62,6 +71,15 @@
       "state" : {
         "revision" : "5b92f029fab2cce44386d28588098b5be0824ef5",
         "version" : "7.11.0"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TracyPlayer/KSPlayer",
+      "state" : {
+        "branch" : "lgpl",
+        "revision" : "f5cfca9324e123eaaaf8000b8d783cf9133cd89a"
       }
     },
     {

@@ -11,12 +11,10 @@ import SimpleToast
 import LiveParse
 
 struct HistoryListView: View {
-    @StateObject var liveViewModel: LiveStore
+    var liveViewModel: LiveViewModel = LiveViewModel(roomListType: .history, liveType: .bilibili)
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
+    @Environment(FavoriteModel.self) var favoriteModel
     @FocusState var focusState: FocusableField?
-    
-    init() {
-        self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .history, liveType: .bilibili))
-    }
     
     var body: some View {
         VStack {
@@ -26,7 +24,9 @@ struct HistoryListView: View {
                 LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
-                            .environmentObject(liveViewModel)
+                            .environment(liveViewModel)
+                            .environment(favoriteModel)
+                            .environment(danmuSettingModel)
                             .frame(width: 370, height: 240)
                     }
                 }

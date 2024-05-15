@@ -1,5 +1,5 @@
 //
-//  LiveStore.swift
+//  LiveViewModel.swift
 //  SimpleLiveTVOS
 //
 //  Created by pangchong on 2023/12/14.
@@ -9,6 +9,7 @@ import Foundation
 import LiveParse
 import SimpleToast
 import SwiftUI
+import Observation
 
 enum LiveRoomListType {
     case live
@@ -18,7 +19,8 @@ enum LiveRoomListType {
 }
 
 
-class LiveStore: ObservableObject {
+@Observable
+final class LiveViewModel {
     
     let leftMenuMinWidth: CGFloat = 180
     let leftMenuMaxWidth: CGFloat = 300
@@ -31,40 +33,40 @@ class LiveStore: ObservableObject {
     var liveType: LiveType
     
     //菜单列表
-    @Published var categories: [LiveMainListModel] = []
-    @Published var showOverlay: Bool = false {
+    var categories: [LiveMainListModel] = []
+    var showOverlay: Bool = false {
         didSet {
             leftWidth = showOverlay == true ? leftMenuMaxWidth : leftMenuMinWidth
             leftHeight = showOverlay == true ? leftMenuMaxHeight : leftMenuMinHeight
             leftMenuCornerRadius = showOverlay == true ? 10 : 25
         }
     }
-    @Published var leftListOverlay: CGFloat = 0
-    @Published var leftWidth: CGFloat = 180
-    @Published var leftHeight: CGFloat = 50
-    @Published var leftMenuCornerRadius: CGFloat = 25
-    @Published var menuTitleIcon: String = ""
+    var leftListOverlay: CGFloat = 0
+    var leftWidth: CGFloat = 180
+    var leftHeight: CGFloat = 50
+    var leftMenuCornerRadius: CGFloat = 25
+    var menuTitleIcon: String = ""
     
     //当前选中的主分类与子分类
-    @Published var selectedMainListCategory: LiveMainListModel?
-    @Published var selectedSubCategory: [LiveCategoryModel] = []
-    @Published var selectedSubListIndex: Int = -1
-    @Published var selectedRoomListIndex: Int = -1
+    var selectedMainListCategory: LiveMainListModel?
+    var selectedSubCategory: [LiveCategoryModel] = []
+    var selectedSubListIndex: Int = -1
+    var selectedRoomListIndex: Int = -1
     
     //加载状态
-    @Published var isLoading = false
+    var isLoading = false
    
     //直播列表分页
-    @Published var subPageNumber = 0
-    @Published var subPageSize = 20
-    @Published var roomPage: Int = 1 {
+    var subPageNumber = 0
+    var subPageSize = 20
+    var roomPage: Int = 1 {
         didSet {
             getRoomList(index: selectedSubListIndex)
         }
     }
-    @Published var roomList: [LiveModel] = []
-    @Published var favoriteRoomList: [LiveModel] = []
-    @Published var currentRoom: LiveModel? {
+    var roomList: [LiveModel] = []
+    var favoriteRoomList: [LiveModel] = []
+    var currentRoom: LiveModel? {
         didSet {
             if favoriteModel != nil {
                 currentRoomIsFavorited = favoriteModel!.roomList.contains{ $0.roomId == currentRoom!.roomId }
@@ -74,46 +76,53 @@ class LiveStore: ObservableObject {
     }
     
     //当前选择房间ViewModel
-    @Published var roomInfoViewModel: RoomInfoStore?
+    var roomInfoViewModel: RoomInfoStore?
 
-    @Published var isLeftFocused: Bool = false
-    @Published var showToast: Bool = false
-    @Published var toastTitle: String = ""
-    @Published var toastTypeIsSuccess: Bool = false
-    @Published var toastOptions = SimpleToastOptions(
+    var isLeftFocused: Bool = false
+    var showToast: Bool = false
+    var toastTitle: String = ""
+    var toastTypeIsSuccess: Bool = false
+    var toastOptions = SimpleToastOptions(
         hideAfter: 1.5
     )
     
-    @AppStorage("SimpleLive.Favorite.Category.Bilibili") public var bilibiliFavoriteLiveCategoryList: Array<LiveMainListModel> = []
-    @AppStorage("SimpleLive.Favorite.Category.Huya") public var huyaFavoriteLiveCategoryList: Array<LiveMainListModel> = []
-    @AppStorage("SimpleLive.Favorite.Category.Douyu") public var douyuFavoriteLiveCategoryList: Array<LiveMainListModel> = []
-    @AppStorage("SimpleLive.Favorite.Category.Douyin") public var douyinFavoriteLiveCategoryList: Array<LiveMainListModel> = []
-    @Published public var currentLiveTypeFavoriteCategoryList: Array<LiveMainListModel> = [] {
-        didSet {
-            switch liveType {
-                case .bilibili:
-                    bilibiliFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
-                case .douyu:
-                    douyuFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
-                case .huya:
-                    huyaFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
-                case .douyin:
-                    douyinFavoriteLiveCategoryList = currentLiveTypeFavoriteCategoryList
-                default:
-                    break
+    public var watchList: Array<LiveModel> {
+        get {
+            access(keyPath: \.watchList)
+            let dictionaries = UserDefaults.standard.value(forKey: "SimpleLive.History.WatchList") as? Array<Dictionary<String, String?>>
+            if dictionaries == nil {
+                return []
+            }else {
+                let jsonEncoder = JSONEncoder()
+                if let jsonData = try? jsonEncoder.encode(dictionaries) {
+                    let jsonDecoder = JSONDecoder()
+                    if let decodedArray = try? jsonDecoder.decode([LiveModel].self, from: jsonData) {
+                        return decodedArray
+                    }
+                }
+                return []
+            }
+        }
+        set {
+            withMutation(keyPath: \.watchList) {
+                let jsonEncoder = JSONEncoder()
+                if let jsonData = try? jsonEncoder.encode(newValue) {
+                    if let dictionary = try? JSONSerialization.jsonObject(with: jsonData, options: .allowFragments) as? [String: Any] {
+                        UserDefaults.standard.setValue(dictionary, forKey: "SimpleLive.History.WatchList")
+                    }
+                }
             }
         }
     }
     
-    @AppStorage("SimpleLive.History.WatchList") public var watchList: Array<LiveModel> = []
-    @Published public var favoriteModel: FavoriteModel?
+    var favoriteModel: FavoriteModel?
     
-    @Published var loadingText: String = "正在获取内容"
-    @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号(抖音码选这个)"]
-    @Published var searchTypeIndex = 0
-    @Published var searchText: String = ""
-    @Published var showAlert: Bool = false
-    @Published var currentRoomIsFavorited: Bool = false
+    var loadingText: String = "正在获取内容"
+    var searchTypeArray = ["关键词", "链接/分享口令/房间号(抖音码选这个)"]
+    var searchTypeIndex = 0
+    var searchText: String = ""
+    var showAlert: Bool = false
+    var currentRoomIsFavorited: Bool = false
     
     
     init(roomListType: LiveRoomListType, liveType: LiveType) {
@@ -122,16 +131,12 @@ class LiveStore: ObservableObject {
         switch liveType {
             case .bilibili: 
                 menuTitleIcon = "bilibili_2"
-                currentLiveTypeFavoriteCategoryList = bilibiliFavoriteLiveCategoryList
             case .douyu:
                 menuTitleIcon = "douyu"
-                currentLiveTypeFavoriteCategoryList = douyuFavoriteLiveCategoryList
             case .huya:
                 menuTitleIcon = "huya"
-                currentLiveTypeFavoriteCategoryList = huyaFavoriteLiveCategoryList
             case .douyin:
                 menuTitleIcon = "douyin"
-                currentLiveTypeFavoriteCategoryList = douyinFavoriteLiveCategoryList
             default: menuTitleIcon = "douyin"
         }
         switch roomListType {
@@ -340,9 +345,6 @@ class LiveStore: ObservableObject {
         roomInfoViewModel = RoomInfoStore(currentRoom: roomList[selectedRoomListIndex], danmuSettingModel: DanmuSettingModel())
     }
     
-    func addFavoriteCategory(_ category: LiveMainListModel) {
-        currentLiveTypeFavoriteCategoryList.append(category)
-    }
     
     func deleteHistory(index: Int) {
         self.watchList.remove(at: index)

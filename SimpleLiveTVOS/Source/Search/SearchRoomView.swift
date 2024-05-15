@@ -12,15 +12,19 @@ import Shimmer
 
 struct SearchRoomView: View {
     
-    @StateObject var liveViewModel = LiveStore(roomListType: .search, liveType: .bilibili)
+    var liveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili)
     @FocusState var focusState: Int?
-    @EnvironmentObject var favoriteModel: FavoriteModel
+    @Environment(FavoriteModel.self) var favoriteModel
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
     
     var body: some View {
+        
+        @Bindable var liveModel = liveViewModel
+        
         VStack {
             Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
             HStack {
-                Picker(selection: $liveViewModel.searchTypeIndex) {
+                Picker(selection: $liveModel.searchTypeIndex) {
                     ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
                         // 需要有一个变量text。不然会自动帮忙加很多0
                         let text = liveViewModel.searchTypeArray[index]
@@ -30,7 +34,7 @@ struct SearchRoomView: View {
                     Text("字体大小")
                 }
             }
-            TextField("搜索", text: $liveViewModel.searchText)
+            TextField("搜索", text: $liveModel.searchText)
             .onSubmit {
                 if liveViewModel.searchTypeIndex == 0 {
                     liveViewModel.roomPage = 1
@@ -46,8 +50,9 @@ struct SearchRoomView: View {
                 LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
-                            .environmentObject(liveViewModel)
-                            .environmentObject(favoriteModel)
+                            .environment(liveViewModel)
+                            .environment(favoriteModel)
+                            .environment(danmuSettingModel)
                             .frame(width: 370, height: 280)
                     }
                     if liveViewModel.isLoading {
@@ -61,7 +66,7 @@ struct SearchRoomView: View {
                 .safeAreaPadding(.top, 50)
             }
         }
-        .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
+        .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess == true ? "checkmark.circle":"info.circle.fill")
                 .padding()
                 .background(liveViewModel.toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))

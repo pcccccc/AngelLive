@@ -11,9 +11,8 @@ import AVKit
 
 
 struct DetailPlayerView: View {
-    
-    var roomInfoViewModel: RoomInfoStore
-    @EnvironmentObject var favoriteModel: FavoriteModel
+    @Environment(RoomInfoStore.self) var roomInfoViewModel
+    @Environment(FavoriteModel.self) var favoriteModel
     
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
@@ -72,7 +71,7 @@ struct DetailPlayerView: View {
                 if roomInfoViewModel.showControlView == true {
                     roomInfoViewModel.showControlView = false
                 }else {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.resetPlayer()
+                    roomInfoViewModel.playerCoordinator.resetPlayer()
                     didExitView(false, "")
                 }
             })

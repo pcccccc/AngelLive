@@ -18,6 +18,8 @@ final class RoomInfoStore {
     
     var roomList: [LiveModel] = []
     var currentRoom: LiveModel
+    
+    @MainActor
     var playerCoordinator = KSVideoPlayer.Coordinator()
     var option: KSOptions = {
         let options = KSOptions()
@@ -181,7 +183,7 @@ final class RoomInfoStore {
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
     }
     
-    func setPlayerDelegate() {
+    @MainActor func setPlayerDelegate() {
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
     }

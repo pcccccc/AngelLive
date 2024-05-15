@@ -9,10 +9,12 @@ import SwiftUI
 import Kingfisher
 import KSPlayer
 import LiveParse
+import Observation
 
 struct LiveCardView: View {
-    @EnvironmentObject var liveViewModel: LiveStore
-    @EnvironmentObject var favoriteModel: FavoriteModel
+    @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(FavoriteModel.self) var favoriteModel
+    @Environment(DanmuSettingModel.self) var danmuSettingModel
     @State var index: Int
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
@@ -24,6 +26,9 @@ struct LiveCardView: View {
     )
     
     var body: some View {
+        
+        @Bindable var liveModel = liveViewModel
+        
         if index < liveViewModel.roomList.count {
             VStack(alignment: .leading, spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
@@ -34,7 +39,9 @@ struct LiveCardView: View {
                             do {
                                 if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
                                     if self.liveViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
-                                        self.liveViewModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+                                        var watchList = self.liveViewModel.watchList
+                                        watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+                                        self.liveViewModel.watchList = watchList
                                     }
                                     liveViewModel.createCurrentRoomViewModel()
                                     DispatchQueue.main.async {
@@ -133,7 +140,7 @@ struct LiveCardView: View {
                             }
                         }
                     })
-                    .alert("提示", isPresented: $liveViewModel.showAlert) {
+                    .alert("提示", isPresented: $liveModel.showAlert) {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
@@ -207,13 +214,13 @@ struct LiveCardView: View {
                         }
                     })
                     .fullScreenCover(isPresented: $isLive, content: {
-//                        DetailPlayerView(didExitView: { isLive, hint in
-//                            self.isLive = isLive
-//                        })
-//                        .environmentObject(liveViewModel.roomInfoViewModel ?? RoomInfoStore(currentRoom: LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "", liveWatchedCount: "")))
-//                        .environmentObject(favoriteModel)
-//                        .edgesIgnoringSafeArea(.all)
-//                        .frame(width: 1920, height: 1080)
+                        DetailPlayerView { isLive, hint in
+                            self.isLive = isLive
+                        }
+                        .environment(liveViewModel.roomInfoViewModel!)
+                        .environmentObject(favoriteModel)
+                        .edgesIgnoringSafeArea(.all)
+                        .frame(width: 1920, height: 1080)
                     })
                 })
                 HStack(spacing: 15) {
