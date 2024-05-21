@@ -620,7 +620,7 @@
 				4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */,
 				4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */,
 				4F22D67D2BF1EF1F00497F3A /* XCRemoteSwiftPackageReference "LiveParse" */,
-				4FDD1D992BF46E49002641E6 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				4FDFAE2C2BFC3AD9008CFDFA /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -1118,12 +1118,12 @@
 				minimumVersion = 2.64.0;
 			};
 		};
-		4FDD1D992BF46E49002641E6 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+		4FDFAE2C2BFC3AD9008CFDFA /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/TracyPlayer/KSPlayer";
+			repositoryURL = "https://github.com/kingslay/KSPlayer";
 			requirement = {
-				branch = lgpl;
-				kind = branch;
+				kind = exactVersion;
+				version = 2.2.4;
 			};
 		};
 		FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */ = {
