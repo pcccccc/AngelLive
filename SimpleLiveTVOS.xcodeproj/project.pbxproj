@@ -1066,7 +1066,7 @@
 			repositoryURL = "https://github.com/pcccccc/LiveParse.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.4;
+				minimumVersion = 1.2.6;
 			};
 		};
 		4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
