@@ -64,17 +64,29 @@ struct ContentView: View {
                     }
                 .tag(4)
                 .environmentObject(favoriteStore)
+//                ListMainView(liveType: .cc)
+//                    .tabItem {
+//                        Text("网易CC")
+//                    }
+//                .tag(5)
+//                .environmentObject(favoriteStore)
+//                ListMainView(liveType: .ks)
+//                    .tabItem {
+//                        Text("快手")
+//                    }
+//                .tag(6)
+//                .environmentObject(favoriteStore)
                 SearchRoomView()
                     .tabItem {
                         Text("搜索")
                     }
-                .tag(5)
+                .tag(7)
                 .environmentObject(favoriteStore)
                 SettingView()
                     .tabItem {
                         Text("设置")
                     }
-                .tag(6)
+                .tag(8)
                 .environmentObject(favoriteStore)
             }
         }

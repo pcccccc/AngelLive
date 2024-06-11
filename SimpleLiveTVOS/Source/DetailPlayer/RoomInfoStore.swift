@@ -163,6 +163,10 @@ class RoomInfoStore: ObservableObject {
                         playArgs =  try await Douyin.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     case .douyu:
                         playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
+                    case .cc:
+                        playArgs =  try await NeteaseCC.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .ks:
+                        playArgs =  try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
                     default: break
                 }
                 await updateCurrentRoomPlayArgs(playArgs)

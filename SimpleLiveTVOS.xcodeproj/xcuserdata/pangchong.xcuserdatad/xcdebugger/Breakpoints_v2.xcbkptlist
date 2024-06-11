@@ -304,5 +304,65 @@
             </Locations>
          </BreakpointContent>
       </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "85"
+            endingLineNumber = "85"
+            landmarkName = "fetchLastestLiveInfo(liveModel:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - aa7e5773dc648219"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85">
+               </Location>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 78d0f095ea557737"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(6) await resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85">
+               </Location>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - e518908e750c1b0f"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(13) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
    </Breakpoints>
 </Bucket>
