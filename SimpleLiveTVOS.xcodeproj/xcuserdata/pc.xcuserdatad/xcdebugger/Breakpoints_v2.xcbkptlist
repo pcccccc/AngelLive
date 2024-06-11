@@ -55,36 +55,6 @@
             endingLineNumber = "27"
             landmarkName = "fetchFavoriteRoomList()"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "F3D143E8-657B-4E26-A330-3DAFCF51476B - f02b2ffabc79b12b"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.FavoriteModel.fetchFavoriteRoomList() -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/Favorite/FavoriteStore.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "27"
-                  endingLineNumber = "27">
-               </Location>
-               <Location
-                  uuid = "F3D143E8-657B-4E26-A330-3DAFCF51476B - 2a7b916c067a9c1f"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "closure #1 () -&gt; () in SimpleLiveTVOS.FavoriteModel.fetchFavoriteRoomList() -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/Favorite/FavoriteStore.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "27"
-                  endingLineNumber = "27">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

@@ -18,13 +18,14 @@ struct ContentView: View {
     
     @Environment(DanmuSettingModel.self) var danmuSettingModel
     @Environment(FavoriteModel.self) var favoriteModel
-    @State private var selection = 1
+    @State private var selection = 0
     
     @State var broadcastConnection: UDPBroadcastConnection?
     
     var body: some View {
         NavigationView {
             TabView(selection:$selection) {
+                PlatformView()
 //                FavoriteMainView()
 //                    .tabItem {
 //                        if favoriteModel.isLoading == true || favoriteModel.cloudKitReady == false {
@@ -42,13 +43,13 @@ struct ContentView: View {
 //                .tag(0)
 //                .environment(favoriteModel)
 //                .environment(danmuSettingModel)
-                ListMainView(liveType: .bilibili)
-                    .tabItem {
-                        Text("B站")
-                    }
-                .tag(1)
-                .environment(favoriteModel)
-                .environment(danmuSettingModel)
+//                ListMainView(liveType: .bilibili)
+//                    .tabItem {
+//                        Text("B站")
+//                    }
+//                .tag(1)
+//                .environment(favoriteModel)
+//                .environment(danmuSettingModel)
 //                ListMainView(liveType: .huya)
 //                    .tabItem {
 //                        Text("虎牙")

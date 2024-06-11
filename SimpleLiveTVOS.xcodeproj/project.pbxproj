@@ -53,6 +53,7 @@
 		4FC3DCF92A49383100CA36B9 /* SimpleLiveTVOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCF82A49383100CA36B9 /* SimpleLiveTVOSUITests.swift */; };
 		4FC3DCFB2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */; };
 		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
+		4FC3EBE42C17FDB1000F888F /* PlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC3EBE32C17FDB1000F888F /* PlatformView.swift */; };
 		4FC475422B563C8D006A102D /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC475412B563C8D006A102D /* Shimmer */; };
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
 		4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */; };
@@ -150,6 +151,7 @@
 		4FC3DCF82A49383100CA36B9 /* SimpleLiveTVOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITests.swift; sourceTree = "<group>"; };
 		4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		4FC3DD0A2A4972FB00CA36B9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		4FC3EBE32C17FDB1000F888F /* PlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformView.swift; sourceTree = "<group>"; };
 		4FCA39162BBA4EB800506675 /* SyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncView.swift; sourceTree = "<group>"; };
 		4FCA39192BBA4F8E00506675 /* SyncSocketManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSocketManager.swift; sourceTree = "<group>"; };
 		4FE0E4272BBD5D720053D69F /* FullScreenLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenLoadingView.swift; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@
 		4F05A69E2B50CAD90033214E /* Source */ = {
 			isa = PBXGroup;
 			children = (
+				4FC3EBE22C17FDA3000F888F /* Platform */,
 				4F05A69F2B50CAD90033214E /* DetailPlayer */,
 				4F05A6A52B50CAD90033214E /* Favorite */,
 				4F05A6A72B50CAD90033214E /* Search */,
@@ -412,6 +415,14 @@
 				4FC3DCFA2A49383100CA36B9 /* SimpleLiveTVOSUITestsLaunchTests.swift */,
 			);
 			path = SimpleLiveTVOSUITests;
+			sourceTree = "<group>";
+		};
+		4FC3EBE22C17FDA3000F888F /* Platform */ = {
+			isa = PBXGroup;
+			children = (
+				4FC3EBE32C17FDB1000F888F /* PlatformView.swift */,
+			);
+			path = Platform;
 			sourceTree = "<group>";
 		};
 		4FCA39182BBA4F7600506675 /* Sync */ = {
@@ -711,6 +722,7 @@
 				4FBAB9172B47A42200A77A5C /* DanmakuGifCellModel.swift in Sources */,
 				4F05A6B92B50CAD90033214E /* FavoriteMainView.swift in Sources */,
 				4FCA391A2BBA4F8E00506675 /* SyncSocketManager.swift in Sources */,
+				4FC3EBE42C17FDB1000F888F /* PlatformView.swift in Sources */,
 				4FF2D3722BBC0369002822DD /* LoadingView.swift in Sources */,
 				4F05A6C52B50CB6E0033214E /* SearchStore.swift in Sources */,
 			);
@@ -1059,7 +1071,7 @@
 			repositoryURL = "https://github.com/pcccccc/LiveParse.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.4;
+				minimumVersion = 1.2.6;
 			};
 		};
 		4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
