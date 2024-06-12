@@ -43,7 +43,7 @@ final class LiveViewModel {
     }
     var leftListOverlay: CGFloat = 0
     var leftWidth: CGFloat = 180
-    var leftHeight: CGFloat = 50
+    var leftHeight: CGFloat = 60
     var leftMenuCornerRadius: CGFloat = 30
     var menuTitleIcon: String = ""
     
