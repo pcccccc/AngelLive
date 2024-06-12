@@ -25,7 +25,7 @@ final class LiveViewModel {
     let leftMenuMinWidth: CGFloat = 180
     let leftMenuMaxWidth: CGFloat = 300
     let leftMenuMinHeight: CGFloat = 50
-    let leftMenuMaxHeight: CGFloat = 830
+    let leftMenuMaxHeight: CGFloat = 1080
     
     //房间列表分类
     var roomListType: LiveRoomListType
@@ -44,7 +44,7 @@ final class LiveViewModel {
     var leftListOverlay: CGFloat = 0
     var leftWidth: CGFloat = 180
     var leftHeight: CGFloat = 50
-    var leftMenuCornerRadius: CGFloat = 25
+    var leftMenuCornerRadius: CGFloat = 30
     var menuTitleIcon: String = ""
     
     //当前选中的主分类与子分类
@@ -70,7 +70,6 @@ final class LiveViewModel {
         didSet {
             if favoriteModel != nil {
                 currentRoomIsFavorited = favoriteModel!.roomList.contains{ $0.roomId == currentRoom!.roomId }
-                print(currentRoomIsFavorited)
             }
         }
     }

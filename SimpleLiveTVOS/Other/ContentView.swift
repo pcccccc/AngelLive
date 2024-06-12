@@ -25,31 +25,35 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             TabView(selection:$selection) {
+                
+                FavoriteMainView()
+                    .tabItem {
+                        if favoriteModel.isLoading == true || favoriteModel.cloudKitReady == false {
+                            Label(
+                                title: {  },
+                                icon: {
+                                    Image(systemName: favoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                }
+                            )
+                            .contentTransition(.symbolEffect(.replace))
+                        }else {
+                            Text("收藏")
+                        }
+                    }
+                .tag(0)
+                .environment(favoriteModel)
+                .environment(danmuSettingModel)
                 PlatformView()
-//                FavoriteMainView()
-//                    .tabItem {
-//                        if favoriteModel.isLoading == true || favoriteModel.cloudKitReady == false {
-//                            Label(
-//                                title: {  },
-//                                icon: {
-//                                    Image(systemName: favoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
-//                                }
-//                            )
-//                            .contentTransition(.symbolEffect(.replace))
-//                        }else {
-//                            Text("收藏")
-//                        }
-//                    }
-//                .tag(0)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
-//                ListMainView(liveType: .bilibili)
-//                    .tabItem {
-//                        Text("B站")
-//                    }
-//                .tag(1)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
+                    .tabItem {
+                        Text("全部")
+                    }
+                ListMainView(liveType: .bilibili)
+                    .tabItem {
+                        Text("B站")
+                    }
+                .tag(1)
+                .environment(favoriteModel)
+                .environment(danmuSettingModel)
 //                ListMainView(liveType: .huya)
 //                    .tabItem {
 //                        Text("虎牙")
@@ -71,20 +75,20 @@ struct ContentView: View {
 //                .tag(4)
 //                .environment(favoriteModel)
 //                .environment(danmuSettingModel)
-//                SearchRoomView()
-//                    .tabItem {
-//                        Text("搜索")
-//                    }
-//                .tag(5)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
-//                SettingView()
-//                    .tabItem {
-//                        Text("设置")
-//                    }
-//                .tag(6)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
+                SearchRoomView()
+                    .tabItem {
+                        Text("搜索")
+                    }
+                .tag(5)
+                .environment(favoriteModel)
+                .environment(danmuSettingModel)
+                SettingView()
+                    .tabItem {
+                        Text("设置")
+                    }
+                .tag(6)
+                .environment(favoriteModel)
+                .environment(danmuSettingModel)
             }
         }
         .onAppear {

@@ -23,6 +23,7 @@ struct PlatformView: View {
             }
         }
         .onAppear {
+            data.removeAll()
             let allPlatform = LiveParseTools.getAllSupportPlatform()
             for index in 0 ..< allPlatform.count {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Double(0.05 * Double(index))) {

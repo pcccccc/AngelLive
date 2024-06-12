@@ -22,58 +22,63 @@ struct LeftMenu: View {
     var body : some View {
         ScrollView {
             VStack(alignment: .center) {
-                if liveViewModel.showOverlay == false {
-                    if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedSubListIndex != -1 {
-                        if liveViewModel.selectedSubListIndex < liveViewModel.selectedSubCategory.count {
-                            HStack(spacing: 10) {
-                                if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
-                                    Image(liveViewModel.menuTitleIcon)
-                                    .resizable()
-                                    .frame(width: 30, height: 30, alignment: .leading)
-                                    .padding(.leading, -5)
-                                }else {
-                                    KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
-                                    .resizable()
-                                    .frame(width: 30, height: 30, alignment: .leading)
-                                    .padding(.leading, -5)
-                                }
-
-                                Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
-                                    .font(.system(size: 20))
-                                    .frame(width: 110, height: 30, alignment: .leading)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            .padding(.top, 160)
-                            .padding(.leading, 5)
-                            .edgesIgnoringSafeArea(.all)
-                        }
-                    }else {
-                        HStack(spacing: 10) {
-                            Image(liveViewModel.menuTitleIcon)
-                                .resizable()
-                                .frame(width: 30, height: 30, alignment: .leading)
-                                .padding(.leading, -5)
-                            Text("直播分类")
-                                .font(.system(size: 20))
-                                .frame(width: 110, height: 30, alignment: .leading)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .padding(.top, 160)
-                        .padding(.leading, 5)
-                        .edgesIgnoringSafeArea(.all)
-                    }
-                }else {
-                    ForEach(liveViewModel.categories.indices, id: \.self) { index in
-                        MenuItem(favorite: false, icon: liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon, title: liveViewModel.categories[index].title, index: index, subItems: liveViewModel.categories[index].subList)
-                            .frame(width: 250)
-                            .padding(.top, index == 0 ? 190 : 15)
-                            .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 15)
-                            .padding([.leading, .trailing], 30)
-                            .buttonStyle(.plain)
-                            .background(Color.clear)
-                            .focused($focusState, equals: .leftMenu(index, 0))
-                    }
+                Text("分类")
+                    .font(.title3)
+                    .bold()
+                    .padding(.top, 20)
+                ForEach(liveViewModel.categories.indices, id: \.self) { index in
+                    MenuItem(favorite: false, icon: liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon, title: liveViewModel.categories[index].title, index: index, subItems: liveViewModel.categories[index].subList)
+                        .frame(width: 250)
+                        .padding(.top, index == 0 ? 30 : 15)
+                        .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 15)
+                        .padding([.leading, .trailing], 30)
+                        .buttonStyle(.plain)
+                        .background(Color.clear)
+                        .focused($focusState, equals: .leftMenu(index, 0))
                 }
+//                if liveViewModel.showOverlay == false {
+//                    if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedSubListIndex != -1 {
+//                        if liveViewModel.selectedSubListIndex < liveViewModel.selectedSubCategory.count {
+//                            HStack(spacing: 10) {
+//                                if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
+//                                    Image(liveViewModel.menuTitleIcon)
+//                                    .resizable()
+//                                    .frame(width: 30, height: 30, alignment: .leading)
+//                                    .padding(.leading, -5)
+//                                }else {
+//                                    KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
+//                                    .resizable()
+//                                    .frame(width: 30, height: 30, alignment: .leading)
+//                                    .padding(.leading, -5)
+//                                }
+//
+//                                Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
+//                                    .font(.system(size: 20))
+//                                    .frame(width: 110, height: 30, alignment: .leading)
+//                                    .multilineTextAlignment(.leading)
+//                            }
+//                            .padding(.top, 160)
+//                            .padding(.leading, 5)
+//                            .edgesIgnoringSafeArea(.all)
+//                        }
+//                    }else {
+//                        HStack(spacing: 10) {
+//                            Image(liveViewModel.menuTitleIcon)
+//                                .resizable()
+//                                .frame(width: 30, height: 30, alignment: .leading)
+//                                .padding(.leading, -5)
+//                            Text("直播分类")
+//                                .font(.system(size: 20))
+//                                .frame(width: 110, height: 30, alignment: .leading)
+//                                .multilineTextAlignment(.leading)
+//                        }
+//                        .padding(.top, 160)
+//                        .padding(.leading, 5)
+//                        .edgesIgnoringSafeArea(.all)
+//                    }
+//                }else {
+//
+//                }
                 
             }
             .listStyle(.plain)

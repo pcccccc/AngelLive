@@ -59,7 +59,7 @@ struct ListMainView: View {
                                             })
                                         }
                                     default:
-                                        print("default")
+                                        break
                                     }
                                 })
                                 .onPlayPauseCommand(perform: {
@@ -79,19 +79,20 @@ struct ListMainView: View {
 //                }
             }.overlay {
                 ZStack {
-                    VStack(alignment: .leading, spacing: 50) {
+                    VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top) {
                             ZStack {
+                                LeftMenu(focusState: _focusState)
+                                    .environment(liveViewModel)
+                                    .opacity(liveViewModel.showOverlay ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
+                                    .edgesIgnoringSafeArea(.all)
+                                    .frame(width: 320, height: 1080)
+                                    .cornerRadius(liveViewModel.leftMenuCornerRadius)
                                 VStack(alignment: .leading) {
                                     HStack {
-                                        LeftMenu(focusState: _focusState)
+                                        IndicatorMenuView()
                                             .environment(liveViewModel)
-                                            .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
-                                            .edgesIgnoringSafeArea(.all)
-                                            .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
-                                            .cornerRadius(liveViewModel.leftMenuCornerRadius)
-                                        
-                                        Spacer(minLength: 0)
                                     }
                                     .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftHeight)
                                     Button {
@@ -115,14 +116,14 @@ struct ListMainView: View {
                                 .frame(width: liveViewModel.showOverlay == true ? 150: 300, height: liveViewModel.showOverlay == true ? liveViewModel.leftMenuMinHeight:  liveViewModel.leftMenuMaxHeight)
                             }
                             .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftMenuMaxHeight)
+                            
                             Spacer()
                         }
-                        Spacer()
+                        .frame(height: 1080)
                     }
-                    
                     .edgesIgnoringSafeArea(.all)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    
+                    .frame(width: 1920, height: 1080)
+                    .background(liveModel.showOverlay ? .black.opacity(0.4) : .clear)
                 }
                 .onMoveCommand(perform: { direction in
                     if direction == .left {
@@ -149,7 +150,9 @@ struct ListMainView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 50)
                 .padding(.leading, 10)
+                
             }
+            
             
         }
         .onChange(of: focusState, { oldValue, newValue in
