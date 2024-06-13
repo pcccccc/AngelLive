@@ -31,6 +31,8 @@ final class LiveViewModel {
     var roomListType: LiveRoomListType
     //直播分类
     var liveType: LiveType
+    //分类名
+    var livePlatformName: String = ""
     
     //菜单列表
     var categories: [LiveMainListModel] = []
@@ -180,6 +182,7 @@ final class LiveViewModel {
      - Returns: 平台直播分类（包含子分类）。
     */
     func getCategoryList() {
+        livePlatformName = LiveParseTools.getLivePlatformName(liveType)
         isLoading = true
         Task {
             do {
@@ -215,7 +218,12 @@ final class LiveViewModel {
                 if index == -1 {
                     if let subListCategory = self.categories.first?.subList.first {
                         Task {
-                            let roomList  = try await ApiManager.fetchRoomList(liveCategory: subListCategory, page: self.roomPage, liveType: liveType)
+                            var finalSubListCategory = subListCategory
+                            if liveType == .yy {
+                                finalSubListCategory.id = self.categories.first!.biz ?? ""
+                                finalSubListCategory.parentId = subListCategory.biz ?? ""
+                            }
+                            let roomList  = try await ApiManager.fetchRoomList(liveCategory: finalSubListCategory, page: self.roomPage, liveType: liveType)
                             DispatchQueue.main.async {
                                 if self.roomPage == 1 {
                                     self.roomList.removeAll()
@@ -229,7 +237,12 @@ final class LiveViewModel {
                 }else {
                     let subListCategory = self.selectedMainListCategory?.subList[index]
                     Task {
-                        let roomList  = try await ApiManager.fetchRoomList(liveCategory: subListCategory!, page: self.roomPage, liveType: liveType)
+                        var finalSubListCategory = subListCategory
+                        if liveType == .yy {
+                            finalSubListCategory?.id = self.categories.first!.biz ?? ""
+                            finalSubListCategory?.parentId = subListCategory?.biz ?? ""
+                        }
+                        let roomList  = try await ApiManager.fetchRoomList(liveCategory: finalSubListCategory!, page: self.roomPage, liveType: liveType)
                         DispatchQueue.main.async {
                             if self.roomPage == 1 {
                                 self.roomList.removeAll()

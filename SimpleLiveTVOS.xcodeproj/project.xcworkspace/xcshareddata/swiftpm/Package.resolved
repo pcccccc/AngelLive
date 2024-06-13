@@ -1,5 +1,5 @@
 {
-  "originHash" : "1d989429c2792dac9bef029fc9309ebafac380b89f379d9295303f6158c28f29",
+  "originHash" : "a80e1c278236a55b5da62534be42193725000aaae4dbc84b6153ea02fb7d5d9a",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -80,15 +80,6 @@
       "state" : {
         "revision" : "b696eb51b5ed66443009b66fe4a909dd9861b1af",
         "version" : "2.2.4"
-      }
-    },
-    {
-      "identity" : "liveparse",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/LiveParse.git",
-      "state" : {
-        "revision" : "38b8e1b00e6bcb4e0bb203669602ab990476db5c",
-        "version" : "1.2.6"
       }
     },
     {
@@ -197,6 +188,15 @@
       "state" : {
         "revision" : "3680f532c00d18a168bb8da7b9f8f82fcd89180d",
         "version" : "5.0.5"
+      }
+    },
+    {
+      "identity" : "youtubekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/YouTubeKit",
+      "state" : {
+        "revision" : "19f2cd54b564044d2229400cf3828f22a2bd483f",
+        "version" : "0.0.3"
       }
     }
   ],

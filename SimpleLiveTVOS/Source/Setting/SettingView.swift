@@ -41,31 +41,31 @@ struct SettingView: View {
                         NavigationLink {
                             if title == "哔哩哔哩登录" {
                                 BilibiliLoginView()
-                                    .background(.ultraThickMaterial)
+                                    .background(.thinMaterial)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .environmentObject(settingStore)
                             }else if title == "弹幕设置" {
                                 DanmuSettingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.ultraThickMaterial)
+                                    .background(.thinMaterial)
                                     .environment(danmuSettingModel)
                             }else if title == "历史记录" {
                                 HistoryListView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.ultraThickMaterial)
+                                    .background(.thinMaterial)
                             }else if title == "开源许可" {
                                 OpenSourceListView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.ultraThickMaterial)
+                                    .background(.thinMaterial)
                             }else if title == "数据同步" {
                                 SyncView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.ultraThickMaterial)
+                                    .background(.thinMaterial)
                                     .environmentObject(favoriteModel)
                             }else {
                                 AboutUSView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.ultraThickMaterial)
+                                    .background(.thinMaterial)
                             }
                         } label: {
 //                            Button(action: {

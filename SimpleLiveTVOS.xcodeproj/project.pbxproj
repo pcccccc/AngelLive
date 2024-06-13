@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -27,7 +27,6 @@
 		4F05A6C72B50CF6C0033214E /* FavoriteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6C62B50CF6C0033214E /* FavoriteStore.swift */; };
 		4F1492412B44F4FC004073DB /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F1492402B44F4FC004073DB /* LiveParse */; };
 		4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F22D67B2BF1AB9400497F3A /* LiveParse */; };
-		4F22D67F2BF1EF2000497F3A /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F22D67E2BF1EF2000497F3A /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73D21B2B2D3BA500689369 /* ColorfulX */; };
 		4F9A9B772C19B01200F8BB44 /* IndicatorMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A9B762C19B01200F8BB44 /* IndicatorMenuView.swift */; };
@@ -76,6 +75,7 @@
 		4FF2D37E2BBC06C2002822DD /* QRCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D37D2BBC06C2002822DD /* QRCodeView.swift */; };
 		4FF2D3802BBC06EE002822DD /* QRCodeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D37F2BBC06EE002822DD /* QRCodeStore.swift */; };
 		4FF2D3822BBC0C18002822DD /* SettingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D3812BBC0C18002822DD /* SettingStore.swift */; };
+		FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB15C6322C1B353900D93C64 /* LiveParse */; };
 		FB21249D2B989E1A004C916F /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB21249C2B989E1A004C916F /* Package.resolved */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
@@ -179,6 +179,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
 				4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */,
 				FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */,
 				4FB7323F2B98884400F02249 /* AcknowList in Frameworks */,
@@ -194,7 +195,6 @@
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
 				4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */,
 				4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */,
-				4F22D67F2BF1EF2000497F3A /* LiveParse in Frameworks */,
 				4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
@@ -544,7 +544,7 @@
 				4FCA391E2BBA5A8600506675 /* NIOHTTP1 */,
 				4FCDB8552BBF155700EB33DA /* LiveParse */,
 				4F22D67B2BF1AB9400497F3A /* LiveParse */,
-				4F22D67E2BF1EF2000497F3A /* LiveParse */,
+				FB15C6322C1B353900D93C64 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -633,8 +633,8 @@
 				FB525FD92BB9D51900BFA18C /* XCRemoteSwiftPackageReference "UDPBroadcastConnection" */,
 				4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */,
 				4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */,
-				4F22D67D2BF1EF1F00497F3A /* XCRemoteSwiftPackageReference "LiveParse" */,
 				4FDFAE2C2BFC3AD9008CFDFA /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				FB15C6312C1B353900D93C64 /* XCLocalSwiftPackageReference "../LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -1069,15 +1069,14 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		4F22D67D2BF1EF1F00497F3A /* XCRemoteSwiftPackageReference "LiveParse" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pcccccc/LiveParse.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.6;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		FB15C6312C1B353900D93C64 /* XCLocalSwiftPackageReference "../LiveParse" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../LiveParse;
 		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/Lakr233/ColorfulX.git";
@@ -1209,11 +1208,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		4F22D67E2BF1EF2000497F3A /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F22D67D2BF1EF1F00497F3A /* XCRemoteSwiftPackageReference "LiveParse" */;
-			productName = LiveParse;
-		};
 		4F70CD1C2BAAE2E100F21EDA /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
@@ -1263,6 +1257,10 @@
 			productName = NIOHTTP1;
 		};
 		4FCDB8552BBF155700EB33DA /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
+		FB15C6322C1B353900D93C64 /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};

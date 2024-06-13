@@ -84,7 +84,7 @@ struct LeftMenu: View {
             .listStyle(.plain)
         }
         .frame(minWidth: 150, maxWidth: .infinity, minHeight: 30, maxHeight: .infinity)
-        .background(.ultraThickMaterial)
+        .background(.thinMaterial)
         .onDisappear {
             speed = 0
         }

@@ -47,13 +47,15 @@ struct ContentView: View {
                     .tabItem {
                         Text("全部")
                     }
-                ListMainView(liveType: .bilibili)
-                    .tabItem {
-                        Text("B站")
-                    }
-                .tag(1)
-                .environment(favoriteModel)
-                .environment(danmuSettingModel)
+                    .environment(favoriteModel)
+                    .environment(danmuSettingModel)
+//                ListMainView(liveType: .bilibili)
+//                    .tabItem {
+//                        Text("B站")
+//                    }
+//                .tag(1)
+//                .environment(favoriteModel)
+//                .environment(danmuSettingModel)
 //                ListMainView(liveType: .huya)
 //                    .tabItem {
 //                        Text("虎牙")
