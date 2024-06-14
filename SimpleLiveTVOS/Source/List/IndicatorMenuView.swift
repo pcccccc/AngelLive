@@ -59,6 +59,7 @@ struct IndicatorMenuView: View {
             }
         }
         .frame(width: 30, height: 30, alignment: .leading)
+        .cornerRadius(15)
         .padding(.leading, -5)
     }
 

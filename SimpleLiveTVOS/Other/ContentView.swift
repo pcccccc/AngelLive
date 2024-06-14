@@ -18,14 +18,16 @@ struct ContentView: View {
     
     @Environment(DanmuSettingModel.self) var danmuSettingModel
     @Environment(FavoriteModel.self) var favoriteModel
-    @State private var selection = 0
+    var contentViewModel = ContentViewModel()
     
     @State var broadcastConnection: UDPBroadcastConnection?
     
     var body: some View {
+        
+        @Bindable var contentVM = contentViewModel
+        
         NavigationView {
-            TabView(selection:$selection) {
-                
+            TabView(selection:$contentVM.selection) {
                 FavoriteMainView()
                     .tabItem {
                         if favoriteModel.isLoading == true || favoriteModel.cloudKitReady == false {
@@ -40,15 +42,17 @@ struct ContentView: View {
                             Text("收藏")
                         }
                     }
-                .tag(0)
-                .environment(favoriteModel)
-                .environment(danmuSettingModel)
+                    .tag(0)
+                    .environment(favoriteModel)
+                    .environment(danmuSettingModel)
                 PlatformView()
                     .tabItem {
                         Text("全部")
                     }
+                    .tag(1)
                     .environment(favoriteModel)
                     .environment(danmuSettingModel)
+                    .environment(contentVM)
 //                ListMainView(liveType: .bilibili)
 //                    .tabItem {
 //                        Text("B站")
@@ -81,22 +85,19 @@ struct ContentView: View {
                     .tabItem {
                         Text("搜索")
                     }
-                .tag(5)
-                .environment(favoriteModel)
-                .environment(danmuSettingModel)
+                    .tag(2)
+                    .environment(favoriteModel)
+                    .environment(danmuSettingModel)
                 SettingView()
                     .tabItem {
                         Text("设置")
                     }
-                .tag(6)
+                .tag(3)
                 .environment(favoriteModel)
                 .environment(danmuSettingModel)
             }
         }
         .onAppear {
-            do {
-                
-            }
             Task {
                 try await Douyin.getRequestHeaders()
             }

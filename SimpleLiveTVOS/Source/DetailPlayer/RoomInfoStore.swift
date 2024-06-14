@@ -32,6 +32,7 @@ final class RoomInfoStore {
     var showControlView: Bool = true
     var isPlaying = false
     var douyuFirstLoad = true
+    var yyFirstLoad = true
     
     var isLoading = false
     var rotationAngle = 0.0
@@ -145,8 +146,24 @@ final class RoomInfoStore {
         }else {
             douyuFirstLoad = false
             self.currentPlayURL = URL(string: currentQuality.url)!
-//            self.playerCoordinator.playerLayer?.resetPlayer()
         }
+        
+        if currentRoom.liveType == .yy && yyFirstLoad == false {
+            Task {
+                let currentCdn = currentRoomPlayArgs![cdnIndex]
+                let currentQuality = currentCdn.qualitys[urlIndex]
+                let playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq:Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
+                DispatchQueue.main.async {
+                    let currentQuality = playArgs.first?.qualitys[urlIndex]
+                    let lastCurrentPlayURL = self.currentPlayURL
+                    self.currentPlayURL = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
+                }
+            }
+        }else {
+            yyFirstLoad = false
+            self.currentPlayURL = URL(string: currentQuality.url)!
+        }
+        
         isLoading = false
     }
     
@@ -169,6 +186,14 @@ final class RoomInfoStore {
                         playArgs =  try await Douyin.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     case .douyu:
                         playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
+                    case .cc:
+                        playArgs = try await NeteaseCC.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .ks:
+                        playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .yy:
+                        playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .youtube:
+                        playArgs = try await YoutubeParse.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     default: break
                 }
                 await updateCurrentRoomPlayArgs(playArgs)

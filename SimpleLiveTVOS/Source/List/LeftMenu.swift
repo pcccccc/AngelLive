@@ -116,6 +116,7 @@ struct MenuItem: View {
                     Image(icon)
                         .resizable()
                         .frame(width: 30, height: 30, alignment: .leading)
+                        .cornerRadius(15)
                         .padding(.leading, -20)
                     Text(title)
                         .font(.system(size: 25))
@@ -157,11 +158,13 @@ struct SubMenuItem: View {
                         Image(icon)
                             .resizable()
                             .frame(width: 20, height: 20, alignment: .leading)
+                            .cornerRadius(10)
                             .padding(.leading, -20)
                     }else {
                         KFImage(URL(string: icon))
                             .resizable()
                             .frame(width: 20, height: 20, alignment: .leading)
+                            .cornerRadius(10)
                             .padding(.leading, -20)
                     }
                     Text(title)
