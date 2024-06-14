@@ -18,12 +18,16 @@ struct LiveCardView: View {
     @State var index: Int
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
-    
-    let gradient = LinearGradient(
-        gradient: Gradient(colors: [Color.black.opacity(0.05), Color.black.opacity(0.3)]),
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    /**LinearGradient(
+     gradient: Gradient(colors: [Color.black.opacity(0.05), Color.black.opacity(0.3)]),
+     startPoint: .top,
+     endPoint: .bottom
+ )*/
+    let gradient = LinearGradient(stops: [
+        .init(color: .black.opacity(0.5), location: 0.0),
+        .init(color: .black.opacity(0.25), location: 0.45),
+        .init(color: .black.opacity(0), location: 0.8)
+    ], startPoint: .bottom, endPoint: .top)
     
     var body: some View {
         
@@ -62,17 +66,15 @@ struct LiveCardView: View {
                         }
                     } label: {
                         ZStack(alignment: .bottom) {
-                            if liveModel.liveType == .yy || liveModel.liveType == .ks || liveModel.liveType == .youtube { //这三个平台的图片比例不对，做一层毛玻璃效果
-                                KFImage(URL(string: liveViewModel.roomList[index].roomCover))
-                                    .placeholder {
-                                        Image("placeholder")
-                                            .resizable()
-                                            .frame(height: 210)
-                                    }
-                                    .resizable()
-                                    .frame(height: 210)
-                                    .blur(radius: 10)
-                            }
+                            KFImage(URL(string: liveViewModel.roomList[index].roomCover))
+                                .placeholder {
+                                    Image("placeholder")
+                                        .resizable()
+                                        .frame(height: 210)
+                                }
+                                .resizable()
+                                .frame(height: 210)
+                                .blur(radius: 10)
                             KFImage(URL(string: liveViewModel.roomList[index].roomCover))
                                 .placeholder {
                                     Image("placeholder")
@@ -87,7 +89,7 @@ struct LiveCardView: View {
                             Rectangle()
                             .fill(gradient)
                             .shadow(radius: 10)
-                            .frame(height: 30)
+                            .frame(height: 40)
                             if liveViewModel.roomList[index].liveWatchedCount != nil {
                                 HStack {
                                     Spacer()
