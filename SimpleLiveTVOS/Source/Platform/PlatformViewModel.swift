@@ -14,15 +14,16 @@ class PlatformViewModel: ObservableObject {
     var platformInfo = [Platformdescription]()
     
     func getPlatformInfo() {
-        platformInfo.removeAll()
-        for index in LiveParseTools.getAllSupportPlatform().indices {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(0.05 * Double(index))) {
-                let item = LiveParseTools.getAllSupportPlatform()[index]
-                if self.platformInfo.contains(where: { $0.title == item.livePlatformName }) == false {
-                    self.platformInfo.append(.init(title: item.livePlatformName, bigPic: "\(item.livePlatformName)-big", smallPic: "\(item.livePlatformName)-small", descripiton: item.description, liveType: item.liveType))
+//        platformInfo.removeAll()
+        if platformInfo.count != LiveParseTools.getAllSupportPlatform().count {
+            for index in LiveParseTools.getAllSupportPlatform().indices {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(0.05 * Double(index))) {
+                    let item = LiveParseTools.getAllSupportPlatform()[index]
+                    if self.platformInfo.contains(where: { $0.title == item.livePlatformName }) == false {
+                        self.platformInfo.append(.init(title: item.livePlatformName, bigPic: "\(item.livePlatformName)-big", smallPic: "\(item.livePlatformName)-small", descripiton: item.description, liveType: item.liveType))
+                    }
                 }
             }
-            
         }
     }
 }

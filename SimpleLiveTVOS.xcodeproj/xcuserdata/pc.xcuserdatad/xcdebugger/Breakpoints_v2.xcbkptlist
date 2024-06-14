@@ -3,4 +3,80 @@
    uuid = "7F9C4C77-7FBF-44F2-BA8C-6A136C823489"
    type = "1"
    version = "2.0">
+   <Breakpoints>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "FA8E9F10-F17B-449C-805D-4E4ECB06FAB8"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "SimpleLiveTVOS/Source/List/LiveStore.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "221"
+            endingLineNumber = "221"
+            landmarkName = "getCategoryList()"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "FA8E9F10-F17B-449C-805D-4E4ECB06FAB8 - 3a48cfbdb3e11a19"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for closure #1 @Sendable () async -&gt; () in SimpleLiveTVOS.LiveViewModel.getCategoryList() -&gt; ()"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/List/LiveStore.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "221"
+                  endingLineNumber = "221">
+               </Location>
+               <Location
+                  uuid = "FA8E9F10-F17B-449C-805D-4E4ECB06FAB8 - aff9ecfbc40eb60b"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for closure #1 @Sendable () async -&gt; () in SimpleLiveTVOS.LiveViewModel.getCategoryList() -&gt; ()"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/List/LiveStore.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "221"
+                  endingLineNumber = "221">
+               </Location>
+               <Location
+                  uuid = "FA8E9F10-F17B-449C-805D-4E4ECB06FAB8 - 5a2e7398f2fc003c"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) suspend resume partial function for closure #1 @Sendable () async -&gt; () in SimpleLiveTVOS.LiveViewModel.getCategoryList() -&gt; ()"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/List/LiveStore.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "221"
+                  endingLineNumber = "221">
+               </Location>
+               <Location
+                  uuid = "FA8E9F10-F17B-449C-805D-4E4ECB06FAB8 - 4e55f04521936b6e"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #2 @Swift.MainActor @Sendable () -&gt; () in closure #1 @Sendable () async -&gt; () in SimpleLiveTVOS.LiveViewModel.getCategoryList() -&gt; ()"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pc/Desktop/Demo/SimpleLiveTVOS/SimpleLiveTVOS/Source/List/LiveStore.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "221"
+                  endingLineNumber = "221">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+   </Breakpoints>
 </Bucket>

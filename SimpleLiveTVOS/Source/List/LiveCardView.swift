@@ -62,6 +62,17 @@ struct LiveCardView: View {
                         }
                     } label: {
                         ZStack(alignment: .bottom) {
+                            if liveModel.liveType == .yy || liveModel.liveType == .ks || liveModel.liveType == .youtube { //这三个平台的图片比例不对，做一层毛玻璃效果
+                                KFImage(URL(string: liveViewModel.roomList[index].roomCover))
+                                    .placeholder {
+                                        Image("placeholder")
+                                            .resizable()
+                                            .frame(height: 210)
+                                    }
+                                    .resizable()
+                                    .frame(height: 210)
+                                    .blur(radius: 10)
+                            }
                             KFImage(URL(string: liveViewModel.roomList[index].roomCover))
                                 .placeholder {
                                     Image("placeholder")
@@ -69,7 +80,9 @@ struct LiveCardView: View {
                                         .frame(height: 210)
                                 }
                                 .resizable()
+                                .aspectRatio(contentMode: .fit)
                                 .frame(height: 210)
+                                .background(.thinMaterial)
                                 
                             Rectangle()
                             .fill(gradient)
