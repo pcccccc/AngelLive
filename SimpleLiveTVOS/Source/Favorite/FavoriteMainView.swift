@@ -53,6 +53,46 @@ struct FavoriteMainView: View {
                     .font(.title3)
             }
         }
+        .overlay {
+            VStack(alignment: .leading) {
+                Spacer()
+                HStack {
+                    VStack(alignment: .leading) {
+                        VStack {
+                            Text("收藏方式")
+                            Button {
+                                
+                            } label: {
+                                Text("iCloud")
+                                    .frame(alignment: .leading)
+                            }
+                            Button {
+                                
+                            } label: {
+                                Text("SimpleLiveCloud")
+                                    .frame(alignment: .leading)
+                                    
+                            }
+                            .frame(alignment: .leading)
+                        }
+                        Button {
+                            
+                        } label: {
+                            Image(systemName: "chevron.backward.circle.fill")
+                                .frame(width: 30, height: 30)
+                            Text("菜单")
+                                .padding(.leading, -30)
+                        }
+                    }
+                    .background(.red)
+                    Spacer()
+                }
+                .padding([.leading, .bottom], 20)
+            }
+            .frame(width: 1920, height: 1080)
+            .edgesIgnoringSafeArea(.all)
+            .background(.green)
+        }
         .onPlayPauseCommand(perform: {
             favoriteModel.fetchFavoriteRoomList()
             liveViewModel.roomPage = 1

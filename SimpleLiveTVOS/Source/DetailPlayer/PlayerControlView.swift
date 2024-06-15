@@ -8,12 +8,15 @@
 import SwiftUI
 import SimpleToast
 import KSPlayer
+import LiveParse
+
+
 
 struct PlayerControlView: View {
     
-    var roomInfoViewModel: RoomInfoStore
-    var danmuSettingModel: DanmuSettingModel
-    @EnvironmentObject var favoriteModel: FavoriteModel
+    @Environment(RoomInfoStore.self) var roomInfoViewModel
+    @Environment(FavoriteModel.self) var favoriteModel
+
     @FocusState var leftFocusState: Bool
     @FocusState var rightFocusState: Bool
     @FocusState var playFocusState: Bool
@@ -214,15 +217,15 @@ struct PlayerControlView: View {
                             }
                         })
                     }else {
-                        danmuSettingModel.showDanmu.toggle()
-                        if danmuSettingModel.showDanmu == false {
+                        roomInfoViewModel.danmuSettingModel.showDanmu.toggle()
+                        if roomInfoViewModel.danmuSettingModel.showDanmu == false {
                             roomInfoViewModel.disConnectSocket()
                         }else {
                             roomInfoViewModel.getDanmuInfo()
                         }
                     }
                 }, label: {
-                    Image(danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
+                    Image(roomInfoViewModel.danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
                         .resizable()
                         .frame(width: 40, height: 40)
                 })
@@ -287,7 +290,9 @@ struct PlayerControlView: View {
     }
 }
 
-//#Preview {
-//    PlayerControlView()
-//        .environmentObject(LiveViewModel(roomListType: .live, liveType: .bilibili))
-//}
+#Preview {
+    let gliveModel = LiveModel(userName: "维克托VR", roomTitle: "WWE SD节目直播中！", roomCover: "http://i0.hdslb.com/bfs/live/1011add6e4e45eee3349272b700f5aa0b389d0f8.jpg", userHeadImg: "https://i1.hdslb.com/bfs/face/eb461f48efaf3fb62b97b322466d822ce785669c.jpg", liveType: .bilibili, liveState: "1", userId: "123821806", roomId: "24209100", liveWatchedCount: "3392")
+    let gdanmuModel = DanmuSettingModel()
+    return PlayerControlView().environment(RoomInfoStore(currentRoom: gliveModel, danmuSettingModel: gdanmuModel)).environment(FavoriteModel()).frame(width: 1920, height: 1080)
+        
+}

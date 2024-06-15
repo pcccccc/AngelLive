@@ -48,11 +48,13 @@ struct DetailPlayerView: View {
                     }
                     .safeAreaPadding(.all)
                     .zIndex(1)
-                PlayerControlView(roomInfoViewModel: roomInfoViewModel, danmuSettingModel: DanmuSettingModel())
+                PlayerControlView()
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)
                     .opacity(roomInfoViewModel.showControlView ? 1 : 0)
                     .safeAreaPadding(.all)
+                    .environment(roomInfoViewModel)
+                    .environment(favoriteModel)
                 VStack {
                     if roomInfoViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
                         Spacer()
