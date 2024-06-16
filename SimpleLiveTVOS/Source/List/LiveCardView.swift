@@ -146,7 +146,7 @@ struct LiveCardView: View {
                                 case .mainContent(let index):
                                     liveViewModel.selectedRoomListIndex = index
                                     if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search  {
-                                        if index >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
+                                        if index >= liveViewModel.roomList.count - 4 && liveModel.roomListType != .favorite { //如果小于4 就尝试刷新。
                                             liveViewModel.roomPage += 1
                                         }
                                     }

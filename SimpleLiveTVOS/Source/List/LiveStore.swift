@@ -64,6 +64,7 @@ final class LiveViewModel {
     var subPageSize = 20
     var roomPage: Int = 1 {
         didSet {
+            print("从didSet这里运行")
             getRoomList(index: selectedSubListIndex)
         }
     }
@@ -145,6 +146,7 @@ final class LiveViewModel {
             case .live:
                 getCategoryList()
             case .favorite, .history:
+                print("从init这里运行")
                 getRoomList(index: 0)
             default:
                 break
@@ -232,6 +234,7 @@ final class LiveViewModel {
      - Returns: 房间列表。
     */
     func getRoomList(index: Int) {
+        print("运行一次")
         isLoading = true
         if roomListType == .search {
             searchRoomWithText(text: searchText)
@@ -278,7 +281,9 @@ final class LiveViewModel {
                 }
             case .favorite:
                 Task {
+                    print("通过CloudKit获取收藏qian")
                     let resList = try await CloudSQLManager.searchRecord()
+                    print("通过CloudKit获取收藏")
                     var fetchedModels: [LiveModel] = []
                     // 使用异步的任务组来并行处理所有的请求
                     var bilibiliModels: [LiveModel] = []
@@ -312,11 +317,11 @@ final class LiveViewModel {
                     
                     for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
                         do {
-                            try? await Task.sleep(nanoseconds: 500_000_000) // 等待2秒
+                            try? await Task.sleep(1) // 等待2秒
                             let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
                             fetchedModels.append(dataReq)
                         }catch {
-                            print(error)
+                            print("房间号\(item.roomId), 主播名字\(item.userName), 平台\(item.liveType), \(error)")
                         }
                     }
 
@@ -336,6 +341,7 @@ final class LiveViewModel {
                         self.roomList = sortedModels
                         self.favoriteRoomList = self.roomList
                         self.isLoading = false
+                        print("结束")
                     }
                 }
             case .history:

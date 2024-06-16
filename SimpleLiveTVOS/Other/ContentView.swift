@@ -18,6 +18,7 @@ struct ContentView: View {
     
     @Environment(DanmuSettingModel.self) var danmuSettingModel
     @Environment(FavoriteModel.self) var favoriteModel
+    @Environment(LiveViewModel.self) var favoriteLiveViewModel
     var contentViewModel = ContentViewModel()
     
     @State var broadcastConnection: UDPBroadcastConnection?
@@ -45,6 +46,7 @@ struct ContentView: View {
                     .tag(0)
                     .environment(favoriteModel)
                     .environment(danmuSettingModel)
+                    .environment(favoriteLiveViewModel)
                 PlatformView()
                     .tabItem {
                         Text("全部")
