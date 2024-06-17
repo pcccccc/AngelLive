@@ -64,7 +64,9 @@ final class LiveViewModel {
     var subPageSize = 20
     var roomPage: Int = 1 {
         didSet {
-            print("从didSet这里运行")
+            if roomListType == .favorite {
+                return
+            }
             getRoomList(index: selectedSubListIndex)
         }
     }

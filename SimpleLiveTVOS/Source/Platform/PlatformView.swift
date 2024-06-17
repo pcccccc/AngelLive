@@ -12,9 +12,7 @@ struct PlatformView: View {
 
     let column = Array(repeating: GridItem(.fixed(320), spacing: 70), count: 4)
     @FocusState var focusIndex: Int?
-    @Environment(DanmuSettingModel.self) var danmuSettingModel
-    @Environment(FavoriteModel.self) var favoriteModel
-    @Environment(ContentViewModel.self) var contentViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     @State var show = false
     @State var selectedIndex = 0
     let platformViewModel = PlatformViewModel()
@@ -28,7 +26,7 @@ struct PlatformView: View {
                             selectedIndex = index
                             let model = platformViewModel.platformInfo[selectedIndex]
                             if model.liveType == .youtube {
-                                contentViewModel.selection = 2
+                                appViewModel.selection = 2
                             }else {
                                 show = true
                             }
@@ -41,7 +39,6 @@ struct PlatformView: View {
                                 Image(platformViewModel.platformInfo[index].bigPic)
                                     .resizable()
                                     .frame(width: 320, height: 192)
-    //                                .opacity(focusIndex == index ? 0 : 1)
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
                                 ZStack {
                                     Image(platformViewModel.platformInfo[index].smallPic)
@@ -66,8 +63,8 @@ struct PlatformView: View {
                         .frame(width: 320, height: 192)
                         .fullScreenCover(isPresented: $show, content: {
                             ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType)
-                            .environment(favoriteModel)
-                            .environment(danmuSettingModel)
+                                .environment(appViewModel.favoriteModel)
+                                .environment(appViewModel.danmuSettingModel)
                         })
                     }
 

@@ -16,26 +16,23 @@ import Darwin
 
 struct ContentView: View {
     
-    @Environment(DanmuSettingModel.self) var danmuSettingModel
-    @Environment(FavoriteModel.self) var favoriteModel
-    @Environment(LiveViewModel.self) var favoriteLiveViewModel
-    var contentViewModel = ContentViewModel()
+    var appViewModel = SimpleLiveViewModel()
     
     @State var broadcastConnection: UDPBroadcastConnection?
     
     var body: some View {
         
-        @Bindable var contentVM = contentViewModel
+        @Bindable var contentVM = appViewModel
         
         NavigationView {
             TabView(selection:$contentVM.selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if favoriteModel.isLoading == true || favoriteModel.cloudKitReady == false {
+                        if appViewModel.favoriteModel.isLoading == true || appViewModel.favoriteModel.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: favoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                    Image(systemName: appViewModel.favoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
                                 }
                             )
                             .contentTransition(.symbolEffect(.replace))
@@ -43,60 +40,29 @@ struct ContentView: View {
                             Text("收藏")
                         }
                     }
+                    .environment(appViewModel.favoriteModel)
+                    .environment(appViewModel.danmuSettingModel)
+                    .environment(appViewModel.favoriteLiveViewModel)
                     .tag(0)
-                    .environment(favoriteModel)
-                    .environment(danmuSettingModel)
-                    .environment(favoriteLiveViewModel)
-                PlatformView()
-                    .tabItem {
-                        Text("全部")
-                    }
-                    .tag(1)
-                    .environment(favoriteModel)
-                    .environment(danmuSettingModel)
-                    .environment(contentVM)
-//                ListMainView(liveType: .bilibili)
+
+//                PlatformView()
 //                    .tabItem {
-//                        Text("B站")
+//                        Text("平台")
 //                    }
-//                .tag(1)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
-//                ListMainView(liveType: .huya)
+//                    .tag(1)
+//
+//                SearchRoomView()
 //                    .tabItem {
-//                        Text("虎牙")
+//                        Text("搜索")
 //                    }
-//                .tag(2)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
-//                ListMainView(liveType: .douyu)
+//                    .tag(2)
+//
+//                SettingView()
 //                    .tabItem {
-//                        Text("斗鱼")
+//                        Text("设置")
 //                    }
 //                .tag(3)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
-//                ListMainView(liveType: .douyin)
-//                    .tabItem {
-//                        Text("抖音")
-//                    }
-//                .tag(4)
-//                .environment(favoriteModel)
-//                .environment(danmuSettingModel)
-                SearchRoomView()
-                    .tabItem {
-                        Text("搜索")
-                    }
-                    .tag(2)
-                    .environment(favoriteModel)
-                    .environment(danmuSettingModel)
-                SettingView()
-                    .tabItem {
-                        Text("设置")
-                    }
-                .tag(3)
-                .environment(favoriteModel)
-                .environment(danmuSettingModel)
+
             }
         }
         .onAppear {
