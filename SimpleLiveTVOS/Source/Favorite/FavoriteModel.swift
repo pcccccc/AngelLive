@@ -23,28 +23,21 @@ class FavoriteModel: ObservableObject {
         self.getState()
     }
     
-    func fetchFavoriteRoomList() {
+    @MainActor func fetchFavoriteRoomList() async {
         withAnimation(.easeInOut(duration: 0.25)) {
             self.isLoading = true
         }
-        Task {
-            do {
-                let roomList = try await CloudSQLManager.searchRecord()
-                DispatchQueue.main.async {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        self.isLoading = false
-                    }
-                    self.roomList = roomList
-                }
-            }catch {
-                print(error)
-                DispatchQueue.main.async {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        self.cloudKitStateString = CloudSQLManager.formatErrorCode(error: error)
-                        self.isLoading = false
-                        self.cloudKitReady = false
-                    }
-                }
+        do {
+            let roomList = try await CloudSQLManager.searchRecord()
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self.isLoading = false
+            }
+            self.roomList = roomList
+        }catch {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self.cloudKitStateString = CloudSQLManager.formatErrorCode(error: error)
+                self.isLoading = false
+                self.cloudKitReady = false
             }
         }
     }
@@ -72,7 +65,9 @@ class FavoriteModel: ObservableObject {
             DispatchQueue.main.async {
                 self.cloudKitStateString = stateString
                 if stateString == "正常" {
-                    self.fetchFavoriteRoomList()
+                    Task {
+                        await self.fetchFavoriteRoomList()
+                    }
                     withAnimation(.easeInOut(duration: 0.25)) {
                         self.cloudKitReady = true
                     }

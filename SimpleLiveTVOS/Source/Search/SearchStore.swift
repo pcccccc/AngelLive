@@ -8,22 +8,12 @@
 import Foundation
 import LiveParse
 import SimpleToast
+import Observation
 
-class SearchStore: ObservableObject {
-    
-//    @Published var searchTypeArray = ["关键词", "链接/分享口令/房间号", "Youtube链接/VideoId"]
-//    @Published var searchTypeIndex = 0
-//    @Published var page = 0
-//    @Published var showToast: Bool = false
-//    @Published var toastTitle: String = ""
-//    @Published var toastTypeIsSuccess: Bool = false
-//    @Published var toastImage: String = "checkmark.circle" {
-//        didSet {
-//            toastImage = toastTypeIsSuccess == true ? "checkmark.circle" : "xmark.circle"
-//        }
-//    }
-//    @Published var toastOptions = SimpleToastOptions (
-//        hideAfter: 1.5
-//    )
-//    @Published var searchText: String = ""
+@Observable
+class SearchViewModel {
+    var searchTypeArray = ["关键词", "链接/分享口令/房间号", "Youtube链接/VideoId"]
+    var searchTypeIndex = 0
+    var page = 0
+    var searchText: String = ""
 }

@@ -119,14 +119,13 @@ final class LiveViewModel {
     var showAlert: Bool = false
     var currentRoomIsFavorited: Bool = false
     
-    var favoriteModel: FavoriteModel
-    var danmuSettingModel: DanmuSettingModel
+    var appViewModel: SimpleLiveViewModel
     
-    init(roomListType: LiveRoomListType, liveType: LiveType, favoriteModel: FavoriteModel, danmuSettingModel: DanmuSettingModel) {
+    init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: SimpleLiveViewModel) {
         self.liveType = liveType
         self.roomListType = roomListType
-        self.favoriteModel = favoriteModel
-        self.danmuSettingModel = danmuSettingModel
+        self.appViewModel = appViewModel
+
         switch liveType {
             case .bilibili: 
                 menuTitleIcon = "bilibili_2"
@@ -240,7 +239,6 @@ final class LiveViewModel {
                                 }
                                 self.roomList += roomList
                                 self.isLoading = false
-        //                            self.selectedSubListIndex = 0
                             }
                         }
                     }
@@ -264,17 +262,16 @@ final class LiveViewModel {
                 }
             case .favorite:
                 Task {
-                    print("通过CloudKit获取收藏qian")
-                    let resList = try await CloudSQLManager.searchRecord()
+                    await appViewModel.favoriteModel.fetchFavoriteRoomList()
+                    let resList = appViewModel.favoriteModel.roomList
                     if resList.count > 0 {
-                        showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态")
+                        appViewModel.showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
                     }
                     var fetchedModels: [LiveModel] = []
                     // 使用异步的任务组来并行处理所有的请求
                     var bilibiliModels: [LiveModel] = []
                     await withTaskGroup(of: LiveModel?.self, body: { group in
                         for liveModel in resList {
-//                            print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType)")
                             if liveModel.liveType == .bilibili {
                                 bilibiliModels.append(liveModel)
                             }else {
@@ -283,7 +280,6 @@ final class LiveViewModel {
                                         let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
                                         return dataReq
                                     } catch {
-                                        print(Date())
                                         print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
                                         var errorModel = liveModel
                                         errorModel.liveState = LiveState.unknow.rawValue
@@ -300,11 +296,13 @@ final class LiveViewModel {
                         }
                     })
                     
-                    showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(bilibiliModels.count)秒")
+                    if bilibiliModels.count > 0 {
+                        appViewModel.showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
+                    }
                     
                     for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
                         do {
-                            try? await Task.sleep(nanoseconds: 1_000_000_000) // 等待1秒
+                            try? await Task.sleep(nanoseconds: 1_500_000_000) // 等待1.5秒
                             let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
                             fetchedModels.append(dataReq)
                         }catch {

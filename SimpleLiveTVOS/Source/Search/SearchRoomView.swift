@@ -14,15 +14,16 @@ struct SearchRoomView: View {
     
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     
     var body: some View {
         
-        @Bindable var liveModel = liveViewModel
+        @Bindable var appModel = appViewModel
         
         VStack {
             Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
             HStack {
-                Picker(selection: $liveModel.searchTypeIndex) {
+                Picker(selection: $appModel.searchModel.searchTypeIndex) {
                     ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
                         // 需要有一个变量text。不然会自动帮忙加很多0
                         let text = liveViewModel.searchTypeArray[index]
@@ -32,7 +33,7 @@ struct SearchRoomView: View {
                     Text("字体大小")
                 }
             }
-            TextField("搜索", text: $liveModel.searchText)
+            TextField("搜索", text: $appModel.searchModel.searchText)
             .onSubmit {
                 if liveViewModel.searchTypeIndex == 0 {
                     liveViewModel.roomPage = 1
@@ -63,14 +64,6 @@ struct SearchRoomView: View {
                 }
                 .safeAreaPadding(.top, 50)
             }
-        }
-        .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
-            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess == true ? "checkmark.circle":"info.circle.fill")
-                .padding()
-                .background(liveViewModel.toastTypeIsSuccess == true ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-                .foregroundColor(Color.white)
-                .cornerRadius(10)
-                .padding(.top)
         }
     }
 }

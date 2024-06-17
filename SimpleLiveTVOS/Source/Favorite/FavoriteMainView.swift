@@ -16,13 +16,14 @@ struct FavoriteMainView: View {
     
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     
     var body: some View {
         
-        @Bindable var liveModel = liveViewModel
+        @Bindable var appModel = appViewModel
         
         VStack {
-            if liveViewModel.favoriteModel.cloudKitReady {
+            if appViewModel.favoriteModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text("暂无喜欢的主播哦，请先去添加吧～")
                         .font(.title3)
@@ -32,6 +33,7 @@ struct FavoriteMainView: View {
                             ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                                 LiveCardView(index: index)
                                     .environment(liveViewModel)
+                                    .environment(appViewModel)
                                     .frame(width: 370, height: 240)
                             }
                             if liveViewModel.isLoading {
@@ -46,7 +48,7 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(liveViewModel.favoriteModel.cloudKitStateString)
+                Text(appViewModel.favoriteModel.cloudKitStateString)
                     .font(.title3)
             }
         }
@@ -91,19 +93,7 @@ struct FavoriteMainView: View {
 //            .background(.green)
 //        }
         .onPlayPauseCommand(perform: {
-            liveViewModel.favoriteModel.fetchFavoriteRoomList()
-            liveViewModel.roomPage = 1
+            liveViewModel.getRoomList(index: 1)
         })
-        .simpleToast(isPresented: $liveModel.showToast, options: liveViewModel.toastOptions) {
-            VStack(alignment: .leading) {
-                Label("提示", systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
-                    .font(.headline.bold())
-                Text(liveViewModel.toastTitle)
-            }
-            .padding()
-            .background(.black.opacity(0.6))
-            .foregroundColor(Color.white)
-            .cornerRadius(10)
-        }
     }
 }

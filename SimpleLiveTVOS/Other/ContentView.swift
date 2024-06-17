@@ -21,8 +21,8 @@ struct ContentView: View {
     var favoriteLiveViewModel: LiveViewModel
 
     init() {
-        searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, favoriteModel: appViewModel.favoriteModel, danmuSettingModel: appViewModel.danmuSettingModel)
-        favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, favoriteModel: appViewModel.favoriteModel, danmuSettingModel: appViewModel.danmuSettingModel)
+        searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
+        favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
     }
     
     var body: some View {
@@ -47,12 +47,14 @@ struct ContentView: View {
                     }
                     .tag(0)
                     .environment(favoriteLiveViewModel)
+                    .environment(appViewModel)
                 
-//                PlatformView()
-//                    .tabItem {
-//                        Text("平台")
-//                    }
-//                    .tag(1)
+                PlatformView()
+                    .tabItem {
+                        Text("平台")
+                    }
+                    .tag(1)
+                    .environment(appViewModel)
                     
                 
 //                SearchRoomView()

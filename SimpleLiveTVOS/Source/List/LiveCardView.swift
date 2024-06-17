@@ -12,15 +12,13 @@ import LiveParse
 import Observation
 
 struct LiveCardView: View {
+    
     @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     @State var index: Int
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
-    /**LinearGradient(
-     gradient: Gradient(colors: [Color.black.opacity(0.05), Color.black.opacity(0.3)]),
-     startPoint: .top,
-     endPoint: .bottom
- )*/
+
     let gradient = LinearGradient(stops: [
         .init(color: .black.opacity(0.5), location: 0.0),
         .init(color: .black.opacity(0.25), location: 0.45),
@@ -37,29 +35,20 @@ struct LiveCardView: View {
                     Button {
                         liveViewModel.currentRoom = liveViewModel.roomList[index]
                         liveViewModel.selectedRoomListIndex = index
-                        Task {
-                            do {
-                                if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
-                                    if self.liveViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
-                                        var watchList = self.liveViewModel.watchList
-                                        watchList.insert(self.liveViewModel.currentRoom!, at: 0)
-                                        self.liveViewModel.watchList = watchList
-                                    }
-                                    liveViewModel.createCurrentRoomViewModel()
-                                    DispatchQueue.main.async {
-                                        isLive = true
-                                    }
-                                }else {
-                                    DispatchQueue.main.async {
-                                        isLive = false
-                                        liveViewModel.showToast(false, title: "主播已经下播")
-                                    }
-                                }
-                            }catch {
-                                DispatchQueue.main.async {
-                                    isLive = false
-                                    liveViewModel.showToast(false, title: "主播已经下播")
-                                }
+                        if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
+                            if self.liveViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
+                                var watchList = self.liveViewModel.watchList
+                                watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+                                self.liveViewModel.watchList = watchList
+                            }
+                            liveViewModel.createCurrentRoomViewModel()
+                            DispatchQueue.main.async {
+                                isLive = true
+                            }
+                        }else {
+                            DispatchQueue.main.async {
+                                isLive = false
+                                appViewModel.showToast(false, title: "主播已经下播")
                             }
                         }
                     } label: {
@@ -156,15 +145,15 @@ struct LiveCardView: View {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await liveViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await appViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
                                             liveViewModel.roomList.remove(at: index)
                                         }
                                     }
-                                    liveViewModel.showToast(true, title:"取消收藏成功")
+                                    appViewModel.showToast(true, title:"取消收藏成功")
                                 }catch {
-                                    liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                    appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                 }
                             }
                         })
@@ -179,15 +168,15 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await liveViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
                                                 liveViewModel.roomList.remove(at: index)
                                             }
                                         }
-                                        liveViewModel.showToast(true, title:"取消收藏成功")
+                                        appViewModel.showToast(true, title:"取消收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                        appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -201,10 +190,10 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await liveViewModel.favoriteModel.addFavorite(room: liveViewModel.currentRoom!)
-                                        liveViewModel.showToast(true, title:"收藏成功")
+                                        try await appViewModel.favoriteModel.addFavorite(room: liveViewModel.currentRoom!)
+                                        appViewModel.showToast(true, title:"收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                        appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -226,13 +215,13 @@ struct LiveCardView: View {
                         }
                     })
                     .fullScreenCover(isPresented: $isLive, content: {
-                        DetailPlayerView { isLive, hint in
-                            self.isLive = isLive
-                        }
-                        .environment(liveViewModel.roomInfoViewModel!)
-                        .environmentObject(liveViewModel.favoriteModel)
-                        .edgesIgnoringSafeArea(.all)
-                        .frame(width: 1920, height: 1080)
+//                        DetailPlayerView { isLive, hint in
+//                            self.isLive = isLive
+//                        }
+//                        .environment(liveViewModel.roomInfoViewModel!)
+//                        .environmentObject(appViewModel.favoriteModel)
+//                        .edgesIgnoringSafeArea(.all)
+//                        .frame(width: 1920, height: 1080)
                     })
                 })
                 HStack(spacing: 15) {

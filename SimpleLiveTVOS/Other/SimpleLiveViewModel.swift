@@ -12,8 +12,9 @@ import SimpleToast
 @Observable
 class SimpleLiveViewModel {
     var selection = 0
-    let favoriteModel = FavoriteModel()
-    let danmuSettingModel = DanmuSettingModel()
+    var favoriteModel = FavoriteModel()
+    var danmuSettingModel = DanmuSettingModel()
+    var searchModel = SearchViewModel()
     
     var showToast: Bool = false
     var toastTitle: String = ""
@@ -24,10 +25,13 @@ class SimpleLiveViewModel {
     
     //MARK: 操作相关
     
-    func showToast(_ success: Bool, title: String) {
+    func showToast(_ success: Bool, title: String, hideAfter: TimeInterval? = 1.5) {
         self.showToast = true
         self.toastTitle = title
         self.toastTypeIsSuccess = success
+        self.toastOptions = SimpleToastOptions(
+            alignment: .topLeading, hideAfter: hideAfter
+        )
     }
 
 }
