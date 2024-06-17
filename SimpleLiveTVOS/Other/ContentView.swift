@@ -17,8 +17,13 @@ import Darwin
 struct ContentView: View {
     
     var appViewModel = SimpleLiveViewModel()
-    
-    @State var broadcastConnection: UDPBroadcastConnection?
+    var searchLiveViewModel: LiveViewModel
+    var favoriteLiveViewModel: LiveViewModel
+
+    init() {
+        searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, favoriteModel: appViewModel.favoriteModel, danmuSettingModel: appViewModel.danmuSettingModel)
+        favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, favoriteModel: appViewModel.favoriteModel, danmuSettingModel: appViewModel.danmuSettingModel)
+    }
     
     var body: some View {
         
@@ -40,23 +45,24 @@ struct ContentView: View {
                             Text("收藏")
                         }
                     }
-                    .environment(appViewModel.favoriteModel)
-                    .environment(appViewModel.danmuSettingModel)
-                    .environment(appViewModel.favoriteLiveViewModel)
                     .tag(0)
-
+                    .environment(favoriteLiveViewModel)
+                
 //                PlatformView()
 //                    .tabItem {
 //                        Text("平台")
 //                    }
 //                    .tag(1)
-//
+                    
+                
 //                SearchRoomView()
 //                    .tabItem {
 //                        Text("搜索")
 //                    }
 //                    .tag(2)
-//
+//                    .environment(searchLiveViewModel)
+
+                
 //                SettingView()
 //                    .tabItem {
 //                        Text("设置")
@@ -69,6 +75,17 @@ struct ContentView: View {
             Task {
                 try await Douyin.getRequestHeaders()
             }
+        }
+        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: appViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                    .font(.headline.bold())
+                Text(appViewModel.toastTitle)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(Color.white)
+            .cornerRadius(10)
         }
     }
 }

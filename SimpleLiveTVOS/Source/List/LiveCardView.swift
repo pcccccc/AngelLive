@@ -13,8 +13,6 @@ import Observation
 
 struct LiveCardView: View {
     @Environment(LiveViewModel.self) var liveViewModel
-    @Environment(FavoriteModel.self) var favoriteModel
-    @Environment(DanmuSettingModel.self) var danmuSettingModel
     @State var index: Int
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
@@ -150,7 +148,6 @@ struct LiveCardView: View {
                                             liveViewModel.roomPage += 1
                                         }
                                     }
-                                case .leftMenu(let index): break
                                 default: break
                             }
                         }
@@ -159,7 +156,7 @@ struct LiveCardView: View {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await liveViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
                                             liveViewModel.roomList.remove(at: index)
@@ -182,7 +179,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        try await liveViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
                                                 liveViewModel.roomList.remove(at: index)
@@ -204,7 +201,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await favoriteModel.addFavorite(room: liveViewModel.currentRoom!)
+                                        try await liveViewModel.favoriteModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
                                     }catch {
                                         liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
@@ -233,7 +230,7 @@ struct LiveCardView: View {
                             self.isLive = isLive
                         }
                         .environment(liveViewModel.roomInfoViewModel!)
-                        .environmentObject(favoriteModel)
+                        .environmentObject(liveViewModel.favoriteModel)
                         .edgesIgnoringSafeArea(.all)
                         .frame(width: 1920, height: 1080)
                     })
@@ -256,11 +253,6 @@ struct LiveCardView: View {
                 .animation(.easeInOut(duration: 0.25), value: focusState == .mainContent(index))
                 .frame(height: 50)
             })
-            .onAppear {
-                if favoriteModel != nil {
-                    liveViewModel.favoriteModel = favoriteModel
-                }
-            }
         }
         
     }

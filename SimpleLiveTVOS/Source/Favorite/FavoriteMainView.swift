@@ -10,21 +10,19 @@ import Kingfisher
 import SimpleToast
 import LiveParse
 import Shimmer
+import TipKit
 
 struct FavoriteMainView: View {
     
-
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
-    @Environment(FavoriteModel.self) var favoriteModel
-    @Environment(DanmuSettingModel.self) var danmuSettingModel
     
     var body: some View {
         
         @Bindable var liveModel = liveViewModel
         
         VStack {
-            if favoriteModel.cloudKitReady {
+            if liveViewModel.favoriteModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text("暂无喜欢的主播哦，请先去添加吧～")
                         .font(.title3)
@@ -34,8 +32,6 @@ struct FavoriteMainView: View {
                             ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                                 LiveCardView(index: index)
                                     .environment(liveViewModel)
-                                    .environment(favoriteModel)
-                                    .environment(danmuSettingModel)
                                     .frame(width: 370, height: 240)
                             }
                             if liveViewModel.isLoading {
@@ -50,7 +46,7 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(favoriteModel.cloudKitStateString)
+                Text(liveViewModel.favoriteModel.cloudKitStateString)
                     .font(.title3)
             }
         }
@@ -95,20 +91,19 @@ struct FavoriteMainView: View {
 //            .background(.green)
 //        }
         .onPlayPauseCommand(perform: {
-//            favoriteModel.fetchFavoriteRoomList()
+            liveViewModel.favoriteModel.fetchFavoriteRoomList()
             liveViewModel.roomPage = 1
         })
-        .task {
-//            favoriteModel.fetchFavoriteRoomList()
-            liveViewModel.roomPage = 1
-        }
         .simpleToast(isPresented: $liveModel.showToast, options: liveViewModel.toastOptions) {
-            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
-                .padding()
-                .background(liveViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-                .foregroundColor(Color.white)
-                .cornerRadius(10)
-                .padding(.top)
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                    .font(.headline.bold())
+                Text(liveViewModel.toastTitle)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(Color.white)
+            .cornerRadius(10)
         }
     }
 }

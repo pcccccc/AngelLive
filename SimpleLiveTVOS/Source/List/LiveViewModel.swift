@@ -7,7 +7,6 @@
 
 import Foundation
 import LiveParse
-import SimpleToast
 import SwiftUI
 import Observation
 import Cache
@@ -72,24 +71,17 @@ final class LiveViewModel {
     }
     var roomList: [LiveModel] = []
     var favoriteRoomList: [LiveModel] = []
-    var currentRoom: LiveModel? {
-        didSet {
-            if favoriteModel != nil {
-                currentRoomIsFavorited = favoriteModel!.roomList.contains{ $0.roomId == currentRoom!.roomId }
-            }
-        }
-    }
+    var currentRoom: LiveModel?
+    /*{
+     didSet {
+         currentRoomIsFavorited = favoriteModel.roomList.contains { $0.roomId == currentRoom!.roomId }
+     }
+     }*/
     
     //当前选择房间ViewModel
     var roomInfoViewModel: RoomInfoStore?
 
     var isLeftFocused: Bool = false
-    var showToast: Bool = false
-    var toastTitle: String = ""
-    var toastTypeIsSuccess: Bool = false
-    var toastOptions = SimpleToastOptions(
-        hideAfter: 1.5
-    )
     
     public var watchList: Array<LiveModel> {
         get {
@@ -120,8 +112,6 @@ final class LiveViewModel {
         }
     }
     
-    var favoriteModel: FavoriteModel?
-    
     var loadingText: String = "正在获取内容"
     var searchTypeArray = ["关键词", "链接/分享口令/房间号", "Youtube链接/VideoId"]
     var searchTypeIndex = 0
@@ -129,10 +119,14 @@ final class LiveViewModel {
     var showAlert: Bool = false
     var currentRoomIsFavorited: Bool = false
     
+    var favoriteModel: FavoriteModel
+    var danmuSettingModel: DanmuSettingModel
     
-    init(roomListType: LiveRoomListType, liveType: LiveType) {
+    init(roomListType: LiveRoomListType, liveType: LiveType, favoriteModel: FavoriteModel, danmuSettingModel: DanmuSettingModel) {
         self.liveType = liveType
         self.roomListType = roomListType
+        self.favoriteModel = favoriteModel
+        self.danmuSettingModel = danmuSettingModel
         switch liveType {
             case .bilibili: 
                 menuTitleIcon = "bilibili_2"
@@ -146,22 +140,15 @@ final class LiveViewModel {
         }
         switch roomListType {
             case .live:
-                getCategoryList()
+                Task {
+                    await getCategoryList()
+                }
             case .favorite, .history:
-                print("从init这里运行")
                 getRoomList(index: 0)
             default:
                 break
                 
         }
-    }
-    
-    //MARK: 操作相关
-    
-    func showToast(_ success: Bool, title: String) {
-        self.showToast = true
-        self.toastTitle = title
-        self.toastTypeIsSuccess = success
     }
 
     /**
@@ -169,7 +156,7 @@ final class LiveViewModel {
      
      - 展示左侧列表子列表
     */
-    func showSubCategoryList(currentCategory: LiveMainListModel) {
+    @MainActor func showSubCategoryList(currentCategory: LiveMainListModel) {
         if self.selectedSubCategory.count == 0 {
             self.selectedMainListCategory = currentCategory
             self.selectedSubCategory.removeAll()
@@ -186,48 +173,41 @@ final class LiveViewModel {
      
      - Returns: 平台直播分类（包含子分类）。
     */
-    func getCategoryList() {
+    @MainActor func getCategoryList() async {
         livePlatformName = LiveParseTools.getLivePlatformName(liveType)
         isLoading = true
-        Task {
-            do {
-                let diskConfig = DiskConfig(name: "Simple_Live_TV")
-                let memoryConfig = MemoryConfig(expiry: .never, countLimit: 50, totalCostLimit: 50)
+        do {
+            let diskConfig = DiskConfig(name: "Simple_Live_TV")
+            let memoryConfig = MemoryConfig(expiry: .never, countLimit: 50, totalCostLimit: 50)
 
-                let storage: Storage<String, [LiveMainListModel]> = try Storage<String, [LiveMainListModel]>(
-                  diskConfig: diskConfig,
-                  memoryConfig: memoryConfig,
-                  transformer: TransformerFactory.forCodable(ofType: [LiveMainListModel].self) // Storage<String, User>
-                )
-                var categories: [LiveMainListModel] = []
-                var hasKsCache = false
-                if liveType == .ks {
-                    do {
-                        categories = try storage.object(forKey: "ks_categories")
-                        hasKsCache = true
-                    }catch {
-                        categories = []
-                    }
-                }
-                if categories.isEmpty && hasKsCache == false {
-                    categories = try await ApiManager.fetchCategoryList(liveType: liveType)
-                }
-                if liveType == .ks && hasKsCache == false {
-                    try storage.setObject(categories, forKey: "ks_categories")
-                }
-
-                DispatchQueue.main.async {
-                    self.categories = categories
-                    self.getRoomList(index: self.selectedSubListIndex)
-                    self.isLoading = false
-                }
-            }catch {
-                DispatchQueue.main.async {
-                    self.isLoading = false
+            let storage: Storage<String, [LiveMainListModel]> = try Storage<String, [LiveMainListModel]>(
+              diskConfig: diskConfig,
+              memoryConfig: memoryConfig,
+              transformer: TransformerFactory.forCodable(ofType: [LiveMainListModel].self) // Storage<String, User>
+            )
+            var categories: [LiveMainListModel] = []
+            var hasKsCache = false
+            if liveType == .ks {
+                do {
+                    categories = try storage.object(forKey: "ks_categories")
+                    hasKsCache = true
+                }catch {
+                    categories = []
                 }
             }
+            if categories.isEmpty && hasKsCache == false {
+                categories = try await ApiManager.fetchCategoryList(liveType: liveType)
+            }
+            if liveType == .ks && hasKsCache == false {
+                try storage.setObject(categories, forKey: "ks_categories")
+            }
+
+            self.categories = categories
+            self.getRoomList(index: self.selectedSubListIndex)
+            self.isLoading = false
+        }catch {
+            self.isLoading = false
         }
-        
     }
     
     /**
@@ -236,10 +216,11 @@ final class LiveViewModel {
      - Returns: 房间列表。
     */
     func getRoomList(index: Int) {
-        print("运行一次")
         isLoading = true
         if roomListType == .search {
-            searchRoomWithText(text: searchText)
+            Task {
+                await searchRoomWithText(text: searchText)
+            }
             return
         }
         switch roomListType {
@@ -285,7 +266,9 @@ final class LiveViewModel {
                 Task {
                     print("通过CloudKit获取收藏qian")
                     let resList = try await CloudSQLManager.searchRecord()
-                    print("通过CloudKit获取收藏")
+                    if resList.count > 0 {
+                        showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态")
+                    }
                     var fetchedModels: [LiveModel] = []
                     // 使用异步的任务组来并行处理所有的请求
                     var bilibiliModels: [LiveModel] = []
@@ -317,9 +300,11 @@ final class LiveViewModel {
                         }
                     })
                     
+                    showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(bilibiliModels.count)秒")
+                    
                     for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
                         do {
-                            try? await Task.sleep(1) // 等待2秒
+                            try? await Task.sleep(nanoseconds: 1_000_000_000) // 等待1秒
                             let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
                             fetchedModels.append(dataReq)
                         }catch {
@@ -395,12 +380,12 @@ final class LiveViewModel {
         self.roomList.remove(at: index)
     }
     
-    func searchRoomWithText(text: String) {
-        isLoading = true
-        if roomPage == 1 {
-            self.roomList.removeAll()
-        }
-        Task {
+    @MainActor func searchRoomWithText(text: String) async {
+        do {
+            isLoading = true
+            if roomPage == 1 {
+                self.roomList.removeAll()
+            }
             let bilibiliResList = try await Bilibili.searchRooms(keyword: text, page: roomPage)
             let douyinResList = try await Douyin.searchRooms(keyword: text, page: roomPage)
             var finalDouyinResList: [LiveModel] = []
@@ -420,14 +405,13 @@ final class LiveViewModel {
             resArray.append(contentsOf: finalDouyinResList)
             resArray.append(contentsOf: huyaResList)
             resArray.append(contentsOf: finalDouyuResList)
-            DispatchQueue.main.async {
-                for item in resArray {
-                    if self.roomList.contains(where: { $0 == item }) == false {
-                        self.roomList.append(item)
-                    }
+            for item in resArray {
+                if self.roomList.contains(where: { $0 == item }) == false {
+                    self.roomList.append(item)
                 }
-                self.isLoading = false
             }
+            self.isLoading = false
+        }catch {
             
         }
     }

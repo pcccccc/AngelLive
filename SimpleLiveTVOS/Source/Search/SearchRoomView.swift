@@ -12,10 +12,8 @@ import Shimmer
 
 struct SearchRoomView: View {
     
-    var liveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili)
     @FocusState var focusState: Int?
-    @Environment(FavoriteModel.self) var favoriteModel
-    @Environment(DanmuSettingModel.self) var danmuSettingModel
+    @Environment(LiveViewModel.self) var liveViewModel
     
     var body: some View {
         
@@ -38,7 +36,9 @@ struct SearchRoomView: View {
             .onSubmit {
                 if liveViewModel.searchTypeIndex == 0 {
                     liveViewModel.roomPage = 1
-                    liveViewModel.searchRoomWithText(text: liveViewModel.searchText)
+                    Task {
+                        await liveViewModel.searchRoomWithText(text: liveViewModel.searchText)
+                    }
                 }else {
                     liveViewModel.roomPage = 1
                     liveViewModel.searchRoomWithShareCode(text: liveViewModel.searchText)
@@ -51,8 +51,6 @@ struct SearchRoomView: View {
                     ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environment(liveViewModel)
-                            .environment(favoriteModel)
-                            .environment(danmuSettingModel)
                             .frame(width: 370, height: 280)
                     }
                     if liveViewModel.isLoading {
