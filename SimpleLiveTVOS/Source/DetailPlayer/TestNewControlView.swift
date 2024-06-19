@@ -8,22 +8,6 @@
 import SwiftUI
 import Shimmer
 
-enum PlayControlFocusableField: Hashable {
-    case playPause
-    case refresh
-    case favorite
-    case playQuality
-    case danmu
-    case listContent(Int)
-    case list
-    case left
-    case right
-}
-
-enum PlayControlTopField: Hashable {
-    case section
-    case list
-}
 
 struct TestPlayerControlView: View {
 

@@ -28,6 +28,7 @@ struct PlatformView: View {
                             let model = platformViewModel.platformInfo[selectedIndex]
                             if model.liveType == .youtube {
                                 appViewModel.selection = 2
+                                appViewModel.searchModel.searchTypeIndex = 2
                             }else {
                                 show = true
                             }

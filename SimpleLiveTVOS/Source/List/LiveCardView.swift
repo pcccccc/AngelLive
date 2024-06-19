@@ -41,7 +41,11 @@ struct LiveCardView: View {
                                 watchList.insert(self.liveViewModel.currentRoom!, at: 0)
                                 self.liveViewModel.watchList = watchList
                             }
-                            liveViewModel.createCurrentRoomViewModel()
+                            var enterFromLive = false
+                            if liveModel.roomListType == .live {
+                                enterFromLive = true
+                            }
+                            liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)
                             DispatchQueue.main.async {
                                 isLive = true
                             }
@@ -215,13 +219,15 @@ struct LiveCardView: View {
                         }
                     })
                     .fullScreenCover(isPresented: $isLive, content: {
-                        DetailPlayerView { isLive, hint in
-                            self.isLive = isLive
+                        if liveViewModel.roomInfoViewModel != nil {
+                            DetailPlayerView { isLive, hint in
+                                self.isLive = isLive
+                            }
+                            .environment(liveViewModel.roomInfoViewModel!)
+                            .environment(appViewModel)
+                            .edgesIgnoringSafeArea(.all)
+                            .frame(width: 1920, height: 1080)
                         }
-                        .environment(liveViewModel.roomInfoViewModel!)
-                        .environment(appViewModel)
-                        .edgesIgnoringSafeArea(.all)
-                        .frame(width: 1920, height: 1080)
                     })
                 })
                 HStack(spacing: 15) {

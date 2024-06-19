@@ -20,6 +20,8 @@ struct DetailPlayerView: View {
         if roomInfoViewModel.currentPlayURL == nil {
             VStack {
                 ProgressView()
+                Text("正在解析直播地址")
+                    .font(.title3)
             }
             .frame(width: 1920, height: 1080)
             .background(.ultraThickMaterial)
@@ -37,20 +39,12 @@ struct DetailPlayerView: View {
                     .onDisappear {
                         roomInfoViewModel.disConnectSocket()
                     }
-                    .onSwipeGesture { direction in
-                        switch direction {
-                            default:
-                                if roomInfoViewModel.showControlView == false {
-                                    roomInfoViewModel.showControlView = true
-                                }
-                        }
-                    }
                     .safeAreaPadding(.all)
                     .zIndex(1)
                 PlayerControlView()
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)
-                    .opacity(roomInfoViewModel.showControlView ? 1 : 0)
+//                    .opacity(roomInfoViewModel.showControlView ? 1 : 0)
                     .safeAreaPadding(.all)
                     .environment(roomInfoViewModel)
                     .environment(appViewModel)
@@ -69,12 +63,8 @@ struct DetailPlayerView: View {
                 .zIndex(2)
             }
             .onExitCommand(perform: {
-                if roomInfoViewModel.showControlView == true {
-                    roomInfoViewModel.showControlView = false
-                }else {
-                    roomInfoViewModel.playerCoordinator.resetPlayer()
-                    didExitView(false, "")
-                }
+                roomInfoViewModel.playerCoordinator.resetPlayer()
+                didExitView(false, "")
             })
             .onPlayPauseCommand(perform: {
                 if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying == true {

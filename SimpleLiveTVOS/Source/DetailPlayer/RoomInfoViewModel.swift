@@ -44,7 +44,7 @@ final class RoomInfoViewModel {
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
-    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel) {
+    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = currentRoom

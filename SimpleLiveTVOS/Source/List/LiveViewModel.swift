@@ -368,8 +368,8 @@ final class LiveViewModel {
         self.roomList[index] = newModel
     }
     
-    func createCurrentRoomViewModel() {
-        roomInfoViewModel = RoomInfoViewModel(currentRoom: roomList[selectedRoomListIndex], appViewModel: appViewModel)
+    func createCurrentRoomViewModel(enterFromLive: Bool) {
+        roomInfoViewModel = RoomInfoViewModel(currentRoom: roomList[selectedRoomListIndex], appViewModel: appViewModel, enterFromLive: enterFromLive)
     }
     
     
