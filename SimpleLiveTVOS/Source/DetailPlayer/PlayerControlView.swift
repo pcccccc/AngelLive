@@ -14,8 +14,8 @@ import LiveParse
 
 struct PlayerControlView: View {
     
-    @Environment(RoomInfoStore.self) var roomInfoViewModel
-    @Environment(FavoriteModel.self) var favoriteModel
+    @Environment(RoomInfoViewModel.self) var roomInfoViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
 
     @FocusState var leftFocusState: Bool
     @FocusState var rightFocusState: Bool
@@ -146,8 +146,8 @@ struct PlayerControlView: View {
                         }
                     }
                 }, label: {
-                    Image(systemName:  favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
-                        .foregroundColor(favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? .red : .white)
+                    Image(systemName:  appViewModel.favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
+                        .foregroundColor(appViewModel.favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? .red : .white)
                         .font(.system(size: 30, weight: .bold))
                         .frame(width: 40, height: 40)
                         .padding(.top, 3)
@@ -217,15 +217,15 @@ struct PlayerControlView: View {
                             }
                         })
                     }else {
-                        roomInfoViewModel.danmuSettingModel.showDanmu.toggle()
-                        if roomInfoViewModel.danmuSettingModel.showDanmu == false {
+                        appViewModel.danmuSettingModel.showDanmu.toggle()
+                        if appViewModel.danmuSettingModel.showDanmu == false {
                             roomInfoViewModel.disConnectSocket()
                         }else {
                             roomInfoViewModel.getDanmuInfo()
                         }
                     }
                 }, label: {
-                    Image(roomInfoViewModel.danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
+                    Image(appViewModel.danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
                         .resizable()
                         .frame(width: 40, height: 40)
                 })
@@ -265,34 +265,19 @@ struct PlayerControlView: View {
         .onReceive(roomInfoViewModel.timer, perform: { _ in
 //            roomInfoViewModel.dynamicInfo = roomInfoViewModel.playerCoordinator.playerLayer?.player.dynamicInfo
         })
-        .simpleToast(isPresented: $roomInfoModel.showToast, options: roomInfoViewModel.toastOptions) {
-            Label(roomInfoViewModel.toastTitle, systemImage: roomInfoViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
-                .padding()
-                .background(roomInfoViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-                .foregroundColor(Color.white)
-                .cornerRadius(10)
-                .padding(.top)
-        }
     }
     
     func favoriteAction() {
-        if favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
+        if appViewModel.favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
-                try await favoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
-                roomInfoViewModel.showToast(true, title: "收藏成功")
+                try await appViewModel.favoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
+                appViewModel.showToast(true, title: "收藏成功")
             }
         }else {
             Task {
-                try await  favoriteModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
-                roomInfoViewModel.showToast(true, title: "取消收藏成功")
+                try await  appViewModel.favoriteModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
+                appViewModel.showToast(true, title: "取消收藏成功")
             }
         }
     }
-}
-
-#Preview {
-    let gliveModel = LiveModel(userName: "维克托VR", roomTitle: "WWE SD节目直播中！", roomCover: "http://i0.hdslb.com/bfs/live/1011add6e4e45eee3349272b700f5aa0b389d0f8.jpg", userHeadImg: "https://i1.hdslb.com/bfs/face/eb461f48efaf3fb62b97b322466d822ce785669c.jpg", liveType: .bilibili, liveState: "1", userId: "123821806", roomId: "24209100", liveWatchedCount: "3392")
-    let gdanmuModel = DanmuSettingModel()
-    return PlayerControlView().environment(RoomInfoStore(currentRoom: gliveModel, danmuSettingModel: gdanmuModel)).environment(FavoriteModel()).frame(width: 1920, height: 1080)
-        
 }

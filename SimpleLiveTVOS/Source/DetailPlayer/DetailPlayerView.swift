@@ -11,11 +11,10 @@ import AVKit
 
 
 struct DetailPlayerView: View {
-    @Environment(RoomInfoStore.self) var roomInfoViewModel
-    @Environment(FavoriteModel.self) var favoriteModel
+    @Environment(RoomInfoViewModel.self) var roomInfoViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     
     public var didExitView: (Bool, String) -> Void = {_, _ in}
-    
     
     var body: some View {
         if roomInfoViewModel.currentPlayURL == nil {
@@ -31,7 +30,7 @@ struct DetailPlayerView: View {
                     .onAppear {
                         roomInfoViewModel.playerCoordinator.playerLayer?.play()
                         roomInfoViewModel.setPlayerDelegate()
-                        if roomInfoViewModel.danmuSettingModel.showDanmu {
+                        if appViewModel.danmuSettingModel.showDanmu {
                             roomInfoViewModel.getDanmuInfo()
                         }
                     }
@@ -54,16 +53,16 @@ struct DetailPlayerView: View {
                     .opacity(roomInfoViewModel.showControlView ? 1 : 0)
                     .safeAreaPadding(.all)
                     .environment(roomInfoViewModel)
-                    .environment(favoriteModel)
+                    .environment(appViewModel)
                 VStack {
-                    if roomInfoViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
+                    if appViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
                         Spacer()
                     }
-                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
-                        .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
-                        .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
-                        .environmentObject(favoriteModel)
-                    if roomInfoViewModel.danmuSettingModel.danmuAreaIndex < 3 {
+                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingModel.getDanmuArea().0)
+                        .frame(width: 1920, height: appViewModel.danmuSettingModel.getDanmuArea().0)
+                        .opacity(appViewModel.danmuSettingModel.showDanmu ? 1 : 0)
+                        .environment(appViewModel)
+                    if appViewModel.danmuSettingModel.danmuAreaIndex < 3 {
                         Spacer()
                     }
                 }

@@ -12,9 +12,9 @@ import SimpleToast
 import Observation
 
 @Observable
-final class RoomInfoStore {
+final class RoomInfoViewModel {
     
-    var danmuSettingModel: DanmuSettingModel
+    var appViewModel: SimpleLiveViewModel
     
     var roomList: [LiveModel] = []
     var currentRoom: LiveModel
@@ -36,14 +36,6 @@ final class RoomInfoStore {
     
     var isLoading = false
     var rotationAngle = 0.0
-    
-    var isLeftFocused: Bool = false
-    var showToast: Bool = false
-    var toastTitle: String = ""
-    var toastTypeIsSuccess: Bool = false
-    var toastOptions = SimpleToastOptions(
-        hideAfter: 1.5
-    )
 
     var debugTimerIsActive = false
     var dynamicInfo: DynamicInfo?
@@ -52,11 +44,11 @@ final class RoomInfoStore {
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
-    init(currentRoom: LiveModel, danmuSettingModel: DanmuSettingModel) {
+    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = currentRoom
-        self.danmuSettingModel = danmuSettingModel
+        self.appViewModel = appViewModel
         getPlayArgs()
     }
     
@@ -194,7 +186,6 @@ final class RoomInfoStore {
                         playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     case .youtube:
                         playArgs = try await YoutubeParse.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                    default: break
                 }
                 await updateCurrentRoomPlayArgs(playArgs)
             }catch {
@@ -237,12 +228,6 @@ final class RoomInfoStore {
         self.socketConnection?.disconnect()
     }
     
-    func showToast(_ success: Bool, title: String) {
-        self.showToast = true
-        self.toastTitle = title
-        self.toastTypeIsSuccess = success
-    }
-    
     func toggleTimer() {
         if debugTimerIsActive == false {
             startTimer()
@@ -262,7 +247,7 @@ final class RoomInfoStore {
     }
 }
 
-extension RoomInfoStore: WebSocketConnectionDelegate {
+extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidConnect() {
         
     }
@@ -272,11 +257,11 @@ extension RoomInfoStore: WebSocketConnectionDelegate {
     }
     
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
-        danmuCoordinator.shoot(text: text, showColorDanmu: danmuSettingModel.showColorDanmu, color: color, alpha: danmuSettingModel.danmuAlpha, font: CGFloat(danmuSettingModel.danmuFontSize))
+        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingModel.danmuFontSize))
     }
 }
 
-extension RoomInfoStore: KSPlayerLayerDelegate {
+extension RoomInfoViewModel: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying

@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		4F05A6B42B50CAD90033214E /* DanmuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A02B50CAD90033214E /* DanmuView.swift */; };
 		4F05A6B62B50CAD90033214E /* PlayerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A22B50CAD90033214E /* PlayerControlView.swift */; };
-		4F05A6B72B50CAD90033214E /* RoomInfoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A32B50CAD90033214E /* RoomInfoStore.swift */; };
+		4F05A6B72B50CAD90033214E /* RoomInfoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A32B50CAD90033214E /* RoomInfoViewModel.swift */; };
 		4F05A6B82B50CAD90033214E /* DetailPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A42B50CAD90033214E /* DetailPlayerView.swift */; };
 		4F05A6B92B50CAD90033214E /* FavoriteMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A62B50CAD90033214E /* FavoriteMainView.swift */; };
 		4F05A6BA2B50CAD90033214E /* SearchRoomView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6A82B50CAD90033214E /* SearchRoomView.swift */; };
@@ -116,7 +116,7 @@
 /* Begin PBXFileReference section */
 		4F05A6A02B50CAD90033214E /* DanmuView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DanmuView.swift; sourceTree = "<group>"; };
 		4F05A6A22B50CAD90033214E /* PlayerControlView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = PlayerControlView.swift; sourceTree = "<group>"; };
-		4F05A6A32B50CAD90033214E /* RoomInfoStore.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RoomInfoStore.swift; sourceTree = "<group>"; };
+		4F05A6A32B50CAD90033214E /* RoomInfoViewModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RoomInfoViewModel.swift; sourceTree = "<group>"; };
 		4F05A6A42B50CAD90033214E /* DetailPlayerView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = DetailPlayerView.swift; sourceTree = "<group>"; };
 		4F05A6A62B50CAD90033214E /* FavoriteMainView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FavoriteMainView.swift; sourceTree = "<group>"; };
 		4F05A6A82B50CAD90033214E /* SearchRoomView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SearchRoomView.swift; sourceTree = "<group>"; };
@@ -252,7 +252,7 @@
 			children = (
 				4F05A6A02B50CAD90033214E /* DanmuView.swift */,
 				4F05A6A22B50CAD90033214E /* PlayerControlView.swift */,
-				4F05A6A32B50CAD90033214E /* RoomInfoStore.swift */,
+				4F05A6A32B50CAD90033214E /* RoomInfoViewModel.swift */,
 				4F05A6A42B50CAD90033214E /* DetailPlayerView.swift */,
 				4F44D9112C1DA56F0029B6E6 /* TestNewControlView.swift */,
 			);
@@ -698,7 +698,7 @@
 				4FBAB9122B47A42200A77A5C /* DanmakuAsyncLayer.swift in Sources */,
 				4F44D9122C1DA56F0029B6E6 /* TestNewControlView.swift in Sources */,
 				4FF2D3732BBC0369002822DD /* UIColor+Extension.swift in Sources */,
-				4F05A6B72B50CAD90033214E /* RoomInfoStore.swift in Sources */,
+				4F05A6B72B50CAD90033214E /* RoomInfoViewModel.swift in Sources */,
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,
 				4FC3DCDE2A49382F00CA36B9 /* SimpleLiveTVOSApp.swift in Sources */,
 				4FF2D3772BBC0369002822DD /* String+Extension.swift in Sources */,

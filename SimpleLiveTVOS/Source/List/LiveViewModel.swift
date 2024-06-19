@@ -79,7 +79,7 @@ final class LiveViewModel {
      }*/
     
     //当前选择房间ViewModel
-    var roomInfoViewModel: RoomInfoStore?
+    var roomInfoViewModel: RoomInfoViewModel?
 
     var isLeftFocused: Bool = false
     
@@ -369,7 +369,7 @@ final class LiveViewModel {
     }
     
     func createCurrentRoomViewModel() {
-        roomInfoViewModel = RoomInfoStore(currentRoom: roomList[selectedRoomListIndex], danmuSettingModel: DanmuSettingModel())
+        roomInfoViewModel = RoomInfoViewModel(currentRoom: roomList[selectedRoomListIndex], appViewModel: appViewModel)
     }
     
     

@@ -215,13 +215,13 @@ struct LiveCardView: View {
                         }
                     })
                     .fullScreenCover(isPresented: $isLive, content: {
-//                        DetailPlayerView { isLive, hint in
-//                            self.isLive = isLive
-//                        }
-//                        .environment(liveViewModel.roomInfoViewModel!)
-//                        .environmentObject(appViewModel.favoriteModel)
-//                        .edgesIgnoringSafeArea(.all)
-//                        .frame(width: 1920, height: 1080)
+                        DetailPlayerView { isLive, hint in
+                            self.isLive = isLive
+                        }
+                        .environment(liveViewModel.roomInfoViewModel!)
+                        .environment(appViewModel)
+                        .edgesIgnoringSafeArea(.all)
+                        .frame(width: 1920, height: 1080)
                     })
                 })
                 HStack(spacing: 15) {

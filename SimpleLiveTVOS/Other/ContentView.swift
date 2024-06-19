@@ -57,19 +57,21 @@ struct ContentView: View {
                     .environment(appViewModel)
                     
                 
-//                SearchRoomView()
-//                    .tabItem {
-//                        Text("搜索")
-//                    }
-//                    .tag(2)
-//                    .environment(searchLiveViewModel)
+                SearchRoomView()
+                    .tabItem {
+                        Text("搜索")
+                    }
+                    .tag(2)
+                    .environment(searchLiveViewModel)
+                    .environment(appViewModel)
 
                 
-//                SettingView()
-//                    .tabItem {
-//                        Text("设置")
-//                    }
-//                .tag(3)
+                SettingView()
+                    .tabItem {
+                        Text("设置")
+                    }
+                    .tag(3)
+                    .environment(appViewModel)
 
             }
         }

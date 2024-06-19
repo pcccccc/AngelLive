@@ -9,11 +9,11 @@ import SwiftUI
 
 struct DanmuSettingView: View {
     
-    @Environment(DanmuSettingModel.self) var danmuSettingModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     
     var body: some View {
         
-        @Bindable var danmuModel = danmuSettingModel
+        @Bindable var danmuModel = appViewModel.danmuSettingModel
         
         GeometryReader { geometry in
             HStack {
@@ -42,7 +42,7 @@ struct DanmuSettingView: View {
                             .multilineTextAlignment(.leading)
                         Spacer()
                         Button {
-                            danmuSettingModel.danmuFontSize -= 5
+                            appViewModel.danmuSettingModel.danmuFontSize -= 5
                         } label: {
                             Text("-5")
                                 .font(.subheadline)
@@ -51,7 +51,7 @@ struct DanmuSettingView: View {
                         .clipShape(.circle)
                         .frame(width: 40, height:40)
                         Button {
-                            danmuSettingModel.danmuFontSize -= 1
+                            appViewModel.danmuSettingModel.danmuFontSize -= 1
                         } label: {
                             Text("-1")
                                 .font(.subheadline)
@@ -60,11 +60,11 @@ struct DanmuSettingView: View {
                         .clipShape(.circle)
                         .frame(width: 40, height:40)
                         
-                        Text("\(danmuSettingModel.danmuFontSize)")
-                            .font(.system(size: CGFloat(danmuSettingModel.danmuFontSize)))
+                        Text("\(appViewModel.danmuSettingModel.danmuFontSize)")
+                            .font(.system(size: CGFloat(appViewModel.danmuSettingModel.danmuFontSize)))
                         
                         Button {
-                            danmuSettingModel.danmuFontSize += 1
+                            appViewModel.danmuSettingModel.danmuFontSize += 1
                         } label: {
                             Text("+1")
                                 .font(.subheadline)
@@ -74,7 +74,7 @@ struct DanmuSettingView: View {
                         .frame(width: 40, height:40)
                         
                         Button {
-                            danmuSettingModel.danmuFontSize += 5
+                            appViewModel.danmuSettingModel.danmuFontSize += 5
                         } label: {
                             Text("+5")
                                 .font(.subheadline)
@@ -88,7 +88,7 @@ struct DanmuSettingView: View {
                     .frame(height: 45)
                     HStack {
                         Text("这是一条测试弹幕")
-                            .font(.system(size: CGFloat(danmuSettingModel.danmuFontSize)))
+                            .font(.system(size: CGFloat(appViewModel.danmuSettingModel.danmuFontSize)))
                     }
                     .frame(height: 45)
                     HStack {
@@ -96,13 +96,13 @@ struct DanmuSettingView: View {
                         TextField("透明度：(0.1-1.0)", text: $danmuModel.danmuAlphaString)
                             .keyboardType(.decimalPad)
                             .submitLabel(.done)
-                            .onChange(of: danmuSettingModel.danmuAlphaString) { oldValue, newValue in
+                            .onChange(of: appViewModel.danmuSettingModel.danmuAlphaString) { oldValue, newValue in
                                 if Double(newValue) != nil && Double(newValue) ?? 0 > 0.09 && Double(newValue) ?? 0 < 1.01  {
-                                    danmuSettingModel.danmuAlpha = Double(newValue)!
+                                    appViewModel.danmuSettingModel.danmuAlpha = Double(newValue)!
                                 }
                             }
                             .onAppear {
-                                danmuSettingModel.danmuAlphaString = "\(danmuSettingModel.danmuAlpha)"
+                                appViewModel.danmuSettingModel.danmuAlphaString = "\(appViewModel.danmuSettingModel.danmuAlpha)"
                             }
                         
                     }
@@ -110,23 +110,23 @@ struct DanmuSettingView: View {
                     HStack {
                         Text("弹幕速度：")
                         Picker(selection: Binding(get: {
-                            danmuSettingModel.danmuSpeedIndex
+                            appViewModel.danmuSettingModel.danmuSpeedIndex
                         }, set: { value in
-                            danmuSettingModel.danmuSpeedIndex = value
-                            switch danmuSettingModel.danmuSpeedIndex {
+                            appViewModel.danmuSettingModel.danmuSpeedIndex = value
+                            switch appViewModel.danmuSettingModel.danmuSpeedIndex {
                                 case 0:
-                                    danmuSettingModel.danmuSpeed = 0.3
+                                    appViewModel.danmuSettingModel.danmuSpeed = 0.3
                                 case 1:
-                                    danmuSettingModel.danmuSpeed = 0.5
+                                    appViewModel.danmuSettingModel.danmuSpeed = 0.5
                                 case 2:
-                                    danmuSettingModel.danmuSpeed = 0.7
+                                    appViewModel.danmuSettingModel.danmuSpeed = 0.7
                                 default:
-                                    danmuSettingModel.danmuSpeed = 0.5
+                                    appViewModel.danmuSettingModel.danmuSpeed = 0.5
                             }
                         })) {
-                            ForEach(danmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
+                            ForEach(appViewModel.danmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
                                 // 需要有一个变量text。不然会自动帮忙加很多0
-                                let text = danmuSettingModel.danmuSpeedArray[index]
+                                let text = appViewModel.danmuSettingModel.danmuSpeedArray[index]
                                 Text(text)
                             }
                         } label: {
@@ -137,13 +137,13 @@ struct DanmuSettingView: View {
                     HStack {
                         Text("显示区域：")
                         Menu(content: {
-                            ForEach(danmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
-                                Button(danmuSettingModel.danmuAreaArray[index]) {
-                                    danmuSettingModel.danmuAreaIndex = index
+                            ForEach(appViewModel.danmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
+                                Button(appViewModel.danmuSettingModel.danmuAreaArray[index]) {
+                                    appViewModel.danmuSettingModel.danmuAreaIndex = index
                                 }
                             }
                         }, label: {
-                            Text("\(danmuSettingModel.danmuAreaArray[danmuSettingModel.danmuAreaIndex])")
+                            Text("\(appViewModel.danmuSettingModel.danmuAreaArray[appViewModel.danmuSettingModel.danmuAreaIndex])")
                                 .frame(width: 535, height: 45, alignment: .center)
                         })
                         
