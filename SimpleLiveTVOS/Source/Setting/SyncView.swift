@@ -10,7 +10,7 @@ import SwiftUI
 
 struct SyncView: View {
     
-    @EnvironmentObject var favoriteModel: FavoriteModel
+    @EnvironmentObject var favoriteStateModel: FavoriteStateModel
     @StateObject var qrCodeStore = QRCodeStore()
     
     var body: some View {
@@ -28,7 +28,7 @@ struct SyncView: View {
     
     @MainActor func startQRService() {
         qrCodeStore.qrCodeType = .syncServer
-        qrCodeStore.favoriteModel = favoriteModel
+        qrCodeStore.favoriteModel = favoriteStateModel
     }
 }
 

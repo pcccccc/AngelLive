@@ -23,7 +23,7 @@ struct FavoriteMainView: View {
         @Bindable var appModel = appViewModel
         
         VStack {
-            if appViewModel.favoriteModel.cloudKitReady {
+            if appViewModel.favoriteStateModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text("暂无喜欢的主播哦，请先去添加吧～")
                         .font(.title3)
@@ -48,7 +48,7 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(appViewModel.favoriteModel.cloudKitStateString)
+                Text(appViewModel.favoriteStateModel.cloudKitStateString)
                     .font(.title3)
             }
         }

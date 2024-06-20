@@ -262,11 +262,14 @@ final class LiveViewModel {
                 }
             case .favorite:
                 Task {
-                    await appViewModel.favoriteModel.fetchFavoriteRoomList()
-                    let resList = appViewModel.favoriteModel.roomList
+                    await appViewModel.favoriteStateModel.fetchFavoriteRoomList()
+                    let resList = appViewModel.favoriteStateModel.roomList
                     if resList.count > 0 {
-                        appViewModel.showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
+                        if appViewModel.selection == 0 {
+                            appViewModel.showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
+                        }
                     }
+                    print("执行导致页面退出")
                     var fetchedModels: [LiveModel] = []
                     // 使用异步的任务组来并行处理所有的请求
                     var bilibiliModels: [LiveModel] = []
@@ -297,7 +300,9 @@ final class LiveViewModel {
                     })
                     
                     if bilibiliModels.count > 0 {
-                        appViewModel.showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
+                        if appViewModel.selection == 0 {
+                            appViewModel.showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
+                        }
                     }
                     
                     for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？

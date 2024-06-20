@@ -12,9 +12,11 @@ import SimpleToast
 @Observable
 class SimpleLiveViewModel {
     var selection = 0
-    var favoriteModel = FavoriteModel()
+    var favoriteModel: LiveViewModel?
+    var favoriteStateModel = FavoriteStateModel()
     var danmuSettingModel = DanmuSettingModel()
     var searchModel = SearchViewModel()
+    var historyModel: LiveViewModel?
     
     var showToast: Bool = false
     var toastTitle: String = ""

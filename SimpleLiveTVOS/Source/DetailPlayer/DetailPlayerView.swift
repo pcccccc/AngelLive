@@ -66,13 +66,7 @@ struct DetailPlayerView: View {
                 roomInfoViewModel.playerCoordinator.resetPlayer()
                 didExitView(false, "")
             })
-            .onPlayPauseCommand(perform: {
-                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying == true {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.pause()
-                }else {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
-                }
-            })
+            
         }
     }
 }

@@ -8,6 +8,7 @@
 import Foundation
 import CoreImage.CIFilterBuiltins
 import UIKit
+import LiveParse
 
 class Common {
     
@@ -99,4 +100,16 @@ class Common {
         return name
     }
 
+    class func getImage(_ liveType: LiveType) -> String {
+        switch liveType {
+            case .bilibili:
+                return "live_card_bili"
+            case .douyu:
+                return "live_card_douyu"
+            case .huya:
+                return "live_card_huya"
+            default:
+                return "live_card_douyin"
+        }
+    }
 }

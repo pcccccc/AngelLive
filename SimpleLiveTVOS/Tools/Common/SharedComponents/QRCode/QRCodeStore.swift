@@ -39,7 +39,7 @@ class QRCodeStore: ObservableObject {
     
     @Published var syncManager: SyncManager?
     @Published var udpManager: UDPListener?
-    @Published var favoriteModel: FavoriteModel?
+    @Published var favoriteModel: FavoriteStateModel?
     
     @Published var syncType: SimpleSyncType? {
         didSet {

@@ -36,50 +36,6 @@ struct LeftMenu: View {
                         .background(Color.clear)
                         .focused($focusState, equals: .leftMenu(index, 0))
                 }
-//                if liveViewModel.showOverlay == false {
-//                    if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedSubListIndex != -1 {
-//                        if liveViewModel.selectedSubListIndex < liveViewModel.selectedSubCategory.count {
-//                            HStack(spacing: 10) {
-//                                if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
-//                                    Image(liveViewModel.menuTitleIcon)
-//                                    .resizable()
-//                                    .frame(width: 30, height: 30, alignment: .leading)
-//                                    .padding(.leading, -5)
-//                                }else {
-//                                    KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
-//                                    .resizable()
-//                                    .frame(width: 30, height: 30, alignment: .leading)
-//                                    .padding(.leading, -5)
-//                                }
-//
-//                                Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
-//                                    .font(.system(size: 20))
-//                                    .frame(width: 110, height: 30, alignment: .leading)
-//                                    .multilineTextAlignment(.leading)
-//                            }
-//                            .padding(.top, 160)
-//                            .padding(.leading, 5)
-//                            .edgesIgnoringSafeArea(.all)
-//                        }
-//                    }else {
-//                        HStack(spacing: 10) {
-//                            Image(liveViewModel.menuTitleIcon)
-//                                .resizable()
-//                                .frame(width: 30, height: 30, alignment: .leading)
-//                                .padding(.leading, -5)
-//                            Text("直播分类")
-//                                .font(.system(size: 20))
-//                                .frame(width: 110, height: 30, alignment: .leading)
-//                                .multilineTextAlignment(.leading)
-//                        }
-//                        .padding(.top, 160)
-//                        .padding(.leading, 5)
-//                        .edgesIgnoringSafeArea(.all)
-//                    }
-//                }else {
-//
-//                }
-                
             }
             .listStyle(.plain)
         }

@@ -149,7 +149,7 @@ struct LiveCardView: View {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await appViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
                                             liveViewModel.roomList.remove(at: index)
@@ -172,7 +172,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await appViewModel.favoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
                                                 liveViewModel.roomList.remove(at: index)
@@ -194,7 +194,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await appViewModel.favoriteModel.addFavorite(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.favoriteStateModel.addFavorite(room: liveViewModel.currentRoom!)
                                         appViewModel.showToast(true, title:"收藏成功")
                                     }catch {
                                         appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))

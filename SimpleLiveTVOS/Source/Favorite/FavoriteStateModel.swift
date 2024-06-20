@@ -12,7 +12,7 @@ import CloudKit
 import Observation
 
 @Observable
-class FavoriteModel: ObservableObject {
+class FavoriteStateModel: ObservableObject {
     
     var roomList: [LiveModel] = []
     var isLoading: Bool = false

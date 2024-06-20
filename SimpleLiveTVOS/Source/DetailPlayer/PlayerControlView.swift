@@ -10,6 +10,7 @@ import SimpleToast
 import KSPlayer
 import LiveParse
 import Shimmer
+import Kingfisher
 
 enum PlayControlFocusableField: Hashable {
     case playPause
@@ -24,7 +25,7 @@ enum PlayControlFocusableField: Hashable {
 }
 
 enum PlayControlTopField: Hashable {
-    case section
+    case section(Int)
     case list
 }
 
@@ -33,8 +34,12 @@ struct PlayerControlView: View {
     
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
+    
+    @State var sectionList: [LiveModel] = []
+    @State var selectIndex = 0
 
     @FocusState var state: PlayControlFocusableField?
+    @FocusState var topState: PlayControlTopField?
     @State var lastOptionState: PlayControlFocusableField?
     @State var showTop = false
     @State var onceTips = false
@@ -83,31 +88,113 @@ struct PlayerControlView: View {
             if showTop {
                 VStack(spacing: 20) {
                     HStack {
+                        Spacer()
                         Button("收藏") {
-                            
+                           
                         }
+                        .focused($topState, equals: .section(0))
                         Button("历史") {
                             
                         }
+                        .focused($topState, equals: .section(1))
                         Button("分区") {
                             
                         }
+                        .focused($topState, equals: .section(2))
+                        Spacer()
                     }
+                    .foregroundColor(.white)
                     .buttonStyle(.plain)
                     .focusSection()
+                    .onChange(of: topState) { oldValue, newValue in
+                        switch newValue {
+                            case .section(let index):
+                                changeList(index)
+                            default:
+                                break
+                        }
+                    }
                     
                     ScrollView(.horizontal) {
                         LazyHGrid(rows: [GridItem(.fixed(192))], content: {
-                            ForEach(0..<10) { i in
+                            ForEach(sectionList.indices, id: \.self) { index in
                                 Button {
-                                    
+                                    changeRoom()
                                 } label: {
-                                    Image("1")
-                                        .resizable()
+                                    ZStack(alignment: .bottom) {
+                                        KFImage(URL(string: sectionList[index].roomCover))
+                                            .placeholder {
+                                                Image("placeholder")
+                                                    .resizable()
+                                                    .frame(height: 210)
+                                            }
+                                            .resizable()
+                                            .frame(height: 210)
+                                            .blur(radius: 10)
+                                        KFImage(URL(string: sectionList[index].roomCover))
+                                            .placeholder {
+                                                Image("placeholder")
+                                                    .resizable()
+                                                    .frame(height: 210)
+                                            }
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(height: 210)
+                                            .background(.thinMaterial)
+                                            
+                                        Rectangle()
+//                                        .fill(gradient)
+                                        .shadow(radius: 10)
+                                        .frame(height: 40)
+                                        if sectionList[index].liveWatchedCount != nil {
+                                            HStack {
+                                                Spacer()
+                                                HStack(spacing: 5) {
+                                                    Image(systemName: "eye")
+                                                        .font(.system(size: 14))
+                                                    Text(sectionList[index].liveWatchedCount!.formatWatchedCount())
+                                                        .font(.system(size: 18))
+                                                }
+                                                
+                                                .foregroundColor(.white)
+                                                .padding([.trailing], 10)
+                                            }
+                                            .frame(height: 30, alignment: .trailing)
+                                        }
+                                        if selectIndex == 2 { // 如果不为直播页面，则展示对应平台和直播状态
+                                            HStack {
+                                                Image(uiImage: .init(named: Common.getImage(sectionList[index].liveType))!)
+                                                    .resizable()
+                                                    .frame(width: 40, height: 40)
+                                                    .cornerRadius(5)
+                                                    .padding(.top, 5)
+                                                    .padding(.leading, 5)
+                                                Spacer()
+                                                HStack(spacing: 5) {
+                                                    HStack(spacing: 5) {
+                                                        Circle()
+                                                            .fill(LiveState(rawValue: sectionList[index].liveState ?? "3") == .live ? Color.green : Color.gray)
+                                                            .frame(width: 10, height: 10)
+                                                            .padding(.leading, 5)
+                                                        Text(sectionList[index].liveStateFormat())
+                                                            .font(.system(size: 18))
+                                                            .foregroundColor(Color.white)
+                                                            .padding(.trailing, 5)
+                                                            .padding(.top, 5)
+                                                            .padding(.bottom, 5)
+                                                    }
+                                                    .background(Color("favorite_right_hint"))
+                                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                                                }
+                                                .padding(.trailing, 5)
+                                            }
+                                            .padding(.bottom, 165)
+                                        }
+                                    }
                                 }
                                 .frame(width: 320, height: 192)
                                 .buttonStyle(.borderless)
-                                .focused($state, equals: .listContent(i))
+//                                .focused($state, equals: .listContent(i))
                             }
                         })
                     }
@@ -227,7 +314,7 @@ struct PlayerControlView: View {
                             Button(action: {
                                 favoriteBtnAction()
                             }, label: {
-                                Image(systemName: appViewModel.favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
+                                Image(systemName: appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
                                     .foregroundColor(.white)
                                     .font(.system(size: 30, weight: .bold))
                                     .frame(width: 40, height: 40)
@@ -384,18 +471,20 @@ struct PlayerControlView: View {
             }
             
         })
-        
+        .onPlayPauseCommand(perform: {
+            playPauseAction()
+        })
     }
     
     func favoriteAction() {
-        if appViewModel.favoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
+        if appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
-                try await appViewModel.favoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
+                try await appViewModel.favoriteStateModel.addFavorite(room: roomInfoViewModel.currentRoom)
                 appViewModel.showToast(true, title: "收藏成功")
             }
         }else {
             Task {
-                try await  appViewModel.favoriteModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
+                try await  appViewModel.favoriteStateModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
                 appViewModel.showToast(true, title: "取消收藏成功")
             }
         }
@@ -442,30 +531,23 @@ struct PlayerControlView: View {
     }
     
     func playPauseAction() {
-        if (roomInfoViewModel.showControlView == false) {
-            roomInfoViewModel.showControlView = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                if roomInfoViewModel.showControlView == true {
-                    roomInfoViewModel.showControlView = false
-                }
-            })
+        if (showControl == false) {
+            showControl = true
         }else {
-            if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
-                roomInfoViewModel.playerCoordinator.playerLayer?.pause()
-            }else {
-                roomInfoViewModel.playerCoordinator.playerLayer?.play()
+            DispatchQueue.main.async {
+                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
+                    roomInfoViewModel.playerCoordinator.playerLayer?.pause()
+                }else {
+                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                }
             }
+            
         }
     }
     
     func refreshAction() {
-        if (roomInfoViewModel.showControlView == false) {
-            roomInfoViewModel.showControlView = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                if roomInfoViewModel.showControlView == true {
-                    roomInfoViewModel.showControlView = false
-                }
-            })
+        if (showControl == false) {
+            showControl = true
         }else {
             roomInfoViewModel.getPlayArgs()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
@@ -480,13 +562,8 @@ struct PlayerControlView: View {
     }
     
     func favoriteBtnAction() {
-        if (roomInfoViewModel.showControlView == false) {
-            roomInfoViewModel.showControlView = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                if roomInfoViewModel.showControlView == true {
-                    roomInfoViewModel.showControlView = false
-                }
-            })
+        if (showControl == false) {
+            showControl = true
         }else {
             withAnimation(.easeInOut(duration: 0.3)) {
                 favoriteAction()
@@ -495,13 +572,8 @@ struct PlayerControlView: View {
     }
     
     func danmuAction() {
-        if (roomInfoViewModel.showControlView == false) {
-            roomInfoViewModel.showControlView = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                if roomInfoViewModel.showControlView == true {
-                    roomInfoViewModel.showControlView = false
-                }
-            })
+        if (showControl == false) {
+            showControl = true
         }else {
             appViewModel.danmuSettingModel.showDanmu.toggle()
             if appViewModel.danmuSettingModel.showDanmu == false {
@@ -517,5 +589,24 @@ struct PlayerControlView: View {
             return true
         }
         return false
+    }
+    
+    func changeRoom() {
+        
+    }
+    
+    func changeList(_ index: Int) {
+        selectIndex = index
+        sectionList.removeAll()
+        switch index {
+            case 0:
+                sectionList.append(contentsOf: appViewModel.favoriteModel?.roomList ?? [])
+            case 1:
+                sectionList.append(contentsOf: appViewModel.historyModel?.roomList ?? [])
+            case 2:
+                sectionList.append(contentsOf: roomInfoViewModel.roomList)
+            default:
+                break
+        }
     }
 }

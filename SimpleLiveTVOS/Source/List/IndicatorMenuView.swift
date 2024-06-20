@@ -68,5 +68,6 @@ struct IndicatorMenuView: View {
             .font(.system(size: 20))
             .frame(width: 110, height: 30, alignment: .leading)
             .multilineTextAlignment(.leading)
+            .foregroundColor(.white)
     }
 }

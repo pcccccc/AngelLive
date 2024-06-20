@@ -19,10 +19,13 @@ struct ContentView: View {
     var appViewModel = SimpleLiveViewModel()
     var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
-
+    var historyModel: LiveViewModel
+    
+    
     init() {
         searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
         favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
+        historyModel = LiveViewModel(roomListType: .history, liveType: .bilibili, appViewModel: appViewModel)
     }
     
     var body: some View {
@@ -33,11 +36,11 @@ struct ContentView: View {
             TabView(selection:$contentVM.selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if appViewModel.favoriteModel.isLoading == true || appViewModel.favoriteModel.cloudKitReady == false {
+                        if appViewModel.favoriteStateModel.isLoading == true || appViewModel.favoriteStateModel.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: appViewModel.favoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                    Image(systemName: appViewModel.favoriteStateModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteStateModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
                                 }
                             )
                             .contentTransition(.symbolEffect(.replace))
@@ -55,7 +58,7 @@ struct ContentView: View {
                     }
                     .tag(1)
                     .environment(appViewModel)
-                    
+
                 
                 SearchRoomView()
                     .tabItem {
@@ -78,6 +81,8 @@ struct ContentView: View {
         .onAppear {
             Task {
                 try await Douyin.getRequestHeaders()
+                appViewModel.historyModel = historyModel
+                appViewModel.favoriteModel = favoriteLiveViewModel
             }
         }
         .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
