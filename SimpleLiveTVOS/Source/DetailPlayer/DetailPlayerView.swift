@@ -11,6 +11,7 @@ import AVKit
 
 
 struct DetailPlayerView: View {
+    
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
     
@@ -18,13 +19,15 @@ struct DetailPlayerView: View {
     
     var body: some View {
         if roomInfoViewModel.currentPlayURL == nil {
-            VStack {
+            VStack(spacing: 10) {
                 ProgressView()
+                    .tint(.white)
                 Text("正在解析直播地址")
-                    .font(.title3)
             }
+            .font(.headline)
+            .foregroundColor(.white)
             .frame(width: 1920, height: 1080)
-            .background(.ultraThickMaterial)
+            .background(.black)
         }else {
             ZStack {
                 KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.option)

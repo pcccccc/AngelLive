@@ -36,10 +36,8 @@ struct LiveCardView: View {
                         liveViewModel.currentRoom = liveViewModel.roomList[index]
                         liveViewModel.selectedRoomListIndex = index
                         if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
-                            if self.liveViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
-                                var watchList = self.liveViewModel.watchList
-                                watchList.insert(self.liveViewModel.currentRoom!, at: 0)
-                                self.liveViewModel.watchList = watchList
+                            if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
+                                appViewModel.historyModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
                             }
                             var enterFromLive = false
                             if liveModel.roomListType == .live {

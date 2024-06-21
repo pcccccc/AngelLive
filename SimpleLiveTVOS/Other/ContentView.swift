@@ -19,13 +19,11 @@ struct ContentView: View {
     var appViewModel = SimpleLiveViewModel()
     var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
-    var historyModel: LiveViewModel
-    
-    
+
     init() {
         searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
         favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
-        historyModel = LiveViewModel(roomListType: .history, liveType: .bilibili, appViewModel: appViewModel)
+
     }
     
     var body: some View {
@@ -81,7 +79,6 @@ struct ContentView: View {
         .onAppear {
             Task {
                 try await Douyin.getRequestHeaders()
-                appViewModel.historyModel = historyModel
                 appViewModel.favoriteModel = favoriteLiveViewModel
             }
         }

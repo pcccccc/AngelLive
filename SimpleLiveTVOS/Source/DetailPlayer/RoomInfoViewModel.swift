@@ -44,11 +44,15 @@ final class RoomInfoViewModel {
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
-    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool) {
+    var roomType: LiveRoomListType
+    var historyList: [LiveModel]?
+    
+    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
+        self.roomType = roomType
         getPlayArgs()
     }
     
@@ -258,6 +262,19 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
         danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingModel.danmuFontSize))
+    }
+    
+    @MainActor func reloadRoom(liveModel: LiveModel) {
+        playerCoordinator.resetPlayer()
+        currentPlayURL = nil
+        disConnectSocket()
+        KSOptions.isAutoPlay = true
+        KSOptions.isSecondOpen = true
+        self.currentRoom = liveModel
+        douyuFirstLoad = true
+        yyFirstLoad = true
+        getPlayArgs()
+//        getDanmuInfo()
     }
 }
 

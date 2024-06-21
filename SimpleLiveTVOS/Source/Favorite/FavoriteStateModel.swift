@@ -28,11 +28,13 @@ class FavoriteStateModel: ObservableObject {
             self.isLoading = true
         }
         do {
-            let roomList = try await CloudSQLManager.searchRecord()
-            withAnimation(.easeInOut(duration: 0.25)) {
-                self.isLoading = false
+            if self.cloudKitReady == true {
+                let roomList = try await CloudSQLManager.searchRecord()
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    self.isLoading = false
+                }
+                self.roomList = roomList
             }
-            self.roomList = roomList
         }catch {
             withAnimation(.easeInOut(duration: 0.25)) {
                 self.cloudKitStateString = CloudSQLManager.formatErrorCode(error: error)

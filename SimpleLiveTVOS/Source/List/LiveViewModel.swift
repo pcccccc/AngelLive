@@ -83,35 +83,6 @@ final class LiveViewModel {
 
     var isLeftFocused: Bool = false
     
-    public var watchList: Array<LiveModel> {
-        get {
-            access(keyPath: \.watchList)
-            let dictionaries = UserDefaults.standard.value(forKey: "SimpleLive.History.WatchList") as? Array<Dictionary<String, String?>>
-            if dictionaries == nil {
-                return []
-            }else {
-                let jsonEncoder = JSONEncoder()
-                if let jsonData = try? jsonEncoder.encode(dictionaries) {
-                    let jsonDecoder = JSONDecoder()
-                    if let decodedArray = try? jsonDecoder.decode([LiveModel].self, from: jsonData) {
-                        return decodedArray
-                    }
-                }
-                return []
-            }
-        }
-        set {
-            withMutation(keyPath: \.watchList) {
-                let jsonEncoder = JSONEncoder()
-                if let jsonData = try? jsonEncoder.encode(newValue) {
-                    if let dictionary = try? JSONSerialization.jsonObject(with: jsonData, options: .allowFragments) as? [String: Any] {
-                        UserDefaults.standard.setValue(dictionary, forKey: "SimpleLive.History.WatchList")
-                    }
-                }
-            }
-        }
-    }
-    
     var loadingText: String = "正在获取内容"
     var searchTypeArray = ["关键词", "链接/分享口令/房间号", "Youtube链接/VideoId"]
     var searchTypeIndex = 0
@@ -269,7 +240,6 @@ final class LiveViewModel {
                             appViewModel.showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
                         }
                     }
-                    print("执行导致页面退出")
                     var fetchedModels: [LiveModel] = []
                     // 使用异步的任务组来并行处理所有的请求
                     var bilibiliModels: [LiveModel] = []
@@ -335,7 +305,7 @@ final class LiveViewModel {
                     }
                 }
             case .history:
-                self.roomList = self.watchList
+                self.roomList = appViewModel.historyModel.watchList
                 for index in 0 ..< self.roomList.count {
                     self.getLastestHistoryRoomInfo(index)
                 }
@@ -374,12 +344,13 @@ final class LiveViewModel {
     }
     
     func createCurrentRoomViewModel(enterFromLive: Bool) {
-        roomInfoViewModel = RoomInfoViewModel(currentRoom: roomList[selectedRoomListIndex], appViewModel: appViewModel, enterFromLive: enterFromLive)
+        roomInfoViewModel = RoomInfoViewModel(currentRoom: roomList[selectedRoomListIndex], appViewModel: appViewModel, enterFromLive: enterFromLive, roomType: roomListType)
+        roomInfoViewModel?.roomList = roomList
     }
     
     
     func deleteHistory(index: Int) {
-        self.watchList.remove(at: index)
+        appViewModel.historyModel.watchList.remove(at: index)
         self.roomList.remove(at: index)
     }
     

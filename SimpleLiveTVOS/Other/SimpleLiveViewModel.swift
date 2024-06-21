@@ -16,7 +16,7 @@ class SimpleLiveViewModel {
     var favoriteStateModel = FavoriteStateModel()
     var danmuSettingModel = DanmuSettingModel()
     var searchModel = SearchViewModel()
-    var historyModel: LiveViewModel?
+    var historyModel = HistoryModel()
     
     var showToast: Bool = false
     var toastTitle: String = ""

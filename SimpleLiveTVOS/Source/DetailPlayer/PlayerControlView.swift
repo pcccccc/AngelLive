@@ -74,6 +74,11 @@ struct PlayerControlView: View {
         startPoint: .top,
         endPoint: .bottom
     )
+    let topTipGradient = LinearGradient(
+        gradient: Gradient(colors: [Color.black.opacity(0.3), Color.black.opacity(0.05)]),
+        startPoint: .top,
+        endPoint: .bottom
+    )
     let bottomGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.1), Color.black.opacity(0.5)]),
         startPoint: .top,
@@ -86,21 +91,27 @@ struct PlayerControlView: View {
         
         ZStack {
             if showTop {
-                VStack(spacing: 20) {
+                VStack(spacing: 50) {
+                    Spacer()
+                        .frame(height: 20)
                     HStack {
                         Spacer()
-                        Button("收藏") {
-                           
+                        if appViewModel.favoriteStateModel.cloudKitReady {
+                            Button("收藏") {
+                               
+                            }
+                            .focused($topState, equals: .section(0))
                         }
-                        .focused($topState, equals: .section(0))
                         Button("历史") {
                             
                         }
                         .focused($topState, equals: .section(1))
-                        Button("分区") {
-                            
+                        if roomInfoModel.roomType == .live {
+                            Button("分区") {
+                                
+                            }
+                            .focused($topState, equals: .section(2))
                         }
-                        .focused($topState, equals: .section(2))
                         Spacer()
                     }
                     .foregroundColor(.white)
@@ -119,7 +130,7 @@ struct PlayerControlView: View {
                         LazyHGrid(rows: [GridItem(.fixed(192))], content: {
                             ForEach(sectionList.indices, id: \.self) { index in
                                 Button {
-                                    changeRoom()
+                                    changeRoom(index)
                                 } label: {
                                     ZStack(alignment: .bottom) {
                                         KFImage(URL(string: sectionList[index].roomCover))
@@ -155,13 +166,12 @@ struct PlayerControlView: View {
                                                     Text(sectionList[index].liveWatchedCount!.formatWatchedCount())
                                                         .font(.system(size: 18))
                                                 }
-                                                
                                                 .foregroundColor(.white)
                                                 .padding([.trailing], 10)
                                             }
                                             .frame(height: 30, alignment: .trailing)
                                         }
-                                        if selectIndex == 2 { // 如果不为直播页面，则展示对应平台和直播状态
+                                        if selectIndex != 2 { // 如果不为直播页面，则展示对应平台和直播状态
                                             HStack {
                                                 Image(uiImage: .init(named: Common.getImage(sectionList[index].liveType))!)
                                                     .resizable()
@@ -193,7 +203,7 @@ struct PlayerControlView: View {
                                     }
                                 }
                                 .frame(width: 320, height: 192)
-                                .buttonStyle(.borderless)
+                                .buttonStyle(.card)
 //                                .focused($state, equals: .listContent(i))
                             }
                         })
@@ -222,10 +232,16 @@ struct PlayerControlView: View {
                         VStack {
                             Spacer()
                                 .frame(height: 15)
-                            Text("下滑切换直播间")
-                                .foregroundStyle(.gray)
+                            Text("下划切换直播间")
+                                .foregroundStyle(.white)
                             Image(systemName: "chevron.compact.down")
-                                .foregroundStyle(.gray)
+                                .foregroundStyle(.white)
+                        }
+                        .background {
+                            Rectangle()
+                                .fill(topTipGradient)
+                                .shadow(radius: 10)
+                                .frame(width: 1920, height: 50)
                         }
                         .shimmering(active: true)
                         Spacer()
@@ -591,8 +607,8 @@ struct PlayerControlView: View {
         return false
     }
     
-    func changeRoom() {
-        
+    @MainActor func changeRoom(_ index: Int) {
+        roomInfoViewModel.reloadRoom(liveModel: sectionList[index])
     }
     
     func changeList(_ index: Int) {
@@ -600,9 +616,22 @@ struct PlayerControlView: View {
         sectionList.removeAll()
         switch index {
             case 0:
-                sectionList.append(contentsOf: appViewModel.favoriteModel?.roomList ?? [])
+                for item in appViewModel.favoriteModel?.roomList ?? [] {
+                    if item.liveState ?? "0" == LiveState.live.rawValue {
+                        sectionList.append(item)
+                    }
+                }
             case 1:
-                sectionList.append(contentsOf: appViewModel.historyModel?.roomList ?? [])
+                Task {
+                    for item in appViewModel.historyModel.watchList {
+                        var varItem = item
+                        let resp = try await ApiManager.getCurrentRoomLiveState(roomId: item.roomId, userId: item.userId, liveType: item.liveType)
+                        varItem.liveState = resp.rawValue
+                        if resp == .live {
+                            sectionList.append(varItem)
+                        }
+                    }
+                }
             case 2:
                 sectionList.append(contentsOf: roomInfoViewModel.roomList)
             default:
