@@ -113,6 +113,12 @@ final class RoomInfoViewModel {
                             self.currentPlayURL = URL(string: liveQuality.url)!
                             currentPlayQualityString = liveQuality.title
                             return
+                        }else {
+                            KSOptions.firstPlayerType = KSMEPlayer.self
+                            KSOptions.secondPlayerType = KSMEPlayer.self
+                            self.currentPlayURL = URL(string: liveQuality.url)!
+                            currentPlayQualityString = liveQuality.title
+                            return
                         }
                     }
                 }
