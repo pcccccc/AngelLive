@@ -191,13 +191,13 @@ class RoomInfoStore: ObservableObject {
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
             switch currentRoom.liveType {
                 case .bilibili:
-                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
                 case .huya:
-                    danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
                 case .douyin:
-                    danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                 case .douyu:
-                    danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
                 default: break
             }
             socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: currentRoom.liveType)

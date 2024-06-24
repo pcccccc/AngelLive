@@ -1,5 +1,4 @@
 {
-  "originHash" : "95934fd5d7a418ba5a5c24b0282e19e1d71af99991d50a791e2b88b2e8e82471",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -83,6 +82,15 @@
       }
     },
     {
+      "identity" : "liveparse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/LiveParse",
+      "state" : {
+        "revision" : "01a51371aa9708dacf6bc752bed902ad1e7d3094",
+        "version" : "1.2.9"
+      }
+    },
+    {
       "identity" : "simpletoast",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sanzaru/SimpleToast.git",
@@ -114,8 +122,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tsolomko/SWCompression",
       "state" : {
-        "revision" : "cd39ca0a3b269173bab06f68b182b72fa690765c",
-        "version" : "4.8.5"
+        "revision" : "390e0b0af8dd19a600005a242a89e570ff482e09",
+        "version" : "4.8.6"
       }
     },
     {
@@ -189,7 +197,16 @@
         "revision" : "3680f532c00d18a168bb8da7b9f8f82fcd89180d",
         "version" : "5.0.5"
       }
+    },
+    {
+      "identity" : "youtubekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/YouTubeKit",
+      "state" : {
+        "revision" : "19f2cd54b564044d2229400cf3828f22a2bd483f",
+        "version" : "0.0.3"
+      }
     }
   ],
-  "version" : 3
+  "version" : 2
 }

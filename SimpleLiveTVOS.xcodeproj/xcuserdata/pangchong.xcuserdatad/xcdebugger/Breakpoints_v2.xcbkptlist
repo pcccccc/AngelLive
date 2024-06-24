@@ -31,7 +31,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "256"
-                  endingLineNumber = "256">
+                  endingLineNumber = "256"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "F4D4DE25-5839-4EC4-ABDD-8B79CEB08DD7 - d3bc8b3cb3d35f84"
@@ -45,7 +46,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "256"
-                  endingLineNumber = "256">
+                  endingLineNumber = "256"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "F4D4DE25-5839-4EC4-ABDD-8B79CEB08DD7 - d3bc8b3cb3d35f84"
@@ -59,7 +61,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "256"
-                  endingLineNumber = "256">
+                  endingLineNumber = "256"
+                  offsetFromSymbolStart = "0">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -91,7 +94,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "259"
-                  endingLineNumber = "259">
+                  endingLineNumber = "259"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "BABB349F-E513-469D-9CA8-B8BFAB7B32E0 - d3bc8b3cb3d35f79"
@@ -105,7 +109,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "259"
-                  endingLineNumber = "259">
+                  endingLineNumber = "259"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "BABB349F-E513-469D-9CA8-B8BFAB7B32E0 - d3bc8b3cb3d35f79"
@@ -119,7 +124,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "259"
-                  endingLineNumber = "259">
+                  endingLineNumber = "259"
+                  offsetFromSymbolStart = "0">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -151,7 +157,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "261"
-                  endingLineNumber = "261">
+                  endingLineNumber = "261"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "76663334-A5E3-4A29-BDF9-6650EA87C6EE - d3bc8b3cb3d35efd"
@@ -165,7 +172,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "263"
-                  endingLineNumber = "263">
+                  endingLineNumber = "263"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "76663334-A5E3-4A29-BDF9-6650EA87C6EE - d3bc8b3cb3d35efd"
@@ -179,7 +187,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "263"
-                  endingLineNumber = "263">
+                  endingLineNumber = "263"
+                  offsetFromSymbolStart = "0">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -211,7 +220,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "243"
-                  endingLineNumber = "243">
+                  endingLineNumber = "243"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "4FB0BBA2-3569-478D-90AE-A7AA87DDA19B - d3bc8b3cb3d35969"
@@ -225,7 +235,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "243"
-                  endingLineNumber = "243">
+                  endingLineNumber = "243"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "4FB0BBA2-3569-478D-90AE-A7AA87DDA19B - d3bc8b3cb3d35969"
@@ -239,7 +250,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "243"
-                  endingLineNumber = "243">
+                  endingLineNumber = "243"
+                  offsetFromSymbolStart = "0">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -271,7 +283,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "241"
-                  endingLineNumber = "241">
+                  endingLineNumber = "241"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "C2BCBFB9-FC2D-4D86-AA89-76A97C0700A2 - d3bc8b3cb3d359f4"
@@ -285,7 +298,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "240"
-                  endingLineNumber = "240">
+                  endingLineNumber = "240"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "C2BCBFB9-FC2D-4D86-AA89-76A97C0700A2 - d3bc8b3cb3d359f4"
@@ -299,7 +313,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "240"
-                  endingLineNumber = "240">
+                  endingLineNumber = "240"
+                  offsetFromSymbolStart = "0">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -331,7 +346,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "85"
-                  endingLineNumber = "85">
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 78d0f095ea557737"
@@ -345,7 +361,8 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "85"
-                  endingLineNumber = "85">
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "0">
                </Location>
                <Location
                   uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - e518908e750c1b0f"
@@ -359,7 +376,68 @@
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "85"
-                  endingLineNumber = "85">
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "0">
+               </Location>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - aa7e5773dc648219"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "1024">
+               </Location>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 60d7c3939cf05bba"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(10) await resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "60">
+               </Location>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - aeeab3bcca2c4539"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(11) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "40">
+               </Location>
+               <Location
+                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 71fa28ca5add7e39"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(20) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
+                  moduleName = "SimpleLiveTVOS"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "85"
+                  endingLineNumber = "85"
+                  offsetFromSymbolStart = "36">
                </Location>
             </Locations>
          </BreakpointContent>
