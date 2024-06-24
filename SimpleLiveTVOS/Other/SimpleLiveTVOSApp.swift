@@ -11,9 +11,11 @@ import LiveParse
 @main
 struct SimpleLiveTVOSApp: App {
     
+    var appViewModel = SimpleLiveViewModel()
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(appViewModel: appViewModel)
         }
     }
 }

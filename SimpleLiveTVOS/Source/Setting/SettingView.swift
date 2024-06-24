@@ -18,6 +18,7 @@ struct SettingView: View {
     @StateObject var settingStore = SettingStore()
     @Environment(SimpleLiveViewModel.self) var appViewModel
     
+    
     var body: some View {
         GeometryReader { geometry in
             HStack {
@@ -49,9 +50,9 @@ struct SettingView: View {
                                     .background(.thinMaterial)
                                     .environment(appViewModel)
                             }else if title == "历史记录" {
-//                                HistoryListView()
-//                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-//                                    .background(.thinMaterial)
+                                HistoryListView(appViewModel: appViewModel)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .background(.thinMaterial)
                             }else if title == "开源许可" {
                                 OpenSourceListView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)

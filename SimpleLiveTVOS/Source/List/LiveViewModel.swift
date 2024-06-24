@@ -10,6 +10,7 @@ import LiveParse
 import SwiftUI
 import Observation
 import Cache
+import SimpleToast
 
 enum LiveRoomListType {
     case live
@@ -20,7 +21,7 @@ enum LiveRoomListType {
 
 
 @Observable
-final class LiveViewModel {
+class LiveViewModel {
     
     let leftMenuMinWidth: CGFloat = 180
     let leftMenuMaxWidth: CGFloat = 300
@@ -92,28 +93,27 @@ final class LiveViewModel {
     
     var appViewModel: SimpleLiveViewModel
     
+    //Toast
+    var showToast: Bool = false
+    var toastTitle: String = ""
+    var toastTypeIsSuccess: Bool = false
+    var toastOptions = SimpleToastOptions(
+        alignment: .topLeading, hideAfter: 1.5
+    )
+    
     init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: SimpleLiveViewModel) {
         self.liveType = liveType
         self.roomListType = roomListType
         self.appViewModel = appViewModel
-
-        switch liveType {
-            case .bilibili: 
-                menuTitleIcon = "bilibili_2"
-            case .douyu:
-                menuTitleIcon = "douyu"
-            case .huya:
-                menuTitleIcon = "huya"
-            case .douyin:
-                menuTitleIcon = "douyin"
-            default: menuTitleIcon = "douyin"
-        }
+        menuTitleIcon = Common.getImage(liveType)
         switch roomListType {
             case .live:
                 Task {
                     await getCategoryList()
                 }
-            case .favorite, .history:
+            case .favorite:
+                getRoomList(index: 0)
+            case .history:
                 getRoomList(index: 0)
             default:
                 break
@@ -237,7 +237,7 @@ final class LiveViewModel {
                     let resList = appViewModel.favoriteStateModel.roomList
                     if resList.count > 0 {
                         if appViewModel.selection == 0 {
-                            appViewModel.showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
+                            showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
                         }
                     }
                     var fetchedModels: [LiveModel] = []
@@ -271,7 +271,7 @@ final class LiveViewModel {
                     
                     if bilibiliModels.count > 0 {
                         if appViewModel.selection == 0 {
-                            appViewModel.showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
+                            showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
                         }
                     }
                     
@@ -306,9 +306,6 @@ final class LiveViewModel {
                 }
             case .history:
                 self.roomList = appViewModel.historyModel.watchList
-                for index in 0 ..< self.roomList.count {
-                    self.getLastestHistoryRoomInfo(index)
-                }
             break
             default:
                 break
@@ -526,5 +523,18 @@ final class LiveViewModel {
                 }
             }
         }
+    }
+    
+
+    
+    //MARK: 操作相关
+    
+    func showToast(_ success: Bool, title: String, hideAfter: TimeInterval? = 1.5) {
+        self.showToast = true
+        self.toastTitle = title
+        self.toastTypeIsSuccess = success
+        self.toastOptions = SimpleToastOptions(
+            alignment: .topLeading, hideAfter: hideAfter
+        )
     }
 }

@@ -1,5 +1,5 @@
 {
-  "originHash" : "dcd6f3085c0e8a932cb90e707cda3b983d140f07eeef76ca98739eefc7d7c3bb",
+  "originHash" : "066911d6c9f9ff4178bab255044a3a6a3bc6166d7d3b9d5dd7812c9be5cc1dae",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -92,6 +92,15 @@
       }
     },
     {
+      "identity" : "liveparse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/LiveParse",
+      "state" : {
+        "revision" : "2926dcc0a7e8bb4df9b8358854d032eb2af1cb2b",
+        "version" : "1.2.8"
+      }
+    },
+    {
       "identity" : "simpletoast",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sanzaru/SimpleToast.git",
@@ -123,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tsolomko/SWCompression",
       "state" : {
-        "revision" : "cd39ca0a3b269173bab06f68b182b72fa690765c",
-        "version" : "4.8.5"
+        "revision" : "390e0b0af8dd19a600005a242a89e570ff482e09",
+        "version" : "4.8.6"
       }
     },
     {

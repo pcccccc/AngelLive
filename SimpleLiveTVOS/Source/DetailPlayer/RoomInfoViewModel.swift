@@ -47,6 +47,14 @@ final class RoomInfoViewModel {
     var roomType: LiveRoomListType
     var historyList: [LiveModel]?
     
+    //Toast
+    var showToast: Bool = false
+    var toastTitle: String = ""
+    var toastTypeIsSuccess: Bool = false
+    var toastOptions = SimpleToastOptions(
+        alignment: .topLeading, hideAfter: 1.5
+    )
+    
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
@@ -219,13 +227,13 @@ final class RoomInfoViewModel {
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
             switch currentRoom.liveType {
                 case .bilibili:
-                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
                 case .huya:
-                    danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
                 case .douyin:
-                    danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                 case .douyu:
-                    danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId)
+                    danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
                 default: break
             }
             socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: currentRoom.liveType)
@@ -254,6 +262,15 @@ final class RoomInfoViewModel {
     func stopTimer() {
         timer.upstream.connect().cancel()
         debugTimerIsActive = false
+    }
+    
+    func showToast(_ success: Bool, title: String, hideAfter: TimeInterval? = 1.5) {
+        self.showToast = true
+        self.toastTitle = title
+        self.toastTypeIsSuccess = success
+        self.toastOptions = SimpleToastOptions(
+            alignment: .topLeading, hideAfter: hideAfter
+        )
     }
 }
 

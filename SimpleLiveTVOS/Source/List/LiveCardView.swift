@@ -50,7 +50,7 @@ struct LiveCardView: View {
                         }else {
                             DispatchQueue.main.async {
                                 isLive = false
-                                appViewModel.showToast(false, title: "主播已经下播")
+                                liveViewModel.showToast(false, title: "主播已经下播")
                             }
                         }
                     } label: {
@@ -153,9 +153,9 @@ struct LiveCardView: View {
                                             liveViewModel.roomList.remove(at: index)
                                         }
                                     }
-                                    appViewModel.showToast(true, title:"取消收藏成功")
+                                    liveViewModel.showToast(true, title:"取消收藏成功")
                                 }catch {
-                                    appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                    liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                 }
                             }
                         })
@@ -176,9 +176,9 @@ struct LiveCardView: View {
                                                 liveViewModel.roomList.remove(at: index)
                                             }
                                         }
-                                        appViewModel.showToast(true, title:"取消收藏成功")
+                                        liveViewModel.showToast(true, title:"取消收藏成功")
                                     }catch {
-                                        appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -193,9 +193,9 @@ struct LiveCardView: View {
                                 Task {
                                     do {
                                         try await appViewModel.favoriteStateModel.addFavorite(room: liveViewModel.currentRoom!)
-                                        appViewModel.showToast(true, title:"收藏成功")
+                                        liveViewModel.showToast(true, title:"收藏成功")
                                     }catch {
-                                        appViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -258,8 +258,16 @@ struct LiveCardView: View {
                 return "live_card_douyu"
             case .huya:
                 return "live_card_huya"
-            default:
+            case .douyin:
                 return "live_card_douyin"
+            case .yy:
+                return "live_card_yy"
+            case .cc:
+                return "live_card_cc"
+            case .ks:
+                return "live_card_ks"
+            case .youtube:
+                return "live_card_youtube"
         }
     }
 }

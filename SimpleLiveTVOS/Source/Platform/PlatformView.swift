@@ -47,7 +47,7 @@ struct PlatformView: View {
                                         .resizable()
                                         .frame(width: 320, height: 192)
                                     Text(platformViewModel.platformInfo[index].descripiton)
-                                        .font(.system(size: 25))
+                                        .font(.body)
                                         .multilineTextAlignment(.leading)
                                         .padding([.leading, .trailing], 15)
                                         .padding(.top, 50)

@@ -20,7 +20,7 @@ struct FavoriteMainView: View {
     
     var body: some View {
         
-        @Bindable var appModel = appViewModel
+        @Bindable var liveModel = liveViewModel
         
         VStack {
             if appViewModel.favoriteStateModel.cloudKitReady {
@@ -52,46 +52,17 @@ struct FavoriteMainView: View {
                     .font(.title3)
             }
         }
-//        .overlay {
-//            VStack(alignment: .leading) {
-//                Spacer()
-//                HStack {
-//                    VStack(alignment: .leading) {
-//                        VStack {
-//                            Text("收藏方式")
-//                            Button {
-//                                
-//                            } label: {
-//                                Text("iCloud")
-//                                    .frame(alignment: .leading)
-//                            }
-//                            Button {
-//                                
-//                            } label: {
-//                                Text("SimpleLiveCloud")
-//                                    .frame(alignment: .leading)
-//                                    
-//                            }
-//                            .frame(alignment: .leading)
-//                        }
-//                        Button {
-//                            
-//                        } label: {
-//                            Image(systemName: "chevron.backward.circle.fill")
-//                                .frame(width: 30, height: 30)
-//                            Text("菜单")
-//                                .padding(.leading, -30)
-//                        }
-//                    }
-//                    .background(.red)
-//                    Spacer()
-//                }
-//                .padding([.leading, .bottom], 20)
-//            }
-//            .frame(width: 1920, height: 1080)
-//            .edgesIgnoringSafeArea(.all)
-//            .background(.green)
-//        }
+        .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                    .font(.headline.bold())
+                Text(liveModel.toastTitle)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(Color.white)
+            .cornerRadius(10)
+        }
         .onPlayPauseCommand(perform: {
             liveViewModel.getRoomList(index: 1)
         })

@@ -26,7 +26,7 @@ enum PlayControlFocusableField: Hashable {
 
 enum PlayControlTopField: Hashable {
     case section(Int)
-    case list
+    case list(Int)
 }
 
 
@@ -92,131 +92,148 @@ struct PlayerControlView: View {
         ZStack {
             if showTop {
                 VStack(spacing: 50) {
-                    Spacer()
-                        .frame(height: 20)
-                    HStack {
-                        Spacer()
-                        if appViewModel.favoriteStateModel.cloudKitReady {
-                            Button("收藏") {
-                               
+                    VStack {
+                        HStack {
+                            Spacer()
+                            if appViewModel.favoriteStateModel.cloudKitReady {
+                                Button("收藏") {
+                                   
+                                }
+                                .focused($topState, equals: .section(0))
                             }
-                            .focused($topState, equals: .section(0))
-                        }
-                        Button("历史") {
-                            
-                        }
-                        .focused($topState, equals: .section(1))
-                        if roomInfoModel.roomType == .live {
-                            Button("分区") {
+                            Button("历史") {
                                 
                             }
-                            .focused($topState, equals: .section(2))
+                            .focused($topState, equals: .section(1))
+                            if roomInfoModel.roomType == .live {
+                                Button("分区") {
+                                    
+                                }
+                                .focused($topState, equals: .section(2))
+                            }
+                            Spacer()
                         }
+
+                        .foregroundColor(.white)
+                        .buttonStyle(.plain)
+                        .focusSection()
+                        .onChange(of: topState) { oldValue, newValue in
+                            switch newValue {
+                                case .section(let index):
+                                    changeList(index)
+                                default:
+                                    break
+                            }
+                        }
+                        
+                        ScrollView(.horizontal) {
+                            LazyHGrid(rows: [GridItem(.fixed(192))], content: {
+                                ForEach(sectionList.indices, id: \.self) { index in
+                                    VStack {
+                                        Button {
+                                            changeRoom(index)
+                                        } label: {
+                                            ZStack(alignment: .bottom) {
+                                                KFImage(URL(string: sectionList[index].roomCover))
+                                                    .placeholder {
+                                                        Image("placeholder")
+                                                            .resizable()
+                                                            .frame(width: 320, height: 210)
+                                                    }
+                                                    .resizable()
+                                                    .frame(width: 320, height: 210)
+                                                    .blur(radius: 10)
+                                                KFImage(URL(string: sectionList[index].roomCover))
+                                                    .placeholder {
+                                                        Image("placeholder")
+                                                            .resizable()
+                                                            .frame(width: 320, height: 210)
+                                                    }
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .frame(height: 210)
+                                                    .background(.thinMaterial)
+                                                Rectangle()
+        //                                        .fill(gradient)
+                                                .shadow(radius: 10)
+                                                .frame(height: 40)
+                                                if sectionList[index].liveWatchedCount != nil {
+                                                    HStack {
+                                                        Spacer()
+                                                        HStack(spacing: 5) {
+                                                            Image(systemName: "eye")
+                                                                .font(.system(size: 14))
+                                                            Text(sectionList[index].liveWatchedCount!.formatWatchedCount())
+                                                                .font(.system(size: 18))
+                                                        }
+                                                        .foregroundColor(.white)
+                                                        .padding([.trailing], 10)
+                                                    }
+                                                    .frame(height: 30, alignment: .trailing)
+                                                }
+                                                if selectIndex != 2 { // 如果不为直播页面，则展示对应平台和直播状态
+                                                    HStack {
+                                                        Image(uiImage: .init(named: Common.getImage(sectionList[index].liveType))!)
+                                                            .resizable()
+                                                            .frame(width: 40, height: 40)
+                                                            .cornerRadius(5)
+                                                            .padding(.top, 5)
+                                                            .padding(.leading, 5)
+                                                        Spacer()
+                                                        HStack(spacing: 5) {
+                                                            HStack(spacing: 5) {
+                                                                Circle()
+                                                                    .fill(LiveState(rawValue: sectionList[index].liveState ?? "3") == .live ? Color.green : Color.gray)
+                                                                    .frame(width: 10, height: 10)
+                                                                    .padding(.leading, 5)
+                                                                Text(sectionList[index].liveStateFormat())
+                                                                    .font(.system(size: 18))
+                                                                    .foregroundColor(Color.white)
+                                                                    .padding(.trailing, 5)
+                                                                    .padding(.top, 5)
+                                                                    .padding(.bottom, 5)
+                                                            }
+                                                            .background(Color("favorite_right_hint"))
+                                                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                                                        }
+                                                        .padding(.trailing, 5)
+                                                    }
+                                                    .padding(.bottom, 165)
+                                                }
+                                            }
+                                        }
+                                        .buttonStyle(.card)
+                                        .focused($topState, equals: .list(index))
+                                        .padding(.leading, 15)
+                                        Text("\(sectionList[index].userName) - \(sectionList[index].roomTitle)")
+                                            .font(.system(size: 22))
+                                            .opacity(topState == .list(index) ? 1 : 0)
+                                            .transition(.opacity)
+                                            .frame(width: 360)
+                                            .foregroundColor(.white)
+                                            .padding(.leading, 15)
+                                            .padding(.top, 10)
+                                            .animation(.easeInOut(duration: 0.25), value: topState == .list(index))
+        //                                .focused($state, equals: .listContent(i))
+                                    }
+                                    
+                                }
+                            })
+                            .padding()
+                        }
+                        .frame(height: 192)
+                        .padding([.leading, .trailing], 55)
+                        .padding(.top, 80)
+                        .scrollClipDisabled()
+                        .focusSection()
                         Spacer()
                     }
-                    .foregroundColor(.white)
-                    .buttonStyle(.plain)
-                    .focusSection()
-                    .onChange(of: topState) { oldValue, newValue in
-                        switch newValue {
-                            case .section(let index):
-                                changeList(index)
-                            default:
-                                break
-                        }
-                    }
-                    
-                    ScrollView(.horizontal) {
-                        LazyHGrid(rows: [GridItem(.fixed(192))], content: {
-                            ForEach(sectionList.indices, id: \.self) { index in
-                                Button {
-                                    changeRoom(index)
-                                } label: {
-                                    ZStack(alignment: .bottom) {
-                                        KFImage(URL(string: sectionList[index].roomCover))
-                                            .placeholder {
-                                                Image("placeholder")
-                                                    .resizable()
-                                                    .frame(height: 210)
-                                            }
-                                            .resizable()
-                                            .frame(height: 210)
-                                            .blur(radius: 10)
-                                        KFImage(URL(string: sectionList[index].roomCover))
-                                            .placeholder {
-                                                Image("placeholder")
-                                                    .resizable()
-                                                    .frame(height: 210)
-                                            }
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                            .frame(height: 210)
-                                            .background(.thinMaterial)
-                                            
-                                        Rectangle()
-//                                        .fill(gradient)
-                                        .shadow(radius: 10)
-                                        .frame(height: 40)
-                                        if sectionList[index].liveWatchedCount != nil {
-                                            HStack {
-                                                Spacer()
-                                                HStack(spacing: 5) {
-                                                    Image(systemName: "eye")
-                                                        .font(.system(size: 14))
-                                                    Text(sectionList[index].liveWatchedCount!.formatWatchedCount())
-                                                        .font(.system(size: 18))
-                                                }
-                                                .foregroundColor(.white)
-                                                .padding([.trailing], 10)
-                                            }
-                                            .frame(height: 30, alignment: .trailing)
-                                        }
-                                        if selectIndex != 2 { // 如果不为直播页面，则展示对应平台和直播状态
-                                            HStack {
-                                                Image(uiImage: .init(named: Common.getImage(sectionList[index].liveType))!)
-                                                    .resizable()
-                                                    .frame(width: 40, height: 40)
-                                                    .cornerRadius(5)
-                                                    .padding(.top, 5)
-                                                    .padding(.leading, 5)
-                                                Spacer()
-                                                HStack(spacing: 5) {
-                                                    HStack(spacing: 5) {
-                                                        Circle()
-                                                            .fill(LiveState(rawValue: sectionList[index].liveState ?? "3") == .live ? Color.green : Color.gray)
-                                                            .frame(width: 10, height: 10)
-                                                            .padding(.leading, 5)
-                                                        Text(sectionList[index].liveStateFormat())
-                                                            .font(.system(size: 18))
-                                                            .foregroundColor(Color.white)
-                                                            .padding(.trailing, 5)
-                                                            .padding(.top, 5)
-                                                            .padding(.bottom, 5)
-                                                    }
-                                                    .background(Color("favorite_right_hint"))
-                                                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                                                }
-                                                .padding(.trailing, 5)
-                                            }
-                                            .padding(.bottom, 165)
-                                        }
-                                    }
-                                }
-                                .frame(width: 320, height: 192)
-                                .buttonStyle(.card)
-//                                .focused($state, equals: .listContent(i))
-                            }
-                        })
-                    }
-                    
-                    .frame(height: 192)
-                    .padding([.leading, .trailing], 55)
-                    .scrollClipDisabled()
-                    .focusSection()
-                    
+                    .background(.black.opacity(0.6))
+                    .frame(height: 390)
                     Spacer()
                 }
                 .frame(width: 1920)
+                .padding(.top, 30)
                 .buttonStyle(.plain)
                 .transition(.move(edge: .top))
                 .onExitCommand(perform: {
@@ -496,12 +513,12 @@ struct PlayerControlView: View {
         if appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
                 try await appViewModel.favoriteStateModel.addFavorite(room: roomInfoViewModel.currentRoom)
-                appViewModel.showToast(true, title: "收藏成功")
+//                roomInfoViewModel.showToast(true, title: "收藏成功")
             }
         }else {
             Task {
                 try await  appViewModel.favoriteStateModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
-                appViewModel.showToast(true, title: "取消收藏成功")
+//                roomInfoViewModel.showToast(true, title: "取消收藏成功")
             }
         }
     }
@@ -557,7 +574,6 @@ struct PlayerControlView: View {
                     roomInfoViewModel.playerCoordinator.playerLayer?.play()
                 }
             }
-            
         }
     }
     

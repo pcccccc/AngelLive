@@ -16,14 +16,14 @@ import Darwin
 
 struct ContentView: View {
     
-    var appViewModel = SimpleLiveViewModel()
+    var appViewModel: SimpleLiveViewModel
     var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
 
-    init() {
-        searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
-        favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
-
+    init(appViewModel: SimpleLiveViewModel) {
+        self.appViewModel = appViewModel
+        self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
+        self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
     }
     
     var body: some View {
@@ -82,24 +82,18 @@ struct ContentView: View {
                 appViewModel.favoriteModel = favoriteLiveViewModel
             }
         }
-        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
-            VStack(alignment: .leading) {
-                Label("提示", systemImage: appViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
-                    .font(.headline.bold())
-                Text(appViewModel.toastTitle)
-            }
-            .padding()
-            .background(.black.opacity(0.6))
-            .foregroundColor(Color.white)
-            .cornerRadius(10)
-        }
-    }
-}
-
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+        
+//        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
+//            VStack(alignment: .leading) {
+//                Label("提示", systemImage: appViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+//                    .font(.headline.bold())
+//                Text(appViewModel.toastTitle)
+//            }
+//            .padding()
+//            .background(.black.opacity(0.6))
+//            .foregroundColor(Color.white)
+//            .cornerRadius(10)
+//        }
     }
 }
 

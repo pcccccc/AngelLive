@@ -19,6 +19,7 @@ struct SearchRoomView: View {
     var body: some View {
         
         @Bindable var appModel = appViewModel
+        @Bindable var liveModel = liveViewModel
         
         VStack {
             Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
@@ -65,6 +66,20 @@ struct SearchRoomView: View {
                 .safeAreaPadding(.top, 50)
             }
         }
+        .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                    .font(.headline.bold())
+                Text(liveModel.toastTitle)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(Color.white)
+            .cornerRadius(10)
+        }
+        .onPlayPauseCommand(perform: {
+            liveViewModel.getRoomList(index: 1)
+        })
     }
 }
 

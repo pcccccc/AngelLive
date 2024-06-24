@@ -55,6 +55,10 @@ struct IndicatorMenuView: View {
                     .resizable()
             } else {
                 KFImage(URL(string: icon))
+                    .placeholder {
+                        Image(liveViewModel.menuTitleIcon)
+                            .resizable()
+                    }
                     .resizable()
             }
         }
