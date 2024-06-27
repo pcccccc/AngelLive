@@ -218,7 +218,7 @@ class LiveViewModel {
                     Task {
                         var finalSubListCategory = subListCategory
                         if liveType == .yy {
-                            finalSubListCategory?.id = self.categories.first!.biz ?? ""
+                            finalSubListCategory?.id = self.selectedMainListCategory?.biz ?? ""
                             finalSubListCategory?.parentId = subListCategory?.biz ?? ""
                         }
                         let roomList  = try await ApiManager.fetchRoomList(liveCategory: finalSubListCategory!, page: self.roomPage, liveType: liveType)
