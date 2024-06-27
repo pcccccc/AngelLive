@@ -36,14 +36,14 @@ struct SearchRoomView: View {
             }
             TextField("搜索", text: $appModel.searchModel.searchText)
             .onSubmit {
-                if liveViewModel.searchTypeIndex == 0 {
+                if appModel.searchModel.searchTypeIndex == 0 {
                     liveViewModel.roomPage = 1
                     Task {
-                        await liveViewModel.searchRoomWithText(text: liveViewModel.searchText)
+                        await liveViewModel.searchRoomWithText(text: appModel.searchModel.searchText)
                     }
                 }else {
                     liveViewModel.roomPage = 1
-                    liveViewModel.searchRoomWithShareCode(text: liveViewModel.searchText)
+                    liveViewModel.searchRoomWithShareCode(text: appModel.searchModel.searchText)
                 }
                 
             }
