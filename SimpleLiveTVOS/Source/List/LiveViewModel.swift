@@ -72,12 +72,11 @@ class LiveViewModel {
     }
     var roomList: [LiveModel] = []
     var favoriteRoomList: [LiveModel] = []
-    var currentRoom: LiveModel?
-    /*{
-     didSet {
-         currentRoomIsFavorited = favoriteModel.roomList.contains { $0.roomId == currentRoom!.roomId }
+    var currentRoom: LiveModel? {
+         didSet {
+             currentRoomIsFavorited = (appViewModel.favoriteModel?.roomList ?? []).contains { $0.roomId == currentRoom!.roomId }
+         }
      }
-     }*/
     
     //当前选择房间ViewModel
     var roomInfoViewModel: RoomInfoViewModel?
@@ -390,7 +389,7 @@ class LiveViewModel {
     func searchRoomWithShareCode(text: String) {
         isLoading = true
         self.roomList.removeAll()
-        if self.searchTypeIndex == 2 {
+        if self.appViewModel.searchModel.searchTypeIndex == 2 {
             Task {
                 do {
                     let u2bResRoom = try await YoutubeParse.getRoomInfoFromShareCode(shareCode: text)

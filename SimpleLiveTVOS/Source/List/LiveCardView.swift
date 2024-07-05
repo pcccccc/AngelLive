@@ -121,6 +121,13 @@ struct LiveCardView: View {
                                     }
                                     .padding(.trailing, 5)
                                 }
+                                .onAppear {
+                                    Task {
+                                        if liveViewModel.roomList[index].liveState == "" {
+                                            liveViewModel.roomList[index].liveState = try await ApiManager.getCurrentRoomLiveState(roomId: liveViewModel.roomList[index].roomId, userId: liveViewModel.roomList[index].userId, liveType: liveViewModel.roomList[index].liveType).rawValue
+                                        }
+                                    }
+                                }
                                 .padding(.bottom, 165)
                             }
                         }
@@ -176,7 +183,9 @@ struct LiveCardView: View {
                                                 liveViewModel.roomList.remove(at: index)
                                             }
                                         }
+                                        appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
                                         liveViewModel.showToast(true, title:"取消收藏成功")
+                                        liveViewModel.currentRoomIsFavorited = false
                                     }catch {
                                         liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
@@ -194,6 +203,8 @@ struct LiveCardView: View {
                                     do {
                                         try await appViewModel.favoriteStateModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
+                                        appViewModel.favoriteModel?.roomList.append(liveViewModel.currentRoom!)
+                                        liveViewModel.currentRoomIsFavorited = true
                                     }catch {
                                         liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }

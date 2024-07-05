@@ -19,3 +19,4 @@ struct SimpleLiveTVOSApp: App {
         }
     }
 }
+

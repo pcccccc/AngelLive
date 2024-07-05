@@ -93,6 +93,8 @@ class ApiManager {
                 return try await KuaiShou.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
             case .yy:
                 return try await YY.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+            case .youtube:
+                return try await YoutubeParse.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
             default:
                 return try await Bilibili.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
         }

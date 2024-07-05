@@ -249,17 +249,17 @@ struct PlayerControlView: View {
                         VStack {
                             Spacer()
                                 .frame(height: 15)
-                            Text("下划切换直播间")
+                            Text("下滑切换直播间")
                                 .foregroundStyle(.white)
                             Image(systemName: "chevron.compact.down")
                                 .foregroundStyle(.white)
                         }
-                        .background {
-                            Rectangle()
-                                .fill(topTipGradient)
-                                .shadow(radius: 10)
-                                .frame(width: 1920, height: 50)
-                        }
+//                        .background {
+//                            Rectangle()
+//                                .fill(topTipGradient)
+//                                .shadow(radius: 10)
+//                                .frame(width: 1920, height: 50)
+//                        }
                         .shimmering(active: true)
                         Spacer()
                     }
@@ -347,8 +347,8 @@ struct PlayerControlView: View {
                             Button(action: {
                                 favoriteBtnAction()
                             }, label: {
-                                Image(systemName: appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) ? "heart.fill" : "heart")
-                                    .foregroundColor(.white)
+                                Image(systemName: (appViewModel.favoriteModel?.roomList ?? []).contains(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId }) ? "heart.fill" : "heart")
+                                    .foregroundColor((appViewModel.favoriteModel?.roomList ?? []).contains(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId }) ? .red : .white)
                                     .font(.system(size: 30, weight: .bold))
                                     .frame(width: 40, height: 40)
                                     .padding(.top, 3)
@@ -401,6 +401,7 @@ struct PlayerControlView: View {
                                                             }
                                                         })
                                                     } label: {
+
                                                         Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
                                                     }
                                                 }
@@ -431,7 +432,7 @@ struct PlayerControlView: View {
                         
                         VStack {
                             Button(action: {
-                                
+                                danmuAction()
                             }, label: {
                                 Image(appViewModel.danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
                                     .resizable()
@@ -479,7 +480,6 @@ struct PlayerControlView: View {
             showControl = true
         }
         .onChange(of: state, { oldValue, newValue in
-            
             if showControl == false {
                 showControl.toggle()
             }else {
@@ -489,9 +489,6 @@ struct PlayerControlView: View {
             if oldValue != .list && isListContentField(oldValue) == false && oldValue != nil {
                 lastOptionState = oldValue
             }
-            print(lastOptionState)
-            print(state)
-            
             if newValue == .left {
                 state = .danmu
             }else if newValue == .right {
@@ -502,7 +499,6 @@ struct PlayerControlView: View {
                     state = .listContent(0)
                 }
             }
-            
         })
         .onPlayPauseCommand(perform: {
             playPauseAction()
@@ -513,18 +509,19 @@ struct PlayerControlView: View {
         if appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
                 try await appViewModel.favoriteStateModel.addFavorite(room: roomInfoViewModel.currentRoom)
-//                roomInfoViewModel.showToast(true, title: "收藏成功")
+                appViewModel.favoriteModel?.roomList.append(roomInfoViewModel.currentRoom)
+                roomInfoViewModel.showToast(true, title: "收藏成功")
             }
         }else {
             Task {
                 try await  appViewModel.favoriteStateModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
-//                roomInfoViewModel.showToast(true, title: "取消收藏成功")
+                appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId })
+                roomInfoViewModel.showToast(true, title: "取消收藏成功")
             }
         }
     }
     
     func startTimer() {
-        
         contolTimer?.invalidate() // 停止之前的计时器
         contolTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             print(controlViewOptionSecond)
