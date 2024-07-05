@@ -1,4 +1,5 @@
 {
+  "originHash" : "44aef451d1057e5ed9091ef58ee90792b37f267df68d037fe732824aab211364",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -86,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "01a51371aa9708dacf6bc752bed902ad1e7d3094",
-        "version" : "1.2.9"
+        "revision" : "32055420e99c62d2520f054b480881aa82a1cf0e",
+        "version" : "1.3.2"
       }
     },
     {
@@ -208,5 +209,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

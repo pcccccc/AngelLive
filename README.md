@@ -24,17 +24,20 @@
 
 tvOS 17+ 
 
-## 功能：
+## 各平台功能概览：
 
-* [x] 观看直播
+|  平台   | 分类列表 | 房间列表 | 地址解析 | 搜索 | 分享码/链接 | 观看弹幕（评论） |
+| :-----: | :------: | :------: | :------: | :--: | :---------: | :--------------: |
+| B站直播 |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
+|  斗鱼   |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
+|  虎牙   |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
+|  抖音   |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
+|  快手   |    ✅     |    ✅     |    ✅     |  ❌   |      ✅      |        ❌         |
+|   YY    |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ❌         |
+| 网易CC  |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ❌         |
+| Youtube |    ❌     |    ❌     |    ✅     |  ❌   |      ✅      |        ❌         |
 
-* [x] 切换线路/清晰度
 
-* [x] 弹幕
-
-* [x] 收藏（iCloud）
-
-* [x] 支持关键词/房间号/平台长短链接/分享码 搜索直播间
 
 ## 参考&引用：
 
@@ -68,16 +71,12 @@ tvOS 17+
 
 [AcknowList](https://github.com/vtourraine/AcknowList)
 
+[YouTubeKit](https://github.com/alexeichhorn/YouTubeKit)
+
 
 ## 特别感谢：
 
 感谢以上开源仓库作者为开发者做出的贡献。
-
----
-
-Dazzle开发者: Groot 、Trunip Player开发者: 萝卜 
-
-感谢以上开发者给予软件改版中的指导和支持。
 
 ---
 
@@ -88,6 +87,10 @@ Dazzle开发者: Groot 、Trunip Player开发者: 萝卜
 <a href="https://jb.gg/OpenSourceSupport" target="_blank"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo (Main) logo." width="150"></a>
 
 感谢JetBrains提供开源许可，在此表达我的感谢。
+
+## 支持：
+
+[爱发电](https://afdian.net/a/laopc)
 
 ## 免责声明：
 
