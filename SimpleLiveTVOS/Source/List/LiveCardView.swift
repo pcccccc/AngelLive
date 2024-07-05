@@ -9,48 +9,48 @@ import SwiftUI
 import Kingfisher
 import KSPlayer
 import LiveParse
+import Observation
 
 struct LiveCardView: View {
-    @EnvironmentObject var liveViewModel: LiveStore
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    
+    @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     @State var index: Int
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
-    
-    let gradient = LinearGradient(
-        gradient: Gradient(colors: [Color.black.opacity(0.05), Color.black.opacity(0.3)]),
-        startPoint: .top,
-        endPoint: .bottom
-    )
+
+    let gradient = LinearGradient(stops: [
+        .init(color: .black.opacity(0.5), location: 0.0),
+        .init(color: .black.opacity(0.25), location: 0.45),
+        .init(color: .black.opacity(0), location: 0.8)
+    ], startPoint: .bottom, endPoint: .top)
     
     var body: some View {
+        
+        @Bindable var liveModel = liveViewModel
+        
         if index < liveViewModel.roomList.count {
             VStack(alignment: .leading, spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
                     Button {
                         liveViewModel.currentRoom = liveViewModel.roomList[index]
                         liveViewModel.selectedRoomListIndex = index
-                        Task {
-                            do {
-                                if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
-                                    if self.liveViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
-                                        self.liveViewModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
-                                    }
-                                    liveViewModel.createCurrentRoomViewModel()
-                                    DispatchQueue.main.async {
-                                        isLive = true
-                                    }
-                                }else {
-                                    DispatchQueue.main.async {
-                                        isLive = false
-                                        liveViewModel.showToast(false, title: "主播已经下播")
-                                    }
-                                }
-                            }catch {
-                                DispatchQueue.main.async {
-                                    isLive = false
-                                    liveViewModel.showToast(false, title: "主播已经下播")
-                                }
+                        if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
+                            if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
+                                appViewModel.historyModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+                            }
+                            var enterFromLive = false
+                            if liveModel.roomListType == .live {
+                                enterFromLive = true
+                            }
+                            liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)
+                            DispatchQueue.main.async {
+                                isLive = true
+                            }
+                        }else {
+                            DispatchQueue.main.async {
+                                isLive = false
+                                liveViewModel.showToast(false, title: "主播已经下播")
                             }
                         }
                     } label: {
@@ -63,11 +63,22 @@ struct LiveCardView: View {
                                 }
                                 .resizable()
                                 .frame(height: 210)
+                                .blur(radius: 10)
+                            KFImage(URL(string: liveViewModel.roomList[index].roomCover))
+                                .placeholder {
+                                    Image("placeholder")
+                                        .resizable()
+                                        .frame(height: 210)
+                                }
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(height: 210)
+                                .background(.thinMaterial)
                                 
                             Rectangle()
                             .fill(gradient)
                             .shadow(radius: 10)
-                            .frame(height: 30)
+                            .frame(height: 40)
                             if liveViewModel.roomList[index].liveWatchedCount != nil {
                                 HStack {
                                     Spacer()
@@ -124,20 +135,19 @@ struct LiveCardView: View {
                                 case .mainContent(let index):
                                     liveViewModel.selectedRoomListIndex = index
                                     if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search  {
-                                        if index >= liveViewModel.roomList.count - 4 { //如果小于4 就尝试刷新。
+                                        if index >= liveViewModel.roomList.count - 4 && liveModel.roomListType != .favorite { //如果小于4 就尝试刷新。
                                             liveViewModel.roomPage += 1
                                         }
                                     }
-                                case .leftMenu(let index): break
                                 default: break
                             }
                         }
                     })
-                    .alert("提示", isPresented: $liveViewModel.showAlert) {
+                    .alert("提示", isPresented: $liveModel.showAlert) {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
                                             liveViewModel.roomList.remove(at: index)
@@ -145,7 +155,7 @@ struct LiveCardView: View {
                                     }
                                     liveViewModel.showToast(true, title:"取消收藏成功")
                                 }catch {
-                                    liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
+                                    liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                 }
                             }
                         })
@@ -160,7 +170,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await favoriteStore.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
                                                 liveViewModel.roomList.remove(at: index)
@@ -168,7 +178,7 @@ struct LiveCardView: View {
                                         }
                                         liveViewModel.showToast(true, title:"取消收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -182,10 +192,10 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await favoriteStore.addFavorite(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.favoriteStateModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
                                     }catch {
-                                        liveViewModel.showToast(false, title:favoriteStore.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -207,13 +217,15 @@ struct LiveCardView: View {
                         }
                     })
                     .fullScreenCover(isPresented: $isLive, content: {
-                        DetailPlayerView(didExitView: { isLive, hint in
-                            self.isLive = isLive
-                        })
-                        .environmentObject(liveViewModel.roomInfoViewModel ?? RoomInfoStore(currentRoom: LiveModel(userName: "", roomTitle: "", roomCover: "", userHeadImg: "", liveType: .bilibili, liveState: "", userId: "", roomId: "", liveWatchedCount: "")))
-                        .environmentObject(favoriteStore)
-                        .edgesIgnoringSafeArea(.all)
-                        .frame(width: 1920, height: 1080)
+                        if liveViewModel.roomInfoViewModel != nil {
+                            DetailPlayerView { isLive, hint in
+                                self.isLive = isLive
+                            }
+                            .environment(liveViewModel.roomInfoViewModel!)
+                            .environment(appViewModel)
+                            .edgesIgnoringSafeArea(.all)
+                            .frame(width: 1920, height: 1080)
+                        }
                     })
                 })
                 HStack(spacing: 15) {
@@ -234,9 +246,6 @@ struct LiveCardView: View {
                 .animation(.easeInOut(duration: 0.25), value: focusState == .mainContent(index))
                 .frame(height: 50)
             })
-            .onAppear {
-                liveViewModel.favoriteStore = favoriteStore
-            }
         }
         
     }
@@ -249,8 +258,16 @@ struct LiveCardView: View {
                 return "live_card_douyu"
             case .huya:
                 return "live_card_huya"
-            default:
+            case .douyin:
                 return "live_card_douyin"
+            case .yy:
+                return "live_card_yy"
+            case .cc:
+                return "live_card_cc"
+            case .ks:
+                return "live_card_ks"
+            case .youtube:
+                return "live_card_youtube"
         }
     }
 }

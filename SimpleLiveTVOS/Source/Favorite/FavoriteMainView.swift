@@ -10,20 +10,20 @@ import Kingfisher
 import SimpleToast
 import LiveParse
 import Shimmer
+import TipKit
 
 struct FavoriteMainView: View {
     
-    @StateObject var liveViewModel: LiveStore
     @FocusState var focusState: Int?
-    @EnvironmentObject var favoriteStore: FavoriteStore
-    
-    init() {
-        self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .favorite, liveType: .bilibili))
-    }
+    @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     
     var body: some View {
+        
+        @Bindable var liveModel = liveViewModel
+        
         VStack {
-            if favoriteStore.cloudKitReady {
+            if appViewModel.favoriteStateModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text("暂无喜欢的主播哦，请先去添加吧～")
                         .font(.title3)
@@ -32,8 +32,8 @@ struct FavoriteMainView: View {
                         LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
                             ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                                 LiveCardView(index: index)
-                                    .environmentObject(liveViewModel)
-                                    .environmentObject(favoriteStore)
+                                    .environment(liveViewModel)
+                                    .environment(appViewModel)
                                     .frame(width: 370, height: 240)
                             }
                             if liveViewModel.isLoading {
@@ -48,25 +48,23 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(favoriteStore.cloudKitStateString)
+                Text(appViewModel.favoriteStateModel.cloudKitStateString)
                     .font(.title3)
             }
         }
+        .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                    .font(.headline.bold())
+                Text(liveModel.toastTitle)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(Color.white)
+            .cornerRadius(10)
+        }
         .onPlayPauseCommand(perform: {
-            favoriteStore.fetchFavoriteRoomList()
-            liveViewModel.roomPage = 1
+            liveViewModel.getRoomList(index: 1)
         })
-        .task {
-            favoriteStore.fetchFavoriteRoomList()
-            liveViewModel.roomPage = 1
-        }
-        .simpleToast(isPresented: $liveViewModel.showToast, options: liveViewModel.toastOptions) {
-            Label(liveViewModel.toastTitle, systemImage: liveViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
-                .padding()
-                .background(liveViewModel.toastTypeIsSuccess ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-                .foregroundColor(Color.white)
-                .cornerRadius(10)
-                .padding(.top)
-        }
     }
 }

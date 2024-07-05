@@ -13,7 +13,7 @@ import ColorfulX
 
 struct LeftMenu: View {
     
-    @EnvironmentObject var liveViewModel: LiveStore
+    @Environment(LiveViewModel.self) var liveViewModel
     @State var colors: [Color] = ColorfulPreset.winter.colors
     @State var speed = 0.5
     @Environment(\.colorScheme) var colorScheme
@@ -22,104 +22,25 @@ struct LeftMenu: View {
     var body : some View {
         ScrollView {
             VStack(alignment: .center) {
-                if liveViewModel.showOverlay == false {
-                    if liveViewModel.selectedSubCategory.count > 0 && liveViewModel.selectedSubListIndex != -1 {
-                        if liveViewModel.selectedSubListIndex < liveViewModel.selectedSubCategory.count {
-                            HStack(spacing: 10) {
-                                if liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon == "" {
-                                    Image(liveViewModel.menuTitleIcon)
-                                    .resizable()
-                                    .frame(width: 30, height: 30, alignment: .leading)
-                                    .padding(.leading, -5)
-                                }else {
-                                    KFImage(URL(string: liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon))
-                                    .resizable()
-                                    .frame(width: 30, height: 30, alignment: .leading)
-                                    .padding(.leading, -5)
-                                }
-
-                                Text(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
-                                    .font(.system(size: 20))
-                                    .frame(width: 110, height: 30, alignment: .leading)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            .padding(.top, 160)
-                            .padding(.leading, 5)
-                            .edgesIgnoringSafeArea(.all)
-                        }
-                    }else {
-                        HStack(spacing: 10) {
-                            Image(liveViewModel.menuTitleIcon)
-                                .resizable()
-                                .frame(width: 30, height: 30, alignment: .leading)
-                                .padding(.leading, -5)
-                            Text("直播分类")
-                                .font(.system(size: 20))
-                                .frame(width: 110, height: 30, alignment: .leading)
-                                .multilineTextAlignment(.leading)
-                        }
-                        .padding(.top, 160)
-                        .padding(.leading, 5)
-                        .edgesIgnoringSafeArea(.all)
-                    }
-                }else {
-                    if liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty == false {
-                        Text("收藏")
-                            .padding(.top, liveViewModel.currentLiveTypeFavoriteCategoryList.count < 2 ? 160 : 150)
-                        ForEach(liveViewModel.currentLiveTypeFavoriteCategoryList.indices, id: \.self) { index in
-                            MenuItem(favorite: true, icon: liveViewModel.currentLiveTypeFavoriteCategoryList[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.currentLiveTypeFavoriteCategoryList[index].icon, title: liveViewModel.currentLiveTypeFavoriteCategoryList[index].title, index: index, subItems: liveViewModel.currentLiveTypeFavoriteCategoryList[index].subList)
-                                .frame(width: 250)
-                                .padding(.top, index == 0 ? 50 : 15)
-                                .padding(.bottom, index == liveViewModel.currentLiveTypeFavoriteCategoryList.count - 1 ? 50 : 15)
-                                .padding([.leading, .trailing], 30)
-                                .buttonStyle(.plain)
-                                .background(Color.clear)
-                                .focused($focusState, equals: .leftFavorite(index, 0))
-                                .contextMenu(menuItems: {
-                                    Button(action: {
-                                        liveViewModel.addFavoriteCategory(liveViewModel.categories[index])
-                                    }, label: {
-                                        HStack {
-                                            Image(systemName: "heart.fill")
-                                            Text("收藏分类")
-                                        }
-                                    })
-                                })
-                        }
-                        Text("全部")
-                    }
-                    ForEach(liveViewModel.categories.indices, id: \.self) { index in
-                        MenuItem(favorite: false, icon: liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon, title: liveViewModel.categories[index].title, index: index, subItems: liveViewModel.categories[index].subList)
-                            .frame(width: 250)
-                            .padding(.top, index == 0 ? (liveViewModel.currentLiveTypeFavoriteCategoryList.isEmpty ? 190 : 50) : 15)
-                            .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 15)
-                            .padding([.leading, .trailing], 30)
-                            .buttonStyle(.plain)
-                            .background(Color.clear)
-                            .focused($focusState, equals: .leftMenu(index, 0))
-                            .contextMenu(menuItems: {
-                                Button(action: {
-                                    liveViewModel.addFavoriteCategory(liveViewModel.categories[index])
-                                }, label: {
-                                    HStack {
-                                        Image(systemName: "heart.fill")
-                                        Text("收藏分类")
-                                    }
-                                })
-                            })
-                    }
+                Text("分类")
+                    .font(.title3)
+                    .bold()
+                    .padding(.top, 20)
+                ForEach(liveViewModel.categories.indices, id: \.self) { index in
+                    MenuItem(favorite: false, icon: liveViewModel.categories[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon, title: liveViewModel.categories[index].title, index: index, subItems: liveViewModel.categories[index].subList)
+                        .frame(width: 250)
+                        .padding(.top, index == 0 ? 30 : 15)
+                        .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 15)
+                        .padding([.leading, .trailing], 30)
+                        .buttonStyle(.plain)
+                        .background(Color.clear)
+                        .focused($focusState, equals: .leftMenu(index, 0))
                 }
-                
             }
             .listStyle(.plain)
-            
         }
         .frame(minWidth: 150, maxWidth: .infinity, minHeight: 30, maxHeight: .infinity)
-        .background(.ultraThickMaterial)
-        .onAppear {
-//            colors = colorScheme == .dark ? [Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1), Color.init(hex: 0xAAAAAA, alpha: 1), Color.init(hex: 0x353937, alpha: 1)] : ColorfulPreset.winter.colors
-//            speed = 0.5
-        }
+        .background(.thinMaterial)
         .onDisappear {
             speed = 0
         }
@@ -133,7 +54,7 @@ struct LeftMenu: View {
 
 struct MenuItem: View {
     
-    @EnvironmentObject var liveViewModel: LiveStore
+    @Environment(LiveViewModel.self) var liveViewModel
     @FocusState var focusState: FocusableField?
     @State var favorite: Bool
     @State var icon: String
@@ -151,6 +72,7 @@ struct MenuItem: View {
                     Image(icon)
                         .resizable()
                         .frame(width: 30, height: 30, alignment: .leading)
+                        .cornerRadius(15)
                         .padding(.leading, -20)
                     Text(title)
                         .font(.system(size: 25))
@@ -163,6 +85,7 @@ struct MenuItem: View {
                 ForEach(liveViewModel.selectedSubCategory.indices, id: \.self) { index in
                     if index < liveViewModel.selectedSubCategory.count {
                         SubMenuItem(favorite: favorite, icon: liveViewModel.selectedSubCategory[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.selectedSubCategory[index].icon, title: liveViewModel.selectedSubCategory[index].title, index: index)
+                            .environment(liveViewModel)
                     }
                 }
             }
@@ -172,7 +95,7 @@ struct MenuItem: View {
 
 struct SubMenuItem: View {
     
-    @EnvironmentObject var liveViewModel: LiveStore
+    @Environment(LiveViewModel.self) var liveViewModel
     @FocusState var focusState: FocusableField?
     @State var favorite: Bool
     @State var icon: String
@@ -191,11 +114,13 @@ struct SubMenuItem: View {
                         Image(icon)
                             .resizable()
                             .frame(width: 20, height: 20, alignment: .leading)
+                            .cornerRadius(10)
                             .padding(.leading, -20)
                     }else {
                         KFImage(URL(string: icon))
                             .resizable()
                             .frame(width: 20, height: 20, alignment: .leading)
+                            .cornerRadius(10)
                             .padding(.leading, -20)
                     }
                     Text(title)
@@ -203,18 +128,6 @@ struct SubMenuItem: View {
                         .frame(width: 110, height: 20, alignment: .leading)
                         .multilineTextAlignment(.leading)
                         .padding(.leading, -50)
-                })
-                .contextMenu(menuItems: {
-                    Button(action: {
-                        Task {
-//                                    await favoriteAction()
-                        }
-                    }, label: {
-                        HStack {
-                            Image(systemName: "heart.fill")
-                            Text("收藏频道")
-                        }
-                    })
                 })
                 .frame(width: 200, height: 30)
                 .padding([.top, .bottom], 15)
@@ -226,7 +139,3 @@ struct SubMenuItem: View {
     }
 }
 
-#Preview {
-    LeftMenu()
-        .environmentObject(LiveStore(roomListType: .live, liveType: .bilibili))
-}

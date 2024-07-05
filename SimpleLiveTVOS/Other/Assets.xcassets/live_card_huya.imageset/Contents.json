@@ -1,11 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "live_card_huya.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "虎牙.png",
       "idiom" : "universal",
       "scale" : "2x"
     },

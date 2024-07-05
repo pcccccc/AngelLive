@@ -1,11 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "live_card_douyin.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "抖音.png",
       "idiom" : "universal",
       "scale" : "2x"
     },

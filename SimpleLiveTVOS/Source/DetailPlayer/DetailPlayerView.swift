@@ -12,19 +12,22 @@ import AVKit
 
 struct DetailPlayerView: View {
     
-    @EnvironmentObject var roomInfoViewModel: RoomInfoStore
-    @EnvironmentObject var favoriteStore: FavoriteStore
+    @Environment(RoomInfoViewModel.self) var roomInfoViewModel
+    @Environment(SimpleLiveViewModel.self) var appViewModel
     
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
-    
     var body: some View {
         if roomInfoViewModel.currentPlayURL == nil {
-            VStack {
+            VStack(spacing: 10) {
                 ProgressView()
+                    .tint(.white)
+                Text("正在解析直播地址")
             }
+            .font(.headline)
+            .foregroundColor(.white)
             .frame(width: 1920, height: 1080)
-            .background(.ultraThickMaterial)
+            .background(.black)
         }else {
             ZStack {
                 KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.option)
@@ -32,59 +35,41 @@ struct DetailPlayerView: View {
                     .onAppear {
                         roomInfoViewModel.playerCoordinator.playerLayer?.play()
                         roomInfoViewModel.setPlayerDelegate()
-                        if roomInfoViewModel.danmuSettingModel.showDanmu {
+                        if appViewModel.danmuSettingModel.showDanmu {
                             roomInfoViewModel.getDanmuInfo()
                         }
                     }
                     .onDisappear {
                         roomInfoViewModel.disConnectSocket()
                     }
-                    .onSwipeGesture { direction in
-                        switch direction {
-                            default:
-                                if roomInfoViewModel.showControlView == false {
-                                    roomInfoViewModel.showControlView = true
-                                }
-                        }
-                    }
                     .safeAreaPadding(.all)
                     .zIndex(1)
                 PlayerControlView()
-                    .environmentObject(roomInfoViewModel)
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)
-                    .opacity(roomInfoViewModel.showControlView ? 1 : 0)
+//                    .opacity(roomInfoViewModel.showControlView ? 1 : 0)
                     .safeAreaPadding(.all)
+                    .environment(roomInfoViewModel)
+                    .environment(appViewModel)
                 VStack {
-                    if roomInfoViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
+                    if appViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
                         Spacer()
                     }
-                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
-                        .frame(width: 1920, height: roomInfoViewModel.danmuSettingModel.getDanmuArea().0)
-                        .opacity(roomInfoViewModel.danmuSettingModel.showDanmu ? 1 : 0)
-                        .environmentObject(roomInfoViewModel.danmuSettingModel)
-                        .environmentObject(favoriteStore)
-                    if roomInfoViewModel.danmuSettingModel.danmuAreaIndex < 3 {
+                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingModel.getDanmuArea().0)
+                        .frame(width: 1920, height: appViewModel.danmuSettingModel.getDanmuArea().0)
+                        .opacity(appViewModel.danmuSettingModel.showDanmu ? 1 : 0)
+                        .environment(appViewModel)
+                    if appViewModel.danmuSettingModel.danmuAreaIndex < 3 {
                         Spacer()
                     }
                 }
                 .zIndex(2)
             }
             .onExitCommand(perform: {
-                if roomInfoViewModel.showControlView == true {
-                    roomInfoViewModel.showControlView = false
-                }else {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.resetPlayer()
-                    didExitView(false, "")
-                }
+                roomInfoViewModel.playerCoordinator.resetPlayer()
+                didExitView(false, "")
             })
-            .onPlayPauseCommand(perform: {
-                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying == true {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.pause()
-                }else {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
-                }
-            })
+            
         }
     }
 }
