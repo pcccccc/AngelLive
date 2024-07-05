@@ -1,4 +1,5 @@
 {
+  "originHash" : "43967a27885244a196961634e675b57e37779d662a5cc3b0004f56ed210e9adc",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -217,5 +218,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
