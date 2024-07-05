@@ -9,47 +9,58 @@ import Foundation
 import KSPlayer
 import LiveParse
 import SimpleToast
+import Observation
 
-class RoomInfoStore: ObservableObject {
+@Observable
+final class RoomInfoViewModel {
     
-    @Published var roomList: [LiveModel] = []
-    @Published var currentRoom: LiveModel
-    @Published var playerCoordinator = KSVideoPlayer.Coordinator()
-    @Published var option: KSOptions = {
+    var appViewModel: SimpleLiveViewModel
+    
+    var roomList: [LiveModel] = []
+    var currentRoom: LiveModel
+    
+    @MainActor
+    var playerCoordinator = KSVideoPlayer.Coordinator()
+    var option: KSOptions = {
         let options = KSOptions()
         options.userAgent = "libmpv"
         return options
     }()
-    @Published var currentRoomPlayArgs: [LiveQualityModel]?
-    @Published var currentPlayURL: URL?
-    @Published var currentPlayQualityString = "清晰度"
-    @Published var danmuSettingModel = DanmuSettingStore()
-    @Published var showControlView: Bool = true
-    @Published var isPlaying = false
-    @Published var douyuFirstLoad = true
+    var currentRoomPlayArgs: [LiveQualityModel]?
+    var currentPlayURL: URL?
+    var currentPlayQualityString = "清晰度"
+    var showControlView: Bool = true
+    var isPlaying = false
+    var douyuFirstLoad = true
+    var yyFirstLoad = true
     
-    @Published var isLoading = false
-    @Published var rotationAngle = 0.0
-    
-    @Published var isLeftFocused: Bool = false
-    @Published var showToast: Bool = false
-    @Published var toastTitle: String = ""
-    @Published var toastTypeIsSuccess: Bool = false
-    @Published var toastOptions = SimpleToastOptions(
-        hideAfter: 1.5
-    )
+    var isLoading = false
+    var rotationAngle = 0.0
 
-    @Published var debugTimerIsActive = false
-    @Published var dynamicInfo: DynamicInfo?
-    @Published var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    var debugTimerIsActive = false
+    var dynamicInfo: DynamicInfo?
+    var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var socketConnection: WebSocketConnection?
     var danmuCoordinator = DanmuView.Coordinator()
     
-    init(currentRoom: LiveModel) {
+    var roomType: LiveRoomListType
+    var historyList: [LiveModel]?
+    
+    //Toast
+    var showToast: Bool = false
+    var toastTitle: String = ""
+    var toastTypeIsSuccess: Bool = false
+    var toastOptions = SimpleToastOptions(
+        alignment: .topLeading, hideAfter: 1.5
+    )
+    
+    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = currentRoom
+        self.appViewModel = appViewModel
+        self.roomType = roomType
         getPlayArgs()
     }
     
@@ -110,6 +121,12 @@ class RoomInfoStore: ObservableObject {
                             self.currentPlayURL = URL(string: liveQuality.url)!
                             currentPlayQualityString = liveQuality.title
                             return
+                        }else {
+                            KSOptions.firstPlayerType = KSMEPlayer.self
+                            KSOptions.secondPlayerType = KSMEPlayer.self
+                            self.currentPlayURL = URL(string: liveQuality.url)!
+                            currentPlayQualityString = liveQuality.title
+                            return
                         }
                     }
                 }
@@ -139,8 +156,24 @@ class RoomInfoStore: ObservableObject {
         }else {
             douyuFirstLoad = false
             self.currentPlayURL = URL(string: currentQuality.url)!
-//            self.playerCoordinator.playerLayer?.resetPlayer()
         }
+        
+        if currentRoom.liveType == .yy && yyFirstLoad == false {
+            Task {
+                let currentCdn = currentRoomPlayArgs![cdnIndex]
+                let currentQuality = currentCdn.qualitys[urlIndex]
+                let playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq:Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
+                DispatchQueue.main.async {
+                    let currentQuality = playArgs.first?.qualitys[urlIndex]
+                    let lastCurrentPlayURL = self.currentPlayURL
+                    self.currentPlayURL = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
+                }
+            }
+        }else {
+            yyFirstLoad = false
+            self.currentPlayURL = URL(string: currentQuality.url)!
+        }
+        
         isLoading = false
     }
     
@@ -164,10 +197,13 @@ class RoomInfoStore: ObservableObject {
                     case .douyu:
                         playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
                     case .cc:
-                        playArgs =  try await NeteaseCC.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                        playArgs = try await NeteaseCC.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     case .ks:
-                        playArgs =  try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-                    default: break
+                        playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .yy:
+                        playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .youtube:
+                        playArgs = try await YoutubeParse.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                 }
                 await updateCurrentRoomPlayArgs(playArgs)
             }catch {
@@ -181,7 +217,7 @@ class RoomInfoStore: ObservableObject {
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
     }
     
-    func setPlayerDelegate() {
+    @MainActor func setPlayerDelegate() {
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
     }
@@ -210,12 +246,6 @@ class RoomInfoStore: ObservableObject {
         self.socketConnection?.disconnect()
     }
     
-    func showToast(_ success: Bool, title: String) {
-        self.showToast = true
-        self.toastTitle = title
-        self.toastTypeIsSuccess = success
-    }
-    
     func toggleTimer() {
         if debugTimerIsActive == false {
             startTimer()
@@ -233,9 +263,18 @@ class RoomInfoStore: ObservableObject {
         timer.upstream.connect().cancel()
         debugTimerIsActive = false
     }
+    
+    func showToast(_ success: Bool, title: String, hideAfter: TimeInterval? = 1.5) {
+        self.showToast = true
+        self.toastTitle = title
+        self.toastTypeIsSuccess = success
+        self.toastOptions = SimpleToastOptions(
+            alignment: .topLeading, hideAfter: hideAfter
+        )
+    }
 }
 
-extension RoomInfoStore: WebSocketConnectionDelegate {
+extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidConnect() {
         
     }
@@ -245,11 +284,24 @@ extension RoomInfoStore: WebSocketConnectionDelegate {
     }
     
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
-        danmuCoordinator.shoot(text: text, showColorDanmu: danmuSettingModel.showColorDanmu, color: color, alpha: danmuSettingModel.danmuAlpha, font: CGFloat(danmuSettingModel.danmuFontSize))
+        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingModel.danmuFontSize))
+    }
+    
+    @MainActor func reloadRoom(liveModel: LiveModel) {
+        playerCoordinator.resetPlayer()
+        currentPlayURL = nil
+        disConnectSocket()
+        KSOptions.isAutoPlay = true
+        KSOptions.isSecondOpen = true
+        self.currentRoom = liveModel
+        douyuFirstLoad = true
+        yyFirstLoad = true
+        getPlayArgs()
+//        getDanmuInfo()
     }
 }
 
-extension RoomInfoStore: KSPlayerLayerDelegate {
+extension RoomInfoViewModel: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying

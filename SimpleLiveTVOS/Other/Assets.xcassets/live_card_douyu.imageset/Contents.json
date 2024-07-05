@@ -1,11 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "live_card_douyu.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "斗鱼.png",
       "idiom" : "universal",
       "scale" : "2x"
     },

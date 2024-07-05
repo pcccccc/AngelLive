@@ -16,21 +16,29 @@ import Darwin
 
 struct ContentView: View {
     
-    @State private var selection = 1
-    @StateObject var favoriteStore = FavoriteStore()
-    @State var broadcastConnection: UDPBroadcastConnection?
+    var appViewModel: SimpleLiveViewModel
+    var searchLiveViewModel: LiveViewModel
+    var favoriteLiveViewModel: LiveViewModel
+
+    init(appViewModel: SimpleLiveViewModel) {
+        self.appViewModel = appViewModel
+        self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
+        self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
+    }
     
     var body: some View {
+        
+        @Bindable var contentVM = appViewModel
+        
         NavigationView {
-            TabView(selection:$selection) {
+            TabView(selection:$contentVM.selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if favoriteStore.isLoading == true || favoriteStore.cloudKitReady == false {
+                        if appViewModel.favoriteStateModel.isLoading == true || appViewModel.favoriteStateModel.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: favoriteStore.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : favoriteStore.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
-                                                          
+                                    Image(systemName: appViewModel.favoriteStateModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteStateModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
                                 }
                             )
                             .contentTransition(.symbolEffect(.replace))
@@ -38,73 +46,54 @@ struct ContentView: View {
                             Text("收藏")
                         }
                     }
-                .tag(0)
-                .environmentObject(favoriteStore)
-                ListMainView(liveType: .bilibili)
+                    .tag(0)
+                    .environment(favoriteLiveViewModel)
+                    .environment(appViewModel)
+                
+                PlatformView()
                     .tabItem {
-                        Text("B站")
+                        Text("平台")
                     }
-                .tag(1)
-                .environmentObject(favoriteStore)
-                ListMainView(liveType: .huya)
-                    .tabItem {
-                        Text("虎牙")
-                    }
-                .tag(2)
-                .environmentObject(favoriteStore)
-                ListMainView(liveType: .douyu)
-                    .tabItem {
-                        Text("斗鱼")
-                    }
-                .tag(3)
-                .environmentObject(favoriteStore)
-                ListMainView(liveType: .douyin)
-                    .tabItem {
-                        Text("抖音")
-                    }
-                .tag(4)
-                .environmentObject(favoriteStore)
-//                ListMainView(liveType: .cc)
-//                    .tabItem {
-//                        Text("网易CC")
-//                    }
-//                .tag(5)
-//                .environmentObject(favoriteStore)
-//                ListMainView(liveType: .ks)
-//                    .tabItem {
-//                        Text("快手")
-//                    }
-//                .tag(6)
-//                .environmentObject(favoriteStore)
+                    .tag(1)
+                    .environment(appViewModel)
+
+                
                 SearchRoomView()
                     .tabItem {
                         Text("搜索")
                     }
-                .tag(7)
-                .environmentObject(favoriteStore)
+                    .tag(2)
+                    .environment(searchLiveViewModel)
+                    .environment(appViewModel)
+
+                
                 SettingView()
                     .tabItem {
                         Text("设置")
                     }
-                .tag(8)
-                .environmentObject(favoriteStore)
+                    .tag(3)
+                    .environment(appViewModel)
+
             }
         }
         .onAppear {
-            do {
-                
-            }
             Task {
                 try await Douyin.getRequestHeaders()
+                appViewModel.favoriteModel = favoriteLiveViewModel
             }
         }
-    }
-}
-
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+        
+//        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
+//            VStack(alignment: .leading) {
+//                Label("提示", systemImage: appViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+//                    .font(.headline.bold())
+//                Text(appViewModel.toastTitle)
+//            }
+//            .padding()
+//            .background(.black.opacity(0.6))
+//            .foregroundColor(Color.white)
+//            .cornerRadius(10)
+//        }
     }
 }
 

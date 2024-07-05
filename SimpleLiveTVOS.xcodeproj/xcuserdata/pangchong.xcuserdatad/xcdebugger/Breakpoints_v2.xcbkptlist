@@ -18,53 +18,6 @@
             endingLineNumber = "256"
             landmarkName = "didReceive(event:client:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "F4D4DE25-5839-4EC4-ABDD-8B79CEB08DD7 - d3bc8b3cb3d35f84"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "F4D4DE25-5839-4EC4-ABDD-8B79CEB08DD7 - d3bc8b3cb3d35f84"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "F4D4DE25-5839-4EC4-ABDD-8B79CEB08DD7 - d3bc8b3cb3d35f84"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "0">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -81,53 +34,6 @@
             endingLineNumber = "259"
             landmarkName = "didReceive(event:client:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "BABB349F-E513-469D-9CA8-B8BFAB7B32E0 - d3bc8b3cb3d35f79"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "259"
-                  endingLineNumber = "259"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "BABB349F-E513-469D-9CA8-B8BFAB7B32E0 - d3bc8b3cb3d35f79"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "259"
-                  endingLineNumber = "259"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "BABB349F-E513-469D-9CA8-B8BFAB7B32E0 - d3bc8b3cb3d35f79"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "259"
-                  endingLineNumber = "259"
-                  offsetFromSymbolStart = "0">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -144,53 +50,6 @@
             endingLineNumber = "261"
             landmarkName = "didReceive(event:client:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "76663334-A5E3-4A29-BDF9-6650EA87C6EE - d3bc8b3cb3d35f3b"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "261"
-                  endingLineNumber = "261"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "76663334-A5E3-4A29-BDF9-6650EA87C6EE - d3bc8b3cb3d35efd"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "263"
-                  endingLineNumber = "263"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "76663334-A5E3-4A29-BDF9-6650EA87C6EE - d3bc8b3cb3d35efd"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "263"
-                  endingLineNumber = "263"
-                  offsetFromSymbolStart = "0">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -207,53 +66,6 @@
             endingLineNumber = "243"
             landmarkName = "didReceive(event:client:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "4FB0BBA2-3569-478D-90AE-A7AA87DDA19B - d3bc8b3cb3d35969"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "243"
-                  endingLineNumber = "243"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "4FB0BBA2-3569-478D-90AE-A7AA87DDA19B - d3bc8b3cb3d35969"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "243"
-                  endingLineNumber = "243"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "4FB0BBA2-3569-478D-90AE-A7AA87DDA19B - d3bc8b3cb3d35969"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "243"
-                  endingLineNumber = "243"
-                  offsetFromSymbolStart = "0">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -270,176 +82,22 @@
             endingLineNumber = "240"
             landmarkName = "didReceive(event:client:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "C2BCBFB9-FC2D-4D86-AA89-76A97C0700A2 - d3bc8b3cb3d35997"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "241"
-                  endingLineNumber = "241"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "C2BCBFB9-FC2D-4D86-AA89-76A97C0700A2 - d3bc8b3cb3d359f4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "240"
-                  endingLineNumber = "240"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "C2BCBFB9-FC2D-4D86-AA89-76A97C0700A2 - d3bc8b3cb3d359f4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "SimpleLiveTVOS.WebSocketManager.didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) -&gt; ()"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/WebSocketManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "240"
-                  endingLineNumber = "240"
-                  offsetFromSymbolStart = "0">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089"
+            uuid = "8FCC96C3-B56A-4511-9C9E-B5B832D09373"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
+            filePath = "../../../Library/Developer/Xcode/DerivedData/SimpleLiveTVOS-drziltdnidqlfzabkrebhfsbifhh/SourcePackages/checkouts/LiveParse/Sources/LiveParse/Douyin.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "85"
-            endingLineNumber = "85"
-            landmarkName = "fetchLastestLiveInfo(liveModel:)"
+            startingLineNumber = "546"
+            endingLineNumber = "546"
+            landmarkName = "getRoomInfoFromShareCode(shareCode:)"
             landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - aa7e5773dc648219"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(1) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 78d0f095ea557737"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(6) await resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - e518908e750c1b0f"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(13) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "0">
-               </Location>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - aa7e5773dc648219"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(1) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "1024">
-               </Location>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 60d7c3939cf05bba"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(10) await resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "60">
-               </Location>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - aeeab3bcca2c4539"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(11) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "40">
-               </Location>
-               <Location
-                  uuid = "6E99085A-6E51-451E-8931-5CE47BCDF089 - 71fa28ca5add7e39"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(20) suspend resume partial function for static SimpleLiveTVOS.ApiManager.fetchLastestLiveInfo(liveModel: LiveParse.LiveModel) async throws -&gt; LiveParse.LiveModel"
-                  moduleName = "SimpleLiveTVOS"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/pangchong/Desktop/Git/SimpleLiveTVOS/SimpleLiveTVOS/Tools/Common/Utils/ApiManager.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "85"
-                  endingLineNumber = "85"
-                  offsetFromSymbolStart = "36">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

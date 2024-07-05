@@ -39,7 +39,7 @@ class QRCodeStore: ObservableObject {
     
     @Published var syncManager: SyncManager?
     @Published var udpManager: UDPListener?
-    @Published var favoriteStore: FavoriteStore?
+    @Published var favoriteModel: FavoriteStateModel?
     
     @Published var syncType: SimpleSyncType? {
         didSet {
@@ -109,13 +109,13 @@ class QRCodeStore: ObservableObject {
     func startFavoriteSync() async {
         if self.needOverlay == true {
             do {
-                if let roomList = favoriteStore?.roomList {
+                if let roomList = favoriteModel?.roomList {
                     for index in roomList.indices {
                         DispatchQueue.main.async {
                             self.showFullScreenLoadingText = "正在清理第\(index + 1)个本地收藏"
                         }
                         let roomModel = roomList[index]
-                        try await favoriteStore?.removeFavoriteRoom(room: roomModel)
+                        try await favoriteModel?.removeFavoriteRoom(room: roomModel)
                     }
                 }
                 if let newRoomList = self.roomList {
@@ -125,7 +125,7 @@ class QRCodeStore: ObservableObject {
                         }
                         let roomModel = newRoomList[index]
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-                        try await favoriteStore?.addFavorite(room: newLiveModel)
+                        try await favoriteModel?.addFavorite(room: newLiveModel)
                     }
                     DispatchQueue.main.async {
                         self.showFullScreenLoading = false
@@ -134,7 +134,7 @@ class QRCodeStore: ObservableObject {
                 }
             }catch {
                 if type(of: error) == CKError.self {
-                    showFullScreenLoadingText = favoriteStore?.formatErrorCode(error: error as! CKError) ?? ""
+                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) ?? ""
                 }else {
                     showFullScreenLoadingText = "\(error)"
                 }
@@ -149,7 +149,7 @@ class QRCodeStore: ObservableObject {
                         DispatchQueue.main.async {
                             self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
                         }
-                        if let deviceFavoriteRoomList = favoriteStore?.roomList {
+                        if let deviceFavoriteRoomList = favoriteModel?.roomList {
                             for room in deviceFavoriteRoomList {
                                 if room.roomId == roomModel.roomId {
                                     has = true
@@ -164,7 +164,7 @@ class QRCodeStore: ObservableObject {
                             continue
                         }
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-                        try await favoriteStore?.addFavorite(room: newLiveModel)
+                        try await favoriteModel?.addFavorite(room: newLiveModel)
                     }
                     let repeatString = repeatCount > 0 ? "(重复\(repeatCount)个）": ""
                     DispatchQueue.main.async {
@@ -174,7 +174,7 @@ class QRCodeStore: ObservableObject {
                 }
             }catch {
                 if type(of: error) == CKError.self {
-                    showFullScreenLoadingText = favoriteStore?.formatErrorCode(error: error as! CKError) ?? ""
+                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) ?? ""
                 }else {
                     showFullScreenLoadingText = "\(error)"
                 }

@@ -1,4 +1,5 @@
 {
+  "originHash" : "43967a27885244a196961634e675b57e37779d662a5cc3b0004f56ed210e9adc",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -25,6 +26,15 @@
       "state" : {
         "revision" : "36df26fe4586b4f23d76cfd8b47076998343a2b2",
         "version" : "2.0.3"
+      }
+    },
+    {
+      "identity" : "cache",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hyperoslo/Cache",
+      "state" : {
+        "revision" : "fd97438a85d44aa4f7186145cdba90e3c36f1c94",
+        "version" : "7.2.0"
       }
     },
     {
@@ -86,8 +96,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "01a51371aa9708dacf6bc752bed902ad1e7d3094",
-        "version" : "1.2.9"
+        "revision" : "32055420e99c62d2520f054b480881aa82a1cf0e",
+        "version" : "1.3.2"
       }
     },
     {
@@ -208,5 +218,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

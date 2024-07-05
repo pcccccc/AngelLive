@@ -11,11 +11,14 @@ import SimpleToast
 import LiveParse
 
 struct HistoryListView: View {
-    @StateObject var liveViewModel: LiveStore
-    @FocusState var focusState: FocusableField?
     
-    init() {
-        self._liveViewModel = StateObject(wrappedValue: LiveStore(roomListType: .history, liveType: .bilibili))
+    var appViewModel: SimpleLiveViewModel
+    @FocusState var focusState: FocusableField?
+    var liveViewModel: LiveViewModel?
+
+    init(appViewModel: SimpleLiveViewModel) {
+        self.appViewModel = appViewModel
+        self.liveViewModel = LiveViewModel(roomListType: .history, liveType: .bilibili, appViewModel: appViewModel)
     }
     
     var body: some View {
@@ -24,9 +27,10 @@ struct HistoryListView: View {
                 .font(.title2)
             ScrollView {
                 LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
-                    ForEach(liveViewModel.roomList.indices, id: \.self) { index in
+                    ForEach(appViewModel.historyModel.watchList.indices, id: \.self) { index in
                         LiveCardView(index: index)
-                            .environmentObject(liveViewModel)
+                            .environment(liveViewModel)
+                            .environment(appViewModel)
                             .frame(width: 370, height: 240)
                     }
                 }
@@ -34,12 +38,12 @@ struct HistoryListView: View {
             }
         }
         .task {
+            for index in 0 ..< (liveViewModel?.roomList ?? []).count {
+                liveViewModel?.getLastestHistoryRoomInfo(index)
+            }
         }
         .onPlayPauseCommand(perform: {
         })
     }
 }
 
-#Preview {
-    HistoryListView()
-}
