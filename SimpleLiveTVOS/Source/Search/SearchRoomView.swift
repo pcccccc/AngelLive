@@ -48,22 +48,40 @@ struct SearchRoomView: View {
                 
             }
             Spacer()
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
-                    ForEach(liveViewModel.roomList.indices, id: \.self) { index in
-                        LiveCardView(index: index)
-                            .environment(liveViewModel)
-                            .frame(width: 370, height: 280)
+            if appModel.searchModel.searchTypeIndex == 2 && liveViewModel.roomList.count == 0 {
+                HStack {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("可选格式:")
+                            .font(.title3)
+                        Text("https://www.youtube.com/watch?v=36YnV9STBqc")
+                            .font(.headline)
+                        Text("https://www.youtube.com/live/36YnV9STBqc")
+                            .font(.headline)
+                        Text("36YnV9STBqc")
+                            .font(.headline)
+                        Spacer()
                     }
-                    if liveViewModel.isLoading {
-                        LoadingView()
-                            .frame(width: 370, height: 280)
-                            .cornerRadius(5)
-                            .shimmering(active: true)
-                            .redacted(reason: .placeholder)
-                    }
+                    .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .safeAreaPadding(.top, 50)
+            }else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
+                        ForEach(liveViewModel.roomList.indices, id: \.self) { index in
+                            LiveCardView(index: index)
+                                .environment(liveViewModel)
+                                .frame(width: 370, height: 280)
+                        }
+                        if liveViewModel.isLoading {
+                            LoadingView()
+                                .frame(width: 370, height: 280)
+                                .cornerRadius(5)
+                                .shimmering(active: true)
+                                .redacted(reason: .placeholder)
+                        }
+                    }
+                    .safeAreaPadding(.top, 50)
+                }
             }
         }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
