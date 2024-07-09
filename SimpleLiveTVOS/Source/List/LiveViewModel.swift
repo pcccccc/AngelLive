@@ -250,6 +250,11 @@ class LiveViewModel {
                                 group.addTask {
                                     do {
                                         let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
+                                        if liveModel.liveType == .ks {
+                                            var finalLiveModel = liveModel
+                                            finalLiveModel.liveState = dataReq.liveState
+                                            return finalLiveModel
+                                        }
                                         return dataReq
                                     } catch {
                                         print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
