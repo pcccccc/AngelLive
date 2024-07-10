@@ -24,9 +24,7 @@ class FavoriteStateModel: ObservableObject {
     }
     
     @MainActor func fetchFavoriteRoomList() async {
-        withAnimation(.easeInOut(duration: 0.25)) {
-            self.isLoading = true
-        }
+        self.isLoading = true
         do {
             if self.cloudKitReady == true {
                 let roomList = try await CloudSQLManager.searchRecord()

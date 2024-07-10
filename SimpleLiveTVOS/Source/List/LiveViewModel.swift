@@ -232,80 +232,82 @@ class LiveViewModel {
                 }
             case .favorite:
                 Task {
-                    await appViewModel.favoriteStateModel.fetchFavoriteRoomList()
-                    let resList = appViewModel.favoriteStateModel.roomList
-                    if resList.count > 0 {
-                        if appViewModel.selection == 0 {
-                            showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
+                    let stateString = await CloudSQLManager.getCloudState()
+                    if stateString == "正常" {
+                        let resList = try await CloudSQLManager.searchRecord()
+                        if resList.count > 0 {
+                            if appViewModel.selection == 0 {
+                                showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
+                            }
                         }
-                    }
-                    var fetchedModels: [LiveModel] = []
-                    // 使用异步的任务组来并行处理所有的请求
-                    var bilibiliModels: [LiveModel] = []
-                    await withTaskGroup(of: LiveModel?.self, body: { group in
-                        for liveModel in resList {
-                            if liveModel.liveType == .bilibili {
-                                bilibiliModels.append(liveModel)
-                            }else {
-                                group.addTask {
-                                    do {
-                                        let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
-                                        if liveModel.liveType == .ks {
-                                            var finalLiveModel = liveModel
-                                            finalLiveModel.liveState = dataReq.liveState
-                                            return finalLiveModel
+                        var fetchedModels: [LiveModel] = []
+                        // 使用异步的任务组来并行处理所有的请求
+                        var bilibiliModels: [LiveModel] = []
+                        await withTaskGroup(of: LiveModel?.self, body: { group in
+                            for liveModel in resList {
+                                if liveModel.liveType == .bilibili {
+                                    bilibiliModels.append(liveModel)
+                                }else {
+                                    group.addTask {
+                                        do {
+                                            let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
+                                            if liveModel.liveType == .ks {
+                                                var finalLiveModel = liveModel
+                                                finalLiveModel.liveState = dataReq.liveState
+                                                return finalLiveModel
+                                            }
+                                            return dataReq
+                                        } catch {
+                                            print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
+                                            var errorModel = liveModel
+                                            errorModel.liveState = LiveState.unknow.rawValue
+                                            return errorModel
                                         }
-                                        return dataReq
-                                    } catch {
-                                        print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
-                                        var errorModel = liveModel
-                                        errorModel.liveState = LiveState.unknow.rawValue
-                                        return errorModel
                                     }
                                 }
                             }
-                        }
-                        // 收集任务组中每个任务的结果
-                        for await result in group {
-                            if let newLiveModel = result {
-                                fetchedModels.append(newLiveModel)
+                            // 收集任务组中每个任务的结果
+                            for await result in group {
+                                if let newLiveModel = result {
+                                    fetchedModels.append(newLiveModel)
+                                }
+                            }
+                        })
+                        
+                        if bilibiliModels.count > 0 {
+                            if appViewModel.selection == 0 {
+                                showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
                             }
                         }
-                    })
-                    
-                    if bilibiliModels.count > 0 {
-                        if appViewModel.selection == 0 {
-                            showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
+                        
+                        for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
+                            do {
+                                try? await Task.sleep(nanoseconds: 1_500_000_000) // 等待1.5秒
+                                let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
+                                fetchedModels.append(dataReq)
+                            }catch {
+                                print("房间号\(item.roomId), 主播名字\(item.userName), 平台\(item.liveType), \(error)")
+                            }
                         }
-                    }
-                    
-                    for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
-                        do {
-                            try? await Task.sleep(nanoseconds: 1_500_000_000) // 等待1.5秒
-                            let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
-                            fetchedModels.append(dataReq)
-                        }catch {
-                            print("房间号\(item.roomId), 主播名字\(item.userName), 平台\(item.liveType), \(error)")
-                        }
-                    }
 
-                    let sortedModels = fetchedModels.sorted { firstModel, secondModel in
-                        if firstModel.liveState == "1", secondModel.liveState != "1" {
-                            return true
-                        } else if firstModel.liveState != "1", secondModel.liveState == "1" {
-                            return false
+                        let sortedModels = fetchedModels.sorted { firstModel, secondModel in
+                            if firstModel.liveState == "1", secondModel.liveState != "1" {
+                                return true
+                            } else if firstModel.liveState != "1", secondModel.liveState == "1" {
+                                return false
+                            }
+                            return true // 如果两个模型的liveState相同，保持它们的当前顺序不变
                         }
-                        return true // 如果两个模型的liveState相同，保持它们的当前顺序不变
-                    }
 
-                    // 最后，更新tempArray
-                    await MainActor.run {
-                        self.favoriteRoomList.removeAll()
-                        self.roomList.removeAll()
-                        self.roomList = sortedModels
-                        self.favoriteRoomList = self.roomList
-                        self.isLoading = false
-                        print("结束")
+                        // 最后，更新tempArray
+                        await MainActor.run {
+                            self.favoriteRoomList.removeAll()
+                            self.roomList.removeAll()
+                            self.roomList = sortedModels
+                            self.favoriteRoomList = self.roomList
+                            self.isLoading = false
+                            print("结束")
+                        }
                     }
                 }
             case .history:

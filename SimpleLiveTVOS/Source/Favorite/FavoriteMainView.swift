@@ -25,7 +25,7 @@ struct FavoriteMainView: View {
         VStack {
             if appViewModel.favoriteStateModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
-                    Text("暂无喜欢的主播哦，请先去添加吧～")
+                    Text(appViewModel.favoriteStateModel.cloudKitStateString)
                         .font(.title3)
                 }else {
                     ScrollView {

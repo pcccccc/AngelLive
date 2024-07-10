@@ -157,7 +157,9 @@ struct LiveCardView: View {
                                     try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
-                                            liveViewModel.roomList.remove(at: index)
+                                            if index < liveViewModel.roomList.count {
+                                                liveViewModel.roomList.remove(at: index)
+                                            }
                                         }
                                     }
                                     liveViewModel.showToast(true, title:"取消收藏成功")
@@ -180,7 +182,9 @@ struct LiveCardView: View {
                                         try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
-                                                liveViewModel.roomList.remove(at: index)
+                                                if index < liveViewModel.roomList.count {
+                                                    liveViewModel.roomList.remove(at: index)
+                                                }
                                             }
                                         }
                                         appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
