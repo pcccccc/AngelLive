@@ -90,7 +90,7 @@ tvOS 17+
 
 ## 支持：
 
-[爱发电](https://afdian.net/a/laopc)
+[爱发电](https://afdian.com/a/laopc)
 
 ## 免责声明：
 
