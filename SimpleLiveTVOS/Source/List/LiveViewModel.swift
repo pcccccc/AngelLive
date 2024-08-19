@@ -240,6 +240,14 @@ class LiveViewModel {
                                 showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
                             }
                         }
+                        //获取是否可以访问google，如果网络环境不允许，则不获取youtube直播相关否则会卡很久
+                        let canLoadYoutube = await ApiManager.checkInternetConnection()
+                        for liveModel in resList {
+                            if liveModel.liveType == .youtube && canLoadYoutube == false {
+                                showToast(true, title: "当前网络环境无法获取Youtube房间状态\n本次将会跳过Youtube相关加载", hideAfter: 1.5)
+                                break
+                            }
+                        }
                         var fetchedModels: [LiveModel] = []
                         // 使用异步的任务组来并行处理所有的请求
                         var bilibiliModels: [LiveModel] = []
@@ -247,6 +255,8 @@ class LiveViewModel {
                             for liveModel in resList {
                                 if liveModel.liveType == .bilibili {
                                     bilibiliModels.append(liveModel)
+                                }else if liveModel.liveType == .youtube && canLoadYoutube == false {
+                                    continue
                                 }else {
                                     group.addTask {
                                         do {
@@ -405,7 +415,7 @@ class LiveViewModel {
                         self.isLoading = false
                     }
                 }catch {
-                    
+                    print(error.localizedDescription)
                 }
             }
         }else {

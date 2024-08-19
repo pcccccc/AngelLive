@@ -7,6 +7,7 @@
 
 import Foundation
 import LiveParse
+import Alamofire
 
 class ApiManager {
     /**
@@ -95,9 +96,30 @@ class ApiManager {
                 return try await YY.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
             case .youtube:
                 return try await YoutubeParse.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
-            default:
-                return try await Bilibili.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
         }
     }
 
+    /**
+     获取用户是否可以访问google。
+     
+     - Returns: 是否
+    */
+    class func checkInternetConnection() async -> Bool {
+        let url = URL(string: "https://www.google.com")!
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let resp = response as? HTTPURLResponse else {
+                return false
+            }
+            if resp.statusCode == 200 {
+                return true
+            }else {
+                return false
+            }
+        }catch {
+            return false
+        }
+    }
 }

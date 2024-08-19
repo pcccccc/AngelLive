@@ -27,6 +27,14 @@ struct FavoriteMainView: View {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
                     Text(appViewModel.favoriteStateModel.cloudKitStateString)
                         .font(.title3)
+                    Button {
+                        Task {
+                            await appViewModel.favoriteStateModel.fetchFavoriteRoomList()
+                        }
+                    } label: {
+                        Label("刷新", systemImage: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                            .font(.headline.bold())
+                    }
                 }else {
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
@@ -52,11 +60,33 @@ struct FavoriteMainView: View {
                     .font(.title3)
             }
         }
+        .overlay {
+            if liveViewModel.roomList.count > 0 {
+                VStack {
+                    Spacer()
+                    HStack {
+                        ZStack {
+                            HStack(spacing: 10) {
+                                Image(systemName: "playpause.circle")
+                                Text("刷新")
+                            }
+                            .frame(width: 190, height: 60)
+                            .background(Color("hintBackgroundColor", bundle: .main).opacity(0.4))
+                            .font(.callout.bold())
+                            .cornerRadius(8)
+                        }
+                        .frame(width: 200, height: 100)
+                        Spacer()
+                    }
+                }
+            }
+        }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
                 Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                     .font(.headline.bold())
                 Text(liveModel.toastTitle)
+                
             }
             .padding()
             .background(.black.opacity(0.6))

@@ -326,7 +326,7 @@ struct PlayerControlView: View {
                             Button(action: {
                                 refreshAction()
                             }, label: {
-                                Image(systemName: "arrow.counterclockwise")
+                                Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
                                     .foregroundColor(.white)
                                     .font(.system(size: 30, weight: .bold))
                                     .frame(width: 40, height: 40)
