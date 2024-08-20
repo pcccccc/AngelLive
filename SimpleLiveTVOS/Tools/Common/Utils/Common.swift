@@ -10,6 +10,10 @@ import CoreImage.CIFilterBuiltins
 import UIKit
 import LiveParse
 
+struct SimpleLiveNotificationNames {
+    static let playerEndPlay = Notification.Name("SimpleLive.Player.End.Play")
+}
+
 class Common {
     
     /**

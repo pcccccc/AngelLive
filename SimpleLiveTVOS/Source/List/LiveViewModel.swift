@@ -214,7 +214,7 @@ class LiveViewModel {
                     }
                 }else {
                     let subListCategory = self.selectedMainListCategory?.subList[index]
-                    Task {
+                    Task { 
                         var finalSubListCategory = subListCategory
                         if liveType == .yy {
                             finalSubListCategory?.id = self.selectedMainListCategory?.biz ?? ""

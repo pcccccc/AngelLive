@@ -28,11 +28,14 @@ struct FavoriteMainView: View {
                     Text(appViewModel.favoriteStateModel.cloudKitStateString)
                         .font(.title3)
                     Button {
-                        Task {
-                            await appViewModel.favoriteStateModel.fetchFavoriteRoomList()
-                        }
+                        appViewModel.favoriteStateModel.getState()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
+                            if appViewModel.favoriteStateModel.cloudKitReady == true {
+                                liveViewModel.getRoomList(index: 0)
+                            }
+                        })
                     } label: {
-                        Label("刷新", systemImage: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                        Label("刷新", systemImage: "arrow.counterclockwise")
                             .font(.headline.bold())
                     }
                 }else {
@@ -58,6 +61,17 @@ struct FavoriteMainView: View {
             }else {
                 Text(appViewModel.favoriteStateModel.cloudKitStateString)
                     .font(.title3)
+                Button {
+                    appViewModel.favoriteStateModel.getState()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
+                        if appViewModel.favoriteStateModel.cloudKitReady == true {
+                            liveViewModel.getRoomList(index: 0)
+                        }
+                    })
+                } label: {
+                    Label("刷新", systemImage: "arrow.counterclockwise")
+                        .font(.headline.bold())
+                }
             }
         }
         .overlay {

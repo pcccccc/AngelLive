@@ -61,6 +61,7 @@ class FavoriteStateModel: ObservableObject {
     
     func getState() {
         Task {
+            self.cloudKitStateString = "正在获取iCloud状态"
             let stateString = await CloudSQLManager.getCloudState()
             DispatchQueue.main.async {
                 self.cloudKitStateString = stateString
