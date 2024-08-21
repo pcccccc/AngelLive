@@ -29,6 +29,7 @@ final class RoomInfoViewModel {
     var currentRoomPlayArgs: [LiveQualityModel]?
     var currentPlayURL: URL?
     var currentPlayQualityString = "清晰度"
+    var currentPlayQualityQn = 0 //当前清晰度，虎牙用来存放回放时间
     var showControlView: Bool = true
     var isPlaying = false
     var douyuFirstLoad = true
@@ -85,6 +86,7 @@ final class RoomInfoViewModel {
         
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
+        currentPlayQualityQn = currentQuality.qn
         
         if currentRoom.liveType == .huya {
             option.userAgent = "HYPlayer"
@@ -131,8 +133,11 @@ final class RoomInfoViewModel {
                     }
                 }
             }
-        }else {
-            if currentQuality.liveCodeType == .hls {
+        } else {
+            if currentQuality.liveCodeType == .hls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
+                KSOptions.firstPlayerType = KSMEPlayer.self
+                KSOptions.secondPlayerType = KSMEPlayer.self
+            }else if currentQuality.liveCodeType == .hls {
                 KSOptions.firstPlayerType = KSAVPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
             }else {
@@ -313,6 +318,12 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
                 self.showControlView = false
             })
+        }
+        
+        if currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "0") == .video && state == .readyToPlay {
+            layer.seek(time: TimeInterval(currentPlayQualityQn), autoPlay: true) { _ in
+                
+            }
         }
     }
     

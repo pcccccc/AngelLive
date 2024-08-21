@@ -35,7 +35,7 @@ struct LiveCardView: View {
                     Button {
                         liveViewModel.currentRoom = liveViewModel.roomList[index]
                         liveViewModel.selectedRoomListIndex = index
-                        if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || self.liveViewModel.roomListType == .live {
+                        if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || ((self.liveViewModel.currentRoom?.liveType == .huya || self.liveViewModel.currentRoom?.liveType == .douyu) && LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .video) || self.liveViewModel.roomListType == .live {
                             if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
                                 appViewModel.historyModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
                             }
@@ -106,7 +106,7 @@ struct LiveCardView: View {
                                     HStack(spacing: 5) {
                                         HStack(spacing: 5) {
                                             Circle()
-                                                .fill(LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .live ? Color.green : Color.gray)
+                                                .fill(formatLiveStateColor())
                                                 .frame(width: 10, height: 10)
                                                 .padding(.leading, 5)
                                             Text(liveViewModel.roomList[index].liveStateFormat())
@@ -263,6 +263,14 @@ struct LiveCardView: View {
             })
         }
         
+    }
+    
+    func formatLiveStateColor() -> Color {
+        if LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .live || LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .video {
+            Color.green
+        }else {
+            Color.gray
+        }
     }
 
     func getImage() -> String {

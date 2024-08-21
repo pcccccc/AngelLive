@@ -299,14 +299,23 @@ class LiveViewModel {
                                 print("房间号\(item.roomId), 主播名字\(item.userName), 平台\(item.liveType), \(error)")
                             }
                         }
-
                         let sortedModels = fetchedModels.sorted { firstModel, secondModel in
-                            if firstModel.liveState == "1", secondModel.liveState != "1" {
-                                return true
-                            } else if firstModel.liveState != "1", secondModel.liveState == "1" {
-                                return false
+                            switch (firstModel.liveState, secondModel.liveState) {
+                                case ("1", "1"):
+                                    return true // 两个都是1，保持原有顺序
+                                case ("1", _):
+                                    return true // 第一个是1，应该排在前面
+                                case (_, "1"):
+                                    return false // 第二个是1，应该排在前面
+                                case ("2", "2"):
+                                    return true // 两个都是2，保持原有顺序
+                                case ("2", _):
+                                    return true // 第一个是2，应该排在非1的前面
+                                case (_, "2"):
+                                    return false // 第二个是2，应该排在非1的前面
+                                default:
+                                    return true // 两个都不是1和2，保持原有顺序
                             }
-                            return true // 如果两个模型的liveState相同，保持它们的当前顺序不变
                         }
 
                         // 最后，更新tempArray
