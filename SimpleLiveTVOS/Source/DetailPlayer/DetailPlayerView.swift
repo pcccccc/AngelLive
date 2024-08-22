@@ -30,7 +30,7 @@ struct DetailPlayerView: View {
             .background(.black)
         }else {
             ZStack {
-                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.option)
+                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
                     .onAppear {
                         roomInfoViewModel.playerCoordinator.playerLayer?.play()

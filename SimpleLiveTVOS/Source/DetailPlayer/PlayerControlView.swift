@@ -57,6 +57,11 @@ struct PlayerControlView: View {
         startPoint: .top,
         endPoint: .bottom
     )
+    let cardGradient = LinearGradient(stops: [
+        .init(color: .black.opacity(0.5), location: 0.0),
+        .init(color: .black.opacity(0.25), location: 0.45),
+        .init(color: .black.opacity(0), location: 0.8)
+    ], startPoint: .bottom, endPoint: .top)
     
     var body: some View {
         
@@ -127,7 +132,7 @@ struct PlayerControlView: View {
                                                     .frame(height: 210)
                                                     .background(.thinMaterial)
                                                 Rectangle()
-        //                                        .fill(gradient)
+                                                .fill(cardGradient)
                                                 .shadow(radius: 10)
                                                 .frame(height: 40)
                                                 if sectionList[index].liveWatchedCount != nil {

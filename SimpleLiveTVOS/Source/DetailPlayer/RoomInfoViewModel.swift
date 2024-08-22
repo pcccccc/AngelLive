@@ -10,6 +10,19 @@ import KSPlayer
 import LiveParse
 import SimpleToast
 import Observation
+import CoreMedia
+
+public class PlayerOptions: KSOptions {
+  public var syncSystemRate: Bool = false
+
+  override public func sei(string: String) {
+      
+  }
+  override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription?) {
+    guard syncSystemRate else { return }
+    super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
+  }
+}
 
 @Observable
 final class RoomInfoViewModel {
@@ -21,11 +34,8 @@ final class RoomInfoViewModel {
     
     @MainActor
     var playerCoordinator = KSVideoPlayer.Coordinator()
-    var option: KSOptions = {
-        let options = KSOptions()
-        options.userAgent = "libmpv"
-        return options
-    }()
+    let settingModel = SettingStore()
+    var playerOption: PlayerOptions
     var currentRoomPlayArgs: [LiveQualityModel]?
     var currentPlayURL: URL?
     var currentPlayQualityString = "清晰度"
@@ -88,6 +98,10 @@ final class RoomInfoViewModel {
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
+        var option = PlayerOptions()
+        option.userAgent = "libmpv"
+        option.syncSystemRate = settingModel.syncSystemRate
+        self.playerOption = option
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
         self.roomType = roomType
@@ -118,9 +132,9 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = currentQuality.qn
         
         if currentRoom.liveType == .huya {
-            option.userAgent = "HYPlayer"
+            self.playerOption.userAgent = "HYPlayer"
         }else {
-            option.userAgent = "libmpv"
+            self.playerOption.userAgent = "libmpv"
         }
         
         

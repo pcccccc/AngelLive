@@ -11,7 +11,7 @@ import SwiftUI
 
 struct SettingView: View {
     
-    let titles = ["哔哩哔哩登录", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
+    @State var titles = ["哔哩哔哩登录", "弹幕设置", "数据同步", "历史记录", "匹配系统动态帧率", "开源许可", "关于"]
     @State var currentTitle: String?
     @State var isLogin = false
     @State var isPushed = false
@@ -38,55 +38,60 @@ struct SettingView: View {
                 VStack(spacing: 15) {
                     Spacer()
                     ForEach(titles, id: \.self) { title in
-                        NavigationLink {
-                            if title == "哔哩哔哩登录" {
-                                BilibiliLoginView()
-                                    .background(.thinMaterial)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .environmentObject(settingStore)
-                            }else if title == "弹幕设置" {
-                                DanmuSettingView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.thinMaterial)
-                                    .environment(appViewModel)
-                            }else if title == "历史记录" {
-                                HistoryListView(appViewModel: appViewModel)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.thinMaterial)
-                            }else if title == "开源许可" {
-                                OpenSourceListView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.thinMaterial)
-                            }else if title == "数据同步" {
-                                SyncView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.thinMaterial)
-                                    .environment(appViewModel)
-                            }else {
-                                AboutUSView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.thinMaterial)
+                        if title != "匹配系统动态帧率" {
+                            NavigationLink {
+                                if title == "哔哩哔哩登录" {
+                                    BilibiliLoginView()
+                                        .background(.thinMaterial)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .environmentObject(settingStore)
+                                }else if title == "弹幕设置" {
+                                    DanmuSettingView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.thinMaterial)
+                                        .environment(appViewModel)
+                                }else if title == "历史记录" {
+                                    HistoryListView(appViewModel: appViewModel)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.thinMaterial)
+                                }else if title == "开源许可" {
+                                    OpenSourceListView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.thinMaterial)
+                                }else if title == "数据同步" {
+                                    SyncView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.thinMaterial)
+                                        .environment(appViewModel)
+                                }else {
+                                    AboutUSView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.thinMaterial)
+                                }
+                            } label: {
+                                Text(title)
+                                Spacer()
+                                if title == "哔哩哔哩登录" {
+                                    Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
+                                        .font(.system(size: 30))
+                                        .foregroundStyle(.gray)
+                                }
                             }
-                        } label: {
-//                            Button(action: {
-//                                currentTitle = title
-//                            }, label: {
-//                                HStack(alignment: .firstTextBaseline) {
-//
-//                                }
-//                                .onAppear {
-//                                }
-//                            })
-//                            .frame(height: 40)
-                            Text(title)
-                            Spacer()
-                            if title == "哔哩哔哩登录" {
-                                Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
-                                    .font(.system(size: 30))
-                                    .foregroundStyle(.gray)
+                        }else {
+                            Button {
+                                settingStore.syncSystemRate.toggle()
+                            } label: {
+                                HStack {
+                                    Text(title)
+                                    Spacer()
+                                    Text(settingStore.syncSystemRate == true ? "开": "关")
+                                        .font(.system(size: 30))
+                                        .foregroundStyle(.gray)
+                                }
                             }
                         }
                     }
+                    
                     Spacer()
                 }
                 .frame(width: geometry.size.width / 2 - 50)
@@ -95,7 +100,7 @@ struct SettingView: View {
         }
     }
     
-
+    
 }
 
 #Preview {

@@ -19,7 +19,7 @@ struct LiveCardView: View {
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
 
-    let gradient = LinearGradient(stops: [
+    let cardGradient = LinearGradient(stops: [
         .init(color: .black.opacity(0.5), location: 0.0),
         .init(color: .black.opacity(0.25), location: 0.45),
         .init(color: .black.opacity(0), location: 0.8)
@@ -76,7 +76,7 @@ struct LiveCardView: View {
                                 .background(.thinMaterial)
                                 
                             Rectangle()
-                            .fill(gradient)
+                            .fill(cardGradient)
                             .shadow(radius: 10)
                             .frame(height: 40)
                             if liveViewModel.roomList[index].liveWatchedCount != nil {
