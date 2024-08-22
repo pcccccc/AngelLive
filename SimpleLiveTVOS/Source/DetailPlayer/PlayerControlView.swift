@@ -40,34 +40,7 @@ struct PlayerControlView: View {
 
     @FocusState var state: PlayControlFocusableField?
     @FocusState var topState: PlayControlTopField?
-    @State var lastOptionState: PlayControlFocusableField?
-    @State var showTop = false
-    @State var onceTips = false
-    @State var showControl = false {
-        didSet {
-            if showControl == true {
-                controlViewOptionSecond = 5  // 重置计时器
-            }
-        }
-    }
-    @State var showTips = false {
-        didSet {
-            if showTips == true {
-                startTipsTimer()
-                onceTips = true
-            }
-        }
-    }
-    @State private var controlViewOptionSecond = 5 {
-        didSet {
-            if controlViewOptionSecond == 5 {
-                startTimer()
-            }
-        }
-    }
-    @State private var tipOptionSecond = 3
-    @State private var contolTimer: Timer? = nil
-    @State private var tipsTimer: Timer? = nil
+   
     
     let topGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
@@ -90,7 +63,7 @@ struct PlayerControlView: View {
         @Bindable var roomInfoModel = roomInfoViewModel
         
         ZStack {
-            if showTop {
+            if roomInfoViewModel.showTop {
                 VStack(spacing: 50) {
                     VStack {
                         HStack {
@@ -238,9 +211,9 @@ struct PlayerControlView: View {
                 .transition(.move(edge: .top))
                 .onExitCommand(perform: {
                     withAnimation {
-                        showTop = false
+                        roomInfoViewModel.showTop = false
                     }
-                    state = lastOptionState
+                    state = roomInfoViewModel.lastOptionState
                 })
             }else {
                 VStack {
@@ -265,7 +238,7 @@ struct PlayerControlView: View {
                     }
                     Spacer()
                 }
-                .opacity(showTips ? 1 : 0)
+                .opacity(roomInfoViewModel.showTips ? 1 : 0)
 //可以放个播放按钮
                 VStack() {
                     ZStack {
@@ -467,27 +440,31 @@ struct PlayerControlView: View {
                     .frame(height: 150)
                 }
                 .transition(.opacity)
-                .opacity(showControl ? 1 : 0)
-//                .onExitCommand {
-//                    if showControl == true {
-//                        showControl.toggle()
-//                    }
-//                }
+                .opacity(roomInfoViewModel.showControl ? 1 : 0)
+                .onExitCommand {
+                    if roomInfoViewModel.showControl == true {
+                        roomInfoViewModel.showControl = false
+                        return
+                    }
+                    if roomInfoViewModel.showControl == false {
+                        NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
+                    }
+                }
             }
         }
         .onAppear {
             state = .playPause
-            showControl = true
+            roomInfoViewModel.showControl = true
         }
         .onChange(of: state, { oldValue, newValue in
-            if showControl == false {
-                showControl.toggle()
+            if roomInfoViewModel.showControl == false {
+                roomInfoViewModel.showControl.toggle()
             }else {
-                controlViewOptionSecond = 5
+                roomInfoViewModel.controlViewOptionSecond = 5
             }
             
             if oldValue != .list && isListContentField(oldValue) == false && oldValue != nil {
-                lastOptionState = oldValue
+                roomInfoViewModel.lastOptionState = oldValue
             }
             if newValue == .left {
                 state = .danmu
@@ -495,7 +472,7 @@ struct PlayerControlView: View {
                 state = .playPause
             }else if newValue == .list {
                 withAnimation {
-                    showTop = true
+                    roomInfoViewModel.showTop = true
                     state = .listContent(0)
                 }
             }
@@ -521,48 +498,11 @@ struct PlayerControlView: View {
         }
     }
     
-    func startTimer() {
-        contolTimer?.invalidate() // 停止之前的计时器
-        contolTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            print(controlViewOptionSecond)
-            if controlViewOptionSecond > 0 {
-                controlViewOptionSecond -= 1
-            } else {
-                withAnimation {
-                    showControl = false
-                    if onceTips == false {
-                        showTips = true
-                    }
-                }
-                contolTimer?.invalidate() // 计时器停止
-            }
-        }
-    }
     
-    func startTipsTimer() {
-        
-        if onceTips {
-            return
-        }
-        
-        tipsTimer?.invalidate() // 停止之前的计时器
-        tipOptionSecond = 3 // 重置计时器
-
-        tipsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if tipOptionSecond > 0 {
-                tipOptionSecond -= 1
-            } else {
-                withAnimation {
-                    showTips = false
-                }
-                tipsTimer?.invalidate() // 计时器停止
-            }
-        }
-    }
     
     func playPauseAction() {
-        if (showControl == false) {
-            showControl = true
+        if (roomInfoViewModel.showControl == false) {
+            roomInfoViewModel.showControl = true
         }else {
             DispatchQueue.main.async {
                 if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
@@ -575,8 +515,8 @@ struct PlayerControlView: View {
     }
     
     func refreshAction() {
-        if (showControl == false) {
-            showControl = true
+        if (roomInfoViewModel.showControl == false) {
+            roomInfoViewModel.showControl = true
         }else {
             roomInfoViewModel.getPlayArgs()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
@@ -591,8 +531,8 @@ struct PlayerControlView: View {
     }
     
     func favoriteBtnAction() {
-        if (showControl == false) {
-            showControl = true
+        if (roomInfoViewModel.showControl == false) {
+            roomInfoViewModel.showControl = true
         }else {
             withAnimation(.easeInOut(duration: 0.3)) {
                 favoriteAction()
@@ -601,8 +541,8 @@ struct PlayerControlView: View {
     }
     
     func danmuAction() {
-        if (showControl == false) {
-            showControl = true
+        if (roomInfoViewModel.showControl == false) {
+            roomInfoViewModel.showControl = true
         }else {
             appViewModel.danmuSettingModel.showDanmu.toggle()
             if appViewModel.danmuSettingModel.showDanmu == false {

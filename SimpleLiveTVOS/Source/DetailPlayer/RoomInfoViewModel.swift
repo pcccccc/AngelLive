@@ -56,6 +56,35 @@ final class RoomInfoViewModel {
         alignment: .topLeading, hideAfter: 1.5
     )
     
+    var lastOptionState: PlayControlFocusableField?
+    var showTop = false
+    var onceTips = false
+    var showControl = false {
+        didSet {
+            if showControl == true {
+                controlViewOptionSecond = 5  // 重置计时器
+            }
+        }
+    }
+    var showTips = false {
+        didSet {
+            if showTips == true {
+                startTipsTimer()
+                onceTips = true
+            }
+        }
+    }
+    var controlViewOptionSecond = 5 {
+        didSet {
+            if controlViewOptionSecond == 5 {
+                startTimer()
+            }
+        }
+    }
+    var tipOptionSecond = 3
+    var contolTimer: Timer? = nil
+    var tipsTimer: Timer? = nil
+    
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
@@ -251,18 +280,18 @@ final class RoomInfoViewModel {
         self.socketConnection?.disconnect()
     }
     
-    func toggleTimer() {
-        if debugTimerIsActive == false {
-            startTimer()
-        }else {
-            stopTimer()
-        }
-    }
-    
-    func startTimer() {
-        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-        debugTimerIsActive = true
-    }
+//    func toggleTimer() {
+//        if debugTimerIsActive == false {
+//            startTimer()
+//        }else {
+//            stopTimer()
+//        }
+//    }
+//    
+//    func startTimer() {
+//        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+//        debugTimerIsActive = true
+//    }
 
     func stopTimer() {
         timer.upstream.connect().cancel()
@@ -341,5 +370,36 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         
     }
     
+    //控制层timer和顶部提示timer
+    func startTimer() {
+        contolTimer?.invalidate() // 停止之前的计时器
+        contolTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if self.controlViewOptionSecond > 0 {
+                self.controlViewOptionSecond -= 1
+            } else {
+                self.showControl = false
+                if self.onceTips == false {
+                    self.showTips = true
+                }
+                self.contolTimer?.invalidate() // 计时器停止
+            }
+        }
+    }
     
+    func startTipsTimer() {
+        if onceTips {
+            return
+        }
+        tipsTimer?.invalidate() // 停止之前的计时器
+        tipOptionSecond = 3 // 重置计时器
+
+        tipsTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if self.tipOptionSecond > 0 {
+                self.tipOptionSecond -= 1
+            } else {
+                self.showTips = false
+                self.tipsTimer?.invalidate() // 计时器停止
+            }
+        }
+    }
 }

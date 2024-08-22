@@ -65,15 +65,17 @@ struct DetailPlayerView: View {
                 }
                 .zIndex(2)
             }
-            .onAppear {
-                NotificationCenter.default.addObserver(self, selector: Selector(("endPlay")), name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
-            }
-            .onDisappear {
-                NotificationCenter.default.removeObserver(self, name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
-            }
-            .onExitCommand(perform: {
+            .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
                 endPlay()
-            })
+            }
+//            .onExitCommand(perform: {
+//                if roomInfoViewModel.showControlView == true {
+//                    return
+//                }
+//                if roomInfoViewModel.showControlView == false {
+//                    endPlay()
+//                }
+//            })
             
         }
     }
