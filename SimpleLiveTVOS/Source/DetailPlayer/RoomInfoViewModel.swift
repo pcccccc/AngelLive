@@ -31,6 +31,8 @@ final class RoomInfoViewModel {
     
     var roomList: [LiveModel] = []
     var currentRoom: LiveModel
+    var currentRoomIsLiked = false
+    var currentRoomLikeLoading = false
     
     @MainActor
     var playerCoordinator = KSVideoPlayer.Coordinator()
@@ -104,6 +106,8 @@ final class RoomInfoViewModel {
         self.playerOption = option
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
+        let list = appViewModel.favoriteModel?.roomList ?? []
+        self.currentRoomIsLiked = list.contains { $0.roomId == currentRoom.roomId }
         self.roomType = roomType
         getPlayArgs()
     }

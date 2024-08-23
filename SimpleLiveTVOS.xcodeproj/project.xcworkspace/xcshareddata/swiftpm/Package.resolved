@@ -1,5 +1,5 @@
 {
-  "originHash" : "066911d6c9f9ff4178bab255044a3a6a3bc6166d7d3b9d5dd7812c9be5cc1dae",
+  "originHash" : "c31b25c79a64e0551097ed28eb9648bfaef045bd011127087769023b0e596fad",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -51,8 +51,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/ColorfulX.git",
       "state" : {
-        "revision" : "24bbc2f4b27c853f2be5ebed144252d9bcd27ee0",
-        "version" : "2.4.5"
+        "revision" : "4425033690d83eea09c5e8a43a3d56b042b20bcb",
+        "version" : "5.3.1"
+      }
+    },
+    {
+      "identity" : "colorvector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/ColorVector.git",
+      "state" : {
+        "revision" : "031ce6ce65c0b347fb192302aa8ec4a17cc1494f",
+        "version" : "1.0.3"
       }
     },
     {
@@ -101,6 +110,24 @@
       }
     },
     {
+      "identity" : "msdisplaylink",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/MSDisplayLink.git",
+      "state" : {
+        "revision" : "08ad21d886e2e3f990ccbc6813eb6cdad8c427cd",
+        "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "pow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/EmergeTools/Pow",
+      "state" : {
+        "revision" : "f0d0f3e72d42beaf2b01f1cb798e1b55902814eb",
+        "version" : "1.0.4"
+      }
+    },
+    {
       "identity" : "simpletoast",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sanzaru/SimpleToast.git",
@@ -114,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/SpringInterpolation.git",
       "state" : {
-        "revision" : "be8721cffc87ec514fa13ba5dab586a2730f51c9",
-        "version" : "1.1.2"
+        "revision" : "ff526fec3ef6df62395141a0cc55a4ba2d82ee81",
+        "version" : "1.2.2"
       }
     },
     {

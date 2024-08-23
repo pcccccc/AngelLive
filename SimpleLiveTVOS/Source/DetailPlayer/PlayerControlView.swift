@@ -11,6 +11,7 @@ import KSPlayer
 import LiveParse
 import Shimmer
 import Kingfisher
+import Pow
 
 enum PlayControlFocusableField: Hashable {
     case playPause
@@ -223,16 +224,27 @@ struct PlayerControlView: View {
                             Button(action: {
                                 favoriteBtnAction()
                             }, label: {
-                                Image(systemName: (appViewModel.favoriteModel?.roomList ?? []).contains(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId }) ? "heart.fill" : "heart")
-                                    .foregroundColor((appViewModel.favoriteModel?.roomList ?? []).contains(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId }) ? .red : .white)
-                                    .font(.system(size: 30, weight: .bold))
-                                    .frame(width: 40, height: 40)
-                                    .padding(.top, 3)
-                                    .contentTransition(.symbolEffect(.replace))
+                                if roomInfoModel.currentRoomLikeLoading {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                        .frame(width: 40, height: 40)
+                                }else {
+                                    Image(systemName: "heart.fill")
+                                        .foregroundColor(roomInfoModel.currentRoomIsLiked ? .red : .white)
+                                        .font(.system(size: 30, weight: .bold))
+                                        .frame(width: 40, height: 40)
+                                        .padding(.top, 3)
+                                }
+                                    
                             })
                             .clipShape(.circle)
                             .padding(.leading, -20)
-                            
+                            .changeEffect(
+                                .spray(origin: UnitPoint(x: 0.25, y: 0.5)) {
+                                    Image(systemName:roomInfoModel.currentRoomIsLiked ? "heart.fill" : "heart.slash.fill" )
+                                    .foregroundStyle(.red)
+                                }, value: roomInfoModel.currentRoomIsLiked)
+//                            .tint(roomInfoModel.currentRoomIsLiked ? .red : .gray)
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
                                     .frame(width: 40)
@@ -386,17 +398,22 @@ struct PlayerControlView: View {
     }
     
     func favoriteAction() {
+        roomInfoViewModel.currentRoomLikeLoading = true
         if appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
                 try await appViewModel.favoriteStateModel.addFavorite(room: roomInfoViewModel.currentRoom)
                 appViewModel.favoriteModel?.roomList.append(roomInfoViewModel.currentRoom)
+                roomInfoViewModel.currentRoomIsLiked = true
                 roomInfoViewModel.showToast(true, title: "收藏成功")
+                roomInfoViewModel.currentRoomLikeLoading = false
             }
         }else {
             Task {
                 try await  appViewModel.favoriteStateModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
                 appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId })
+                roomInfoViewModel.currentRoomIsLiked = false
                 roomInfoViewModel.showToast(true, title: "取消收藏成功")
+                roomInfoViewModel.currentRoomLikeLoading = false
             }
         }
     }
@@ -437,9 +454,7 @@ struct PlayerControlView: View {
         if (roomInfoViewModel.showControl == false) {
             roomInfoViewModel.showControl = true
         }else {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                favoriteAction()
-            }
+            favoriteAction()
         }
     }
     
@@ -495,6 +510,5 @@ struct PlayerControlView: View {
                 break
         }
     }
-    
     
 }

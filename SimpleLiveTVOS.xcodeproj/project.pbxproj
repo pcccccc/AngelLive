@@ -29,10 +29,11 @@
 		4F16B4412C78228B00AA7A7E /* PlayerControlCardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F16B4402C78228B00AA7A7E /* PlayerControlCardViewModel.swift */; };
 		4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F22D67B2BF1AB9400497F3A /* LiveParse */; };
 		4F5AD4442C252896005A2E5B /* HistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5AD4432C252896005A2E5B /* HistoryModel.swift */; };
+		4F61662E2C786A79008FED0D /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 4F61662D2C786A79008FED0D /* Pow */; };
+		4F64860C2C783FFA00716373 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F64860B2C783FFA00716373 /* ColorfulX */; };
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F6C40382C7590DA00A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40372C7590DA00A5BEDA /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
-		4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73D21B2B2D3BA500689369 /* ColorfulX */; };
 		4F73DB632C1BF6D2001C38C9 /* SimpleLiveViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F73DB622C1BF6D2001C38C9 /* SimpleLiveViewModel.swift */; };
 		4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73DB652C1C1ABB001C38C9 /* Cache */; };
 		4F9A9B772C19B01200F8BB44 /* IndicatorMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A9B762C19B01200F8BB44 /* IndicatorMenuView.swift */; };
@@ -192,6 +193,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4F61662E2C786A79008FED0D /* Pow in Frameworks */,
 				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
 				4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */,
 				FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */,
@@ -199,6 +201,7 @@
 				FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */,
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
 				FB29265D2C58991500A1F07F /* LiveParse in Frameworks */,
+				4F64860C2C783FFA00716373 /* ColorfulX in Frameworks */,
 				FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */,
 				4FB732422B988CDF00F02249 /* AcknowList in Frameworks */,
 				FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */,
@@ -209,7 +212,6 @@
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
 				4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */,
 				4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */,
-				4F73D21C2B2D3BA500689369 /* ColorfulX in Frameworks */,
 				4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				4F6C40382C7590DA00A5BEDA /* LiveParse in Frameworks */,
@@ -554,7 +556,6 @@
 				FB89E1602B1340870083116D /* KSPlayer */,
 				FB89E1632B1340DA0083116D /* KSPlayer */,
 				FB99EA452B1346A400C0C5DA /* KSPlayer */,
-				4F73D21B2B2D3BA500689369 /* ColorfulX */,
 				4F1492402B44F4FC004073DB /* LiveParse */,
 				4FC475412B563C8D006A102D /* Shimmer */,
 				4FB7323E2B98884400F02249 /* AcknowList */,
@@ -572,6 +573,8 @@
 				FB29265C2C58991500A1F07F /* LiveParse */,
 				4F6C40342C75885500A5BEDA /* LiveParse */,
 				4F6C40372C7590DA00A5BEDA /* LiveParse */,
+				4F64860B2C783FFA00716373 /* ColorfulX */,
+				4F61662D2C786A79008FED0D /* Pow */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -654,7 +657,6 @@
 				FB5101962B0ED76A00A1AE0D /* XCRemoteSwiftPackageReference "SWCompression" */,
 				FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 				FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */,
-				4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
 				4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */,
 				FB525FD92BB9D51900BFA18C /* XCRemoteSwiftPackageReference "UDPBroadcastConnection" */,
@@ -663,6 +665,8 @@
 				4FDFAE2C2BFC3AD9008CFDFA /* XCRemoteSwiftPackageReference "KSPlayer" */,
 				4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */,
 				4F6C40362C7590DA00A5BEDA /* XCRemoteSwiftPackageReference "LiveParse" */,
+				4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */,
+				4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -1102,20 +1106,28 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/EmergeTools/Pow";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.4;
+			};
+		};
+		4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Lakr233/ColorfulX";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.3.1;
+			};
+		};
 		4F6C40362C7590DA00A5BEDA /* XCRemoteSwiftPackageReference "LiveParse" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pcccccc/LiveParse";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.3.8;
-			};
-		};
-		4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Lakr233/ColorfulX.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.1.3;
 			};
 		};
 		4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */ = {
@@ -1249,6 +1261,16 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
+		4F61662D2C786A79008FED0D /* Pow */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */;
+			productName = Pow;
+		};
+		4F64860B2C783FFA00716373 /* ColorfulX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */;
+			productName = ColorfulX;
+		};
 		4F6C40342C75885500A5BEDA /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
@@ -1261,11 +1283,6 @@
 		4F70CD1C2BAAE2E100F21EDA /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
-		};
-		4F73D21B2B2D3BA500689369 /* ColorfulX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F73D21A2B2D3BA500689369 /* XCRemoteSwiftPackageReference "ColorfulX" */;
-			productName = ColorfulX;
 		};
 		4F73DB652C1C1ABB001C38C9 /* Cache */ = {
 			isa = XCSwiftPackageProductDependency;
