@@ -57,11 +57,6 @@ struct PlayerControlView: View {
         startPoint: .top,
         endPoint: .bottom
     )
-    let cardGradient = LinearGradient(stops: [
-        .init(color: .black.opacity(0.5), location: 0.0),
-        .init(color: .black.opacity(0.25), location: 0.45),
-        .init(color: .black.opacity(0), location: 0.8)
-    ], startPoint: .bottom, endPoint: .top)
     
     var body: some View {
         
@@ -74,24 +69,17 @@ struct PlayerControlView: View {
                         HStack {
                             Spacer()
                             if appViewModel.favoriteStateModel.cloudKitReady {
-                                Button("收藏") {
-                                   
-                                }
+                                Button("收藏") {}
                                 .focused($topState, equals: .section(0))
                             }
-                            Button("历史") {
-                                
-                            }
+                            Button("历史") {}
                             .focused($topState, equals: .section(1))
                             if roomInfoModel.roomType == .live {
-                                Button("分区") {
-                                    
-                                }
+                                Button("分区") {}
                                 .focused($topState, equals: .section(2))
                             }
                             Spacer()
                         }
-
                         .foregroundColor(.white)
                         .buttonStyle(.plain)
                         .focusSection()
@@ -107,94 +95,10 @@ struct PlayerControlView: View {
                         ScrollView(.horizontal) {
                             LazyHGrid(rows: [GridItem(.fixed(192))], content: {
                                 ForEach(sectionList.indices, id: \.self) { index in
-                                    VStack {
-                                        Button {
-                                            changeRoom(index)
-                                        } label: {
-                                            ZStack(alignment: .bottom) {
-                                                KFImage(URL(string: sectionList[index].roomCover))
-                                                    .placeholder {
-                                                        Image("placeholder")
-                                                            .resizable()
-                                                            .frame(width: 320, height: 210)
-                                                    }
-                                                    .resizable()
-                                                    .frame(width: 320, height: 210)
-                                                    .blur(radius: 10)
-                                                KFImage(URL(string: sectionList[index].roomCover))
-                                                    .placeholder {
-                                                        Image("placeholder")
-                                                            .resizable()
-                                                            .frame(width: 320, height: 210)
-                                                    }
-                                                    .resizable()
-                                                    .aspectRatio(contentMode: .fit)
-                                                    .frame(height: 210)
-                                                    .background(.thinMaterial)
-                                                Rectangle()
-                                                .fill(cardGradient)
-                                                .shadow(radius: 10)
-                                                .frame(height: 40)
-                                                if sectionList[index].liveWatchedCount != nil {
-                                                    HStack {
-                                                        Spacer()
-                                                        HStack(spacing: 5) {
-                                                            Image(systemName: "eye")
-                                                                .font(.system(size: 14))
-                                                            Text(sectionList[index].liveWatchedCount!.formatWatchedCount())
-                                                                .font(.system(size: 18))
-                                                        }
-                                                        .foregroundColor(.white)
-                                                        .padding([.trailing], 10)
-                                                    }
-                                                    .frame(height: 30, alignment: .trailing)
-                                                }
-                                                if selectIndex != 2 { // 如果不为直播页面，则展示对应平台和直播状态
-                                                    HStack {
-                                                        Image(uiImage: .init(named: Common.getImage(sectionList[index].liveType))!)
-                                                            .resizable()
-                                                            .frame(width: 40, height: 40)
-                                                            .cornerRadius(5)
-                                                            .padding(.top, 5)
-                                                            .padding(.leading, 5)
-                                                        Spacer()
-                                                        HStack(spacing: 5) {
-                                                            HStack(spacing: 5) {
-                                                                Circle()
-                                                                    .fill(LiveState(rawValue: sectionList[index].liveState ?? "3") == .live ? Color.green : Color.gray)
-                                                                    .frame(width: 10, height: 10)
-                                                                    .padding(.leading, 5)
-                                                                Text(sectionList[index].liveStateFormat())
-                                                                    .font(.system(size: 18))
-                                                                    .foregroundColor(Color.white)
-                                                                    .padding(.trailing, 5)
-                                                                    .padding(.top, 5)
-                                                                    .padding(.bottom, 5)
-                                                            }
-                                                            .background(Color("favorite_right_hint"))
-                                                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                                                        }
-                                                        .padding(.trailing, 5)
-                                                    }
-                                                    .padding(.bottom, 165)
-                                                }
-                                            }
-                                        }
-                                        .buttonStyle(.card)
-                                        .focused($topState, equals: .list(index))
-                                        .padding(.leading, 15)
-                                        Text("\(sectionList[index].userName) - \(sectionList[index].roomTitle)")
-                                            .font(.system(size: 22))
-                                            .opacity(topState == .list(index) ? 1 : 0)
-                                            .transition(.opacity)
-                                            .frame(width: 360)
-                                            .foregroundColor(.white)
-                                            .padding(.leading, 15)
-                                            .padding(.top, 10)
-                                            .animation(.easeInOut(duration: 0.25), value: topState == .list(index))
-        //                                .focused($state, equals: .listContent(i))
+                                    PlayerControlCardView() { liveModel in
+                                        changeRoom(liveModel)
                                     }
-                                    
+                                        .environment(PlayerControlCardViewModel(liveModel: sectionList[index], cardIndex: index, selectIndex: selectIndex))
                                 }
                             })
                             .padding()
@@ -232,12 +136,6 @@ struct PlayerControlView: View {
                             Image(systemName: "chevron.compact.down")
                                 .foregroundStyle(.white)
                         }
-//                        .background {
-//                            Rectangle()
-//                                .fill(topTipGradient)
-//                                .shadow(radius: 10)
-//                                .frame(width: 1920, height: 50)
-//                        }
                         .shimmering(active: true)
                         Spacer()
                     }
@@ -565,8 +463,14 @@ struct PlayerControlView: View {
         return false
     }
     
-    @MainActor func changeRoom(_ index: Int) {
-        roomInfoViewModel.reloadRoom(liveModel: sectionList[index])
+    @MainActor func changeRoom(_ liveModel: LiveModel) {
+        if liveModel.liveState == "" || liveModel.liveState == LiveState.unknow.rawValue {
+            roomInfoViewModel.showToast(false, title: "请等待房间状态同步")
+        }else if liveModel.liveState == LiveState.close.rawValue {
+            roomInfoViewModel.showToast(false, title: "主播已经下播")
+        }else {
+            roomInfoViewModel.reloadRoom(liveModel: liveModel)
+        }
     }
     
     func changeList(_ index: Int) {
@@ -582,12 +486,7 @@ struct PlayerControlView: View {
             case 1:
                 Task {
                     for item in appViewModel.historyModel.watchList {
-                        var varItem = item
-                        let resp = try await ApiManager.getCurrentRoomLiveState(roomId: item.roomId, userId: item.userId, liveType: item.liveType)
-                        varItem.liveState = resp.rawValue
-                        if resp == .live {
-                            sectionList.append(varItem)
-                        }
+                        sectionList.append(item)
                     }
                 }
             case 2:

@@ -25,8 +25,9 @@
 		4F05A6C52B50CB6E0033214E /* SearchStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6C42B50CB6E0033214E /* SearchStore.swift */; };
 		4F05A6C72B50CF6C0033214E /* FavoriteStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F05A6C62B50CF6C0033214E /* FavoriteStateModel.swift */; };
 		4F1492412B44F4FC004073DB /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F1492402B44F4FC004073DB /* LiveParse */; };
+		4F16B43F2C781B6C00AA7A7E /* PlayerControlCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F16B43E2C781B6C00AA7A7E /* PlayerControlCardView.swift */; };
+		4F16B4412C78228B00AA7A7E /* PlayerControlCardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F16B4402C78228B00AA7A7E /* PlayerControlCardViewModel.swift */; };
 		4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F22D67B2BF1AB9400497F3A /* LiveParse */; };
-		4F44D9122C1DA56F0029B6E6 /* TestNewControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F44D9112C1DA56F0029B6E6 /* TestNewControlView.swift */; };
 		4F5AD4442C252896005A2E5B /* HistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5AD4432C252896005A2E5B /* HistoryModel.swift */; };
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F6C40382C7590DA00A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40372C7590DA00A5BEDA /* LiveParse */; };
@@ -135,7 +136,8 @@
 		4F05A6B32B50CAD90033214E /* HistoryListView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HistoryListView.swift; sourceTree = "<group>"; };
 		4F05A6C42B50CB6E0033214E /* SearchStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchStore.swift; sourceTree = "<group>"; };
 		4F05A6C62B50CF6C0033214E /* FavoriteStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteStateModel.swift; sourceTree = "<group>"; };
-		4F44D9112C1DA56F0029B6E6 /* TestNewControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestNewControlView.swift; sourceTree = "<group>"; };
+		4F16B43E2C781B6C00AA7A7E /* PlayerControlCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlCardView.swift; sourceTree = "<group>"; };
+		4F16B4402C78228B00AA7A7E /* PlayerControlCardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlCardViewModel.swift; sourceTree = "<group>"; };
 		4F5AD4432C252896005A2E5B /* HistoryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryModel.swift; sourceTree = "<group>"; };
 		4F73DB622C1BF6D2001C38C9 /* SimpleLiveViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveViewModel.swift; sourceTree = "<group>"; };
 		4F9A9B762C19B01200F8BB44 /* IndicatorMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IndicatorMenuView.swift; sourceTree = "<group>"; };
@@ -262,7 +264,8 @@
 				4F05A6A22B50CAD90033214E /* PlayerControlView.swift */,
 				4F05A6A32B50CAD90033214E /* RoomInfoViewModel.swift */,
 				4F05A6A42B50CAD90033214E /* DetailPlayerView.swift */,
-				4F44D9112C1DA56F0029B6E6 /* TestNewControlView.swift */,
+				4F16B43E2C781B6C00AA7A7E /* PlayerControlCardView.swift */,
+				4F16B4402C78228B00AA7A7E /* PlayerControlCardViewModel.swift */,
 			);
 			path = DetailPlayer;
 			sourceTree = "<group>";
@@ -708,7 +711,6 @@
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
 				4F05A6B62B50CAD90033214E /* PlayerControlView.swift in Sources */,
 				4FBAB9122B47A42200A77A5C /* DanmakuAsyncLayer.swift in Sources */,
-				4F44D9122C1DA56F0029B6E6 /* TestNewControlView.swift in Sources */,
 				4FF2D3732BBC0369002822DD /* UIColor+Extension.swift in Sources */,
 				4F05A6B72B50CAD90033214E /* RoomInfoViewModel.swift in Sources */,
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,
@@ -726,6 +728,7 @@
 				4FF2D37C2BBC0597002822DD /* SwipeView.swift in Sources */,
 				4F05A6BB2B50CAD90033214E /* LiveViewModel.swift in Sources */,
 				4F73DB632C1BF6D2001C38C9 /* SimpleLiveViewModel.swift in Sources */,
+				4F16B4412C78228B00AA7A7E /* PlayerControlCardViewModel.swift in Sources */,
 				4F05A6C32B50CAD90033214E /* HistoryListView.swift in Sources */,
 				4FBAB91F2B47A8A200A77A5C /* DanmakuTextCell.swift in Sources */,
 				4FBAB9112B47A42200A77A5C /* DanmakuView.swift in Sources */,
@@ -750,6 +753,7 @@
 				4FF2D37A2BBC0399002822DD /* DanmuSettingStore.swift in Sources */,
 				4FF2D37E2BBC06C2002822DD /* QRCodeView.swift in Sources */,
 				4FBAB9152B47A42200A77A5C /* DanmakuCellModel.swift in Sources */,
+				4F16B43F2C781B6C00AA7A7E /* PlayerControlCardView.swift in Sources */,
 				4F05A6B42B50CAD90033214E /* DanmuView.swift in Sources */,
 				4FBAB9172B47A42200A77A5C /* DanmakuGifCellModel.swift in Sources */,
 				4F05A6B92B50CAD90033214E /* FavoriteMainView.swift in Sources */,
