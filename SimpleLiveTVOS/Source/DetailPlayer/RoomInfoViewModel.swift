@@ -71,6 +71,7 @@ final class RoomInfoViewModel {
     var lastOptionState: PlayControlFocusableField?
     var showTop = false
     var onceTips = false
+    var showDanmuSettingView = false
     var showControl = false {
         didSet {
             if showControl == true {

@@ -23,6 +23,7 @@ enum PlayControlFocusableField: Hashable {
     case list
     case left
     case right
+    case danmuSetting
 }
 
 enum PlayControlTopField: Hashable {
@@ -41,7 +42,7 @@ struct PlayerControlView: View {
 
     @FocusState var state: PlayControlFocusableField?
     @FocusState var topState: PlayControlTopField?
-   
+    @FocusState var showDanmuSetting: Bool
     
     let topGradient = LinearGradient(
         gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
@@ -144,6 +145,28 @@ struct PlayerControlView: View {
                 }
                 .opacity(roomInfoViewModel.showTips ? 1 : 0)
 //可以放个播放按钮
+                if roomInfoModel.showDanmuSettingView == true {
+                    GeometryReader { geometry in
+                        HStack {
+                            Spacer()
+                            DanmuSettingMainView(showDanmuView: _showDanmuSetting)
+                                .environment(appViewModel)
+                                .frame(width: geometry.size.width / 2 - 100, height: geometry.size.height)
+                                .padding([.leading, .trailing], 50)
+                                .background(.thinMaterial)
+                                .focused($state, equals: .danmuSetting)
+                                .onExitCommand {
+                                    if roomInfoModel.showDanmuSettingView == true {
+                                        roomInfoModel.showDanmuSettingView.toggle()
+                                        showDanmuSetting.toggle()
+                                        state = roomInfoViewModel.lastOptionState
+                                        roomInfoViewModel.showControl = true
+                                    }
+                                }
+                        }
+                    }
+                }
+                
                 VStack() {
                     ZStack {
                         HStack {
@@ -320,6 +343,33 @@ struct PlayerControlView: View {
                         
                         VStack {
                             Button(action: {
+                                if roomInfoModel.showControlView == false {
+                                    roomInfoModel.showControlView = true
+                                }else {
+                                    roomInfoModel.showDanmuSettingView = true
+                                    roomInfoModel.showControl = false
+                                    showDanmuSetting = true
+                                    state = .danmuSetting
+                                }
+                            }, label: {
+                                Image("icon-danmu-setting-focus")
+                                    .resizable()
+                                    .frame(width: 40, height: 40)
+                            })
+                            .focused($state, equals: .danmuSetting)
+                            .clipShape(.circle)
+                            
+                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
+                                Text("")
+                                    .frame(width: 40)
+                            })
+                            .focused($state, equals: .list)
+                            .opacity(0)
+                        }
+                        .padding(.top, 60)
+                        
+                        VStack {
+                            Button(action: {
                                 danmuAction()
                             }, label: {
                                 Image(appViewModel.danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
@@ -359,6 +409,10 @@ struct PlayerControlView: View {
                 .onExitCommand {
                     if roomInfoViewModel.showControl == true {
                         roomInfoViewModel.showControl = false
+                        return
+                    }
+                    if roomInfoViewModel.showDanmuSettingView == true {
+                        state = roomInfoViewModel.lastOptionState
                         return
                     }
                     if roomInfoViewModel.showControl == false {

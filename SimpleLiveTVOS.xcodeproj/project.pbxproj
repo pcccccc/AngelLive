@@ -91,6 +91,7 @@
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
 		FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101972B0ED76A00A1AE0D /* SWCompression */; };
 		FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */ = {isa = PBXBuildFile; productRef = FB525FDA2BB9D51900BFA18C /* UDPBroadcast */; };
+		FB5C3FD92C79C86A00865D6E /* DanmuSettingMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5C3FD82C79C86A00865D6E /* DanmuSettingMainView.swift */; };
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
@@ -185,6 +186,7 @@
 		4FF2D3812BBC0C18002822DD /* SettingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingStore.swift; sourceTree = "<group>"; };
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB21249C2B989E1A004C916F /* Package.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = Package.resolved; path = SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
+		FB5C3FD82C79C86A00865D6E /* DanmuSettingMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingMainView.swift; sourceTree = "<group>"; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -315,6 +317,7 @@
 				4FB732362B9882C100F02249 /* OpenSourceListView.swift */,
 				4FCA39162BBA4EB800506675 /* SyncView.swift */,
 				4F5AD4432C252896005A2E5B /* HistoryModel.swift */,
+				FB5C3FD82C79C86A00865D6E /* DanmuSettingMainView.swift */,
 			);
 			path = Setting;
 			sourceTree = "<group>";
@@ -722,6 +725,7 @@
 				4FF2D3772BBC0369002822DD /* String+Extension.swift in Sources */,
 				4FE0E4282BBD5D720053D69F /* FullScreenLoadingView.swift in Sources */,
 				4F05A6BD2B50CAD90033214E /* LeftMenu.swift in Sources */,
+				FB5C3FD92C79C86A00865D6E /* DanmuSettingMainView.swift in Sources */,
 				4FCA39172BBA4EB800506675 /* SyncView.swift in Sources */,
 				4F05A6C72B50CF6C0033214E /* FavoriteStateModel.swift in Sources */,
 				4F05A6C12B50CAD90033214E /* BilibiliLoginView.swift in Sources */,
