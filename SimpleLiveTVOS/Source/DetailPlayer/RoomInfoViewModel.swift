@@ -97,6 +97,7 @@ final class RoomInfoViewModel {
     var tipOptionSecond = 3
     var contolTimer: Timer? = nil
     var tipsTimer: Timer? = nil
+    var liveFlagTimer: Timer? = nil
     
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
@@ -268,6 +269,16 @@ final class RoomInfoViewModel {
     @MainActor func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel]) {
         self.currentRoomPlayArgs = playArgs
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+        //开一个定时，检查主播是否已经下播
+        liveFlagTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
+            Task {
+                let state = try await ApiManager.getCurrentRoomLiveState(roomId: self.currentRoom.roomId, userId: self.currentRoom.userId, liveType: self.currentRoom.liveType)
+                if state == .close || state == .unknow {
+                    NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
+                    self.liveFlagTimer?.invalidate()
+                }
+            }
+        }
     }
     
     @MainActor func setPlayerDelegate() {

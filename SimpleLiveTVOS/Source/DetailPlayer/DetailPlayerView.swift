@@ -30,6 +30,8 @@ struct DetailPlayerView: View {
             .background(.black)
         }else {
             ZStack {
+            
+//                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:URL(string: "https://onlinetestcase.com/wp-content/uploads/2023/06/1MB.mp4")!, options: roomInfoViewModel.playerOption)
                 KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
                     .onAppear {
