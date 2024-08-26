@@ -70,6 +70,13 @@ struct ListMainView: View {
                                 })
                                 .frame(width: 370, height: 280)
                         }
+                        if liveViewModel.isLoading {
+                            LoadingView()
+                                .frame(width: 370, height: 280)
+                                .cornerRadius(5)
+                                .shimmering(active: true)
+                                .redacted(reason: .placeholder)
+                        }
                     }
                 }
 //                .scrollTransition { content, phase in
