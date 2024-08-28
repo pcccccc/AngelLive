@@ -98,6 +98,8 @@ final class RoomInfoViewModel {
     var contolTimer: Timer? = nil
     var tipsTimer: Timer? = nil
     var liveFlagTimer: Timer? = nil
+    var danmuServerIsConnected = false
+    var danmuServerIsLoading = false
     
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
@@ -204,12 +206,12 @@ final class RoomInfoViewModel {
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
-                    self.currentPlayURL = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
+                    self.currentPlayURL = URL(string: currentQuality?.url ?? lastCurrentPlayURL?.absoluteString ?? "")!
                 }
             }
         }else {
             douyuFirstLoad = false
-            self.currentPlayURL = URL(string: currentQuality.url)!
+            self.currentPlayURL = URL(string: currentQuality.url )!
         }
         
         if currentRoom.liveType == .yy && yyFirstLoad == false {
@@ -279,6 +281,9 @@ final class RoomInfoViewModel {
                 }
             }
         }
+        if appViewModel.danmuSettingModel.showDanmu {
+            getDanmuInfo()
+        }
     }
     
     @MainActor func setPlayerDelegate() {
@@ -287,7 +292,11 @@ final class RoomInfoViewModel {
     }
     
     func getDanmuInfo() {
+        if danmuServerIsConnected == true || danmuServerIsLoading == true {
+            return
+        }
         Task {
+            danmuServerIsLoading = true
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
             switch currentRoom.liveType {
                 case .bilibili:
@@ -308,6 +317,9 @@ final class RoomInfoViewModel {
     
     func disConnectSocket() {
         self.socketConnection?.disconnect()
+//        self.socketConnection?.socket?.forceDisconnect()
+        self.socketConnection = nil
+        socketConnection?.delegate = nil
     }
     
 //    func toggleTimer() {
@@ -340,11 +352,13 @@ final class RoomInfoViewModel {
 
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidConnect() {
-        
+        danmuServerIsConnected = true
+        danmuServerIsLoading = false
     }
     
     func webSocketDidDisconnect(error: Error?) {
-        
+        danmuServerIsConnected = false
+        danmuServerIsLoading = false
     }
     
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
@@ -361,7 +375,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         douyuFirstLoad = true
         yyFirstLoad = true
         getPlayArgs()
-//        getDanmuInfo()
     }
 }
 

@@ -312,8 +312,11 @@ struct PlayerControlView: View {
                                                             }
                                                         })
                                                     } label: {
-
-                                                        Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
+                                                        if index < roomInfoViewModel.currentRoomPlayArgs?.count ?? 0 {
+                                                            Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
+                                                        }else {
+                                                            Text("")
+                                                        }
                                                     }
                                                 }
                                             } label: {
@@ -471,8 +474,6 @@ struct PlayerControlView: View {
             }
         }
     }
-    
-    
     
     func playPauseAction() {
         if (roomInfoViewModel.showControl == false) {

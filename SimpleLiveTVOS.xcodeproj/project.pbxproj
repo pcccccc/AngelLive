@@ -31,7 +31,6 @@
 		4F5AD4442C252896005A2E5B /* HistoryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5AD4432C252896005A2E5B /* HistoryModel.swift */; };
 		4F61662E2C786A79008FED0D /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 4F61662D2C786A79008FED0D /* Pow */; };
 		4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6166302C7C8E84008FED0D /* LiveParse */; };
-		4F6166342C7C91D7008FED0D /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6166332C7C91D7008FED0D /* LiveParse */; };
 		4F64860C2C783FFA00716373 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 4F64860B2C783FFA00716373 /* ColorfulX */; };
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
@@ -86,6 +85,7 @@
 		4FF2D3802BBC06EE002822DD /* QRCodeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D37F2BBC06EE002822DD /* QRCodeStore.swift */; };
 		4FF2D3822BBC0C18002822DD /* SettingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF2D3812BBC0C18002822DD /* SettingStore.swift */; };
 		FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB15C6322C1B353900D93C64 /* LiveParse */; };
+		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
 		FB21249D2B989E1A004C916F /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB21249C2B989E1A004C916F /* Package.resolved */; };
 		FB29265D2C58991500A1F07F /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB29265C2C58991500A1F07F /* LiveParse */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
@@ -94,6 +94,7 @@
 		FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */ = {isa = PBXBuildFile; productRef = FB525FDA2BB9D51900BFA18C /* UDPBroadcast */; };
 		FB5C3FD92C79C86A00865D6E /* DanmuSettingMainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5C3FD82C79C86A00865D6E /* DanmuSettingMainView.swift */; };
 		FB5C3FDC2C7B5F5000865D6E /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB5C3FDB2C7B5F5000865D6E /* LiveParse */; };
+		FB76CA592C7EFF2000F95FA2 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB76CA582C7EFF2000F95FA2 /* LiveParse */; };
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
@@ -197,6 +198,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB76CA592C7EFF2000F95FA2 /* LiveParse in Frameworks */,
 				4F61662E2C786A79008FED0D /* Pow in Frameworks */,
 				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
 				4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */,
@@ -228,7 +230,7 @@
 				4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */,
 				4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
-				4F6166342C7C91D7008FED0D /* LiveParse in Frameworks */,
+				FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */,
 				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
 				4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */,
 				FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */,
@@ -583,7 +585,8 @@
 				4F61662D2C786A79008FED0D /* Pow */,
 				FB5C3FDB2C7B5F5000865D6E /* LiveParse */,
 				4F6166302C7C8E84008FED0D /* LiveParse */,
-				4F6166332C7C91D7008FED0D /* LiveParse */,
+				FB1D86B82C7EC13F00A679F3 /* LiveParse */,
+				FB76CA582C7EFF2000F95FA2 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -675,7 +678,7 @@
 				4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */,
 				4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */,
-				4F6166322C7C91D7008FED0D /* XCRemoteSwiftPackageReference "LiveParse" */,
+				FB76CA572C7EFF2000F95FA2 /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -1124,14 +1127,6 @@
 				minimumVersion = 1.0.4;
 			};
 		};
-		4F6166322C7C91D7008FED0D /* XCRemoteSwiftPackageReference "LiveParse" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pcccccc/LiveParse";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.4.0;
-			};
-		};
 		4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/Lakr233/ColorfulX";
@@ -1236,6 +1231,14 @@
 				minimumVersion = 5.0.2;
 			};
 		};
+		FB76CA572C7EFF2000F95FA2 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pcccccc/LiveParse";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.1;
+			};
+		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sanzaru/SimpleToast.git";
@@ -1278,11 +1281,6 @@
 		};
 		4F6166302C7C8E84008FED0D /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		4F6166332C7C91D7008FED0D /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F6166322C7C91D7008FED0D /* XCRemoteSwiftPackageReference "LiveParse" */;
 			productName = LiveParse;
 		};
 		4F64860B2C783FFA00716373 /* ColorfulX */ = {
@@ -1354,6 +1352,10 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
+		FB1D86B82C7EC13F00A679F3 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
 		FB29265C2C58991500A1F07F /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
@@ -1380,6 +1382,11 @@
 		};
 		FB5C3FDB2C7B5F5000865D6E /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
+		FB76CA582C7EFF2000F95FA2 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB76CA572C7EFF2000F95FA2 /* XCRemoteSwiftPackageReference "LiveParse" */;
 			productName = LiveParse;
 		};
 		FB89E1602B1340870083116D /* KSPlayer */ = {

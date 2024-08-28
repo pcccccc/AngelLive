@@ -36,8 +36,10 @@ struct IndicatorMenuView: View {
 
     private var categoryContent: some View {
         HStack(spacing: 10) {
-            iconView(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon)
-            textView(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
+            if liveViewModel.selectedSubListIndex < liveViewModel.selectedSubCategory.count {
+                iconView(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].icon)
+                textView(liveViewModel.selectedSubCategory[liveViewModel.selectedSubListIndex].title)
+            }
         }
     }
 

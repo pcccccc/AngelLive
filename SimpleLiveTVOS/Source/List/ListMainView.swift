@@ -91,28 +91,45 @@ struct ListMainView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(alignment: .top) {
                                 ZStack {
-                                    LeftMenu(focusState: _focusState)
-                                        .environment(liveViewModel)
-                                        .opacity(liveViewModel.showOverlay ? 1 : 0)
-                                        .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
-                                        .edgesIgnoringSafeArea(.all)
-                                        .frame(width: 320, height: 1080)
-                                        .cornerRadius(liveViewModel.leftMenuCornerRadius)
+                                    if #available(tvOS 18.0, *) {
+                                        LeftMenu(focusState: _focusState)
+                                            .environment(liveViewModel)
+                                            .opacity(liveViewModel.showOverlay ? 0.8 : 0)
+                                            .background(
+                                                Color("sl-background", bundle: nil)
+                                                    .blur(radius: 10)
+                                                    .opacity(liveViewModel.showOverlay ? 0.8 : 0)
+                                            )
+                                            .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
+                                            .edgesIgnoringSafeArea(.all)
+                                            .frame(width: 320, height: 1080)
+                                            .cornerRadius(liveViewModel.leftMenuCornerRadius)
+                                    }else {
+                                        LeftMenu(focusState: _focusState)
+                                            .environment(liveViewModel)
+                                            .opacity(liveViewModel.showOverlay ? 1 : 0)
+                                            .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
+                                            .edgesIgnoringSafeArea(.all)
+                                            .frame(width: 320, height: 1080)
+                                            .cornerRadius(liveViewModel.leftMenuCornerRadius)
+                                    }
                                     VStack(alignment: .leading) {
                                         HStack {
                                             IndicatorMenuView()
                                                 .environment(liveViewModel)
                                         }
                                         .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftHeight)
+
                                         Button {
-                                            
+                                            //                                            print(1)
                                         } label: {
                                             Text("")
                                                 .frame(width: liveViewModel.leftMenuMaxWidth, height: liveViewModel.leftMenuMaxHeight - liveViewModel.leftHeight)
                                         }
                                         .background(Color.clear)
+                                        .opacity(0)
                                         .buttonStyle(.plain)
-                                        .focusable(true) { focus in
+                                        .focusable(liveModel.endFirstLoading) { focus in
                                             if focus {
                                                 liveViewModel.showOverlay = true
                                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
@@ -120,6 +137,22 @@ struct ListMainView: View {
                                                 })
                                             }
                                         }
+
+                                       
+//                                        .onChange(of: focusState) { oldValue, newValue in
+//                                            switch newValue {
+//                                                case .leftMenu(let mainIndex, let cateIndex):
+//                                                    liveViewModel.showOverlay = true
+//                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
+//                                                        focusState = .leftMenu(0, 0)
+//                                                    })
+//                                                default:
+//                                                    break
+//                                            }
+//                                            
+//                                        }
+
+                                        
                                     }
                                     
                                     .frame(width: liveViewModel.showOverlay == true ? 150: 300, height: liveViewModel.showOverlay == true ? liveViewModel.leftMenuMinHeight:  liveViewModel.leftMenuMaxHeight)

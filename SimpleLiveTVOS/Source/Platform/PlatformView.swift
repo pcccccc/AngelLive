@@ -42,20 +42,40 @@ struct PlatformView: View {
                                     .resizable()
                                     .frame(width: 320, height: 192)
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                                ZStack {
-                                    Image(platformViewModel.platformInfo[index].smallPic)
-                                        .resizable()
-                                        .frame(width: 320, height: 192)
-                                    Text(platformViewModel.platformInfo[index].descripiton)
-                                        .font(.body)
-                                        .multilineTextAlignment(.leading)
-                                        .padding([.leading, .trailing], 15)
-                                        .padding(.top, 50)
-                                        
+                                    .blur(radius: focusIndex == index ? 10 : 0)
+                                
+                                if #available(tvOS 18.0, *) {
+                                    ZStack {
+                                        Image(platformViewModel.platformInfo[index].smallPic)
+                                            .resizable()
+                                            .frame(width: 320, height: 192)
+                                        Text(platformViewModel.platformInfo[index].descripiton)
+                                            .font(.body)
+                                            .multilineTextAlignment(.leading)
+                                            .padding([.leading, .trailing], 15)
+                                            .padding(.top, 50)
+                                            
+                                    }
+                                    .background(Color("sl-background", bundle: nil))
+                                    .opacity(focusIndex == index ? 0.9 : 0)
+                                    .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
+                                }else {
+                                    ZStack {
+                                        Image(platformViewModel.platformInfo[index].smallPic)
+                                            .resizable()
+                                            .frame(width: 320, height: 192)
+                                        Text(platformViewModel.platformInfo[index].descripiton)
+                                            .font(.body)
+                                            .multilineTextAlignment(.leading)
+                                            .padding([.leading, .trailing], 15)
+                                            .padding(.top, 50)
+                                            
+                                    }
+                                    .background(.thinMaterial)
+                                    .opacity(focusIndex == index ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
                                 }
-                                .background(.thinMaterial)
-                                .opacity(focusIndex == index ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
+                                
                             }
                         }
                         .buttonStyle(.card)
@@ -65,7 +85,17 @@ struct PlatformView: View {
                         .animation(.easeInOut(duration: 0.25) ,value: true)
                         .frame(width: 320, height: 192)
                         .fullScreenCover(isPresented: $show, content: {
-                            ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                            if #available(tvOS 18.0, *) {
+                                ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                                    .background(
+                                        Color("sl-background", bundle: nil)
+                                            .blur(radius: 10)
+                                            .opacity(0.6)
+                                    )
+                                
+                            }else {
+                                ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                            }
                         })
                     }
 

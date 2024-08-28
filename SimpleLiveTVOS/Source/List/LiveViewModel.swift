@@ -99,6 +99,8 @@ class LiveViewModel {
     var toastOptions = SimpleToastOptions(
         alignment: .topLeading, hideAfter: 1.5
     )
+    var endFirstLoading = false
+    var lodingTimer: Timer?
     
     init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: SimpleLiveViewModel) {
         self.liveType = liveType
@@ -174,6 +176,10 @@ class LiveViewModel {
             self.categories = categories
             self.getRoomList(index: self.selectedSubListIndex)
             self.isLoading = false
+            self.lodingTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false, block: { _ in
+                self.endFirstLoading = true
+            })
+            
         }catch {
             self.isLoading = false
         }
@@ -362,7 +368,9 @@ class LiveViewModel {
     }
     
     @MainActor func updateList(_ newModel: LiveModel, index: Int) { //后续会优化掉这个方法
-        self.roomList[index] = newModel
+        if index < self.roomList.count {
+            self.roomList[index] = newModel
+        }
     }
     
     func createCurrentRoomViewModel(enterFromLive: Bool) {
