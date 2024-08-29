@@ -110,5 +110,13 @@ struct FavoriteMainView: View {
         .onPlayPauseCommand(perform: {
             liveViewModel.getRoomList(index: 1)
         })
+        .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.favoriteRefresh)) { _ in
+            appViewModel.favoriteStateModel.getState()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
+                if appViewModel.favoriteStateModel.cloudKitReady == true {
+                    liveViewModel.getRoomList(index: 0)
+                }
+            })
+        }
     }
 }

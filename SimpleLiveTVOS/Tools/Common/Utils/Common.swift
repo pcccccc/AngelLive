@@ -12,6 +12,7 @@ import LiveParse
 
 struct SimpleLiveNotificationNames {
     static let playerEndPlay = Notification.Name("SimpleLive.Player.End.Play")
+    static let favoriteRefresh = Notification.Name("SimpleLive.Favorite.Refresh")
 }
 
 class Common {

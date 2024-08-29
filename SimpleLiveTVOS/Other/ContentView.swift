@@ -82,6 +82,11 @@ struct ContentView: View {
                 appViewModel.favoriteModel = favoriteLiveViewModel
             }
         }
+        .onPlayPauseCommand(perform: {
+            if contentVM.selection == 0 {
+                NotificationCenter.default.post(name: SimpleLiveNotificationNames.favoriteRefresh, object: nil)
+            }
+        })
         
 //        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
 //            VStack(alignment: .leading) {

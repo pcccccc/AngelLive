@@ -4,7 +4,7 @@
       "color" : {
         "color-space" : "display-p3",
         "components" : {
-          "alpha" : "0.400",
+          "alpha" : "0.900",
           "blue" : "255",
           "green" : "255",
           "red" : "255"
@@ -22,7 +22,7 @@
       "color" : {
         "color-space" : "display-p3",
         "components" : {
-          "alpha" : "0.400",
+          "alpha" : "0.900",
           "blue" : "0",
           "green" : "0",
           "red" : "0"

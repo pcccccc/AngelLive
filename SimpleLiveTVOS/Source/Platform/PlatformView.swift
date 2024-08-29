@@ -57,7 +57,7 @@ struct PlatformView: View {
                                             
                                     }
                                     .background(Color("sl-background", bundle: nil))
-                                    .opacity(focusIndex == index ? 0.9 : 0)
+                                    .opacity(focusIndex == index ? 1 : 0)
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
                                 }else {
                                     ZStack {
