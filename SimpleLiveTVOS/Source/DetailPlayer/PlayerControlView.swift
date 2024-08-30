@@ -419,6 +419,8 @@ struct PlayerControlView: View {
                         return
                     }
                     if roomInfoViewModel.showControl == false {
+                        roomInfoViewModel.liveFlagTimer?.invalidate()
+                        roomInfoViewModel.liveFlagTimer = nil
                         NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
                     }
                 }
