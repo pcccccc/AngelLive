@@ -89,9 +89,12 @@ struct PlatformView: View {
                                 ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
                                     .background(
                                         Color("sl-background", bundle: nil)
-                                            .blur(radius: 10)
-                                            .opacity(0.6)
+//                                            .blur(radius: 10)
+//                                        Color.red
+//                                            .blur(radius: 10)
+//                                            .opacity(0.95)
                                     )
+                                    .safeAreaPadding(.all)
                                 
                             }else {
                                 ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)

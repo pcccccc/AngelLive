@@ -94,11 +94,11 @@ struct ListMainView: View {
                                     if #available(tvOS 18.0, *) {
                                         LeftMenu(focusState: _focusState)
                                             .environment(liveViewModel)
-                                            .opacity(liveViewModel.showOverlay ? 0.8 : 0)
+                                            .opacity(liveViewModel.showOverlay ? 1 : 0)
                                             .background(
                                                 Color("sl-background", bundle: nil)
                                                     .blur(radius: 10)
-                                                    .opacity(liveViewModel.showOverlay ? 0.8 : 0)
+                                                    .opacity(liveViewModel.showOverlay ? 1 : 0)
                                             )
                                             .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
                                             .edgesIgnoringSafeArea(.all)
