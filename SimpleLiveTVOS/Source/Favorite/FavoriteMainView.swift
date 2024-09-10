@@ -17,6 +17,7 @@ struct FavoriteMainView: View {
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(\.scenePhase) var scenePhase
     
     var body: some View {
         
@@ -117,6 +118,24 @@ struct FavoriteMainView: View {
                     liveViewModel.getRoomList(index: 0)
                 }
             })
+        }
+        .onChange(of: scenePhase) { oldValue, newValue in
+            switch newValue {
+                case .active:
+                    appViewModel.favoriteStateModel.getState()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
+                        if appViewModel.favoriteStateModel.cloudKitReady == true {
+                            liveViewModel.getRoomList(index: 0)
+                        }
+                    })
+            
+                case .background:
+                    print("background。。。。")
+                case .inactive:
+                    print("inactive。。。。")
+                @unknown default:
+                    break
+            }
         }
     }
 }

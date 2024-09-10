@@ -20,6 +20,7 @@ enum FocusableField: Hashable {
 
 struct ListMainView: View {
     
+    @Environment(\.scenePhase) var scenePhase
     @State var needFullScreenLoading: Bool = false
     private static let topId = "topIdHere"
     
@@ -223,6 +224,19 @@ struct ListMainView: View {
         .onPlayPauseCommand(perform: {
             liveViewModel.getRoomList(index: 1)
         })
+        .onChange(of: scenePhase) { oldValue, newValue in
+            switch newValue {
+                case .active:
+                    liveViewModel.showToast(true, title: "程序返回前台，正在为您刷新列表", hideAfter: 3)
+                    liveViewModel.roomPage = 1
+                case .background:
+                    print("background。。。。")
+                case .inactive:
+                    print("inactive。。。。")
+                @unknown default:
+                    break
+            }
+        }
     }
 }
 
