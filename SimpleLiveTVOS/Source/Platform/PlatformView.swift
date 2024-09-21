@@ -44,7 +44,7 @@ struct PlatformView: View {
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
                                     .blur(radius: focusIndex == index ? 10 : 0)
                                 
-                                if #available(tvOS 18.0, *) {
+                                if appViewModel.generalSettingModel.generalDisableMaterialBackground {
                                     ZStack {
                                         Image(platformViewModel.platformInfo[index].smallPic)
                                             .resizable()
@@ -85,7 +85,7 @@ struct PlatformView: View {
                         .animation(.easeInOut(duration: 0.25) ,value: true)
                         .frame(width: 320, height: 192)
                         .fullScreenCover(isPresented: $show, content: {
-                            if #available(tvOS 18.0, *) {
+                            if appViewModel.generalSettingModel.generalDisableMaterialBackground {
                                 ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
                                     .background(
                                         Color("sl-background", bundle: nil)

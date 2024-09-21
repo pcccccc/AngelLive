@@ -272,18 +272,23 @@ final class RoomInfoViewModel {
         self.currentRoomPlayArgs = playArgs
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
         //开一个定时，检查主播是否已经下播
-        if currentRoom.liveType != .youtube && currentRoom.liveType != .ks {
-            liveFlagTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { _ in
-                Task {
-                    let state = try await ApiManager.getCurrentRoomLiveState(roomId: self.currentRoom.roomId, userId: self.currentRoom.userId, liveType: self.currentRoom.liveType)
-                    if state == .close || state == .unknow {
-                        NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
-                        self.liveFlagTimer?.invalidate()
-                        self.liveFlagTimer = nil
+        if appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEnd == true {
+            if currentRoom.liveType != .youtube && currentRoom.liveType != .ks {
+                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { _ in
+                    Task {
+                        print("====================================get live state=================================")
+                        let state = try await ApiManager.getCurrentRoomLiveState(roomId: self.currentRoom.roomId, userId: self.currentRoom.userId, liveType: self.currentRoom.liveType)
+                        if state == .close || state == .unknow {
+                            NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
+                            self.liveFlagTimer?.invalidate()
+                            self.liveFlagTimer = nil
+                        }
+                        print("====================================\(self.appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEndSecond)=================================")
                     }
                 }
             }
         }
+        
         if appViewModel.danmuSettingModel.showDanmu {
             getDanmuInfo()
         }

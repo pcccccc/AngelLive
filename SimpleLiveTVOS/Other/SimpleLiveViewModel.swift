@@ -16,4 +16,6 @@ class SimpleLiveViewModel {
     var danmuSettingModel = DanmuSettingModel()
     var searchModel = SearchViewModel()
     var historyModel = HistoryModel()
+    var playerSettingModel = PlayerSettingModel()
+    var generalSettingModel = GeneralSettingModel()
 }

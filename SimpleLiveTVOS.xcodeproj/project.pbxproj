@@ -97,6 +97,8 @@
 		FB76CA592C7EFF2000F95FA2 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB76CA582C7EFF2000F95FA2 /* LiveParse */; };
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
+		FB8F3C8F2C9EA9E6004ABC63 /* GeneralSettingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8F3C8E2C9EA9E6004ABC63 /* GeneralSettingView.swift */; };
+		FB8F3C912C9EAAB5004ABC63 /* PlayerSettingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB8F3C902C9EAAB5004ABC63 /* PlayerSettingModel.swift */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
 		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
 		FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */; };
@@ -104,6 +106,7 @@
 		FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F72B122B5100B19C3E /* SwiftProtobufPluginLibrary */; };
 		FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F92B122B5100B19C3E /* protoc-gen-swift */; };
 		FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1FE2B124C6200B19C3E /* Gzip */; };
+		FBFFC8E02C9ECD1600013792 /* GeneralSettingModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBFFC8DF2C9ECD1600013792 /* GeneralSettingModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -190,7 +193,10 @@
 		FB168FC32AE0BE470099B286 /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FB21249C2B989E1A004C916F /* Package.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = Package.resolved; path = SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
 		FB5C3FD82C79C86A00865D6E /* DanmuSettingMainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmuSettingMainView.swift; sourceTree = "<group>"; };
+		FB8F3C8E2C9EA9E6004ABC63 /* GeneralSettingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingView.swift; sourceTree = "<group>"; };
+		FB8F3C902C9EAAB5004ABC63 /* PlayerSettingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSettingModel.swift; sourceTree = "<group>"; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		FBFFC8DF2C9ECD1600013792 /* GeneralSettingModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -313,17 +319,20 @@
 		4F05A6AE2B50CAD90033214E /* Setting */ = {
 			isa = PBXGroup;
 			children = (
-				4FF2D3792BBC0399002822DD /* DanmuSettingStore.swift */,
 				4F05A6AF2B50CAD90033214E /* DanmuSettingView.swift */,
+				4FF2D3792BBC0399002822DD /* DanmuSettingStore.swift */,
 				4F05A6B02B50CAD90033214E /* AboutUSView.swift */,
 				4F05A6B12B50CAD90033214E /* BilibiliLoginView.swift */,
-				4FF2D3812BBC0C18002822DD /* SettingStore.swift */,
 				4F05A6B22B50CAD90033214E /* SettingView.swift */,
+				4FF2D3812BBC0C18002822DD /* SettingStore.swift */,
 				4F05A6B32B50CAD90033214E /* HistoryListView.swift */,
 				4FB732362B9882C100F02249 /* OpenSourceListView.swift */,
 				4FCA39162BBA4EB800506675 /* SyncView.swift */,
 				4F5AD4432C252896005A2E5B /* HistoryModel.swift */,
 				FB5C3FD82C79C86A00865D6E /* DanmuSettingMainView.swift */,
+				FB8F3C8E2C9EA9E6004ABC63 /* GeneralSettingView.swift */,
+				FB8F3C902C9EAAB5004ABC63 /* PlayerSettingModel.swift */,
+				FBFFC8DF2C9ECD1600013792 /* GeneralSettingModel.swift */,
 			);
 			path = Setting;
 			sourceTree = "<group>";
@@ -727,6 +736,7 @@
 				4FC3DCE02A49382F00CA36B9 /* ContentView.swift in Sources */,
 				4F05A6B62B50CAD90033214E /* PlayerControlView.swift in Sources */,
 				4FBAB9122B47A42200A77A5C /* DanmakuAsyncLayer.swift in Sources */,
+				FB8F3C8F2C9EA9E6004ABC63 /* GeneralSettingView.swift in Sources */,
 				4FF2D3732BBC0369002822DD /* UIColor+Extension.swift in Sources */,
 				4F05A6B72B50CAD90033214E /* RoomInfoViewModel.swift in Sources */,
 				4FBAB9132B47A42200A77A5C /* DanmakuQueuePool.swift in Sources */,
@@ -754,8 +764,10 @@
 				4FF2D3742BBC0369002822DD /* CloudSQLManager.swift in Sources */,
 				4FBAB9182B47A42200A77A5C /* DanmakuGifCell.swift in Sources */,
 				4FB732372B9882C100F02249 /* OpenSourceListView.swift in Sources */,
+				FB8F3C912C9EAAB5004ABC63 /* PlayerSettingModel.swift in Sources */,
 				4FBAB9202B47A8A200A77A5C /* DanmakuTextCellModel.swift in Sources */,
 				4FBAB9142B47A42200A77A5C /* DanmakuTrack.swift in Sources */,
+				FBFFC8E02C9ECD1600013792 /* GeneralSettingModel.swift in Sources */,
 				4F05A6C02B50CAD90033214E /* AboutUSView.swift in Sources */,
 				4F5AD4442C252896005A2E5B /* HistoryModel.swift in Sources */,
 				4FF2D3802BBC06EE002822DD /* QRCodeStore.swift in Sources */,
@@ -1236,7 +1248,7 @@
 			repositoryURL = "https://github.com/pcccccc/LiveParse";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.4.1;
+				minimumVersion = 1.4.3;
 			};
 		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {

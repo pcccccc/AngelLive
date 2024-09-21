@@ -92,13 +92,12 @@ struct ListMainView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(alignment: .top) {
                                 ZStack {
-                                    if #available(tvOS 18.0, *) {
+                                    if appViewModel.generalSettingModel.generalDisableMaterialBackground {
                                         LeftMenu(focusState: _focusState)
                                             .environment(liveViewModel)
                                             .opacity(liveViewModel.showOverlay ? 1 : 0)
                                             .background(
                                                 Color("sl-background", bundle: nil)
-                                                    .blur(radius: 10)
                                                     .opacity(liveViewModel.showOverlay ? 1 : 0)
                                             )
                                             .animation(.easeInOut(duration: 0.25), value: liveViewModel.showOverlay)
