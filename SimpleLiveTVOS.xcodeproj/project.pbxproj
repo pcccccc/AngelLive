@@ -1248,7 +1248,7 @@
 			repositoryURL = "https://github.com/pcccccc/LiveParse";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.4.3;
+				minimumVersion = 1.4.4;
 			};
 		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
