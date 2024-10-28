@@ -134,11 +134,11 @@ struct LiveCardView: View {
                     }
                     .buttonStyle(.card)
                     .focused($focusState, equals: .mainContent(index))
-                    .onChange(of: focusState, perform: { value in
+                    .onChange(of: focusState, { oldValue, newValue in
                         liveViewModel.currentRoom = liveViewModel.roomList[index]
                         liveViewModel.selectedRoomListIndex = index
                         if liveViewModel.roomListType != .history {
-                            switch value {
+                            switch newValue {
                                 case .mainContent(let index):
                                     liveViewModel.selectedRoomListIndex = index
                                     if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search  {
@@ -150,6 +150,7 @@ struct LiveCardView: View {
                             }
                         }
                     })
+
                     .alert("提示", isPresented: $liveModel.showAlert) {
                         Button("取消收藏", role: .destructive, action: {
                             Task {

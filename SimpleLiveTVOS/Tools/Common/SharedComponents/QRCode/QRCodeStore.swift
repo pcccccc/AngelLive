@@ -134,7 +134,7 @@ class QRCodeStore: ObservableObject {
                 }
             }catch {
                 if type(of: error) == CKError.self {
-                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) ?? ""
+                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) 
                 }else {
                     showFullScreenLoadingText = "\(error)"
                 }
@@ -174,7 +174,7 @@ class QRCodeStore: ObservableObject {
                 }
             }catch {
                 if type(of: error) == CKError.self {
-                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) ?? ""
+                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) 
                 }else {
                     showFullScreenLoadingText = "\(error)"
                 }

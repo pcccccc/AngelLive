@@ -147,70 +147,71 @@ final class HTTPHandler: ChannelInboundHandler {
             // 请求体已完全接收，处理请求
             if let body = requestBody, let bodyString = body.getString(at: 0, length: body.readableBytes) {
                 print("Request body: \(bodyString)")
-                do {
-                    if requestHeaderT?.uri.contains("sync/follow") == true {
-                        let resp = JSON([
-                            "status": true,
-                            "message": "success",
-                        ]).rawString()
-                        
-                        let respList = formatDatas(bodyString: bodyString)
-                        let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
-                        if self.syncSuccess != nil {
-                            self.syncSuccess!(.favorite, overlay, respList)
-                            // 重置为下一个请求
-                            requestBody = nil
-                        }
-                        
-                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
-                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
-                    }
-                    if requestHeaderT?.uri.contains("sync/history") == true {
-                        let resp = JSON([
-                            "status": true,
-                            "message": "success",
-                        ]).rawString()
-                        let respList = formatDatas(bodyString: bodyString)
-                        let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
-                        if self.syncSuccess != nil {
-                            self.syncSuccess!(.history, overlay, respList)
-                            // 重置为下一个请求
-                            requestBody = nil
-                        }
-                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
-                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
-                    }
-                    if requestHeaderT?.uri.contains("blocked_word") == true {
-                        let resp = JSON([
-                            "status": false,
-                            "message": "Apple TV 端暂不支持此功能",
-                        ]).rawString()
-                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
-                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
-                        // 重置为下一个请求
-                        requestBody = nil
-                    }
-                    if requestHeaderT?.uri.contains("account/bilibili") == true {
-                        let resp = JSON([
-                            "status": false,
-                            "message": "Apple TV 端暂不支持此功能",
-                        ]).rawString()
-                        responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
-                        response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                if requestHeaderT?.uri.contains("sync/follow") == true {
+                    let resp = JSON([
+                        "status": true,
+                        "message": "success",
+                    ]).rawString()
+                    
+                    let respList = formatDatas(bodyString: bodyString)
+                    let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
+                    if self.syncSuccess != nil {
+                        self.syncSuccess!(.favorite, overlay, respList)
                         // 重置为下一个请求
                         requestBody = nil
                     }
                     
-                }catch {
+                    responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                    response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                }
+                if requestHeaderT?.uri.contains("sync/history") == true {
+                    let resp = JSON([
+                        "status": true,
+                        "message": "success",
+                    ]).rawString()
+                    let respList = formatDatas(bodyString: bodyString)
+                    let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
+                    if self.syncSuccess != nil {
+                        self.syncSuccess!(.history, overlay, respList)
+                        // 重置为下一个请求
+                        requestBody = nil
+                    }
+                    responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                    response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                }
+                if requestHeaderT?.uri.contains("blocked_word") == true {
                     let resp = JSON([
                         "status": false,
-                        "message": "解析数据异常",
+                        "message": "Apple TV 端暂不支持此功能",
                     ]).rawString()
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                     // 重置为下一个请求
                     requestBody = nil
                 }
+                if requestHeaderT?.uri.contains("account/bilibili") == true {
+                    let resp = JSON([
+                        "status": false,
+                        "message": "Apple TV 端暂不支持此功能",
+                    ]).rawString()
+                    responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+                    response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+                    // 重置为下一个请求
+                    requestBody = nil
+                }
+//                do {
+//
+//                    
+//                }catch {
+//                    let resp = JSON([
+//                        "status": false,
+//                        "message": "解析数据异常",
+//                    ]).rawString()
+//                    responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
+//                    response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
+//                    // 重置为下一个请求
+//                    requestBody = nil
+//                }
             }
             // Create and write the response
             if response == nil {
@@ -229,7 +230,7 @@ final class HTTPHandler: ChannelInboundHandler {
         }
     
     func formatDatas(bodyString: String) -> [LiveModel] {
-        let resp = JSON([
+        _ = JSON([
             "status": true,
             "message": "success",
         ]).rawString()

@@ -7,6 +7,7 @@
 
 import UIKit
 import MobileCoreServices
+import UniformTypeIdentifiers
 
 /// You can use or inherit this cell to shoot a danmaku with a GIF animation.
 /// You need to implement the DanmakuGifCellModel protocol for your data source.
@@ -53,7 +54,7 @@ open class DanmakuGifCell: DanmakuCell {
         
         let info: [CFString: Any] = [
             kCGImageSourceShouldCache: true,
-            kCGImageSourceTypeIdentifierHint: kUTTypeGIF
+            kCGImageSourceTypeIdentifierHint: UTType.gif
         ]
         guard let imageSource = CGImageSourceCreateWithData(data as CFData, info as CFDictionary) else {
             debugPrint("Could not create gif animetion because imageSource create failed.")

@@ -52,7 +52,7 @@ class CloudSQLManager: NSObject {
         let container = CKContainer(identifier: ck_identifier)
         let database = container.privateCloudDatabase
         let query = CKQuery(recordType: "favorite_streamers", predicate: NSPredicate(value: true))
-        let operation = CKQueryOperation(query: query)
+        _ = CKQueryOperation(query: query)
         let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
         var temp: Array<LiveModel> = []
         for record in recordArray {
