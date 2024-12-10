@@ -36,7 +36,10 @@
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F73DB632C1BF6D2001C38C9 /* SimpleLiveViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F73DB622C1BF6D2001C38C9 /* SimpleLiveViewModel.swift */; };
 		4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73DB652C1C1ABB001C38C9 /* Cache */; };
-		4F952DB32CF620B000FED77C /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F952DB22CF620B000FED77C /* LiveParse */; };
+		4F84D6D72D08642800F88855 /* TarsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D62D08642800F88855 /* TarsKit */; };
+		4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D92D08644300F88855 /* LiveParse */; };
+		4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DC2D088B5F00F88855 /* LiveParse */; };
+		4F84D6E02D088DB400F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DF2D088DB400F88855 /* LiveParse */; };
 		4F9A9B772C19B01200F8BB44 /* IndicatorMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9A9B762C19B01200F8BB44 /* IndicatorMenuView.swift */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
 		4F9F9C2A2C1BDEFC00B863A9 /* PlatformViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9F9C292C1BDEFC00B863A9 /* PlatformViewModel.swift */; };
@@ -204,7 +207,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4F952DB32CF620B000FED77C /* LiveParse in Frameworks */,
+				4F84D6E02D088DB400F88855 /* LiveParse in Frameworks */,
 				4F61662E2C786A79008FED0D /* Pow in Frameworks */,
 				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
 				4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */,
@@ -214,8 +217,11 @@
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
 				FB29265D2C58991500A1F07F /* LiveParse in Frameworks */,
 				4F64860C2C783FFA00716373 /* ColorfulX in Frameworks */,
+				4F84D6D72D08642800F88855 /* TarsKit in Frameworks */,
 				FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */,
 				4FB732422B988CDF00F02249 /* AcknowList in Frameworks */,
+				4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */,
+				4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */,
 				FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */,
 				4F1492412B44F4FC004073DB /* LiveParse in Frameworks */,
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
@@ -595,7 +601,10 @@
 				FB5C3FDB2C7B5F5000865D6E /* LiveParse */,
 				4F6166302C7C8E84008FED0D /* LiveParse */,
 				FB1D86B82C7EC13F00A679F3 /* LiveParse */,
-				4F952DB22CF620B000FED77C /* LiveParse */,
+				4F84D6D62D08642800F88855 /* TarsKit */,
+				4F84D6D92D08644300F88855 /* LiveParse */,
+				4F84D6DC2D088B5F00F88855 /* LiveParse */,
+				4F84D6DF2D088DB400F88855 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -687,7 +696,7 @@
 				4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */,
 				4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */,
-				4F952DB12CF620B000FED77C /* XCRemoteSwiftPackageReference "LiveParse" */,
+				4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -1155,12 +1164,12 @@
 				minimumVersion = 7.2.0;
 			};
 		};
-		4F952DB12CF620B000FED77C /* XCRemoteSwiftPackageReference "LiveParse" */ = {
+		4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pcccccc/LiveParse";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.4.7;
+				minimumVersion = 1.5.0;
 			};
 		};
 		4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */ = {
@@ -1313,9 +1322,21 @@
 			package = 4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */;
 			productName = Cache;
 		};
-		4F952DB22CF620B000FED77C /* LiveParse */ = {
+		4F84D6D62D08642800F88855 /* TarsKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 4F952DB12CF620B000FED77C /* XCRemoteSwiftPackageReference "LiveParse" */;
+			productName = TarsKit;
+		};
+		4F84D6D92D08644300F88855 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
+		4F84D6DC2D088B5F00F88855 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
+		4F84D6DF2D088DB400F88855 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */;
 			productName = LiveParse;
 		};
 		4F9F9C272C1BDEE100B863A9 /* LiveParse */ = {

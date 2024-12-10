@@ -104,8 +104,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "db2140dec1ff031758d8846b31301e804f35ec0c",
-        "version" : "1.4.7"
+        "revision" : "b3a7e8ac4813af4d0c5ce706d730a5715bef036e",
+        "version" : "1.5.0"
       }
     },
     {
@@ -223,6 +223,15 @@
       "state" : {
         "revision" : "b3dcd7dbd0d488e1a7077cb33b00f2083e382f07",
         "version" : "5.0.1"
+      }
+    },
+    {
+      "identity" : "tarskit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/TarsKit",
+      "state" : {
+        "revision" : "31a8b27b98bbdd67f131737fb1319b726fe45ca3",
+        "version" : "1.1.0"
       }
     },
     {
