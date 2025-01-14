@@ -140,9 +140,9 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = currentQuality.qn
         
         if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = "HYSDK(Windows, 20000308)"
+            self.playerOption.userAgent = "HYSDK(Windows, 21000308)"
             self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows, 20000308)"
+                "user-agent": "HYSDK(Windows, 21000308)"
             ])
         }else {
             self.playerOption.userAgent = "libmpv"

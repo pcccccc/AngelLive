@@ -50,8 +50,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/ColorfulX.git",
       "state" : {
-        "revision" : "4425033690d83eea09c5e8a43a3d56b042b20bcb",
-        "version" : "5.3.1"
+        "revision" : "1f667feb13844f38d70488439682933b4d1ea65b",
+        "version" : "5.2.8"
       }
     },
     {
@@ -113,8 +113,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/MSDisplayLink.git",
       "state" : {
-        "revision" : "08ad21d886e2e3f990ccbc6813eb6cdad8c427cd",
-        "version" : "1.0.0"
+        "revision" : "c2fcd28cb99300d83acc30860ce252ef97c20b61",
+        "version" : "1.1.1"
       }
     },
     {
