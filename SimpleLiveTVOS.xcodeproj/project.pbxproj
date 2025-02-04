@@ -1225,7 +1225,7 @@
 			repositoryURL = "https://github.com/kingslay/KSPlayer";
 			requirement = {
 				kind = exactVersion;
-				version = 2.2.4;
+				version = 2.3.3;
 			};
 		};
 		FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */ = {
