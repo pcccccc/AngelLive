@@ -128,7 +128,7 @@ struct PlayerControlCardView: View {
         }
         .onChange(of: topState) { oldValue, newValue in
             switch newValue {
-                case .list(let index):
+            case .list(_):
                     if playControlCardViewModel.liveModel.liveState == nil || playControlCardViewModel.liveModel.liveState == LiveState.unknow.rawValue || playControlCardViewModel.liveModel.liveState == "" {
                         playControlCardViewModel.liveStateLoading = true
                         Task {
