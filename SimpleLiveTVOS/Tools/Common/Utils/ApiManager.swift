@@ -98,6 +98,80 @@ class ApiManager {
                 return try await YoutubeParse.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
         }
     }
+    
+    class func fetchSearchWithShareCode(shareCode: String) async throws -> LiveModel? {
+
+        // 确定平台类型
+        let platform: LiveType? = {
+            if shareCode.contains("b23.tv") || shareCode.contains("bilibili") { return .bilibili }
+            if shareCode.contains("douyin") { return .douyin }
+            if shareCode.contains("huya") { return .huya }
+            if shareCode.contains("douyu") { return .douyu }
+            if shareCode.contains("cc.163.com") { return .cc }
+            if shareCode.contains("kuaishou.com") { return .ks }
+            if shareCode.contains("yy.com") { return .yy }
+            return nil
+        }()
+        
+        if let platform = platform {
+            // 已知平台的处理
+            return try await handlePlatformSearch(shareCode, platform: platform)
+        } else {
+            // 未知平台
+            throw NSError(domain: "解析房间号失败，请检查分享码/分享链接是否正确", code: -10000, userInfo: ["desc": "解析房间号失败，请检查分享码/分享链接是否正确"])
+        }
+    }
+    
+    private class func handlePlatformSearch(_ text: String, platform: LiveType) async throws -> LiveModel? {
+        switch platform {
+        case .bilibili:
+            return try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
+        case .douyin:
+            let room = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
+            let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+            return LiveModel(userName: room.userName, roomTitle: room.roomTitle,
+                            roomCover: room.roomCover, userHeadImg: room.userHeadImg,
+                            liveType: room.liveType, liveState: liveState,
+                            userId: room.userId, roomId: room.roomId,
+                            liveWatchedCount: room.liveWatchedCount)
+        case .huya:
+            return try await Huya.getRoomInfoFromShareCode(shareCode: text)
+        case .douyu:
+            let room = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
+            let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+            return LiveModel(userName: room.userName, roomTitle: room.roomTitle,
+                            roomCover: room.roomCover, userHeadImg: room.userHeadImg,
+                            liveType: room.liveType, liveState: liveState,
+                            userId: room.userId, roomId: room.roomId,
+                            liveWatchedCount: room.liveWatchedCount)
+        case .cc:
+            let room = try await NeteaseCC.getRoomInfoFromShareCode(shareCode: text)
+            let liveState = try await NeteaseCC.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+            return LiveModel(userName: room.userName, roomTitle: room.roomTitle,
+                            roomCover: room.roomCover, userHeadImg: room.userHeadImg,
+                            liveType: room.liveType, liveState: liveState,
+                            userId: room.userId, roomId: room.roomId,
+                            liveWatchedCount: room.liveWatchedCount)
+        case .ks:
+            let room = try await KuaiShou.getRoomInfoFromShareCode(shareCode: text)
+            let liveState = try await KuaiShou.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+            return LiveModel(userName: room.userName, roomTitle: room.roomTitle,
+                            roomCover: room.roomCover, userHeadImg: room.userHeadImg,
+                            liveType: room.liveType, liveState: liveState,
+                            userId: room.userId, roomId: room.roomId,
+                            liveWatchedCount: room.liveWatchedCount)
+        case .yy:
+            let room = try await YY.getRoomInfoFromShareCode(shareCode: text)
+            let liveState = try await YY.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+            return LiveModel(userName: room.userName, roomTitle: room.roomTitle,
+                            roomCover: room.roomCover, userHeadImg: room.userHeadImg,
+                            liveType: room.liveType, liveState: liveState,
+                            userId: room.userId, roomId: room.roomId,
+                            liveWatchedCount: room.liveWatchedCount)
+        case .youtube:
+            return try await YoutubeParse.getRoomInfoFromShareCode(shareCode: text)
+        }
+    }
 
     /**
      获取用户是否可以访问google。

@@ -11,8 +11,8 @@ import SwiftUI
 import CloudKit
 import Observation
 
-@Observable
-class FavoriteStateModel: ObservableObject {
+
+actor FavoriteStateModel: ObservableObject {
     
     var roomList: [LiveModel] = []
     var isLoading: Bool = false
@@ -20,10 +20,10 @@ class FavoriteStateModel: ObservableObject {
     var cloudKitStateString: String = "正在检查状态"
     
     init() {
-        self.getState()
+        Task { await self.getState() }
     }
     
-    @MainActor func fetchFavoriteRoomList() async {
+    func fetchFavoriteRoomList() async {
         self.isLoading = true
         do {
             if self.cloudKitReady == true {
@@ -44,18 +44,14 @@ class FavoriteStateModel: ObservableObject {
     
     func addFavorite(room: LiveModel) async throws {
         try await CloudSQLManager.saveRecord(liveModel: room)
-        DispatchQueue.main.async {
-            self.roomList.append(room)
-        }
+        self.roomList.append(room)
     }
     
     func removeFavoriteRoom(room: LiveModel) async throws {
         try await CloudSQLManager.deleteRecord(liveModel: room)
         let index = roomList.firstIndex(of: room)
         if index != nil {
-            DispatchQueue.main.async {
-                self.roomList.remove(at: index!)
-            }
+            self.roomList.remove(at: index!)
         }
     }
     
@@ -63,19 +59,17 @@ class FavoriteStateModel: ObservableObject {
         Task {
             self.cloudKitStateString = "正在获取iCloud状态"
             let stateString = await CloudSQLManager.getCloudState()
-            DispatchQueue.main.async {
-                self.cloudKitStateString = stateString
-                if stateString == "正常" {
-                    Task {
-                        await self.fetchFavoriteRoomList()
-                    }
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        self.cloudKitReady = true
-                    }
-                }else {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        self.cloudKitReady = false
-                    }
+            self.cloudKitStateString = stateString
+            if stateString == "正常" {
+                Task {
+                    await self.fetchFavoriteRoomList()
+                }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    self.cloudKitReady = true
+                }
+            }else {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    self.cloudKitReady = false
                 }
             }
         }

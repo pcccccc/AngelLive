@@ -419,141 +419,17 @@ class LiveViewModel {
             
         }
     }
-    
+
     func searchRoomWithShareCode(text: String) {
         isLoading = true
-        self.roomList.removeAll()
-        if self.appViewModel.searchModel.searchTypeIndex == 2 {
-            Task {
-                do {
-                    let u2bResRoom = try await YoutubeParse.getRoomInfoFromShareCode(shareCode: text)
-                    DispatchQueue.main.async {
-                        self.roomList.append(u2bResRoom)
-                        self.isLoading = false
-                    }
-                }catch {
-                    print(error.localizedDescription)
+        roomList.removeAll()
+        Task {
+            do {
+                if let room = try await ApiManager.fetchSearchWithShareCode(shareCode: text) {
+                    roomList.append(room)
                 }
-            }
-        }else {
-            Task {
-                if text.contains("b23.tv") || text.contains("bilibili") {
-                    let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
-                    DispatchQueue.main.async {
-                        self.roomList.append(bilibiliResRoom)
-                        self.isLoading = false
-                    }
-                }else if text.contains("douyin") {
-                    let room = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
-                    let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    let finalDouyinResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
-                    DispatchQueue.main.async {
-                        self.roomList.append(finalDouyinResRoom)
-                        self.isLoading = false
-                    }
-                }else if text.contains("huya") {
-                    let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
-                    DispatchQueue.main.async {
-                        self.roomList.append(huyaResRoom)
-                        self.isLoading = false
-                    }
-                }else if text.contains("douyu") {
-                    let room = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
-                    let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    let finalDouyuResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
-                    DispatchQueue.main.async {
-                        self.roomList.append(finalDouyuResRoom)
-                        self.isLoading = false
-                    }
-                }else if text.contains("cc.163.com") {
-                    let room = try await NeteaseCC.getRoomInfoFromShareCode(shareCode: text)
-                    let liveState = try await NeteaseCC.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    let finalCCResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
-                    DispatchQueue.main.async {
-                        self.roomList.append(finalCCResRoom)
-                        self.isLoading = false
-                    }
-                }else if text.contains("kuaishou.com") {
-                    let room = try await KuaiShou.getRoomInfoFromShareCode(shareCode: text)
-                    let liveState = try await KuaiShou.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    let finalKSResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
-                    DispatchQueue.main.async {
-                        self.roomList.append(finalKSResRoom)
-                        self.isLoading = false
-                    }
-                }else if text.contains("yy.com") {
-                    let room = try await YY.getRoomInfoFromShareCode(shareCode: text)
-                    let liveState = try await YY.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    let finalYYResRoom = LiveModel.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount)
-                    DispatchQueue.main.async {
-                        self.roomList.append(finalYYResRoom)
-                        self.isLoading = false
-                    }
-                }else { //如果是房间号?
-                    do {
-                        let bilibiliResRoom = try await Bilibili.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(bilibiliResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                    do {
-                        let douyinResRoom = try await Douyin.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(douyinResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                    do {
-                        let huyaResRoom = try await Huya.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(huyaResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                    do {
-                        let douyuResRoom = try await Douyu.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(douyuResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                    do {
-                        let ccResRoom = try await NeteaseCC.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(ccResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                    do {
-                        let ksResRoom = try await KuaiShou.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(ksResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                    do {
-                        let yyResRoom = try await YY.getRoomInfoFromShareCode(shareCode: text)
-                        DispatchQueue.main.async {
-                            self.roomList.append(yyResRoom)
-                            self.isLoading = false
-                        }
-                    }catch {
-                        
-                    }
-                }
+            }catch {
+                
             }
         }
     }

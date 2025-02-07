@@ -109,15 +109,15 @@ class QRCodeStore: ObservableObject {
     func startFavoriteSync() async {
         if self.needOverlay == true {
             do {
-                if let roomList = favoriteModel?.roomList {
-                    for index in roomList.indices {
-                        DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在清理第\(index + 1)个本地收藏"
-                        }
-                        let roomModel = roomList[index]
-                        try await favoriteModel?.removeFavoriteRoom(room: roomModel)
-                    }
-                }
+//                if let roomList = favoriteModel?.roomList {
+//                    for index in roomList.indices {
+//                        DispatchQueue.main.async {
+//                            self.showFullScreenLoadingText = "正在清理第\(index + 1)个本地收藏"
+//                        }
+//                        let roomModel = roomList[index]
+//                        try await favoriteModel?.removeFavoriteRoom(room: roomModel)
+//                    }
+//                }
                 if let newRoomList = self.roomList {
                     for index in newRoomList.indices {
                         DispatchQueue.main.async {
@@ -149,16 +149,16 @@ class QRCodeStore: ObservableObject {
                         DispatchQueue.main.async {
                             self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
                         }
-                        if let deviceFavoriteRoomList = favoriteModel?.roomList {
-                            for room in deviceFavoriteRoomList {
-                                if room.roomId == roomModel.roomId {
-                                    has = true
-                                    DispatchQueue.main.async {
-                                        self.showFullScreenLoadingText = "第\(index + 1)个新收藏重复，已经跳过"
-                                    }
-                                }
-                            }
-                        }
+//                        if let deviceFavoriteRoomList = favoriteModel?.roomList {
+//                            for room in deviceFavoriteRoomList {
+//                                if room.roomId == roomModel.roomId {
+//                                    has = true
+//                                    DispatchQueue.main.async {
+//                                        self.showFullScreenLoadingText = "第\(index + 1)个新收藏重复，已经跳过"
+//                                    }
+//                                }
+//                            }
+//                        }
                         if has == true {
                             repeatCount += 1
                             continue
