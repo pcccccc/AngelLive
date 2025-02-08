@@ -34,11 +34,11 @@ struct ContentView: View {
             TabView(selection:$contentVM.selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if appViewModel.favoriteStateModel.isLoading == true || appViewModel.favoriteStateModel.cloudKitReady == false {
+                        if appViewModel.appFavoriteModel.isLoading == true || appViewModel.appFavoriteModel.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: appViewModel.favoriteStateModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteStateModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                    Image(systemName: appViewModel.appFavoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.appFavoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
                                 }
                             )
                             .contentTransition(.symbolEffect(.replace))

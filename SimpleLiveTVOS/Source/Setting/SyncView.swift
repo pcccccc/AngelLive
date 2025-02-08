@@ -28,7 +28,7 @@ struct SyncView: View {
     
     @MainActor func startQRService() {
         qrCodeStore.qrCodeType = .syncServer
-        qrCodeStore.favoriteModel = appViewModel.favoriteStateModel
+//        qrCodeStore.favoriteModel = appViewModel.favoriteStateModel
     }
 }
 

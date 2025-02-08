@@ -24,14 +24,14 @@ struct FavoriteMainView: View {
         @Bindable var liveModel = liveViewModel
         
         VStack {
-            if appViewModel.favoriteStateModel.cloudKitReady {
+            if appViewModel.appFavoriteModel.cloudKitReady {
                 if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
-                    Text(appViewModel.favoriteStateModel.cloudKitStateString)
+                    Text(appViewModel.appFavoriteModel.cloudKitStateString)
                         .font(.title3)
                     Button {
-                        appViewModel.favoriteStateModel.getState()
+//                        appViewModel.appFavoriteModel.getState()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                            if appViewModel.favoriteStateModel.cloudKitReady == true {
+                            if appViewModel.appFavoriteModel.cloudKitReady == true {
                                 liveViewModel.getRoomList(index: 0)
                             }
                         })
@@ -60,12 +60,12 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(appViewModel.favoriteStateModel.cloudKitStateString)
+                Text(appViewModel.appFavoriteModel.cloudKitStateString)
                     .font(.title3)
                 Button {
-                    appViewModel.favoriteStateModel.getState()
+//                    appViewModel.favoriteStateModel.getState()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                        if appViewModel.favoriteStateModel.cloudKitReady == true {
+                        if appViewModel.appFavoriteModel.cloudKitReady == true {
                             liveViewModel.getRoomList(index: 0)
                         }
                     })
@@ -112,9 +112,9 @@ struct FavoriteMainView: View {
             liveViewModel.getRoomList(index: 1)
         })
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.favoriteRefresh)) { _ in
-            appViewModel.favoriteStateModel.getState()
+//            appViewModel.appFavoriteModel.getState()
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                if appViewModel.favoriteStateModel.cloudKitReady == true {
+                if appViewModel.appFavoriteModel.cloudKitReady == true {
                     liveViewModel.getRoomList(index: 0)
                 }
             })
@@ -122,9 +122,9 @@ struct FavoriteMainView: View {
         .onChange(of: scenePhase) { oldValue, newValue in
             switch newValue {
                 case .active:
-                    appViewModel.favoriteStateModel.getState()
+//                appViewModel.appFavoriteModel.getState()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                        if appViewModel.favoriteStateModel.cloudKitReady == true {
+                        if appViewModel.appFavoriteModel.cloudKitReady == true {
                             liveViewModel.getRoomList(index: 0)
                         }
                     })

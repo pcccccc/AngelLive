@@ -70,7 +70,7 @@ struct PlayerControlView: View {
                     VStack {
                         HStack {
                             Spacer()
-                            if appViewModel.favoriteStateModel.cloudKitReady {
+                            if appViewModel.appFavoriteModel.cloudKitReady {
                                 Button("收藏") {}
                                 .focused($topState, equals: .section(0))
                             }
@@ -458,9 +458,9 @@ struct PlayerControlView: View {
     
     func favoriteAction() {
         roomInfoViewModel.currentRoomLikeLoading = true
-        if appViewModel.favoriteStateModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
+        if appViewModel.appFavoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
-                try await appViewModel.favoriteStateModel.addFavorite(room: roomInfoViewModel.currentRoom)
+                try await appViewModel.appFavoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
                 appViewModel.favoriteModel?.roomList.append(roomInfoViewModel.currentRoom)
                 roomInfoViewModel.currentRoomIsLiked = true
                 roomInfoViewModel.showToast(true, title: "收藏成功")
@@ -468,7 +468,7 @@ struct PlayerControlView: View {
             }
         }else {
             Task {
-                try await  appViewModel.favoriteStateModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
+                try await  appViewModel.appFavoriteModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
                 appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId })
                 roomInfoViewModel.currentRoomIsLiked = false
                 roomInfoViewModel.showToast(true, title: "取消收藏成功")

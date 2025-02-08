@@ -12,6 +12,39 @@ import CloudKit
 import Observation
 
 
+@Observable
+class AppFavoriteModel {
+    private let actor = FavoriteStateModel()
+    var roomList: [LiveModel] = []
+    var isLoading: Bool = false
+    var cloudKitReady: Bool = false
+    var cloudKitStateString: String = "正在检查状态"
+    
+    @MainActor
+    func syncWithActor() async {
+        self.isLoading = true
+        await actor.getState()
+        self.cloudKitReady = await actor.cloudKitReady
+        self.cloudKitStateString = await actor.cloudKitStateString
+        if self.cloudKitReady == true {
+            self.roomList = await actor.roomList
+        }
+    }
+    
+    func addFavorite(room: LiveModel) async throws {
+        try await CloudSQLManager.saveRecord(liveModel: room)
+        self.roomList.append(room)
+    }
+    
+    func removeFavoriteRoom(room: LiveModel) async throws {
+        try await CloudSQLManager.deleteRecord(liveModel: room)
+        let index = roomList.firstIndex(of: room)
+        if index != nil {
+            self.roomList.remove(at: index!)
+        }
+    }
+}
+
 actor FavoriteStateModel: ObservableObject {
     
     var roomList: [LiveModel] = []
@@ -39,19 +72,6 @@ actor FavoriteStateModel: ObservableObject {
                 self.isLoading = false
                 self.cloudKitReady = false
             }
-        }
-    }
-    
-    func addFavorite(room: LiveModel) async throws {
-        try await CloudSQLManager.saveRecord(liveModel: room)
-        self.roomList.append(room)
-    }
-    
-    func removeFavoriteRoom(room: LiveModel) async throws {
-        try await CloudSQLManager.deleteRecord(liveModel: room)
-        let index = roomList.firstIndex(of: room)
-        if index != nil {
-            self.roomList.remove(at: index!)
         }
     }
     

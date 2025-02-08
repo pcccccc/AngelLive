@@ -125,7 +125,7 @@ class QRCodeStore: ObservableObject {
                         }
                         let roomModel = newRoomList[index]
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-                        try await favoriteModel?.addFavorite(room: newLiveModel)
+//                        try await favoriteModel?.addFavorite(room: newLiveModel)
                     }
                     DispatchQueue.main.async {
                         self.showFullScreenLoading = false
@@ -164,7 +164,7 @@ class QRCodeStore: ObservableObject {
                             continue
                         }
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-                        try await favoriteModel?.addFavorite(room: newLiveModel)
+//                        try await favoriteModel?.addFavorite(room: newLiveModel)
                     }
                     let repeatString = repeatCount > 0 ? "(重复\(repeatCount)个）": ""
                     DispatchQueue.main.async {

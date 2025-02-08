@@ -12,7 +12,7 @@ import Observation
 class SimpleLiveViewModel {
     var selection = 0
     var favoriteModel: LiveViewModel?
-    var favoriteStateModel = FavoriteStateModel()
+    var appFavoriteModel = AppFavoriteModel()
     var danmuSettingModel = DanmuSettingModel()
     var searchModel = SearchViewModel()
     var historyModel = HistoryModel()

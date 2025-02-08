@@ -155,7 +155,7 @@ struct LiveCardView: View {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     if liveViewModel.roomListType == .favorite {
                                         DispatchQueue.main.async {
                                             if index < liveViewModel.roomList.count {
@@ -180,7 +180,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await appViewModel.favoriteStateModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                         if liveViewModel.roomListType == .favorite {
                                             DispatchQueue.main.async {
                                                 if index < liveViewModel.roomList.count {
@@ -206,7 +206,7 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await appViewModel.favoriteStateModel.addFavorite(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.appFavoriteModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
                                         appViewModel.favoriteModel?.roomList.append(liveViewModel.currentRoom!)
                                         liveViewModel.currentRoomIsFavorited = true
