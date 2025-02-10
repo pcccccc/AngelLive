@@ -112,8 +112,8 @@ class LiveViewModel {
                 Task {
                     await getCategoryList()
                 }
-            case .favorite:
-                getRoomList(index: 0)
+            case .favorite: break
+//                getRoomList(index: 0)
             case .history:
                 getRoomList(index: 0)
             default:
@@ -236,105 +236,105 @@ class LiveViewModel {
                         }
                     }
                 }
-            case .favorite:
-                Task {
-                    let stateString = await CloudSQLManager.getCloudState()
-                    if stateString == "正常" {
-                        let resList = try await CloudSQLManager.searchRecord()
-                        if resList.count > 0 {
-                            if appViewModel.selection == 0 {
-                                showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
-                            }
-                        }
-                        //获取是否可以访问google，如果网络环境不允许，则不获取youtube直播相关否则会卡很久
-                        let canLoadYoutube = await ApiManager.checkInternetConnection()
-                        for liveModel in resList {
-                            if liveModel.liveType == .youtube && canLoadYoutube == false {
-                                showToast(true, title: "当前网络环境无法获取Youtube房间状态\n本次将会跳过Youtube相关加载", hideAfter: 1.5)
-                                break
-                            }
-                        }
-                        var fetchedModels: [LiveModel] = []
-                        // 使用异步的任务组来并行处理所有的请求
-                        var bilibiliModels: [LiveModel] = []
-                        await withTaskGroup(of: LiveModel?.self, body: { group in
-                            for liveModel in resList {
-                                if liveModel.liveType == .bilibili {
-                                    bilibiliModels.append(liveModel)
-                                }else if liveModel.liveType == .youtube && canLoadYoutube == false {
-                                    continue
-                                }else {
-                                    group.addTask {
-                                        do {
-                                            let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
-                                            if liveModel.liveType == .ks {
-                                                var finalLiveModel = liveModel
-                                                finalLiveModel.liveState = dataReq.liveState
-                                                return finalLiveModel
-                                            }
-                                            return dataReq
-                                        } catch {
-                                            print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
-                                            var errorModel = liveModel
-                                            errorModel.liveState = LiveState.unknow.rawValue
-                                            return errorModel
-                                        }
-                                    }
-                                }
-                            }
-                            // 收集任务组中每个任务的结果
-                            for await result in group {
-                                if let newLiveModel = result {
-                                    fetchedModels.append(newLiveModel)
-                                }
-                            }
-                        })
-                        
-                        if bilibiliModels.count > 0 {
-                            if appViewModel.selection == 0 {
-                                showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
-                            }
-                        }
-                        
-                        for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
-                            do {
-                                try? await Task.sleep(nanoseconds: 1_500_000_000) // 等待1.5秒
-                                let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
-                                fetchedModels.append(dataReq)
-                            }catch {
-                                print("房间号\(item.roomId), 主播名字\(item.userName), 平台\(item.liveType), \(error)")
-                            }
-                        }
-                        let sortedModels = fetchedModels.sorted { firstModel, secondModel in
-                            switch (firstModel.liveState, secondModel.liveState) {
-                                case ("1", "1"):
-                                    return true // 两个都是1，保持原有顺序
-                                case ("1", _):
-                                    return true // 第一个是1，应该排在前面
-                                case (_, "1"):
-                                    return false // 第二个是1，应该排在前面
-                                case ("2", "2"):
-                                    return true // 两个都是2，保持原有顺序
-                                case ("2", _):
-                                    return true // 第一个是2，应该排在非1的前面
-                                case (_, "2"):
-                                    return false // 第二个是2，应该排在非1的前面
-                                default:
-                                    return true // 两个都不是1和2，保持原有顺序
-                            }
-                        }
-
-                        // 最后，更新tempArray
-                        await MainActor.run {
-                            self.favoriteRoomList.removeAll()
-                            self.roomList.removeAll()
-                            self.roomList = sortedModels
-                            self.favoriteRoomList = self.roomList
-                            self.isLoading = false
-                            print("结束")
-                        }
-                    }
-                }
+            case .favorite: break;
+//                Task {
+//                    let stateString = await CloudSQLManager.getCloudState()
+//                    if stateString == "正常" {
+//                        let resList = try await CloudSQLManager.searchRecord()
+//                        if resList.count > 0 {
+//                            if appViewModel.selection == 0 {
+//                                showToast(true, title: "通过CloudKit拉取数据成功,正在同步主播状态", hideAfter: 1.5)
+//                            }
+//                        }
+//                        //获取是否可以访问google，如果网络环境不允许，则不获取youtube直播相关否则会卡很久
+//                        let canLoadYoutube = await ApiManager.checkInternetConnection()
+//                        for liveModel in resList {
+//                            if liveModel.liveType == .youtube && canLoadYoutube == false {
+//                                showToast(true, title: "当前网络环境无法获取Youtube房间状态\n本次将会跳过Youtube相关加载", hideAfter: 1.5)
+//                                break
+//                            }
+//                        }
+//                        var fetchedModels: [LiveModel] = []
+//                        // 使用异步的任务组来并行处理所有的请求
+//                        var bilibiliModels: [LiveModel] = []
+//                        await withTaskGroup(of: LiveModel?.self, body: { group in
+//                            for liveModel in resList {
+//                                if liveModel.liveType == .bilibili {
+//                                    bilibiliModels.append(liveModel)
+//                                }else if liveModel.liveType == .youtube && canLoadYoutube == false {
+//                                    continue
+//                                }else {
+//                                    group.addTask {
+//                                        do {
+//                                            let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
+//                                            if liveModel.liveType == .ks {
+//                                                var finalLiveModel = liveModel
+//                                                finalLiveModel.liveState = dataReq.liveState
+//                                                return finalLiveModel
+//                                            }
+//                                            return dataReq
+//                                        } catch {
+//                                            print("房间号\(liveModel.roomId), 主播名字\(liveModel.userName), 平台\(liveModel.liveType), \(error)")
+//                                            var errorModel = liveModel
+//                                            errorModel.liveState = LiveState.unknow.rawValue
+//                                            return errorModel
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                            // 收集任务组中每个任务的结果
+//                            for await result in group {
+//                                if let newLiveModel = result {
+//                                    fetchedModels.append(newLiveModel)
+//                                }
+//                            }
+//                        })
+//                        
+//                        if bilibiliModels.count > 0 {
+//                            if appViewModel.selection == 0 {
+//                                showToast(true, title: "同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒", hideAfter: 3)
+//                            }
+//                        }
+//                        
+//                        for item in bilibiliModels { //B站可能存在风控，触发条件为访问过快或没有Cookie？
+//                            do {
+//                                try? await Task.sleep(nanoseconds: 1_500_000_000) // 等待1.5秒
+//                                let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
+//                                fetchedModels.append(dataReq)
+//                            }catch {
+//                                print("房间号\(item.roomId), 主播名字\(item.userName), 平台\(item.liveType), \(error)")
+//                            }
+//                        }
+//                        let sortedModels = fetchedModels.sorted { firstModel, secondModel in
+//                            switch (firstModel.liveState, secondModel.liveState) {
+//                                case ("1", "1"):
+//                                    return true // 两个都是1，保持原有顺序
+//                                case ("1", _):
+//                                    return true // 第一个是1，应该排在前面
+//                                case (_, "1"):
+//                                    return false // 第二个是1，应该排在前面
+//                                case ("2", "2"):
+//                                    return true // 两个都是2，保持原有顺序
+//                                case ("2", _):
+//                                    return true // 第一个是2，应该排在非1的前面
+//                                case (_, "2"):
+//                                    return false // 第二个是2，应该排在非1的前面
+//                                default:
+//                                    return true // 两个都不是1和2，保持原有顺序
+//                            }
+//                        }
+//
+//                        // 最后，更新tempArray
+//                        await MainActor.run {
+//                            self.favoriteRoomList.removeAll()
+//                            self.roomList.removeAll()
+//                            self.roomList = sortedModels
+//                            self.favoriteRoomList = self.roomList
+//                            self.isLoading = false
+//                            print("结束")
+//                        }
+//                    }
+//                }
             case .history:
                 self.roomList = appViewModel.historyModel.watchList
             break
@@ -437,7 +437,6 @@ class LiveViewModel {
 
     
     //MARK: 操作相关
-    
     func showToast(_ success: Bool, title: String, hideAfter: TimeInterval? = 1.5) {
         self.showToast = true
         self.toastTitle = title

@@ -21,20 +21,15 @@ struct FavoriteMainView: View {
     
     var body: some View {
         
-        @Bindable var liveModel = liveViewModel
+        @Bindable var appModel = appViewModel
         
         VStack {
             if appViewModel.appFavoriteModel.cloudKitReady {
-                if liveViewModel.roomList.isEmpty && liveViewModel.isLoading == false {
+                if appViewModel.appFavoriteModel.roomList.isEmpty && appViewModel.appFavoriteModel.isLoading == false {
                     Text(appViewModel.appFavoriteModel.cloudKitStateString)
                         .font(.title3)
                     Button {
-//                        appViewModel.appFavoriteModel.getState()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                            if appViewModel.appFavoriteModel.cloudKitReady == true {
-                                liveViewModel.getRoomList(index: 0)
-                            }
-                        })
+                        getViewStateAndFavoriteList()
                     } label: {
                         Label("刷新", systemImage: "arrow.counterclockwise")
                             .font(.headline.bold())
@@ -42,13 +37,13 @@ struct FavoriteMainView: View {
                 }else {
                     ScrollView {
                         LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
-                            ForEach(liveViewModel.roomList.indices, id: \.self) { index in
+                            ForEach(appViewModel.appFavoriteModel.roomList.indices, id: \.self) { index in
                                 LiveCardView(index: index)
                                     .environment(liveViewModel)
                                     .environment(appViewModel)
                                     .frame(width: 370, height: 240)
                             }
-                            if liveViewModel.isLoading {
+                            if appViewModel.appFavoriteModel.isLoading {
                                 LoadingView()
                                     .frame(width: 370, height: 275)
                                     .cornerRadius(5)
@@ -63,12 +58,7 @@ struct FavoriteMainView: View {
                 Text(appViewModel.appFavoriteModel.cloudKitStateString)
                     .font(.title3)
                 Button {
-//                    appViewModel.favoriteStateModel.getState()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                        if appViewModel.appFavoriteModel.cloudKitReady == true {
-                            liveViewModel.getRoomList(index: 0)
-                        }
-                    })
+                    getViewStateAndFavoriteList()
                 } label: {
                     Label("刷新", systemImage: "arrow.counterclockwise")
                         .font(.headline.bold())
@@ -96,12 +86,11 @@ struct FavoriteMainView: View {
                 }
             }
         }
-        .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
+        .simpleToast(isPresented: $appModel.appFavoriteModel.showToast, options: appViewModel.appFavoriteModel.toastOptions) {
             VStack(alignment: .leading) {
-                Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                Label("提示", systemImage: appModel.appFavoriteModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                     .font(.headline.bold())
-                Text(liveModel.toastTitle)
-                
+                Text(appModel.appFavoriteModel.toastTitle)
             }
             .padding()
             .background(.black.opacity(0.6))
@@ -109,26 +98,19 @@ struct FavoriteMainView: View {
             .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
-            liveViewModel.getRoomList(index: 1)
+            getViewStateAndFavoriteList()
         })
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.favoriteRefresh)) { _ in
-//            appViewModel.appFavoriteModel.getState()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                if appViewModel.appFavoriteModel.cloudKitReady == true {
-                    liveViewModel.getRoomList(index: 0)
-                }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: {
+                getViewStateAndFavoriteList()
             })
         }
         .onChange(of: scenePhase) { oldValue, newValue in
             switch newValue {
                 case .active:
-//                appViewModel.appFavoriteModel.getState()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: {
-                        if appViewModel.appFavoriteModel.cloudKitReady == true {
-                            liveViewModel.getRoomList(index: 0)
-                        }
-                    })
-            
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: {
+                    getViewStateAndFavoriteList()
+                })
                 case .background:
                     print("background。。。。")
                 case .inactive:
@@ -136,6 +118,13 @@ struct FavoriteMainView: View {
                 @unknown default:
                     break
             }
+        }
+    }
+    
+    func getViewStateAndFavoriteList() {
+        Task {
+            await appViewModel.appFavoriteModel.syncWithActor()
+            liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
         }
     }
 }
