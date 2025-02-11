@@ -16,9 +16,9 @@ struct SimpleLiveTVOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(appViewModel: appViewModel)
-                .task {
-                    await appViewModel.appFavoriteModel.syncWithActor()
-                }
+            .onAppear {
+                print(11111)
+            }   
         }
     }
 }

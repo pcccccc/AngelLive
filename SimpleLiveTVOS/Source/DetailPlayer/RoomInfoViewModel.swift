@@ -104,7 +104,7 @@ final class RoomInfoViewModel {
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
-        var option = PlayerOptions()
+        let option = PlayerOptions()
         option.userAgent = "libmpv"
         option.syncSystemRate = settingModel.syncSystemRate
         self.playerOption = option
@@ -279,14 +279,12 @@ final class RoomInfoViewModel {
             if currentRoom.liveType != .youtube && currentRoom.liveType != .ks {
                 liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { _ in
                     Task {
-                        print("====================================get live state=================================")
                         let state = try await ApiManager.getCurrentRoomLiveState(roomId: self.currentRoom.roomId, userId: self.currentRoom.userId, liveType: self.currentRoom.liveType)
                         if state == .close || state == .unknow {
                             NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
                             self.liveFlagTimer?.invalidate()
                             self.liveFlagTimer = nil
                         }
-                        print("====================================\(self.appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEndSecond)=================================")
                     }
                 }
             }
@@ -328,23 +326,9 @@ final class RoomInfoViewModel {
     
     func disConnectSocket() {
         self.socketConnection?.disconnect()
-//        self.socketConnection?.socket?.forceDisconnect()
         self.socketConnection = nil
         socketConnection?.delegate = nil
     }
-    
-//    func toggleTimer() {
-//        if debugTimerIsActive == false {
-//            startTimer()
-//        }else {
-//            stopTimer()
-//        }
-//    }
-//    
-//    func startTimer() {
-//        timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-//        debugTimerIsActive = true
-//    }
 
     func stopTimer() {
         timer.upstream.connect().cancel()

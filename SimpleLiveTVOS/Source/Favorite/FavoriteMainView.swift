@@ -25,7 +25,7 @@ struct FavoriteMainView: View {
         
         VStack {
             if appViewModel.appFavoriteModel.cloudKitReady {
-                if appViewModel.appFavoriteModel.roomList.isEmpty && appViewModel.appFavoriteModel.isLoading == false {
+                if appViewModel.appFavoriteModel.groupedRoomList.isEmpty && appViewModel.appFavoriteModel.isLoading == false {
                     Text(appViewModel.appFavoriteModel.cloudKitStateString)
                         .font(.title3)
                     Button {
@@ -36,22 +36,31 @@ struct FavoriteMainView: View {
                     }
                 }else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
-                            ForEach(appViewModel.appFavoriteModel.roomList.indices, id: \.self) { index in
-                                LiveCardView(index: index)
-                                    .environment(liveViewModel)
-                                    .environment(appViewModel)
-                                    .frame(width: 370, height: 240)
-                            }
-                            if appViewModel.appFavoriteModel.isLoading {
-                                LoadingView()
-                                    .frame(width: 370, height: 275)
-                                    .cornerRadius(5)
-                                    .shimmering(active: true)
-                                    .redacted(reason: .placeholder)
+                        ForEach(appViewModel.appFavoriteModel.groupedRoomList, id: \.id) { section in
+                            VStack {
+                                HStack {
+                                    Text(section.title)
+                                    Spacer()
+                                }
+                                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
+                                        ForEach(section.roomList.indices, id: \.self) { index in
+                                            Text("\(index)")
+                                            LiveCardView(index: index)
+                                                .environment(liveViewModel)
+                                                .environment(appViewModel)
+                                                .frame(width: 370, height: 240)
+                                        }
+                                        if appViewModel.appFavoriteModel.isLoading {
+                                            LoadingView()
+                                                .frame(width: 370, height: 275)
+                                                .cornerRadius(5)
+                                                .shimmering(active: true)
+                                                .redacted(reason: .placeholder)
+                                        }
+                                }
+                                .safeAreaPadding(.top, 15)
                             }
                         }
-                        .safeAreaPadding(.top, 15)
                     }
                 }
             }else {
@@ -66,7 +75,7 @@ struct FavoriteMainView: View {
             }
         }
         .overlay {
-            if liveViewModel.roomList.count > 0 {
+            if liveViewModel.roomList.count > 0 && appViewModel.appFavoriteModel.cloudKitReady {
                 VStack {
                     Spacer()
                     HStack {
@@ -121,7 +130,7 @@ struct FavoriteMainView: View {
         }
     }
     
-    func getViewStateAndFavoriteList() {
+    private func getViewStateAndFavoriteList() {
         Task {
             await appViewModel.appFavoriteModel.syncWithActor()
             liveViewModel.roomList = appViewModel.appFavoriteModel.roomList

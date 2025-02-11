@@ -1,5 +1,5 @@
 {
-  "originHash" : "fb4e855e136c5955c82f7eee455fb050e4b3c1f5d0eaf7b4c555c3e121931e10",
+  "originHash" : "d1231c18c70b528cbbc08757cad7da15ee855fa0e8205358804400b850058d01",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -83,6 +83,15 @@
       }
     },
     {
+      "identity" : "injectionnext",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/InjectionNext",
+      "state" : {
+        "revision" : "dc3474dc65e0a8d6661932733950810bfca180a9",
+        "version" : "1.2.6"
+      }
+    },
+    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
@@ -105,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "175077657410fa09c774d8cb8df6cb20afee4459",
-        "version" : "1.5.3"
+        "revision" : "f268dfdf326c0aa0ef3474bd23fecc1eae25744e",
+        "version" : "1.5.4"
       }
     },
     {

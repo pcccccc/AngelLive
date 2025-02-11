@@ -40,36 +40,53 @@ class CloudSQLManager: NSObject {
         let database = container.privateCloudDatabase
         let predicate = NSPredicate(format: " \(roomId_colum_cloud) = '\(roomId)' ")
         let query = CKQuery(recordType: "favorite_streamers", predicate: predicate)
-        let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
+        // 使用新的 API
+        let recordArray = try await database.records(matching: query)
         var temp: Array<LiveModel> = []
-        for record in recordArray {
-            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "", liveWatchedCount: nil))
+        for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
+            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "",
+                                 roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "",
+                                 roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "",
+                                 userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "",
+                                 liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili,
+                                 liveState: record.value(forKey: liveState_column_cloud) as? String ?? "",
+                                 userId: record.value(forKey: userId_column_cloud) as? String ?? "",
+                                 roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "",
+                                 liveWatchedCount: nil))
         }
         return temp
     }
-    
+
     class func searchRecord() async throws -> [LiveModel] {
         let container = CKContainer(identifier: ck_identifier)
         let database = container.privateCloudDatabase
         let query = CKQuery(recordType: "favorite_streamers", predicate: NSPredicate(value: true))
-        _ = CKQueryOperation(query: query)
-        let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
+        // 使用新的 API
+        let recordArray = try await database.records(matching: query)
         var temp: Array<LiveModel> = []
-        for record in recordArray {
-            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "", roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "", roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "", userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "", liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili, liveState: record.value(forKey: liveState_column_cloud) as? String ?? "", userId: record.value(forKey: userId_column_cloud) as? String ?? "", roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "", liveWatchedCount: nil))
+        for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
+            temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "",
+                                 roomTitle: record.value(forKey: roomTitle_column_cloud) as? String ?? "",
+                                 roomCover: record.value(forKey: roomCover_column_cloud) as? String ?? "",
+                                 userHeadImg: record.value(forKey: userHeadImg_column_cloud) as? String ?? "",
+                                 liveType: LiveType(rawValue: record.value(forKey: liveType_column_cloud) as? String ?? "") ?? .bilibili,
+                                 liveState: record.value(forKey: liveState_column_cloud) as? String ?? "",
+                                 userId: record.value(forKey: userId_column_cloud) as? String ?? "",
+                                 roomId: record.value(forKey: roomId_colum_cloud) as? String ?? "",
+                                 liveWatchedCount: nil))
         }
         return temp
     }
-    
-    class func deleteRecord(liveModel: LiveModel) async throws {
 
+    class func deleteRecord(liveModel: LiveModel) async throws {
         let container = CKContainer(identifier: ck_identifier)
         let database = container.privateCloudDatabase
         let predicate = NSPredicate(format: " \(roomId_colum_cloud) = '\(liveModel.roomId)' ")
         let query = CKQuery(recordType: "favorite_streamers", predicate: predicate)
-        let recordArray = try await database.perform(query, inZoneWith: CKRecordZone.default().zoneID)
-        if recordArray.count > 0 {
-            try await database.deleteRecord(withID: recordArray.first!.recordID)
+        let recordArray = try await database.records(matching: query)
+        if let firstRecord = recordArray.matchResults.first,
+           let record = try? firstRecord.1.get() {
+            try await database.deleteRecord(withID: record.recordID)
         }
     }
     
@@ -91,7 +108,7 @@ class CloudSQLManager: NSObject {
                     return "无法确定状态"
             }
         }catch {
-            return error.localizedDescription
+            return formatErrorCode(error: error)
         }
     }
     

@@ -41,6 +41,7 @@
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
+		FBCBE6F12D5B2BCA00BE3E62 /* InjectionNext in Frameworks */ = {isa = PBXBuildFile; productRef = FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */; };
 		FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBDEE4782AD5874900F996BA /* SimpleToast */; };
 		FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */; };
 		FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F52B122B5100B19C3E /* SwiftProtobuf */; };
@@ -103,6 +104,7 @@
 				FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */,
 				4FB7323F2B98884400F02249 /* AcknowList in Frameworks */,
 				FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */,
+				FBCBE6F12D5B2BCA00BE3E62 /* InjectionNext in Frameworks */,
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
 				FB29265D2C58991500A1F07F /* LiveParse in Frameworks */,
 				4F64860C2C783FFA00716373 /* ColorfulX in Frameworks */,
@@ -243,6 +245,7 @@
 				4F84D6D92D08644300F88855 /* LiveParse */,
 				4F84D6DC2D088B5F00F88855 /* LiveParse */,
 				4F84D6DF2D088DB400F88855 /* LiveParse */,
+				FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -341,6 +344,7 @@
 				4F64860A2C783FFA00716373 /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */,
 				4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */,
+				FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -559,6 +563,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2.0;
+				OTHER_LDFLAGS = (
+					"-Xlinker",
+					"-interposable",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.simplelive;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -593,6 +601,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2.0;
+				OTHER_LDFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.simplelive;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -837,6 +846,14 @@
 				minimumVersion = 5.0.2;
 			};
 		};
+		FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnno1962/InjectionNext";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.6;
+			};
+		};
 		FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sanzaru/SimpleToast.git";
@@ -1010,6 +1027,11 @@
 		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KSPlayer;
+		};
+		FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */;
+			productName = InjectionNext;
 		};
 		FBDEE4782AD5874900F996BA /* SimpleToast */ = {
 			isa = XCSwiftPackageProductDependency;
