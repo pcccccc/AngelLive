@@ -44,7 +44,9 @@ class AppFavoriteModel {
         self.cloudKitStateString = state.1
         if self.cloudKitReady {
             do {
-                self.groupedRoomList = try await actor.syncStreamerLiveStates()
+                let resp = try await actor.syncStreamerLiveStates()
+                self.roomList = resp.0
+                self.groupedRoomList = resp.1
                 isLoading = false
             }catch {
                 isLoading = false
@@ -80,7 +82,7 @@ class AppFavoriteModel {
 
 actor FavoriteStateModel: ObservableObject {
     
-    func syncStreamerLiveStates() async throws -> [FavoriteLiveSectionModel] {
+    func syncStreamerLiveStates() async throws -> ([LiveModel], [FavoriteLiveSectionModel]) {
         //获取是否可以访问google，如果网络环境不允许，则不获取youtube直播相关否则会卡很久
         let roomList = try await CloudSQLManager.searchRecord()
         let types = Set(roomList.map { $0.liveType })
@@ -96,7 +98,7 @@ actor FavoriteStateModel: ObservableObject {
             groupedRoomList.append(model)
         }
         groupedRoomList = groupedRoomList.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        return groupedRoomList
+        return (roomList,groupedRoomList)
 //        let canLoadYoutube = await ApiManager.checkInternetConnection()
 //        for liveModel in roomList {
 //            if liveModel.liveType == .youtube && canLoadYoutube == false {

@@ -16,6 +16,7 @@ struct LiveCardView: View {
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
     @State var index: Int
+    @State var currentLiveModel: LiveModel?
     @State private var isLive: Bool = false
     @FocusState var focusState: FocusableField?
 
@@ -29,33 +30,15 @@ struct LiveCardView: View {
         
         @Bindable var liveModel = liveViewModel
         
+        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
         if index < liveViewModel.roomList.count {
             VStack(alignment: .leading, spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
                     Button {
-                        liveViewModel.currentRoom = liveViewModel.roomList[index]
-                        liveViewModel.selectedRoomListIndex = index
-                        if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || ((self.liveViewModel.currentRoom?.liveType == .huya || self.liveViewModel.currentRoom?.liveType == .douyu) && LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .video) || self.liveViewModel.roomListType == .live {
-                            if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
-                                appViewModel.historyModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
-                            }
-                            var enterFromLive = false
-                            if liveModel.roomListType == .live {
-                                enterFromLive = true
-                            }
-                            liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)
-                            DispatchQueue.main.async {
-                                isLive = true
-                            }
-                        }else {
-                            DispatchQueue.main.async {
-                                isLive = false
-                                liveViewModel.showToast(false, title: "主播已经下播")
-                            }
-                        }
+                        enterDetailRoom()
                     } label: {
                         ZStack(alignment: .bottom) {
-                            KFImage(URL(string: liveViewModel.roomList[index].roomCover))
+                            KFImage(URL(string: currentLiveModel.roomCover))
                                 .placeholder {
                                     Image("placeholder")
                                         .resizable()
@@ -64,7 +47,7 @@ struct LiveCardView: View {
                                 .resizable()
                                 .frame(height: 210)
                                 .blur(radius: 10)
-                            KFImage(URL(string: liveViewModel.roomList[index].roomCover))
+                            KFImage(URL(string: currentLiveModel.roomCover))
                                 .placeholder {
                                     Image("placeholder")
                                         .resizable()
@@ -79,13 +62,13 @@ struct LiveCardView: View {
                             .fill(cardGradient)
                             .shadow(radius: 10)
                             .frame(height: 40)
-                            if liveViewModel.roomList[index].liveWatchedCount != nil {
+                            if currentLiveModel.liveWatchedCount != nil {
                                 HStack {
                                     Spacer()
                                     HStack(spacing: 5) {
                                         Image(systemName: "eye")
                                             .font(.system(size: 14))
-                                        Text(liveViewModel.roomList[index].liveWatchedCount!.formatWatchedCount())
+                                        Text(currentLiveModel.liveWatchedCount!.formatWatchedCount())
                                             .font(.system(size: 18))
                                     }
                                     
@@ -109,7 +92,7 @@ struct LiveCardView: View {
                                                 .fill(formatLiveStateColor())
                                                 .frame(width: 10, height: 10)
                                                 .padding(.leading, 5)
-                                            Text(liveViewModel.roomList[index].liveStateFormat())
+                                            Text(currentLiveModel.liveStateFormat())
                                                 .font(.system(size: 18))
                                                 .foregroundColor(Color.white)
                                                 .padding(.trailing, 5)
@@ -121,11 +104,11 @@ struct LiveCardView: View {
                                     }
                                     .padding(.trailing, 5)
                                 }
-                                .onAppear {
-                                    Task {
-                                        if liveViewModel.roomList[index].liveState == "" {
-                                            liveViewModel.roomList[index].liveState = try await ApiManager.getCurrentRoomLiveState(roomId: liveViewModel.roomList[index].roomId, userId: liveViewModel.roomList[index].userId, liveType: liveViewModel.roomList[index].liveType).rawValue
-                                        }
+                                .task {
+                                    do {
+                                        try await refreshStateIfStateIsUnknow()
+                                    }catch {
+                                        // todo
                                     }
                                 }
                                 .padding(.bottom, 165)
@@ -245,14 +228,14 @@ struct LiveCardView: View {
                     })
                 })
                 HStack(spacing: 15) {
-                    KFImage(URL(string: liveViewModel.roomList[index].userHeadImg))
+                    KFImage(URL(string: currentLiveModel.userHeadImg))
                         .resizable()
                         .frame(width: 40, height: 40)
                         .cornerRadius(20)
                     VStack (alignment: .leading, spacing: 5) {
-                        Text(liveViewModel.roomList[index].userName)
-                            .font(.system(size: 22))
-                        Text(liveViewModel.roomList[index].roomTitle)
+                        Text(currentLiveModel.userName)
+                            .font(.system(size: 22).weight(.semibold))
+                        Text(currentLiveModel.roomTitle)
                             .font(.system(size: 16))
                     }
                     Spacer()
@@ -266,6 +249,29 @@ struct LiveCardView: View {
         
     }
     
+    private func enterDetailRoom() {
+        liveViewModel.currentRoom = currentLiveModel
+        liveViewModel.selectedRoomListIndex = index
+        if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || ((self.liveViewModel.currentRoom?.liveType == .huya || self.liveViewModel.currentRoom?.liveType == .douyu) && LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .video) || self.liveViewModel.roomListType == .live {
+            if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
+                appViewModel.historyModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+            }
+            var enterFromLive = false
+            if liveViewModel.roomListType == .live {
+                enterFromLive = true
+            }
+            liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)
+            DispatchQueue.main.async {
+                isLive = true
+            }
+        }else {
+            DispatchQueue.main.async {
+                isLive = false
+                liveViewModel.showToast(false, title: "主播已经下播")
+            }
+        }
+    }
+    
     func formatLiveStateColor() -> Color {
         if LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .live || LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .video {
             Color.green
@@ -273,9 +279,16 @@ struct LiveCardView: View {
             Color.gray
         }
     }
+    
+    func refreshStateIfStateIsUnknow() async throws {
+        if liveViewModel.roomList[index].liveState == "" {
+            liveViewModel.roomList[index].liveState = try await ApiManager.getCurrentRoomLiveState(roomId: liveViewModel.roomList[index].roomId, userId: liveViewModel.roomList[index].userId, liveType: liveViewModel.roomList[index].liveType).rawValue
+        }
+    }
 
     func getImage() -> String {
-        switch liveViewModel.roomList[index].liveType {
+        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
+        switch currentLiveModel.liveType {
             case .bilibili:
                 return "live_card_bili"
             case .douyu:

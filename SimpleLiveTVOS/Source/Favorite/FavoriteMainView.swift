@@ -35,21 +35,24 @@ struct FavoriteMainView: View {
                             .font(.headline.bold())
                     }
                 }else {
-                    ScrollView {
+                    ScrollView(.vertical) {
                         ForEach(appViewModel.appFavoriteModel.groupedRoomList, id: \.id) { section in
                             VStack {
                                 HStack {
                                     Text(section.title)
+                                        .font(.title2.bold())
+                                        .padding(.leading, 14)
                                     Spacer()
                                 }
-                                LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
+                                ScrollView(.horizontal) {
+                                    LazyHGrid(rows: [GridItem(.fixed(370), spacing: 60, alignment: .leading)], spacing: 60) {
                                         ForEach(section.roomList.indices, id: \.self) { index in
-                                            Text("\(index)")
-                                            LiveCardView(index: index)
+                                            LiveCardView(index: index, currentLiveModel: section.roomList[index])
                                                 .environment(liveViewModel)
                                                 .environment(appViewModel)
                                                 .frame(width: 370, height: 240)
                                         }
+                                        
                                         if appViewModel.appFavoriteModel.isLoading {
                                             LoadingView()
                                                 .frame(width: 370, height: 275)
@@ -57,11 +60,17 @@ struct FavoriteMainView: View {
                                                 .shimmering(active: true)
                                                 .redacted(reason: .placeholder)
                                         }
+                                    }
+                                    .safeAreaPadding([.leading, .trailing], 25)
+                                    .padding([.top, .bottom], 0)
                                 }
-                                .safeAreaPadding(.top, 15)
+                                .padding(.top, -45)
+                                Spacer()
                             }
+                            .focusSection()
                         }
                     }
+                    
                 }
             }else {
                 Text(appViewModel.appFavoriteModel.cloudKitStateString)
