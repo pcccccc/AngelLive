@@ -75,6 +75,27 @@ struct GeneralSettingView: View {
                     Text("如果您的页面部分背景不正常（如页面背景透明）,请尝试打开这个选项。")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    HStack {
+                        Text("收藏设置")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    HStack {
+                        Text("收藏页面展示样式")
+                        Spacer()
+                        Menu(content: {
+                            ForEach(AngelLiveFavoriteStyle.allCases, id: \.self) { index in
+                                Button(AngelLiveFavoriteStyle.allCases[index.rawValue].description) {
+                                    generalSettingModel.globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.allCases[index.rawValue].rawValue
+                                }
+                            }
+                        }, label: {
+                            Text(AngelLiveFavoriteStyle(rawValue: generalSettingModel.globalGeneralSettingFavoriteStyle)?.description ?? "普通视图")
+                                .frame(width: 400, height: 45, alignment: .center)
+                        })
+                    }
+                    .frame(height: 45)
                     AnyView(Color.clear)
                         .frame(height: 350)
                     Spacer()
