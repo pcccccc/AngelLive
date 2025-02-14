@@ -16,9 +16,6 @@ struct SimpleLiveTVOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(appViewModel: appViewModel)
-            .onAppear {
-                print(11111)
-            }   
         }
     }
 }

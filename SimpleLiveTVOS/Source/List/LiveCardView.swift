@@ -250,7 +250,7 @@ struct LiveCardView: View {
     }
     
     private func enterDetailRoom() {
-        liveViewModel.currentRoom = currentLiveModel
+        liveViewModel.currentRoom = currentLiveModel ?? liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = index
         if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || ((self.liveViewModel.currentRoom?.liveType == .huya || self.liveViewModel.currentRoom?.liveType == .douyu) && LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .video) || self.liveViewModel.roomListType == .live {
             if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {

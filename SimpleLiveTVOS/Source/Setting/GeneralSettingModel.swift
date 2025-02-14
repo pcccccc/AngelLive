@@ -17,11 +17,14 @@ enum AngelLiveFavoriteStyle: Int, CaseIterable, CustomStringConvertible {
             return "普通视图"
         case .section:
             return "按平台分组"
+        case .liveState:
+            return "按直播状态分组"
         }
     }
     
     case normal = 0
     case section = 1
+    case liveState = 2
 }
 
 @Observable

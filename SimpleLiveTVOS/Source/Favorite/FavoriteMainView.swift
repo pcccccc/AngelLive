@@ -35,7 +35,7 @@ struct FavoriteMainView: View {
                     }
                 }else {
                     ScrollView(.vertical) {
-                        if AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingModel.globalGeneralSettingFavoriteStyle) == .section { //按平台分组展示页面
+                        if AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingModel.globalGeneralSettingFavoriteStyle) == .section || AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingModel.globalGeneralSettingFavoriteStyle) == .liveState { //按平台分组展示页面
                             ForEach(appViewModel.appFavoriteModel.groupedRoomList, id: \.id) { section in
                                 VStack {
                                     HStack {
