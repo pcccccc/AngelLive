@@ -29,9 +29,10 @@ struct LiveCardView: View {
     var body: some View {
         
         @Bindable var liveModel = liveViewModel
+        @State var roomList = liveViewModel.roomList
         
-        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
-        if index < liveViewModel.roomList.count {
+        if index < roomList.count {
+            let currentLiveModel = self.currentLiveModel == nil ? roomList[index] : self.currentLiveModel!
             VStack(alignment: .leading, spacing: 10, content: {
                 ZStack(alignment: Alignment(horizontal: .leading, vertical: .top), content: {
                     Button {
@@ -139,13 +140,6 @@ struct LiveCardView: View {
                             Task {
                                 do {
                                     try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                                    if liveViewModel.roomListType == .favorite {
-                                        DispatchQueue.main.async {
-                                            if index < liveViewModel.roomList.count {
-                                                liveViewModel.roomList.remove(at: index)
-                                            }
-                                        }
-                                    }
                                     liveViewModel.showToast(true, title:"取消收藏成功")
                                 }catch {
                                     liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
@@ -164,13 +158,6 @@ struct LiveCardView: View {
                                 Task {
                                     do {
                                         try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                                        if liveViewModel.roomListType == .favorite {
-                                            DispatchQueue.main.async {
-                                                if index < liveViewModel.roomList.count {
-                                                    liveViewModel.roomList.remove(at: index)
-                                                }
-                                            }
-                                        }
                                         appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
                                         liveViewModel.showToast(true, title:"取消收藏成功")
                                         liveViewModel.currentRoomIsFavorited = false
@@ -281,8 +268,9 @@ struct LiveCardView: View {
     }
     
     func refreshStateIfStateIsUnknow() async throws {
-        if liveViewModel.roomList[index].liveState == "" {
-            liveViewModel.roomList[index].liveState = try await ApiManager.getCurrentRoomLiveState(roomId: liveViewModel.roomList[index].roomId, userId: liveViewModel.roomList[index].userId, liveType: liveViewModel.roomList[index].liveType).rawValue
+        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
+        if currentLiveModel.liveState == "" {
+            self.currentLiveModel?.liveState = try await ApiManager.getCurrentRoomLiveState(roomId: currentLiveModel.roomId, userId: currentLiveModel.userId, liveType: currentLiveModel.liveType).rawValue
         }
     }
 

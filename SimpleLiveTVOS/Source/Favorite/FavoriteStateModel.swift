@@ -39,6 +39,9 @@ class AppFavoriteModel {
     
     @MainActor
     func syncWithActor() async {
+        roomList.removeAll()
+        groupedRoomList.removeAll()
+        syncProgressInfo = ("", "", "", 0, 0)
         self.isLoading = true
         let state = await actor.getState()
         self.cloudKitReady = state.0
@@ -64,7 +67,22 @@ class AppFavoriteModel {
     
     func addFavorite(room: LiveModel) async throws {
         try await CloudSQLManager.saveRecord(liveModel: room)
-        self.roomList.append(room)
+        self.roomList.insert(room, at: 0)
+        if AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) == .section {
+            for (index, model) in groupedRoomList.enumerated() {
+                if model.type == room.liveType {
+                    groupedRoomList[index].roomList.append(room)
+                    break
+                }
+            }
+        }else {
+            for (index, model) in groupedRoomList.enumerated() {
+                if model.title == room.liveStateFormat() {
+                    groupedRoomList[index].roomList.append(room)
+                    break
+                }
+            }
+        }
     }
     
     func removeFavoriteRoom(room: LiveModel) async throws {
@@ -72,6 +90,12 @@ class AppFavoriteModel {
         let index = roomList.firstIndex(of: room)
         if index != nil {
             self.roomList.remove(at: index!)
+        }
+        for (index, model) in groupedRoomList.enumerated() {
+            if model.id == room.id {
+                groupedRoomList.remove(at: index)
+                break
+            }
         }
     }
     

@@ -104,7 +104,7 @@ struct FavoriteMainView: View {
             }
         }
         .overlay {
-            if liveViewModel.roomList.count > 0 && appViewModel.appFavoriteModel.cloudKitReady {
+            if appViewModel.appFavoriteModel.roomList.count > 0 && appViewModel.appFavoriteModel.cloudKitReady {
                 VStack {
                     Spacer()
                     HStack {
