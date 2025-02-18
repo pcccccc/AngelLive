@@ -9,6 +9,7 @@ import SwiftUI
 import LiveParse
 import SimpleToast
 import CloudKit
+import KSPlayer
 
 
 enum QRCodeType {
@@ -16,16 +17,19 @@ enum QRCodeType {
     case syncServer
 }
 
+@Observable
 class QRCodeStore: ObservableObject {
-    @Published var qrcode_url = "" {
+    
+    var qrcode_url = "" {
         didSet {
             generateQRCode()
         }
     }
-    @Published var message = ""
-    @Published var qrcode_key = ""
-    @Published var qrCodeImage: UIImage?
-    @Published var qrCodeType: QRCodeType? = .syncServer {
+    
+    var message = ""
+    var qrcode_key = ""
+    var qrCodeImage: UIImage?
+    var qrCodeType: QRCodeType? = .syncServer {
         didSet {
             if qrCodeType == .syncServer {
                 qrcode_url = "\(Common.getWiFiIPAddress() ?? ""):\(httpPort)"
@@ -37,41 +41,53 @@ class QRCodeStore: ObservableObject {
         }
     }
     
-    @Published var syncManager: SyncManager?
-    @Published var udpManager: UDPListener?
-    @Published var favoriteModel: FavoriteStateModel?
+    var syncManager: SyncManager?
+    var udpManager: UDPListener?
+    var favoriteModel: AppFavoriteModel?
     
-    @Published var syncType: SimpleSyncType? {
+    var syncType: SimpleSyncType? {
         didSet {
-            switch syncType {
-                case .favorite:
-                    syncTypeString = "收藏同步"
-                case .history:
-                    syncTypeString = "观看历史同步"
-                case .danmuBlockWords:
-                    syncTypeString = "弹幕屏蔽词同步"
-                case .bilibiliCookie:
-                    syncTypeString = "Bilibili登录信息同步"
-                case nil:
-                    syncTypeString = ""
-            }
+            syncTypeString = syncType?.description ?? ""
         }
     }
-    @Published var needOverlay: Bool?
-    @Published var roomList: [LiveModel]?
-    @Published var showAlert: Bool = false
-    @Published var syncTypeString = ""
     
-    @Published var showToast: Bool = false
-    @Published var toastTitle: String = ""
-    @Published var toastTypeIsSuccess: Bool = false
-    @Published var toastOptions = SimpleToastOptions(
+    var needOverlay: Bool?
+    var roomList: [LiveModel]?
+    var showAlert: Bool = false
+    var syncTypeString = ""
+    
+    var showToast: Bool = false
+    var toastTitle: String = ""
+    var toastTypeIsSuccess: Bool = false
+    var toastOptions = SimpleToastOptions(
         hideAfter: 1.5
     )
     
-    @Published var showFullScreenLoading = false
-    @Published var showFullScreenLoadingText = ""
-    @AppStorage("SimpleLive.History.WatchList") public var watchList: Array<LiveModel> = []
+    var showFullScreenLoading = false
+    var showFullScreenLoadingText = ""
+    
+    @ObservationIgnored
+    public var watchList: Array<LiveModel> {
+        get {
+            access(keyPath: \.watchList)
+            return UserDefaults.standard.value(forKey: "SimpleLive.History.WatchList") as? Array<LiveModel> ?? []
+        }
+        set {
+            withMutation(keyPath: \.watchList) {
+                 UserDefaults.standard.setValue(newValue, forKey: "SimpleLive.History.WatchList")
+            }
+        }
+    }
+    
+    public var playerLayer: KSPlayerLayer? {
+        didSet {
+            oldValue?.delegate = nil
+            oldValue?.pause()
+        }
+    }
+    
+    @MainActor
+    var playerCoordinator = KSVideoPlayer.Coordinator()
    
     func generateQRCode() {
         qrCodeImage = Common.generateQRCode(from: qrcode_url)
@@ -109,15 +125,15 @@ class QRCodeStore: ObservableObject {
     func startFavoriteSync() async {
         if self.needOverlay == true {
             do {
-//                if let roomList = favoriteModel?.roomList {
-//                    for index in roomList.indices {
-//                        DispatchQueue.main.async {
-//                            self.showFullScreenLoadingText = "正在清理第\(index + 1)个本地收藏"
-//                        }
-//                        let roomModel = roomList[index]
-//                        try await favoriteModel?.removeFavoriteRoom(room: roomModel)
-//                    }
-//                }
+                if let roomList = favoriteModel?.roomList {
+                    for index in roomList.indices {
+                        DispatchQueue.main.async {
+                            self.showFullScreenLoadingText = "正在清理第\(index + 1)个本地收藏"
+                        }
+                        let roomModel = roomList[index]
+                        try await favoriteModel?.removeFavoriteRoom(room: roomModel)
+                    }
+                }
                 if let newRoomList = self.roomList {
                     for index in newRoomList.indices {
                         DispatchQueue.main.async {

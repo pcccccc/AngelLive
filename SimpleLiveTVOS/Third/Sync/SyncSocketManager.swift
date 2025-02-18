@@ -12,7 +12,17 @@ import NIO
 import NIOHTTP1
 import LiveParse
 
-enum SimpleSyncType {
+enum SimpleSyncType: CustomStringConvertible {
+    
+    var description: String {
+        switch self {
+        case .favorite: return "收藏同步"
+        case .history: return "观看历史同步"
+        case .danmuBlockWords: return "弹幕屏蔽词同步"
+        case .bilibiliCookie: return "Bilibili登录信息同步"
+        }
+    }
+    
     case favorite
     case history
     case danmuBlockWords
