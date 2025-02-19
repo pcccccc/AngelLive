@@ -79,7 +79,6 @@
 		FBAC2BCA2D548C94008BB5CD /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Assets.xcassets,
 				Other/Info.plist,
 			);
 			target = 4FC3DCD92A49382F00CA36B9 /* SimpleLiveTVOS */;

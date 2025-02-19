@@ -12,13 +12,13 @@ import KSPlayer
 struct SyncView: View {
     
     @Environment(SimpleLiveViewModel.self) var appViewModel
-    @StateObject var qrCodeStore = QRCodeStore()
+    var qrCodeStore = QRCodeViewModel()
     
     var body: some View {
         VStack {
             Spacer(minLength: 30)
             QRCodeView()
-            .environmentObject(qrCodeStore)
+            .environment(qrCodeStore)
 //            KSVideoPlayer(coordinator: qrCodeStore.playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: .init())
 //                .background(Color.black)
 //                .onAppear {

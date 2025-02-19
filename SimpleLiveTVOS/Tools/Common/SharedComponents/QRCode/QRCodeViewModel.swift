@@ -18,7 +18,7 @@ enum QRCodeType {
 }
 
 @Observable
-class QRCodeStore: ObservableObject {
+class QRCodeViewModel {
     
     var qrcode_url = "" {
         didSet {
@@ -141,7 +141,7 @@ class QRCodeStore: ObservableObject {
                         }
                         let roomModel = newRoomList[index]
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-//                        try await favoriteModel?.addFavorite(room: newLiveModel)
+                        try await favoriteModel?.addFavorite(room: newLiveModel)
                     }
                     DispatchQueue.main.async {
                         self.showFullScreenLoading = false
@@ -165,22 +165,22 @@ class QRCodeStore: ObservableObject {
                         DispatchQueue.main.async {
                             self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
                         }
-//                        if let deviceFavoriteRoomList = favoriteModel?.roomList {
-//                            for room in deviceFavoriteRoomList {
-//                                if room.roomId == roomModel.roomId {
-//                                    has = true
-//                                    DispatchQueue.main.async {
-//                                        self.showFullScreenLoadingText = "第\(index + 1)个新收藏重复，已经跳过"
-//                                    }
-//                                }
-//                            }
-//                        }
+                        if let deviceFavoriteRoomList = favoriteModel?.roomList {
+                            for room in deviceFavoriteRoomList {
+                                if room.roomId == roomModel.roomId {
+                                    has = true
+                                    DispatchQueue.main.async {
+                                        self.showFullScreenLoadingText = "第\(index + 1)个新收藏重复，已经跳过"
+                                    }
+                                }
+                            }
+                        }
                         if has == true {
                             repeatCount += 1
                             continue
                         }
                         let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-//                        try await favoriteModel?.addFavorite(room: newLiveModel)
+                        try await favoriteModel?.addFavorite(room: newLiveModel)
                     }
                     let repeatString = repeatCount > 0 ? "(重复\(repeatCount)个）": ""
                     DispatchQueue.main.async {
@@ -256,7 +256,7 @@ class QRCodeStore: ObservableObject {
     
 }
 
-extension QRCodeStore: SyncManagerDelegate {
+extension QRCodeViewModel: @preconcurrency SyncManagerDelegate {
     func syncManagerDidConnectError(error: Error) {
         message = "服务启动失败，错误原因\(error),如果错误原因为端口占用，请关闭App几分钟后再试。"
     }

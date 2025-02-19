@@ -15,7 +15,7 @@ struct BilibiliLoginView: View {
     @State private var qrcode_key = ""
     @State private var timer: Timer?
     @EnvironmentObject var settingStore: SettingStore
-    @StateObject var qrCodeStore = QRCodeStore()
+    var qrCodeStore = QRCodeViewModel()
     
     
     var body: some View {
@@ -27,7 +27,7 @@ struct BilibiliLoginView: View {
                     await getQRCode()
                 }
             }
-            .environmentObject(qrCodeStore)
+            .environment(qrCodeStore)
             Spacer()
         }
         .frame(width: 1920, height: 1080)
