@@ -128,12 +128,13 @@ struct FavoriteMainView: View {
                         HStack {
                             Spacer()
                             HStack {
-                                VStack(alignment: .leading, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 15) {
                                     Text("正在同步\("\(appViewModel.appFavoriteModel.syncProgressInfo.3)/\(appViewModel.appFavoriteModel.syncProgressInfo.4)")")
                                         .font(.title3)
                                     HStack {
-                                        VStack(alignment: .leading, spacing: 5) {
+                                        VStack(alignment: .leading, spacing: 10) {
                                             Text("主播：\(appViewModel.appFavoriteModel.syncProgressInfo.0)")
+                                                .lineLimit(1)
                                             Text("平台：\(appViewModel.appFavoriteModel.syncProgressInfo.1)")
                                         }
                                         Spacer()
@@ -199,6 +200,7 @@ struct FavoriteMainView: View {
 extension FavoriteMainView {
     private func getViewStateAndFavoriteList() {
         Task {
+            guard appViewModel.appFavoriteModel.isLoading == false else { return }
             await appViewModel.appFavoriteModel.syncWithActor()
             liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
         }

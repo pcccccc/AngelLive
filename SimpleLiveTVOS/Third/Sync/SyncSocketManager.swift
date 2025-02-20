@@ -138,7 +138,7 @@ final class HTTPHandler: ChannelInboundHandler {
                     "id": UUID().uuidString,
                     "type": "tv",
                     "name": Common.hostName() ?? "Apple TV",
-                    "version": "1.1.0",
+                    "version": "1.2.0",
                     "address": Common.getWiFiIPAddress() ?? "127.0.0.1",
                     "port": httpPort
                 ]).rawString()

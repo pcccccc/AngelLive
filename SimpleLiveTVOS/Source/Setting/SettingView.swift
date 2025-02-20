@@ -63,10 +63,14 @@ struct SettingView: View {
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.thinMaterial)
                             }else if title == "数据同步" {
-                                SyncView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .background(.thinMaterial)
-                                    .environment(appViewModel)
+                                if appViewModel.appFavoriteModel.cloudKitReady == true {
+                                    SyncView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .background(.thinMaterial)
+                                        .environment(appViewModel)
+                                }else {
+                                    Text("请通过收藏页面检查iCloud状态是否正常")
+                                }
                             }else {
                                 AboutUSView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -77,6 +81,10 @@ struct SettingView: View {
                             Spacer()
                             if title == "哔哩哔哩登录" {
                                 Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(.gray)
+                            }else if title == "数据同步" {
+                                Text(appViewModel.appFavoriteModel.cloudKitReady == true ? "iCloud就绪" : "iCloud状态异常")
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
                             }

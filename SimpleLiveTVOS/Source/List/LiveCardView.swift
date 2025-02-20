@@ -260,10 +260,11 @@ struct LiveCardView: View {
     }
     
     func formatLiveStateColor() -> Color {
-        if LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .live || LiveState(rawValue: liveViewModel.roomList[index].liveState ?? "3") == .video {
-            Color.green
+        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
+        if LiveState(rawValue: currentLiveModel.liveState ?? "3") == .live || LiveState(rawValue:currentLiveModel.liveState ?? "3") == .video {
+            return Color.green
         }else {
-            Color.gray
+            return Color.gray
         }
     }
     

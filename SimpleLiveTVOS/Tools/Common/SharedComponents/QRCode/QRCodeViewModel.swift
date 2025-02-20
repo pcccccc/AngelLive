@@ -11,231 +11,201 @@ import SimpleToast
 import CloudKit
 import KSPlayer
 
-
-enum QRCodeType {
-    case bilibiliLogin
-    case syncServer
+enum SimpleLiveSyncTaskState: CustomStringConvertible {
+    case cleanOld
+    case addICloud
+    case syncFavorite
+    case idle
+    
+    var description: String {
+        switch self {
+            case .cleanOld: return "清理旧数据"
+            case .addICloud: return "同步收藏至iCloud"
+            case .syncFavorite: return "拉取主播最新信息"
+            case .idle: return "空闲"
+        }
+    }
 }
 
 @Observable
 class QRCodeViewModel {
     
-    var qrcode_url = "" {
-        didSet {
-            generateQRCode()
-        }
-    }
-    
+    @MainActor
+    var playerCoordinator = KSVideoPlayer.Coordinator()
+    private let actor = QRCodeActor()
+    // 是否收到同步请求、 提示文字、 同步类型、 是否需要覆盖、 房间列表
+    var currentState: (Bool, String, SimpleSyncType, Bool, [LiveModel]) = (false, "", .favorite, false, [])
+    var fullScreenLoading: Bool = false
+    var progressTask: Task<Void, Error>?
     var message = ""
-    var qrcode_key = ""
-    var qrCodeImage: UIImage?
-    var qrCodeType: QRCodeType? = .syncServer {
+    var fullScreenSyncState = ""
+    var favoriteSyncTaskStart = false
+    var currentTaskState = SimpleLiveSyncTaskState.idle
+    var progress = 0.0
+    var desc = ""
+    var qrCodeKey = ""
+    var qrcodeUrl = "" {
         didSet {
-            if qrCodeType == .syncServer {
-                qrcode_url = "\(Common.getWiFiIPAddress() ?? ""):\(httpPort)"
-                message = "服务启动成功，请使用Simple Live手机版选中\(Common.hostName() ?? "")或扫描屏幕二维码\n或在客户端地址框内输入：\(Common.getWiFiIPAddress() ?? ""):\(httpPort)"
-                syncManager = SyncManager()
-                udpManager = UDPListener()
-                syncManager?.delegate = self
+            Task {
+                // 创建一个异步任务来处理进度更新
+                progressTask = Task { @MainActor in
+                    while !Task.isCancelled {
+                        currentState = await actor.getCurrentState()
+                        message = currentState.1
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                }
             }
         }
     }
-    
-    var syncManager: SyncManager?
-    var udpManager: UDPListener?
-    var favoriteModel: AppFavoriteModel?
-    
-    var syncType: SimpleSyncType? {
-        didSet {
-            syncTypeString = syncType?.description ?? ""
-        }
-    }
-    
-    var needOverlay: Bool?
-    var roomList: [LiveModel]?
-    var showAlert: Bool = false
-    var syncTypeString = ""
-    
+
+    //Toast
     var showToast: Bool = false
     var toastTitle: String = ""
     var toastTypeIsSuccess: Bool = false
     var toastOptions = SimpleToastOptions(
-        hideAfter: 1.5
+        alignment: .topLeading, hideAfter: 1.5
     )
     
-    var showFullScreenLoading = false
-    var showFullScreenLoadingText = ""
-    
-    @ObservationIgnored
-    public var watchList: Array<LiveModel> {
-        get {
-            access(keyPath: \.watchList)
-            return UserDefaults.standard.value(forKey: "SimpleLive.History.WatchList") as? Array<LiveModel> ?? []
-        }
-        set {
-            withMutation(keyPath: \.watchList) {
-                 UserDefaults.standard.setValue(newValue, forKey: "SimpleLive.History.WatchList")
-            }
-        }
-    }
-    
-    public var playerLayer: KSPlayerLayer? {
-        didSet {
-            oldValue?.delegate = nil
-            oldValue?.pause()
-        }
-    }
-    
     @MainActor
-    var playerCoordinator = KSVideoPlayer.Coordinator()
-   
-    func generateQRCode() {
-        qrCodeImage = Common.generateQRCode(from: qrcode_url)
-    }
-    
-    func beginSync() async {
-        if self.syncType == .favorite {
-            let stateString = await CloudSQLManager.getCloudState()
-            if stateString == "正常" {
-                DispatchQueue.main.async {
-                    self.showFullScreenLoading = true
-                    self.showFullScreenLoadingText = "正在进行同步"
-                }
-                await startFavoriteSync()
-            }else {
-                showToast(false, title: stateString)
-            }
-        } else if self.syncType == .history {
-            DispatchQueue.main.async {
-                self.showFullScreenLoading = true
-                self.showFullScreenLoadingText = "正在进行同步"
-            }
-            await startHistorySync()
+    private func generateQRCode() async -> UIImage? {
+        if let image = await actor.generateQRCode(url: qrcodeUrl) {
+            return image
         }
+        return nil
     }
     
-    //MARK: 操作相关
+    func setupSyncServer() async {
+        let resp = await actor.setupSyncServer()
+        qrcodeUrl = resp
+    }
     
-    func showToast(_ success: Bool, title: String) {
+    func startSyncTask(appViewModel: SimpleLiveViewModel) async {
+        await actor.resetMessage()
+        currentTaskState = .cleanOld
+        fullScreenLoading = true
+        let syncType = currentState.2
+        let needOverlay = currentState.3
+        let roomList = currentState.4
+        if syncType == .favorite {
+            appViewModel.appFavoriteModel.groupedRoomList.removeAll()
+            let oldFavoriteListCount = appViewModel.appFavoriteModel.roomList.count
+            if needOverlay {
+                for (index, room) in appViewModel.appFavoriteModel.roomList.enumerated() {
+                    do {
+                        progress = Double(index) / Double(oldFavoriteListCount)
+                        fullScreenSyncState = "正在清除旧收藏：第 \(index + 1) 个房间"
+                        try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: room)
+                        fullScreenSyncState = "成功"
+                    }catch {
+                        fullScreenSyncState = "失败:\(error.localizedDescription)"
+                    }
+                }
+            }
+            currentTaskState = .addICloud
+            for (index, newRoom) in roomList.enumerated() {
+                progress = Double(index) / Double(roomList.count)
+                if appViewModel.appFavoriteModel.roomList.contains(where: { $0.roomId == newRoom.roomId }) {
+                    fullScreenSyncState = "失败:房间已存在"
+                }else {
+                    do {
+                        fullScreenSyncState = "添加至iCloud: \(index + 1) / \(roomList.count)"
+                        try await appViewModel.appFavoriteModel.addFavorite(room: newRoom)
+                    }catch {
+                        fullScreenSyncState = "失败:\(error.localizedDescription)"
+                    }
+                }
+            }
+            favoriteSyncTaskStart = true
+            currentTaskState = .syncFavorite
+            await appViewModel.appFavoriteModel.syncWithActor()
+            favoriteSyncTaskStart = false
+            currentTaskState = .idle
+            showToast(true, title: "收藏同步完成")
+        } else if syncType == .history {
+            if needOverlay {
+                appViewModel.historyModel.watchList = roomList
+            }else {
+                for room in roomList {
+                    if appViewModel.historyModel.watchList.contains(where: { $0.roomId != room.roomId }) {
+                        appViewModel.historyModel.watchList.append(room)
+                    }
+                }
+            }
+        }
+        fullScreenLoading = false
+        currentState = (false, "", .favorite, false, [])
+    }
+    
+    func resetSyncTaskState() async {
+        await actor.resetCurrentState()
+        favoriteSyncTaskStart = false
+        fullScreenLoading = false
+        currentState = (false, "", .favorite, false, [])
+    }
+
+    func stopSyncServer() {
+        progressTask?.cancel()
+        // 使用弱引用来避免循环引用
+        let actorRef = actor
+        Task.detached {
+            await actorRef.closeServer()
+        }
+        print("停止")
+    }
+    
+    func showToast(_ success: Bool, title: String, hideAfter: TimeInterval? = 1.5) {
         self.showToast = true
         self.toastTitle = title
         self.toastTypeIsSuccess = success
+        self.toastOptions = SimpleToastOptions(
+            alignment: .topLeading, hideAfter: hideAfter
+        )
+    }
+}
+
+actor QRCodeActor: @preconcurrency SyncManagerDelegate {
+    
+    private var qrcode_url = ""
+    private var message = ""
+    private var qrcode_key = ""
+    private var qrCodeImage: UIImage?
+    private var syncManager: SyncManager?
+    private var udpManager: UDPListener?
+    private var syncType: SimpleSyncType?
+    private var needOverlay: Bool?
+    private var roomList: [LiveModel]?
+    private var startSyncTask: Bool = false
+    
+    func resetMessage() {
+        message = ""
     }
     
-    func startFavoriteSync() async {
-        if self.needOverlay == true {
-            do {
-                if let roomList = favoriteModel?.roomList {
-                    for index in roomList.indices {
-                        DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在清理第\(index + 1)个本地收藏"
-                        }
-                        let roomModel = roomList[index]
-                        try await favoriteModel?.removeFavoriteRoom(room: roomModel)
-                    }
-                }
-                if let newRoomList = self.roomList {
-                    for index in newRoomList.indices {
-                        DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
-                        }
-                        let roomModel = newRoomList[index]
-                        let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-                        try await favoriteModel?.addFavorite(room: newLiveModel)
-                    }
-                    DispatchQueue.main.async {
-                        self.showFullScreenLoading = false
-                        self.showToast(true, title: "同步\(newRoomList.count)个收藏成功")
-                    }
-                }
-            }catch {
-                if type(of: error) == CKError.self {
-                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) 
-                }else {
-                    showFullScreenLoadingText = "\(error)"
-                }
-            }
-        }else {
-            do {
-                var repeatCount = 0
-                if let newRoomList = self.roomList {
-                    for index in newRoomList.indices {
-                        var has = false
-                        let roomModel = newRoomList[index]
-                        DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在添加第\(index + 1)/\(newRoomList.count)个新收藏"
-                        }
-                        if let deviceFavoriteRoomList = favoriteModel?.roomList {
-                            for room in deviceFavoriteRoomList {
-                                if room.roomId == roomModel.roomId {
-                                    has = true
-                                    DispatchQueue.main.async {
-                                        self.showFullScreenLoadingText = "第\(index + 1)个新收藏重复，已经跳过"
-                                    }
-                                }
-                            }
-                        }
-                        if has == true {
-                            repeatCount += 1
-                            continue
-                        }
-                        let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: roomModel)
-                        try await favoriteModel?.addFavorite(room: newLiveModel)
-                    }
-                    let repeatString = repeatCount > 0 ? "(重复\(repeatCount)个）": ""
-                    DispatchQueue.main.async {
-                        self.showFullScreenLoading = false
-                        self.showToast(true, title: "同步\(newRoomList.count)个收藏成功\(repeatString)")
-                    }
-                }
-            }catch {
-                if type(of: error) == CKError.self {
-                    showFullScreenLoadingText = CloudSQLManager.formatErrorCode(error: error as! CKError) 
-                }else {
-                    showFullScreenLoadingText = "\(error)"
-                }
-            }
-        }
+    func resetCurrentState() {
+        startSyncTask = false
+        message = "服务启动成功，请使用Simple Live手机版选中\(Common.hostName() ?? "")或扫描屏幕二维码\n或在客户端地址框内输入：\(Common.getWiFiIPAddress() ?? ""):\(httpPort)"
+        syncType = nil
+        needOverlay = nil
+        roomList = nil
     }
     
-    func startHistorySync() async {
-        DispatchQueue.main.async {
-            self.showFullScreenLoadingText = "正在清理本地历史记录"
-        }
-        if self.needOverlay == true {
-            DispatchQueue.main.async {
-                self.watchList.removeAll()
-                self.showFullScreenLoadingText = "成功清理本地历史记录"
-            }
-        }
-        do {
-            if let roomList = self.roomList {
-                for index in roomList.indices {
-                    let room = roomList[index]
-                    if self.watchList.contains(where: { room.roomId == $0.roomId }) == false {
-                        let newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel: room)
-                        DispatchQueue.main.async {
-                            self.showFullScreenLoadingText = "正在添加第\(index + 1)个历史记录"
-                            self.watchList.insert(newLiveModel, at: 0)
-                        }
-                    }
-                }
-                DispatchQueue.main.async {
-                    self.showFullScreenLoading = false
-                    self.showToast(true, title: "同步历史记录成功")
-                }
-            }
-        }catch {
-            DispatchQueue.main.async {
-                self.showFullScreenLoadingText = "\(error)"
-            }
-        }
-        
+    func getCurrentState() -> (Bool, String, SimpleSyncType, Bool, [LiveModel]) {
+        return (startSyncTask, message, syncType ?? .favorite, needOverlay ?? false, roomList ?? [])
     }
     
-    deinit {
-        syncManager?.closeServer()
-        udpManager?.closeServer()
+    func generateQRCode(url: String) -> UIImage? {
+        qrcode_url = url
+        qrCodeImage = Common.generateQRCode(from: url)
+        return qrCodeImage
+    }
+    
+    func setupSyncServer() -> String {
+        qrcode_url = "\(Common.getWiFiIPAddress() ?? ""):\(httpPort)"
+        syncManager = SyncManager()
+        syncManager?.delegate = self
+        udpManager = UDPListener()
+        message = "服务启动成功，请使用Simple Live手机版选中\(Common.hostName() ?? "")或扫描屏幕二维码\n或在客户端地址框内输入：\(Common.getWiFiIPAddress() ?? ""):\(httpPort)"
+        return qrcode_url
     }
     
     func closeServer() {
@@ -245,26 +215,16 @@ class QRCodeViewModel {
         udpManager = nil
     }
     
-    @MainActor func updateSyncInfo(type: SimpleSyncType, needOverlay: Bool, info: [LiveModel]) {
-        DispatchQueue.main.async {
-            self.syncType = type
-            self.needOverlay = needOverlay
-            self.roomList = info
-            self.showAlert = true
-        }
+    func syncManagerDidConnectError(error: any Error) {
+        message = "服务启动失败，错误原因\(error.localizedDescription)，如果错误原因为端口占用，请关闭App几分钟后再试。"
     }
     
-}
+    func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any) {
+        self.startSyncTask = true
+        self.syncType = type
+        self.needOverlay = needOverlay
+        self.roomList = info as? [LiveModel] ?? []
+        self.message = "收到\(type.description)请求，本次请求\(needOverlay ? "会" : "不会")覆盖你之前的数据。您确认要同步吗？"
+    }
 
-extension QRCodeViewModel: @preconcurrency SyncManagerDelegate {
-    func syncManagerDidConnectError(error: Error) {
-        message = "服务启动失败，错误原因\(error),如果错误原因为端口占用，请关闭App几分钟后再试。"
-    }
-    
-    
-    @MainActor func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any) {
-        updateSyncInfo(type: type, needOverlay: needOverlay, info: info as? [LiveModel] ?? [])
-    }
-    
-    
 }

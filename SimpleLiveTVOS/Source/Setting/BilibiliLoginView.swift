@@ -47,8 +47,8 @@ struct BilibiliLoginView: View {
         do {
             let dataReq = try await Bilibili.getQRCodeUrl()
             if dataReq.code == 0 {
-                qrCodeStore.qrcode_key = dataReq.data.qrcode_key!
-                qrCodeStore.qrcode_url = dataReq.data.url ?? ""
+                qrCodeStore.qrCodeKey = dataReq.data.qrcode_key!
+                qrCodeStore.qrcodeUrl = dataReq.data.url ?? ""
                 timer?.fire()
             }else {
                 qrCodeStore.message = dataReq.message
@@ -61,7 +61,7 @@ struct BilibiliLoginView: View {
     func getQRCodeScanState() async {
         Task {
             do {
-                let dataReq = try await Bilibili.getQRCodeState(qrcode_key: qrCodeStore.qrcode_key)
+                let dataReq = try await Bilibili.getQRCodeState(qrcode_key: qrCodeStore.qrCodeKey)
                 if qrCodeStore.message == "授权成功，请退出页面" {
                     return;
                 } 
