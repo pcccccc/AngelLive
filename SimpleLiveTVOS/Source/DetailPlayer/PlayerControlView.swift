@@ -460,8 +460,8 @@ struct PlayerControlView: View {
         roomInfoViewModel.currentRoomLikeLoading = true
         if appViewModel.appFavoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
+                roomInfoViewModel.currentRoom.liveState = try await ApiManager.getCurrentRoomLiveState(roomId: roomInfoViewModel.currentRoom.roomId, userId: roomInfoViewModel.currentRoom.userId, liveType: roomInfoViewModel.currentRoom.liveType).rawValue
                 try await appViewModel.appFavoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
-                appViewModel.favoriteModel?.roomList.append(roomInfoViewModel.currentRoom)
                 roomInfoViewModel.currentRoomIsLiked = true
                 roomInfoViewModel.showToast(true, title: "收藏成功")
                 roomInfoViewModel.currentRoomLikeLoading = false
