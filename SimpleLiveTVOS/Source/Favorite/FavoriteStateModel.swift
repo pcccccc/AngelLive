@@ -107,6 +107,7 @@ class AppFavoriteModel {
                 break
             }
         }
+        refreshView()
     }
     
     //MARK: 操作相关

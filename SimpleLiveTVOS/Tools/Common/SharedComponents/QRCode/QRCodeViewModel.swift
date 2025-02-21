@@ -164,7 +164,7 @@ class QRCodeViewModel {
     }
 }
 
-actor QRCodeActor: @preconcurrency SyncManagerDelegate {
+@preconcurrency actor QRCodeActor: SyncManagerDelegate {
     
     private var qrcode_url = ""
     private var message = ""
@@ -215,16 +215,29 @@ actor QRCodeActor: @preconcurrency SyncManagerDelegate {
         udpManager = nil
     }
     
-    func syncManagerDidConnectError(error: any Error) {
-        message = "服务启动失败，错误原因\(error.localizedDescription)，如果错误原因为端口占用，请关闭App几分钟后再试。"
-    }
-    
-    func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any) {
-        self.startSyncTask = true
-        self.syncType = type
-        self.needOverlay = needOverlay
-        self.roomList = info as? [LiveModel] ?? []
-        self.message = "收到\(type.description)请求，本次请求\(needOverlay ? "会" : "不会")覆盖你之前的数据。您确认要同步吗？"
+    nonisolated func syncManagerDidConnectError(error: any Error) {
+       Task { @MainActor in
+           await self.updateMessage("服务启动失败，错误原因\(error.localizedDescription)，如果错误原因为端口占用，请关闭App几分钟后再试。")
+       }
     }
 
+    nonisolated func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any) {
+       Task { @MainActor in
+           await self.updateSyncState(type: type, needOverlay: needOverlay, info: info)
+       }
+    }
+
+    // 新增一个隔离方法来更新消息
+    func updateMessage(_ newMessage: String) {
+       message = newMessage
+    }
+
+    // 新增一个隔离方法来更新同步状态
+    func updateSyncState(type: SimpleSyncType, needOverlay: Bool, info: Any) {
+       self.startSyncTask = true
+       self.syncType = type
+       self.needOverlay = needOverlay
+       self.roomList = info as? [LiveModel] ?? []
+       self.message = "收到\(type.description)请求，本次请求\(needOverlay ? "会" : "不会")覆盖你之前的数据。您确认要同步吗？"
+    }
 }

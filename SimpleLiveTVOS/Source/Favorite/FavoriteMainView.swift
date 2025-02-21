@@ -193,6 +193,7 @@ struct FavoriteMainView: View {
             }
         }
         .onAppear {
+            appViewModel.appFavoriteModel.refreshView()
             if appViewModel.appFavoriteModel.cloudKitReady == true && appViewModel.appFavoriteModel.roomList.count > 0 {
                 liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
             }
