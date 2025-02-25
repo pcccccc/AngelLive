@@ -214,7 +214,9 @@ final class RoomInfoViewModel {
             }
         }else {
             douyuFirstLoad = false
-            self.currentPlayURL = URL(string: currentQuality.url )!
+            if let url = URL(string: currentQuality.url) {
+                self.currentPlayURL = url
+            }            
         }
         
         if currentRoom.liveType == .yy && yyFirstLoad == false {

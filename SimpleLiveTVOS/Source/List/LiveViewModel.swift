@@ -219,22 +219,24 @@ class LiveViewModel {
                         }
                     }
                 }else {
-                    let subListCategory = self.selectedMainListCategory?.subList[index]
-                    Task { 
-                        var finalSubListCategory = subListCategory
-                        if liveType == .yy {
-                            finalSubListCategory?.id = self.selectedMainListCategory?.biz ?? ""
-                            finalSubListCategory?.parentId = subListCategory?.biz ?? ""
-                        }
-                        let roomList  = try await ApiManager.fetchRoomList(liveCategory: finalSubListCategory!, page: self.roomPage, liveType: liveType)
-                        DispatchQueue.main.async {
-                            if self.roomPage == 1 {
-                                self.roomList.removeAll()
+                    if let subListCategory = self.selectedMainListCategory?.subList[index] {
+                        Task {
+                            var finalSubListCategory = subListCategory
+                            if liveType == .yy {
+                                finalSubListCategory.id = self.selectedMainListCategory?.biz ?? ""
+                                finalSubListCategory.parentId = subListCategory.biz ?? ""
                             }
-                            self.roomList += roomList
-                            self.isLoading = false
+                            let roomList  = try await ApiManager.fetchRoomList(liveCategory: finalSubListCategory, page: self.roomPage, liveType: liveType)
+                            DispatchQueue.main.async {
+                                if self.roomPage == 1 {
+                                    self.roomList.removeAll()
+                                }
+                                self.roomList += roomList
+                                self.isLoading = false
+                            }
                         }
                     }
+                    
                 }
             case .favorite: break;
 //                Task {

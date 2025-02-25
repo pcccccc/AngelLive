@@ -440,8 +440,13 @@ public extension DanmakuView {
 
 private extension DanmakuView {
     
-    func recalculateFloatingTracks() {
-        let trackCount = Int(floorf(Float((viewHeight - paddingTop - paddingBottom) / trackHeight)))
+    private func recalculateFloatingTracks() {
+        var trackCount = 0
+        if trackHeight > 0 {
+            let availableHeight = viewHeight - paddingTop - paddingBottom
+            trackCount = Int(floorf(Float(availableHeight / trackHeight)))
+        }
+        trackCount = Int(floorf(Float((viewHeight - paddingTop - paddingBottom) / trackHeight)))
         let offsetY = max(0, (viewHeight - CGFloat(trackCount) * trackHeight) / 2.0)
         let diffFloatingTrackCount = trackCount - floatingTracks.count
         if diffFloatingTrackCount > 0 {
