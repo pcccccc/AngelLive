@@ -107,7 +107,6 @@
 		FBEE413D2D686E60006CCC1C /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FBEE40AA2D686E60006CCC1C /* LaunchScreen.storyboard */; };
 		FBEE413E2D686E60006CCC1C /* loading.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = FBEE40AB2D686E60006CCC1C /* loading.mp4 */; };
 		FBEE413F2D686E60006CCC1C /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBEE40AF2D686E60006CCC1C /* Preview Assets.xcassets */; };
-		FBEE41402D686E60006CCC1C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBEE40FD2D686E60006CCC1C /* Assets.xcassets */; };
 		FBEE41432D686E60006CCC1C /* SimpleLiveTVOSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEE41412D686E60006CCC1C /* SimpleLiveTVOSTests.swift */; };
 		FBEE41472D686E60006CCC1C /* SimpleLiveTVOSUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEE41442D686E60006CCC1C /* SimpleLiveTVOSUITests.swift */; };
 		FBEE41482D686E60006CCC1C /* SimpleLiveTVOSUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBEE41452D686E60006CCC1C /* SimpleLiveTVOSUITestsLaunchTests.swift */; };
@@ -204,7 +203,6 @@
 		FBEE40F72D686E60006CCC1C /* SwipeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeView.swift; sourceTree = "<group>"; };
 		FBEE40F82D686E60006CCC1C /* UIColor+Extension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UIColor+Extension.swift"; sourceTree = "<group>"; };
 		FBEE40F92D686E60006CCC1C /* ViewDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewDebug.swift; sourceTree = "<group>"; };
-		FBEE40FD2D686E60006CCC1C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FBEE40FE2D686E60006CCC1C /* SimpleLiveTVOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SimpleLiveTVOS.entitlements; sourceTree = "<group>"; };
 		FBEE41412D686E60006CCC1C /* SimpleLiveTVOSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSTests.swift; sourceTree = "<group>"; };
 		FBEE41442D686E60006CCC1C /* SimpleLiveTVOSUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveTVOSUITests.swift; sourceTree = "<group>"; };
@@ -549,7 +547,6 @@
 				FBEE40D82D686E60006CCC1C /* Source */,
 				FBEE40EA2D686E60006CCC1C /* Third */,
 				FBEE40FC2D686E60006CCC1C /* Tools */,
-				FBEE40FD2D686E60006CCC1C /* Assets.xcassets */,
 				FBEE40FE2D686E60006CCC1C /* SimpleLiveTVOS.entitlements */,
 			);
 			path = SimpleLiveTVOS;
@@ -743,7 +740,6 @@
 				FBEE413D2D686E60006CCC1C /* LaunchScreen.storyboard in Resources */,
 				FBEE413E2D686E60006CCC1C /* loading.mp4 in Resources */,
 				FBEE413F2D686E60006CCC1C /* Preview Assets.xcassets in Resources */,
-				FBEE41402D686E60006CCC1C /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

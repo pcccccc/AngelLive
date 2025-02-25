@@ -44,15 +44,18 @@ class QRCodeViewModel {
     var progress = 0.0
     var desc = ""
     var qrCodeKey = ""
+    var isBilibiliLogin = false
     var qrcodeUrl = "" {
         didSet {
-            Task {
-                // 创建一个异步任务来处理进度更新
-                progressTask = Task { @MainActor in
-                    while !Task.isCancelled {
-                        currentState = await actor.getCurrentState()
-                        message = currentState.1
-                        try? await Task.sleep(nanoseconds: 100_000_000)
+            if isBilibiliLogin == false {
+                Task {
+                    // 创建一个异步任务来处理进度更新
+                    progressTask = Task { @MainActor in
+                        while !Task.isCancelled {
+                            currentState = await actor.getCurrentState()
+                            message = currentState.1
+                            try? await Task.sleep(nanoseconds: 100_000_000)
+                        }
                     }
                 }
             }

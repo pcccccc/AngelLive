@@ -13,6 +13,7 @@ struct QRCodeView: View {
     @Environment(QRCodeViewModel.self) var qrCodeViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
     var refreshAction: (() -> Void)?
+    @State var qrcodeUrl = ""
 
     var body: some View {
         
@@ -30,12 +31,12 @@ struct QRCodeView: View {
                 }
             }
             Spacer(minLength: 30)
-            if qrCodeViewModel.qrcodeUrl.count == 0 {
+            if qrCodeVM.qrcodeUrl.count == 0 {
                 ProgressView()
                     .scaleEffect(0.5)
                     .frame(width: 500, height: 500)
             }else {
-                Image(uiImage: Common.generateQRCode(from: qrCodeViewModel.qrcodeUrl))
+                Image(uiImage: Common.generateQRCode(from: qrCodeVM.qrcodeUrl))
                     .resizable()
                     .scaledToFit()
                     .frame(width: 500, height: 500)

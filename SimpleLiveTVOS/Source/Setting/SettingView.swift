@@ -44,6 +44,7 @@ struct SettingView: View {
                                     .background(.thinMaterial)
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .environmentObject(settingStore)
+                                    .environment(appViewModel)
                             }else if title == "弹幕设置" {
                                 DanmuSettingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
