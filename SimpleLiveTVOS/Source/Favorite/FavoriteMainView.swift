@@ -25,13 +25,18 @@ struct FavoriteMainView: View {
         VStack {
             if appViewModel.appFavoriteModel.cloudKitReady {
                 if appViewModel.appFavoriteModel.groupedRoomList.isEmpty && appViewModel.appFavoriteModel.isLoading == false {
-                    Text(appViewModel.appFavoriteModel.cloudKitStateString)
-                        .font(.title3)
-                    Button {
-                        getViewStateAndFavoriteList()
-                    } label: {
-                        Label("刷新", systemImage: "arrow.counterclockwise")
-                            .font(.headline.bold())
+                    if appViewModel.appFavoriteModel.roomList.isEmpty {
+                        Text("暂无收藏")
+                            .font(.title3)
+                    }else {
+                        Text(appViewModel.appFavoriteModel.cloudKitStateString)
+                            .font(.title3)
+                        Button {
+                            getViewStateAndFavoriteList()
+                        } label: {
+                            Label("刷新", systemImage: "arrow.counterclockwise")
+                                .font(.headline.bold())
+                        }
                     }
                 }else {
                     ScrollView(.vertical) {
