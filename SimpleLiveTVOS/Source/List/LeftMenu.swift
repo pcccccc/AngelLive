@@ -14,7 +14,7 @@ import ColorfulX
 struct LeftMenu: View {
     
     @Environment(LiveViewModel.self) var liveViewModel
-    @State var colors: [Color] = ColorfulPreset.winter.colors
+    @State var color = ColorfulPreset.winter
     @State var speed = 0.5
     @Environment(\.colorScheme) var colorScheme
     @FocusState var focusState: FocusableField?

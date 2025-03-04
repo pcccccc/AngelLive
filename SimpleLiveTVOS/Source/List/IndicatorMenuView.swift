@@ -12,7 +12,7 @@ import ColorfulX
 struct IndicatorMenuView: View {
     
     @Environment(LiveViewModel.self) var liveViewModel
-    @State var colors: [Color] = ColorfulPreset.autumn.colors
+    @State var color = ColorfulPreset.autumn
     
     var body: some View {
         HStack {
@@ -23,7 +23,7 @@ struct IndicatorMenuView: View {
             }
         }
         .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
-        .background(ColorfulView(color: $colors)
+        .background(ColorfulView(color: $color)
             .ignoresSafeArea())
         .cornerRadius(liveViewModel.leftMenuCornerRadius)
         .offset(x: 60, y: 70)

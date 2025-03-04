@@ -45,6 +45,7 @@ struct ListMainView: View {
                     ZStack {
                         Text(liveModel.livePlatformName)
                             .font(.largeTitle)
+                            .bold()
                     }
                     .id(Self.topId)
                     LazyVGrid(columns: [GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50)], spacing: 50) {
