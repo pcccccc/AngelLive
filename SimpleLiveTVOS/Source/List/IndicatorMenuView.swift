@@ -12,7 +12,7 @@ import ColorfulX
 struct IndicatorMenuView: View {
     
     @Environment(LiveViewModel.self) var liveViewModel
-    @State var color = ColorfulPreset.autumn
+    @State var color = ColorfulPreset.autumn.colors
     
     var body: some View {
         HStack {
