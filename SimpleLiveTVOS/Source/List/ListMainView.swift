@@ -237,6 +237,27 @@ struct ListMainView: View {
                     break
             }
         }
+        .overlay {
+            if liveViewModel.roomList.count > 0 {
+                VStack {
+                    Spacer()
+                    HStack {
+                        ZStack {
+                            HStack(spacing: 10) {
+                                Image(systemName: "playpause.circle")
+                                Text("刷新")
+                            }
+                            .frame(width: 190, height: 60)
+                            .background(Color("hintBackgroundColor", bundle: .main).opacity(0.4))
+                            .font(.callout.bold())
+                            .cornerRadius(8)
+                        }
+                        .frame(width: 200, height: 100)
+                        Spacer()
+                    }
+                }
+            }
+        }
     }
 }
 
