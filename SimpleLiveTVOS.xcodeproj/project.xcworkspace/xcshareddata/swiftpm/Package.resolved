@@ -82,6 +82,15 @@
       }
     },
     {
+      "identity" : "ijkmediaplayer-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/debugly/IJKMediaPlayer-SPM",
+      "state" : {
+        "revision" : "3d88ff21b04efcdd39f49808e1926cba36452465",
+        "version" : "0.11.9"
+      }
+    },
+    {
       "identity" : "injectionnext",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/johnno1962/InjectionNext",

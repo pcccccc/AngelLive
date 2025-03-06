@@ -59,8 +59,10 @@ class AppFavoriteModel {
             self.roomList = resp.0
             self.groupedRoomList = resp.1
             progressTask.cancel()
+            syncProgressInfo = ("", "", "", 0, 0)
             isLoading = false
         }else {
+            syncProgressInfo = ("", "", "", 0, 0)
             isLoading = false
         }
     }

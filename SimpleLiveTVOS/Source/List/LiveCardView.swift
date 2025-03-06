@@ -176,6 +176,9 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
+                                        if liveViewModel.currentRoom!.liveState == nil || (liveViewModel.currentRoom!.liveState ?? "").isEmpty || liveViewModel.currentRoom!.liveState == "" {
+                                            liveViewModel.currentRoom!.liveState = try await ApiManager.getCurrentRoomLiveState(roomId: liveViewModel.currentRoom!.roomId, userId: liveViewModel.currentRoom!.userId, liveType: liveViewModel.currentRoom!.liveType).rawValue
+                                        }
                                         try await appViewModel.appFavoriteModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
                                         appViewModel.favoriteModel?.roomList.append(liveViewModel.currentRoom!)
