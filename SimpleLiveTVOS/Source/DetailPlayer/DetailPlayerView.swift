@@ -31,15 +31,19 @@ struct DetailPlayerView: View {
         }else {
             ZStack {
             
-//                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:URL(string: "https://onlinetestcase.com/wp-content/uploads/2023/06/1MB.mp4")!, options: roomInfoViewModel.playerOption)
-                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
+//                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
+//                    .background(Color.black)
+//                    .onAppear {
+//                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
+//                        roomInfoViewModel.setPlayerDelegate()
+//                    }
+//                    .safeAreaPadding(.all)
+//                    .zIndex(1)
+                IJKPlayerViewRepresentable(url: roomInfoViewModel.currentPlayURL ?? URL(string: "")!)
                     .background(Color.black)
-                    .onAppear {
-                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
-                        roomInfoViewModel.setPlayerDelegate()
-                    }
                     .safeAreaPadding(.all)
                     .zIndex(1)
+
                 PlayerControlView()
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)
