@@ -1,4 +1,5 @@
 {
+  "originHash" : "5f9c099e7b15025aa8799db4b40e4434468a6ae0a0ab1b7aee70d8923e6aef66",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -48,7 +49,7 @@
     {
       "identity" : "colorfulx",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Lakr233/ColorfulX",
+      "location" : "https://github.com/Lakr233/ColorfulX.git",
       "state" : {
         "revision" : "1f667feb13844f38d70488439682933b4d1ea65b",
         "version" : "5.2.8"
@@ -79,15 +80,6 @@
       "state" : {
         "revision" : "731037f6cc2be2ec01562f6597c1d0aa3fe6fd05",
         "version" : "6.0.1"
-      }
-    },
-    {
-      "identity" : "ijkmediaplayer-spm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/debugly/IJKMediaPlayer-SPM",
-      "state" : {
-        "revision" : "3d88ff21b04efcdd39f49808e1926cba36452465",
-        "version" : "0.11.9"
       }
     },
     {
@@ -122,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "b1ed2b195d99f9e48b0963886dfb30aa33f0579e",
-        "version" : "1.5.9"
+        "revision" : "b62f698ebb3f877157a53921c078f94e375e9cd7",
+        "version" : "1.6.0"
       }
     },
     {
@@ -271,5 +263,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

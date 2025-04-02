@@ -200,6 +200,10 @@ final class RoomInfoViewModel {
             }
         }
         
+        if currentRoom.liveType == .ks {
+            KSOptions.firstPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = KSMEPlayer.self
+        }
         
         if currentRoom.liveType == .douyu && douyuFirstLoad == false {
             Task {
@@ -234,6 +238,8 @@ final class RoomInfoViewModel {
             yyFirstLoad = false
             self.currentPlayURL = URL(string: currentQuality.url)!
         }
+        
+       
         
         isLoading = false
     }

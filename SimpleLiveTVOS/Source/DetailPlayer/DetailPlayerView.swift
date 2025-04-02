@@ -31,18 +31,18 @@ struct DetailPlayerView: View {
         }else {
             ZStack {
             
-//                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
-//                    .background(Color.black)
-//                    .onAppear {
-//                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
-//                        roomInfoViewModel.setPlayerDelegate()
-//                    }
-//                    .safeAreaPadding(.all)
-//                    .zIndex(1)
-                IJKPlayerViewRepresentable(url: roomInfoViewModel.currentPlayURL ?? URL(string: "")!)
+                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
+                    .onAppear {
+                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                        roomInfoViewModel.setPlayerDelegate()
+                    }
                     .safeAreaPadding(.all)
                     .zIndex(1)
+//                IJKPlayerViewRepresentable(url: roomInfoViewModel.currentPlayURL ?? URL(string: "")!)
+//                    .background(Color.black)
+//                    .safeAreaPadding(.all)
+//                    .zIndex(1)
 
                 PlayerControlView()
                     .zIndex(3)
