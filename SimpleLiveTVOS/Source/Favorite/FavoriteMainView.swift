@@ -17,6 +17,9 @@ struct FavoriteMainView: View {
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
     @Environment(\.scenePhase) var scenePhase
+    @State var timer: Timer?
+    @State var second = 0
+    @State var firstLoad = true
     
     var body: some View {
         
@@ -186,18 +189,28 @@ struct FavoriteMainView: View {
         .onChange(of: scenePhase) { oldValue, newValue in
             switch newValue {
                 case .active:
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: {
-                    getViewStateAndFavoriteList()
-                })
+                    self.second = 0
+                    self.timer?.invalidate()
+                    self.timer = nil
+                    if second > 300 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: {
+                            getViewStateAndFavoriteList()
+                        })
+                    }
                 case .background:
                     print("background。。。。")
                 case .inactive:
                     print("inactive。。。。")
+                    startTimer()
                 @unknown default:
                     break
             }
         }
         .onAppear {
+            if firstLoad {
+                getViewStateAndFavoriteList()
+                firstLoad = false
+            }
             appViewModel.appFavoriteModel.refreshView()
             if appViewModel.appFavoriteModel.cloudKitReady == true && appViewModel.appFavoriteModel.roomList.count > 0 {
                 liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
@@ -215,5 +228,12 @@ extension FavoriteMainView {
             await appViewModel.appFavoriteModel.syncWithActor()
             liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
         }
+    }
+    
+    func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            second += 1
+        }
+        timer?.fire()
     }
 }
