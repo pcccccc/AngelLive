@@ -140,9 +140,10 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = currentQuality.qn
         
         if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = "HYSDK(Windows, 21000308)"
+            let currentTs = Int(Date().timeIntervalSince1970)
+            self.playerOption.userAgent = "HYSDK(Windows, \(currentTs))"
             self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows, 21000308)"
+                "user-agent": "HYSDK(Windows, \(currentTs))"
             ])
         }else {
             self.playerOption.userAgent = "libmpv"
@@ -160,7 +161,7 @@ final class RoomInfoViewModel {
                         return
                     }
                 }
-            }
+            } 
             if self.currentPlayURL == nil {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
