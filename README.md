@@ -59,7 +59,9 @@ tvOS 17+
 
 [Kingfisher](https://github.com/onevcat/Kingfisher)
 
-[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` [FFMPEG](https://github.com/FFmpeg/FFmpeg)
+[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` (目前使用LGPL版本，fork代码请退回GPL版本)
+
+[FFMPEG](https://github.com/FFmpeg/FFmpeg)
 
 [Shimmer](https://github.com/markiv/SwiftUI-Shimmer)
 

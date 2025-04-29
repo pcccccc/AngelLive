@@ -18,6 +18,7 @@ struct SyncView: View {
         option.isLoopPlay = true
         return option
     }()
+
     
     var body: some View {
         

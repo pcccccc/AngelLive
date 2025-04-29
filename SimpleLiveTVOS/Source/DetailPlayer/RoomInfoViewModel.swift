@@ -18,9 +18,9 @@ public class PlayerOptions: KSOptions {
   override public func sei(string: String) {
       
   }
-  override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription?) {
+    override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
     guard syncSystemRate else { return }
-    super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
+      super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
   }
 }
 
@@ -101,6 +101,7 @@ final class RoomInfoViewModel {
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
     
+    @MainActor
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
@@ -119,6 +120,7 @@ final class RoomInfoViewModel {
     /**
      切换清晰度
     */
+    @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
         guard currentRoomPlayArgs != nil else {
             isLoading = false
@@ -141,9 +143,9 @@ final class RoomInfoViewModel {
         
         if currentRoom.liveType == .huya {
             let currentTs = Int(Date().timeIntervalSince1970)
-            self.playerOption.userAgent = "HYSDK(Windows, \(currentTs))"
+            self.playerOption.userAgent = "HYSDK(Windows, \(20000308))"
             self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows, \(currentTs))"
+                "user-agent": "HYSDK(Windows, \(20000308))"
             ])
         }else {
             self.playerOption.userAgent = "libmpv"
@@ -372,7 +374,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     @MainActor func reloadRoom(liveModel: LiveModel) {
         liveFlagTimer?.invalidate()
         liveFlagTimer = nil
-        playerCoordinator.resetPlayer()
         currentPlayURL = nil
         disConnectSocket()
         KSOptions.isAutoPlay = true

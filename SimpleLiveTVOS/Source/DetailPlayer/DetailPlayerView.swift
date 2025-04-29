@@ -14,7 +14,6 @@ struct DetailPlayerView: View {
     
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
-    
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
@@ -30,8 +29,8 @@ struct DetailPlayerView: View {
             .background(.black)
         }else {
             ZStack {
-            
-                KSVideoPlayer(coordinator: roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
+                
+                KSVideoPlayer(coordinator:roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
                     .onAppear {
                         roomInfoViewModel.playerCoordinator.playerLayer?.play()
@@ -39,10 +38,6 @@ struct DetailPlayerView: View {
                     }
                     .safeAreaPadding(.all)
                     .zIndex(1)
-//                IJKPlayerViewRepresentable(url: roomInfoViewModel.currentPlayURL ?? URL(string: "")!)
-//                    .background(Color.black)
-//                    .safeAreaPadding(.all)
-//                    .zIndex(1)
 
                 PlayerControlView()
                     .zIndex(3)
