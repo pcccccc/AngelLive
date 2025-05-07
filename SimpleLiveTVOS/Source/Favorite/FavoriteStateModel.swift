@@ -185,53 +185,50 @@ actor FavoriteStateModel: ObservableObject {
                 break
             }
         }
+        
+        // 使用任务组并发获取房间状态
         var fetchedModels: [LiveModel] = []
-        var bilibiliModels: [LiveModel] = []
-        for liveModel in roomList {
-            if liveModel.liveType == .bilibili {
-                bilibiliModels.append(liveModel)
-            }else if liveModel.liveType == .youtube && canLoadYoutube == false {
-                continue
-            }else {
-                do {
-                    currentProgress = (liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "同步中", fetchedModels.count + 1, roomList.count)
-                    let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
-                    currentProgress = (liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功", fetchedModels.count + 1, roomList.count)
-                    if liveModel.liveType == .ks {
-                        var finalLiveModel = liveModel
-                        finalLiveModel.liveState = dataReq.liveState
-                        fetchedModels.append(finalLiveModel)
-                    }else {
-                        fetchedModels.append(dataReq)
+        let filteredRoomList = roomList.filter { !(canLoadYoutube == false && $0.liveType == .youtube) }
+        
+        await withTaskGroup(of: (Int, LiveModel?, String, String, String).self) { group in
+            for (index, liveModel) in filteredRoomList.enumerated() {
+                group.addTask {
+                    // 不在任务中修改 actor 属性，而是返回状态信息
+                    do {
+                        let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
+                        if liveModel.liveType == .ks {
+                            var finalLiveModel = liveModel
+                            finalLiveModel.liveState = dataReq.liveState
+                            return (index, finalLiveModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功")
+                        } else {
+                            return (index, dataReq, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功")
+                        }
+                    } catch {
+                        var errorModel = liveModel
+                        if errorModel.liveType == .yy {
+                            errorModel.liveState = LiveState.close.rawValue
+                        } else {
+                            errorModel.liveState = LiveState.unknow.rawValue
+                        }
+                        return (index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败")
                     }
-                } catch {
-                    currentProgress = (liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败", fetchedModels.count + 1, roomList.count)
-                    var errorModel = liveModel
-                    if errorModel.liveType == .yy {
-                        errorModel.liveState = LiveState.close.rawValue
-                    }else {
-                        errorModel.liveState = LiveState.unknow.rawValue
-                    }
-                    fetchedModels.append(errorModel)
                 }
             }
+            
+            // 收集结果并保持原始顺序
+            var resultModels = [LiveModel?](repeating: nil, count: filteredRoomList.count)
+            for await (index, model, userName, platformName, status) in group {
+                // 在主 actor 上下文中更新进度信息
+                self.currentProgress = (userName, platformName, status, index + 1, filteredRoomList.count)
+                if let model = model {
+                    resultModels[index] = model
+                }
+            }
+            
+            // 过滤掉nil值并添加到fetchedModels中
+            fetchedModels = resultModels.compactMap { $0 }
         }
         
-        //B站可能存在风控，触发条件为访问过快或没有Cookie？
-        if bilibiliModels.count > 0 {
-            print("同步除B站主播状态成功, 开始同步B站主播状态,预计时间\(Double(bilibiliModels.count) * 1.5)秒")
-        }
-        for item in bilibiliModels {
-            do {
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 等待1.5秒
-                currentProgress = (item.userName, LiveParseTools.getLivePlatformName(item.liveType), "同步中", fetchedModels.count + 1, roomList.count)
-                let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: item)
-                currentProgress = (item.userName, LiveParseTools.getLivePlatformName(item.liveType), "成功", fetchedModels.count + 1, roomList.count)
-                fetchedModels.append(dataReq)
-            }catch {
-                currentProgress = (item.userName, LiveParseTools.getLivePlatformName(item.liveType), "失败", fetchedModels.count + 1, roomList.count)
-            }
-        }
         let sortedModels = fetchedModels.sorted { firstModel, secondModel in
             switch (firstModel.liveState, secondModel.liveState) {
             case ("1", "1"):
@@ -288,6 +285,7 @@ actor FavoriteStateModel: ObservableObject {
         }
         return (roomList,groupedRoomList)
     }
+
 
     func getState() async -> (Bool, String)  {
         let stateString = await CloudSQLManager.getCloudState()
