@@ -62,7 +62,7 @@ class CloudSQLManager: NSObject {
         let database = container.privateCloudDatabase
         let query = CKQuery(recordType: "favorite_streamers", predicate: NSPredicate(value: true))
         // 使用新的 API
-        let recordArray = try await database.records(matching: query)
+        let recordArray = try await database.records(matching: query, resultsLimit: 99999)
         var temp: Array<LiveModel> = []
         for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
             temp.append(LiveModel(userName: record.value(forKey: userName_column_cloud) as? String ?? "",
