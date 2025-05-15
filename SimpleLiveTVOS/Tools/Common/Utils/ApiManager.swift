@@ -110,6 +110,7 @@ class ApiManager {
             if shareCode.contains("cc.163.com") { return .cc }
             if shareCode.contains("kuaishou.com") { return .ks }
             if shareCode.contains("yy.com") { return .yy }
+            if shareCode.contains("youtube") { return .youtube }
             return nil
         }()
         
