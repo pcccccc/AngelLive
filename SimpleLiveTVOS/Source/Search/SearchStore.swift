@@ -15,5 +15,5 @@ class SearchViewModel {
     var searchTypeArray = ["关键词", "链接/分享口令/房间号", "Youtube链接/VideoId"]
     var searchTypeIndex = 0
     var page = 0
-    var searchText: String = "https://www.youtube.com/watch?v=wZI7qCQx054"
+    var searchText: String = ""
 }
