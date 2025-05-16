@@ -131,7 +131,9 @@ final class RoomInfoViewModel {
             return
         }
 
-        let currentCdn = currentRoomPlayArgs![cdnIndex]
+        guard let currentCdn = currentRoomPlayArgs?[cdnIndex] else {
+            return
+        }
         
         if urlIndex >= currentCdn.qualitys.count {
             return
@@ -142,7 +144,6 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = currentQuality.qn
         
         if currentRoom.liveType == .huya {
-            let currentTs = Int(Date().timeIntervalSince1970)
             self.playerOption.userAgent = "HYSDK(Windows, \(20000308))"
             self.playerOption.appendHeader([
                 "user-agent": "HYSDK(Windows, \(20000308))"
@@ -284,6 +285,11 @@ final class RoomInfoViewModel {
     
     @MainActor func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel]) {
         self.currentRoomPlayArgs = playArgs
+        if playArgs.count == 0 {
+            self.isLoading = false
+            showToast(false, title: "获取直播间信息失败")
+            return
+        }
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
         //开一个定时，检查主播是否已经下播
         if appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEnd == true {

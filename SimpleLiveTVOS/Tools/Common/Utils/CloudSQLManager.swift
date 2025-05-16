@@ -175,6 +175,8 @@ class CloudSQLManager: NSObject {
             return "由于管理账户限制，请求被拒绝"
         case .accountTemporarilyUnavailable:
             return "账户暂时不可用，请尝试在系统设置中重新登录默认账户后再试"
+        case .networkFailure:
+            return "连接到iCloud失败，请检查网络"
         default:
             return "未知错误"
         }

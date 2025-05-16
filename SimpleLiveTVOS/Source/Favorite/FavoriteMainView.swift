@@ -29,8 +29,13 @@ struct FavoriteMainView: View {
             if appViewModel.appFavoriteModel.cloudKitReady {
                 if appViewModel.appFavoriteModel.groupedRoomList.isEmpty && appViewModel.appFavoriteModel.isLoading == false {
                     if appViewModel.appFavoriteModel.roomList.isEmpty {
-                        Text("暂无收藏")
-                            .font(.title3)
+                        if appViewModel.appFavoriteModel.cloudReturnError {
+                            Text(appViewModel.appFavoriteModel.cloudKitStateString)
+                                .font(.title3)
+                        }else {
+                            Text("暂无收藏")
+                                .font(.title3)
+                        }
                     }else {
                         Text(appViewModel.appFavoriteModel.cloudKitStateString)
                             .font(.title3)
@@ -130,41 +135,6 @@ struct FavoriteMainView: View {
                         Spacer()
                     }
                 }
-            }else {
-//                if appViewModel.appFavoriteModel.syncProgressInfo.0.isEmpty == false {
-//                    VStack {
-//                        HStack {
-//                            Spacer()
-//                            HStack {
-//                                VStack(alignment: .leading, spacing: 15) {
-//                                    Text("正在同步\("\(appViewModel.appFavoriteModel.syncProgressInfo.3)/\(appViewModel.appFavoriteModel.syncProgressInfo.4)")")
-//                                        .font(.title3)
-//                                    HStack {
-//                                        VStack(alignment: .leading, spacing: 10) {
-//                                            Text("主播：\(appViewModel.appFavoriteModel.syncProgressInfo.0)")
-//                                                .lineLimit(1)
-//                                            Text("平台：\(appViewModel.appFavoriteModel.syncProgressInfo.1)")
-//                                        }
-//                                        Spacer()
-//                                        Text(appViewModel.appFavoriteModel.syncProgressInfo.2)
-//                                            .foregroundStyle(appViewModel.appFavoriteModel.syncProgressInfo.2 == "失败" ? Color.red : Color.green)
-//                                    }
-//                                    ProgressView(value: Float(appViewModel.appFavoriteModel.syncProgressInfo.3) / Float(appViewModel.appFavoriteModel.syncProgressInfo.4), total: 1)
-//                                        .progressViewStyle(.linear)
-//                                       
-//                                }
-//                                .frame(maxWidth: 450)
-//                                .padding([.top, .bottom], 30)
-//                                .padding([.leading, .trailing], 50)
-//                            }
-//                            .background(.thinMaterial)
-//                            .cornerRadius(10)
-//                            .padding([.trailing], 30)
-//                        }
-//                        Spacer()
-//                    }
-//                    .frame(width: 1920, height: 1080)
-//                }
             }
         }
         .simpleToast(isPresented: $appModel.appFavoriteModel.showToast, options: appViewModel.appFavoriteModel.toastOptions) {
@@ -189,7 +159,7 @@ struct FavoriteMainView: View {
         .onChange(of: scenePhase) { oldValue, newValue in
             switch newValue {
                 case .active:
-                    self.second = 0
+                    
                     self.timer?.invalidate()
                     self.timer = nil
                     if second > 300 {
@@ -227,6 +197,7 @@ extension FavoriteMainView {
             guard appViewModel.appFavoriteModel.isLoading == false else { return }
             await appViewModel.appFavoriteModel.syncWithActor()
             liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
+            self.second = 0
         }
     }
     

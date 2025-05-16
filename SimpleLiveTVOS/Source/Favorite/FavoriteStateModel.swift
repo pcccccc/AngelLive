@@ -26,8 +26,9 @@ class AppFavoriteModel {
     var roomList: [LiveModel] = []
     var isLoading: Bool = false
     var cloudKitReady: Bool = false
-    var cloudKitStateString: String = "正在检查状态"
+    var cloudKitStateString: String = "正在检查iCloud状态"
     var syncProgressInfo: (String, String, String, Int, Int) = ("", "", "", 0, 0)  // 新增进度显示属性
+    var cloudReturnError = false
     
     //Toast
     var showToast: Bool = false
@@ -41,6 +42,7 @@ class AppFavoriteModel {
     func syncWithActor() async {
         roomList.removeAll()
         groupedRoomList.removeAll()
+        cloudReturnError = false
         syncProgressInfo = ("", "", "", 0, 0)
         self.isLoading = true
         let state = await actor.getState()
@@ -55,15 +57,30 @@ class AppFavoriteModel {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             }
-            let resp = await actor.syncStreamerLiveStates()
-            self.roomList = resp.0
-            self.groupedRoomList = resp.1
-            progressTask.cancel()
-            syncProgressInfo = ("", "", "", 0, 0)
-            isLoading = false
+            do {
+                let resp = try await actor.syncStreamerLiveStates()
+                self.roomList = resp.0
+                self.groupedRoomList = resp.1
+                progressTask.cancel()
+                syncProgressInfo = ("", "", "", 0, 0)
+                isLoading = false
+            }catch {
+                self.cloudKitStateString = "获取收藏列表失败：" + CloudSQLManager.formatErrorCode(error: error)
+                progressTask.cancel()
+                syncProgressInfo = ("", "", "", 0, 0)
+                isLoading = false
+                cloudReturnError = true
+            }
         }else {
+            let state = await CloudSQLManager.getCloudState()
+            if state == "无法确定状态" {
+                self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + state + "请尝试将Apple TV断电后重新在设置APP中登录iCloud"
+            }else {
+                self.cloudKitStateString = state
+            }
             syncProgressInfo = ("", "", "", 0, 0)
             isLoading = false
+            cloudReturnError = true
         }
     }
     
@@ -170,12 +187,12 @@ actor FavoriteStateModel: ObservableObject {
     
     var currentProgress: (String, String, String, Int, Int) = ("", "", "", 0, 0)
     
-    func syncStreamerLiveStates() async -> ([LiveModel], [FavoriteLiveSectionModel]) {
+    func syncStreamerLiveStates() async throws -> ([LiveModel], [FavoriteLiveSectionModel]) {
         var roomList: [LiveModel] = []
         do {
             roomList = try await CloudSQLManager.searchRecord()
         }catch {
-            print("获取收藏列表失败: \(error)")
+            throw error
         }
         //获取是否可以访问google，如果网络环境不允许，则不获取youtube直播相关否则会卡很久
         let canLoadYoutube = await ApiManager.checkInternetConnection()
