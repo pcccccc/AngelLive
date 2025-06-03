@@ -417,9 +417,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
     
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-        if error == nil {
-            NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
-        }
+
     }
     
     func player(layer: KSPlayer.KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {
