@@ -105,8 +105,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "783336b3230e4fff7a0f29ba81206d45a9f3dccc",
-        "version" : "2.4.2"
+        "branch" : "lgpl",
+        "revision" : "3d1c6958ba467394904ca6729605a1a6f9a5364c"
       }
     },
     {
@@ -114,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "dea9af1200b0577b73157cffe4938b8c678f033e",
-        "version" : "1.6.9"
+        "revision" : "f9b69ca09dc9d073ecccc5a33ee14bd181f9ea07",
+        "version" : "1.7.0"
       }
     },
     {

@@ -21,9 +21,8 @@
 		4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D92D08644300F88855 /* LiveParse */; };
 		4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DC2D088B5F00F88855 /* LiveParse */; };
 		4F84D6E02D088DB400F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DF2D088DB400F88855 /* LiveParse */; };
+		4F9087772DF8335E00A2E6F2 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9087762DF8335E00A2E6F2 /* KSPlayer */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
-		4FB178652DC07DBE00ECA135 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB178642DC07DBE00ECA135 /* KSPlayer */; };
-		4FB178672DC07DBE00ECA135 /* MPVPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB178662DC07DBE00ECA135 /* MPVPlayer */; };
 		4FB7323F2B98884400F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB7323E2B98884400F02249 /* AcknowList */; };
 		4FB732422B988CDF00F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732412B988CDF00F02249 /* AcknowList */; };
 		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
@@ -222,6 +221,7 @@
 				4F5B30F92D9D3E6A00C81B0D /* KSPlayer in Frameworks */,
 				4F84D6E02D088DB400F88855 /* LiveParse in Frameworks */,
 				4F61662E2C786A79008FED0D /* Pow in Frameworks */,
+				4F9087772DF8335E00A2E6F2 /* KSPlayer in Frameworks */,
 				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
 				4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */,
 				FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */,
@@ -235,7 +235,6 @@
 				4FB732422B988CDF00F02249 /* AcknowList in Frameworks */,
 				4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */,
 				4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */,
-				4FB178672DC07DBE00ECA135 /* MPVPlayer in Frameworks */,
 				FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */,
 				4F1492412B44F4FC004073DB /* LiveParse in Frameworks */,
 				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
@@ -259,7 +258,6 @@
 				4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */,
 				4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
-				4FB178652DC07DBE00ECA135 /* KSPlayer in Frameworks */,
 				FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */,
 				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
 				4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */,
@@ -636,10 +634,9 @@
 				FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */,
 				FBD7063D2D76D74600DCD6C1 /* ColorfulX */,
 				4F5B30F82D9D3E6A00C81B0D /* KSPlayer */,
-				4FB178642DC07DBE00ECA135 /* KSPlayer */,
-				4FB178662DC07DBE00ECA135 /* MPVPlayer */,
 				4F64C9992DC085AF00665DE0 /* FFmpegKit */,
 				4F64C99B2DC085AF00665DE0 /* libmpv */,
+				4F9087762DF8335E00A2E6F2 /* KSPlayer */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -732,8 +729,8 @@
 				4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */,
 				FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */,
 				FBD7063C2D76D74600DCD6C1 /* XCRemoteSwiftPackageReference "ColorfulX" */,
-				4FB178632DC07DBE00ECA135 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 				4F64C9982DC085AF00665DE0 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
+				4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -1213,12 +1210,12 @@
 				minimumVersion = 1.5.0;
 			};
 		};
-		4FB178632DC07DBE00ECA135 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+		4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/TracyPlayer/KSPlayer";
 			requirement = {
-				kind = exactVersion;
-				version = 2.4.2;
+				branch = lgpl;
+				kind = branch;
 			};
 		};
 		4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */ = {
@@ -1405,19 +1402,14 @@
 			package = 4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */;
 			productName = LiveParse;
 		};
+		4F9087762DF8335E00A2E6F2 /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
 		4F9F9C272C1BDEE100B863A9 /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
-		};
-		4FB178642DC07DBE00ECA135 /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FB178632DC07DBE00ECA135 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
-		4FB178662DC07DBE00ECA135 /* MPVPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FB178632DC07DBE00ECA135 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = MPVPlayer;
 		};
 		4FB7323E2B98884400F02249 /* AcknowList */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -12,6 +12,7 @@ import SimpleToast
 struct SyncView: View {
     
     @Environment(SimpleLiveViewModel.self) var appViewModel
+    @ObservedObject var playerCoordinator = KSVideoPlayer.Coordinator()
     var qrCodeStore = QRCodeViewModel()
     var playerOption = {
         let option = KSOptions()
@@ -26,10 +27,10 @@ struct SyncView: View {
         
         VStack {
             if qrCodeStore.fullScreenLoading {
-                KSVideoPlayer(coordinator: qrCodeStore.playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: playerOption)
+                KSVideoPlayer(coordinator: _playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: playerOption)
                     .background(Color.black)
                     .onAppear {
-                        qrCodeStore.playerCoordinator.playerLayer?.play()
+                        playerCoordinator.playerLayer?.play()
                     }
                     .ignoresSafeArea()
                     .overlay {

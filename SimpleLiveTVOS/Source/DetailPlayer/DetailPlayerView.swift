@@ -12,6 +12,7 @@ import AVKit
 
 struct DetailPlayerView: View {
     
+    @ObservedObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(SimpleLiveViewModel.self) var appViewModel
     public var didExitView: (Bool, String) -> Void = {_, _ in}
@@ -29,17 +30,16 @@ struct DetailPlayerView: View {
             .background(.black)
         }else {
             ZStack {
-                
-                KSVideoPlayer(coordinator:roomInfoViewModel.playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
+                KSVideoPlayer(coordinator: _playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
                     .onAppear {
-                        roomInfoViewModel.playerCoordinator.playerLayer?.play()
-                        roomInfoViewModel.setPlayerDelegate()
+                        playerCoordinator.playerLayer?.play()
+                        roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
                     }
                     .safeAreaPadding(.all)
                     .zIndex(1)
 
-                PlayerControlView()
+                PlayerControlView(playerCoordinator: playerCoordinator)
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)
 //                    .opacity(roomInfoViewModel.showControlView ? 1 : 0)
@@ -76,7 +76,7 @@ struct DetailPlayerView: View {
     }
     
     @MainActor func endPlay() {
-        roomInfoViewModel.playerCoordinator.resetPlayer()
+        playerCoordinator.resetPlayer()
         didExitView(false, "")
     }
 }

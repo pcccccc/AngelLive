@@ -11,6 +11,7 @@ import LiveParse
 import SimpleToast
 import Observation
 import CoreMedia
+import SwiftUI
 
 public class PlayerOptions: KSOptions {
   public var syncSystemRate: Bool = false
@@ -34,8 +35,6 @@ final class RoomInfoViewModel {
     var currentRoomIsLiked = false
     var currentRoomLikeLoading = false
     
-    @MainActor
-    var playerCoordinator = KSVideoPlayer.Coordinator()
     let settingModel = SettingStore()
     var playerOption: PlayerOptions
     var currentRoomPlayArgs: [LiveQualityModel]?
@@ -312,7 +311,7 @@ final class RoomInfoViewModel {
         }
     }
     
-    @MainActor func setPlayerDelegate() {
+    @MainActor func setPlayerDelegate(playerCoordinator: KSVideoPlayer.Coordinator) {
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
     }

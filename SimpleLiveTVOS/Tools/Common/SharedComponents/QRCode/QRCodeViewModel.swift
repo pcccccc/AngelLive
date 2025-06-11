@@ -31,7 +31,7 @@ enum SimpleLiveSyncTaskState: CustomStringConvertible {
 class QRCodeViewModel {
     
     @MainActor
-    var playerCoordinator = KSVideoPlayer.Coordinator()
+    
     private let actor = QRCodeActor()
     // 是否收到同步请求、 提示文字、 同步类型、 是否需要覆盖、 房间列表
     var currentState: (Bool, String, SimpleSyncType, Bool, [LiveModel]) = (false, "", .favorite, false, [])

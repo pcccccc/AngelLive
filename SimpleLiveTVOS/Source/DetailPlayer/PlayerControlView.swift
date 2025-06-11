@@ -44,21 +44,7 @@ struct PlayerControlView: View {
     @FocusState var topState: PlayControlTopField?
     @FocusState var showDanmuSetting: Bool
     
-    let topGradient = LinearGradient(
-        gradient: Gradient(colors: [Color.black.opacity(0.5), Color.black.opacity(0.1)]),
-        startPoint: .top,
-        endPoint: .bottom
-    )
-    let topTipGradient = LinearGradient(
-        gradient: Gradient(colors: [Color.black.opacity(0.3), Color.black.opacity(0.05)]),
-        startPoint: .top,
-        endPoint: .bottom
-    )
-    let bottomGradient = LinearGradient(
-        gradient: Gradient(colors: [Color.black.opacity(0.1), Color.black.opacity(0.5)]),
-        startPoint: .top,
-        endPoint: .bottom
-    )
+    @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
     
     var body: some View {
         
@@ -177,10 +163,17 @@ struct PlayerControlView: View {
                             Spacer()
                         }
                         .background {
-                            Rectangle()
-                                .fill(topGradient)
-                                .shadow(radius: 10)
-                                .frame(height: 150)
+                            LinearGradient(colors: [
+                                .black,
+                                .black.opacity(0.5),
+                                .black.opacity(0.1),
+                                .clear,
+                                .clear,
+                                .clear,
+                                .clear,
+                                .clear,
+                            ], startPoint: .top, endPoint: .bottom)
+                            .frame(height: 150)
                         }
                         .frame(height: 150)
                     }
@@ -277,11 +270,11 @@ struct PlayerControlView: View {
                         }
                         .padding(.top, 60)
                        
-                        Color.green
-                            .cornerRadius(10)
-                            .frame(width: 20, height: 20)
-                        Text("Live")
-                            .foregroundStyle(.white)
+//                        Color.green
+//                            .cornerRadius(10)
+//                            .frame(width: 20, height: 20)
+//                        Text("Live")
+//                            .foregroundStyle(.white)
                         Spacer()
                         VStack {
                             Menu {
@@ -304,8 +297,8 @@ struct PlayerControlView: View {
                                                     Button {
                                                         roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
                                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                                                            if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
-                                                                roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                                                            if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                                                                playerCoordinator.playerLayer?.play()
                                                                 DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
                                                                     roomInfoViewModel.showControlView = false
                                                                 })
@@ -400,10 +393,17 @@ struct PlayerControlView: View {
                         .focused($state, equals: .right)
                     }
                     .background {
-                        Rectangle()
-                            .fill(bottomGradient)
-                            .shadow(radius: 10)
-                            .frame(height: 150)
+                        LinearGradient(colors: [
+                            .clear,
+                            .clear,
+                            .clear,
+                            .clear,
+                            .clear,
+                            .black.opacity(0.1),
+                            .black.opacity(0.5),
+                            .black
+                        ], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 150)
                     }
                     .frame(height: 150)
                 }
@@ -482,10 +482,10 @@ struct PlayerControlView: View {
             roomInfoViewModel.showControl = true
         }else {
             DispatchQueue.main.async {
-                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.pause()
+                if playerCoordinator.playerLayer?.player.isPlaying ?? false {
+                    playerCoordinator.playerLayer?.pause()
                 }else {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                    playerCoordinator.playerLayer?.play()
                 }
             }
         }
@@ -497,8 +497,8 @@ struct PlayerControlView: View {
         }else {
             roomInfoViewModel.getPlayArgs()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                if roomInfoViewModel.playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
-                    roomInfoViewModel.playerCoordinator.playerLayer?.play()
+                if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                    playerCoordinator.playerLayer?.play()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
                         roomInfoViewModel.showControlView = false
                     })

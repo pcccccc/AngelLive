@@ -7,16 +7,16 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "5AC35FB6-12A6-4581-81E6-F22F500373D4"
+            uuid = "36E06A64-5EF4-4F2B-A72C-5824F162B54F"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "SimpleLiveTVOS/Source/DetailPlayer/RoomInfoViewModel.swift"
+            filePath = "../../../Library/Developer/Xcode/DerivedData/SimpleLiveTVOS-azzfrdxbuxjdwzdrbgegkfoonmey/SourcePackages/checkouts/LiveParse/Sources/LiveParse/Bilibili.swift"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "301"
-            endingLineNumber = "301"
-            landmarkName = "updateCurrentRoomPlayArgs(_:)"
+            startingLineNumber = "337"
+            endingLineNumber = "337"
+            landmarkName = "getRoomList(id:parentId:page:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
