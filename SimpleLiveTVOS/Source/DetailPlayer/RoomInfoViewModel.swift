@@ -104,6 +104,8 @@ final class RoomInfoViewModel {
     init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
+        KSOptions.firstPlayerType = KSMEPlayer.self
+        KSOptions.secondPlayerType = KSMEPlayer.self
         let option = PlayerOptions()
         option.userAgent = "libmpv"
         option.syncSystemRate = settingModel.syncSystemRate

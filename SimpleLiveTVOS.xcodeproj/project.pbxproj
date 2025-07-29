@@ -12,17 +12,16 @@
 		4F5B30F92D9D3E6A00C81B0D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4F5B30F82D9D3E6A00C81B0D /* KSPlayer */; };
 		4F61662E2C786A79008FED0D /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 4F61662D2C786A79008FED0D /* Pow */; };
 		4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6166302C7C8E84008FED0D /* LiveParse */; };
-		4F64C99A2DC085AF00665DE0 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F64C9992DC085AF00665DE0 /* FFmpegKit */; };
-		4F64C99C2DC085AF00665DE0 /* libmpv in Frameworks */ = {isa = PBXBuildFile; productRef = 4F64C99B2DC085AF00665DE0 /* libmpv */; };
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73DB652C1C1ABB001C38C9 /* Cache */; };
 		4F84D6D72D08642800F88855 /* TarsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D62D08642800F88855 /* TarsKit */; };
 		4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D92D08644300F88855 /* LiveParse */; };
 		4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DC2D088B5F00F88855 /* LiveParse */; };
-		4F84D6E02D088DB400F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DF2D088DB400F88855 /* LiveParse */; };
 		4F9087772DF8335E00A2E6F2 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9087762DF8335E00A2E6F2 /* KSPlayer */; };
+		4F9EC4FC2E3875E000F6C0A6 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
+		4FB71DAC2E38786600277C21 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB71DAB2E38786600277C21 /* LiveParse */; };
 		4FB7323F2B98884400F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB7323E2B98884400F02249 /* AcknowList */; };
 		4FB732422B988CDF00F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732412B988CDF00F02249 /* AcknowList */; };
 		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
@@ -101,7 +100,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				4F5B30F92D9D3E6A00C81B0D /* KSPlayer in Frameworks */,
-				4F84D6E02D088DB400F88855 /* LiveParse in Frameworks */,
 				4F61662E2C786A79008FED0D /* Pow in Frameworks */,
 				4F9087772DF8335E00A2E6F2 /* KSPlayer in Frameworks */,
 				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
@@ -125,11 +123,11 @@
 				FBDEE4792AD5874900F996BA /* SimpleToast in Frameworks */,
 				4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */,
 				FB5C3FDC2C7B5F5000865D6E /* LiveParse in Frameworks */,
-				4F64C99C2DC085AF00665DE0 /* libmpv in Frameworks */,
 				4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */,
-				4F64C99A2DC085AF00665DE0 /* FFmpegKit in Frameworks */,
 				4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */,
 				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
+				4FB71DAC2E38786600277C21 /* LiveParse in Frameworks */,
+				4F9EC4FC2E3875E000F6C0A6 /* FFmpegKit in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
 				FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */,
 				4FC475422B563C8D006A102D /* Shimmer in Frameworks */,
@@ -250,13 +248,12 @@
 				4F84D6D62D08642800F88855 /* TarsKit */,
 				4F84D6D92D08644300F88855 /* LiveParse */,
 				4F84D6DC2D088B5F00F88855 /* LiveParse */,
-				4F84D6DF2D088DB400F88855 /* LiveParse */,
 				FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */,
 				FBD7063D2D76D74600DCD6C1 /* ColorfulX */,
 				4F5B30F82D9D3E6A00C81B0D /* KSPlayer */,
-				4F64C9992DC085AF00665DE0 /* FFmpegKit */,
-				4F64C99B2DC085AF00665DE0 /* libmpv */,
 				4F9087762DF8335E00A2E6F2 /* KSPlayer */,
+				4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */,
+				4FB71DAB2E38786600277C21 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -352,11 +349,11 @@
 				4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */,
 				4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */,
 				4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */,
-				4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */,
 				FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */,
 				FBD7063C2D76D74600DCD6C1 /* XCRemoteSwiftPackageReference "ColorfulX" */,
-				4F64C9982DC085AF00665DE0 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
 				4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */,
+				4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
+				4FB71DAA2E38786600277C21 /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -744,14 +741,6 @@
 				minimumVersion = 1.0.4;
 			};
 		};
-		4F64C9982DC085AF00665DE0 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/TracyPlayer/FFmpegKit/";
-			requirement = {
-				kind = exactVersion;
-				version = 7.1.0;
-			};
-		};
 		4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/hyperoslo/Cache";
@@ -760,20 +749,28 @@
 				minimumVersion = 7.2.0;
 			};
 		};
-		4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pcccccc/LiveParse";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.5.0;
-			};
-		};
 		4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/TracyPlayer/KSPlayer";
 			requirement = {
-				branch = lgpl;
-				kind = branch;
+				kind = exactVersion;
+				version = 2.6.2;
+			};
+		};
+		4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/TracyPlayer/FFmpegKit/";
+			requirement = {
+				kind = exactVersion;
+				version = 7.1.1;
+			};
+		};
+		4FB71DAA2E38786600277C21 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pcccccc/LiveParse";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.7.3;
 			};
 		};
 		4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */ = {
@@ -920,16 +917,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		4F64C9992DC085AF00665DE0 /* FFmpegKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F64C9982DC085AF00665DE0 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
-			productName = FFmpegKit;
-		};
-		4F64C99B2DC085AF00665DE0 /* libmpv */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F64C9982DC085AF00665DE0 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
-			productName = libmpv;
-		};
 		4F6C40342C75885500A5BEDA /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
@@ -955,18 +942,23 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		4F84D6DF2D088DB400F88855 /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F84D6DE2D088DB400F88855 /* XCRemoteSwiftPackageReference "LiveParse" */;
-			productName = LiveParse;
-		};
 		4F9087762DF8335E00A2E6F2 /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */;
 			productName = KSPlayer;
 		};
+		4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = FFmpegKit;
+		};
 		4F9F9C272C1BDEE100B863A9 /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
+		4FB71DAB2E38786600277C21 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FB71DAA2E38786600277C21 /* XCRemoteSwiftPackageReference "LiveParse" */;
 			productName = LiveParse;
 		};
 		4FB7323E2B98884400F02249 /* AcknowList */ = {

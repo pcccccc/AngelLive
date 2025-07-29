@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/FFmpegKit/",
       "state" : {
-        "revision" : "933bac60663005a6489bd50c67cda148e7511f30",
-        "version" : "7.1.0"
+        "revision" : "631784c6f5366193c407194ae93ee44e9525b170",
+        "version" : "7.1.1"
       }
     },
     {
@@ -105,8 +105,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "branch" : "lgpl",
-        "revision" : "3d1c6958ba467394904ca6729605a1a6f9a5364c"
+        "revision" : "62998ba783dca4d9a9643ef5dd717652a30b9dc5",
+        "version" : "2.6.2"
       }
     },
     {
