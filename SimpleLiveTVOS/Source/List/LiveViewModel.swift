@@ -377,10 +377,10 @@ class LiveViewModel {
     
     @MainActor
     func createCurrentRoomViewModel(enterFromLive: Bool) {
-        roomInfoViewModel = RoomInfoViewModel(currentRoom: roomList[selectedRoomListIndex], appViewModel: appViewModel, enterFromLive: enterFromLive, roomType: roomListType)
+        guard let currentRoom = self.currentRoom else { return }
+        roomInfoViewModel = RoomInfoViewModel(currentRoom: currentRoom, appViewModel: appViewModel, enterFromLive: enterFromLive, roomType: roomListType)
         roomInfoViewModel?.roomList = roomList
     }
-    
     
     func deleteHistory(index: Int) {
         appViewModel.historyModel.watchList.remove(at: index)
