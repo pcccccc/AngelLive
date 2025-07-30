@@ -70,6 +70,7 @@ struct ListMainView: View {
                                     liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
                                     reader.scrollTo(Self.topId)
                                 })
+                                .focused($focusState, equals: .mainContent(index))
                                 .frame(width: 370, height: 280)
                         }
                         if liveViewModel.isLoading {
@@ -81,12 +82,15 @@ struct ListMainView: View {
                         }
                     }
                 }
-//                .scrollTransition { content, phase in
-//                    content
-//                        .opacity(phase.isIdentity ? 1 : 1)
-//                        .scaleEffect(phase.isIdentity ? 1 : 0.75)
-//                        .blur(radius: phase.isIdentity ? 0 : 10)
-//                }
+                .scrollTransition { content, phase in
+                    if liveViewModel.showOverlay {
+                        content
+                            .blur(radius: 5)
+                    }else {
+                        content
+                            .blur(radius: 0)
+                    }
+                }
             }.overlay {
                 if liveModel.roomList.count > 0 {
                     ZStack {
@@ -138,22 +142,6 @@ struct ListMainView: View {
                                                 })
                                             }
                                         }
-
-                                       
-//                                        .onChange(of: focusState) { oldValue, newValue in
-//                                            switch newValue {
-//                                                case .leftMenu(let mainIndex, let cateIndex):
-//                                                    liveViewModel.showOverlay = true
-//                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: {
-//                                                        focusState = .leftMenu(0, 0)
-//                                                    })
-//                                                default:
-//                                                    break
-//                                            }
-//                                            
-//                                        }
-
-                                        
                                     }
                                     
                                     .frame(width: liveViewModel.showOverlay == true ? 150: 300, height: liveViewModel.showOverlay == true ? liveViewModel.leftMenuMinHeight:  liveViewModel.leftMenuMaxHeight)
@@ -170,25 +158,12 @@ struct ListMainView: View {
                     }
                     .onMoveCommand(perform: { direction in
                         if direction == .left {
-                            //                        liveViewModel.showOverlay = true
                         }else if direction == .right {
-                            //                        liveViewModel.showOverlay = false
                             focusState = .mainContent(liveViewModel.selectedRoomListIndex)
                         }
                     })
                     .onExitCommand {
-                        switch focusState {
-                        case .leftMenu(_, _):
-                            //                            liveViewModel.showOverlay = false
-                            focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                        case .leftFavorite(_, _):
-                            //                            liveViewModel.showOverlay = false
-                            focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                        case .mainContent(_):
-                            break
-                        case .none:
-                            break
-                        }
+                        exitAction()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.top, 50)
@@ -196,18 +171,18 @@ struct ListMainView: View {
                 }
                 
             }
-            
-            
         }
         .background(.thinMaterial)
         .onChange(of: focusState, { oldValue, newValue in
             switch newValue {
-            case .leftMenu(_, _):
-                liveViewModel.showOverlay = true
-            case .leftFavorite(_, _):
-                liveViewModel.showOverlay = true
-            default:
-                liveViewModel.showOverlay = false
+                case .leftMenu(_, _):
+                    liveViewModel.showOverlay = true
+                case .leftFavorite(_, _):
+                    liveViewModel.showOverlay = true
+                case .mainContent(_):
+                    liveViewModel.showOverlay = false
+                case .none:
+                    break
             }
         })
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
@@ -257,6 +232,27 @@ struct ListMainView: View {
                     }
                 }
             }
+        }
+    }
+    
+    private func exitAction() {
+        switch focusState {
+            case .leftMenu(_, _):
+                if liveViewModel.selectedSubCategory.count == 0 {
+                    focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                    if liveViewModel.showOverlay == true {
+                        liveViewModel.showOverlay = false
+                    }
+                }else {
+                    guard let selectedMainListCategory = liveViewModel.selectedMainListCategory else { return }
+                    liveViewModel.showSubCategoryList(currentCategory: selectedMainListCategory)
+                }
+            case .leftFavorite(_, _):
+                focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+            case .mainContent(_):
+                break
+            case .none:
+                break
         }
     }
 }

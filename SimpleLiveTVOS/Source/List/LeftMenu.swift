@@ -44,11 +44,6 @@ struct LeftMenu: View {
         .onDisappear {
             speed = 0
         }
-        .onExitCommand(perform: {
-            if liveViewModel.showOverlay == true {
-                liveViewModel.showOverlay = false
-            }
-        })
     }
 }
 
@@ -86,9 +81,9 @@ struct MenuItem: View {
                     if index < liveViewModel.selectedSubCategory.count {
                         SubMenuItem(favorite: favorite, icon: liveViewModel.selectedSubCategory[index].icon == "" ? liveViewModel.menuTitleIcon : liveViewModel.selectedSubCategory[index].icon, title: liveViewModel.selectedSubCategory[index].title, index: index)
                             .environment(liveViewModel)
-                            .onExitCommand(perform: {
-                                liveViewModel.showSubCategoryList(currentCategory: liveViewModel.categories[self.index])
-                            })
+//                            .onExitCommand(perform: {
+//                                liveViewModel.showSubCategoryList(currentCategory: liveViewModel.categories[self.index])
+//                            })
                     }
                 }
             }

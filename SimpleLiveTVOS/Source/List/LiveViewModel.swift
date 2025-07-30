@@ -191,6 +191,9 @@ class LiveViewModel {
      - Returns: 房间列表。
     */
     func getRoomList(index: Int) {
+        if index == -1 || index == 1 {
+            selectedRoomListIndex = 0
+        }
         isLoading = true
         if roomListType == .search {
             Task {
