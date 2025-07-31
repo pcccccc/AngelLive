@@ -106,6 +106,7 @@ class ApiManager {
             if shareCode.contains("b23.tv") || shareCode.contains("bilibili") { return .bilibili }
             if shareCode.contains("douyin") { return .douyin }
             if shareCode.contains("huya") { return .huya }
+            if shareCode.contains("hy.fan") { return .huya }
             if shareCode.contains("douyu") { return .douyu }
             if shareCode.contains("cc.163.com") { return .cc }
             if shareCode.contains("kuaishou.com") { return .ks }
