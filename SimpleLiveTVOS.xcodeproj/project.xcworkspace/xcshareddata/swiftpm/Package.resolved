@@ -1,5 +1,5 @@
 {
-  "originHash" : "67c3a05fb8ba63c31171edf9a226f22c57438c09d84e62d2463009238c34996a",
+  "originHash" : "b1f087644db52804c2509fa0cfd283e794a7478d21c3b541a79780efc8b7d792",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "36df26fe4586b4f23d76cfd8b47076998343a2b2",
         "version" : "2.0.3"
+      }
+    },
+    {
+      "identity" : "bugsnag-cocoa",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/bugsnag/bugsnag-cocoa",
+      "state" : {
+        "revision" : "a3f56c6191f0d8ae6b2407aad026ce3580298ce1",
+        "version" : "6.32.2"
       }
     },
     {

@@ -15,6 +15,7 @@
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73DB652C1C1ABB001C38C9 /* Cache */; };
+		4F8077032E3B69A5002FA56A /* Bugsnag in Frameworks */ = {isa = PBXBuildFile; productRef = 4F8077022E3B69A5002FA56A /* Bugsnag */; };
 		4F84D6D72D08642800F88855 /* TarsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D62D08642800F88855 /* TarsKit */; };
 		4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D92D08644300F88855 /* LiveParse */; };
 		4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DC2D088B5F00F88855 /* LiveParse */; };
@@ -141,6 +142,7 @@
 				FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */,
 				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
 				4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */,
+				4F8077032E3B69A5002FA56A /* Bugsnag in Frameworks */,
 				FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -254,6 +256,7 @@
 				4F9087762DF8335E00A2E6F2 /* KSPlayer */,
 				4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */,
 				4FB71DAB2E38786600277C21 /* LiveParse */,
+				4F8077022E3B69A5002FA56A /* Bugsnag */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -354,6 +357,7 @@
 				4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */,
 				4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
 				4FB71DAA2E38786600277C21 /* XCRemoteSwiftPackageReference "LiveParse" */,
+				4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -567,6 +571,7 @@
 				INFOPLIST_FILE = SimpleLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于同步数据";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen.storyboard;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -604,6 +609,7 @@
 				INFOPLIST_FILE = SimpleLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于同步数据";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen.storyboard;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
@@ -747,6 +753,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 7.2.0;
+			};
+		};
+		4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/bugsnag/bugsnag-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.32.2;
 			};
 		};
 		4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
@@ -929,6 +943,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */;
 			productName = Cache;
+		};
+		4F8077022E3B69A5002FA56A /* Bugsnag */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */;
+			productName = Bugsnag;
 		};
 		4F84D6D62D08642800F88855 /* TarsKit */ = {
 			isa = XCSwiftPackageProductDependency;

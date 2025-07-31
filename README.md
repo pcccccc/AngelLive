@@ -90,6 +90,10 @@ tvOS 17+
 
 感谢JetBrains提供开源许可，在此表达我的感谢。
 
+<a href="www.bugsnag.com" target="_blank"><img src="https://images.typeform.com/images/QKuaAssrFCq7/image/default-firstframe.png" alt="Bugsnag Logo (Main) logo." width="150"></a>
+
+感谢bugsnag提供的开源许可，在此表达我的感谢。
+
 ## 支持：
 
 [爱发电](https://afdian.com/a/laopc)

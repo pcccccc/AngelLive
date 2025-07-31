@@ -7,11 +7,16 @@
 
 import SwiftUI
 import LiveParse
+import Bugsnag
 
 @main
 struct SimpleLiveTVOSApp: App {
     
     var appViewModel = SimpleLiveViewModel()
+    
+    init() {
+        Bugsnag.start()
+    }
     
     var body: some Scene {
         WindowGroup {
