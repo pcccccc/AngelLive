@@ -197,6 +197,7 @@ struct ListMainView: View {
             .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
+            guard liveViewModel.isLoading == true else { return }
             liveViewModel.getRoomList(index: 1)
         })
         .onChange(of: scenePhase) { oldValue, newValue in

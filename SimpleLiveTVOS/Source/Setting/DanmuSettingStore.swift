@@ -28,11 +28,11 @@ final class DanmuSettingModel {
     public var showDanmu: Bool {
         get {
             access(keyPath: \.showDanmu)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalShowDanmu) as? Bool ?? true
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalShowDanmu, synchronize: true) as? Bool ?? true
         }
         set {
             withMutation(keyPath: \.showDanmu) {
-                 UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalShowDanmu)
+                 UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalShowDanmu, synchronize: true)
             }
         }
     }
@@ -40,11 +40,11 @@ final class DanmuSettingModel {
     public var showColorDanmu: Bool {
         get {
             access(keyPath: \.showColorDanmu)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalShowColorDanmu) as? Bool ?? true
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalShowColorDanmu, synchronize: true) as? Bool ?? true
         }
         set {
             withMutation(keyPath: \.showColorDanmu) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalShowColorDanmu)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalShowColorDanmu, synchronize: true)
             }
         }
     }
@@ -52,11 +52,11 @@ final class DanmuSettingModel {
     public var danmuTopMargin: Double {
         get {
             access(keyPath: \.danmuTopMargin)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuTopMargin) as? Double ?? 0.0
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuTopMargin, synchronize: true) as? Double ?? 0.0
         }
         set {
             withMutation(keyPath: \.danmuTopMargin) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuTopMargin)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuTopMargin, synchronize: true)
             }
         }
     }
@@ -64,11 +64,11 @@ final class DanmuSettingModel {
     public var danmuBottomMargin: Double {
         get {
             access(keyPath: \.danmuBottomMargin)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuBottomMargin) as? Double ?? 0.0
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuBottomMargin, synchronize: true) as? Double ?? 0.0
         }
         set {
             withMutation(keyPath: \.danmuBottomMargin) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuBottomMargin)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuBottomMargin, synchronize: true)
             }
         }
     }
@@ -76,11 +76,11 @@ final class DanmuSettingModel {
     public var danmuFontSize: Int {
         get {
             access(keyPath: \.danmuFontSize)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuFontSize) as? Int ?? 50
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuFontSize, synchronize: true) as? Int ?? 50
         }
         set {
             withMutation(keyPath: \.danmuFontSize) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuFontSize)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuFontSize, synchronize: true)
             }
         }
     }
@@ -88,11 +88,11 @@ final class DanmuSettingModel {
     public var danmuSpeed: Double {
         get {
             access(keyPath: \.danmuSpeed)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuSpeed) as? Double ?? 0.5
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuSpeed, synchronize: true) as? Double ?? 0.5
         }
         set {
             withMutation(keyPath: \.danmuSpeed) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuSpeed)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuSpeed, synchronize: true)
             }
         }
     }
@@ -100,11 +100,11 @@ final class DanmuSettingModel {
     var danmuAlpha: Double {
         get {
             access(keyPath: \.danmuAlpha)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuAlpha) as? Double ?? 1.0
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuAlpha, synchronize: true) as? Double ?? 1.0
         }
         set {
             withMutation(keyPath: \.danmuAlpha) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuAlpha)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuAlpha, synchronize: true)
             }
         }
     }
@@ -112,11 +112,11 @@ final class DanmuSettingModel {
     var danmuAreaIndex: Int {
         get {
             access(keyPath: \.danmuAreaIndex)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuAreaIndex) as? Int ?? 2
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuAreaIndex, synchronize: true) as? Int ?? 2
         }
         set {
             withMutation(keyPath: \.danmuAreaIndex) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuAreaIndex)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuAreaIndex, synchronize: true)
             }
         }
     }
@@ -124,11 +124,11 @@ final class DanmuSettingModel {
     var danmuFontSizeIndex: Int {
         get {
             access(keyPath: \.danmuFontSizeIndex)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuFontSizeIndex) as? Int ?? 1
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuFontSizeIndex, synchronize: true) as? Int ?? 1
         }
         set {
             withMutation(keyPath: \.danmuFontSizeIndex) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuFontSizeIndex)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuFontSizeIndex, synchronize: true)
             }
         }
     }
@@ -136,11 +136,11 @@ final class DanmuSettingModel {
     var danmuSpeedIndex: Int {
         get {
             access(keyPath: \.danmuSpeedIndex)
-            return UserDefaults.standard.value(forKey: DanmuSettingModel.globalDanmuSpeedIndex) as? Int ?? 1
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuSpeedIndex, synchronize: true) as? Int ?? 1
         }
         set {
             withMutation(keyPath: \.danmuSpeedIndex) {
-                UserDefaults.standard.setValue(newValue, forKey: DanmuSettingModel.globalDanmuSpeedIndex)
+                UserDefaults.shared.set(newValue, forKey: DanmuSettingModel.globalDanmuSpeedIndex, synchronize: true)
             }
         }
     }

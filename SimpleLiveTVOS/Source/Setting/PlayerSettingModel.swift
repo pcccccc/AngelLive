@@ -20,11 +20,11 @@ final class PlayerSettingModel {
     public var openExitPlayerViewWhenLiveEnd: Bool {
         get {
             access(keyPath: \.openExitPlayerViewWhenLiveEnd)
-            return UserDefaults.standard.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEnd) as? Bool ?? false
+            return UserDefaults.shared.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEnd, synchronize: true) as? Bool ?? false
         }
         set {
             withMutation(keyPath: \.openExitPlayerViewWhenLiveEnd) {
-                 UserDefaults.standard.setValue(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEnd)
+                 UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEnd, synchronize: true)
             }
         }
     }
@@ -32,11 +32,11 @@ final class PlayerSettingModel {
     public var openExitPlayerViewWhenLiveEndSecond: Int {
         get {
             access(keyPath: \.openExitPlayerViewWhenLiveEndSecond)
-            return UserDefaults.standard.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecond) as? Int ?? 180
+            return UserDefaults.shared.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecond, synchronize: true) as? Int ?? 180
         }
         set {
             withMutation(keyPath: \.openExitPlayerViewWhenLiveEndSecond) {
-                UserDefaults.standard.setValue(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecond)
+                UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecond, synchronize: true)
             }
         }
     }
@@ -44,11 +44,11 @@ final class PlayerSettingModel {
     var openExitPlayerViewWhenLiveEndSecondIndex: Int {
         get {
             access(keyPath: \.openExitPlayerViewWhenLiveEndSecondIndex)
-            return UserDefaults.standard.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecondIndex) as? Int ?? 2
+            return UserDefaults.shared.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecondIndex, synchronize: true) as? Int ?? 2
         }
         set {
             withMutation(keyPath: \.openExitPlayerViewWhenLiveEndSecondIndex) {
-                UserDefaults.standard.setValue(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecondIndex)
+                UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecondIndex, synchronize: true)
             }
         }
     }

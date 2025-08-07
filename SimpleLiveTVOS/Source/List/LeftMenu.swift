@@ -44,6 +44,9 @@ struct LeftMenu: View {
         .onDisappear {
             speed = 0
         }
+        .onAppear {
+            speed = 0.5
+        }
     }
 }
 

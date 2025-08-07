@@ -8,6 +8,8 @@
 import SwiftUI
 import LiveParse
 import Bugsnag
+import Kingfisher
+import KingfisherWebP
 
 @main
 struct SimpleLiveTVOSApp: App {
@@ -15,6 +17,10 @@ struct SimpleLiveTVOSApp: App {
     var appViewModel = SimpleLiveViewModel()
     
     init() {
+        KingfisherManager.shared.defaultOptions += [
+            .processor(WebPProcessor.default),
+            .cacheSerializer(WebPSerializer.default)
+        ]
         Bugsnag.start()
     }
     

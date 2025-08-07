@@ -10,6 +10,7 @@ import Kingfisher
 import KSPlayer
 import LiveParse
 import Observation
+import KingfisherWebP
 
 struct LiveCardView: View {
     
@@ -49,6 +50,9 @@ struct LiveCardView: View {
                                 .frame(height: 210)
                                 .blur(radius: 10)
                             KFImage(URL(string: currentLiveModel.roomCover))
+                                .onFailure { error in
+                                    print("Image loading failed: \(error)")
+                                }
                                 .placeholder {
                                     Image("placeholder")
                                         .resizable()

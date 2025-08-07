@@ -102,6 +102,11 @@ class LiveViewModel {
     var endFirstLoading = false
     var lodingTimer: Timer?
     
+    deinit {
+        lodingTimer?.invalidate()
+        lodingTimer = nil
+    }
+    
     init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: SimpleLiveViewModel) {
         self.liveType = liveType
         self.roomListType = roomListType

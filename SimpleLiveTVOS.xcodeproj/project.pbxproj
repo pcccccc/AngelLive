@@ -25,12 +25,13 @@
 		4FB71DAC2E38786600277C21 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB71DAB2E38786600277C21 /* LiveParse */; };
 		4FB7323F2B98884400F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB7323E2B98884400F02249 /* AcknowList */; };
 		4FB732422B988CDF00F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732412B988CDF00F02249 /* AcknowList */; };
-		4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC3DD082A49725F00CA36B9 /* Kingfisher */; };
 		4FC475422B563C8D006A102D /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC475412B563C8D006A102D /* Shimmer */; };
 		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
 		4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */; };
 		4FCA391D2BBA5A8600506675 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391C2BBA5A8600506675 /* NIO */; };
 		4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391E2BBA5A8600506675 /* NIOHTTP1 */; };
+		4FCB4E5C2E3C6AF4007134CE /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCB4E5B2E3C6AF4007134CE /* Kingfisher */; };
+		4FCB4E5F2E3C6B73007134CE /* KingfisherWebP in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */; };
 		4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCDB8552BBF155700EB33DA /* LiveParse */; };
 		FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB15C6322C1B353900D93C64 /* LiveParse */; };
 		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
@@ -108,6 +109,7 @@
 				FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */,
 				4FB7323F2B98884400F02249 /* AcknowList in Frameworks */,
 				FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */,
+				4FCB4E5C2E3C6AF4007134CE /* Kingfisher in Frameworks */,
 				FBCBE6F12D5B2BCA00BE3E62 /* InjectionNext in Frameworks */,
 				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
 				FB29265D2C58991500A1F07F /* LiveParse in Frameworks */,
@@ -126,7 +128,6 @@
 				FB5C3FDC2C7B5F5000865D6E /* LiveParse in Frameworks */,
 				4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */,
 				4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */,
-				4FC3DD092A49725F00CA36B9 /* Kingfisher in Frameworks */,
 				4FB71DAC2E38786600277C21 /* LiveParse in Frameworks */,
 				4F9EC4FC2E3875E000F6C0A6 /* FFmpegKit in Frameworks */,
 				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
@@ -144,6 +145,7 @@
 				4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */,
 				4F8077032E3B69A5002FA56A /* Bugsnag in Frameworks */,
 				FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */,
+				4FCB4E5F2E3C6B73007134CE /* KingfisherWebP in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -214,7 +216,6 @@
 			);
 			name = SimpleLiveTVOS;
 			packageProductDependencies = (
-				4FC3DD082A49725F00CA36B9 /* Kingfisher */,
 				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
 				FBDEE4782AD5874900F996BA /* SimpleToast */,
 				FB51018F2B0E35A900A1AE0D /* Starscream */,
@@ -257,6 +258,8 @@
 				4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */,
 				4FB71DAB2E38786600277C21 /* LiveParse */,
 				4F8077022E3B69A5002FA56A /* Bugsnag */,
+				4FCB4E5B2E3C6AF4007134CE /* Kingfisher */,
+				4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -337,7 +340,6 @@
 			);
 			mainGroup = 4FC3DCD12A49382F00CA36B9;
 			packageReferences = (
-				4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */,
 				FBDEE4772AD5874900F996BA /* XCRemoteSwiftPackageReference "SimpleToast" */,
 				FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */,
@@ -358,6 +360,8 @@
 				4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
 				4FB71DAA2E38786600277C21 /* XCRemoteSwiftPackageReference "LiveParse" */,
 				4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */,
+				4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */,
+				4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -795,14 +799,6 @@
 				kind = branch;
 			};
 		};
-		4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/onevcat/Kingfisher";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 7.0.0;
-			};
-		};
 		4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/markiv/SwiftUI-Shimmer";
@@ -833,6 +829,22 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.64.0;
+			};
+		};
+		4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/onevcat/Kingfisher";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.5.0;
+			};
+		};
+		4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/yeatse/KingfisherWebP.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.7.0;
 			};
 		};
 		FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */ = {
@@ -989,11 +1001,6 @@
 			package = 4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */;
 			productName = AcknowList;
 		};
-		4FC3DD082A49725F00CA36B9 /* Kingfisher */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FC3DD072A49725F00CA36B9 /* XCRemoteSwiftPackageReference "Kingfisher" */;
-			productName = Kingfisher;
-		};
 		4FC475412B563C8D006A102D /* Shimmer */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
@@ -1018,6 +1025,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */;
 			productName = NIOHTTP1;
+		};
+		4FCB4E5B2E3C6AF4007134CE /* Kingfisher */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */;
+			productName = Kingfisher;
+		};
+		4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */;
+			productName = KingfisherWebP;
 		};
 		4FCDB8552BBF155700EB33DA /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;

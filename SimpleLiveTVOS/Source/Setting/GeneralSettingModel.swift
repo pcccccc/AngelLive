@@ -37,11 +37,11 @@ final class GeneralSettingModel {
     public var generalDisableMaterialBackground: Bool {
         get {
             access(keyPath: \.generalDisableMaterialBackground)
-            return UserDefaults.standard.value(forKey: GeneralSettingModel.globalGeneralDisableMaterialBackground) as? Bool ?? false
+            return UserDefaults.shared.value(forKey: GeneralSettingModel.globalGeneralDisableMaterialBackground, synchronize: true) as? Bool ?? false
         }
         set {
             withMutation(keyPath: \.generalDisableMaterialBackground) {
-                 UserDefaults.standard.setValue(newValue, forKey: GeneralSettingModel.globalGeneralDisableMaterialBackground)
+                 UserDefaults.shared.set(newValue, forKey: GeneralSettingModel.globalGeneralDisableMaterialBackground, synchronize: true)
             }
         }
     }
@@ -50,11 +50,11 @@ final class GeneralSettingModel {
     public var globalGeneralSettingFavoriteStyle: Int {
         get {
             access(keyPath: \.globalGeneralSettingFavoriteStyle)
-            return UserDefaults.standard.value(forKey: GeneralSettingModel.globalGeneralSettingFavoriteStyle) as? Int ?? 0
+            return UserDefaults.shared.value(forKey: GeneralSettingModel.globalGeneralSettingFavoriteStyle, synchronize: true) as? Int ?? 0
         }
         set {
             withMutation(keyPath: \.globalGeneralSettingFavoriteStyle) {
-                 UserDefaults.standard.setValue(newValue, forKey: GeneralSettingModel.globalGeneralSettingFavoriteStyle)
+                 UserDefaults.shared.set(newValue, forKey: GeneralSettingModel.globalGeneralSettingFavoriteStyle, synchronize: true)
             }
         }
     }

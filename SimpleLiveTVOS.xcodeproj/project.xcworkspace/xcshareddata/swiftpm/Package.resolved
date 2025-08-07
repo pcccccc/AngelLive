@@ -1,5 +1,5 @@
 {
-  "originHash" : "b1f087644db52804c2509fa0cfd283e794a7478d21c3b541a79780efc8b7d792",
+  "originHash" : "bbd1684c35bf6bbe7ad25c6842d9d552e0d21f31ccb3b171e483c760b636a84c",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -105,8 +105,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "5b92f029fab2cce44386d28588098b5be0824ef5",
-        "version" : "7.11.0"
+        "revision" : "2015fda791daa72c8058619545a593bf8c1dd59f",
+        "version" : "8.5.0"
+      }
+    },
+    {
+      "identity" : "kingfisherwebp",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/yeatse/KingfisherWebP.git",
+      "state" : {
+        "revision" : "dccea7e92e77b0aa9ae5955c0d8f78c88ac0a950",
+        "version" : "1.7.0"
       }
     },
     {
@@ -119,12 +128,21 @@
       }
     },
     {
+      "identity" : "libwebp-xcode",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SDWebImage/libwebp-Xcode",
+      "state" : {
+        "revision" : "0d60654eeefd5d7d2bef3835804892c40225e8b2",
+        "version" : "1.5.0"
+      }
+    },
+    {
       "identity" : "liveparse",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "5f324ee136d2464812e870ee4b32adc67e059565",
-        "version" : "1.7.5"
+        "revision" : "4744fbbd8448d3b391db4315957782b66fd89ee2",
+        "version" : "1.8.0"
       }
     },
     {

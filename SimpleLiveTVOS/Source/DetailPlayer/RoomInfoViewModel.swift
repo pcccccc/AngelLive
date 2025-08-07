@@ -241,7 +241,9 @@ final class RoomInfoViewModel {
             }
         }else {
             yyFirstLoad = false
-            self.currentPlayURL = URL(string: currentQuality.url)!
+            if let url = URL(string: currentQuality.url) {
+                self.currentPlayURL = url
+            }
         }
         
        
