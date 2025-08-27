@@ -9,14 +9,14 @@ import SwiftUI
 
 struct GeneralSettingView: View {
     
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     @FocusState var focused: Bool
     @StateObject var settingStore = SettingStore()
     
     var body: some View {
         
-        @Bindable var playerSettingModel = appViewModel.playerSettingModel
-        @Bindable var generalSettingModel = appViewModel.generalSettingModel
+        @Bindable var playerSettingModel = appViewModel.playerSettingsViewModel
+        @Bindable var generalSettingModel = appViewModel.generalSettingsViewModel
         
         GeometryReader { geometry in
             HStack {

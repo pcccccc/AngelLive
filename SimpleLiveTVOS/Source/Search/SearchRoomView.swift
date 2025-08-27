@@ -14,7 +14,7 @@ struct SearchRoomView: View {
     
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     
     var body: some View {
         
@@ -24,7 +24,7 @@ struct SearchRoomView: View {
         VStack {
             Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
             HStack {
-                Picker(selection: $appModel.searchModel.searchTypeIndex) {
+                Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
                     ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
                         // 需要有一个变量text。不然会自动帮忙加很多0
                         let text = liveViewModel.searchTypeArray[index]
@@ -34,21 +34,21 @@ struct SearchRoomView: View {
                     Text("字体大小")
                 }
             }
-            TextField("搜索", text: $appModel.searchModel.searchText)
+            TextField("搜索", text: $appModel.searchViewModel.searchText)
             .onSubmit {
-                if appModel.searchModel.searchTypeIndex == 0 {
+                if appModel.searchViewModel.searchTypeIndex == 0 {
                     liveViewModel.roomPage = 1
                     Task {
-                        await liveViewModel.searchRoomWithText(text: appModel.searchModel.searchText)
+                        await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
                     }
                 }else {
                     liveViewModel.roomPage = 1
-                    liveViewModel.searchRoomWithShareCode(text: appModel.searchModel.searchText)
+                    liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                 }
                 
             }
             Spacer()
-            if appModel.searchModel.searchTypeIndex == 2 && liveViewModel.roomList.count == 0 {
+            if appModel.searchViewModel.searchTypeIndex == 2 && liveViewModel.roomList.count == 0 {
                 HStack {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("可选格式:")

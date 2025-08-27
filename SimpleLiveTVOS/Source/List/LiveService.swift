@@ -4,7 +4,7 @@ import LiveParse
 import Cache
 import LiveParse
 
-class LivePlatformService {
+class LiveService {
     
     static func fetchCategoryList(liveType: LiveType) async throws -> [LiveMainListModel] {
         let diskConfig = DiskConfig(name: "Simple_Live_TV")

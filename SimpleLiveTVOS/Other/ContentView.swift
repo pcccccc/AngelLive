@@ -16,11 +16,11 @@ import Darwin
 
 struct ContentView: View {
     
-    var appViewModel: SimpleLiveViewModel
+    var appViewModel: AppState
     var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
 
-    init(appViewModel: SimpleLiveViewModel) {
+    init(appViewModel: AppState) {
         self.appViewModel = appViewModel
         self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
         self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
@@ -34,11 +34,11 @@ struct ContentView: View {
             TabView(selection:$contentVM.selection) {
                 FavoriteMainView()
                     .tabItem {
-                        if appViewModel.appFavoriteModel.isLoading == true || appViewModel.appFavoriteModel.cloudKitReady == false {
+                        if appViewModel.favoriteViewModel.isLoading == true || appViewModel.favoriteViewModel.cloudKitReady == false {
                             Label(
                                 title: {  },
                                 icon: {
-                                    Image(systemName: appViewModel.appFavoriteModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.appFavoriteModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                    Image(systemName: appViewModel.favoriteViewModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteViewModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
                                 }
                             )
                             .contentTransition(.symbolEffect(.replace))
@@ -79,7 +79,6 @@ struct ContentView: View {
         .onAppear {
             Task {
                 try await Douyin.getRequestHeaders()
-                appViewModel.favoriteModel = favoriteLiveViewModel
             }
         }
         .onPlayPauseCommand(perform: {

@@ -14,7 +14,7 @@ import KingfisherWebP
 @main
 struct SimpleLiveTVOSApp: App {
     
-    var appViewModel = SimpleLiveViewModel()
+    var appViewModel = AppState()
     
     init() {
         KingfisherManager.shared.defaultOptions += [

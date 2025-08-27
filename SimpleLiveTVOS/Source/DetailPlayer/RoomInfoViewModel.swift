@@ -28,7 +28,7 @@ public class PlayerOptions: KSOptions {
 @Observable
 final class RoomInfoViewModel {
     
-    var appViewModel: SimpleLiveViewModel
+    var appViewModel: AppState
     
     var roomList: [LiveModel] = []
     var currentRoom: LiveModel
@@ -101,7 +101,7 @@ final class RoomInfoViewModel {
     var danmuServerIsLoading = false
     
     @MainActor
-    init(currentRoom: LiveModel, appViewModel: SimpleLiveViewModel, enterFromLive: Bool, roomType: LiveRoomListType) {
+    init(currentRoom: LiveModel, appViewModel: AppState, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         KSOptions.firstPlayerType = KSMEPlayer.self
@@ -112,7 +112,7 @@ final class RoomInfoViewModel {
         self.playerOption = option
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
-        let list = appViewModel.favoriteModel?.roomList ?? []
+        let list = appViewModel.favoriteViewModel.roomList ?? []
         self.currentRoomIsLiked = list.contains { $0.roomId == currentRoom.roomId }
         self.roomType = roomType
         getPlayArgs()
@@ -295,9 +295,9 @@ final class RoomInfoViewModel {
         }
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
         //开一个定时，检查主播是否已经下播
-        if appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEnd == true {
+        if appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEnd == true {
             if currentRoom.liveType != .youtube && currentRoom.liveType != .ks {
-                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { _ in
+                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { _ in
                     Task {
                         let state = try await ApiManager.getCurrentRoomLiveState(roomId: self.currentRoom.roomId, userId: self.currentRoom.userId, liveType: self.currentRoom.liveType)
                         if state == .close || state == .unknow {
@@ -310,7 +310,7 @@ final class RoomInfoViewModel {
             }
         }
         
-        if appViewModel.danmuSettingModel.showDanmu {
+        if appViewModel.danmuSettingsViewModel.showDanmu {
             getDanmuInfo()
         }
     }
@@ -377,7 +377,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     }
     
     func webSocketDidReceiveMessage(text: String, color: UInt32) {
-        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingModel.danmuFontSize))
+        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingsViewModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingsViewModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize))
     }
     
     @MainActor func reloadRoom(liveModel: LiveModel) {

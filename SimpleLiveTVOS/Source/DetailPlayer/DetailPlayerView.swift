@@ -14,7 +14,7 @@ struct DetailPlayerView: View {
     
     @ObservedObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
@@ -47,14 +47,14 @@ struct DetailPlayerView: View {
                     .environment(roomInfoViewModel)
                     .environment(appViewModel)
                 VStack {
-                    if appViewModel.danmuSettingModel.danmuAreaIndex >= 3 {
+                    if appViewModel.danmuSettingsViewModel.danmuAreaIndex >= 3 {
                         Spacer()
                     }
-                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingModel.getDanmuArea().0)
-                        .frame(width: 1920, height: appViewModel.danmuSettingModel.getDanmuArea().0)
-                        .opacity(appViewModel.danmuSettingModel.showDanmu ? 1 : 0)
+                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
+                        .frame(width: 1920, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
+                        .opacity(appViewModel.danmuSettingsViewModel.showDanmu ? 1 : 0)
                         .environment(appViewModel)
-                    if appViewModel.danmuSettingModel.danmuAreaIndex < 3 {
+                    if appViewModel.danmuSettingsViewModel.danmuAreaIndex < 3 {
                         Spacer()
                     }
                 }

@@ -15,7 +15,7 @@ struct FavoriteMainView: View {
     
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     @Environment(\.scenePhase) var scenePhase
     @State var timer: Timer?
     @State var second = 0
@@ -26,18 +26,18 @@ struct FavoriteMainView: View {
         @Bindable var appModel = appViewModel
         
         VStack {
-            if appViewModel.appFavoriteModel.cloudKitReady {
-                if appViewModel.appFavoriteModel.groupedRoomList.isEmpty && appViewModel.appFavoriteModel.isLoading == false {
-                    if appViewModel.appFavoriteModel.roomList.isEmpty {
-                        if appViewModel.appFavoriteModel.cloudReturnError {
-                            Text(appViewModel.appFavoriteModel.cloudKitStateString)
+            if appViewModel.favoriteViewModel.cloudKitReady {
+                if appViewModel.favoriteViewModel.groupedRoomList.isEmpty && appViewModel.favoriteViewModel.isLoading == false {
+                    if appViewModel.favoriteViewModel.roomList.isEmpty {
+                        if appViewModel.favoriteViewModel.cloudReturnError {
+                            Text(appViewModel.favoriteViewModel.cloudKitStateString)
                                 .font(.title3)
                         }else {
                             Text("暂无收藏")
                                 .font(.title3)
                         }
                     }else {
-                        Text(appViewModel.appFavoriteModel.cloudKitStateString)
+                        Text(appViewModel.favoriteViewModel.cloudKitStateString)
                             .font(.title3)
                         Button {
                             getViewStateAndFavoriteList()
@@ -48,8 +48,8 @@ struct FavoriteMainView: View {
                     }
                 }else {
                     ScrollView(.vertical) {
-                        if AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingModel.globalGeneralSettingFavoriteStyle) == .section || AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingModel.globalGeneralSettingFavoriteStyle) == .liveState { //按平台分组展示页面
-                            ForEach(appViewModel.appFavoriteModel.groupedRoomList, id: \.id) { section in
+                        if AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingsViewModel.globalGeneralSettingFavoriteStyle) == .section || AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingsViewModel.globalGeneralSettingFavoriteStyle) == .liveState { //按平台分组展示页面
+                            ForEach(appViewModel.favoriteViewModel.groupedRoomList, id: \.id) { section in
                                 VStack {
                                     HStack {
                                         Text(section.title)
@@ -75,7 +75,7 @@ struct FavoriteMainView: View {
                                 }
                                 .focusSection()
                             }
-                            if appViewModel.appFavoriteModel.isLoading {
+                            if appViewModel.favoriteViewModel.isLoading {
                                 HStack{
                                     LoadingView()
                                         .frame(width: 370, height: 275)
@@ -87,13 +87,13 @@ struct FavoriteMainView: View {
                             }
                         }else {
                             LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
-                                ForEach(appViewModel.appFavoriteModel.roomList.indices, id: \.self) { index in
+                                ForEach(appViewModel.favoriteViewModel.roomList.indices, id: \.self) { index in
                                     LiveCardView(index: index)
                                         .environment(liveViewModel)
                                         .environment(appViewModel)
                                         .frame(width: 370, height: 240)
                                 }
-                                if appViewModel.appFavoriteModel.isLoading {
+                                if appViewModel.favoriteViewModel.isLoading {
                                     LoadingView()
                                         .frame(width: 370, height: 275)
                                         .cornerRadius(5)
@@ -106,7 +106,7 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(appViewModel.appFavoriteModel.cloudKitStateString)
+                Text(appViewModel.favoriteViewModel.cloudKitStateString)
                     .font(.title3)
                 Button {
                     getViewStateAndFavoriteList()
@@ -117,7 +117,7 @@ struct FavoriteMainView: View {
             }
         }
         .overlay {
-            if appViewModel.appFavoriteModel.roomList.count > 0 && appViewModel.appFavoriteModel.cloudKitReady {
+            if appViewModel.favoriteViewModel.roomList.count > 0 && appViewModel.favoriteViewModel.cloudKitReady {
                 VStack {
                     Spacer()
                     HStack {
@@ -137,11 +137,11 @@ struct FavoriteMainView: View {
                 }
             }
         }
-        .simpleToast(isPresented: $appModel.appFavoriteModel.showToast, options: appViewModel.appFavoriteModel.toastOptions) {
+        .simpleToast(isPresented: $appModel.favoriteViewModel.showToast, options: appViewModel.favoriteViewModel.toastOptions) {
             VStack(alignment: .leading) {
-                Label("提示", systemImage: appModel.appFavoriteModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
+                Label("提示", systemImage: appModel.favoriteViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
                     .font(.headline.bold())
-                Text(appModel.appFavoriteModel.toastTitle)
+                Text(appModel.favoriteViewModel.toastTitle)
             }
             .padding()
             .background(.black.opacity(0.6))
@@ -181,9 +181,9 @@ struct FavoriteMainView: View {
                 getViewStateAndFavoriteList()
                 firstLoad = false
             }
-            appViewModel.appFavoriteModel.refreshView()
-            if appViewModel.appFavoriteModel.cloudKitReady == true && appViewModel.appFavoriteModel.roomList.count > 0 {
-                liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
+            appViewModel.favoriteViewModel.refreshView()
+            if appViewModel.favoriteViewModel.cloudKitReady == true && appViewModel.favoriteViewModel.roomList.count > 0 {
+                liveViewModel.roomList = appViewModel.favoriteViewModel.roomList
             }
         }
     }
@@ -194,9 +194,9 @@ struct FavoriteMainView: View {
 extension FavoriteMainView {
     private func getViewStateAndFavoriteList() {
         Task {
-            guard appViewModel.appFavoriteModel.isLoading == false else { return }
-            await appViewModel.appFavoriteModel.syncWithActor()
-            liveViewModel.roomList = appViewModel.appFavoriteModel.roomList
+            guard appViewModel.favoriteViewModel.isLoading == false else { return }
+            await appViewModel.favoriteViewModel.syncWithActor()
+            liveViewModel.roomList = appViewModel.favoriteViewModel.roomList
             self.second = 0
         }
     }

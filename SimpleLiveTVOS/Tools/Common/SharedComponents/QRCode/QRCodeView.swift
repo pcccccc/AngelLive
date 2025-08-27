@@ -11,7 +11,7 @@ import SimpleToast
 struct QRCodeView: View {
     
     @Environment(QRCodeViewModel.self) var qrCodeViewModel
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     var refreshAction: (() -> Void)?
     @State var qrcodeUrl = ""
 

@@ -27,9 +27,9 @@ struct ListMainView: View {
     var liveType: LiveType
     var liveViewModel: LiveViewModel
     @FocusState var focusState: FocusableField?
-    var appViewModel: SimpleLiveViewModel
+    var appViewModel: AppState
     
-    init(liveType: LiveType, appViewModel: SimpleLiveViewModel) {
+    init(liveType: LiveType, appViewModel: AppState) {
         self.liveType = liveType
         self.appViewModel = appViewModel
         self.liveViewModel = LiveViewModel(roomListType: .live, liveType: liveType, appViewModel: appViewModel)
@@ -97,7 +97,7 @@ struct ListMainView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(alignment: .top) {
                                 ZStack {
-                                    if appViewModel.generalSettingModel.generalDisableMaterialBackground {
+                                    if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
                                         LeftMenu(focusState: _focusState)
                                             .environment(liveViewModel)
                                             .opacity(liveViewModel.showOverlay ? 1 : 0)

@@ -15,7 +15,7 @@ import KingfisherWebP
 struct LiveCardView: View {
     
     @Environment(LiveViewModel.self) var liveViewModel
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     @State var index: Int
     @State var currentLiveModel: LiveModel?
     @State private var isLive: Bool = false
@@ -143,10 +143,10 @@ struct LiveCardView: View {
                         Button("取消收藏", role: .destructive, action: {
                             Task {
                                 do {
-                                    try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                    try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                                     liveViewModel.showToast(true, title:"取消收藏成功")
                                 }catch {
-                                    liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                    liveViewModel.showToast(false, title:FavoriteService.formatErrorCode(error: error))
                                 }
                             }
                         })
@@ -161,12 +161,12 @@ struct LiveCardView: View {
                             Button(action: {
                                 Task {
                                     do {
-                                        try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                                        appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
+                                        try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
+                                        appViewModel.favoriteViewModel.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
                                         liveViewModel.showToast(true, title:"取消收藏成功")
                                         liveViewModel.currentRoomIsFavorited = false
                                     }catch {
-                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:FavoriteService.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -183,12 +183,12 @@ struct LiveCardView: View {
                                         if liveViewModel.currentRoom!.liveState == nil || (liveViewModel.currentRoom!.liveState ?? "").isEmpty || liveViewModel.currentRoom!.liveState == "" {
                                             liveViewModel.currentRoom!.liveState = try await ApiManager.getCurrentRoomLiveState(roomId: liveViewModel.currentRoom!.roomId, userId: liveViewModel.currentRoom!.userId, liveType: liveViewModel.currentRoom!.liveType).rawValue
                                         }
-                                        try await appViewModel.appFavoriteModel.addFavorite(room: liveViewModel.currentRoom!)
+                                        try await appViewModel.favoriteViewModel.addFavorite(room: liveViewModel.currentRoom!)
                                         liveViewModel.showToast(true, title:"收藏成功")
-                                        appViewModel.favoriteModel?.roomList.append(liveViewModel.currentRoom!)
+                                        appViewModel.favoriteViewModel.roomList.append(liveViewModel.currentRoom!)
                                         liveViewModel.currentRoomIsFavorited = true
                                     }catch {
-                                        liveViewModel.showToast(false, title:CloudSQLManager.formatErrorCode(error: error))
+                                        liveViewModel.showToast(false, title:FavoriteService.formatErrorCode(error: error))
                                     }
                                 }
                             }, label: {
@@ -247,8 +247,8 @@ struct LiveCardView: View {
         liveViewModel.currentRoom = currentLiveModel ?? liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = index
         if LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .live || ((self.liveViewModel.currentRoom?.liveType == .huya || self.liveViewModel.currentRoom?.liveType == .douyu) && LiveState(rawValue: self.liveViewModel.currentRoom?.liveState ?? "unknow") == .video) || self.liveViewModel.roomListType == .live {
-            if appViewModel.historyModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
-                appViewModel.historyModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
+            if appViewModel.historyViewModel.watchList.contains(where: { self.liveViewModel.currentRoom!.roomId == $0.roomId }) == false {
+                appViewModel.historyViewModel.watchList.insert(self.liveViewModel.currentRoom!, at: 0)
             }
             var enterFromLive = false
             if liveViewModel.roomListType == .live {

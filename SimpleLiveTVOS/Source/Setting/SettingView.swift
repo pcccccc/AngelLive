@@ -16,7 +16,7 @@ struct SettingView: View {
     @State var isLogin = false
     @State var isPushed = false
     @StateObject var settingStore = SettingStore()
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     
     
     var body: some View {
@@ -64,7 +64,7 @@ struct SettingView: View {
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.thinMaterial)
                             }else if title == "数据同步" {
-                                if appViewModel.appFavoriteModel.cloudKitReady == true {
+                                if appViewModel.favoriteViewModel.cloudKitReady == true {
                                     SyncView()
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                                         .background(.thinMaterial)
@@ -85,7 +85,7 @@ struct SettingView: View {
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
                             }else if title == "数据同步" {
-                                Text(appViewModel.appFavoriteModel.cloudKitReady == true ? "iCloud就绪" : "iCloud状态异常")
+                                Text(appViewModel.favoriteViewModel.cloudKitReady == true ? "iCloud就绪" : "iCloud状态异常")
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
                             }

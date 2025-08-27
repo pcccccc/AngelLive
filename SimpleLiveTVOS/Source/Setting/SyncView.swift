@@ -11,7 +11,7 @@ import SimpleToast
 
 struct SyncView: View {
     
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     @ObservedObject var playerCoordinator = KSVideoPlayer.Coordinator()
     var qrCodeStore = QRCodeViewModel()
     var playerOption = {
@@ -44,13 +44,13 @@ struct SyncView: View {
                                         HStack {
                                             if qrCodeStore.favoriteSyncTaskStart {
                                                 VStack(alignment: .leading, spacing: 10) {
-                                                    Text("主播：\(appViewModel.appFavoriteModel.syncProgressInfo.0)")
+                                                    Text("主播：\(appViewModel.favoriteViewModel.syncProgressInfo.0)")
                                                         .lineLimit(1)
-                                                    Text("平台：\(appViewModel.appFavoriteModel.syncProgressInfo.1)")
+                                                    Text("平台：\(appViewModel.favoriteViewModel.syncProgressInfo.1)")
                                                 }
                                                 Spacer()
-                                                Text(appViewModel.appFavoriteModel.syncProgressInfo.2)
-                                                    .foregroundStyle(appViewModel.appFavoriteModel.syncProgressInfo.2 == "失败" ? Color.red : Color.green)
+                                                Text(appViewModel.favoriteViewModel.syncProgressInfo.2)
+                                                    .foregroundStyle(appViewModel.favoriteViewModel.syncProgressInfo.2 == "失败" ? Color.red : Color.green)
                                             }else {
                                                 VStack(alignment: .leading, spacing: 10) {
                                                     Text(qrCodeStore.fullScreenSyncState)
@@ -58,7 +58,7 @@ struct SyncView: View {
                                             }
                                         }
                                         if qrCodeStore.favoriteSyncTaskStart {
-                                            ProgressView(value: Float(appViewModel.appFavoriteModel.syncProgressInfo.3) / Float(appViewModel.appFavoriteModel.syncProgressInfo.4), total: 1)
+                                            ProgressView(value: Float(appViewModel.favoriteViewModel.syncProgressInfo.3) / Float(appViewModel.favoriteViewModel.syncProgressInfo.4), total: 1)
                                                 .progressViewStyle(.linear)
                                         }else {
                                             ProgressView(value: qrCodeStore.progress, total: 1)
@@ -113,5 +113,5 @@ struct SyncView: View {
 
 #Preview {
     SyncView()
-        .environment(SimpleLiveViewModel())
+        .environment(AppState())
 }

@@ -35,7 +35,7 @@ enum PlayControlTopField: Hashable {
 struct PlayerControlView: View {
     
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     
     @State var sectionList: [LiveModel] = []
     @State var selectIndex = 0
@@ -56,7 +56,7 @@ struct PlayerControlView: View {
                     VStack {
                         HStack {
                             Spacer()
-                            if appViewModel.appFavoriteModel.cloudKitReady {
+                            if appViewModel.favoriteViewModel.cloudKitReady {
                                 Button("收藏") {}
                                 .focused($topState, equals: .section(0))
                             }
@@ -368,7 +368,7 @@ struct PlayerControlView: View {
                             Button(action: {
                                 danmuAction()
                             }, label: {
-                                Image(appViewModel.danmuSettingModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
+                                Image(appViewModel.danmuSettingsViewModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
                                     .resizable()
                                     .frame(width: 40, height: 40)
                             })
@@ -458,18 +458,18 @@ struct PlayerControlView: View {
     
     func favoriteAction() {
         roomInfoViewModel.currentRoomLikeLoading = true
-        if appViewModel.appFavoriteModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
+        if appViewModel.favoriteViewModel.roomList.contains(where: { roomInfoViewModel.currentRoom == $0 }) == false {
             Task {
                 roomInfoViewModel.currentRoom.liveState = try await ApiManager.getCurrentRoomLiveState(roomId: roomInfoViewModel.currentRoom.roomId, userId: roomInfoViewModel.currentRoom.userId, liveType: roomInfoViewModel.currentRoom.liveType).rawValue
-                try await appViewModel.appFavoriteModel.addFavorite(room: roomInfoViewModel.currentRoom)
+                try await appViewModel.favoriteViewModel.addFavorite(room: roomInfoViewModel.currentRoom)
                 roomInfoViewModel.currentRoomIsLiked = true
                 roomInfoViewModel.showToast(true, title: "收藏成功")
                 roomInfoViewModel.currentRoomLikeLoading = false
             }
         }else {
             Task {
-                try await  appViewModel.appFavoriteModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
-                appViewModel.favoriteModel?.roomList.removeAll(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId })
+                try await  appViewModel.favoriteViewModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
+                appViewModel.favoriteViewModel.roomList.removeAll(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId })
                 roomInfoViewModel.currentRoomIsLiked = false
                 roomInfoViewModel.showToast(true, title: "取消收藏成功")
                 roomInfoViewModel.currentRoomLikeLoading = false
@@ -519,8 +519,8 @@ struct PlayerControlView: View {
         if (roomInfoViewModel.showControl == false) {
             roomInfoViewModel.showControl = true
         }else {
-            appViewModel.danmuSettingModel.showDanmu.toggle()
-            if appViewModel.danmuSettingModel.showDanmu == false {
+            appViewModel.danmuSettingsViewModel.showDanmu.toggle()
+            if appViewModel.danmuSettingsViewModel.showDanmu == false {
                 roomInfoViewModel.disConnectSocket()
             }else {
                 roomInfoViewModel.getDanmuInfo()
@@ -550,14 +550,14 @@ struct PlayerControlView: View {
         sectionList.removeAll()
         switch index {
             case 0:
-                for item in appViewModel.favoriteModel?.roomList ?? [] {
+                for item in appViewModel.favoriteViewModel.roomList ?? [] {
                     if item.liveState ?? "0" == LiveState.live.rawValue {
                         sectionList.append(item)
                     }
                 }
             case 1:
                 Task {
-                    for item in appViewModel.historyModel.watchList {
+                    for item in appViewModel.historyViewModel.watchList {
                         sectionList.append(item)
                     }
                 }

@@ -15,7 +15,7 @@ struct BilibiliLoginView: View {
     @State private var qrcode_key = ""
     @State private var timer: Timer?
     @EnvironmentObject var settingStore: SettingStore
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     var qrCodeViewModel = {
         let qrCodeViewModel = QRCodeViewModel()
         qrCodeViewModel.isBilibiliLogin = true

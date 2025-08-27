@@ -13,7 +13,7 @@ struct PlatformView: View {
     let column = Array(repeating: GridItem(.fixed(320), spacing: 70), count: 4)
     let platformViewModel = PlatformViewModel()
     @FocusState var focusIndex: Int?
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     @State var show = false
     @State var selectedIndex = 0
     
@@ -28,7 +28,7 @@ struct PlatformView: View {
                             let model = platformViewModel.platformInfo[selectedIndex]
                             if model.liveType == .youtube {
                                 appViewModel.selection = 2
-                                appViewModel.searchModel.searchTypeIndex = 2
+                                appViewModel.searchViewModel.searchTypeIndex = 2
                             }else {
                                 show = true
                             }
@@ -44,7 +44,7 @@ struct PlatformView: View {
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
                                     .blur(radius: focusIndex == index ? 10 : 0)
                                 
-                                if appViewModel.generalSettingModel.generalDisableMaterialBackground {
+                                if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
                                     ZStack {
                                         Image(platformViewModel.platformInfo[index].smallPic)
                                             .resizable()
@@ -85,7 +85,7 @@ struct PlatformView: View {
                         .animation(.easeInOut(duration: 0.25) ,value: true)
                         .frame(width: 320, height: 192)
                         .fullScreenCover(isPresented: $show, content: {
-                            if appViewModel.generalSettingModel.generalDisableMaterialBackground {
+                            if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
                                 ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
                                     .background(
                                         Color("sl-background", bundle: nil)

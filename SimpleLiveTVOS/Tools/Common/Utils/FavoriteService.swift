@@ -1,5 +1,5 @@
 //
-//  CloudSQLManager.swift
+//  FavoriteService.swift
 //  SimpleLiveTVOS
 //
 //  Created by pangchong on 2023/10/19.
@@ -20,7 +20,7 @@ let liveState_column_cloud = "live_state"
 let ck_identifier = "iCloud.icloud.dev.igod.simplelive"
 
 
-class CloudSQLManager: NSObject {
+class FavoriteService: NSObject {
     
     class func saveRecord(liveModel: LiveModel) async throws {
         let rec = CKRecord(recordType: "favorite_streamers")

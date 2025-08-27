@@ -11,7 +11,7 @@ import UIKit
 struct DanmuView: UIViewRepresentable {
     var coordinator: Coordinator
     var height: CGFloat
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
 
     func makeUIView(context: Context) -> DanmakuView {
         let view = DanmakuView(frame: .init(x: 0, y: 0, width: 1920, height: height))
@@ -25,7 +25,7 @@ struct DanmuView: UIViewRepresentable {
         // 更新 UIView，如果有必要
         uiView.frame = .init(x: 0, y: 0, width: 1920, height: height)
         uiView.paddingTop = 5
-        uiView.trackHeight = CGFloat(Double(appViewModel.danmuSettingModel.danmuFontSize) * 1.35)
+        uiView.trackHeight = CGFloat(Double(appViewModel.danmuSettingsViewModel.danmuFontSize) * 1.35)
         uiView.displayArea = 1
         uiView.recalculateTracks()
         

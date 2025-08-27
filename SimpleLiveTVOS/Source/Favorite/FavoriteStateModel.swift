@@ -65,14 +65,14 @@ class AppFavoriteModel {
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
             }catch {
-                self.cloudKitStateString = "获取收藏列表失败：" + CloudSQLManager.formatErrorCode(error: error)
+                self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
                 progressTask.cancel()
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
                 cloudReturnError = true
             }
         }else {
-            let state = await CloudSQLManager.getCloudState()
+            let state = await FavoriteService.getCloudState()
             if state == "无法确定状态" {
                 self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + state + "请尝试将Apple TV断电后重新在设置APP中登录iCloud"
             }else {
@@ -85,7 +85,7 @@ class AppFavoriteModel {
     }
     
     func addFavorite(room: LiveModel) async throws {
-        try await CloudSQLManager.saveRecord(liveModel: room)
+        try await FavoriteService.saveRecord(liveModel: room)
         var favIndex = -1
         for (index, favoriteRoom) in roomList.enumerated() {
             if LiveState(rawValue: favoriteRoom.liveState ?? "3") != .live {
@@ -115,7 +115,7 @@ class AppFavoriteModel {
     }
     
     func removeFavoriteRoom(room: LiveModel) async throws {
-        try await CloudSQLManager.deleteRecord(liveModel: room)
+        try await FavoriteService.deleteRecord(liveModel: room)
         let index = roomList.firstIndex(of: room)
         if index != nil {
             self.roomList.remove(at: index!)
@@ -190,7 +190,7 @@ actor FavoriteStateModel: ObservableObject {
     func syncStreamerLiveStates() async throws -> ([LiveModel], [FavoriteLiveSectionModel]) {
         var roomList: [LiveModel] = []
         do {
-            roomList = try await CloudSQLManager.searchRecord()
+            roomList = try await FavoriteService.searchRecord()
         }catch {
             throw error
         }
@@ -305,7 +305,7 @@ actor FavoriteStateModel: ObservableObject {
 
 
     func getState() async -> (Bool, String)  {
-        let stateString = await CloudSQLManager.getCloudState()
+        let stateString = await FavoriteService.getCloudState()
         return (stateString == "正常", stateString)
     }
     

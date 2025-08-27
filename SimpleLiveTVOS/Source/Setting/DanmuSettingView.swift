@@ -9,11 +9,11 @@ import SwiftUI
 
 struct DanmuSettingView: View {
     
-    @Environment(SimpleLiveViewModel.self) var appViewModel
+    @Environment(AppState.self) var appViewModel
     
     var body: some View {
         
-        @Bindable var danmuModel = appViewModel.danmuSettingModel
+        @Bindable var danmuModel = appViewModel.danmuSettingsViewModel
         
         GeometryReader { geometry in
             HStack {

@@ -74,7 +74,7 @@ class LiveViewModel {
     var favoriteRoomList: [LiveModel] = []
     var currentRoom: LiveModel? {
          didSet {
-             currentRoomIsFavorited = (appViewModel.favoriteModel?.roomList ?? []).contains { $0.roomId == currentRoom!.roomId }
+             currentRoomIsFavorited = (appViewModel.favoriteViewModel.roomList ?? []).contains { $0.roomId == currentRoom!.roomId }
          }
      }
     
@@ -90,7 +90,7 @@ class LiveViewModel {
     var showAlert: Bool = false
     var currentRoomIsFavorited: Bool = false
     
-    var appViewModel: SimpleLiveViewModel
+    var appViewModel: AppState
     
     //Toast
     var showToast: Bool = false
@@ -103,7 +103,7 @@ class LiveViewModel {
     var lodingTimer: Timer?
 
     
-    init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: SimpleLiveViewModel) {
+    init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: AppState) {
         self.liveType = liveType
         self.roomListType = roomListType
         self.appViewModel = appViewModel
@@ -144,7 +144,7 @@ class LiveViewModel {
         livePlatformName = LiveParseTools.getLivePlatformName(liveType)
         isLoading = true
         do {
-            self.categories = try await LivePlatformService.fetchCategoryList(liveType: liveType)
+            self.categories = try await LiveService.fetchCategoryList(liveType: liveType)
             self.getRoomList(index: self.selectedSubListIndex)
             self.isLoading = false
             self.lodingTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false, block: { _ in
@@ -176,7 +176,7 @@ class LiveViewModel {
             // It's a good candidate for its own ViewModel/Service later.
             break
         case .history:
-            self.roomList = appViewModel.historyModel.watchList
+            self.roomList = appViewModel.historyViewModel.watchList
             self.isLoading = false // Make sure to turn off loading indicator
         default:
             self.isLoading = false // Make sure to turn off loading indicator
@@ -191,12 +191,12 @@ class LiveViewModel {
                 if index == -1 {
                     if let subListCategory = self.categories.first?.subList.first {
                         let parentBiz = self.categories.first?.biz
-                        newRooms = try await LivePlatformService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
+                        newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
                     }
                 } else {
                     if let subListCategory = self.selectedMainListCategory?.subList[index] {
                         let parentBiz = self.selectedMainListCategory?.biz
-                        newRooms = try await LivePlatformService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
+                        newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
                     }
                 }
                 
@@ -218,7 +218,7 @@ class LiveViewModel {
             if roomPage == 1 {
                 self.roomList.removeAll()
             }
-            let newRooms = try await LivePlatformService.searchRooms(keyword: text, page: roomPage)
+            let newRooms = try await LiveService.searchRooms(keyword: text, page: roomPage)
             var uniqueNewRooms: [LiveModel] = []
             for item in newRooms {
                 if !self.roomList.contains(where: { $0 == item }) {
@@ -237,7 +237,7 @@ class LiveViewModel {
         roomList.removeAll()
         Task {
             do {
-                if let room = try await LivePlatformService.searchRoomWithShareCode(shareCode: text) {
+                if let room = try await LiveService.searchRoomWithShareCode(shareCode: text) {
                     roomList.append(room)
                 }
             } catch {
@@ -285,7 +285,7 @@ class LiveViewModel {
     }
     
     func deleteHistory(index: Int) {
-        appViewModel.historyModel.watchList.remove(at: index)
+        appViewModel.historyViewModel.watchList.remove(at: index)
         self.roomList.remove(at: index)
     }
     

@@ -12,11 +12,11 @@ import LiveParse
 
 struct HistoryListView: View {
     
-    var appViewModel: SimpleLiveViewModel
+    var appViewModel: AppState
     @FocusState var focusState: FocusableField?
     var liveViewModel: LiveViewModel?
 
-    init(appViewModel: SimpleLiveViewModel) {
+    init(appViewModel: AppState) {
         self.appViewModel = appViewModel
         self.liveViewModel = LiveViewModel(roomListType: .history, liveType: .bilibili, appViewModel: appViewModel)
     }
@@ -27,7 +27,7 @@ struct HistoryListView: View {
                 .font(.title2)
             ScrollView {
                 LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
-                    ForEach(appViewModel.historyModel.watchList.indices, id: \.self) { index in
+                    ForEach(appViewModel.historyViewModel.watchList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environment(liveViewModel)
                             .environment(appViewModel)

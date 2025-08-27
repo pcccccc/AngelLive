@@ -83,7 +83,7 @@ class QRCodeViewModel {
         qrcodeUrl = resp
     }
     
-    func startSyncTask(appViewModel: SimpleLiveViewModel) async {
+    func startSyncTask(appViewModel: AppState) async {
         await actor.resetMessage()
         currentTaskState = .cleanOld
         fullScreenLoading = true
@@ -91,14 +91,14 @@ class QRCodeViewModel {
         let needOverlay = currentState.3
         let roomList = currentState.4
         if syncType == .favorite {
-            appViewModel.appFavoriteModel.groupedRoomList.removeAll()
-            let oldFavoriteListCount = appViewModel.appFavoriteModel.roomList.count
+            appViewModel.favoriteViewModel.groupedRoomList.removeAll()
+            let oldFavoriteListCount = appViewModel.favoriteViewModel.roomList.count
             if needOverlay {
-                for (index, room) in appViewModel.appFavoriteModel.roomList.enumerated() {
+                for (index, room) in appViewModel.favoriteViewModel.roomList.enumerated() {
                     do {
                         progress = Double(index) / Double(oldFavoriteListCount)
                         fullScreenSyncState = "正在清除旧收藏：第 \(index + 1) 个房间"
-                        try await appViewModel.appFavoriteModel.removeFavoriteRoom(room: room)
+                        try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: room)
                         fullScreenSyncState = "成功"
                     }catch {
                         fullScreenSyncState = "失败:\(error.localizedDescription)"
@@ -108,12 +108,12 @@ class QRCodeViewModel {
             currentTaskState = .addICloud
             for (index, newRoom) in roomList.enumerated() {
                 progress = Double(index) / Double(roomList.count)
-                if appViewModel.appFavoriteModel.roomList.contains(where: { $0.roomId == newRoom.roomId }) {
+                if appViewModel.favoriteViewModel.roomList.contains(where: { $0.roomId == newRoom.roomId }) {
                     fullScreenSyncState = "失败:房间已存在"
                 }else {
                     do {
                         fullScreenSyncState = "添加至iCloud: \(index + 1) / \(roomList.count)"
-                        try await appViewModel.appFavoriteModel.addFavorite(room: newRoom)
+                        try await appViewModel.favoriteViewModel.addFavorite(room: newRoom)
                     }catch {
                         fullScreenSyncState = "失败:\(error.localizedDescription)"
                     }
@@ -121,17 +121,17 @@ class QRCodeViewModel {
             }
             favoriteSyncTaskStart = true
             currentTaskState = .syncFavorite
-            await appViewModel.appFavoriteModel.syncWithActor()
+            await appViewModel.favoriteViewModel.syncWithActor()
             favoriteSyncTaskStart = false
             currentTaskState = .idle
             showToast(true, title: "收藏同步完成")
         } else if syncType == .history {
             if needOverlay {
-                appViewModel.historyModel.watchList = roomList
+                appViewModel.historyViewModel.watchList = roomList
             }else {
                 for room in roomList {
-                    if appViewModel.historyModel.watchList.contains(where: { $0.roomId != room.roomId }) {
-                        appViewModel.historyModel.watchList.append(room)
+                    if appViewModel.historyViewModel.watchList.contains(where: { $0.roomId != room.roomId }) {
+                        appViewModel.historyViewModel.watchList.append(room)
                     }
                 }
             }
