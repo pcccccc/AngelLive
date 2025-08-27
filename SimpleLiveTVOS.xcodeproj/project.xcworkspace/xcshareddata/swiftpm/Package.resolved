@@ -1,5 +1,5 @@
 {
-  "originHash" : "bbd1684c35bf6bbe7ad25c6842d9d552e0d21f31ccb3b171e483c760b636a84c",
+  "originHash" : "1af6e0eed27e20061fa4cdf0f553c93eb7bb5b5ba9ff93edd892c4cb9299a5ff",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -137,15 +137,6 @@
       }
     },
     {
-      "identity" : "liveparse",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/LiveParse",
-      "state" : {
-        "revision" : "4744fbbd8448d3b391db4315957782b66fd89ee2",
-        "version" : "1.8.0"
-      }
-    },
-    {
       "identity" : "msdisplaylink",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/MSDisplayLink.git",
@@ -166,10 +157,10 @@
     {
       "identity" : "simpletoast",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sanzaru/SimpleToast.git",
+      "location" : "https://github.com/sanzaru/SimpleToast",
       "state" : {
-        "revision" : "8dbc2e7c33cda25c0b2efafd59716cb9820c83eb",
-        "version" : "0.8.1"
+        "revision" : "8d49c8c16d218b03c3428a0d1c8fe79f4e2707a6",
+        "version" : "0.11.0"
       }
     },
     {
