@@ -34,7 +34,6 @@ tvOS 17+
 
 2. **配置 API Keys**：
    - 首次克隆后，在 `SimpleLiveTVOS/Other/Info.plist` 中将 `YOUR_BUGSNAG_API_KEY_HERE` 替换为你的 Bugsnag API key
-   - Git 配置了自动过滤器，提交时会自动将真实 API key 替换为占位符
 
 3. **打开项目**：
    使用 Xcode 打开 `SimpleLiveTVOS.xcodeproj`
