@@ -24,6 +24,25 @@
 
 tvOS 17+ 
 
+## 开发环境配置：
+
+1. **克隆项目**：
+   ```bash
+   git clone https://github.com/pcccccc/SimpleLiveTVOS.git
+   cd SimpleLiveTVOS
+   ```
+
+2. **配置 API Keys**：
+   - 复制 `SimpleLiveTVOS/Other/Info-template.plist` 为 `SimpleLiveTVOS/Other/Info.plist`
+   - 在 `Info.plist` 中将 `YOUR_BUGSNAG_API_KEY_HERE` 替换为你的 Bugsnag API key
+   - `Info.plist` 已在 `.gitignore` 中，不会被提交到版本控制
+
+3. **打开项目**：
+   使用 Xcode 打开 `SimpleLiveTVOS.xcodeproj`
+
+4. **运行项目**：
+   选择 Apple TV 模拟器或真机设备运行
+
 ## 各平台功能概览：
 
 |  平台   | 分类列表 | 房间列表 | 地址解析 | 搜索 | 分享码/链接 | 观看弹幕（评论） |
