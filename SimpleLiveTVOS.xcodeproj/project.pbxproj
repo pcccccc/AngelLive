@@ -43,6 +43,7 @@
 		FB5C3FDC2C7B5F5000865D6E /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB5C3FDB2C7B5F5000865D6E /* LiveParse */; };
 		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
 		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
+		FB982AC02E72A4A2001BE393 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB982ABF2E72A4A2001BE393 /* LiveParse */; };
 		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
 		FBA5C3832E58229100B1368B /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBA5C3822E58229100B1368B /* LiveParse */; };
 		FBA5C38C2E58581600B1368B /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBA5C38B2E58581600B1368B /* SimpleToast */; };
@@ -141,6 +142,7 @@
 				4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */,
 				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
 				FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */,
+				FB982AC02E72A4A2001BE393 /* LiveParse in Frameworks */,
 				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
 				4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */,
 				4F8077032E3B69A5002FA56A /* Bugsnag in Frameworks */,
@@ -260,6 +262,7 @@
 				4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */,
 				FBA5C3822E58229100B1368B /* LiveParse */,
 				FBA5C38B2E58581600B1368B /* SimpleToast */,
+				FB982ABF2E72A4A2001BE393 /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
@@ -360,8 +363,8 @@
 				4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */,
 				4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */,
-				FBA5C3812E58229100B1368B /* XCLocalSwiftPackageReference "../LiveParse" */,
 				FBA5C38A2E58581600B1368B /* XCRemoteSwiftPackageReference "SimpleToast" */,
+				FB982ABE2E72A4A2001BE393 /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -742,13 +745,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		FBA5C3812E58229100B1368B /* XCLocalSwiftPackageReference "../LiveParse" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../LiveParse;
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
 		4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -876,6 +872,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 5.0.2;
+			};
+		};
+		FB982ABE2E72A4A2001BE393 /* XCRemoteSwiftPackageReference "LiveParse" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pcccccc/LiveParse";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.8.3;
 			};
 		};
 		FBA5C38A2E58581600B1368B /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
@@ -1077,6 +1081,11 @@
 		FB89E1632B1340DA0083116D /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KSPlayer;
+		};
+		FB982ABF2E72A4A2001BE393 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB982ABE2E72A4A2001BE393 /* XCRemoteSwiftPackageReference "LiveParse" */;
+			productName = LiveParse;
 		};
 		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {
 			isa = XCSwiftPackageProductDependency;
