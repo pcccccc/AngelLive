@@ -1,4 +1,4 @@
-//
+ //
 //  SearchRoomView.swift
 //  SimpleLiveTVOS
 //
@@ -36,16 +36,17 @@ struct SearchRoomView: View {
             }
             TextField("搜索", text: $appModel.searchViewModel.searchText)
             .onSubmit {
-                if appModel.searchViewModel.searchTypeIndex == 0 {
-                    liveViewModel.roomPage = 1
-                    Task {
-                        await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
+                Task {
+                    await MainActor.run {
+                        liveViewModel.roomPage = 1
                     }
-                }else {
-                    liveViewModel.roomPage = 1
-                    liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
+
+                    if appModel.searchViewModel.searchTypeIndex == 0 {
+                        await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
+                    } else {
+                        await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
+                    }
                 }
-                
             }
             Spacer()
             if appModel.searchViewModel.searchTypeIndex == 2 && liveViewModel.roomList.count == 0 {

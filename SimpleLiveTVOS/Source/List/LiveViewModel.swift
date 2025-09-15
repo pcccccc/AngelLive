@@ -147,9 +147,12 @@ class LiveViewModel {
             self.categories = try await LiveService.fetchCategoryList(liveType: liveType)
             self.getRoomList(index: self.selectedSubListIndex)
             self.isLoading = false
-            self.lodingTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false, block: { _ in
-                self.endFirstLoading = true
-            })
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                await MainActor.run {
+                    self.endFirstLoading = true
+                }
+            }
         } catch {
             self.isLoading = false
             // Handle error appropriately, maybe show a toast
@@ -232,17 +235,21 @@ class LiveViewModel {
         isLoading = false
     }
 
-    func searchRoomWithShareCode(text: String) {
-        isLoading = true
-        roomList.removeAll()
-        Task {
-            do {
-                if let room = try await LiveService.searchRoomWithShareCode(shareCode: text) {
+    func searchRoomWithShareCode(text: String) async {
+        await MainActor.run {
+            isLoading = true
+            roomList.removeAll()
+        }
+        do {
+            if let room = try await LiveService.searchRoomWithShareCode(shareCode: text) {
+                await MainActor.run {
                     roomList.append(room)
                 }
-            } catch {
-                // Handle error
             }
+        } catch {
+            // Handle error
+        }
+        await MainActor.run {
             isLoading = false
         }
     }
