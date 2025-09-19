@@ -83,6 +83,15 @@
       }
     },
     {
+      "identity" : "gmobjc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/GMObjC",
+      "state" : {
+        "revision" : "0cf4b70a3525d3954b269a5ed5200f4cd0f31052",
+        "version" : "1.0.2"
+      }
+    },
+    {
       "identity" : "gzipswift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/1024jp/GzipSwift",
@@ -141,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "04be9fd99bd9ae5701c2085164684bede61c2209",
-        "version" : "1.8.4"
+        "revision" : "8358865f10436eabc16544bdcfd67f74c25ca50a",
+        "version" : "1.8.7"
       }
     },
     {
@@ -267,8 +276,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/TarsKit",
       "state" : {
-        "revision" : "259f97b90a4f2778146ea5964cc7b3eb881e31f3",
-        "version" : "1.2.0"
+        "revision" : "68e2afd78327f047fa32afb2c339f3e8af5b3294",
+        "version" : "1.3.0"
       }
     },
     {
