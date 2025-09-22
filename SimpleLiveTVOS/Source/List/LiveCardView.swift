@@ -276,14 +276,33 @@ struct LiveCardView: View {
     }
     
     func refreshStateIfStateIsUnknow() async throws {
-        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
+        guard index < liveViewModel.roomList.count else { return }
+
+        let currentLiveModel: LiveModel
+        if let existingModel = self.currentLiveModel {
+            currentLiveModel = existingModel
+        } else {
+            currentLiveModel = liveViewModel.roomList[index]
+        }
+
         if currentLiveModel.liveState == "" {
-            self.currentLiveModel?.liveState = try await ApiManager.getCurrentRoomLiveState(roomId: currentLiveModel.roomId, userId: currentLiveModel.userId, liveType: currentLiveModel.liveType).rawValue
+            let newState = try await ApiManager.getCurrentRoomLiveState(roomId: currentLiveModel.roomId, userId: currentLiveModel.userId, liveType: currentLiveModel.liveType)
+            await MainActor.run {
+                self.currentLiveModel?.liveState = newState.rawValue
+            }
         }
     }
 
     func getImage() -> String {
-        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
+        guard index < liveViewModel.roomList.count else { return "live_card_bili" }
+
+        let currentLiveModel: LiveModel
+        if let existingModel = self.currentLiveModel {
+            currentLiveModel = existingModel
+        } else {
+            currentLiveModel = liveViewModel.roomList[index]
+        }
+
         switch currentLiveModel.liveType {
             case .bilibili:
                 return "live_card_bili"

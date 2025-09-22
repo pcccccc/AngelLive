@@ -141,12 +141,17 @@ class LiveViewModel {
     //MARK: 获取相关
     
     func getCategoryList() async {
-        livePlatformName = LiveParseTools.getLivePlatformName(liveType)
-        isLoading = true
+        await MainActor.run {
+            livePlatformName = LiveParseTools.getLivePlatformName(liveType)
+            isLoading = true
+        }
         do {
-            self.categories = try await LiveService.fetchCategoryList(liveType: liveType)
-            self.getRoomList(index: self.selectedSubListIndex)
-            self.isLoading = false
+            let fetchedCategories = try await LiveService.fetchCategoryList(liveType: liveType)
+            await MainActor.run {
+                self.categories = fetchedCategories
+                self.getRoomList(index: self.selectedSubListIndex)
+                self.isLoading = false
+            }
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
                 await MainActor.run {
@@ -154,7 +159,9 @@ class LiveViewModel {
                 }
             }
         } catch {
-            self.isLoading = false
+            await MainActor.run {
+                self.isLoading = false
+            }
             // Handle error appropriately, maybe show a toast
         }
     }
@@ -202,37 +209,48 @@ class LiveViewModel {
                         newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
                     }
                 }
-                
-                if self.roomPage == 1 {
-                    self.roomList.removeAll()
+
+                await MainActor.run {
+                    if self.roomPage == 1 {
+                        self.roomList.removeAll()
+                    }
+                    self.roomList += newRooms
+                    self.isLoading = false
                 }
-                self.roomList += newRooms
-                self.isLoading = false
             } catch {
-                self.isLoading = false
+                await MainActor.run {
+                    self.isLoading = false
+                }
                 // Handle error
             }
         }
     }
     
     func searchRoomWithText(text: String) async {
-        isLoading = true
+        await MainActor.run {
+            isLoading = true
+        }
         do {
-            if roomPage == 1 {
-                self.roomList.removeAll()
-            }
             let newRooms = try await LiveService.searchRooms(keyword: text, page: roomPage)
-            var uniqueNewRooms: [LiveModel] = []
-            for item in newRooms {
-                if !self.roomList.contains(where: { $0 == item }) {
-                    uniqueNewRooms.append(item)
+            await MainActor.run {
+                if roomPage == 1 {
+                    self.roomList.removeAll()
                 }
+                var uniqueNewRooms: [LiveModel] = []
+                for item in newRooms {
+                    if !self.roomList.contains(where: { $0 == item }) {
+                        uniqueNewRooms.append(item)
+                    }
+                }
+                self.roomList.append(contentsOf: uniqueNewRooms)
+                isLoading = false
             }
-            self.roomList.append(contentsOf: uniqueNewRooms)
         } catch {
+            await MainActor.run {
+                isLoading = false
+            }
             // Handle error
         }
-        isLoading = false
     }
 
     func searchRoomWithShareCode(text: String) async {
