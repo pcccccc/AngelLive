@@ -111,6 +111,11 @@ tvOS 17+
 
 感谢bugsnag提供的开源许可，在此表达我的感谢。
 
+
+<a href="https://dartnode.com" target="_blank"><img src="https://dartnode.com/branding/DN-Open-Source-sm.png" alt="Powered by DartNode - Free VPS for Open Source" width="150"></a>
+
+感谢DartNode提供的开源许可，在此表达我的感谢。
+
 ## 支持：
 
 [爱发电](https://afdian.com/a/laopc)
