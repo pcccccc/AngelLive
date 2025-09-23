@@ -11,7 +11,18 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/BmPIcZQsSA70SS8yo6D6qV.xccrashpoint/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/BmPIcZQsSA70SS8yo6D6qV.xccrashpoint/Filters/Filter_BmPIcZQsSA70SS8yo6D6qV-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/C7jKNORt__ztZi7LTPlTIE.xccrashpoint/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/C7jKNORt__ztZi7LTPlTIE.xccrashpoint/Filters/Filter_C7jKNORt__ztZi7LTPlTIE-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/C6NuZdBvssiduv0FcbsX4b.xccrashpoint/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/C6NuZdBvssiduv0FcbsX4b.xccrashpoint/Filters/Filter_C6NuZdBvssiduv0FcbsX4b-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/bOi2fdUtOnIMNK8s2bOdh.xccrashpoint/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/bOi2fdUtOnIMNK8s2bOdh.xccrashpoint/Filters/Filter_bOi2fdUtOnIMNK8s2bOdh-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/B60a0qbyKHXmvzsPxnHnVU.xccrashpoint/**)",
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/B60a0qbyKHXmvzsPxnHnVU.xccrashpoint/Filters/Filter_B60a0qbyKHXmvzsPxnHnVU-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)"
     ],
     "deny": [],
     "ask": []

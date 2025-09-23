@@ -286,18 +286,24 @@ class LiveViewModel {
         isLoading = true
         Task {
             do {
-                var newLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
-                if newLiveModel.liveState == "" || newLiveModel.liveState == nil {
-                    newLiveModel.liveState = "0"
+                let fetchedLiveModel = try await ApiManager.fetchLastestLiveInfo(liveModel:roomList[index])
+                // 确保在主线程更新UI
+                await MainActor.run {
+                    var newLiveModel = fetchedLiveModel
+                    if newLiveModel.liveState == "" || newLiveModel.liveState == nil {
+                        newLiveModel.liveState = "0"
+                    }
+                    updateList(newLiveModel, index: index)
                 }
-                updateList(newLiveModel, index: index)
-            }catch {
-                
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                }
             }
         }
     }
     
-    func updateList(_ newModel: LiveModel, index: Int) { //后续会优化掉这个方法
+    @MainActor func updateList(_ newModel: LiveModel, index: Int) {
         if index < self.roomList.count {
             self.roomList[index] = newModel
         }

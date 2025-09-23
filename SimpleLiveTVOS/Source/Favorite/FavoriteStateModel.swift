@@ -229,6 +229,7 @@ actor FavoriteStateModel: ObservableObject {
                         }
                         return (index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败")
                     }
+
                 }
             }
             

@@ -218,7 +218,10 @@ final class RoomInfoViewModel {
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
-                    self.currentPlayURL = URL(string: currentQuality?.url ?? lastCurrentPlayURL?.absoluteString ?? "")!
+                    if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
+                       let url = URL(string: urlString) {
+                        self.currentPlayURL = url
+                    }
                 }
             }
         }else {
@@ -230,9 +233,11 @@ final class RoomInfoViewModel {
         
         if currentRoom.liveType == .yy && yyFirstLoad == false {
             Task {
-                let currentCdn = currentRoomPlayArgs![cdnIndex]
+                guard var playArgs = currentRoomPlayArgs,
+                      cdnIndex < playArgs.count else { return }
+                let currentCdn = playArgs[cdnIndex]
                 let currentQuality = currentCdn.qualitys[urlIndex]
-                let playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq:Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
+                playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq:Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
