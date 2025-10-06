@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "4FC3DCD92A49382F00CA36B9"
-               BuildableName = "SimpleLiveTVOS.app"
-               BlueprintName = "SimpleLiveTVOS"
-               ReferencedContainer = "container:SimpleLiveTVOS.xcodeproj">
+               BuildableName = "AngelLiveTVOS.app"
+               BlueprintName = "AngelLiveTVOS"
+               ReferencedContainer = "container:AngelLiveTVOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -35,9 +35,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "4FC3DCE92A49383100CA36B9"
-               BuildableName = "SimpleLiveTVOSTests.xctest"
-               BlueprintName = "SimpleLiveTVOSTests"
-               ReferencedContainer = "container:SimpleLiveTVOS.xcodeproj">
+               BuildableName = "AngelLiveTVOSTests.xctest"
+               BlueprintName = "AngelLiveTVOSTests"
+               ReferencedContainer = "container:AngelLiveTVOS.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
@@ -46,9 +46,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "4FC3DCF32A49383100CA36B9"
-               BuildableName = "SimpleLiveTVOSUITests.xctest"
-               BlueprintName = "SimpleLiveTVOSUITests"
-               ReferencedContainer = "container:SimpleLiveTVOS.xcodeproj">
+               BuildableName = "AngelLiveTVOSUITests.xctest"
+               BlueprintName = "AngelLiveTVOSUITests"
+               ReferencedContainer = "container:AngelLiveTVOS.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -69,9 +69,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4FC3DCD92A49382F00CA36B9"
-            BuildableName = "SimpleLiveTVOS.app"
-            BlueprintName = "SimpleLiveTVOS"
-            ReferencedContainer = "container:SimpleLiveTVOS.xcodeproj">
+            BuildableName = "AngelLiveTVOS.app"
+            BlueprintName = "AngelLiveTVOS"
+            ReferencedContainer = "container:AngelLiveTVOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -86,9 +86,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4FC3DCD92A49382F00CA36B9"
-            BuildableName = "SimpleLiveTVOS.app"
-            BlueprintName = "SimpleLiveTVOS"
-            ReferencedContainer = "container:SimpleLiveTVOS.xcodeproj">
+            BuildableName = "AngelLiveTVOS.app"
+            BlueprintName = "AngelLiveTVOS"
+            ReferencedContainer = "container:AngelLiveTVOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

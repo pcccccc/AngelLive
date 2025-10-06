@@ -35,7 +35,6 @@
 		FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB15C6322C1B353900D93C64 /* LiveParse */; };
 		FB1BAC812E81479D006BC677 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1BAC802E81479D006BC677 /* LiveParse */; };
 		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
-		FB21249D2B989E1A004C916F /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB21249C2B989E1A004C916F /* Package.resolved */; };
 		FB29265D2C58991500A1F07F /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB29265C2C58991500A1F07F /* LiveParse */; };
 		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
 		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
@@ -59,28 +58,8 @@
 		FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1FE2B124C6200B19C3E /* Gzip */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		4FC3DCEB2A49383100CA36B9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 4FC3DCD22A49382F00CA36B9 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4FC3DCD92A49382F00CA36B9;
-			remoteInfo = SimpleLiveTVOS;
-		};
-		4FC3DCF52A49383100CA36B9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 4FC3DCD22A49382F00CA36B9 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4FC3DCD92A49382F00CA36B9;
-			remoteInfo = SimpleLiveTVOS;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileReference section */
-		4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SimpleLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4FC3DCEA2A49383100CA36B9 /* SimpleLiveTVOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SimpleLiveTVOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		4FC3DCF42A49383100CA36B9 /* SimpleLiveTVOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SimpleLiveTVOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		FB21249C2B989E1A004C916F /* Package.resolved */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = Package.resolved; path = SimpleLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
+		4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -90,14 +69,12 @@
 			membershipExceptions = (
 				Other/Info.plist,
 			);
-			target = 4FC3DCD92A49382F00CA36B9 /* SimpleLiveTVOS */;
+			target = 4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		4F314FE82DF98085009B9FF5 /* SimpleLiveTVOSUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = SimpleLiveTVOSUITests; sourceTree = "<group>"; };
-		4F3150422DF98086009B9FF5 /* SimpleLiveTVOS */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (4F3150862DF98086009B9FF5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = SimpleLiveTVOS; sourceTree = "<group>"; };
-		4F3150842DF98086009B9FF5 /* SimpleLiveTVOSTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = SimpleLiveTVOSTests; sourceTree = "<group>"; };
+		4F3150422DF98086009B9FF5 /* AngelLiveTVOS */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (4F3150862DF98086009B9FF5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = AngelLiveTVOS; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,30 +134,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		4FC3DCE72A49383100CA36B9 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4FC3DCF12A49383100CA36B9 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		4FC3DCD12A49382F00CA36B9 = {
 			isa = PBXGroup;
 			children = (
-				FB21249C2B989E1A004C916F /* Package.resolved */,
-				4F3150422DF98086009B9FF5 /* SimpleLiveTVOS */,
-				4F3150842DF98086009B9FF5 /* SimpleLiveTVOSTests */,
-				4F314FE82DF98085009B9FF5 /* SimpleLiveTVOSUITests */,
+				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
 				4FC3DCDB2A49382F00CA36B9 /* Products */,
 				FBDEF8382BB9CBCB002EE8FF /* Frameworks */,
 			);
@@ -189,9 +149,7 @@
 		4FC3DCDB2A49382F00CA36B9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */,
-				4FC3DCEA2A49383100CA36B9 /* SimpleLiveTVOSTests.xctest */,
-				4FC3DCF42A49383100CA36B9 /* SimpleLiveTVOSUITests.xctest */,
+				4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -207,9 +165,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		4FC3DCD92A49382F00CA36B9 /* SimpleLiveTVOS */ = {
+		4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4FC3DCFE2A49383100CA36B9 /* Build configuration list for PBXNativeTarget "SimpleLiveTVOS" */;
+			buildConfigurationList = 4FC3DCFE2A49383100CA36B9 /* Build configuration list for PBXNativeTarget "AngelLiveTVOS" */;
 			buildPhases = (
 				4FC3DCD62A49382F00CA36B9 /* Sources */,
 				4FC3DCD72A49382F00CA36B9 /* Frameworks */,
@@ -220,9 +178,9 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				4F3150422DF98086009B9FF5 /* SimpleLiveTVOS */,
+				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
 			);
-			name = SimpleLiveTVOS;
+			name = AngelLiveTVOS;
 			packageProductDependencies = (
 				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
 				FB51018F2B0E35A900A1AE0D /* Starscream */,
@@ -274,50 +232,8 @@
 				FBBEAD1F2E827E8A00FE785F /* LiveParse */,
 			);
 			productName = SimpleLiveTVOS;
-			productReference = 4FC3DCDA2A49382F00CA36B9 /* SimpleLiveTVOS.app */;
+			productReference = 4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */;
 			productType = "com.apple.product-type.application";
-		};
-		4FC3DCE92A49383100CA36B9 /* SimpleLiveTVOSTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 4FC3DD012A49383100CA36B9 /* Build configuration list for PBXNativeTarget "SimpleLiveTVOSTests" */;
-			buildPhases = (
-				4FC3DCE62A49383100CA36B9 /* Sources */,
-				4FC3DCE72A49383100CA36B9 /* Frameworks */,
-				4FC3DCE82A49383100CA36B9 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				4FC3DCEC2A49383100CA36B9 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				4F3150842DF98086009B9FF5 /* SimpleLiveTVOSTests */,
-			);
-			name = SimpleLiveTVOSTests;
-			productName = SimpleLiveTVOSTests;
-			productReference = 4FC3DCEA2A49383100CA36B9 /* SimpleLiveTVOSTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		4FC3DCF32A49383100CA36B9 /* SimpleLiveTVOSUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 4FC3DD042A49383100CA36B9 /* Build configuration list for PBXNativeTarget "SimpleLiveTVOSUITests" */;
-			buildPhases = (
-				4FC3DCF02A49383100CA36B9 /* Sources */,
-				4FC3DCF12A49383100CA36B9 /* Frameworks */,
-				4FC3DCF22A49383100CA36B9 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				4FC3DCF62A49383100CA36B9 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				4F314FE82DF98085009B9FF5 /* SimpleLiveTVOSUITests */,
-			);
-			name = SimpleLiveTVOSUITests;
-			productName = SimpleLiveTVOSUITests;
-			productReference = 4FC3DCF42A49383100CA36B9 /* SimpleLiveTVOSUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -332,17 +248,9 @@
 					4FC3DCD92A49382F00CA36B9 = {
 						CreatedOnToolsVersion = 14.3.1;
 					};
-					4FC3DCE92A49383100CA36B9 = {
-						CreatedOnToolsVersion = 14.3.1;
-						TestTargetID = 4FC3DCD92A49382F00CA36B9;
-					};
-					4FC3DCF32A49383100CA36B9 = {
-						CreatedOnToolsVersion = 14.3.1;
-						TestTargetID = 4FC3DCD92A49382F00CA36B9;
-					};
 				};
 			};
-			buildConfigurationList = 4FC3DCD52A49382F00CA36B9 /* Build configuration list for PBXProject "SimpleLiveTVOS" */;
+			buildConfigurationList = 4FC3DCD52A49382F00CA36B9 /* Build configuration list for PBXProject "AngelLiveTVOS" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -379,30 +287,13 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				4FC3DCD92A49382F00CA36B9 /* SimpleLiveTVOS */,
-				4FC3DCE92A49383100CA36B9 /* SimpleLiveTVOSTests */,
-				4FC3DCF32A49383100CA36B9 /* SimpleLiveTVOSUITests */,
+				4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		4FC3DCD82A49382F00CA36B9 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				FB21249D2B989E1A004C916F /* Package.resolved in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4FC3DCE82A49383100CA36B9 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4FC3DCF22A49383100CA36B9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -419,34 +310,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		4FC3DCE62A49383100CA36B9 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		4FC3DCF02A49383100CA36B9 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		4FC3DCEC2A49383100CA36B9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4FC3DCD92A49382F00CA36B9 /* SimpleLiveTVOS */;
-			targetProxy = 4FC3DCEB2A49383100CA36B9 /* PBXContainerItemProxy */;
-		};
-		4FC3DCF62A49383100CA36B9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4FC3DCD92A49382F00CA36B9 /* SimpleLiveTVOS */;
-			targetProxy = 4FC3DCF52A49383100CA36B9 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4FC3DCFC2A49383100CA36B9 /* Debug */ = {
@@ -576,15 +440,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = SimpleLiveTVOS/SimpleLiveTVOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AngelLiveTVOS/AngelLiveTVOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_ASSET_PATHS = "\"SimpleLiveTVOS/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"AngelLiveTVOS/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = SimpleLiveTVOS/Other/Info.plist;
+				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于同步数据";
@@ -615,14 +479,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = SimpleLiveTVOS/SimpleLiveTVOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AngelLiveTVOS/AngelLiveTVOS.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"SimpleLiveTVOS/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"AngelLiveTVOS/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = SimpleLiveTVOS/Other/Info.plist;
+				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于同步数据";
@@ -645,78 +509,10 @@
 			};
 			name = Release;
 		};
-		4FC3DD022A49383100CA36B9 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mydrivers.SimpleLiveTVOSTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimpleLiveTVOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimpleLiveTVOS";
-				TVOS_DEPLOYMENT_TARGET = 17.0;
-			};
-			name = Debug;
-		};
-		4FC3DD032A49383100CA36B9 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mydrivers.SimpleLiveTVOSTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SimpleLiveTVOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SimpleLiveTVOS";
-				TVOS_DEPLOYMENT_TARGET = 17.0;
-			};
-			name = Release;
-		};
-		4FC3DD052A49383100CA36B9 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mydrivers.SimpleLiveTVOSUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TEST_TARGET_NAME = SimpleLiveTVOS;
-			};
-			name = Debug;
-		};
-		4FC3DD062A49383100CA36B9 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mydrivers.SimpleLiveTVOSUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 3;
-				TEST_TARGET_NAME = SimpleLiveTVOS;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		4FC3DCD52A49382F00CA36B9 /* Build configuration list for PBXProject "SimpleLiveTVOS" */ = {
+		4FC3DCD52A49382F00CA36B9 /* Build configuration list for PBXProject "AngelLiveTVOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4FC3DCFC2A49383100CA36B9 /* Debug */,
@@ -725,29 +521,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4FC3DCFE2A49383100CA36B9 /* Build configuration list for PBXNativeTarget "SimpleLiveTVOS" */ = {
+		4FC3DCFE2A49383100CA36B9 /* Build configuration list for PBXNativeTarget "AngelLiveTVOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4FC3DCFF2A49383100CA36B9 /* Debug */,
 				4FC3DD002A49383100CA36B9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		4FC3DD012A49383100CA36B9 /* Build configuration list for PBXNativeTarget "SimpleLiveTVOSTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				4FC3DD022A49383100CA36B9 /* Debug */,
-				4FC3DD032A49383100CA36B9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		4FC3DD042A49383100CA36B9 /* Build configuration list for PBXNativeTarget "SimpleLiveTVOSUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				4FC3DD052A49383100CA36B9 /* Debug */,
-				4FC3DD062A49383100CA36B9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

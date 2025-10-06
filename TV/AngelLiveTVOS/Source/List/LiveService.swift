@@ -12,6 +12,7 @@ class LiveService {
         let storage: Storage<String, [LiveMainListModel]> = try Storage<String, [LiveMainListModel]>(
           diskConfig: diskConfig,
           memoryConfig: memoryConfig,
+          fileManager: .default,
           transformer: TransformerFactory.forCodable(ofType: [LiveMainListModel].self)
         )
         
