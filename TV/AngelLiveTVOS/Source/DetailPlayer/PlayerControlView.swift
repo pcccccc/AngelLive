@@ -6,12 +6,8 @@
 //
 
 import SwiftUI
-import SimpleToast
-import KSPlayer
-import LiveParse
-import Shimmer
-import Kingfisher
-import Pow
+import AngelLiveCore
+import AngelLiveDependencies
 
 enum PlayControlFocusableField: Hashable {
     case playPause

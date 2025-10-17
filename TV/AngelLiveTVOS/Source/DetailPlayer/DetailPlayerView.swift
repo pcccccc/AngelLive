@@ -6,8 +6,8 @@
 //
 
 import SwiftUI
-import KSPlayer
 import AVKit
+import AngelLiveDependencies
 
 
 struct DetailPlayerView: View {
@@ -81,6 +81,5 @@ struct DetailPlayerView: View {
         didExitView(false, "")
     }
 }
-
 
 

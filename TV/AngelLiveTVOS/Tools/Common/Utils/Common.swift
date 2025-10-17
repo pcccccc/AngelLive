@@ -8,7 +8,7 @@
 import Foundation
 import CoreImage.CIFilterBuiltins
 import UIKit
-import LiveParse
+import AngelLiveDependencies
 
 struct SimpleLiveNotificationNames {
     static let playerEndPlay = Notification.Name("SimpleLive.Player.End.Play")

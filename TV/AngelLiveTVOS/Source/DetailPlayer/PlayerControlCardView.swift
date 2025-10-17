@@ -6,8 +6,8 @@
 //
 
 import SwiftUI
-import Kingfisher
-import LiveParse
+import AngelLiveCore
+import AngelLiveDependencies
 
 struct PlayerControlCardView: View {
     

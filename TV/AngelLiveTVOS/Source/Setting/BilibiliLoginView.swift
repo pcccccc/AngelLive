@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import LiveParse
+import AngelLiveDependencies
 
 struct BilibiliLoginView: View {
     

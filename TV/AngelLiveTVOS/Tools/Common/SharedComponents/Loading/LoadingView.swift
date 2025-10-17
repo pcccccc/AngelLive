@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import Shimmer
+import AngelLiveDependencies
 
 struct LoadingView: View {
     
@@ -36,4 +36,3 @@ struct LoadingView: View {
         }
     }
 }
-

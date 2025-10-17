@@ -7,8 +7,8 @@
 
 import Foundation
 import Observation
-import LiveParse
 import SwiftUI
+import AngelLiveDependencies
 
 @Observable
 class PlatformViewModel {

@@ -22,7 +22,11 @@
       "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/bOi2fdUtOnIMNK8s2bOdh.xccrashpoint/**)",
       "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/bOi2fdUtOnIMNK8s2bOdh.xccrashpoint/Filters/Filter_bOi2fdUtOnIMNK8s2bOdh-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)",
       "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/B60a0qbyKHXmvzsPxnHnVU.xccrashpoint/**)",
-      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/B60a0qbyKHXmvzsPxnHnVU.xccrashpoint/Filters/Filter_B60a0qbyKHXmvzsPxnHnVU-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)"
+      "Read(//Users/pangchong/Library/Developer/Xcode/Products/dev.idog.simplelive (tvOS)/Crashes/Points/B60a0qbyKHXmvzsPxnHnVU.xccrashpoint/Filters/Filter_B60a0qbyKHXmvzsPxnHnVU-6469257030-dev.idog.simplelive-com.apple.platform.appletvos-com.apple.platform.appletvos-Any-Any/Logs/**)",
+      "Bash(swift package dump-package:*)",
+      "Bash(swift build:*)",
+      "Bash(cat:*)",
+      "Bash(uuidgen:*)"
     ],
     "deny": [],
     "ask": []

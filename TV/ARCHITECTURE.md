@@ -53,7 +53,7 @@ class AppState {
 ### 2. Service 层
 
 #### LiveService
-**文件位置**: `SimpleLiveTVOS/Source/List/LiveService.swift`
+**文件位置**: `Shared/AngelLiveCore/Sources/AngelLiveCore/Services/LiveService.swift`
 
 **职责**:
 - 直播平台 API 调用
@@ -70,7 +70,12 @@ static func searchRoomWithShareCode(shareCode: String) async throws -> LiveModel
 ```
 
 #### FavoriteService  
-**文件位置**: `SimpleLiveTVOS/Tools/Common/Utils/FavoriteService.swift`
+**文件位置**: `Shared/AngelLiveCore/Sources/AngelLiveCore/Services/FavoriteService.swift`
+
+#### 依赖聚合包  
+**文件位置**: `Package.swift` → `Sources/AngelLiveDependencies`
+
+通过工作区根目录的 Swift Package 聚合三端共用的第三方库，源码统一 `import AngelLiveDependencies` 即可访问 Kingfisher、KSPlayer、SimpleToast 等依赖。
 
 **职责**:
 - CloudKit 数据同步

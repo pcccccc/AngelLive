@@ -6,11 +6,7 @@
 //
 
 import Foundation
-import CocoaAsyncSocket
-import SwiftyJSON
-import NIO
-import NIOHTTP1
-import LiveParse
+import AngelLiveDependencies
 
 enum SimpleSyncType: CustomStringConvertible {
     
@@ -124,7 +120,7 @@ final class HTTPHandler: ChannelInboundHandler {
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let reqPart = self.unwrapInboundIn(data)
-        var headers = HTTPHeaders()
+        var headers = NIOHTTP1.HTTPHeaders()
         headers.add(name: "Content-Type", value: "application/json")
         switch reqPart {
         case .head(let requestHeader):

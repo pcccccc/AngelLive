@@ -6,9 +6,8 @@
 //
 
 import Foundation
-import LiveParse
-import SimpleToast
 import Observation
+import AngelLiveDependencies
 
 @Observable
 class SearchViewModel {

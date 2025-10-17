@@ -6,19 +6,18 @@
 //
 
 import Foundation
-import KSPlayer
-import LiveParse
-import SimpleToast
 import Observation
 import CoreMedia
 import SwiftUI
+import AngelLiveCore
+import AngelLiveDependencies
 
-public class PlayerOptions: KSOptions {
+public class PlayerOptions: KSOptions, @unchecked Sendable {
   public var syncSystemRate: Bool = false
 
-  override public func sei(string: String) {
-      
-  }
+//  override public func sei(string: String) {
+//      
+//  }
     override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
     guard syncSystemRate else { return }
       super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)

@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import SimpleToast
+import AngelLiveDependencies
 
 struct QRCodeView: View {
     

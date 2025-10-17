@@ -2,6 +2,18 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:iOS/AngelLive.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:macOS/AngelLiveMacOS.xcodeproj">
+   </FileRef>
+   <FileRef
       location = "group:TV/AngelLiveTVOS.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:Shared/AngelLiveDependencies">
+   </FileRef>
+   <FileRef
+      location = "group:Shared/AngelLiveCore">
    </FileRef>
 </Workspace>

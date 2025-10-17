@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import AcknowList
+import AngelLiveDependencies
 
 struct OpenSourceListView: View {
     

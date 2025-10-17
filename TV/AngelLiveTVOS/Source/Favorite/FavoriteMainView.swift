@@ -6,10 +6,7 @@
 //
 
 import SwiftUI
-import Kingfisher
-import SimpleToast
-import LiveParse
-import Shimmer
+import AngelLiveDependencies
 
 struct FavoriteMainView: View {
     

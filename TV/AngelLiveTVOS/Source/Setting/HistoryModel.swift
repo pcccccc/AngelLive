@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import LiveParse
+import AngelLiveDependencies
 
 class HistoryModel: ObservableObject {
     @AppStorage("SimpleLive.History.WatchList") var watchList: Array<LiveModel> = []

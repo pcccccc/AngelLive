@@ -7,55 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4F1492412B44F4FC004073DB /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F1492402B44F4FC004073DB /* LiveParse */; };
 		4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F22D67B2BF1AB9400497F3A /* LiveParse */; };
-		4F5B30F92D9D3E6A00C81B0D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4F5B30F82D9D3E6A00C81B0D /* KSPlayer */; };
-		4F61662E2C786A79008FED0D /* Pow in Frameworks */ = {isa = PBXBuildFile; productRef = 4F61662D2C786A79008FED0D /* Pow */; };
 		4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6166302C7C8E84008FED0D /* LiveParse */; };
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
-		4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */ = {isa = PBXBuildFile; productRef = 4F73DB652C1C1ABB001C38C9 /* Cache */; };
-		4F8077032E3B69A5002FA56A /* Bugsnag in Frameworks */ = {isa = PBXBuildFile; productRef = 4F8077022E3B69A5002FA56A /* Bugsnag */; };
-		4F84D6D72D08642800F88855 /* TarsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D62D08642800F88855 /* TarsKit */; };
-		4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6D92D08644300F88855 /* LiveParse */; };
-		4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F84D6DC2D088B5F00F88855 /* LiveParse */; };
-		4F9087772DF8335E00A2E6F2 /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9087762DF8335E00A2E6F2 /* KSPlayer */; };
-		4F9EC4FC2E3875E000F6C0A6 /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
-		4FB7323F2B98884400F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB7323E2B98884400F02249 /* AcknowList */; };
-		4FB732422B988CDF00F02249 /* AcknowList in Frameworks */ = {isa = PBXBuildFile; productRef = 4FB732412B988CDF00F02249 /* AcknowList */; };
-		4FC475422B563C8D006A102D /* Shimmer in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC475412B563C8D006A102D /* Shimmer */; };
-		4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 4FC9B38D2A52E39400C0D3C8 /* Alamofire */; };
-		4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */; };
-		4FCA391D2BBA5A8600506675 /* NIO in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391C2BBA5A8600506675 /* NIO */; };
-		4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCA391E2BBA5A8600506675 /* NIOHTTP1 */; };
-		4FCB4E5C2E3C6AF4007134CE /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCB4E5B2E3C6AF4007134CE /* Kingfisher */; };
-		4FCB4E5F2E3C6B73007134CE /* KingfisherWebP in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */; };
-		4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4FCDB8552BBF155700EB33DA /* LiveParse */; };
-		FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB15C6322C1B353900D93C64 /* LiveParse */; };
 		FB1BAC812E81479D006BC677 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1BAC802E81479D006BC677 /* LiveParse */; };
 		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
-		FB29265D2C58991500A1F07F /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB29265C2C58991500A1F07F /* LiveParse */; };
-		FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */ = {isa = PBXBuildFile; productRef = FB51018F2B0E35A900A1AE0D /* Starscream */; };
-		FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101942B0ED74E00A1AE0D /* SwiftyJSON */; };
-		FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = FB5101972B0ED76A00A1AE0D /* SWCompression */; };
-		FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */ = {isa = PBXBuildFile; productRef = FB525FDA2BB9D51900BFA18C /* UDPBroadcast */; };
-		FB5C3FDC2C7B5F5000865D6E /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB5C3FDB2C7B5F5000865D6E /* LiveParse */; };
-		FB89E1612B1340870083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1602B1340870083116D /* KSPlayer */; };
-		FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB89E1632B1340DA0083116D /* KSPlayer */; };
 		FB8E940B2E7BEC670055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940A2E7BEC670055E746 /* LiveParse */; };
 		FB8E940E2E7BEE390055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940D2E7BEE390055E746 /* LiveParse */; };
-		FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = FB99EA452B1346A400C0C5DA /* KSPlayer */; };
 		FBA5C3832E58229100B1368B /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBA5C3822E58229100B1368B /* LiveParse */; };
-		FBA5C38C2E58581600B1368B /* SimpleToast in Frameworks */ = {isa = PBXBuildFile; productRef = FBA5C38B2E58581600B1368B /* SimpleToast */; };
-		FBBEAD202E827E8A00FE785F /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBBEAD1F2E827E8A00FE785F /* LiveParse */; };
-		FBCBE6F12D5B2BCA00BE3E62 /* InjectionNext in Frameworks */ = {isa = PBXBuildFile; productRef = FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */; };
-		FBD7063E2D76D74600DCD6C1 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = FBD7063D2D76D74600DCD6C1 /* ColorfulX */; };
 		FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */; };
-		FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F52B122B5100B19C3E /* SwiftProtobuf */; };
-		FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F72B122B5100B19C3E /* SwiftProtobufPluginLibrary */; };
-		FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1F92B122B5100B19C3E /* protoc-gen-swift */; };
-		FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */ = {isa = PBXBuildFile; productRef = FBFEF1FE2B124C6200B19C3E /* Gzip */; };
+		FBF74A782EA1F9B000591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A772EA1F9B000591EEA /* AngelLiveCore */; };
+		FBF74A7A2EA1F9B000591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,55 +46,19 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4F5B30F92D9D3E6A00C81B0D /* KSPlayer in Frameworks */,
-				4F61662E2C786A79008FED0D /* Pow in Frameworks */,
-				4F9087772DF8335E00A2E6F2 /* KSPlayer in Frameworks */,
-				FB15C6332C1B353900D93C64 /* LiveParse in Frameworks */,
-				FBA5C38C2E58581600B1368B /* SimpleToast in Frameworks */,
-				4FCDB8562BBF155700EB33DA /* LiveParse in Frameworks */,
-				FB525FDB2BB9D51900BFA18C /* UDPBroadcast in Frameworks */,
-				4FB7323F2B98884400F02249 /* AcknowList in Frameworks */,
-				FB5101982B0ED76A00A1AE0D /* SWCompression in Frameworks */,
-				4FCB4E5C2E3C6AF4007134CE /* Kingfisher in Frameworks */,
-				FBBEAD202E827E8A00FE785F /* LiveParse in Frameworks */,
-				FBCBE6F12D5B2BCA00BE3E62 /* InjectionNext in Frameworks */,
-				FBFEF1FF2B124C6200B19C3E /* Gzip in Frameworks */,
-				FB29265D2C58991500A1F07F /* LiveParse in Frameworks */,
-				4F84D6D72D08642800F88855 /* TarsKit in Frameworks */,
-				FBFEF1FA2B122B5100B19C3E /* protoc-gen-swift in Frameworks */,
-				4FB732422B988CDF00F02249 /* AcknowList in Frameworks */,
-				4F84D6DD2D088B5F00F88855 /* LiveParse in Frameworks */,
-				4F84D6DA2D08644300F88855 /* LiveParse in Frameworks */,
 				FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */,
-				4F1492412B44F4FC004073DB /* LiveParse in Frameworks */,
-				FBFEF1F82B122B5100B19C3E /* SwiftProtobufPluginLibrary in Frameworks */,
-				FB5101952B0ED74E00A1AE0D /* SwiftyJSON in Frameworks */,
-				4FCA391D2BBA5A8600506675 /* NIO in Frameworks */,
-				4F73DB662C1C1ABB001C38C9 /* Cache in Frameworks */,
-				FB5C3FDC2C7B5F5000865D6E /* LiveParse in Frameworks */,
-				4FCA391F2BBA5A8600506675 /* NIOHTTP1 in Frameworks */,
-				4FCA39152BBA4E9F00506675 /* CocoaAsyncSocket in Frameworks */,
-				4F9EC4FC2E3875E000F6C0A6 /* FFmpegKit in Frameworks */,
-				FB89E1612B1340870083116D /* KSPlayer in Frameworks */,
-				FB99EA462B1346A400C0C5DA /* KSPlayer in Frameworks */,
-				4FC475422B563C8D006A102D /* Shimmer in Frameworks */,
 				4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */,
-				FB89E1642B1340DA0083116D /* KSPlayer in Frameworks */,
-				FBD7063E2D76D74600DCD6C1 /* ColorfulX in Frameworks */,
+				FBF74A7A2EA1F9B000591EEA /* AngelLiveDependencies in Frameworks */,
 				4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */,
 				4F22D67C2BF1AB9400497F3A /* LiveParse in Frameworks */,
 				FB1BAC812E81479D006BC677 /* LiveParse in Frameworks */,
 				FBA5C3832E58229100B1368B /* LiveParse in Frameworks */,
 				FB8E940E2E7BEE390055E746 /* LiveParse in Frameworks */,
 				4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */,
-				4FC9B38E2A52E39400C0D3C8 /* Alamofire in Frameworks */,
 				FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */,
+				FBF74A782EA1F9B000591EEA /* AngelLiveCore in Frameworks */,
 				FB8E940B2E7BEC670055E746 /* LiveParse in Frameworks */,
-				FB5101902B0E35A900A1AE0D /* Starscream in Frameworks */,
 				4F6166312C7C8E84008FED0D /* LiveParse in Frameworks */,
-				4F8077032E3B69A5002FA56A /* Bugsnag in Frameworks */,
-				FBFEF1F62B122B5100B19C3E /* SwiftProtobuf in Frameworks */,
-				4FCB4E5F2E3C6B73007134CE /* KingfisherWebP in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -182,54 +110,18 @@
 			);
 			name = AngelLiveTVOS;
 			packageProductDependencies = (
-				4FC9B38D2A52E39400C0D3C8 /* Alamofire */,
-				FB51018F2B0E35A900A1AE0D /* Starscream */,
-				FB5101942B0ED74E00A1AE0D /* SwiftyJSON */,
-				FB5101972B0ED76A00A1AE0D /* SWCompression */,
-				FBFEF1F52B122B5100B19C3E /* SwiftProtobuf */,
-				FBFEF1F72B122B5100B19C3E /* SwiftProtobufPluginLibrary */,
-				FBFEF1F92B122B5100B19C3E /* protoc-gen-swift */,
-				FBFEF1FE2B124C6200B19C3E /* Gzip */,
-				FB89E1602B1340870083116D /* KSPlayer */,
-				FB89E1632B1340DA0083116D /* KSPlayer */,
-				FB99EA452B1346A400C0C5DA /* KSPlayer */,
-				4F1492402B44F4FC004073DB /* LiveParse */,
-				4FC475412B563C8D006A102D /* Shimmer */,
-				4FB7323E2B98884400F02249 /* AcknowList */,
-				4FB732412B988CDF00F02249 /* AcknowList */,
 				4F70CD1C2BAAE2E100F21EDA /* LiveParse */,
-				FB525FDA2BB9D51900BFA18C /* UDPBroadcast */,
-				4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */,
-				4FCA391C2BBA5A8600506675 /* NIO */,
-				4FCA391E2BBA5A8600506675 /* NIOHTTP1 */,
-				4FCDB8552BBF155700EB33DA /* LiveParse */,
 				4F22D67B2BF1AB9400497F3A /* LiveParse */,
-				FB15C6322C1B353900D93C64 /* LiveParse */,
 				4F9F9C272C1BDEE100B863A9 /* LiveParse */,
-				4F73DB652C1C1ABB001C38C9 /* Cache */,
-				FB29265C2C58991500A1F07F /* LiveParse */,
 				4F6C40342C75885500A5BEDA /* LiveParse */,
-				4F61662D2C786A79008FED0D /* Pow */,
-				FB5C3FDB2C7B5F5000865D6E /* LiveParse */,
 				4F6166302C7C8E84008FED0D /* LiveParse */,
 				FB1D86B82C7EC13F00A679F3 /* LiveParse */,
-				4F84D6D62D08642800F88855 /* TarsKit */,
-				4F84D6D92D08644300F88855 /* LiveParse */,
-				4F84D6DC2D088B5F00F88855 /* LiveParse */,
-				FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */,
-				FBD7063D2D76D74600DCD6C1 /* ColorfulX */,
-				4F5B30F82D9D3E6A00C81B0D /* KSPlayer */,
-				4F9087762DF8335E00A2E6F2 /* KSPlayer */,
-				4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */,
-				4F8077022E3B69A5002FA56A /* Bugsnag */,
-				4FCB4E5B2E3C6AF4007134CE /* Kingfisher */,
-				4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */,
 				FBA5C3822E58229100B1368B /* LiveParse */,
-				FBA5C38B2E58581600B1368B /* SimpleToast */,
 				FB8E940A2E7BEC670055E746 /* LiveParse */,
 				FB8E940D2E7BEE390055E746 /* LiveParse */,
 				FB1BAC802E81479D006BC677 /* LiveParse */,
-				FBBEAD1F2E827E8A00FE785F /* LiveParse */,
+				FBF74A772EA1F9B000591EEA /* AngelLiveCore */,
+				FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */;
@@ -260,28 +152,6 @@
 			);
 			mainGroup = 4FC3DCD12A49382F00CA36B9;
 			packageReferences = (
-				4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */,
-				FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */,
-				FB5101932B0ED74E00A1AE0D /* XCRemoteSwiftPackageReference "SwiftyJSON" */,
-				FB5101962B0ED76A00A1AE0D /* XCRemoteSwiftPackageReference "SWCompression" */,
-				FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */,
-				FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */,
-				4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */,
-				4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */,
-				FB525FD92BB9D51900BFA18C /* XCRemoteSwiftPackageReference "UDPBroadcastConnection" */,
-				4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */,
-				4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */,
-				4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */,
-				4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */,
-				FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */,
-				FBD7063C2D76D74600DCD6C1 /* XCRemoteSwiftPackageReference "ColorfulX" */,
-				4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */,
-				4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
-				4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */,
-				4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */,
-				4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */,
-				FBA5C38A2E58581600B1368B /* XCRemoteSwiftPackageReference "SimpleToast" */,
-				FBBEAD1E2E827E8A00FE785F /* XCRemoteSwiftPackageReference "LiveParse" */,
 			);
 			productRefGroup = 4FC3DCDB2A49382F00CA36B9 /* Products */;
 			projectDirPath = "";
@@ -532,202 +402,10 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/EmergeTools/Pow";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.4;
-			};
-		};
-		4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/hyperoslo/Cache";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 7.2.0;
-			};
-		};
-		4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/bugsnag/bugsnag-cocoa";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 6.32.2;
-			};
-		};
-		4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/TracyPlayer/KSPlayer";
-			requirement = {
-				kind = exactVersion;
-				version = 2.6.2;
-			};
-		};
-		4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/TracyPlayer/FFmpegKit/";
-			requirement = {
-				kind = exactVersion;
-				version = 7.1.1;
-			};
-		};
-		4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pcccccc/AcknowList";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-		4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/markiv/SwiftUI-Shimmer";
-			requirement = {
-				branch = "iOS17-animate-start-end-points";
-				kind = branch;
-			};
-		};
-		4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Alamofire/Alamofire.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.7.1;
-			};
-		};
-		4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/robbiehanson/CocoaAsyncSocket";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 7.6.5;
-			};
-		};
-		4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-nio.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.64.0;
-			};
-		};
-		4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/onevcat/Kingfisher";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 8.5.0;
-			};
-		};
-		4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/yeatse/KingfisherWebP.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.7.0;
-			};
-		};
-		FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/daltoniam/Starscream";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.0.6;
-			};
-		};
-		FB5101932B0ED74E00A1AE0D /* XCRemoteSwiftPackageReference "SwiftyJSON" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/SwiftyJSON/SwiftyJSON";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.0.1;
-			};
-		};
-		FB5101962B0ED76A00A1AE0D /* XCRemoteSwiftPackageReference "SWCompression" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tsolomko/SWCompression";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.8.5;
-			};
-		};
-		FB525FD92BB9D51900BFA18C /* XCRemoteSwiftPackageReference "UDPBroadcastConnection" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/gunterhager/UDPBroadcastConnection";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.0.2;
-			};
-		};
-		FBA5C38A2E58581600B1368B /* XCRemoteSwiftPackageReference "SimpleToast" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sanzaru/SimpleToast";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.11.0;
-			};
-		};
-		FBBEAD1E2E827E8A00FE785F /* XCRemoteSwiftPackageReference "LiveParse" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pcccccc/LiveParse";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.8.9;
-			};
-		};
-		FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/johnno1962/InjectionNext";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.6;
-			};
-		};
-		FBD7063C2D76D74600DCD6C1 /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Lakr233/ColorfulX";
-			requirement = {
-				kind = exactVersion;
-				version = 5.2.8;
-			};
-		};
-		FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/apple/swift-protobuf.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.25.1;
-			};
-		};
-		FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/1024jp/GzipSwift";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 6.0.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		4F1492402B44F4FC004073DB /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
 		4F22D67B2BF1AB9400497F3A /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
-		};
-		4F5B30F82D9D3E6A00C81B0D /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = KSPlayer;
-		};
-		4F61662D2C786A79008FED0D /* Pow */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F61662C2C786A79008FED0D /* XCRemoteSwiftPackageReference "Pow" */;
-			productName = Pow;
 		};
 		4F6166302C7C8E84008FED0D /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -741,91 +419,7 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		4F73DB652C1C1ABB001C38C9 /* Cache */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F73DB642C1C1ABB001C38C9 /* XCRemoteSwiftPackageReference "Cache" */;
-			productName = Cache;
-		};
-		4F8077022E3B69A5002FA56A /* Bugsnag */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F8077012E3B69A5002FA56A /* XCRemoteSwiftPackageReference "bugsnag-cocoa" */;
-			productName = Bugsnag;
-		};
-		4F84D6D62D08642800F88855 /* TarsKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = TarsKit;
-		};
-		4F84D6D92D08644300F88855 /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		4F84D6DC2D088B5F00F88855 /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		4F9087762DF8335E00A2E6F2 /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F9087752DF8335E00A2E6F2 /* XCRemoteSwiftPackageReference "KSPlayer" */;
-			productName = KSPlayer;
-		};
-		4F9EC4FB2E3875E000F6C0A6 /* FFmpegKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4F9EC4FA2E3875E000F6C0A6 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
-			productName = FFmpegKit;
-		};
 		4F9F9C272C1BDEE100B863A9 /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		4FB7323E2B98884400F02249 /* AcknowList */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = AcknowList;
-		};
-		4FB732412B988CDF00F02249 /* AcknowList */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FB732402B988CDF00F02249 /* XCRemoteSwiftPackageReference "AcknowList" */;
-			productName = AcknowList;
-		};
-		4FC475412B563C8D006A102D /* Shimmer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FC475402B563C8D006A102D /* XCRemoteSwiftPackageReference "SwiftUI-Shimmer" */;
-			productName = Shimmer;
-		};
-		4FC9B38D2A52E39400C0D3C8 /* Alamofire */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FC9B38C2A52E39400C0D3C8 /* XCRemoteSwiftPackageReference "Alamofire" */;
-			productName = Alamofire;
-		};
-		4FCA39142BBA4E9F00506675 /* CocoaAsyncSocket */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FCA39132BBA4E9F00506675 /* XCRemoteSwiftPackageReference "CocoaAsyncSocket" */;
-			productName = CocoaAsyncSocket;
-		};
-		4FCA391C2BBA5A8600506675 /* NIO */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIO;
-		};
-		4FCA391E2BBA5A8600506675 /* NIOHTTP1 */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FCA391B2BBA5A8600506675 /* XCRemoteSwiftPackageReference "swift-nio" */;
-			productName = NIOHTTP1;
-		};
-		4FCB4E5B2E3C6AF4007134CE /* Kingfisher */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FCB4E5A2E3C6AF4007134CE /* XCRemoteSwiftPackageReference "Kingfisher" */;
-			productName = Kingfisher;
-		};
-		4FCB4E5E2E3C6B73007134CE /* KingfisherWebP */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 4FCB4E5D2E3C6B73007134CE /* XCRemoteSwiftPackageReference "KingfisherWebP" */;
-			productName = KingfisherWebP;
-		};
-		4FCDB8552BBF155700EB33DA /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		FB15C6322C1B353900D93C64 /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
@@ -837,42 +431,6 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		FB29265C2C58991500A1F07F /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		FB51018F2B0E35A900A1AE0D /* Starscream */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FB51018E2B0E35A900A1AE0D /* XCRemoteSwiftPackageReference "Starscream" */;
-			productName = Starscream;
-		};
-		FB5101942B0ED74E00A1AE0D /* SwiftyJSON */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FB5101932B0ED74E00A1AE0D /* XCRemoteSwiftPackageReference "SwiftyJSON" */;
-			productName = SwiftyJSON;
-		};
-		FB5101972B0ED76A00A1AE0D /* SWCompression */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FB5101962B0ED76A00A1AE0D /* XCRemoteSwiftPackageReference "SWCompression" */;
-			productName = SWCompression;
-		};
-		FB525FDA2BB9D51900BFA18C /* UDPBroadcast */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FB525FD92BB9D51900BFA18C /* XCRemoteSwiftPackageReference "UDPBroadcastConnection" */;
-			productName = UDPBroadcast;
-		};
-		FB5C3FDB2C7B5F5000865D6E /* LiveParse */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LiveParse;
-		};
-		FB89E1602B1340870083116D /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = KSPlayer;
-		};
-		FB89E1632B1340DA0083116D /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = KSPlayer;
-		};
 		FB8E940A2E7BEC670055E746 /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
@@ -881,53 +439,17 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		FB99EA452B1346A400C0C5DA /* KSPlayer */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = KSPlayer;
-		};
 		FBA5C3822E58229100B1368B /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
 		};
-		FBA5C38B2E58581600B1368B /* SimpleToast */ = {
+		FBF74A772EA1F9B000591EEA /* AngelLiveCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = FBA5C38A2E58581600B1368B /* XCRemoteSwiftPackageReference "SimpleToast" */;
-			productName = SimpleToast;
+			productName = AngelLiveCore;
 		};
-		FBBEAD1F2E827E8A00FE785F /* LiveParse */ = {
+		FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = FBBEAD1E2E827E8A00FE785F /* XCRemoteSwiftPackageReference "LiveParse" */;
-			productName = LiveParse;
-		};
-		FBCBE6F02D5B2BCA00BE3E62 /* InjectionNext */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBCBE6EF2D5B2BCA00BE3E62 /* XCRemoteSwiftPackageReference "InjectionNext" */;
-			productName = InjectionNext;
-		};
-		FBD7063D2D76D74600DCD6C1 /* ColorfulX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBD7063C2D76D74600DCD6C1 /* XCRemoteSwiftPackageReference "ColorfulX" */;
-			productName = ColorfulX;
-		};
-		FBFEF1F52B122B5100B19C3E /* SwiftProtobuf */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */;
-			productName = SwiftProtobuf;
-		};
-		FBFEF1F72B122B5100B19C3E /* SwiftProtobufPluginLibrary */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */;
-			productName = SwiftProtobufPluginLibrary;
-		};
-		FBFEF1F92B122B5100B19C3E /* protoc-gen-swift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBFEF1F42B122B5100B19C3E /* XCRemoteSwiftPackageReference "swift-protobuf" */;
-			productName = "protoc-gen-swift";
-		};
-		FBFEF1FE2B124C6200B19C3E /* Gzip */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FBFEF1FD2B124C6200B19C3E /* XCRemoteSwiftPackageReference "GzipSwift" */;
-			productName = Gzip;
+			productName = AngelLiveDependencies;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -6,13 +6,12 @@
 //
 
 import SwiftUI
-import Kingfisher
-import ColorfulX
+import AngelLiveDependencies
 
 struct IndicatorMenuView: View {
     
     @Environment(LiveViewModel.self) var liveViewModel
-    @State var color = ColorfulPreset.autumn.colors
+    private let color = ColorfulPreset.autumn
     
     var body: some View {
         HStack {
@@ -23,7 +22,7 @@ struct IndicatorMenuView: View {
             }
         }
         .frame(width: liveViewModel.leftWidth, height: liveViewModel.leftHeight)
-        .background(ColorfulView(color: $color)
+        .background(ColorfulView(color: color)
             .ignoresSafeArea())
         .cornerRadius(liveViewModel.leftMenuCornerRadius)
         .offset(x: 60, y: 70)
@@ -77,3 +76,4 @@ struct IndicatorMenuView: View {
             .foregroundColor(.white)
     }
 }
+

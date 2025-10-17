@@ -6,11 +6,8 @@
 ////
 
 import SwiftUI
-import Kingfisher
-import SimpleToast
-import LiveParse
 import GameController
-import Shimmer
+import AngelLiveDependencies
 
 enum FocusableField: Hashable {
     case leftMenu(Int, Int)
@@ -257,4 +254,3 @@ struct ListMainView: View {
         }
     }
 }
-

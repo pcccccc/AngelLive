@@ -6,9 +6,7 @@
 //
 
 import SwiftUI
-import SimpleToast
-import LiveParse
-import Shimmer
+import AngelLiveDependencies
 
 struct SearchRoomView: View {
     
@@ -101,4 +99,3 @@ struct SearchRoomView: View {
         })
     }
 }
-

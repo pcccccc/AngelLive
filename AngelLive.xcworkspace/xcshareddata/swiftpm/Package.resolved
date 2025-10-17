@@ -1,5 +1,5 @@
 {
-  "originHash" : "484578405571ac9034e26fa1b946d2da8946b6d6e193f50d6fc5a7581e2ea0a8",
+  "originHash" : "c15ee07cb71bc4bac339fa36e16f43b6ef9fe2a3b9e85c3e9e3506cb2634d3e6",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -7,7 +7,7 @@
       "location" : "https://github.com/pcccccc/AcknowList",
       "state" : {
         "branch" : "main",
-        "revision" : "7648ed852ba8b9fb5460f8b57436ddd6847d2043"
+        "revision" : "5d8159863a3455462a7fa8dcc529422c35edc2f0"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/bugsnag/bugsnag-cocoa",
       "state" : {
-        "revision" : "1f991e92a6e3993c2763d071781d895ca4075a90",
-        "version" : "6.34.0"
+        "revision" : "f4348c29cc881ce80e4e22a46f29d7f5a18e924b",
+        "version" : "6.34.1"
       }
     },
     {
@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/ColorfulX",
       "state" : {
-        "revision" : "1f667feb13844f38d70488439682933b4d1ea65b",
-        "version" : "5.2.8"
+        "revision" : "af739ea2d891afc68ff53b01c701bb72b9ca4a69",
+        "version" : "5.8.3"
       }
     },
     {
@@ -76,10 +76,10 @@
     {
       "identity" : "ffmpegkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/TracyPlayer/FFmpegKit/",
+      "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
       "state" : {
-        "revision" : "631784c6f5366193c407194ae93ee44e9525b170",
-        "version" : "7.1.1"
+        "revision" : "46a3ce58f8899a2f3f829ef798ec5b9972c10a39",
+        "version" : "8.0.0"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "62998ba783dca4d9a9643ef5dd717652a30b9dc5",
-        "version" : "2.6.2"
+        "revision" : "91a4e3d5da7ad5dc024389e619e3fba6d7ffc621",
+        "version" : "2.6.9"
       }
     },
     {
@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/MSDisplayLink.git",
       "state" : {
-        "revision" : "c2fcd28cb99300d83acc30860ce252ef97c20b61",
-        "version" : "1.1.1"
+        "revision" : "ebf5823cb5fc1326639d9a05bc06d16bbe82989f",
+        "version" : "2.0.8"
       }
     },
     {
@@ -231,8 +231,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-nio.git",
       "state" : {
-        "revision" : "a18bddb0acf7a40d982b2f128ce73ce4ee31f352",
-        "version" : "2.86.2"
+        "revision" : "4e8f4b1c9adaa59315c523540c1ff2b38adc20a9",
+        "version" : "2.87.0"
       }
     },
     {
@@ -240,8 +240,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-protobuf.git",
       "state" : {
-        "revision" : "2547102afd04fe49f1b286090f13ebce07284980",
-        "version" : "1.31.1"
+        "revision" : "c6fe6442e6a64250495669325044052e113e990c",
+        "version" : "1.32.0"
       }
     },
     {

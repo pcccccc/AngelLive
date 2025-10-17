@@ -6,10 +6,7 @@
 //
 
 import SwiftUI
-import LiveParse
-import Bugsnag
-import Kingfisher
-import KingfisherWebP
+import AngelLiveDependencies
 
 @main
 struct SimpleLiveTVOSApp: App {
@@ -30,4 +27,3 @@ struct SimpleLiveTVOSApp: App {
         }
     }
 }
-

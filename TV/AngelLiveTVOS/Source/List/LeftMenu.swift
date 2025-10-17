@@ -6,10 +6,8 @@
 //
 
 import SwiftUI
-import Kingfisher
 import GameController
-import LiveParse
-import ColorfulX
+import AngelLiveDependencies
 
 struct LeftMenu: View {
     
@@ -139,4 +137,3 @@ struct SubMenuItem: View {
         }
     }
 }
-

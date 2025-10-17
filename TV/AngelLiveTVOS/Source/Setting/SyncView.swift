@@ -6,8 +6,7 @@
 //
 
 import SwiftUI
-import KSPlayer
-import SimpleToast
+import AngelLiveDependencies
 
 struct SyncView: View {
     

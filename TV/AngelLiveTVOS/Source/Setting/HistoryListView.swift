@@ -6,9 +6,7 @@
 //
 
 import SwiftUI
-import Kingfisher
-import SimpleToast
-import LiveParse
+import AngelLiveDependencies
 
 struct HistoryListView: View {
     
@@ -46,4 +44,3 @@ struct HistoryListView: View {
         })
     }
 }
-

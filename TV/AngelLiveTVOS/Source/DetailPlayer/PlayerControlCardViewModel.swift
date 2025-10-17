@@ -7,7 +7,7 @@
 
 import Foundation
 import Observation
-import LiveParse
+import AngelLiveDependencies
 
 @Observable
 final class PlayerControlCardViewModel {

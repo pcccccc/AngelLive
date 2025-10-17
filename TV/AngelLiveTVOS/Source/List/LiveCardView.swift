@@ -6,11 +6,9 @@
 //
 
 import SwiftUI
-import Kingfisher
-import KSPlayer
-import LiveParse
 import Observation
-import KingfisherWebP
+import AngelLiveCore
+import AngelLiveDependencies
 
 struct LiveCardView: View {
     
