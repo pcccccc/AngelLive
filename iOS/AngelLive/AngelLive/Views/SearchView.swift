@@ -17,45 +17,25 @@ struct SearchView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // 背景渐变
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
-                        Color(red: 0.05, green: 0.05, blue: 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                VStack(spacing: 0) {
-                    // 搜索类型选择器
-                    Picker("搜索类型", selection: $viewModel.searchTypeIndex) {
-                        ForEach(viewModel.searchTypeArray.indices, id: \.self) { index in
-                            Text(viewModel.searchTypeArray[index])
-                                .tag(index)
-                        }
+            VStack(spacing: 0) {
+                // 搜索类型选择器
+                Picker("搜索类型", selection: $viewModel.searchTypeIndex) {
+                    ForEach(viewModel.searchTypeArray.indices, id: \.self) { index in
+                        Text(viewModel.searchTypeArray[index])
+                            .tag(index)
                     }
-                    .pickerStyle(.segmented)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.ultraThinMaterial)
-                            .padding(.horizontal, 8)
-                    )
-                    .padding(.bottom, 8)
+                }
+                .pickerStyle(.segmented)
+                .padding()
 
-                    // 搜索结果列表
-                    if searchResults.isEmpty && !isSearching {
-                        searchEmptyState
-                    } else if isSearching {
-                        ProgressView("搜索中...")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .foregroundStyle(.white)
-                    } else {
-                        searchResultsList
-                    }
+                // 搜索结果列表
+                if searchResults.isEmpty && !isSearching {
+                    searchEmptyState
+                } else if isSearching {
+                    ProgressView("搜索中...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    searchResultsList
                 }
             }
             .navigationTitle("搜索")
@@ -121,8 +101,8 @@ struct SearchView: View {
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
+                    .fill(AppConstants.Colors.materialBackground)
             )
             .padding(.horizontal)
         }
@@ -170,11 +150,7 @@ struct SearchResultCard: View {
                         .aspectRatio(16/9, contentMode: .fill)
                 } placeholder: {
                     Rectangle()
-                        .fill(LinearGradient(
-                            colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
+                        .fill(AppConstants.Colors.placeholderGradient())
                 }
                 .frame(width: 120, height: 68)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -188,7 +164,7 @@ struct SearchResultCard: View {
                         .padding(.vertical, 2)
                         .background(
                             Capsule()
-                                .fill(.red.gradient)
+                                .fill(AppConstants.Colors.liveStatus.gradient)
                         )
                         .padding(4)
                 }
@@ -198,7 +174,7 @@ struct SearchResultCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(room.roomTitle)
                     .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppConstants.Colors.primaryText)
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
@@ -215,18 +191,18 @@ struct SearchResultCard: View {
 
                     Text(room.userName)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
                         .lineLimit(1)
                 }
 
                 Text(room.liveType.rawValue)
                     .font(.caption2)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(AppConstants.Colors.link)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(.blue.opacity(0.2))
+                            .fill(AppConstants.Colors.link.opacity(0.2))
                     )
             }
 
@@ -234,12 +210,12 @@ struct SearchResultCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(AppConstants.Colors.tertiaryText)
         }
-        .padding(12)
+        .padding(AppConstants.Spacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
+                .fill(AppConstants.Colors.materialBackground)
         )
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.spring(response: 0.3), value: isPressed)

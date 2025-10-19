@@ -15,32 +15,19 @@ struct FavoriteView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // 背景渐变
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
-                        Color(red: 0.05, green: 0.05, blue: 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                ScrollView {
-                    if viewModel.cloudKitReady {
-                        if viewModel.roomList.isEmpty {
-                            emptyStateView
-                        } else {
-                            favoriteContentView
-                        }
+            ScrollView {
+                if viewModel.cloudKitReady {
+                    if viewModel.roomList.isEmpty {
+                        emptyStateView
                     } else {
-                        cloudKitErrorView
+                        favoriteContentView
                     }
+                } else {
+                    cloudKitErrorView
                 }
-                .refreshable {
-                    await refreshFavorites()
-                }
+            }
+            .refreshable {
+                await refreshFavorites()
             }
             .navigationTitle("收藏")
             .navigationBarTitleDisplayMode(.large)
@@ -107,7 +94,7 @@ struct FavoriteView: View {
                     // 分组标题
                     Text(section.title)
                         .font(.title2.bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppConstants.Colors.primaryText)
                         .padding(.horizontal)
 
                     // 横向滚动的直播间卡片
@@ -151,11 +138,7 @@ struct LiveRoomCard: View {
                         .aspectRatio(16/9, contentMode: .fill)
                 } placeholder: {
                     Rectangle()
-                        .fill(LinearGradient(
-                            colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
+                        .fill(AppConstants.Colors.placeholderGradient())
                 }
                 .frame(width: 280, height: 157)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -169,7 +152,7 @@ struct LiveRoomCard: View {
                         .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(.red.gradient)
+                                .fill(AppConstants.Colors.liveStatus.gradient)
                         )
                         .padding(8)
                 }
@@ -191,23 +174,28 @@ struct LiveRoomCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(room.roomTitle)
                         .font(.subheadline.bold())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppConstants.Colors.primaryText)
                         .lineLimit(1)
 
                     Text(room.userName)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
                         .lineLimit(1)
                 }
             }
             .frame(width: 280)
         }
         .frame(width: 280)
-        .padding(12)
+        .padding(AppConstants.Spacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
+                .fill(AppConstants.Colors.materialBackground)
+                .shadow(
+                    color: AppConstants.Shadow.md.color,
+                    radius: AppConstants.Shadow.md.radius,
+                    x: AppConstants.Shadow.md.x,
+                    y: AppConstants.Shadow.md.y
+                )
         )
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3), value: isPressed)

@@ -15,40 +15,27 @@ struct PlatformView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // 背景渐变
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
-                        Color(red: 0.05, green: 0.05, blue: 0.15)
+            ScrollView {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 16),
+                        GridItem(.flexible(), spacing: 16)
                     ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-
-                ScrollView {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 16),
-                            GridItem(.flexible(), spacing: 16)
-                        ],
-                        spacing: 16
-                    ) {
-                        ForEach(viewModel.platformInfo.indices, id: \.self) { index in
-                            PlatformCard(platform: viewModel.platformInfo[index])
-                                .onTapGesture {
-                                    selectedPlatform = viewModel.platformInfo[index]
-                                }
-                        }
+                    spacing: 16
+                ) {
+                    ForEach(viewModel.platformInfo.indices, id: \.self) { index in
+                        PlatformCard(platform: viewModel.platformInfo[index])
+                            .onTapGesture {
+                                selectedPlatform = viewModel.platformInfo[index]
+                            }
                     }
-                    .padding()
-
-                    Text("敬请期待更多平台...")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.vertical)
                 }
+                .padding()
+
+                Text("敬请期待更多平台...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical)
             }
             .navigationTitle("平台")
             .navigationBarTitleDisplayMode(.large)
@@ -68,63 +55,44 @@ struct PlatformCard: View {
     @State private var isPressed = false
 
     var body: some View {
-        ZStack {
-            // 背景图片
-            if let image = UIImage(named: platform.bigPic) {
+        VStack(spacing: AppConstants.Spacing.md) {
+            if let image = UIImage(named: platform.smallPic) {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(height: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .blur(radius: 4)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: 60)
             } else {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(LinearGradient(
-                        colors: [
-                            Color.blue.opacity(0.6),
-                            Color.purple.opacity(0.6)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .frame(height: 180)
+                Image(systemName: "play.tv")
+                    .font(.system(size: 50))
+                    .foregroundStyle(AppConstants.Colors.primaryText)
             }
 
-            // 毛玻璃效果覆盖层
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .frame(height: 180)
+            Text(platform.title)
+                .font(.title3.bold())
+                .foregroundStyle(AppConstants.Colors.primaryText)
 
-            // 内容
-            VStack(spacing: 12) {
-                if let image = UIImage(named: platform.smallPic) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 60)
-                } else {
-                    Image(systemName: "play.tv")
-                        .font(.system(size: 50))
-                        .foregroundStyle(.white)
-                }
-
-                Text(platform.title)
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
-
-                Text(platform.descripiton)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, 8)
-            }
-            .padding()
+            Text(platform.descripiton)
+                .font(.caption)
+                .foregroundStyle(AppConstants.Colors.tertiaryText)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, AppConstants.Spacing.sm)
         }
+        .padding(AppConstants.Spacing.lg)
         .frame(height: 180)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl)
+                .fill(AppConstants.Colors.materialBackground)
+        )
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3), value: isPressed)
-        .shadow(color: .black.opacity(0.3), radius: 10, y: 5)
+        .shadow(
+            color: AppConstants.Shadow.lg.color,
+            radius: AppConstants.Shadow.lg.radius,
+            x: AppConstants.Shadow.lg.x,
+            y: AppConstants.Shadow.lg.y
+        )
         .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
             isPressed = pressing
         }, perform: {})
@@ -138,58 +106,45 @@ struct PlatformDetailView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                // 背景
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
-                        Color(red: 0.05, green: 0.05, blue: 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 20) {
+                    // 平台 Logo
+                    if let image = UIImage(named: platform.smallPic) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 100)
+                            .padding(.top, 40)
+                    }
 
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // 平台 Logo
-                        if let image = UIImage(named: platform.smallPic) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(height: 100)
-                                .padding(.top, 40)
-                        }
+                    // 平台描述
+                    Text(platform.descripiton)
+                        .font(.body)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
 
-                        // 平台描述
-                        Text(platform.descripiton)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                    // 占位内容
+                    VStack(spacing: AppConstants.Spacing.lg) {
+                        Text("直播内容列表")
+                            .font(.headline)
+                            .foregroundStyle(AppConstants.Colors.primaryText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal)
 
-                        // 占位内容
-                        VStack(spacing: 16) {
-                            Text("直播内容列表")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        // TODO: Add live room list here
+                        ForEach(0..<5) { _ in
+                            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
+                                .fill(AppConstants.Colors.materialBackground)
+                                .frame(height: 100)
+                                .overlay {
+                                    Text("加载中...")
+                                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                                }
                                 .padding(.horizontal)
-
-                            // TODO: Add live room list here
-                            ForEach(0..<5) { _ in
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
-                                    .frame(height: 100)
-                                    .overlay {
-                                        Text("加载中...")
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal)
-                            }
                         }
-                        .padding(.top, 30)
                     }
+                    .padding(.top, 30)
                 }
             }
             .navigationTitle(platform.title)
