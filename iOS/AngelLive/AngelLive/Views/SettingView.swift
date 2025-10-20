@@ -10,52 +10,13 @@ import AngelLiveDependencies
 import AngelLiveCore
 
 struct SettingView: View {
-    @State private var settingStore = SettingStore()
+    @StateObject private var settingStore = SettingStore()
     @State private var cloudKitReady = false
     @State private var cloudKitStateString = "检查中..."
 
     var body: some View {
         NavigationStack {
             Form {
-                // 应用信息
-                Section {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: AppConstants.Spacing.lg) {
-                            if let image = UIImage(named: "icon") {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
-                                    .shadow(
-                                        color: AppConstants.Shadow.lg.color,
-                                        radius: AppConstants.Shadow.lg.radius,
-                                        x: AppConstants.Shadow.lg.x,
-                                        y: AppConstants.Shadow.lg.y
-                                    )
-                            } else {
-                                Image(systemName: "app.fill")
-                                    .font(.system(size: 80))
-                                    .foregroundStyle(AppConstants.Colors.link)
-                            }
-
-                            Text("AngelLive")
-                                .font(.title2.bold())
-                                .foregroundStyle(AppConstants.Colors.primaryText)
-
-                            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-                               let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
-                                Text("Version \(version) (\(build))")
-                                    .font(.caption)
-                                    .foregroundStyle(AppConstants.Colors.secondaryText)
-                            }
-                        }
-                        .padding(.vertical, AppConstants.Spacing.xl)
-                        Spacer()
-                    }
-                }
-                .listRowBackground(Color.clear)
-
                 // 账号设置
                 Section {
                     NavigationLink {

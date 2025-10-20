@@ -12,11 +12,14 @@ import AngelLiveCore
 struct FavoriteView: View {
     @State private var viewModel = AppFavoriteModel()
     @State private var isRefreshing = false
+    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                if viewModel.cloudKitReady {
+                if isLoading {
+                    skeletonView
+                } else if viewModel.cloudKitReady {
                     if viewModel.roomList.isEmpty {
                         emptyStateView
                     } else {
@@ -55,6 +58,82 @@ struct FavoriteView: View {
         .padding(.top, 100)
     }
 
+    private var skeletonView: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                LazyVStack(spacing: 20) {
+                    // 第一个分组：正在直播（网格布局）
+                    skeletonLiveSection(geometry: geometry)
+
+                    // 其他分组：横向滚动
+                    ForEach(0..<2, id: \.self) { _ in
+                        skeletonHorizontalSection(geometry: geometry)
+                    }
+                }
+                .padding(.vertical)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func skeletonLiveSection(geometry: GeometryProxy) -> some View {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let columns = isIPad ? 3 : 2
+        let spacing: CGFloat = 16
+        let horizontalPadding: CGFloat = 16
+        let screenWidth = geometry.size.width
+        let totalSpacing = spacing * CGFloat(columns - 1) + horizontalPadding * 2
+        let cardWidth = (screenWidth - totalSpacing) / CGFloat(columns)
+
+        VStack(alignment: .leading, spacing: 12) {
+            // 分组标题骨架
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 24)
+                .padding(.horizontal)
+
+            // 网格卡片骨架 - 只显示一行，减少内存占用
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: columns),
+                spacing: spacing
+            ) {
+                ForEach(0..<columns, id: \.self) { _ in
+                    LiveRoomCardSkeleton(width: cardWidth)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+        }
+        .shimmering()  // 在整个分组上应用 shimmer，而不是每个元素
+    }
+
+    @ViewBuilder
+    private func skeletonHorizontalSection(geometry: GeometryProxy) -> some View {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let visibleCards: CGFloat = isIPad ? 3.5 : 2.5
+        let spacing: CGFloat = 16
+        let horizontalPadding: CGFloat = 16
+        let screenWidth = geometry.size.width
+        let totalSpacing = spacing * (visibleCards - 1) + horizontalPadding
+        let cardWidth = (screenWidth - totalSpacing) / visibleCards
+
+        VStack(alignment: .leading, spacing: 12) {
+            // 分组标题骨架
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 24)
+                .padding(.horizontal)
+
+            // 横向滚动的卡片骨架 - 减少卡片数量
+            HStack(spacing: spacing) {
+                ForEach(0..<Int(ceil(visibleCards)), id: \.self) { _ in
+                    LiveRoomCardSkeleton(width: cardWidth)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+        }
+        .shimmering()  // 在整个分组上应用 shimmer，而不是每个元素
+    }
+
     private var cloudKitErrorView: some View {
         VStack(spacing: 20) {
             Image(systemName: "exclamationmark.icloud")
@@ -88,123 +167,90 @@ struct FavoriteView: View {
     }
 
     private var favoriteContentView: some View {
-        LazyVStack(spacing: 20) {
-            ForEach(viewModel.groupedRoomList, id: \.id) { section in
-                VStack(alignment: .leading, spacing: 12) {
-                    // 分组标题
-                    Text(section.title)
-                        .font(.title2.bold())
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-                        .padding(.horizontal)
-
-                    // 横向滚动的直播间卡片
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 16) {
-                            ForEach(section.roomList, id: \.roomId) { room in
-                                LiveRoomCard(room: room)
-                            }
-                        }
-                        .padding(.horizontal)
+        GeometryReader { geometry in
+            ScrollView {
+                LazyVStack(spacing: 20) {
+                    ForEach(viewModel.groupedRoomList, id: \.id) { section in
+                        sectionView(section: section, geometry: geometry)
                     }
                 }
+                .padding(.vertical)
             }
         }
-        .padding(.vertical)
+    }
+
+    @ViewBuilder
+    private func sectionView(section: FavoriteLiveSectionModel, geometry: GeometryProxy) -> some View {
+        let isLiveSection = section.title == "正在直播"
+        let screenWidth = geometry.size.width
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+
+        VStack(alignment: .leading, spacing: 12) {
+            // 分组标题
+            Text(section.title)
+                .font(.title2.bold())
+                .foregroundStyle(AppConstants.Colors.primaryText)
+                .padding(.horizontal)
+
+            if isLiveSection {
+                // 正在直播：纵向网格布局
+                liveSectionGrid(roomList: section.roomList, screenWidth: screenWidth, isIPad: isIPad)
+            } else {
+                // 其他分组：横向滚动布局
+                horizontalScrollSection(roomList: section.roomList, screenWidth: screenWidth, isIPad: isIPad)
+            }
+        }
+    }
+
+    // 正在直播的网格布局
+    @ViewBuilder
+    private func liveSectionGrid(roomList: [LiveModel], screenWidth: CGFloat, isIPad: Bool) -> some View {
+        let columns = isIPad ? 3 : 2
+        let spacing: CGFloat = 16
+        let horizontalPadding: CGFloat = 16
+        let totalSpacing = spacing * CGFloat(columns - 1) + horizontalPadding * 2
+        let cardWidth = (screenWidth - totalSpacing) / CGFloat(columns)
+
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: columns),
+            spacing: spacing
+        ) {
+            ForEach(roomList, id: \.roomId) { room in
+                LiveRoomCard(room: room, width: cardWidth)
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
+    }
+
+    // 其他分组的横向滚动布局
+    @ViewBuilder
+    private func horizontalScrollSection(roomList: [LiveModel], screenWidth: CGFloat, isIPad: Bool) -> some View {
+        let visibleCards: CGFloat = isIPad ? 3.5 : 2.5
+        let spacing: CGFloat = 16
+        let horizontalPadding: CGFloat = 16
+        let totalSpacing = spacing * (visibleCards - 1) + horizontalPadding
+        let cardWidth = (screenWidth - totalSpacing) / visibleCards
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: spacing) {
+                ForEach(roomList, id: \.roomId) { room in
+                    LiveRoomCard(room: room, width: cardWidth)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+        }
     }
 
     private func loadFavorites() async {
+        isLoading = true
         await viewModel.syncWithActor()
+        isLoading = false
     }
 
     private func refreshFavorites() async {
         isRefreshing = true
         await viewModel.syncWithActor()
         isRefreshing = false
-    }
-}
-
-// MARK: - Live Room Card Component
-struct LiveRoomCard: View {
-    let room: LiveModel
-    @State private var isPressed = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 封面图
-            ZStack(alignment: .topTrailing) {
-                AsyncImage(url: URL(string: room.roomCover)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(16/9, contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(AppConstants.Colors.placeholderGradient())
-                }
-                .frame(width: 280, height: 157)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                // 直播状态标签
-                if let liveState = room.liveState, !liveState.isEmpty {
-                    Text(liveState)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(AppConstants.Colors.liveStatus.gradient)
-                        )
-                        .padding(8)
-                }
-            }
-
-            // 主播信息
-            HStack(spacing: 8) {
-                AsyncImage(url: URL(string: room.userHeadImg)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                }
-                .frame(width: 32, height: 32)
-                .clipShape(Circle())
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(room.roomTitle)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-                        .lineLimit(1)
-
-                    Text(room.userName)
-                        .font(.caption)
-                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                        .lineLimit(1)
-                }
-            }
-            .frame(width: 280)
-        }
-        .frame(width: 280)
-        .padding(AppConstants.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
-                .fill(AppConstants.Colors.materialBackground)
-                .shadow(
-                    color: AppConstants.Shadow.md.color,
-                    radius: AppConstants.Shadow.md.radius,
-                    x: AppConstants.Shadow.md.x,
-                    y: AppConstants.Shadow.md.y
-                )
-        )
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3), value: isPressed)
-        .onTapGesture {
-            // TODO: Navigate to player view
-        }
-        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
     }
 }
 
