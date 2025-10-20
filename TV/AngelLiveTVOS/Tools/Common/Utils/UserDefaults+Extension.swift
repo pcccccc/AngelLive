@@ -2,11 +2,11 @@
 import Foundation
 
 extension UserDefaults {
-    static let shared = UserDefaults(suiteName: "group.com.lision.simplelivetvos")!
+    static let shared = UserDefaults(suiteName: "group.dev.idog.simplelivetvos")!
     private static let queue = DispatchQueue(label: "com.lision.simplelivetvos.userdefaults.queue")
 
     func synchronized() -> UserDefaults {
-        return UserDefaults(suiteName: "group.com.lision.simplelivetvos")!
+        return UserDefaults(suiteName: "group.dev.idog.simplelivetvos")!
     }
 
     func set(_ value: Any?, forKey key: String, synchronize: Bool) {

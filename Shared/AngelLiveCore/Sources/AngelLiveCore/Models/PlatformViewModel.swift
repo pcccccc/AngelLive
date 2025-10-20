@@ -25,7 +25,7 @@ public final class PlatformViewModel {
 }
 
 
-public struct Platformdescription {
+public struct Platformdescription: Hashable {
     public let title: String
     public let bigPic: String
     public let smallPic: String

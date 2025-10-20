@@ -8,11 +8,11 @@
 import Foundation
 
 public extension UserDefaults {
-    nonisolated(unsafe) static let shared = UserDefaults(suiteName: "group.com.lision.simplelivetvos")!
-    private static let queue = DispatchQueue(label: "com.lision.simplelivetvos.userdefaults.queue")
+    nonisolated(unsafe) static let shared = UserDefaults(suiteName: "group.dev.idog.simplelivetvos")!
+    private static let queue = DispatchQueue(label: "dev.idog.simplelivetvos.userdefaults.queue")
 
     func synchronized() -> UserDefaults {
-        return UserDefaults(suiteName: "group.com.lision.simplelivetvos")!
+        return UserDefaults(suiteName: "group.dev.idog.simplelivetvos")!
     }
 
     func set(_ value: Any?, forKey key: String, synchronize: Bool) {

@@ -17,6 +17,7 @@
 		FB8E940B2E7BEC670055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940A2E7BEC670055E746 /* LiveParse */; };
 		FB8E940E2E7BEE390055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940D2E7BEE390055E746 /* LiveParse */; };
 		FBA5C3832E58229100B1368B /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBA5C3822E58229100B1368B /* LiveParse */; };
+		FBA85D9B2EA5E06100D976E1 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85D9A2EA5E06100D976E1 /* SharedAssets */; };
 		FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */; };
 		FBF74A782EA1F9B000591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A772EA1F9B000591EEA /* AngelLiveCore */; };
 		FBF74A7A2EA1F9B000591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */; };
@@ -46,6 +47,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBA85D9B2EA5E06100D976E1 /* SharedAssets in Frameworks */,
 				FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */,
 				4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */,
 				FBF74A7A2EA1F9B000591EEA /* AngelLiveDependencies in Frameworks */,
@@ -122,6 +124,7 @@
 				FB1BAC802E81479D006BC677 /* LiveParse */,
 				FBF74A772EA1F9B000591EEA /* AngelLiveCore */,
 				FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */,
+				FBA85D9A2EA5E06100D976E1 /* SharedAssets */,
 			);
 			productName = SimpleLiveTVOS;
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */;
@@ -442,6 +445,10 @@
 		FBA5C3822E58229100B1368B /* LiveParse */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LiveParse;
+		};
+		FBA85D9A2EA5E06100D976E1 /* SharedAssets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SharedAssets;
 		};
 		FBF74A772EA1F9B000591EEA /* AngelLiveCore */ = {
 			isa = XCSwiftPackageProductDependency;

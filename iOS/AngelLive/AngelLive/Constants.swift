@@ -24,7 +24,7 @@ enum AppConstants {
         static let secondaryText = Color.secondary
 
         /// 三级文本颜色 - 用于描述文本、辅助信息
-        static let tertiaryText = Color.tertiary
+        static let tertiaryText = Color(.tertiaryLabel)
 
         /// 占位符文本颜色
         static let placeholderText = Color.secondary.opacity(0.6)

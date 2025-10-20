@@ -11,6 +11,9 @@
       location = "group:TV/AngelLiveTVOS.xcodeproj">
    </FileRef>
    <FileRef
+      location = "group:Shared/SharedAssets">
+   </FileRef>
+   <FileRef
       location = "group:Shared/AngelLiveDependencies">
    </FileRef>
    <FileRef

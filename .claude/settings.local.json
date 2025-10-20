@@ -26,9 +26,22 @@
       "Bash(swift package dump-package:*)",
       "Bash(swift build:*)",
       "Bash(cat:*)",
-      "Bash(uuidgen:*)"
+      "Bash(uuidgen:*)",
+      "Bash(mkdir:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(mcp__apple_developer_docs__search:*)",
+      "Bash(env)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "sequential-thinking",
+    "apple-docs",
+    "Homebrew",
+    "XcodeBuildMCP",
+    "context7"
+  ],
+  "enableAllProjectMcpServers": true
 }
