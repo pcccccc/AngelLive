@@ -23,48 +23,45 @@ struct LiveRoomCard: View {
         GeometryReader { geometry in
             let cardWidth = width ?? geometry.size.width
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack {
                 // 封面图
                 ZStack(alignment: .topTrailing) {
-                    AsyncImage(url: URL(string: room.roomCover)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(16/9, contentMode: .fill)
-                    } placeholder: {
+
+                    KFImage(URL(string: room.roomCover))
+                    .placeholder {
                         Rectangle()
                             .fill(AppConstants.Colors.placeholderGradient())
                     }
-                    .aspectRatio(16/9, contentMode: .fill)
+                    .resizable()
+                    .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fill)
+                    .blur(radius: 10)
                     .frame(width: cardWidth)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    // 直播状态标签
-                    if let liveState = room.liveState, !liveState.isEmpty {
-                        Text(liveState)
-                            .font(.caption2.bold())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(AppConstants.Colors.liveStatus.gradient)
-                            )
-                            .padding(8)
-                    }
+                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
+                    
+                    KFImage(URL(string: room.roomCover))
+                        .placeholder {
+                            Image("placeholder")
+                                .resizable()
+                                .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                                .frame(width: cardWidth)
+                                .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
+                        }
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: cardWidth)
+                        .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
                 }
 
                 // 主播信息
                 HStack(spacing: 8) {
-                    AsyncImage(url: URL(string: room.userHeadImg)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                    }
-                    .frame(width: 32, height: 32)
-                    .clipShape(Circle())
+                    KFImage(URL(string: room.userHeadImg))
+                        .placeholder {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                        }
+                        .resizable()
+                        .frame(width: 32, height: 32)
+                        .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(room.roomTitle)
@@ -77,20 +74,15 @@ struct LiveRoomCard: View {
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                             .lineLimit(1)
                     }
+                    
+                    Spacer()
                 }
                 .frame(width: cardWidth)
             }
             .frame(width: cardWidth)
-            .padding(AppConstants.Spacing.md)
             .background(
                 RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
-                    .fill(AppConstants.Colors.materialBackground)
-                    .shadow(
-                        color: AppConstants.Shadow.md.color,
-                        radius: AppConstants.Shadow.md.radius,
-                        x: AppConstants.Shadow.md.x,
-                        y: AppConstants.Shadow.md.y
-                    )
+                    .fill(.clear)
             )
             .scaleEffect(isPressed ? 0.95 : 1.0)
             .animation(.spring(response: 0.3), value: isPressed)
@@ -101,6 +93,6 @@ struct LiveRoomCard: View {
                 isPressed = pressing
             }, perform: {})
         }
-        .aspectRatio(280/240, contentMode: .fit)
+        .aspectRatio(AppConstants.AspectRatio.card, contentMode: .fit)
     }
 }

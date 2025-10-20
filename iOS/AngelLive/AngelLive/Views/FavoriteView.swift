@@ -12,25 +12,26 @@ import AngelLiveCore
 struct FavoriteView: View {
     @State private var viewModel = AppFavoriteModel()
     @State private var isRefreshing = false
-    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                if isLoading {
-                    skeletonView
-                } else if viewModel.cloudKitReady {
-                    if viewModel.roomList.isEmpty {
-                        emptyStateView
+            GeometryReader { geometry in
+                ScrollView {
+                    if viewModel.isLoading {
+                        skeletonView(geometry: geometry)
+                    } else if viewModel.cloudKitReady {
+                        if viewModel.roomList.isEmpty {
+                            emptyStateView
+                        } else {
+                            favoriteContentView(geometry: geometry)
+                        }
                     } else {
-                        favoriteContentView
+                        cloudKitErrorView
                     }
-                } else {
-                    cloudKitErrorView
                 }
-            }
-            .refreshable {
-                await refreshFavorites()
+                .refreshable {
+                    await refreshFavorites()
+                }
             }
             .navigationTitle("收藏")
             .navigationBarTitleDisplayMode(.large)
@@ -58,32 +59,29 @@ struct FavoriteView: View {
         .padding(.top, 100)
     }
 
-    private var skeletonView: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    // 第一个分组：正在直播（网格布局）
-                    skeletonLiveSection(geometry: geometry)
-
-                    // 其他分组：横向滚动
-                    ForEach(0..<2, id: \.self) { _ in
-                        skeletonHorizontalSection(geometry: geometry)
-                    }
-                }
-                .padding(.vertical)
-            }
+    @ViewBuilder
+    private func skeletonView(geometry: GeometryProxy) -> some View {
+        LazyVStack(spacing: 20) {
+            // 第一个分组：正在直播（网格布局）
+            skeletonLiveSection(geometry: geometry)
         }
+        .padding(.top)
+        .padding(.bottom, 80)  // 增加底部间距，与实际内容保持一致
+        .shimmering()  // 在最外层应用一次 shimmer，提升性能
     }
 
     @ViewBuilder
     private func skeletonLiveSection(geometry: GeometryProxy) -> some View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let columns = isIPad ? 3 : 2
-        let spacing: CGFloat = 16
-        let horizontalPadding: CGFloat = 16
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的水平间距
+        let verticalSpacing: CGFloat = 24    // 卡片之间的垂直间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
         let screenWidth = geometry.size.width
-        let totalSpacing = spacing * CGFloat(columns - 1) + horizontalPadding * 2
-        let cardWidth = (screenWidth - totalSpacing) / CGFloat(columns)
+
+        // 计算卡片宽度：(屏幕宽度 - 左边距 - 右边距 - 卡片间距) / 列数
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
 
         VStack(alignment: .leading, spacing: 12) {
             // 分组标题骨架
@@ -94,8 +92,8 @@ struct FavoriteView: View {
 
             // 网格卡片骨架 - 只显示一行，减少内存占用
             LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: spacing), count: columns),
-                spacing: spacing
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+                spacing: verticalSpacing
             ) {
                 ForEach(0..<columns, id: \.self) { _ in
                     LiveRoomCardSkeleton(width: cardWidth)
@@ -103,18 +101,18 @@ struct FavoriteView: View {
             }
             .padding(.horizontal, horizontalPadding)
         }
-        .shimmering()  // 在整个分组上应用 shimmer，而不是每个元素
     }
 
     @ViewBuilder
     private func skeletonHorizontalSection(geometry: GeometryProxy) -> some View {
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let visibleCards: CGFloat = isIPad ? 3.5 : 2.5
-        let spacing: CGFloat = 16
-        let horizontalPadding: CGFloat = 16
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
         let screenWidth = geometry.size.width
-        let totalSpacing = spacing * (visibleCards - 1) + horizontalPadding
+        let totalSpacing = horizontalSpacing * (visibleCards - 1) + horizontalPadding
         let cardWidth = (screenWidth - totalSpacing) / visibleCards
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card
 
         VStack(alignment: .leading, spacing: 12) {
             // 分组标题骨架
@@ -123,15 +121,15 @@ struct FavoriteView: View {
                 .frame(width: 120, height: 24)
                 .padding(.horizontal)
 
-            // 横向滚动的卡片骨架 - 减少卡片数量
-            HStack(spacing: spacing) {
-                ForEach(0..<Int(ceil(visibleCards)), id: \.self) { _ in
+            // 横向滚动的卡片骨架 - 只显示 2 张卡片，减少动画数量
+            HStack(spacing: horizontalSpacing) {
+                ForEach(0..<2, id: \.self) { _ in
                     LiveRoomCardSkeleton(width: cardWidth)
+                        .frame(width: cardWidth, height: cardHeight)
                 }
             }
             .padding(.horizontal, horizontalPadding)
         }
-        .shimmering()  // 在整个分组上应用 shimmer，而不是每个元素
     }
 
     private var cloudKitErrorView: some View {
@@ -166,15 +164,11 @@ struct FavoriteView: View {
         .padding(.top, 100)
     }
 
-    private var favoriteContentView: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    ForEach(viewModel.groupedRoomList, id: \.id) { section in
-                        sectionView(section: section, geometry: geometry)
-                    }
-                }
-                .padding(.vertical)
+    @ViewBuilder
+    private func favoriteContentView(geometry: GeometryProxy) -> some View {
+        LazyVStack(spacing: 20) {
+            ForEach(viewModel.groupedRoomList, id: \.id) { section in
+                sectionView(section: section, geometry: geometry)
             }
         }
     }
@@ -200,51 +194,57 @@ struct FavoriteView: View {
                 horizontalScrollSection(roomList: section.roomList, screenWidth: screenWidth, isIPad: isIPad)
             }
         }
+        .safeAreaPadding(.vertical)
     }
 
     // 正在直播的网格布局
     @ViewBuilder
     private func liveSectionGrid(roomList: [LiveModel], screenWidth: CGFloat, isIPad: Bool) -> some View {
         let columns = isIPad ? 3 : 2
-        let spacing: CGFloat = 16
-        let horizontalPadding: CGFloat = 16
-        let totalSpacing = spacing * CGFloat(columns - 1) + horizontalPadding * 2
-        let cardWidth = (screenWidth - totalSpacing) / CGFloat(columns)
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的水平间距
+        let verticalSpacing: CGFloat = 24    // 卡片之间的垂直间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
+
+        // 计算卡片宽度：(屏幕宽度 - 左边距 - 右边距 - 卡片间距) / 列数
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
 
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: columns),
-            spacing: spacing
+            columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+            spacing: verticalSpacing
         ) {
             ForEach(roomList, id: \.roomId) { room in
                 LiveRoomCard(room: room, width: cardWidth)
             }
         }
         .padding(.horizontal, horizontalPadding)
+        .ignoresSafeArea()
     }
 
     // 其他分组的横向滚动布局
     @ViewBuilder
     private func horizontalScrollSection(roomList: [LiveModel], screenWidth: CGFloat, isIPad: Bool) -> some View {
         let visibleCards: CGFloat = isIPad ? 3.5 : 2.5
-        let spacing: CGFloat = 16
-        let horizontalPadding: CGFloat = 16
-        let totalSpacing = spacing * (visibleCards - 1) + horizontalPadding
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
+        let totalSpacing = horizontalSpacing * (visibleCards - 1) + horizontalPadding
         let cardWidth = (screenWidth - totalSpacing) / visibleCards
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card
 
         ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: spacing) {
+            LazyHStack(spacing: horizontalSpacing) {
                 ForEach(roomList, id: \.roomId) { room in
                     LiveRoomCard(room: room, width: cardWidth)
+                        .frame(width: cardWidth, height: cardHeight)
                 }
             }
             .padding(.horizontal, horizontalPadding)
         }
+        .frame(height: cardHeight)
     }
 
     private func loadFavorites() async {
-        isLoading = true
         await viewModel.syncWithActor()
-        isLoading = false
     }
 
     private func refreshFavorites() async {

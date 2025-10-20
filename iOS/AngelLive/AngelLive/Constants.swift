@@ -99,13 +99,10 @@ enum AppConstants {
         // MARK: - Specific Use Colors (特定用途颜色)
 
         /// 直播状态 - 正在直播
-        static let liveStatus = Color.red
+        static let liveStatus = Color.green
 
         /// 离线状态
         static let offlineStatus = Color.gray
-
-        /// 收藏/喜欢
-        static let favorite = Color.yellow
 
         /// 卡片背景渐变色（用于占位符等）
         static func placeholderGradient() -> LinearGradient {
@@ -149,6 +146,11 @@ enum AppConstants {
         static let sm = (color: AppConstants.Colors.primaryShadow, radius: CGFloat(4), x: CGFloat(0), y: CGFloat(2))
         static let md = (color: AppConstants.Colors.primaryShadow, radius: CGFloat(8), x: CGFloat(0), y: CGFloat(4))
         static let lg = (color: AppConstants.Colors.primaryShadow, radius: CGFloat(10), x: CGFloat(0), y: CGFloat(5))
+    }
+    
+    enum AspectRatio {
+        static let pic = 16.0 / 9.0
+        static let card = 1.2
     }
 }
 
