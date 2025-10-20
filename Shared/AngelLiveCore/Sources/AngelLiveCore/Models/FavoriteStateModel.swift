@@ -45,6 +45,7 @@ public actor FavoriteStateModel: ObservableObject {
         
         await withTaskGroup(of: (Int, LiveModel?, String, String, String).self) { group in
             for (index, liveModel) in filteredRoomList.enumerated() {
+                print(index)
                 group.addTask {
                     // 不在任务中修改 actor 属性，而是返回状态信息
                     do {
@@ -52,8 +53,10 @@ public actor FavoriteStateModel: ObservableObject {
                         if liveModel.liveType == .ks {
                             var finalLiveModel = liveModel
                             finalLiveModel.liveState = dataReq.liveState
+                            print((index, finalLiveModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功"))
                             return (index, finalLiveModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功")
                         } else {
+                            print(index, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功")
                             return (index, dataReq, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功")
                         }
                     } catch {
@@ -63,6 +66,7 @@ public actor FavoriteStateModel: ObservableObject {
                         } else {
                             errorModel.liveState = LiveState.unknow.rawValue
                         }
+                        print((index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败"))
                         return (index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败")
                     }
                     

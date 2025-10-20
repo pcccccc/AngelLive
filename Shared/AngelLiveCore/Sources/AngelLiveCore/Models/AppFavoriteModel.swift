@@ -35,24 +35,14 @@ public final class AppFavoriteModel {
         self.cloudKitReady = state.0
         self.cloudKitStateString = state.1
         if self.cloudKitReady {
-            // 创建一个异步任务来处理进度更新
-            let progressTask = Task { @MainActor in
-                while !Task.isCancelled {
-                    let progress = await actor.getCurrentProgress()
-                    self.syncProgressInfo = progress
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                }
-            }
             do {
                 let resp = try await actor.syncStreamerLiveStates()
                 self.roomList = resp.0
                 self.groupedRoomList = resp.1
-                progressTask.cancel()
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
             }catch {
                 self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
-                progressTask.cancel()
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
                 cloudReturnError = true

@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import AngelLiveCore
+import AngelLiveDependencies
 
 @main
 struct AngelLiveApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onAppear {
+                    GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
+                }
         }
     }
 }
