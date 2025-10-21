@@ -10,12 +10,15 @@ import AngelLiveDependencies
 import AngelLiveCore
 
 struct SearchView: View {
-    @State private var viewModel = SearchViewModel()
+    @Environment(SearchViewModel.self) private var viewModel
     @State private var searchResults: [LiveModel] = []
     @State private var isSearching = false
     @FocusState private var isSearchFieldFocused: Bool
 
     var body: some View {
+        
+        @Bindable var viewModel = viewModel
+        
         NavigationStack {
             VStack(spacing: 0) {
                 // 搜索类型选择器

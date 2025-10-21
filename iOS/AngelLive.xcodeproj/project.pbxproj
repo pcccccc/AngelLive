@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB6991472EA77D7D00F29F0E /* JXSegmentedView in Frameworks */ = {isa = PBXBuildFile; productRef = FB6991462EA77D7D00F29F0E /* JXSegmentedView */; };
 		FBA85D9D2EA5E78600D976E1 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85D9C2EA5E78600D976E1 /* SharedAssets */; };
 		FBA85D9F2EA5E83800D976E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */; };
 		FBA85DA92EA6337C00D976E1 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85DA82EA6337C00D976E1 /* LiveParse */; };
@@ -19,9 +20,22 @@
 		FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		FB00C4DE2EA754AA0066BEFD /* Exceptions for "AngelLive" folder in "AngelLive" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FB7077B22EA1D6450059AFD9 /* AngelLive */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		FB7077B52EA1D6450059AFD9 /* AngelLive */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				FB00C4DE2EA754AA0066BEFD /* Exceptions for "AngelLive" folder in "AngelLive" target */,
+			);
 			path = AngelLive;
 			sourceTree = "<group>";
 		};
@@ -35,6 +49,7 @@
 				FBA85DA92EA6337C00D976E1 /* LiveParse in Frameworks */,
 				FBA85D9D2EA5E78600D976E1 /* SharedAssets in Frameworks */,
 				FBF74A6F2EA1F99B00591EEA /* AngelLiveCore in Frameworks */,
+				FB6991472EA77D7D00F29F0E /* JXSegmentedView in Frameworks */,
 				FBF74A712EA1F99B00591EEA /* AngelLiveDependencies in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -91,6 +106,7 @@
 				FBF74A702EA1F99B00591EEA /* AngelLiveDependencies */,
 				FBA85D9C2EA5E78600D976E1 /* SharedAssets */,
 				FBA85DA82EA6337C00D976E1 /* LiveParse */,
+				FB6991462EA77D7D00F29F0E /* JXSegmentedView */,
 			);
 			productName = AngelLive;
 			productReference = FB7077B32EA1D6450059AFD9 /* AngelLive.app */;
@@ -121,6 +137,7 @@
 			mainGroup = FB7077AA2EA1D6450059AFD9;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				FB6991452EA77D7D00F29F0E /* XCRemoteSwiftPackageReference "JXSegmentedView" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FB7077B42EA1D6450059AFD9 /* Products */;
@@ -286,6 +303,7 @@
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AngelLive/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -320,6 +338,7 @@
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AngelLive/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -366,7 +385,23 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		FB6991452EA77D7D00F29F0E /* XCRemoteSwiftPackageReference "JXSegmentedView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pujiaxin33/JXSegmentedView.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		FB6991462EA77D7D00F29F0E /* JXSegmentedView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FB6991452EA77D7D00F29F0E /* XCRemoteSwiftPackageReference "JXSegmentedView" */;
+			productName = JXSegmentedView;
+		};
 		FBA85D9C2EA5E78600D976E1 /* SharedAssets */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SharedAssets;

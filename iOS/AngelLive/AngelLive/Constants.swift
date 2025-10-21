@@ -150,7 +150,27 @@ enum AppConstants {
     
     enum AspectRatio {
         static let pic = 16.0 / 9.0
-        static let card = 1.2
+
+        /// 根据卡片宽度和设备类型计算合适的宽高比
+        /// - Parameters:
+        ///   - cardWidth: 卡片宽度
+        /// - Returns: 卡片的宽高比
+        static func card(width cardWidth: CGFloat) -> CGFloat {
+            // 封面图高度 = 宽度 / (16/9)
+            let coverHeight = cardWidth / pic
+
+            // 主播信息区域高度：头像(32)
+            let infoHeight: CGFloat = 32
+
+            // 内边距
+            let padding: CGFloat = 8
+
+            // 总高度
+            let totalHeight = coverHeight + infoHeight + padding
+
+            // 返回宽高比 (宽度/高度)
+            return cardWidth / totalHeight
+        }
     }
 }
 

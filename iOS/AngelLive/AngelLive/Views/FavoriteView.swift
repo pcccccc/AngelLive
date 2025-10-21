@@ -10,7 +10,7 @@ import AngelLiveDependencies
 import AngelLiveCore
 
 struct FavoriteView: View {
-    @State private var viewModel = AppFavoriteModel()
+    @Environment(AppFavoriteModel.self) private var viewModel
     @State private var isRefreshing = false
 
     var body: some View {
@@ -112,7 +112,7 @@ struct FavoriteView: View {
         let screenWidth = geometry.size.width
         let totalSpacing = horizontalSpacing * (visibleCards - 1) + horizontalPadding
         let cardWidth = (screenWidth - totalSpacing) / visibleCards
-        let cardHeight = cardWidth / AppConstants.AspectRatio.card
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
 
         VStack(alignment: .leading, spacing: 12) {
             // 分组标题骨架
@@ -208,17 +208,18 @@ struct FavoriteView: View {
         // 计算卡片宽度：(屏幕宽度 - 左边距 - 右边距 - 卡片间距) / 列数
         let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
         let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
 
         LazyVGrid(
             columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
             spacing: verticalSpacing
         ) {
             ForEach(roomList, id: \.roomId) { room in
-                LiveRoomCard(room: room, width: cardWidth)
+                LiveRoomCard(room: room)
+                    .frame(width: cardWidth, height: cardHeight)
             }
         }
         .padding(.horizontal, horizontalPadding)
-        .ignoresSafeArea()
     }
 
     // 其他分组的横向滚动布局
@@ -229,7 +230,7 @@ struct FavoriteView: View {
         let horizontalPadding: CGFloat = 20  // 左右边距
         let totalSpacing = horizontalSpacing * (visibleCards - 1) + horizontalPadding
         let cardWidth = (screenWidth - totalSpacing) / visibleCards
-        let cardHeight = cardWidth / AppConstants.AspectRatio.card
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
 
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: horizontalSpacing) {

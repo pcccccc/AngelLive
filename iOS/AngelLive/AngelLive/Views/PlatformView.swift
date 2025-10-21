@@ -10,9 +10,8 @@ import AngelLiveDependencies
 import AngelLiveCore
 
 struct PlatformView: View {
-    @State private var viewModel = PlatformViewModel()
+    @Environment(PlatformViewModel.self) private var viewModel
     @State private var navigationPath: [Platformdescription] = []
-    @Namespace private var navigationNamespace
     private let gridSpacing = AppConstants.Spacing.lg
 
     var body: some View {
@@ -29,7 +28,6 @@ struct PlatformView: View {
                             NavigationLink(value: platform) {
                                 PlatformCard(platform: platform)
                                     .frame(width: metrics.itemWidth, height: metrics.itemHeight)
-                                    .matchedTransitionSource(id: platform.id, in: navigationNamespace)
                             }
                             .buttonStyle(.plain)
                         }
@@ -48,9 +46,10 @@ struct PlatformView: View {
                 .navigationBarTitleDisplayMode(.large)
             }
             .navigationDestination(for: Platformdescription.self) { platform in
-                PlatformDetailView(platform: platform)
-                    .matchedTransitionSource(id: platform.id, in: navigationNamespace)
-                    .navigationTransition(.zoom(sourceID: platform.id, in: navigationNamespace))
+                PlatformDetailViewControllerWrapper()
+                    .environment(PlatformDetailViewModel(platform: platform))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .navigationTitle(platform.title)
             }
         }
     }
@@ -129,64 +128,6 @@ struct PlatformCard: View {
         .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
             isPressed = pressing
         }, perform: {})
-    }
-}
-
-// MARK: - Platform Detail View
-struct PlatformDetailView: View {
-    let platform: Platformdescription
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if let image = UIImage(named: platform.smallPic) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 100)
-                        .padding(.top, 40)
-                }
-
-                Text(platform.descripiton)
-                    .font(.body)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-
-                VStack(spacing: AppConstants.Spacing.lg) {
-                    Text("直播内容列表")
-                        .font(.headline)
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-
-                    ForEach(0..<5) { _ in
-                        RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                            .fill(AppConstants.Colors.materialBackground)
-                            .frame(height: 100)
-                            .overlay {
-                                Text("加载中...")
-                                    .foregroundStyle(AppConstants.Colors.secondaryText)
-                            }
-                            .padding(.horizontal)
-                    }
-                }
-                .padding(.top, 30)
-            }
-        }
-        .navigationTitle(platform.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
     }
 }
 

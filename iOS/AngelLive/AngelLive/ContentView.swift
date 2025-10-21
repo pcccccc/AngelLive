@@ -20,7 +20,11 @@ enum TabSelection: Hashable {
 struct ContentView: View {
     @State private var selectedTab: TabSelection = .favorite
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    // 创建全局 ViewModels
     @State private var platformViewModel = PlatformViewModel()
+    @State private var favoriteViewModel = AppFavoriteModel()
+    @State private var searchViewModel = SearchViewModel()
 
     // 检测是否为 iPad
     private var isIPad: Bool {
@@ -36,11 +40,16 @@ struct ContentView: View {
     }
 
     var body: some View {
-        if isIPad {
-            iPadTabView
-        } else {
-            iPhoneTabView
+        Group {
+            if isIPad {
+                iPadTabView
+            } else {
+                iPhoneTabView
+            }
         }
+        .environment(platformViewModel)
+        .environment(favoriteViewModel)
+        .environment(searchViewModel)
     }
 
     // iPad 专用 TabView
@@ -58,7 +67,8 @@ struct ContentView: View {
 
                 ForEach(platformViewModel.platformInfo) { platform in
                     Tab(platform.title, systemImage: "play.tv", value: TabSelection.platform(platform)) {
-                        PlatformDetailView(platform: platform)
+                        PlatformDetailViewControllerWrapper()
+                            .environment(PlatformDetailViewModel(platform: platform))
                     }
                 }
             }

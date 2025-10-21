@@ -109,6 +109,15 @@
       }
     },
     {
+      "identity" : "jxsegmentedview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pujiaxin33/JXSegmentedView.git",
+      "state" : {
+        "revision" : "fbbf965d7396bd99ac1ce88a80b6c950b85313f6",
+        "version" : "1.4.1"
+      }
+    },
+    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
@@ -131,8 +140,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "91a4e3d5da7ad5dc024389e619e3fba6d7ffc621",
-        "version" : "2.6.9"
+        "revision" : "9e7e70c4bb3119a4d7ac9865526ef12c328174e8",
+        "version" : "2.7.0"
       }
     },
     {
@@ -142,6 +151,15 @@
       "state" : {
         "revision" : "0d60654eeefd5d7d2bef3835804892c40225e8b2",
         "version" : "1.5.0"
+      }
+    },
+    {
+      "identity" : "liveparse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/LiveParse",
+      "state" : {
+        "revision" : "681ceeab08432c61ecc7a0c8062ec6713705b9a9",
+        "version" : "1.9.1"
       }
     },
     {
