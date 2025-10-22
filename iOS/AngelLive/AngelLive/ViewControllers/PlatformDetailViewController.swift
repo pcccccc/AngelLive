@@ -66,12 +66,6 @@ class PlatformDetailViewController: UIViewController {
         loadCategories()
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        // 当从管理页面返回时，同步 UI 状态到 ViewModel 的选中索引
-        syncUIToViewModelSelection()
-    }
-
     // MARK: - Setup
 
     private func setupUI() {
@@ -153,36 +147,11 @@ class PlatformDetailViewController: UIViewController {
         viewModel.selectedMainCategoryIndex = mainIndex
         mainCategorySegmentedView.selectItemAt(index: mainIndex)
 
-        // 使用 RunLoop 确保 UI 更新完成后再执行子分类选择
-        RunLoop.main.perform {
-            // 切换到指定的子分类
+        // 延迟切换子分类，确保主分类动画完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            guard let self = self else { return }
             if let subCategoryVC = self.mainListContainerView.validListDict[mainIndex] as? SubCategoryViewController {
                 subCategoryVC.selectSubCategory(at: subIndex)
-            }
-        }
-    }
-
-    // 同步 UI 到 ViewModel 的选中索引
-    private func syncUIToViewModelSelection() {
-        let targetMainIndex = viewModel.selectedMainCategoryIndex
-        let targetSubIndex = viewModel.selectedSubCategoryIndex
-
-        // 如果主分类索引发生变化，切换主分类
-        if targetMainIndex != mainCategorySegmentedView.selectedIndex,
-           viewModel.categories.indices.contains(targetMainIndex) {
-            mainCategorySegmentedView.selectItemAt(index: targetMainIndex)
-
-            // 等待主分类切换完成后，再切换子分类
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-                guard let self = self else { return }
-                if let subCategoryVC = self.mainListContainerView.validListDict[targetMainIndex] as? SubCategoryViewController {
-                    subCategoryVC.selectSubCategory(at: targetSubIndex)
-                }
-            }
-        } else {
-            // 主分类没变，只切换子分类
-            if let subCategoryVC = mainListContainerView.validListDict[targetMainIndex] as? SubCategoryViewController {
-                subCategoryVC.selectSubCategory(at: targetSubIndex)
             }
         }
     }

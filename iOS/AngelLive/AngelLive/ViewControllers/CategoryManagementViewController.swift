@@ -16,6 +16,7 @@ class CategoryManagementViewController: UIViewController {
     // MARK: - Properties
 
     private weak var viewModel: PlatformDetailViewModel?
+    var onCategorySelected: ((Int, Int) -> Void)?
 
     // 主分类 JXSegmentedView
     private lazy var mainCategoryDataSource = JXSegmentedTitleDataSource()
@@ -182,17 +183,8 @@ extension CategoryManagementViewController: UICollectionViewDataSource {
 
 extension CategoryManagementViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        guard let viewModel = viewModel else { return }
-
-        // 直接通过 ViewModel 更新选中的分类索引
-        // 由于 ViewModel 是 @Observable，UI 会自动更新
-        Task { @MainActor in
-            viewModel.selectedMainCategoryIndex = selectedMainIndex
-            viewModel.selectedSubCategoryIndex = indexPath.item
-
-            // 加载对应的房间列表
-            await viewModel.loadRoomList()
-        }
+        // 通过闭包回调通知选中的分类
+        onCategorySelected?(selectedMainIndex, indexPath.item)
 
         // 返回上一页
         navigationController?.popViewController(animated: true)

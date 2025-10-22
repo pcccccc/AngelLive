@@ -200,7 +200,30 @@ class SubCategoryViewController: UIViewController {
     @objc private func manageButtonTapped() {
         guard let viewModel = viewModel else { return }
         let managementVC = CategoryManagementViewController(viewModel: viewModel)
+
+        // 设置闭包回调
+        managementVC.onCategorySelected = { [weak self] mainIndex, subIndex in
+            guard let self = self else { return }
+
+            // 通知父视图控制器切换分类
+            if let platformDetailVC = self.findParentViewController(ofType: PlatformDetailViewController.self) {
+                platformDetailVC.selectCategory(mainIndex: mainIndex, subIndex: subIndex)
+            }
+        }
+
         navigationController?.pushViewController(managementVC, animated: true)
+    }
+
+    // 查找指定类型的父控制器
+    private func findParentViewController<T: UIViewController>(ofType type: T.Type) -> T? {
+        var current = parent
+        while current != nil {
+            if let targetVC = current as? T {
+                return targetVC
+            }
+            current = current?.parent
+        }
+        return nil
     }
 }
 
