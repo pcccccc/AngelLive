@@ -182,11 +182,19 @@ extension CategoryManagementViewController: UICollectionViewDataSource {
 
 extension CategoryManagementViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        // 找到 PlatformDetailViewController 并回调
-        if let navController = navigationController,
-           let platformDetailVC = navController.viewControllers.first(where: { $0 is PlatformDetailViewController }) as? PlatformDetailViewController {
-            platformDetailVC.selectCategory(mainIndex: selectedMainIndex, subIndex: indexPath.item)
+        guard let viewModel = viewModel else { return }
+
+        // 直接通过 ViewModel 更新选中的分类索引
+        // 由于 ViewModel 是 @Observable，UI 会自动更新
+        Task { @MainActor in
+            viewModel.selectedMainCategoryIndex = selectedMainIndex
+            viewModel.selectedSubCategoryIndex = indexPath.item
+
+            // 加载对应的房间列表
+            await viewModel.loadRoomList()
         }
+
+        // 返回上一页
         navigationController?.popViewController(animated: true)
     }
 }
