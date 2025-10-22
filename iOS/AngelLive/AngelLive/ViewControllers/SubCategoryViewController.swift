@@ -50,9 +50,10 @@ class SubCategoryViewController: UIViewController {
     // 管理按钮
     private lazy var manageButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("管理", for: .normal)
-        button.setTitleColor(UIColor(AppConstants.Colors.accent), for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        let image = UIImage(systemName: "line.3.horizontal.circle", withConfiguration: config)
+        button.setImage(image, for: .normal)
+        button.tintColor = UIColor(AppConstants.Colors.accent)
         button.addTarget(self, action: #selector(manageButtonTapped), for: .touchUpInside)
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
@@ -97,7 +98,8 @@ class SubCategoryViewController: UIViewController {
             // 管理按钮
             manageButton.centerYAnchor.constraint(equalTo: subCategorySegmentedView.centerYAnchor),
             manageButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            manageButton.widthAnchor.constraint(equalToConstant: 50),
+            manageButton.widthAnchor.constraint(equalToConstant: 36),
+            manageButton.heightAnchor.constraint(equalToConstant: 36),
 
             // 房间列表容器
             listContainerView.topAnchor.constraint(equalTo: subCategorySegmentedView.bottomAnchor),

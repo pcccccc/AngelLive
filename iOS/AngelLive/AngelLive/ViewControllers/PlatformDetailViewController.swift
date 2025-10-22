@@ -142,12 +142,13 @@ class PlatformDetailViewController: UIViewController {
 
     func selectCategory(mainIndex: Int, subIndex: Int) {
         // 切换到指定的主分类
+        guard viewModel.categories.indices.contains(mainIndex) else { return }
+
         viewModel.selectedMainCategoryIndex = mainIndex
         mainCategorySegmentedView.selectItemAt(index: mainIndex)
 
-        // 延迟执行子分类选择，确保主分类切换完成
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self = self else { return }
+        // 使用 RunLoop 确保 UI 更新完成后再执行子分类选择
+        RunLoop.main.perform {
             // 切换到指定的子分类
             if let subCategoryVC = self.mainListContainerView.validListDict[mainIndex] as? SubCategoryViewController {
                 subCategoryVC.selectSubCategory(at: subIndex)
