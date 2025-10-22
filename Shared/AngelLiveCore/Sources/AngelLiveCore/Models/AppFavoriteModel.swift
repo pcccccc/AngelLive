@@ -11,6 +11,14 @@ import CloudKit
 import Observation
 import LiveParse
 
+/// iCloud同步状态
+public enum CloudSyncStatus {
+    case syncing      // 正在同步
+    case success      // 同步成功
+    case error        // 同步错误
+    case notLoggedIn  // 未登录iCloud
+}
+
 @Observable
 public final class AppFavoriteModel {
     public let actor = FavoriteStateModel()
@@ -21,8 +29,28 @@ public final class AppFavoriteModel {
     public var cloudKitStateString: String = "正在检查iCloud状态"
     public var syncProgressInfo: (String, String, String, Int, Int) = ("", "", "", 0, 0)
     public var cloudReturnError = false
+    public var syncStatus: CloudSyncStatus = .syncing
+    public var lastSyncTime: Date?
 
     public init() {}
+
+    /// 判断是否需要同步数据
+    /// - Returns: 如果列表为空或距离上次同步超过1分钟则返回true
+    public func shouldSync() -> Bool {
+        // 如果列表为空，需要同步
+        if roomList.isEmpty {
+            return true
+        }
+
+        // 如果从未同步过，需要同步
+        guard let lastSync = lastSyncTime else {
+            return true
+        }
+
+        // 如果距离上次同步超过1分钟，需要同步
+        let timeInterval = Date().timeIntervalSince(lastSync)
+        return timeInterval > 60 // 60秒 = 1分钟
+    }
 
     @MainActor
     public func syncWithActor() async {
@@ -31,9 +59,12 @@ public final class AppFavoriteModel {
         cloudReturnError = false
         syncProgressInfo = ("", "", "", 0, 0)
         self.isLoading = true
+        self.syncStatus = .syncing
+
         let state = await actor.getState()
         self.cloudKitReady = state.0
         self.cloudKitStateString = state.1
+
         if self.cloudKitReady {
             do {
                 let resp = try await actor.syncStreamerLiveStates()
@@ -41,22 +72,26 @@ public final class AppFavoriteModel {
                 self.groupedRoomList = resp.1
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
-            }catch {
+                syncStatus = .success
+                lastSyncTime = Date() // 记录同步时间
+            } catch {
                 self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
                 cloudReturnError = true
+                syncStatus = .error
             }
-        }else {
+        } else {
             let state = await FavoriteService.getCloudState()
             if state == "无法确定状态" {
                 self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + state + "请尝试重新在设置中登录iCloud"
-            }else {
+            } else {
                 self.cloudKitStateString = state
             }
             syncProgressInfo = ("", "", "", 0, 0)
             isLoading = false
             cloudReturnError = true
+            syncStatus = .notLoggedIn
         }
     }
 

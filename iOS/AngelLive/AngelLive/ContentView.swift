@@ -55,8 +55,14 @@ struct ContentView: View {
     // iPad 专用 TabView
     private var iPadTabView: some View {
         TabView(selection: $selectedTab) {
-            Tab("收藏", systemImage: "star.fill", value: TabSelection.favorite) {
+            Tab(value: TabSelection.favorite) {
                 FavoriteView()
+            } label: {
+                Label {
+                    Text("收藏")
+                } icon: {
+                    CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                }
             }
 
             TabSection(platformSectionTitle) {
@@ -87,8 +93,14 @@ struct ContentView: View {
     // iPhone 专用 TabView
     private var iPhoneTabView: some View {
         TabView {
-            Tab("收藏", systemImage: "star.fill") {
+            Tab {
                 FavoriteView()
+            } label: {
+                Label {
+                    Text("收藏")
+                } icon: {
+                    CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                }
             }
 
             Tab("平台", systemImage: "square.grid.2x2.fill") {

@@ -52,7 +52,6 @@ struct LiveRoomCard: View {
                     }
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
             }
             .matchedTransitionSource(id: room.roomId, in: namespace)
 

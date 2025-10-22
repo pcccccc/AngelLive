@@ -245,10 +245,14 @@ struct FavoriteView: View {
     }
 
     private func loadFavorites() async {
-        await viewModel.syncWithActor()
+        // 只有在需要同步时才同步（列表为空或超过1分钟）
+        if viewModel.shouldSync() {
+            await viewModel.syncWithActor()
+        }
     }
 
     private func refreshFavorites() async {
+        // 手动刷新时始终同步
         isRefreshing = true
         await viewModel.syncWithActor()
         isRefreshing = false

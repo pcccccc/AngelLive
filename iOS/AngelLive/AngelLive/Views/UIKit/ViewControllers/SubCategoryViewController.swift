@@ -50,8 +50,8 @@ class SubCategoryViewController: UIViewController {
     // 管理按钮
     private lazy var manageButton: UIButton = {
         let button = UIButton(type: .system)
-        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
-        let image = UIImage(systemName: "line.3.horizontal.circle", withConfiguration: config)
+        let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        let image = UIImage(systemName: "chart.bar.yaxis", withConfiguration: config)
         button.setImage(image, for: .normal)
         button.tintColor = UIColor(AppConstants.Colors.accent)
         button.addTarget(self, action: #selector(manageButtonTapped), for: .touchUpInside)
@@ -98,8 +98,8 @@ class SubCategoryViewController: UIViewController {
             // 管理按钮
             manageButton.centerYAnchor.constraint(equalTo: subCategorySegmentedView.centerYAnchor),
             manageButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            manageButton.widthAnchor.constraint(equalToConstant: 36),
-            manageButton.heightAnchor.constraint(equalToConstant: 36),
+            manageButton.widthAnchor.constraint(equalToConstant: 30),
+            manageButton.heightAnchor.constraint(equalToConstant: 30),
 
             // 房间列表容器
             listContainerView.topAnchor.constraint(equalTo: subCategorySegmentedView.bottomAnchor),
@@ -192,7 +192,7 @@ class SubCategoryViewController: UIViewController {
               viewModel.categories.indices.contains(mainCategoryIndex) else {
             return []
         }
-        return viewModel.categories[mainCategoryIndex].subList ?? []
+        return viewModel.categories[mainCategoryIndex].subList
     }
 
     // MARK: - Actions
