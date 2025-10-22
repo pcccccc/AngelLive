@@ -137,6 +137,23 @@ class PlatformDetailViewController: UIViewController {
             }
         }
     }
+
+    // MARK: - Public Methods
+
+    func selectCategory(mainIndex: Int, subIndex: Int) {
+        // 切换到指定的主分类
+        viewModel.selectedMainCategoryIndex = mainIndex
+        mainCategorySegmentedView.selectItemAt(index: mainIndex)
+
+        // 延迟执行子分类选择，确保主分类切换完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self = self else { return }
+            // 切换到指定的子分类
+            if let subCategoryVC = self.mainListContainerView.validListDict[mainIndex] as? SubCategoryViewController {
+                subCategoryVC.selectSubCategory(at: subIndex)
+            }
+        }
+    }
 }
 
 // MARK: - JXSegmentedViewDelegate

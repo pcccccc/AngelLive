@@ -47,6 +47,17 @@ class SubCategoryViewController: UIViewController {
         return container
     }()
 
+    // 管理按钮
+    private lazy var manageButton: UIButton = {
+        let button = UIButton(type: .system)
+        button.setTitle("管理", for: .normal)
+        button.setTitleColor(UIColor(AppConstants.Colors.accent), for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        button.addTarget(self, action: #selector(manageButtonTapped), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+
     // MARK: - Initialization
 
     init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int) {
@@ -73,14 +84,20 @@ class SubCategoryViewController: UIViewController {
         view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
 
         view.addSubview(subCategorySegmentedView)
+        view.addSubview(manageButton)
         view.addSubview(listContainerView)
 
         NSLayoutConstraint.activate([
             // 子分类 SegmentedView
             subCategorySegmentedView.topAnchor.constraint(equalTo: view.topAnchor),
             subCategorySegmentedView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            subCategorySegmentedView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            subCategorySegmentedView.trailingAnchor.constraint(equalTo: manageButton.leadingAnchor, constant: -8),
             subCategorySegmentedView.heightAnchor.constraint(equalToConstant: 50),
+
+            // 管理按钮
+            manageButton.centerYAnchor.constraint(equalTo: subCategorySegmentedView.centerYAnchor),
+            manageButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            manageButton.widthAnchor.constraint(equalToConstant: 50),
 
             // 房间列表容器
             listContainerView.topAnchor.constraint(equalTo: subCategorySegmentedView.bottomAnchor),
@@ -136,12 +153,52 @@ class SubCategoryViewController: UIViewController {
         }
     }
 
+    func selectSubCategory(at index: Int) {
+        guard let viewModel = viewModel else { return }
+        let subCategories = getCurrentSubCategories()
+        guard index < subCategories.count else { return }
+
+        viewModel.selectedSubCategoryIndex = index
+        subCategorySegmentedView.selectItemAt(index: index)
+
+        // 检查缓存，如果没有数据则加载
+        let key = "\(mainCategoryIndex)-\(index)"
+        if viewModel.roomListCache[key]?.isEmpty ?? true {
+            Task { @MainActor in
+                // 临时保存并恢复索引
+                let oldMainIndex = viewModel.selectedMainCategoryIndex
+                let oldSubIndex = viewModel.selectedSubCategoryIndex
+
+                viewModel.selectedMainCategoryIndex = mainCategoryIndex
+                viewModel.selectedSubCategoryIndex = index
+
+                await viewModel.loadRoomList()
+
+                viewModel.selectedMainCategoryIndex = oldMainIndex
+                viewModel.selectedSubCategoryIndex = oldSubIndex
+
+                // 通知当前显示的 ViewController 更新数据
+                if let currentVC = listContainerView.validListDict[index] as? RoomListViewController {
+                    currentVC.updateRooms()
+                }
+            }
+        }
+    }
+
     private func getCurrentSubCategories() -> [LiveCategoryModel] {
         guard let viewModel = viewModel,
               viewModel.categories.indices.contains(mainCategoryIndex) else {
             return []
         }
         return viewModel.categories[mainCategoryIndex].subList ?? []
+    }
+
+    // MARK: - Actions
+
+    @objc private func manageButtonTapped() {
+        guard let viewModel = viewModel else { return }
+        let managementVC = CategoryManagementViewController(viewModel: viewModel)
+        navigationController?.pushViewController(managementVC, animated: true)
     }
 }
 
