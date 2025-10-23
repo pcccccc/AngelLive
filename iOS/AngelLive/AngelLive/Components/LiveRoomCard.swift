@@ -20,9 +20,9 @@ struct LiveRoomCard: View {
 
     var body: some View {
         NavigationLink {
-            DetailPlayerView()
-                .environment(RoomInfoViewModel(room: room))
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                 .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                .toolbar(.hidden, for: .tabBar)
         } label: {
             cardContent
         }
@@ -52,6 +52,7 @@ struct LiveRoomCard: View {
                     }
                     .resizable()
                     .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
             }
             .matchedTransitionSource(id: room.roomId, in: namespace)
 

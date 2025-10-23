@@ -17,6 +17,9 @@ class PlatformDetailViewController: UIViewController {
 
     private var viewModel: PlatformDetailViewModel
 
+    // 骨架屏容器
+    private var skeletonHostingController: UIHostingController<PlatformDetailSkeletonView>?
+
     // 主分类 JXSegmentedView
     private lazy var mainCategoryDataSource = JXSegmentedTitleDataSource()
 
@@ -71,6 +74,9 @@ class PlatformDetailViewController: UIViewController {
     private func setupUI() {
         view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         title = viewModel.platform.title
+
+        // 先显示骨架屏
+        showSkeletonView()
 
         view.addSubview(mainCategorySegmentedView)
         view.addSubview(mainListContainerView)
@@ -134,7 +140,49 @@ class PlatformDetailViewController: UIViewController {
 
             if !viewModel.categories.isEmpty {
                 setupMainCategories()
+                // 加载完成后隐藏骨架屏
+                hideSkeletonView()
             }
+        }
+    }
+
+    // MARK: - Skeleton View Methods
+
+    private func showSkeletonView() {
+        let skeletonView = PlatformDetailSkeletonView()
+        let hostingController = UIHostingController(rootView: skeletonView)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        skeletonHostingController = hostingController
+
+        // 隐藏实际内容
+        mainCategorySegmentedView.alpha = 0
+        mainListContainerView.alpha = 0
+    }
+
+    private func hideSkeletonView() {
+        guard let skeletonHostingController = skeletonHostingController else { return }
+
+        UIView.animate(withDuration: 0.3, animations: {
+            skeletonHostingController.view.alpha = 0
+            self.mainCategorySegmentedView.alpha = 1
+            self.mainListContainerView.alpha = 1
+        }) { _ in
+            skeletonHostingController.willMove(toParent: nil)
+            skeletonHostingController.view.removeFromSuperview()
+            skeletonHostingController.removeFromParent()
+            self.skeletonHostingController = nil
         }
     }
 

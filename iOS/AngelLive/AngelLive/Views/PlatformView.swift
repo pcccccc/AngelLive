@@ -50,6 +50,7 @@ struct PlatformView: View {
                     .environment(PlatformDetailViewModel(platform: platform))
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationTitle(platform.title)
+                    .toolbar(.hidden, for: .tabBar)
             }
         }
     }
@@ -131,7 +132,7 @@ struct PlatformCard: View {
     }
 }
 
-extension Platformdescription: Identifiable {
+extension Platformdescription: @retroactive Identifiable {
     public var id: String { title }
 }
 

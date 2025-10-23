@@ -172,6 +172,26 @@ enum AppConstants {
             return cardWidth / totalHeight
         }
     }
+
+    // MARK: - Device Detection
+
+    /// 设备类型检测
+    enum Device {
+        /// 是否为 iPad
+        static var isIPad: Bool {
+            UIDevice.current.userInterfaceIdiom == .pad
+        }
+
+        /// 是否为 iPhone
+        static var isIPhone: Bool {
+            UIDevice.current.userInterfaceIdiom == .phone
+        }
+
+        /// 是否为 Apple TV
+        static var isTV: Bool {
+            UIDevice.current.userInterfaceIdiom == .tv
+        }
+    }
 }
 
 // MARK: - Convenience Extensions
