@@ -185,7 +185,7 @@ struct FavoriteView: View {
 
         VStack(alignment: .leading, spacing: 16) { // iOS 26: 增加内部间距
             // 分组标题 - iOS 26 风格
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 8) { // 居中对齐
                 // 视觉指示器
                 RoundedRectangle(cornerRadius: 2)
                     .fill(isLiveSection ? Color.red.gradient : Color.blue.gradient) // iOS 26: gradient 效果
@@ -199,8 +199,8 @@ struct FavoriteView: View {
                 Text("\(section.roomList.count)")
                     .font(.caption.monospacedDigit()) // iOS 26: 等宽数字
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
                     .background(
                         Capsule()
                             .fill(.quaternary.opacity(0.5))
