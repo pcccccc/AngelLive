@@ -186,11 +186,6 @@ struct FavoriteView: View {
         VStack(alignment: .leading, spacing: 16) { // iOS 26: 增加内部间距
             // 分组标题 - iOS 26 风格
             HStack(spacing: 8) {
-                // 视觉指示器
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(isLiveSection ? Color.red.gradient : Color.blue.gradient) // iOS 26: gradient 效果
-                    .frame(width: 4, height: 24)
-
                 Text(section.title)
                     .font(.title2.bold())
                     .foregroundStyle(AppConstants.Colors.primaryText)
