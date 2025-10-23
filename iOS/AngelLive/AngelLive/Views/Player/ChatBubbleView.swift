@@ -13,6 +13,50 @@ struct ChatBubbleView: View {
     let message: ChatMessage
 
     var body: some View {
+        if message.isSystemMessage {
+            // 系统消息样式
+            systemMessageView
+        } else {
+            // 普通用户消息样式
+            userMessageView
+        }
+    }
+
+    // 系统消息视图
+    private var systemMessageView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle.fill")
+                .font(.caption2)
+                .foregroundStyle(.yellow.opacity(0.8))
+
+            Text(message.message)
+                .font(.caption2)
+                .foregroundStyle(.yellow.opacity(0.9))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .fill(.yellow.opacity(0.15))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.yellow.opacity(0.3), lineWidth: 0.5)
+                )
+        )
+        .shadow(
+            color: .black.opacity(0.1),
+            radius: 2,
+            x: 0,
+            y: 1
+        )
+    }
+
+    // 用户消息视图
+    private var userMessageView: some View {
         HStack(alignment: .top, spacing: 8) {
             // 用户名
             Text(message.userName)

@@ -15,8 +15,6 @@ struct DetailPlayerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    @State private var chatMessages: [ChatMessage] = ChatMessage.mockMessages
-
     // MARK: - Device & Layout Detection
 
     /// 是否为 iPad
@@ -53,14 +51,26 @@ struct DetailPlayerView: View {
                         portraitLayout
                     }
 
+                    // 屏幕弹幕层（飞过效果）
+                    if viewModel.showDanmu {
+                        DanmuView(coordinator: viewModel.danmuCoordinator)
+                            .allowsHitTesting(false) // 不拦截触摸事件
+                            .zIndex(2)
+                    }
+
                     // 返回按钮（始终显示在左上角）
                     backButton
+                        .zIndex(3)
                 }
             }
         }
         .navigationBarBackButtonHidden(true)
         .task {
             await viewModel.loadPlayURL()
+        }
+        .onDisappear {
+            // 页面消失时断开弹幕连接
+            viewModel.disconnectSocket()
         }
     }
 
@@ -131,7 +141,7 @@ struct DetailPlayerView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(chatMessages) { message in
+                    ForEach(viewModel.danmuMessages) { message in
                         ChatBubbleView(message: message)
                             .id(message.id)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -141,7 +151,7 @@ struct DetailPlayerView: View {
                 .padding(.vertical, 12)
                 .padding(.bottom, 60) // 为更多按钮留出空间
             }
-            .onChange(of: chatMessages.count) { oldValue, newValue in
+            .onChange(of: viewModel.danmuMessages.count) { oldValue, newValue in
                 scrollToBottom(proxy: proxy)
             }
             .onAppear {
@@ -179,7 +189,7 @@ struct DetailPlayerView: View {
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
         withAnimation {
-            if let lastMessage = chatMessages.last {
+            if let lastMessage = viewModel.danmuMessages.last {
                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
             }
         }
@@ -187,7 +197,7 @@ struct DetailPlayerView: View {
 
     private func clearChat() {
         withAnimation {
-            chatMessages.removeAll()
+            viewModel.danmuMessages.removeAll()
         }
     }
 }

@@ -188,8 +188,8 @@ struct FavoriteView: View {
             HStack(alignment: .center, spacing: 8) { // 居中对齐
                 // 视觉指示器
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(isLiveSection ? Color.red.gradient : Color.blue.gradient) // iOS 26: gradient 效果
-                    .frame(width: 4, height: 24)
+                    .fill(isLiveSection ? Color.green.gradient : Color.gray.gradient) // iOS 26: gradient 效果
+                    .frame(width: 4, height: 18)
 
                 Text(section.title)
                     .font(.title2.bold())

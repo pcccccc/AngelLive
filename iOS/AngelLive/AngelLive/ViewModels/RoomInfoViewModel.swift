@@ -36,6 +36,14 @@ final class RoomInfoViewModel {
     var douyuFirstLoad = true
     var yyFirstLoad = true
 
+    // 弹幕相关属性
+    var socketConnection: WebSocketConnection?
+    var danmuMessages: [ChatMessage] = []
+    var danmuServerIsConnected = false
+    var danmuServerIsLoading = false
+    var showDanmu = true // 是否显示弹幕
+    var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
+
     init(room: LiveModel) {
         self.currentRoom = room
 
@@ -96,6 +104,11 @@ final class RoomInfoViewModel {
             return
         }
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+
+        // 启动弹幕连接
+        if showDanmu {
+            getDanmuInfo()
+        }
     }
 
     // 切换清晰度
@@ -260,6 +273,157 @@ final class RoomInfoViewModel {
     func setPlayerDelegate(playerCoordinator: KSVideoPlayer.Coordinator) {
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
+    }
+
+    // MARK: - 弹幕相关方法
+
+    /// 检查平台是否支持弹幕
+    func platformSupportsDanmu() -> Bool {
+        switch currentRoom.liveType {
+        case .bilibili, .huya, .douyin, .douyu:
+            return true
+        case .cc, .ks, .yy, .youtube:
+            return false
+        }
+    }
+
+    /// 添加系统消息到聊天列表
+    @MainActor
+    func addSystemMessage(_ message: String) {
+        let systemMsg = ChatMessage(
+            userName: "系统",
+            message: message,
+            isSystemMessage: true
+        )
+        danmuMessages.append(systemMsg)
+
+        // 限制消息数量
+        if danmuMessages.count > 100 {
+            danmuMessages.removeFirst(danmuMessages.count - 100)
+        }
+    }
+
+    /// 获取弹幕连接信息并连接
+    func getDanmuInfo() {
+        // 检查平台是否支持弹幕
+        if !platformSupportsDanmu() {
+            Task { @MainActor in
+                addSystemMessage("当前平台不支持查看弹幕/评论")
+            }
+            return
+        }
+
+        if danmuServerIsConnected == true || danmuServerIsLoading == true {
+            return
+        }
+
+        Task {
+            danmuServerIsLoading = true
+
+            // 添加连接中消息
+            await MainActor.run {
+                addSystemMessage("正在连接弹幕服务器...")
+            }
+
+            var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
+            do {
+                switch currentRoom.liveType {
+                case .bilibili:
+                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                case .huya:
+                    danmuArgs = try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                case .douyin:
+                    danmuArgs = try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                case .douyu:
+                    danmuArgs = try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                default:
+                    await MainActor.run {
+                        danmuServerIsLoading = false
+                    }
+                    return
+                }
+
+                await MainActor.run {
+                    socketConnection = WebSocketConnection(
+                        parameters: danmuArgs.0,
+                        headers: danmuArgs.1,
+                        liveType: currentRoom.liveType
+                    )
+                    socketConnection?.delegate = self
+                    socketConnection?.connect()
+                }
+            } catch {
+                print("获取弹幕连接失败: \(error)")
+                await MainActor.run {
+                    danmuServerIsLoading = false
+                    addSystemMessage("连接弹幕服务器失败：\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// 断开弹幕连接
+    func disconnectSocket() {
+        socketConnection?.disconnect()
+        socketConnection?.delegate = nil
+        socketConnection = nil
+        danmuServerIsConnected = false
+    }
+
+    /// 添加弹幕消息到聊天列表
+    @MainActor
+    func addDanmuMessage(text: String, userName: String = "观众") {
+        let message = ChatMessage(
+            userName: userName,
+            message: text
+        )
+        danmuMessages.append(message)
+
+        // 限制消息数量，避免内存占用过大
+        if danmuMessages.count > 100 {
+            danmuMessages.removeFirst(danmuMessages.count - 100)
+        }
+    }
+}
+
+// MARK: - WebSocketConnectionDelegate
+extension RoomInfoViewModel: WebSocketConnectionDelegate {
+    func webSocketDidConnect() {
+        Task { @MainActor in
+            danmuServerIsConnected = true
+            danmuServerIsLoading = false
+            addSystemMessage("弹幕服务器连接成功")
+            print("✅ 弹幕服务已连接")
+        }
+    }
+
+    func webSocketDidDisconnect(error: Error?) {
+        Task { @MainActor in
+            danmuServerIsConnected = false
+            danmuServerIsLoading = false
+            if let error = error {
+                addSystemMessage("弹幕服务器已断开：\(error.localizedDescription)")
+                print("❌ 弹幕服务断开: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    func webSocketDidReceiveMessage(text: String, color: UInt32) {
+        Task { @MainActor in
+            // 将弹幕消息添加到聊天列表（底部气泡）
+            addDanmuMessage(text: text)
+
+            // 发射到屏幕弹幕（飞过效果）
+            if showDanmu {
+                danmuCoordinator.shoot(
+                    text: text,
+                    showColorDanmu: true,
+                    color: color,
+                    alpha: 1.0,
+                    font: 16
+                )
+            }
+        }
     }
 }
 

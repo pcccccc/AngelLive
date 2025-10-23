@@ -35,7 +35,7 @@ struct BlurredBackgroundView: View {
                 .blur(radius: 60) // 强烈模糊，创造渐变效果
                 .scaleEffect(1.2) // 放大避免边缘问题
                 .overlay {
-                    Color.black.opacity(0.2)
+                    Color.black.opacity(0.3)
                         .blendMode(.darken)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 }

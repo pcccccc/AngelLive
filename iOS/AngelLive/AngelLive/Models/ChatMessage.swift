@@ -14,19 +14,22 @@ struct ChatMessage: Identifiable, Equatable {
     let userAvatar: String?
     let message: String
     let timestamp: Date
+    let isSystemMessage: Bool // 是否为系统消息
 
     init(
         id: UUID = UUID(),
         userName: String,
         userAvatar: String? = nil,
         message: String,
-        timestamp: Date = Date()
+        timestamp: Date = Date(),
+        isSystemMessage: Bool = false
     ) {
         self.id = id
         self.userName = userName
         self.userAvatar = userAvatar
         self.message = message
         self.timestamp = timestamp
+        self.isSystemMessage = isSystemMessage
     }
 }
 
