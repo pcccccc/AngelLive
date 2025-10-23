@@ -114,13 +114,17 @@ struct SearchView: View {
 
     private var searchResultsList: some View {
         ScrollView {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 16) { // iOS 26: 增加间距
                 ForEach(searchResults, id: \.roomId) { room in
                     SearchResultCard(room: room)
+                        .transition(.opacity.combined(with: .move(edge: .top))) // iOS 26: 流畅过渡
                 }
             }
             .padding()
+            .animation(.smooth(duration: 0.3), value: searchResults.count) // iOS 26: smooth 动画
         }
+        .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
+        .scrollDismissesKeyboard(.interactively) // iOS 26: 交互式键盘消失
     }
 
     private func performSearch() {
@@ -221,7 +225,7 @@ struct SearchResultCard: View {
                 .fill(AppConstants.Colors.materialBackground)
         )
         .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.spring(response: 0.3), value: isPressed)
+        .animation(.bouncy(duration: 0.3), value: isPressed) // iOS 26: bouncy 动画
         .onTapGesture {
             // TODO: Navigate to player view
         }

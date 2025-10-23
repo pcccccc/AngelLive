@@ -29,6 +29,8 @@ struct FavoriteView: View {
                         cloudKitErrorView
                     }
                 }
+                .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
+                .scrollIndicators(.visible, axes: .vertical) // iOS 26: 改进的滚动指示器
                 .refreshable {
                     await refreshFavorites()
                 }
@@ -166,11 +168,13 @@ struct FavoriteView: View {
 
     @ViewBuilder
     private func favoriteContentView(geometry: GeometryProxy) -> some View {
-        LazyVStack(spacing: 20) {
+        LazyVStack(spacing: 32) { // iOS 26: 增加分区间距，提升视觉层次
             ForEach(viewModel.groupedRoomList, id: \.id) { section in
                 sectionView(section: section, geometry: geometry)
+                    .transition(.opacity.combined(with: .move(edge: .top))) // iOS 26: 流畅的过渡动画
             }
         }
+        .animation(.smooth(duration: 0.4), value: viewModel.groupedRoomList.count) // iOS 26: smooth 动画
     }
 
     @ViewBuilder
@@ -179,12 +183,32 @@ struct FavoriteView: View {
         let screenWidth = geometry.size.width
         let isIPad = UIDevice.current.userInterfaceIdiom == .pad
 
-        VStack(alignment: .leading, spacing: 12) {
-            // 分组标题
-            Text(section.title)
-                .font(.title2.bold())
-                .foregroundStyle(AppConstants.Colors.primaryText)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 16) { // iOS 26: 增加内部间距
+            // 分组标题 - iOS 26 风格
+            HStack(spacing: 8) {
+                // 视觉指示器
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isLiveSection ? Color.red.gradient : Color.blue.gradient) // iOS 26: gradient 效果
+                    .frame(width: 4, height: 24)
+
+                Text(section.title)
+                    .font(.title2.bold())
+                    .foregroundStyle(AppConstants.Colors.primaryText)
+
+                // 房间数量标签
+                Text("\(section.roomList.count)")
+                    .font(.caption.monospacedDigit()) // iOS 26: 等宽数字
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(.quaternary.opacity(0.5))
+                    )
+
+                Spacer()
+            }
+            .padding(.horizontal)
 
             if isLiveSection {
                 // 正在直播：纵向网格布局
@@ -194,7 +218,7 @@ struct FavoriteView: View {
                 horizontalScrollSection(roomList: section.roomList, screenWidth: screenWidth, isIPad: isIPad)
             }
         }
-        .safeAreaPadding(.vertical)
+        .safeAreaPadding(.vertical, 8) // iOS 26: 使用 safeAreaPadding
     }
 
     // 正在直播的网格布局
@@ -237,10 +261,18 @@ struct FavoriteView: View {
                 ForEach(roomList, id: \.roomId) { room in
                     LiveRoomCard(room: room, width: cardWidth)
                         .frame(width: cardWidth, height: cardHeight)
+                        .scrollTransition { content, phase in // iOS 26: 滚动过渡效果
+                            content
+                                .opacity(phase.isIdentity ? 1 : 0.8)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.95)
+                        }
                 }
             }
             .padding(.horizontal, horizontalPadding)
+            .scrollTargetLayout() // iOS 26: 优化滚动目标
         }
+        .scrollTargetBehavior(.viewAligned) // iOS 26: 视图对齐滚动
+        .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性
         .frame(height: cardHeight)
     }
 

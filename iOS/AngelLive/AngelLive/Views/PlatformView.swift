@@ -34,7 +34,7 @@ struct PlatformView: View {
                     }
                     .padding(.horizontal, gridSpacing)
                     .padding(.vertical, gridSpacing)
-                    .animation(.easeInOut(duration: 0.3), value: metrics.columns.count)
+                    .animation(.smooth(duration: 0.3), value: metrics.columns.count) // iOS 26: smooth 动画
 
                     Text("敬请期待更多平台...")
                         .font(.caption)
@@ -42,6 +42,7 @@ struct PlatformView: View {
                         .padding(.top, gridSpacing)
                         .padding(.bottom, gridSpacing)
                 }
+                .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
                 .navigationTitle("平台")
                 .navigationBarTitleDisplayMode(.large)
             }
@@ -119,7 +120,7 @@ struct PlatformCard: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
         .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3), value: isPressed)
+        .animation(.bouncy(duration: 0.3), value: isPressed) // iOS 26: bouncy 动画
         .shadow(
             color: AppConstants.Shadow.lg.color,
             radius: AppConstants.Shadow.lg.radius,
