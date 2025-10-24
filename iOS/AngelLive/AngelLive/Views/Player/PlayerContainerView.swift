@@ -42,10 +42,10 @@ struct PlayerContainerView: View {
 }
 
 struct PlayerContentView: View {
-    
+
     @Environment(RoomInfoViewModel.self) private var viewModel
-    @ObservedObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
-    
+    @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
+
     var body: some View {
         ZStack(alignment: .center) {
             // 背景
@@ -53,15 +53,28 @@ struct PlayerContentView: View {
 
             // 如果有播放地址，显示播放器
             if let playURL = viewModel.currentPlayURL {
-                KSVideoPlayer(
-                    coordinator: _playerCoordinator,
-                    url: playURL,
-                    options: viewModel.playerOption
-                )
-                .background(Color.black)
-                .onAppear {
-                    playerCoordinator.playerLayer?.play()
-                    viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
+                if #available(iOS 16.0, *) {
+                    KSVideoPlayerView(
+                        coordinator: playerCoordinator,
+                        url: playURL,
+                        options: viewModel.playerOption
+                    ) { coordinator, isDisappear in
+                        if !isDisappear {
+                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                        }
+                    }
+                } else {
+                    // iOS 15 降级方案
+                    KSVideoPlayer(
+                        coordinator: ObservedObject(wrappedValue: playerCoordinator),
+                        url: playURL,
+                        options: viewModel.playerOption
+                    )
+                    .background(Color.black)
+                    .onAppear {
+                        playerCoordinator.playerLayer?.play()
+                        viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
+                    }
                 }
             } else {
                 if viewModel.isLoading {
