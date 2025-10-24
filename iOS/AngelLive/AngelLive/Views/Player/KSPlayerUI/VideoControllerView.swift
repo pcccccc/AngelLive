@@ -216,27 +216,9 @@ struct VideoTimeShowView: View {
     fileprivate var model: ControllerTimeModel
     fileprivate var timeFont: Font
     var body: some View {
-        if let playerLayer = config.playerLayer, playerLayer.player.seekable {
-            HStack {
-                Text(model.currentTime.toString(for: .minOrHour))
-                PlayerSlider(model: model) { [weak model, weak playerLayer] onEditingChanged in
-                    guard let model, let playerLayer else { return }
-                    if onEditingChanged {
-                        playerLayer.pause()
-                    } else {
-                        playerLayer.seek(time: TimeInterval(model.currentTime))
-                    }
-                }
-                .frame(maxHeight: 20)
-                #if os(visionOS)
-                    .tint(.white.opacity(0.8))
-                #endif
-                Text((model.totalTime).toString(for: .minOrHour))
-            }
-            .font(timeFont.monospacedDigit())
-        } else {
-            Text(String(localized: "Live Streaming", bundle: .module))
-        }
+        // 直播应用，只显示"直播中"
+        Text(String(localized: "Live Streaming", bundle: .module))
+            .font(timeFont)
     }
 }
 
