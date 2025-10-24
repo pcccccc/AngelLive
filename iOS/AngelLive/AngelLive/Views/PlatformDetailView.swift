@@ -72,7 +72,7 @@ struct PlatformDetailView: View {
                     }
                 } else {
                     // 没有子分类时显示空状态
-                    emptyView
+                    emptyView()
                 }
             }
         }
@@ -109,7 +109,7 @@ struct PlatformDetailView: View {
                     }
                 )
             } else if rooms.isEmpty && !viewModel.isLoadingRooms && isCurrentPage {
-                emptyView
+                emptyView()
             } else {
                 roomGridView(geometry: geometry, rooms: rooms)
             }
@@ -197,7 +197,8 @@ struct PlatformDetailView: View {
 
     // MARK: - 加载和空状态视图
 
-    private var loadingView: some View {
+    @ViewBuilder
+    private func loadingView() -> some View {
         VStack(spacing: 20) {
             ProgressView()
                 .scaleEffect(1.5)
@@ -208,7 +209,8 @@ struct PlatformDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var emptyView: some View {
+    @ViewBuilder
+    private func emptyView() -> some View {
         VStack(spacing: 20) {
             Image(systemName: "tv.slash")
                 .font(.system(size: 60))

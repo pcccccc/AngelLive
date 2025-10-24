@@ -12,6 +12,8 @@ import AngelLiveCore
 struct FavoriteView: View {
     @Environment(AppFavoriteModel.self) private var viewModel
     @State private var isRefreshing = false
+    private static var lastLeaveTimestamp: Date?
+    private static var hasPerformedInitialSync = false
 
     var body: some View {
         NavigationStack {
@@ -21,12 +23,12 @@ struct FavoriteView: View {
                         skeletonView(geometry: geometry)
                     } else if viewModel.cloudKitReady {
                         if viewModel.roomList.isEmpty {
-                            emptyStateView
+                            emptyStateView()
                         } else {
                             favoriteContentView(geometry: geometry)
                         }
                     } else {
-                        cloudKitErrorView
+                        cloudKitErrorView()
                     }
                 }
                 .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
@@ -38,12 +40,16 @@ struct FavoriteView: View {
             .navigationTitle("收藏")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                await loadFavorites()
+                await handleOnAppear()
             }
+        }
+        .onDisappear {
+            FavoriteView.lastLeaveTimestamp = Date()
         }
     }
 
-    private var emptyStateView: some View {
+    @ViewBuilder
+    private func emptyStateView() -> some View {
         VStack(spacing: 20) {
             Image(systemName: "star.slash")
                 .font(.system(size: 60))
@@ -134,7 +140,8 @@ struct FavoriteView: View {
         }
     }
 
-    private var cloudKitErrorView: some View {
+    @ViewBuilder
+    private func cloudKitErrorView() -> some View {
         VStack(spacing: 20) {
             Image(systemName: "exclamationmark.icloud")
                 .font(.system(size: 60))
@@ -276,13 +283,37 @@ struct FavoriteView: View {
         .frame(height: cardHeight)
     }
 
-    private func loadFavorites() async {
-        // 只有在需要同步时才同步（列表为空或超过1分钟）
-        if viewModel.shouldSync() {
+    @MainActor
+    private func handleOnAppear() async {
+        if !FavoriteView.hasPerformedInitialSync {
+            await loadFavorites(force: true)
+            FavoriteView.hasPerformedInitialSync = true
+            return
+        }
+
+        guard shouldForceRefresh() else { return }
+
+        await loadFavorites(force: true)
+        FavoriteView.lastLeaveTimestamp = Date()
+    }
+
+    private func shouldForceRefresh() -> Bool {
+        guard let lastLeave = FavoriteView.lastLeaveTimestamp else {
+            return false
+        }
+        return Date().timeIntervalSince(lastLeave) > 60
+    }
+
+    @MainActor
+    private func loadFavorites(force: Bool = false) async {
+        if force {
+            await viewModel.syncWithActor()
+        } else if viewModel.shouldSync() {
             await viewModel.syncWithActor()
         }
     }
 
+    @MainActor
     private func refreshFavorites() async {
         // 手动刷新时始终同步
         isRefreshing = true

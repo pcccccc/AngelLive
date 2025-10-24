@@ -33,12 +33,12 @@ struct SearchView: View {
 
                 // 搜索结果列表
                 if searchResults.isEmpty && !isSearching {
-                    searchEmptyState
+                    searchEmptyState()
                 } else if isSearching {
                     ProgressView("搜索中...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    searchResultsList
+                    searchResultsList()
                 }
             }
             .navigationTitle("搜索")
@@ -67,7 +67,8 @@ struct SearchView: View {
         }
     }
 
-    private var searchEmptyState: some View {
+    @ViewBuilder
+    private func searchEmptyState() -> some View {
         VStack(spacing: 20) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 60))
@@ -112,7 +113,8 @@ struct SearchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var searchResultsList: some View {
+    @ViewBuilder
+    private func searchResultsList() -> some View {
         ScrollView {
             LazyVStack(spacing: 16) { // iOS 26: 增加间距
                 ForEach(searchResults, id: \.roomId) { room in

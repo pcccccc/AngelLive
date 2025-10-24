@@ -14,6 +14,7 @@ struct DetailPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @State private var isPlayerFullScreen = false
 
     // MARK: - Device & Layout Detection
 
@@ -37,7 +38,8 @@ struct DetailPlayerView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // 模糊背景（使用主播头像）- 铺满整个屏幕
-            backgroundView
+            BlurredBackgroundView(imageURL: viewModel.currentRoom.userHeadImg)
+                .edgesIgnoringSafeArea(.all)
 
             // 内容区域
             GeometryReader { geometry in
@@ -58,9 +60,11 @@ struct DetailPlayerView: View {
                             .zIndex(2)
                     }
 
-                    // 返回按钮（始终显示在左上角）
-                    backButton
-                        .zIndex(3)
+                    // 返回按钮（非全屏显示）
+                    if !isPlayerFullScreen {
+                        backButton
+                            .zIndex(3)
+                    }
                 }
             }
         }
@@ -74,35 +78,31 @@ struct DetailPlayerView: View {
         }
     }
 
-    // MARK: - Background
-
-    private var backgroundView: some View {
-        BlurredBackgroundView(imageURL: viewModel.currentRoom.userHeadImg)
-            .edgesIgnoringSafeArea(.all)
-    }
-
     // MARK: - iPad 横屏布局（左右分栏）
 
     private var iPadLandscapeLayout: some View {
         HStack(spacing: 0) {
             // 左侧：播放器
-            PlayerContainerView()
+            PlayerContainerView(isFullScreen: $isPlayerFullScreen)
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)
+                .frame(maxHeight: isPlayerFullScreen ? .infinity : nil)
 
             // 右侧：主播信息 + 聊天
-            VStack(spacing: 0) {
-                // 主播信息
-                StreamerInfoView()
-                    .environment(viewModel)
+            if !isPlayerFullScreen {
+                VStack(spacing: 0) {
+                    // 主播信息
+                    StreamerInfoView()
+                        .environment(viewModel)
 
-                Divider()
-                    .background(Color.white.opacity(0.2))
+                    Divider()
+                        .background(Color.white.opacity(0.2))
 
-                // 聊天区域
-                chatAreaWithMoreButton
+                    // 聊天区域
+                    chatAreaWithMoreButton
+                }
+                .frame(width: 400)
             }
-            .frame(width: 400)
         }
     }
 
@@ -111,15 +111,18 @@ struct DetailPlayerView: View {
     private var portraitLayout: some View {
         VStack(spacing: 0) {
             // 播放器容器
-            PlayerContainerView()
+            PlayerContainerView(isFullScreen: $isPlayerFullScreen)
                 .frame(maxWidth: .infinity)
+                .frame(maxHeight: isPlayerFullScreen ? .infinity : nil)
                 .environment(viewModel)
 
-            // 主播信息
-            StreamerInfoView()
-                .environment(viewModel)
-            // 聊天区域
-            chatAreaWithMoreButton
+            if !isPlayerFullScreen {
+                // 主播信息
+                StreamerInfoView()
+                    .environment(viewModel)
+                // 聊天区域
+                chatAreaWithMoreButton
+            }
         }
     }
 

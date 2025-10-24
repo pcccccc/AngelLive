@@ -370,6 +370,34 @@ final class RoomInfoViewModel {
         danmuServerIsConnected = false
     }
 
+    /// 刷新当前播放流
+    @MainActor
+    func refreshPlayback() {
+        Task {
+            await loadPlayURL()
+        }
+    }
+
+    /// 切换弹幕显示状态
+    @MainActor
+    func toggleDanmuDisplay() {
+        setDanmuDisplay(!showDanmu)
+    }
+
+    /// 设置弹幕显示状态
+    @MainActor
+    func setDanmuDisplay(_ enabled: Bool) {
+        guard enabled != showDanmu else { return }
+        showDanmu = enabled
+        if enabled {
+            danmuCoordinator.play()
+            getDanmuInfo()
+        } else {
+            danmuCoordinator.clear()
+            disconnectSocket()
+        }
+    }
+
     /// 添加弹幕消息到聊天列表
     @MainActor
     func addDanmuMessage(text: String, userName: String = "观众") {
@@ -445,4 +473,3 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         // 缓冲回调
     }
 }
-
