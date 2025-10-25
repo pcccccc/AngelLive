@@ -9,7 +9,6 @@ import SwiftUI
 import KSPlayer
 
 #if !os(tvOS)
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
 @MainActor
 public struct PlayBackCommands: Commands {
     @FocusedObject
@@ -19,7 +18,7 @@ public struct PlayBackCommands: Commands {
     public var body: some Commands {
         CommandMenu("PlayBack") {
             if let config {
-                Button(config.state.isPlaying ? String(localized: "Pause", bundle: .module) : String(localized: "Resume", bundle: .module)) {
+                Button(config.state.isPlaying ? "Pause" : "Resume") {
                     if config.state.isPlaying {
                         config.playerLayer?.pause()
                     } else {
@@ -27,7 +26,7 @@ public struct PlayBackCommands: Commands {
                     }
                 }
                 .keyboardShortcut(.space, modifiers: .none)
-                Button(config.isMuted ? String(localized: "Mute", bundle: .module) : String(localized: "Unmute", bundle: .module)) {
+                Button(config.isMuted ? "Mute" : "Unmute") {
                     config.isMuted.toggle()
                 }
             }
@@ -36,7 +35,6 @@ public struct PlayBackCommands: Commands {
 }
 #endif
 
-@available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
 public struct MenuView<SelectionValue, Content, Label>: View where SelectionValue: Hashable, Content: View, Label: View {
     public let selection: Binding<SelectionValue>
     @ViewBuilder
@@ -53,48 +51,37 @@ public struct MenuView<SelectionValue, Content, Label>: View where SelectionValu
     }
 
     public var body: some View {
-        if #available(tvOS 17, iOS 16, macOS 13.0, *) {
-            Menu {
-                Picker(selection: selection) {
-                    content()
-                } label: {
-                    EmptyView()
-                }
-                .pickerStyle(.inline)
+        Menu {
+            Picker(selection: selection) {
+                content()
             } label: {
-                label()
-                    .menuLabelStyle()
+                EmptyView()
             }
-            .menuIndicator(.hidden)
-            .menuStyle(.borderlessButton)
-        } else {
-            Picker(selection: selection, content: content) {
-                label()
-                    .menuLabelStyle()
-            }
+            .pickerStyle(.inline)
+        } label: {
+            label()
+                .menuLabelStyle()
         }
+        .menuIndicator(.hidden)
+        .menuStyle(.borderlessButton)
     }
 }
 
 public extension View {
-    @available(iOS 15, macOS 12, tvOS 15, *)
-    func menuLabelStyle() -> some View {
+    func ksMenuLabelStyle() -> some View {
         modifier(MenuLabelStyleModifier())
     }
 
-    @available(iOS 14, macOS 11, tvOS 14, *)
-    func isFocused(_ binding: Binding<Bool>) -> some View {
+    func ksIsFocused(_ binding: Binding<Bool>) -> some View {
         modifier(WhenFocusedModifier(isFocuse: binding))
     }
 
-    @available(iOS 15, macOS 12, tvOS 15, *)
-    func isFocused<T: Hashable>(_ binding: Binding<T?>, equals value: T) -> some View {
+    func ksIsFocused<T: Hashable>(_ binding: Binding<T?>, equals value: T) -> some View {
         modifier(FocusModifier(binding: binding, value: value))
     }
 
-    @available(iOS 13, macOS 11, tvOS 15, *)
     @ViewBuilder
-    func borderlessButton() -> some View {
+    func ksBorderlessButton() -> some View {
         #if os(tvOS)
         if #available(tvOS 17, *) {
             self.buttonStyle(.borderless)
@@ -121,7 +108,6 @@ public extension Binding {
 }
 
 /// 这是只读的焦点状态，用于根据焦点调整样式
-@available(iOS 14, macOS 11, tvOS 14, *)
 private struct WhenFocusedModifier: ViewModifier {
     @Environment(\.isFocused)
     private var isFocused: Bool
@@ -135,7 +121,6 @@ private struct WhenFocusedModifier: ViewModifier {
     }
 }
 
-@available(iOS 15, macOS 12, tvOS 15, *)
 private struct FocusModifier<T: Hashable>: ViewModifier {
     @Binding
     var binding: T?
@@ -159,7 +144,6 @@ private struct FocusModifier<T: Hashable>: ViewModifier {
     }
 }
 
-@available(iOS 15, macOS 12, tvOS 15, *)
 private struct MenuLabelStyleModifier: ViewModifier {
     @State
     private var isFocus: Bool = false
@@ -181,12 +165,11 @@ private struct MenuLabelStyleModifier: ViewModifier {
             .font(.title3.weight(.semibold))
             .imageScale(.medium)
         #endif
-            .isFocused($isFocus)
+            .ksIsFocused($isFocus)
     }
 }
 
-@available(iOS 16, macOS 13, tvOS 16, *)
-public struct PlatformView<Content: View>: View {
+public struct KSPlatformView<Content: View>: View {
     private let content: () -> Content
     public var body: some View {
         #if os(tvOS)
@@ -257,14 +240,6 @@ public extension View {
     }
 }
 
-extension Bool {
-    static var iOS16: Bool {
-        guard #available(iOS 16, *) else {
-            return true
-        }
-        return false
-    }
-}
 
 extension View {
     func onKeyPressLeftArrow(action: @escaping () -> Void) -> some View {
@@ -310,28 +285,16 @@ extension View {
 
     #if !os(tvOS)
     func textSelection() -> some View {
-        if #available(iOS 15.0, macOS 12.0, *) {
-            return self.textSelection(.enabled)
-        } else {
-            return self
-        }
+        self.textSelection(.enabled)
     }
     #endif
 
     func italic(value: Bool) -> some View {
-        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
-            return self.italic(value)
-        } else {
-            return self
-        }
+        self.italic(value)
     }
 
     func ksIgnoresSafeArea() -> some View {
-        if #available(iOS 14.0, macOS 11.0, tvOS 14.0, *) {
-            return self.ignoresSafeArea()
-        } else {
-            return self
-        }
+        self.ignoresSafeArea()
     }
 
     func onHoverActive(point: @escaping (CGPoint?) -> Void) -> some View {

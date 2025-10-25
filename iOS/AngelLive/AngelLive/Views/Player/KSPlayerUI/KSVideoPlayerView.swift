@@ -4,12 +4,12 @@
 //
 //  Created by kintan on 2022/1/29.
 //
-import AVFoundation
+internal import AVFoundation
 import Combine
 import MediaPlayer
 import SwiftUI
+import KSPlayer
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 @MainActor
 public struct KSVideoPlayerView: View {
     @ObservedObject
@@ -78,7 +78,7 @@ public struct KSVideoPlayerView: View {
                         }
                     }
                 }
-                .isFocused($model.focusableView, equals: .play)
+                .ksIsFocused($model.focusableView, equals: .play)
                 .opacity(!model.config.isMaskShow ? 1 : 0)
                 #endif
                 controllerView
@@ -174,7 +174,6 @@ public struct KSVideoPlayerView: View {
     }
 }
 
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, *)
 public extension KSVideoPlayerView {
     init(url: URL, options: KSOptions, title: String? = nil, liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)? = nil) {
         self.init(url: url, options: options, title: title, subtitleDataSource: nil, liftCycleBlock: liftCycleBlock)
@@ -196,7 +195,6 @@ public extension KSVideoPlayerView {
     }
 }
 
-@available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
 public class KSVideoPlayerModel: ObservableObject {
     @Published
     public var title: String
@@ -266,7 +264,6 @@ public class KSVideoPlayerModel: ObservableObject {
 }
 
 #if DEBUG
-@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
 struct KSVideoPlayerView_Previews: PreviewProvider {
     static var previews: some View {
         let url = URL(string: "https://raw.githubusercontent.com/kingslay/TestVideo/main/subrip.mkv")!

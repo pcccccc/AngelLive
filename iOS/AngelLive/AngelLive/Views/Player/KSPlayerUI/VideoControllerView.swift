@@ -7,8 +7,9 @@
 
 import Foundation
 import SwiftUI
+import KSPlayer
+internal import AVFoundation
 
-@available(iOS 16, macOS 13, tvOS 16, *)
 struct VideoControllerView: View {
     @ObservedObject
     private var model: KSVideoPlayerModel
@@ -50,7 +51,7 @@ struct VideoControllerView: View {
             }
             if model.config.isMaskShow {
                 VideoTimeShowView(config: model.config, model: model.config.timemodel, timeFont: .caption2)
-                    .isFocused($model.focusableView, equals: .slider)
+                    .ksIsFocused($model.focusableView, equals: .slider)
             }
             #elseif os(macOS)
             Spacer()
@@ -153,7 +154,7 @@ struct VideoControllerView: View {
             #endif
             #endif
         }
-        .isFocused($model.focusableView, equals: .controller)
+        .ksIsFocused($model.focusableView, equals: .controller)
         .sheet(isPresented: $model.showVideoSetting) {
             VideoSettingView(model: model)
         }
@@ -208,7 +209,6 @@ struct VideoControllerView: View {
     }
 }
 
-@available(iOS 15, macOS 12, tvOS 15, *)
 struct VideoTimeShowView: View {
     @ObservedObject
     fileprivate var config: KSVideoPlayer.Coordinator
@@ -217,12 +217,11 @@ struct VideoTimeShowView: View {
     fileprivate var timeFont: Font
     var body: some View {
         // 直播应用，只显示"直播中"
-        Text(String(localized: "Live Streaming", bundle: .module))
+        Text("Live Streaming")
             .font(timeFont)
     }
 }
 
-@available(iOS 16, macOS 13, tvOS 16, *)
 struct VideoSettingView: View {
     @ObservedObject
     var model: KSVideoPlayerModel
@@ -230,120 +229,138 @@ struct VideoSettingView: View {
     private var dismiss
     @State
     private var subtitleFileImport = false
+
+    private func formatFileSize(_ bytes: Int64) -> String {
+        let kb = Double(bytes) / 1024.0
+        if kb < 1024 {
+            return String(format: "%.1fK", kb)
+        }
+        let mb = kb / 1024.0
+        if mb < 1024 {
+            return String(format: "%.1fM", mb)
+        }
+        let gb = mb / 1024.0
+        return String(format: "%.1fG", gb)
+    }
+
     var body: some View {
-        PlatformView {
+        KSPlatformView {
             if let playerLayer = model.config.playerLayer {
                 if model.urls.count > 0 {
-                    Picker(selection: Binding {
-                        model.url
-                    } set: { value in
-                        model.url = value
-                    }) {
+                    Picker(selection: Binding<URL?>(
+                        get: { model.url },
+                        set: { model.url = $0 }
+                    )) {
                         ForEach(model.urls) { url in
-                            Text(url.lastPathComponent).tag(url)
+                            Text(url.lastPathComponent).tag(url as URL?)
                         }
                     } label: {
-                        Label(String(localized: "PlayList", bundle: .module), systemImage: "list.bullet.rectangle.fill")
+                        Label("PlayList", systemImage: "list.bullet.rectangle.fill")
                     }
                 }
                 if let playList = playerLayer.player.ioContext as? PlayList {
                     let list = playList.playlists.filter { $0.duration > 60 * 2 }
                     if list.count > 1 {
-                        Picker(selection: Binding {
-                            playList.currentStream?.name
-                        } set: { value in
-                            if let value, var components = playerLayer.url.components {
-                                if components.scheme == "BDMVIOContext", var queryItems = components.queryItems, let index = queryItems.firstIndex(where: { $0.name == "streamName" }) {
-                                    queryItems[index].value = value
-                                    components.queryItems = queryItems
-                                    model.url = components.url
-                                } else if var newURL = URL(string: "BDMVIOContext://") {
-                                    newURL.append(queryItems: [URLQueryItem(name: "streamName", value: value), URLQueryItem(name: "url", value: playerLayer.url.description)])
-                                    model.url = newURL
+                        Picker(selection: Binding<String?>(
+                            get: { playList.currentStream?.name },
+                            set: { value in
+                                if let value, var components = playerLayer.url.components {
+                                    if components.scheme == "BDMVIOContext", var queryItems = components.queryItems, let index = queryItems.firstIndex(where: { $0.name == "streamName" }) {
+                                        queryItems[index].value = value
+                                        components.queryItems = queryItems
+                                        model.url = components.url
+                                    } else if var newURL = URL(string: "BDMVIOContext://") {
+                                        newURL.append(queryItems: [URLQueryItem(name: "streamName", value: value), URLQueryItem(name: "url", value: playerLayer.url.description)])
+                                        model.url = newURL
+                                    }
                                 }
                             }
-                        }) {
+                        )) {
                             ForEach(list, id: \.name) { stream in
                                 Text(stream.name + " duration=\(Int(stream.duration).toString(for: .minOrHour))").tag(stream.name as String?)
                             }
                         } label: {
-                            Label(String(localized: "Stream Name", bundle: .module), systemImage: "video.fill")
+                            Label("Stream Name", systemImage: "video.fill")
                         }
                     }
                 }
                 let videoTracks = playerLayer.player.tracks(mediaType: .video)
                 if !videoTracks.isEmpty {
-                    Picker(selection: Binding {
-                        videoTracks.first { $0.isEnabled }?.trackID
-                    } set: { value in
-                        if let track = videoTracks.first(where: { $0.trackID == value }) {
-                            playerLayer.player.select(track: track)
+                    Picker(selection: Binding<Int32?>(
+                        get: { videoTracks.first { $0.isEnabled }?.trackID },
+                        set: { value in
+                            if let value, let track = videoTracks.first(where: { $0.trackID == value }) {
+                                playerLayer.player.select(track: track)
+                            }
                         }
-                    }) {
+                    )) {
                         ForEach(videoTracks, id: \.trackID) { track in
                             Text(track.description).tag(track.trackID as Int32?)
                         }
                     } label: {
-                        Label(String(localized: "Video Track", bundle: .module), systemImage: "video.fill")
+                        Label("Video Track", systemImage: "video.fill")
                     }
 
-                    Picker(String(localized: "Video Display Type", bundle: .module), selection: Binding {
-                        if playerLayer.options.display === KSOptions.displayEnumVR {
-                            return "VR"
-                        } else if playerLayer.options.display === KSOptions.displayEnumVRBox {
-                            return "VRBox"
-                        } else {
-                            return "Plane"
+                    Picker("Video Display Type", selection: Binding<String>(
+                        get: {
+                            if playerLayer.options.display === KSOptions.displayEnumVR {
+                                return "VR"
+                            } else if playerLayer.options.display === KSOptions.displayEnumVRBox {
+                                return "VRBox"
+                            } else {
+                                return "Plane"
+                            }
+                        },
+                        set: { (value: String) in
+                            if value == "VR" {
+                                playerLayer.options.display = KSOptions.displayEnumVR
+                            } else if value == "VRBox" {
+                                playerLayer.options.display = KSOptions.displayEnumVRBox
+                            } else {
+                                playerLayer.options.display = KSOptions.displayEnumPlane
+                            }
                         }
-                    } set: { value in
-                        if value == "VR" {
-                            playerLayer.options.display = KSOptions.displayEnumVR
-                        } else if value == "VRBox" {
-                            playerLayer.options.display = KSOptions.displayEnumVRBox
-                        } else {
-                            playerLayer.options.display = KSOptions.displayEnumPlane
-                        }
-                    }) {
+                    )) {
                         Text("Plane").tag("Plane")
                         Text("VR").tag("VR")
                         Text("VRBox").tag("VRBox")
                     }
-                    LabeledContent(String(localized: "Video Type", bundle: .module), value: (videoTracks.first { $0.isEnabled }?.dynamicRange ?? .sdr).description)
-                    LabeledContent(String(localized: "Stream Type", bundle: .module), value: (videoTracks.first { $0.isEnabled }?.fieldOrder ?? .progressive).description)
-                    LabeledContent(String(localized: "Decode Type", bundle: .module), value: playerLayer.options.decodeType.rawValue)
+                    LabeledContent("Video Type", value: (videoTracks.first { $0.isEnabled }?.dynamicRange ?? .sdr).description)
+                    LabeledContent("Stream Type", value: (videoTracks.first { $0.isEnabled }?.fieldOrder ?? .progressive).description)
+                    LabeledContent("Decode Type", value: playerLayer.options.decodeType.rawValue)
                     #if os(macOS)
-                    TextField(String(localized: "brightness", bundle: .module), value: Binding {
-                        playerLayer.options.brightness
-                    } set: { value in
-                        playerLayer.options.brightness = value
-                    }, format: .number)
+                    TextField("brightness", value: Binding<Float>(
+                        get: { playerLayer.options.brightness },
+                        set: { playerLayer.options.brightness = $0 }
+                    ), format: .number)
                     #endif
                 }
-                TextField(String(localized: "Subtitle delay", bundle: .module), value: Binding {
-                    playerLayer.subtitleModel.subtitleDelay
-                } set: { value in
-                    playerLayer.subtitleModel.subtitleDelay = value
-                }, format: .number)
-                Picker(selection: Binding {
-                    playerLayer.subtitleModel.secondarySubtitleInfo?.subtitleID
-                } set: { value in
-                    let info = playerLayer.subtitleModel.subtitleInfos.first { $0.subtitleID == value }
-                    playerLayer.select(subtitleInfo: info, isSecondary: true)
-                }) {
-                    Text("Off").tag(nil as String?)
-                    ForEach(playerLayer.subtitleModel.subtitleInfos ?? [], id: \.subtitleID) { track in
-                        Text(track.name).tag(track.subtitleID as String?)
-                    }
-                } label: {
-                    Label(String(localized: "Secondary Subtitle", bundle: .module), systemImage: "text.bubble")
-                }
-                TextField(String(localized: "Title", bundle: .module), text: $model.title)
-                Button(String(localized: "Search Subtitle", bundle: .module)) {
+                TextField("Subtitle delay", value: Binding<Double>(
+                    get: { playerLayer.subtitleModel.subtitleDelay },
+                    set: { playerLayer.subtitleModel.subtitleDelay = $0 }
+                ), format: .number)
+                // 次要字幕功能（直播不需要，已注释）
+                // Picker(selection: Binding<String?>(
+                //     get: { playerLayer.subtitleModel.secondarySubtitleInfo?.subtitleID },
+                //     set: { value in
+                //         let info = playerLayer.subtitleModel.subtitleInfos.first { $0.subtitleID == value }
+                //         playerLayer.select(subtitleInfo: info, isSecondary: true)
+                //     }
+                // )) {
+                //     Text("Off").tag(nil as String?)
+                //     ForEach(playerLayer.subtitleModel.subtitleInfos ?? [], id: \.subtitleID) { track in
+                //         Text(track.name).tag(track.subtitleID as String?)
+                //     }
+                // } label: {
+                //     Label("Secondary Subtitle", systemImage: "text.bubble")
+                // }
+                TextField("Title", text: $model.title)
+                Button("Search Subtitle") {
                     playerLayer.subtitleModel.searchSubtitle(query: model.title, languages: [Locale.current.identifier])
                 }
                 .buttonStyle(.bordered)
                 #if !os(tvOS)
-                Button(String(localized: "Add Subtitle", bundle: .module)) {
+                Button("Add Subtitle") {
                     subtitleFileImport = true
                 }
                 .buttonStyle(.bordered)
@@ -351,11 +368,10 @@ struct VideoSettingView: View {
                 DynamicInfoView(dynamicInfo: playerLayer.player.dynamicInfo)
                 let fileSize = playerLayer.player.fileSize
                 if fileSize > 0 {
-                    LabeledContent(String(localized: "File Size", bundle: .module), value: fileSize.kmFormatted + "B")
+                    LabeledContent("File Size", value: formatFileSize(fileSize) + "B")
                 }
-                LabeledContent(String(localized: "First Time Log", bundle: .module), value: model.options.firstTimeLog().debugDescription)
             } else {
-                Text(String(localized: "Loading...", bundle: .module))
+                Text("Loading...")
             }
         }
         #if !os(tvOS)
@@ -373,7 +389,7 @@ struct VideoSettingView: View {
         #endif
         #if os(macOS) || targetEnvironment(macCatalyst) || os(visionOS)
         .toolbar {
-            Button(String(localized: "Done", bundle: .module)) {
+            Button("Done") {
                 dismiss()
             }
             .keyboardShortcut(.defaultAction)
@@ -382,21 +398,32 @@ struct VideoSettingView: View {
     }
 }
 
-@available(iOS 16, macOS 13, tvOS 16, *)
 public struct DynamicInfoView: View {
     @ObservedObject
     fileprivate var dynamicInfo: DynamicInfo
     public var body: some View {
-        LabeledContent(String(localized: "Display FPS", bundle: .module), value: dynamicInfo.displayFPS, format: .number)
-        LabeledContent(String(localized: "Audio Video sync", bundle: .module), value: dynamicInfo.audioVideoSyncDiff, format: .number)
-        LabeledContent(String(localized: "Dropped Frames", bundle: .module), value: dynamicInfo.droppedVideoFrameCount + dynamicInfo.droppedVideoPacketCount, format: .number)
-        LabeledContent(String(localized: "Bytes Read", bundle: .module), value: dynamicInfo.bytesRead.kmFormatted + "B")
-        LabeledContent(String(localized: "Audio bitrate", bundle: .module), value: dynamicInfo.audioBitrate.kmFormatted + "bps")
-        LabeledContent(String(localized: "Video bitrate", bundle: .module), value: dynamicInfo.videoBitrate.kmFormatted + "bps")
+        LabeledContent("Display FPS", value: dynamicInfo.displayFPS, format: .number)
+        LabeledContent("Audio Video sync", value: dynamicInfo.audioVideoSyncDiff, format: .number)
+        LabeledContent("Dropped Frames", value: dynamicInfo.droppedVideoFrameCount + dynamicInfo.droppedVideoPacketCount, format: .number)
+        LabeledContent("Bytes Read", value: formatBytes(dynamicInfo.bytesRead) + "B")
+        LabeledContent("Audio bitrate", value: formatBytes(Int64(dynamicInfo.audioBitrate)) + "bps")
+        LabeledContent("Video bitrate", value: formatBytes(Int64(dynamicInfo.videoBitrate)) + "bps")
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let kb = Double(bytes) / 1024.0
+        if kb < 1024 {
+            return String(format: "%.1fK", kb)
+        }
+        let mb = kb / 1024.0
+        if mb < 1024 {
+            return String(format: "%.1fM", mb)
+        }
+        let gb = mb / 1024.0
+        return String(format: "%.1fG", gb)
     }
 }
 
-@available(macOS 12, iOS 15, tvOS 15, watchOS 8, *)
 public struct HUDLogView: View {
     @ObservedObject
     public var dynamicInfo: DynamicInfo
@@ -409,15 +436,28 @@ public struct HUDLogView: View {
 }
 
 private extension DynamicInfo {
-    @available(macOS 12, iOS 15, tvOS 15, watchOS 8, *)
     var hudLogText: String {
-        var log = String(localized: "Display FPS", bundle: .module) + ": \(displayFPS)\n"
-            + String(localized: "Dropped Frames", bundle: .module) + ": \(droppedVideoFrameCount)\n"
-            + String(localized: "Audio Video sync", bundle: .module) + ": \(audioVideoSyncDiff)\n"
-            + String(localized: "Network Speed", bundle: .module) + ": \(networkSpeed.kmFormatted)B/s\n"
+        var log = ""
+        log += "Display FPS: \(displayFPS)\n"
+        log += "Dropped Frames: \(droppedVideoFrameCount)\n"
+        log += "Audio Video sync: \(audioVideoSyncDiff)\n"
+        log += "Network Speed: \(formatBytes(Int64(networkSpeed)))B/s\n"
         #if DEBUG
-        log += String(localized: "Average Audio Video sync", bundle: .module) + ": \(averageAudioVideoSyncDiff)\n"
+        log += "Average Audio Video sync: \(averageAudioVideoSyncDiff)\n"
         #endif
         return log
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        let kb = Double(bytes) / 1024.0
+        if kb < 1024 {
+            return String(format: "%.1fK", kb)
+        }
+        let mb = kb / 1024.0
+        if mb < 1024 {
+            return String(format: "%.1fM", mb)
+        }
+        let gb = mb / 1024.0
+        return String(format: "%.1fG", gb)
     }
 }

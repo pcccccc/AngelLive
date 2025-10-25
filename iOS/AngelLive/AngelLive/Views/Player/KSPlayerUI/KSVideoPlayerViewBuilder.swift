@@ -6,8 +6,8 @@
 //
 
 import SwiftUI
+import KSPlayer
 
-@available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
 @MainActor
 public enum KSVideoPlayerViewBuilder {
     @ViewBuilder
@@ -16,9 +16,9 @@ public enum KSVideoPlayerViewBuilder {
             config.isScaleAspectFill.toggle()
         } label: {
             Image(systemName: config.isScaleAspectFill ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward")
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
         }
-        .borderlessButton()
+        .ksBorderlessButton()
     }
 
     @ViewBuilder
@@ -69,9 +69,9 @@ public enum KSVideoPlayerViewBuilder {
             config.isMuted.toggle()
         } label: {
             Image(systemName: config.isMuted ? speakerDisabledSystemName : speakerSystemName)
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
         }
-        .borderlessButton()
+        .ksBorderlessButton()
     }
 
     @ViewBuilder
@@ -80,9 +80,9 @@ public enum KSVideoPlayerViewBuilder {
             showVideoSetting.wrappedValue.toggle()
         } label: {
             Image(systemName: "info.circle")
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
         }
-        .borderlessButton()
+        .ksBorderlessButton()
         // iOS 模拟器加keyboardShortcut会导致KSVideoPlayer.Coordinator无法释放。真机不会有这个问题
         #if !os(tvOS)
             .keyboardShortcut("i", modifiers: [.command])
@@ -95,9 +95,9 @@ public enum KSVideoPlayerViewBuilder {
             config.isRecord.toggle()
         } label: {
             Image(systemName: config.isRecord ? "video.fill" : "video")
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
         }
-        .borderlessButton()
+        .ksBorderlessButton()
     }
 
     @ViewBuilder
@@ -142,9 +142,9 @@ public enum KSVideoPlayerViewBuilder {
             }
         } label: {
             Image(systemName: "pip")
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
         }
-        .borderlessButton()
+        .ksBorderlessButton()
     }
 
     @ViewBuilder
@@ -190,10 +190,10 @@ public enum KSVideoPlayerViewBuilder {
             #if os(iOS)
                 .centerControlButtonStyle()
             #elseif os(tvOS)
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
             #endif
         }
-        .borderlessButton()
+        .ksBorderlessButton()
         #if os(visionOS)
             .contentTransition(.symbolEffect(.replace))
         #endif
@@ -209,9 +209,9 @@ public enum KSVideoPlayerViewBuilder {
                 model.previous()
             } label: {
                 Image(systemName: "backward.end.fill")
-                    .menuLabelStyle()
+                    .ksMenuLabelStyle()
             }
-            .borderlessButton()
+            .ksBorderlessButton()
         }
     }
 
@@ -222,9 +222,9 @@ public enum KSVideoPlayerViewBuilder {
                 model.next()
             } label: {
                 Image(systemName: "forward.end.fill")
-                    .menuLabelStyle()
+                    .ksMenuLabelStyle()
             }
-            .borderlessButton()
+            .ksBorderlessButton()
         }
     }
 
@@ -236,14 +236,13 @@ public enum KSVideoPlayerViewBuilder {
             UIViewController.attemptRotationToDeviceOrientation()
         } label: {
             Image(systemName: UIApplication.isLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                .menuLabelStyle()
+                .ksMenuLabelStyle()
         }
     }
     #endif
 }
 
 private extension View {
-    @available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
     func centerControlButtonStyle() -> some View {
         font(.system(.title, design: .rounded).bold())
             .imageScale(.large)
@@ -253,7 +252,6 @@ private extension View {
     }
 }
 
-@available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
 public extension KSVideoPlayerViewBuilder {
     static var speakerSystemName: String {
         #if os(visionOS) || os(macOS)
