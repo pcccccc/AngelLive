@@ -1,8 +1,9 @@
 //
-//  File.swift
-//  KSPlayer
+//  KSVideoPlayerView.swift
+//  AngelLive
 //
-//  Created by kintan on 2022/1/29.
+//  Forked and modified from KSPlayer by kintan
+//  Created by pangchong on 10/26/25.
 //
 internal import AVFoundation
 import Combine

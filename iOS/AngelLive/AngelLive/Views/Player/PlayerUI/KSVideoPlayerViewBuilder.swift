@@ -1,8 +1,9 @@
 //
 //  KSVideoPlayerViewBuilder.swift
+//  AngelLive
 //
-//
-//  Created by Ian Magallan Bosch on 17.03.24.
+//  Forked and modified from KSPlayer by Ian Magallan Bosch
+//  Created by pangchong on 10/26/25.
 //
 
 import SwiftUI

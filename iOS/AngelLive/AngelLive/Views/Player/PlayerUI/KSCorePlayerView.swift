@@ -1,8 +1,9 @@
 //
 //  KSCorePlayerView.swift
-//  KSPlayer
+//  AngelLive
 //
-//  Created by kintan on 11/30/24.
+//  Forked and modified from KSPlayer by kintan
+//  Created by pangchong on 10/26/25.
 //
 
 import Foundation
