@@ -25,19 +25,9 @@ struct PlayerContainerView: View {
     }
 
     var body: some View {
-        if isIPadLandscape {
-            // iPad 横屏：填充整个可用高度
-            PlayerContentView()
-                .environment(viewModel)
-        } else {
-            // iPhone 或 iPad 竖屏：使用 16:9 比例
-            GeometryReader { proxy in
-                PlayerContentView()
-                    .environment(viewModel)
-                    .frame(height: proxy.size.width * 9 / 16)
-            }
-            .aspectRatio(16/9, contentMode: .fit)
-        }
+        PlayerContentView()
+            .environment(viewModel)
+            
     }
 }
 
@@ -45,36 +35,66 @@ struct PlayerContentView: View {
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
+    @State private var videoAspectRatio: CGFloat? = nil
+    @State private var isVideoPortrait: Bool = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    // 检测设备是否为横屏
+    private var isDeviceLandscape: Bool {
+        horizontalSizeClass == .compact && verticalSizeClass == .compact ||
+        horizontalSizeClass == .regular && verticalSizeClass == .compact
+    }
 
     var body: some View {
-        ZStack(alignment: .center) {
-            // 背景
-            Color.black
-
+        ZStack {
             // 如果有播放地址，显示播放器
             if let playURL = viewModel.currentPlayURL {
-                if #available(iOS 16.0, *) {
-                    KSVideoPlayerView(
-                        coordinator: playerCoordinator,
-                        url: playURL,
-                        options: viewModel.playerOption
-                    ) { coordinator, isDisappear in
-                        if !isDisappear {
-                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                KSVideoPlayerView(
+                    coordinator: playerCoordinator,
+                    url: playURL,
+                    options: viewModel.playerOption
+                ) { coordinator, isDisappear in
+                    if !isDisappear {
+                        viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                    }
+                }
+                .task {
+                    // 使用异步任务定期检查视频尺寸
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+
+                        if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
+                           naturalSize.width > 0, naturalSize.height > 0 {
+                            let ratio = naturalSize.width / naturalSize.height
+                            let isPortrait = ratio < 1.0
+
+                            if videoAspectRatio != ratio {
+                                print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
+                                print("📐 视频比例: \(ratio)")
+                                print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                                print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
+
+                                videoAspectRatio = ratio
+                                isVideoPortrait = isPortrait
+
+                                // 打印应用的策略
+                                if isDeviceLandscape && isPortrait {
+                                    print("✅ 应用策略: 横屏设备+竖屏视频 → 限制宽度，居中显示")
+                                } else {
+                                    print("✅ 应用策略: 标准 aspect fit 显示")
+                                }
+
+                                break // 获取到后退出循环
+                            }
                         }
                     }
-                } else {
-                    // iOS 15 降级方案
-                    KSVideoPlayer(
-                        coordinator: ObservedObject(wrappedValue: playerCoordinator),
-                        url: playURL,
-                        options: viewModel.playerOption
-                    )
-                    .background(Color.black)
-                    .onAppear {
-                        playerCoordinator.playerLayer?.play()
-                        viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
-                    }
+                }
+                .onChange(of: playURL) { _ in
+                    // 切换视频时重置比例
+                    print("🔄 切换视频，重置比例")
+                    videoAspectRatio = nil
+                    isVideoPortrait = false
                 }
             } else {
                 if viewModel.isLoading {
@@ -87,7 +107,7 @@ struct PlayerContentView: View {
                             .foregroundStyle(.white.opacity(0.7))
                     }
                 } else {
-                    //                // 封面图作为背景
+                    // 封面图作为背景
                     KFImage(URL(string: viewModel.currentRoom.roomCover))
                         .placeholder {
                             Rectangle()
@@ -95,10 +115,20 @@ struct PlayerContentView: View {
                         }
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
                 }
             }
         }
+        .frame(
+            maxWidth: shouldLimitWidth ? nil : .infinity,
+            maxHeight: .infinity
+        )
+        .aspectRatio(videoAspectRatio, contentMode: .fit)
+        .frame(maxWidth: .infinity) // 外层容器仍然填满，用于居中
+        .background(Color.black)
+    }
+
+    // 判断是否需要限制宽度（横屏设备 + 竖屏视频）
+    private var shouldLimitWidth: Bool {
+        isDeviceLandscape && isVideoPortrait
     }
 }

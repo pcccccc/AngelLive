@@ -7,8 +7,8 @@
 
 import Foundation
 import SwiftUI
+import KSPlayer
 
-@available(iOS 14.0, macOS 11.0, tvOS 14.0, *)
 public struct KSCorePlayerView: View {
     @ObservedObject
     private var config: KSVideoPlayer.Coordinator
@@ -27,7 +27,7 @@ public struct KSCorePlayerView: View {
     }
 
     public var body: some View {
-        KSVideoPlayer(coordinator: config, url: url, options: options)
+        KSVideoPlayer(coordinator: _config, url: url, options: options)
             .onStateChanged { playerLayer, state in
                 if state == .readyToPlay {
                     if let subtitleDataSource {
@@ -44,8 +44,6 @@ public struct KSCorePlayerView: View {
         #if (os(iOS) || os(macOS)) && !targetEnvironment(macCatalyst)
             .translationView()
         #endif
-            .ignoresSafeArea()
-
         #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -98,7 +96,6 @@ public struct KSCorePlayerView: View {
     }
 }
 
-@available(iOS 14.0, macOS 11.0, tvOS 14.0, *)
 extension KSCorePlayerView: Equatable {
     public nonisolated static func == (lhs: KSCorePlayerView, rhs: KSCorePlayerView) -> Bool {
         lhs.url == rhs.url
