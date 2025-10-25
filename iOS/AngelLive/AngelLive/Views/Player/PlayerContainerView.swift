@@ -35,8 +35,9 @@ struct PlayerContentView: View {
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
-    @State private var videoAspectRatio: CGFloat? = nil
+    @State private var videoAspectRatio: CGFloat? = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
+    @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -61,15 +62,28 @@ struct PlayerContentView: View {
                 }
                 .task {
                     // 使用异步任务定期检查视频尺寸
-                    while !Task.isCancelled {
+                    var retryCount = 0
+                    let maxRetries = 20 // 最多重试 20 次（10 秒）
+
+                    while !Task.isCancelled && retryCount < maxRetries {
                         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+                        retryCount += 1
 
                         if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
                            naturalSize.width > 0, naturalSize.height > 0 {
+
+                            // 检查是否为有效尺寸（排除 1.0 x 1.0 等占位符）
+                            let isValidSize = naturalSize.width > 1.0 && naturalSize.height > 1.0
+
+                            if !isValidSize {
+                                print("⚠️ 检测到无效视频尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
+                                continue
+                            }
+
                             let ratio = naturalSize.width / naturalSize.height
                             let isPortrait = ratio < 1.0
 
-                            if videoAspectRatio != ratio {
+                            if !hasDetectedSize {
                                 print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
                                 print("📐 视频比例: \(ratio)")
                                 print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
@@ -77,6 +91,7 @@ struct PlayerContentView: View {
 
                                 videoAspectRatio = ratio
                                 isVideoPortrait = isPortrait
+                                hasDetectedSize = true
 
                                 // 打印应用的策略
                                 if isDeviceLandscape && isPortrait {
@@ -89,12 +104,18 @@ struct PlayerContentView: View {
                             }
                         }
                     }
+
+                    // 超时后仍未获取到有效尺寸，保持默认 16:9 比例
+                    if retryCount >= maxRetries {
+                        print("⚠️ 无法获取有效视频尺寸，保持默认 16:9 比例")
+                    }
                 }
                 .onChange(of: playURL) { _ in
-                    // 切换视频时重置比例
-                    print("🔄 切换视频，重置比例")
-                    videoAspectRatio = nil
+                    // 切换视频时重置为默认 16:9 比例
+                    print("🔄 切换视频，重置为默认 16:9 比例")
+                    videoAspectRatio = 16.0 / 9.0
                     isVideoPortrait = false
+                    hasDetectedSize = false
                 }
             } else {
                 if viewModel.isLoading {
