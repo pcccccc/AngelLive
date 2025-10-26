@@ -84,10 +84,23 @@ public enum KSVideoPlayerViewBuilder {
                 .ksMenuLabelStyle()
         }
         .ksBorderlessButton()
-        // iOS 模拟器加keyboardShortcut会导致KSVideoPlayer.Coordinator无法释放。真机不会有这个问题
-        #if !os(tvOS)
-            .keyboardShortcut("i", modifiers: [.command])
-        #endif
+        .keyboardShortcut("i", modifiers: [.command])
+    }
+
+    @ViewBuilder
+    static func refreshButton(isLoading: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "arrow.clockwise")
+                .ksMenuLabelStyle()
+                .rotationEffect(.degrees(isLoading ? 360 : 0))
+                .animation(
+                    isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                    value: isLoading
+                )
+        }
+        .ksBorderlessButton()
+        .disabled(isLoading)
+        .keyboardShortcut("r", modifiers: [.command])
     }
 
     @ViewBuilder
@@ -124,10 +137,6 @@ public enum KSVideoPlayerViewBuilder {
             }
         } label: {
             Image(systemName: "waveform.circle.fill")
-            #if os(visionOS)
-                .padding()
-                .clipShape(Circle())
-            #endif
         }
     }
 
@@ -157,9 +166,7 @@ public enum KSVideoPlayerViewBuilder {
                 Image(systemName: "gobackward.15")
                     .centerControlButtonStyle()
             }
-            #if !os(tvOS)
             .keyboardShortcut(.leftArrow, modifiers: .none)
-            #endif
         }
     }
 
@@ -172,9 +179,7 @@ public enum KSVideoPlayerViewBuilder {
                 Image(systemName: "goforward.15")
                     .centerControlButtonStyle()
             }
-            #if !os(tvOS)
             .keyboardShortcut(.rightArrow, modifiers: .none)
-            #endif
         }
     }
 
@@ -188,19 +193,10 @@ public enum KSVideoPlayerViewBuilder {
             }
         } label: {
             Image(systemName: config.state.systemName)
-            #if os(iOS)
                 .centerControlButtonStyle()
-            #elseif os(tvOS)
-                .ksMenuLabelStyle()
-            #endif
         }
         .ksBorderlessButton()
-        #if os(visionOS)
-            .contentTransition(.symbolEffect(.replace))
-        #endif
-        #if !os(tvOS)
         .keyboardShortcut(.space, modifiers: .none)
-        #endif
     }
 
     @ViewBuilder
@@ -229,7 +225,6 @@ public enum KSVideoPlayerViewBuilder {
         }
     }
 
-    #if canImport(UIKit) && !os(tvOS)
     @ViewBuilder
     static var landscapeButton: some View {
         Button {
@@ -240,7 +235,6 @@ public enum KSVideoPlayerViewBuilder {
                 .ksMenuLabelStyle()
         }
     }
-    #endif
 }
 
 private extension View {
@@ -255,11 +249,7 @@ private extension View {
 
 public extension KSVideoPlayerViewBuilder {
     static var speakerSystemName: String {
-        #if os(visionOS) || os(macOS)
-        "speaker.fill"
-        #else
         "speaker.wave.2.fill"
-        #endif
     }
 
     static var speakerDisabledSystemName: String {
@@ -272,11 +262,7 @@ extension KSPlayerState {
         if self == .error {
             return "play.slash.fill"
         } else if self == .playedToTheEnd {
-            #if os(visionOS) || os(macOS)
-            return "restart.circle"
-            #else
             return "restart.circle.fill"
-            #endif
         } else if isPlaying {
             return "pause.fill"
         } else {

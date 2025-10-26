@@ -8,7 +8,6 @@
 import SwiftUI
 import KSPlayer
 
-#if !os(tvOS)
 @MainActor
 public struct PlayBackCommands: Commands {
     @FocusedObject
@@ -33,7 +32,6 @@ public struct PlayBackCommands: Commands {
         }
     }
 }
-#endif
 
 public struct MenuView<SelectionValue, Content, Label>: View where SelectionValue: Hashable, Content: View, Label: View {
     public let selection: Binding<SelectionValue>
@@ -82,15 +80,7 @@ public extension View {
 
     @ViewBuilder
     func ksBorderlessButton() -> some View {
-        #if os(tvOS)
-        if #available(tvOS 17, *) {
-            self.buttonStyle(.borderless)
-        } else {
-            self
-        }
-        #else
         buttonStyle(.borderless)
-        #endif
     }
 }
 
@@ -153,18 +143,8 @@ private struct MenuLabelStyleModifier: ViewModifier {
             .symbolVariant(isFocus ? .fill : .none)
             .foregroundStyle(isFocus ? .black : .secondary)
             .scaleEffect(isFocus ? 1.25 : 1)
-        #if os(tvOS)
-            .background {
-                Circle()
-                    .fill(.white)
-                    .opacity(isFocus ? 1 : 0)
-                    .scaleEffect(isFocus ? 2.2 : 1)
-            }
-            .animation(.spring(duration: 0.18), value: isFocus)
-        #else
             .font(.title3.weight(.semibold))
             .imageScale(.medium)
-        #endif
             .ksIsFocused($isFocus)
     }
 }
@@ -172,21 +152,10 @@ private struct MenuLabelStyleModifier: ViewModifier {
 public struct KSPlatformView<Content: View>: View {
     private let content: () -> Content
     public var body: some View {
-        #if os(tvOS)
-        // tvos需要加NavigationStack，不然无法出现下拉框。iOS不能加NavigationStack，不然会丢帧。
-        NavigationStack {
-            ScrollView {
-                content()
-                    .padding()
-            }
-        }
-        .pickerStyle(.navigationLink)
-        #else
         Form {
             content()
         }
         .formStyle(.grouped)
-        #endif
     }
 
     public init(@ViewBuilder content: @escaping () -> Content) {
@@ -283,11 +252,9 @@ extension View {
         }
     }
 
-    #if !os(tvOS)
     func textSelection() -> some View {
         self.textSelection(.enabled)
     }
-    #endif
 
     func italic(value: Bool) -> some View {
         self.italic(value)

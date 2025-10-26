@@ -39,12 +39,10 @@ public struct KSVideoPlayerView: View {
                     // onChange不会马上就回调，会少一些状态的回调。要用onReceive才不会有这个问题
                     .onReceive(model.config.$state) { state in
                         if state == .readyToPlay {
-                            #if os(iOS)
                             if let playerLayer = model.config.playerLayer, playerLayer.player.naturalSize.isHorizonal == true, !UIApplication.isLandscape {
                                 KSOptions.supportedInterfaceOrientations = .landscapeLeft
                                 UIViewController.attemptRotationToDeviceOrientation()
                             }
-                            #endif
                         } else if state == .playedToTheEnd {
                             model.next()
                         }
@@ -53,7 +51,6 @@ public struct KSVideoPlayerView: View {
                     HUDLogView(dynamicInfo: playerLayer.player.dynamicInfo)
                 }
                 // 需要放在这里才能生效
-                #if canImport(UIKit)
                 GestureView { direction in
                     switch direction {
                     case .left:
@@ -81,7 +78,6 @@ public struct KSVideoPlayerView: View {
                 }
                 .ksIsFocused($model.focusableView, equals: .play)
                 .opacity(!model.config.isMaskShow ? 1 : 0)
-                #endif
                 controllerView
                     .sheet(isPresented: $model.showVideoSetting) {
                         VideoSettingView(model: model)
@@ -95,12 +91,8 @@ public struct KSVideoPlayerView: View {
             .tint(.white)
             .persistentSystemOverlays(.hidden)
             .toolbar(.hidden, for: .automatic)
-            #if !os(macOS)
-                .toolbar(.hidden, for: .tabBar)
-            #endif
-            #if os(iOS)
+            .toolbar(.hidden, for: .tabBar)
             .statusBar(hidden: !model.config.isMaskShow)
-            #endif
             .focusedObject(model.config)
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
@@ -109,35 +101,10 @@ public struct KSVideoPlayerView: View {
                     model.focusableView = .play
                 }
             }
-            #if os(tvOS)
-            // 要放在最上层才不会有焦点丢失问题
-            .onPlayPauseCommand {
-                if model.config.state.isPlaying {
-                    model.config.playerLayer?.pause()
-                } else {
-                    model.config.playerLayer?.play()
-                }
-            }
-            .onExitCommand {
-                if model.config.isMaskShow {
-                    model.config.isMaskShow = false
-                } else {
-                    switch model.focusableView {
-                    case .play:
-                        dismiss()
-                    default:
-                        model.focusableView = .play
-                    }
-                }
-            }
-            #endif
-            // onHover在view里面移动光标，onHover不会在回调，所以macOS还是用addLocalMonitorForEvents来监听光标移动
-            #if !os(tvOS) && !os(macOS)
-            // 要放在最上面的view。这样才不会被controllerView盖住
+            // iOS: 要放在最上面的view。这样才不会被controllerView盖住
             .onHover { new in
                 model.config.isMaskShow = new
             }
-            #endif
         } else {
             controllerView
         }
@@ -159,7 +126,6 @@ public struct KSVideoPlayerView: View {
 
     private var controllerView: some View {
         VideoControllerView(model: model)
-        #if !os(tvOS)
             // 要放在最上面才能修改url
             .onDrop(of: ["public.file-url"], isTargeted: nil) { providers -> Bool in
                 providers.first?.loadDataRepresentation(forTypeIdentifier: "public.file-url") { data, _ in
@@ -171,7 +137,6 @@ public struct KSVideoPlayerView: View {
                 }
                 return true
             }
-        #endif
     }
 }
 
@@ -210,9 +175,6 @@ public class KSVideoPlayerModel: ObservableObject {
                 options.videoFilters.removeAll()
                 options.audioFilters.removeAll()
                 title = url.lastPathComponent
-                #if os(macOS)
-                NSDocumentController.shared.noteNewRecentDocumentURL(url)
-                #endif
             }
         }
     }
@@ -238,11 +200,6 @@ public class KSVideoPlayerModel: ObservableObject {
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
-        #if os(macOS)
-        if let url {
-            NSDocumentController.shared.noteNewRecentDocumentURL(url)
-        }
-        #endif
     }
 
     @MainActor

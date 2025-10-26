@@ -10,12 +10,14 @@ import Foundation
 import SwiftUI
 import KSPlayer
 internal import AVFoundation
+import AngelLiveCore
 
 struct VideoControllerView: View {
     @ObservedObject
     private var model: KSVideoPlayerModel
     @Environment(\.dismiss)
     private var dismiss
+    @Environment(RoomInfoViewModel.self) private var viewModel
     private var playerWidth: CGFloat {
         model.config.playerLayer?.player.view.frame.width ?? 0
     }
@@ -26,101 +28,22 @@ struct VideoControllerView: View {
 
     var body: some View {
         VStack {
-            #if os(tvOS)
-            Spacer()
-            HStack(spacing: 24) {
-                KSVideoPlayerViewBuilder.titleView(title: model.title, config: model.config)
-                    .lineLimit(2)
-                    .layoutPriority(100)
-                KSVideoPlayerViewBuilder.muteButton(config: model.config)
-                if let audioTracks = model.config.playerLayer?.player.tracks(mediaType: .audio), !audioTracks.isEmpty {
-                    KSVideoPlayerViewBuilder.audioButton(config: model.config, audioTracks: audioTracks)
-                }
-                Spacer()
-                    .layoutPriority(2)
-                HStack(spacing: 24) {
-                    KSVideoPlayerViewBuilder.preButton(model: model)
-                    KSVideoPlayerViewBuilder.playButton(config: model.config)
-                    KSVideoPlayerViewBuilder.nextButton(model: model)
-                    KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
-                    KSVideoPlayerViewBuilder.playbackRateButton(playbackRate: $model.config.playbackRate)
-                    KSVideoPlayerViewBuilder.recordButton(config: model.config)
-                    KSVideoPlayerViewBuilder.pipButton(config: model.config)
-                    KSVideoPlayerViewBuilder.subtitleButton(config: model.config)
-                    KSVideoPlayerViewBuilder.infoButton(showVideoSetting: $model.showVideoSetting)
-                }
-            }
-            if model.config.isMaskShow {
-                VideoTimeShowView(config: model.config, model: model.config.timemodel, timeFont: .caption2)
-                    .ksIsFocused($model.focusableView, equals: .slider)
-            }
-            #elseif os(macOS)
-            Spacer()
-            VStack(spacing: 10) {
-                HStack {
-                    KSVideoPlayerViewBuilder.muteButton(config: model.config)
-                    KSVideoPlayerViewBuilder.volumeSlider(config: model.config, volume: $model.config.playbackVolume)
-                        .frame(maxWidth: 100)
-                    if let audioTracks = model.config.playerLayer?.player.tracks(mediaType: .audio), !audioTracks.isEmpty {
-                        KSVideoPlayerViewBuilder.audioButton(config: model.config, audioTracks: audioTracks)
-                    }
-                    Spacer()
-                    KSVideoPlayerViewBuilder.preButton(model: model)
-                    KSVideoPlayerViewBuilder.backwardButton(config: model.config)
-                        .font(.largeTitle)
-                    KSVideoPlayerViewBuilder.playButton(config: model.config)
-                        .font(.largeTitle)
-                    KSVideoPlayerViewBuilder.forwardButton(config: model.config)
-                        .font(.largeTitle)
-                    KSVideoPlayerViewBuilder.nextButton(model: model)
-                    Spacer()
-                    KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
-                    KSVideoPlayerViewBuilder.playbackRateButton(playbackRate: $model.config.playbackRate)
-                    KSVideoPlayerViewBuilder.recordButton(config: model.config)
-                    KSVideoPlayerViewBuilder.pipButton(config: model.config)
-                    KSVideoPlayerViewBuilder.subtitleButton(config: model.config)
-                    KSVideoPlayerViewBuilder.infoButton(showVideoSetting: $model.showVideoSetting)
-                }
-                // 设置opacity为0，还是会去更新View。所以只能这样了
-                if model.config.isMaskShow {
-                    VideoTimeShowView(config: model.config, model: model.config.timemodel, timeFont: .caption2)
-                }
-            }
-            .padding()
-            .background(.black.opacity(0.35))
-            .cornerRadius(10)
-            .padding(.horizontal, playerWidth * 0.15)
-            .padding(.vertical, 24)
-            #else
             HStack {
                 Button {
                     dismiss()
-                    #if os(iOS)
                     KSOptions.supportedInterfaceOrientations = nil
-                    #endif
                 } label: {
                     Image(systemName: "x.circle.fill")
                 }
-                #if os(visionOS)
-                .glassBackgroundEffect()
-                #endif
                 KSVideoPlayerViewBuilder.muteButton(config: model.config)
                 KSVideoPlayerViewBuilder.volumeSlider(config: model.config, volume: $model.config.playbackVolume)
                     .frame(maxWidth: 100)
                     .tint(.white.opacity(0.8))
                     .padding(.leading, 16)
-                #if os(visionOS)
-                    .glassBackgroundEffect()
-                #endif
                 if let audioTracks = model.config.playerLayer?.player.tracks(mediaType: .audio), !audioTracks.isEmpty {
                     KSVideoPlayerViewBuilder.audioButton(config: model.config, audioTracks: audioTracks)
-                    #if os(visionOS)
-                        .aspectRatio(1, contentMode: .fit)
-                        .glassBackgroundEffect()
-                    #endif
                 }
                 Spacer()
-                #if os(iOS)
                 if model.config.playerLayer?.player.allowsExternalPlayback == true {
                     AirPlayView().fixedSize()
                 }
@@ -128,14 +51,15 @@ struct VideoControllerView: View {
                 if model.config.playerLayer?.player.naturalSize.isHorizonal == true {
                     KSVideoPlayerViewBuilder.landscapeButton
                 }
-                #endif
             }
             Spacer()
-            #if !os(visionOS)
             HStack(spacing: 20) {
                 KSVideoPlayerViewBuilder.preButton(model: model)
                 KSVideoPlayerViewBuilder.backwardButton(config: model.config)
                 KSVideoPlayerViewBuilder.playButton(config: model.config)
+                KSVideoPlayerViewBuilder.refreshButton(isLoading: viewModel.isLoading) {
+                    viewModel.refreshPlayback()
+                }
                 KSVideoPlayerViewBuilder.forwardButton(config: model.config)
                 KSVideoPlayerViewBuilder.nextButton(model: model)
             }
@@ -145,67 +69,19 @@ struct VideoControllerView: View {
                 Spacer()
                 KSVideoPlayerViewBuilder.playbackRateButton(playbackRate: $model.config.playbackRate)
                 KSVideoPlayerViewBuilder.pipButton(config: model.config)
-                KSVideoPlayerViewBuilder.recordButton(config: model.config)
-                KSVideoPlayerViewBuilder.subtitleButton(config: model.config)
                 KSVideoPlayerViewBuilder.infoButton(showVideoSetting: $model.showVideoSetting)
             }
             if model.config.isMaskShow {
                 VideoTimeShowView(config: model.config, model: model.config.timemodel, timeFont: .caption2)
             }
-            #endif
-            #endif
         }
         .ksIsFocused($model.focusableView, equals: .controller)
         .sheet(isPresented: $model.showVideoSetting) {
             VideoSettingView(model: model)
         }
-        #if os(visionOS)
-        .ornament(visibility: model.config.isMaskShow ? .visible : .hidden, attachmentAnchor: .scene(.bottom)) {
-            VStack(alignment: .leading) {
-                HStack {
-                    KSVideoPlayerViewBuilder.titleView(title: model.title, config: model.config)
-                }
-                HStack(spacing: 16) {
-                    KSVideoPlayerViewBuilder.backwardButton(config: model.config)
-                    KSVideoPlayerViewBuilder.playButton(config: model.config)
-                    KSVideoPlayerViewBuilder.forwardButton(config: model.config)
-                    VideoTimeShowView(config: model.config, model: model.config.timemodel, timeFont: .title3)
-                    KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
-                    KSVideoPlayerViewBuilder.subtitleButton(config: model.config)
-                    KSVideoPlayerViewBuilder.playbackRateButton(playbackRate: $model.config.playbackRate)
-                    KSVideoPlayerViewBuilder.infoButton(showVideoSetting: $model.showVideoSetting)
-                }
-            }
-            .frame(minWidth: playerWidth / 1.5)
-            .buttonStyle(.plain)
-            .padding(.vertical, 24)
-            .padding(.horizontal, 36)
-            .glassBackgroundEffect()
-        }
-        #endif
-        #if os(tvOS)
-        .padding(.horizontal, 80)
-        .padding(.bottom, 80)
-        .background(LinearGradient(
-            stops: [
-                Gradient.Stop(color: .black.opacity(0), location: 0.22),
-                Gradient.Stop(color: .black.opacity(0.7), location: 1),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        ))
-        .ignoresSafeArea()
-        #else
-        .font(.title)
+        .font(.body)
         .buttonStyle(.borderless)
         .padding()
-        #if os(iOS)
-            .background {
-                Color.black.opacity(0.35).ignoresSafeArea()
-            }
-        #endif
-        #endif
-        // macOS要写在这里才能隐藏，写在外面无法隐藏
         .opacity(model.config.isMaskShow ? 1 : 0)
     }
 }
@@ -329,12 +205,6 @@ struct VideoSettingView: View {
                     LabeledContent("Video Type", value: (videoTracks.first { $0.isEnabled }?.dynamicRange ?? .sdr).description)
                     LabeledContent("Stream Type", value: (videoTracks.first { $0.isEnabled }?.fieldOrder ?? .progressive).description)
                     LabeledContent("Decode Type", value: playerLayer.options.decodeType.rawValue)
-                    #if os(macOS)
-                    TextField("brightness", value: Binding<Float>(
-                        get: { playerLayer.options.brightness },
-                        set: { playerLayer.options.brightness = $0 }
-                    ), format: .number)
-                    #endif
                 }
                 TextField("Subtitle delay", value: Binding<Double>(
                     get: { playerLayer.subtitleModel.subtitleDelay },
@@ -360,12 +230,10 @@ struct VideoSettingView: View {
                     playerLayer.subtitleModel.searchSubtitle(query: model.title, languages: [Locale.current.identifier])
                 }
                 .buttonStyle(.bordered)
-                #if !os(tvOS)
                 Button("Add Subtitle") {
                     subtitleFileImport = true
                 }
                 .buttonStyle(.bordered)
-                #endif
                 DynamicInfoView(dynamicInfo: playerLayer.player.dynamicInfo)
                 let fileSize = playerLayer.player.fileSize
                 if fileSize > 0 {
@@ -375,7 +243,6 @@ struct VideoSettingView: View {
                 Text("Loading...")
             }
         }
-        #if !os(tvOS)
         .fileImporter(isPresented: $subtitleFileImport, allowedContentTypes: [.data]) { result in
             guard let url = try? result.get() else {
                 return
@@ -387,15 +254,6 @@ struct VideoSettingView: View {
                 }
             }
         }
-        #endif
-        #if os(macOS) || targetEnvironment(macCatalyst) || os(visionOS)
-        .toolbar {
-            Button("Done") {
-                dismiss()
-            }
-            .keyboardShortcut(.defaultAction)
-        }
-        #endif
     }
 }
 
