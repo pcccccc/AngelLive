@@ -31,6 +31,7 @@ public final class AppFavoriteModel {
     public var cloudReturnError = false
     public var syncStatus: CloudSyncStatus = .syncing
     public var lastSyncTime: Date?
+    private var isSyncing: Bool = false  // 添加同步状态标记
 
     public init() {}
 
@@ -54,6 +55,15 @@ public final class AppFavoriteModel {
 
     @MainActor
     public func syncWithActor() async {
+        // 防止并发刷新：如果正在同步中，直接返回
+        guard !isSyncing else {
+            print("正在同步中，忽略此次刷新请求")
+            return
+        }
+
+        isSyncing = true
+        defer { isSyncing = false }  // 确保无论成功或失败都重置状态
+
         roomList.removeAll()
         groupedRoomList.removeAll()
         cloudReturnError = false
@@ -90,6 +100,50 @@ public final class AppFavoriteModel {
             }
             syncProgressInfo = ("", "", "", 0, 0)
             isLoading = false
+            cloudReturnError = true
+            syncStatus = .notLoggedIn
+        }
+    }
+
+    /// 下拉刷新专用方法 - 不清空数据，保持 List 结构稳定
+    @MainActor
+    public func pullToRefresh() async {
+        // 防止并发刷新
+        guard !isSyncing else {
+            print("正在同步中，忽略此次刷新请求")
+            return
+        }
+
+        isSyncing = true
+        defer { isSyncing = false }
+
+        // 不清空数据，不改变 isLoading 状态
+        self.syncStatus = .syncing
+
+        let state = await actor.getState()
+        self.cloudKitReady = state.0
+        self.cloudKitStateString = state.1
+
+        if self.cloudKitReady {
+            do {
+                let resp = try await actor.syncStreamerLiveStates()
+                // 直接更新数据，不清空
+                self.roomList = resp.0
+                self.groupedRoomList = resp.1
+                syncStatus = .success
+                lastSyncTime = Date()
+            } catch {
+                self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
+                cloudReturnError = true
+                syncStatus = .error
+            }
+        } else {
+            let state = await FavoriteService.getCloudState()
+            if state == "无法确定状态" {
+                self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + state + "请尝试重新在设置中登录iCloud"
+            } else {
+                self.cloudKitStateString = state
+            }
             cloudReturnError = true
             syncStatus = .notLoggedIn
         }

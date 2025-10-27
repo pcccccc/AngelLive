@@ -18,23 +18,26 @@ struct FavoriteView: View {
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
-                ScrollView {
-                    if viewModel.isLoading {
-                        skeletonView(geometry: geometry)
-                    } else if viewModel.cloudKitReady {
-                        if viewModel.roomList.isEmpty {
-                            emptyStateView()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        if viewModel.isLoading {
+                            skeletonView(geometry: geometry)
+                        } else if viewModel.cloudKitReady {
+                            if viewModel.roomList.isEmpty {
+                                emptyStateView()
+                            } else {
+                                favoriteContentView(geometry: geometry)
+                                    .id("top") // 添加顶部标识
+                            }
                         } else {
-                            favoriteContentView(geometry: geometry)
+                            cloudKitErrorView()
                         }
-                    } else {
-                        cloudKitErrorView()
                     }
-                }
-                .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
-                .scrollIndicators(.visible, axes: .vertical) // iOS 26: 改进的滚动指示器
-                .refreshable {
-                    await refreshFavorites()
+                    .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
+                    .scrollIndicators(.visible, axes: .vertical) // iOS 26: 改进的滚动指示器
+                    .refreshable {
+                        await refreshFavorites(scrollProxy: proxy)
+                    }
                 }
             }
             .navigationTitle("收藏")
@@ -314,11 +317,17 @@ struct FavoriteView: View {
     }
 
     @MainActor
-    private func refreshFavorites() async {
+    private func refreshFavorites(scrollProxy: ScrollViewProxy) async {
         // 手动刷新时始终同步
         isRefreshing = true
-        await viewModel.syncWithActor()
+        await viewModel.pullToRefresh()
         isRefreshing = false
+
+        // 刷新完成后延迟 0.5 秒滚动到顶部
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+        withAnimation {
+            scrollProxy.scrollTo("top", anchor: .top)
+        }
     }
 }
 

@@ -20,10 +20,20 @@ public final class FavoriteLiveSectionModel: Identifiable, @unchecked Sendable {
 public actor FavoriteStateModel: ObservableObject {
 
     var currentProgress: (String, String, String, Int, Int) = ("", "", "", 0, 0)
+    private var isSyncing = false  // 添加同步标志
 
     public init() {}
 
     public func syncStreamerLiveStates() async throws -> ([LiveModel], [FavoriteLiveSectionModel]) {
+        // 防止并发执行
+        guard !isSyncing else {
+            print("Actor 正在同步中，拒绝重复调用")
+            throw NSError(domain: "FavoriteStateModel", code: -1, userInfo: [NSLocalizedDescriptionKey: "正在同步中"])
+        }
+
+        isSyncing = true
+        defer { isSyncing = false }
+
         var roomList: [LiveModel] = []
         do {
             roomList = try await FavoriteService.searchRecord()

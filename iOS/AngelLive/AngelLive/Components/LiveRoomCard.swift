@@ -33,7 +33,6 @@ struct LiveRoomCard: View {
         VStack {
             // 封面图
             ZStack(alignment: .center) {
-
                 KFImage(URL(string: room.roomCover))
                     .placeholder {
                         Rectangle()
