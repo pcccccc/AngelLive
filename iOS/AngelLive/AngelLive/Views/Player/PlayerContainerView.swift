@@ -60,15 +60,13 @@ struct PlayerContentView: View {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                     }
                 }
+                .opacity(hasDetectedSize ? 1 : 0)
                 .task {
                     // 使用异步任务定期检查视频尺寸
                     var retryCount = 0
-                    let maxRetries = 20 // 最多重试 20 次（10 秒）
+                    let maxRetries = 40 // 最多重试 40 次（10 秒）
 
                     while !Task.isCancelled && retryCount < maxRetries {
-                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
-                        retryCount += 1
-
                         if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
                            naturalSize.width > 0, naturalSize.height > 0 {
 
@@ -77,21 +75,20 @@ struct PlayerContentView: View {
 
                             if !isValidSize {
                                 print("⚠️ 检测到无效视频尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
-                                continue
-                            }
+                            } else if !hasDetectedSize {
+                                let ratio = naturalSize.width / naturalSize.height
+                                let isPortrait = ratio < 1.0
 
-                            let ratio = naturalSize.width / naturalSize.height
-                            let isPortrait = ratio < 1.0
-
-                            if !hasDetectedSize {
                                 print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
                                 print("📐 视频比例: \(ratio)")
                                 print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
                                 print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
 
-                                videoAspectRatio = ratio
-                                isVideoPortrait = isPortrait
-                                hasDetectedSize = true
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    videoAspectRatio = ratio
+                                    isVideoPortrait = isPortrait
+                                    hasDetectedSize = true
+                                }
 
                                 // 打印应用的策略
                                 if isDeviceLandscape && isPortrait {
@@ -103,6 +100,9 @@ struct PlayerContentView: View {
                                 break // 获取到后退出循环
                             }
                         }
+
+                        retryCount += 1
+                        try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
                     }
 
                     // 超时后仍未获取到有效尺寸，保持默认 16:9 比例

@@ -8,6 +8,9 @@
 
 import SwiftUI
 import KSPlayer
+internal import AVFoundation
+import AngelLiveCore
+import AngelLiveDependencies
 
 @MainActor
 public enum KSVideoPlayerViewBuilder {
@@ -81,7 +84,9 @@ public enum KSVideoPlayerViewBuilder {
             showVideoSetting.wrappedValue.toggle()
         } label: {
             Image(systemName: "info.circle")
-                .ksMenuLabelStyle()
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
         }
         .ksBorderlessButton()
         .keyboardShortcut("i", modifiers: [.command])
@@ -91,7 +96,9 @@ public enum KSVideoPlayerViewBuilder {
     static func refreshButton(isLoading: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "arrow.clockwise")
-                .ksMenuLabelStyle()
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
                 .rotationEffect(.degrees(isLoading ? 360 : 0))
                 .animation(
                     isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
@@ -184,16 +191,26 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     @ViewBuilder
-    static func playButton(config: KSVideoPlayer.Coordinator) -> some View {
+    static func playButton(config: KSVideoPlayer.Coordinator, isToolbar: Bool = false, isPlaying: Bool = false) -> some View {
         Button {
-            if config.state.isPlaying {
+            if isPlaying || config.state.isPlaying {
                 config.playerLayer?.pause()
             } else {
                 config.playerLayer?.play()
             }
         } label: {
-            Image(systemName: config.state.systemName)
-                .centerControlButtonStyle()
+            let systemName = isPlaying ? "pause.fill" : (config.state.isPlaying ? "pause.fill" : "play.fill")
+            if isToolbar {
+                // 工具栏样式：30x30
+                Image(systemName: systemName)
+                    .frame(width: 30, height: 30)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+            } else {
+                // 中间大按钮样式
+                Image(systemName: systemName)
+                    .centerControlButtonStyle()
+            }
         }
         .ksBorderlessButton()
         .keyboardShortcut(.space, modifiers: .none)
@@ -232,8 +249,55 @@ public enum KSVideoPlayerViewBuilder {
             UIViewController.attemptRotationToDeviceOrientation()
         } label: {
             Image(systemName: UIApplication.isLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                .ksMenuLabelStyle()
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
         }
+        .ksBorderlessButton()
+    }
+
+    @ViewBuilder
+    static var portraitButton: some View {
+        Button {
+            KSOptions.supportedInterfaceOrientations = .portrait
+            UIViewController.attemptRotationToDeviceOrientation()
+        } label: {
+            Image(systemName: "arrow.up.and.down")
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .ksBorderlessButton()
+    }
+
+    @ViewBuilder
+    static func qualityMenuButton(viewModel: RoomInfoViewModel) -> some View {
+        Menu {
+            if let playArgs = viewModel.currentRoomPlayArgs {
+                ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
+                    Menu {
+                        ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
+                            Button {
+                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                            } label: {
+                                HStack {
+                                    Text(quality.title)
+                                    if viewModel.currentPlayQualityQn == quality.qn {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Text("线路 \(cdnIndex + 1)")
+                    }
+                }
+            }
+        } label: {
+            Text(viewModel.currentPlayQualityString)
+        }
+        .menuIndicator(.hidden)
+        .menuStyle(.borderlessButton)
     }
 }
 

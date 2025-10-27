@@ -79,9 +79,6 @@ public struct KSVideoPlayerView: View {
                 .ksIsFocused($model.focusableView, equals: .play)
                 .opacity(!model.config.isMaskShow ? 1 : 0)
                 controllerView
-                    .sheet(isPresented: $model.showVideoSetting) {
-                        VideoSettingView(model: model)
-                    }
             }
             // 要放在这里才可以生效
             .onTapGesture {
