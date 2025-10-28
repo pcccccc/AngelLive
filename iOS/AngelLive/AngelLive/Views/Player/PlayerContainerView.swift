@@ -35,6 +35,7 @@ struct PlayerContentView: View {
     @State private var videoAspectRatio: CGFloat? = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
+    @State private var orientationKey: String = "initial" // 用于跟踪方向变化
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -47,6 +48,11 @@ struct PlayerContentView: View {
     private var isDeviceLandscape: Bool {
         horizontalSizeClass == .compact && verticalSizeClass == .compact ||
         horizontalSizeClass == .regular && verticalSizeClass == .compact
+    }
+
+    // 生成基于方向的唯一 key
+    private var playerViewKey: String {
+        "\(viewModel.currentPlayURL?.absoluteString ?? "")_\(isDeviceLandscape ? "landscape" : "portrait")"
     }
 
     var body: some View {
@@ -74,6 +80,33 @@ struct PlayerContentView: View {
         ))
         .frame(maxWidth: .infinity) // 外层容器仍然填满，用于居中
         .background(Color.black)
+        .onAppear {
+            // 页面出现时准备播放器
+            playerManager.prepare()
+
+            // 如果 playerLayer 已存在，立即显示播放器
+            if let playerLayer = playerCoordinator.playerLayer {
+                let naturalSize = playerLayer.player.naturalSize
+
+                print("🎬 onAppear - 检测到已有播放器")
+                print("   视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
+                print("   当前 hasDetectedSize: \(hasDetectedSize)")
+
+                if naturalSize.width > 1.0 && naturalSize.height > 1.0 {
+                    // 有有效尺寸，立即应用
+                    let ratio = naturalSize.width / naturalSize.height
+                    let isPortrait = ratio < 1.0
+
+                    print("   ✅ 应用视频尺寸，比例: \(ratio)")
+
+                    videoAspectRatio = ratio
+                    isVideoPortrait = isPortrait
+                }
+
+                // 强制显示播放器（解决横屏有声音无画面问题）
+                hasDetectedSize = true
+            }
+        }
     }
 
     // MARK: - Player Content
@@ -89,13 +122,19 @@ struct PlayerContentView: View {
                 ) { coordinator, isDisappear in
                     if !isDisappear {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                    } else {
+                        // 视图消失时不要清理 playerLayer，让全局 coordinator 保持状态
+                        print("⚠️ KSVideoPlayerView isDisappear，但不清理 playerLayer")
                     }
                 }
+                .id(playerViewKey) // 横竖屏切换时重建视图，重新附加 playerLayer
                 .opacity(hasDetectedSize ? 1 : 0)
-                .task {
+                .task(id: playURL.absoluteString) {
                     // 使用异步任务定期检查视频尺寸
                     var retryCount = 0
                     let maxRetries = 40 // 最多重试 40 次（10 秒）
+
+                    print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
 
                     while !Task.isCancelled && retryCount < maxRetries {
                         if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
@@ -129,6 +168,10 @@ struct PlayerContentView: View {
                                 }
 
                                 break // 获取到后退出循环
+                            } else {
+                                // 已经检测过，直接退出
+                                print("✅ 已有视频尺寸信息，无需重复检测")
+                                break
                             }
                         }
 
@@ -136,17 +179,30 @@ struct PlayerContentView: View {
                         try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
                     }
 
-                    // 超时后仍未获取到有效尺寸，保持默认 16:9 比例
-                    if retryCount >= maxRetries {
-                        print("⚠️ 无法获取有效视频尺寸，保持默认 16:9 比例")
+                    // 超时后仍未获取到有效尺寸，强制显示（使用默认 16:9 比例）
+                    if retryCount >= maxRetries && !hasDetectedSize {
+                        print("⚠️ 无法获取有效视频尺寸，强制显示（默认 16:9 比例）")
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            hasDetectedSize = true
+                        }
                     }
                 }
                 .onChange(of: playURL) { _ in
-                    // 切换视频时重置为默认 16:9 比例
+                    // 切换视频时重置为默认 16:9 比例并重新检测
                     print("🔄 切换视频，重置为默认 16:9 比例")
                     videoAspectRatio = 16.0 / 9.0
                     isVideoPortrait = false
                     hasDetectedSize = false
+                    // task(id: playURL.absoluteString) 会自动触发重新检测
+                }
+                .onChange(of: isDeviceLandscape) { oldValue, newValue in
+                    // 横竖屏切换时重新触发尺寸检测
+                    print("🔄 设备方向变化: \(oldValue ? "横屏" : "竖屏") → \(newValue ? "横屏" : "竖屏")")
+                    if hasDetectedSize {
+                        print("   已有尺寸信息，保持当前显示状态")
+                        // 不重置 hasDetectedSize，保持已检测的状态
+                        // 这样可以避免横竖屏切换时出现黑屏
+                    }
                 }
             } else {
                 if viewModel.isLoading {

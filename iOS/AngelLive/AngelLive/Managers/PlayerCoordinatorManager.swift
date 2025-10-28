@@ -31,14 +31,30 @@ final class PlayerCoordinatorManager {
     func reset() {
         print("🔄 PlayerCoordinatorManager reset - 重置播放器状态")
 
-        // 停止播放
-        coordinator.playerLayer?.pause()
-        coordinator.playerLayer?.reset()
+        // 停止播放并完全重置 playerLayer
+        if let playerLayer = coordinator.playerLayer {
+            playerLayer.pause()
+            playerLayer.reset()
+
+            // 清理播放器资源
+            playerLayer.player.shutdown()
+        }
 
         // 重置状态
         coordinator.isMuted = false
         coordinator.playbackRate = 1.0
         coordinator.isScaleAspectFill = false
         coordinator.isRecord = false
+        coordinator.isMaskShow = false
+    }
+
+    /// 准备播放器
+    /// 在进入播放页面时调用，确保播放器状态干净
+    func prepare() {
+        print("🟢 PlayerCoordinatorManager prepare - 准备播放器")
+
+        // 不调用 shutdown，只是确保状态正确
+        // shutdown 会清理 playerLayer，导致横竖屏切换时无法重新渲染
+        print("   当前 playerLayer 状态: \(coordinator.playerLayer != nil ? "存在" : "不存在")")
     }
 }
