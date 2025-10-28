@@ -18,34 +18,94 @@ struct VideoControllerView: View {
     @Environment(\.dismiss)
     private var dismiss
     @Environment(RoomInfoViewModel.self) private var viewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+
     private var playerWidth: CGFloat {
         model.config.playerLayer?.player.view.frame.width ?? 0
+    }
+
+    /// 检测是否为横屏
+    private var isLandscape: Bool {
+        horizontalSizeClass == .compact && verticalSizeClass == .compact ||
+        horizontalSizeClass == .regular && verticalSizeClass == .compact
     }
 
     init(model: KSVideoPlayerModel) {
         self.model = model
     }
 
+    // MARK: - Helper Methods
+
+    /// 处理返回按钮点击
+    /// - iPad 全屏时：退出全屏
+    /// - iPhone 横屏时：退出全屏（切换到竖屏）
+    /// - 其他情况：返回上一页
+    private func handleBackButton() {
+        if AppConstants.Device.isIPad && isIPadFullscreen.wrappedValue {
+            // iPad 全屏，退出全屏（不改变方向）
+            isIPadFullscreen.wrappedValue = false
+            return
+        } else if !AppConstants.Device.isIPad && UIApplication.isLandscape {
+            // iPhone 横屏，切换回竖屏
+            KSOptions.supportedInterfaceOrientations = .portrait
+
+            // 使用 iOS 16+ API
+            if #available(iOS 16.0, *) {
+                guard let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first else {
+                    return
+                }
+
+                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: .portrait
+                )
+
+                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                    print("❌ 退出全屏失败: \(error)")
+                }
+
+                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            } else {
+                // iOS 16 以下降级方案
+                UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+                UIViewController.attemptRotationToDeviceOrientation()
+            }
+        } else {
+            // 竖屏，返回上一页
+            dismiss()
+            KSOptions.supportedInterfaceOrientations = .portrait
+        }
+    }
+
     var body: some View {
+        @Bindable var viewModel = viewModel
+
         ZStack {
             // 控制按钮层（带 padding）
             ZStack {
-                // 左上角：返回按钮
-                VStack {
-                    HStack {
-                        Button {
-                            dismiss()
-                            KSOptions.supportedInterfaceOrientations = nil
-                        } label: {
-                            Image(systemName: "chevron.left")
-                                .frame(width: 30, height: 30)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.white)
+                // 左上角：返回按钮（横屏或 iPad 全屏时显示）
+                if isLandscape || isIPadFullscreen.wrappedValue {
+                    VStack {
+                        HStack {
+                            Button {
+                                handleBackButton()
+                            } label: {
+                                Image(systemName: "chevron.left")
+                                    .frame(width: 30, height: 30)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .ksBorderlessButton()
+                            Spacer()
                         }
-                        .ksBorderlessButton()
                         Spacer()
                     }
-                    Spacer()
+                    .transition(.opacity)
                 }
 
                 // 右上角：投屏、设置按钮
@@ -82,12 +142,15 @@ struct VideoControllerView: View {
                     }
                 }
 
-                // 右下角：清晰度设置、竖屏按钮（可选）、全屏按钮
+                // 右下角：弹幕开关、清晰度设置、竖屏按钮（可选）、全屏按钮
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
+                            // 弹幕开关按钮
+                            KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.showDanmu)
+
                             // 清晰度设置菜单
                             KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel)
 
@@ -98,7 +161,7 @@ struct VideoControllerView: View {
                             }
 
                             // 全屏按钮
-                            KSVideoPlayerViewBuilder.landscapeButton
+                            KSVideoPlayerViewBuilder.landscapeButton(isIPadFullscreen: isIPadFullscreen)
                         }
                     }
                 }

@@ -14,22 +14,16 @@ struct DetailPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(PlayerCoordinatorManager.self) private var playerManager
+
+    /// iPad 是否处于全屏模式
+    @State private var isIPadFullscreen: Bool = false
 
     // MARK: - Device & Layout Detection
 
     /// 是否为 iPad
     private var isIPad: Bool {
         AppConstants.Device.isIPad
-    }
-
-    /// 是否为横屏
-    private var isLandscape: Bool {
-        horizontalSizeClass == .regular && verticalSizeClass == .compact
-    }
-
-    /// 是否使用分栏布局（iPad 横屏）
-    private var useSplitLayout: Bool {
-        isIPad && isLandscape
     }
 
     // MARK: - Body
@@ -41,29 +35,32 @@ struct DetailPlayerView: View {
 
             // 内容区域
             GeometryReader { geometry in
+                let isLandscape = geometry.size.width > geometry.size.height
+                let isIPhoneLandscape = !isIPad && isLandscape  // iPhone 横屏
+
                 ZStack(alignment: .topLeading) {
                     // 根据设备和方向选择布局
-                    if useSplitLayout {
-                        // iPad 横屏：左右分栏布局
+                    if isIPhoneLandscape || isIPadFullscreen {
+                        // iPhone 横屏 或 iPad 全屏：只显示播放器
+                        fullscreenPlayerLayout
+                    } else if AppConstants.Device.isIPad && isLandscape {
+                        // iPad 横屏（非全屏）：左右分栏布局
                         iPadLandscapeLayout
                     } else {
-                        // iPhone 或 iPad 竖屏：上下布局
+                        // iPhone 竖屏 或 iPad 竖屏（非全屏）：上下布局
                         portraitLayout
                     }
 
-                    // 屏幕弹幕层（飞过效果）
-                    if viewModel.showDanmu {
-                        DanmuView(coordinator: viewModel.danmuCoordinator)
-                            .allowsHitTesting(false) // 不拦截触摸事件
-                            .zIndex(2)
-                    }
-
                     // 返回按钮（始终显示在左上角）
-                    backButton
-                        .zIndex(3)
+                    // iPhone 横屏或 iPad 全屏时由播放器控制层显示，这里不显示
+                    if !isIPhoneLandscape && !isIPadFullscreen {
+                        backButton
+                            .zIndex(3)
+                    }
                 }
             }
         }
+        .environment(\.isIPadFullscreen, $isIPadFullscreen)
         .navigationBarBackButtonHidden(true)
         .task {
             await viewModel.loadPlayURL()
@@ -71,6 +68,9 @@ struct DetailPlayerView: View {
         .onDisappear {
             // 页面消失时断开弹幕连接
             viewModel.disconnectSocket()
+
+            // 重置全局播放器状态
+            playerManager.reset()
         }
     }
 
@@ -78,6 +78,15 @@ struct DetailPlayerView: View {
 
     private var backgroundView: some View {
         BlurredBackgroundView(imageURL: viewModel.currentRoom.userHeadImg)
+            .edgesIgnoringSafeArea(.all)
+    }
+
+    // MARK: - 全屏播放器布局（iPhone 横屏 或 iPad 全屏）
+
+    private var fullscreenPlayerLayout: some View {
+        PlayerContainerView()
+            .environment(viewModel)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .edgesIgnoringSafeArea(.all)
     }
 
@@ -199,5 +208,19 @@ struct DetailPlayerView: View {
         withAnimation {
             viewModel.danmuMessages.removeAll()
         }
+    }
+}
+
+// MARK: - iPad Fullscreen Support
+
+/// iPad 全屏状态的 Environment Key
+private struct IPadFullscreenEnvironmentKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(false)
+}
+
+extension EnvironmentValues {
+    var isIPadFullscreen: Binding<Bool> {
+        get { self[IPadFullscreenEnvironmentKey.self] }
+        set { self[IPadFullscreenEnvironmentKey.self] = newValue }
     }
 }

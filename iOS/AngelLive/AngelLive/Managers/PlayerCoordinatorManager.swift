@@ -1,0 +1,44 @@
+//
+//  PlayerCoordinatorManager.swift
+//  AngelLive
+//
+//  Created by Claude on 10/28/25.
+//
+
+import Foundation
+import SwiftUI
+import KSPlayer
+
+/// 全局播放器协调器管理器
+/// 确保整个 APP 只有一个播放器实例，避免重复创建
+@MainActor
+@Observable
+final class PlayerCoordinatorManager {
+    /// 全局共享的播放器协调器
+    let coordinator: KSVideoPlayer.Coordinator
+
+    init() {
+        self.coordinator = KSVideoPlayer.Coordinator()
+        print("🟢 PlayerCoordinatorManager init - 创建全局播放器协调器")
+    }
+
+    deinit {
+        print("🔴 PlayerCoordinatorManager deinit")
+    }
+
+    /// 重置播放器状态
+    /// 在退出播放页面时调用，清理播放器状态
+    func reset() {
+        print("🔄 PlayerCoordinatorManager reset - 重置播放器状态")
+
+        // 停止播放
+        coordinator.playerLayer?.pause()
+        coordinator.playerLayer?.reset()
+
+        // 重置状态
+        coordinator.isMuted = false
+        coordinator.playbackRate = 1.0
+        coordinator.isScaleAspectFill = false
+        coordinator.isRecord = false
+    }
+}

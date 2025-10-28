@@ -12,21 +12,44 @@ import AngelLiveDependencies
 struct LiveRoomCard: View {
     let room: LiveModel
     @State private var isPressed = false
+    @State private var showPlayer = false
     @Namespace private var namespace
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    // 检测是否为 iPad
+    private var isIPad: Bool {
+        horizontalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
+    }
 
     init(room: LiveModel, width: CGFloat? = nil) {
         self.room = room
     }
 
     var body: some View {
-        NavigationLink {
-            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                .toolbar(.hidden, for: .tabBar)
-        } label: {
-            cardContent
+        if isIPad {
+            // iPad: 使用 fullScreenCover
+            Button {
+                showPlayer = true
+            } label: {
+                cardContent
+            }
+            .buttonStyle(.plain)
+            .fullScreenCover(isPresented: $showPlayer) {
+                DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                    .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                    .toolbar(.hidden, for: .tabBar)
+            }
+        } else {
+            // iPhone: 使用 NavigationLink
+            NavigationLink {
+                DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                    .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                    .toolbar(.hidden, for: .tabBar)
+            } label: {
+                cardContent
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     private var cardContent: some View {

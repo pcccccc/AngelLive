@@ -243,12 +243,30 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     @ViewBuilder
-    static var landscapeButton: some View {
+    static func landscapeButton(isIPadFullscreen: Binding<Bool>) -> some View {
+        let iconName: String = {
+            var iconName = ""
+            if AppConstants.Device.isIPad {
+                // iPad: 全屏图标
+                iconName = isIPadFullscreen.wrappedValue ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+            } else {
+                // iPhone: 方向图标
+                iconName = UIApplication.isLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+            }
+            return iconName
+        }()
+        
+
         Button {
-            KSOptions.supportedInterfaceOrientations = UIApplication.isLandscape ? .portrait : .landscapeLeft
-            UIViewController.attemptRotationToDeviceOrientation()
+            if AppConstants.Device.isIPad {
+                // iPad: 切换全屏状态（不改变方向）
+                isIPadFullscreen.wrappedValue.toggle()
+            } else {
+                // iPhone: 切换屏幕方向
+                toggleOrientation()
+            }
         } label: {
-            Image(systemName: UIApplication.isLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+            Image(systemName: iconName)
                 .frame(width: 30, height: 30)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
@@ -256,13 +274,104 @@ public enum KSVideoPlayerViewBuilder {
         .ksBorderlessButton()
     }
 
+    // 使用 iOS 16+ GeometryPreferences API 切换屏幕方向
+    private static func toggleOrientation() {
+        let targetOrientation: UIInterfaceOrientationMask = UIApplication.isLandscape ? .portrait : .landscapeRight
+
+        // 获取当前的 WindowScene
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first else {
+            print("⚠️ 无法获取 WindowScene")
+            return
+        }
+        
+        // 更新 KSOptions
+        KSOptions.supportedInterfaceOrientations = targetOrientation
+        
+        // 使用 GeometryPreferences 请求方向更新
+        let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+            interfaceOrientations: targetOrientation
+        )
+        
+        windowScene.requestGeometryUpdate(geometryPreferences) { error in
+            print("❌ 方向更新失败: \(error)")
+        }
+        
+        // 通知系统刷新方向
+        if let rootVC = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController {
+            // Ask the active view controller to update supported orientations
+            rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
+    }
+
     @ViewBuilder
     static var portraitButton: some View {
         Button {
-            KSOptions.supportedInterfaceOrientations = .portrait
-            UIViewController.attemptRotationToDeviceOrientation()
+            forcePortraitOrientation()
         } label: {
             Image(systemName: "arrow.up.and.down")
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .ksBorderlessButton()
+    }
+
+    // 强制切换到竖屏
+    private static func forcePortraitOrientation() {
+        // iOS 16+ 使用 GeometryPreferences
+        if #available(iOS 16.0, *) {
+            // 获取当前的 WindowScene
+            guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first else {
+                print("⚠️ 无法获取 WindowScene")
+                return
+            }
+
+            // 更新 KSOptions
+            KSOptions.supportedInterfaceOrientations = .portrait
+
+            // 使用 GeometryPreferences 请求方向更新
+            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                interfaceOrientations: .portrait
+            )
+
+            windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                print("❌ 方向更新失败: \(error)")
+            }
+
+            // 通知系统刷新方向
+            if let rootVC = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow })?
+                .rootViewController {
+                // Ask the active view controller to update supported orientations
+                rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+
+        } else {
+            // iOS 16 以下使用传统方式
+            KSOptions.supportedInterfaceOrientations = .portrait
+
+            // 使用私有 API（仅用于 iOS 16 以下）
+            UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
+            UIViewController.attemptRotationToDeviceOrientation()
+        }
+    }
+
+    @ViewBuilder
+    static func danmakuButton(showDanmu: Binding<Bool>) -> some View {
+        Button {
+            showDanmu.wrappedValue.toggle()
+        } label: {
+            Image(systemName: showDanmu.wrappedValue ? "captions.bubble.fill" : "captions.bubble")
                 .frame(width: 30, height: 30)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
@@ -334,3 +443,19 @@ extension KSPlayerState {
         }
     }
 }
+
+// MARK: - UIApplication Extension
+
+extension UIApplication {
+    /// 检查当前设备是否为横屏
+    static var isLandscape: Bool {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            return false
+        }
+
+        return windowScene.interfaceOrientation.isLandscape
+    }
+}
+

@@ -73,8 +73,10 @@ struct ContentView: View {
 
                 ForEach(platformViewModel.platformInfo) { platform in
                     Tab(platform.title, systemImage: "play.tv", value: TabSelection.platform(platform)) {
-                        PlatformDetailViewControllerWrapper()
-                            .environment(PlatformDetailViewModel(platform: platform))
+                        NavigationStack {
+                            PlatformDetailViewControllerWrapper()
+                                .environment(PlatformDetailViewModel(platform: platform))
+                        }
                     }
                 }
             }
@@ -92,31 +94,57 @@ struct ContentView: View {
 
     // iPhone 专用 TabView
     private var iPhoneTabView: some View {
-        TabView {
-            Tab {
-                FavoriteView()
-            } label: {
-                Label {
-                    Text("收藏")
-                } icon: {
-                    CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+        if #available(iOS 26.0, *) {
+            return TabView {
+                Tab {
+                    FavoriteView()
+                } label: {
+                    Label {
+                        Text("收藏")
+                    } icon: {
+                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                    }
+                }
+                
+                Tab("平台", systemImage: "square.grid.2x2.fill") {
+                    PlatformView()
+                }
+                
+                Tab("设置", systemImage: "gearshape.fill") {
+                    SettingView()
+                }
+                
+                Tab("搜索", systemImage: "magnifyingglass", role: .search) {
+                    SearchView()
                 }
             }
-
-            Tab("平台", systemImage: "square.grid.2x2.fill") {
-                PlatformView()
-            }
-
-            Tab("设置", systemImage: "gearshape.fill") {
-                SettingView()
-            }
-
-            Tab("搜索", systemImage: "magnifyingglass", role: .search) {
-                SearchView()
+            .tabViewStyle(.sidebarAdaptable)
+            .tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+           return TabView {
+                Tab {
+                    FavoriteView()
+                } label: {
+                    Label {
+                        Text("收藏")
+                    } icon: {
+                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                    }
+                }
+                
+                Tab("平台", systemImage: "square.grid.2x2.fill") {
+                    PlatformView()
+                }
+                
+                Tab("设置", systemImage: "gearshape.fill") {
+                    SettingView()
+                }
+                
+                Tab("搜索", systemImage: "magnifyingglass", role: .search) {
+                    SearchView()
+                }
             }
         }
-        .tabViewStyle(.sidebarAdaptable)
-        .tabBarMinimizeBehavior(.onScrollDown)
     }
 }
 
