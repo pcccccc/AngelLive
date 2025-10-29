@@ -26,6 +26,14 @@ struct DetailPlayerView: View {
         AppConstants.Device.isIPad
     }
 
+    /// 共享的播放器容器视图
+    /// 在不同布局间复用同一个实例，避免横竖屏切换时重建导致 playerLayer 丢失
+    private var sharedPlayerContainer: some View {
+        PlayerContainerView()
+            .environment(viewModel)
+            .id("shared_player_container") // 稳定的 ID，确保 SwiftUI 识别为同一视图
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -42,13 +50,13 @@ struct DetailPlayerView: View {
                     // 根据设备和方向选择布局
                     if isIPhoneLandscape || isIPadFullscreen {
                         // iPhone 横屏 或 iPad 全屏：只显示播放器
-                        fullscreenPlayerLayout
+                        fullscreenPlayerLayout(playerContainer: sharedPlayerContainer)
                     } else if AppConstants.Device.isIPad && isLandscape {
                         // iPad 横屏（非全屏）：左右分栏布局
-                        iPadLandscapeLayout
+                        iPadLandscapeLayout(playerContainer: sharedPlayerContainer)
                     } else {
                         // iPhone 竖屏 或 iPad 竖屏（非全屏）：上下布局
-                        portraitLayout
+                        portraitLayout(playerContainer: sharedPlayerContainer)
                     }
 
                     // 返回按钮（始终显示在左上角）
@@ -83,20 +91,18 @@ struct DetailPlayerView: View {
 
     // MARK: - 全屏播放器布局（iPhone 横屏 或 iPad 全屏）
 
-    private var fullscreenPlayerLayout: some View {
-        PlayerContainerView()
-            .environment(viewModel)
+    private func fullscreenPlayerLayout<Content: View>(playerContainer: Content) -> some View {
+        playerContainer
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .edgesIgnoringSafeArea(.all)
     }
 
     // MARK: - iPad 横屏布局（左右分栏）
 
-    private var iPadLandscapeLayout: some View {
+    private func iPadLandscapeLayout<Content: View>(playerContainer: Content) -> some View {
         HStack(spacing: 0) {
             // 左侧：播放器
-            PlayerContainerView()
-                .environment(viewModel)
+            playerContainer
                 .frame(maxWidth: .infinity)
 
             // 右侧：主播信息 + 聊天
@@ -117,12 +123,11 @@ struct DetailPlayerView: View {
 
     // MARK: - 竖屏布局（上下排列）
 
-    private var portraitLayout: some View {
+    private func portraitLayout<Content: View>(playerContainer: Content) -> some View {
         VStack(spacing: 0) {
             // 播放器容器
-            PlayerContainerView()
+            playerContainer
                 .frame(maxWidth: .infinity)
-                .environment(viewModel)
 
             // 主播信息
             StreamerInfoView()
