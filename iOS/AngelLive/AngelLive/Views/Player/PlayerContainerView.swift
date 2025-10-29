@@ -12,6 +12,7 @@ import AngelLiveDependencies
 /// 播放器容器视图
 struct PlayerContainerView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
+    @ObservedObject var coordinator: KSVideoPlayer.Coordinator
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -23,7 +24,7 @@ struct PlayerContainerView: View {
     }
 
     var body: some View {
-        PlayerContentView()
+        PlayerContentView(playerCoordinator: coordinator)
             .environment(viewModel)
     }
 }
@@ -31,23 +32,12 @@ struct PlayerContainerView: View {
 struct PlayerContentView: View {
 
     @Environment(RoomInfoViewModel.self) private var viewModel
-    @Environment(PlayerCoordinatorManager.self) private var playerManager
+    @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
     @State private var videoAspectRatio: CGFloat? = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
-    // hasDetectedSize 移到全局管理器中，避免横竖屏切换时重置
-    @State private var orientationKey: String = "initial" // 用于跟踪方向变化
+    @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-
-    // 使用全局共享的 coordinator 和 hasDetectedSize
-    private var playerCoordinator: KSVideoPlayer.Coordinator {
-        playerManager.coordinator
-    }
-
-    private var hasDetectedSize: Bool {
-        get { playerManager.hasDetectedSize }
-        nonmutating set { playerManager.hasDetectedSize = newValue }
-    }
 
     // 检测设备是否为横屏
     private var isDeviceLandscape: Bool {
@@ -61,9 +51,7 @@ struct PlayerContentView: View {
     }
 
     var body: some View {
-        let _ = print("📺 PlayerContentView body - hasDetectedSize: \(hasDetectedSize), playURL: \(viewModel.currentPlayURL?.absoluteString ?? "nil"), coordinator.playerLayer: \(playerCoordinator.playerLayer != nil)")
-
-        return ZStack {
+        ZStack {
             // 播放器内容
             playerContent
 
@@ -85,39 +73,6 @@ struct PlayerContentView: View {
         ))
         .frame(maxWidth: .infinity) // 外层容器仍然填满，用于居中
         .background(Color.black)
-        .onAppear {
-            print("🎬 PlayerContentView onAppear")
-            print("   playURL: \(viewModel.currentPlayURL?.absoluteString ?? "nil")")
-            print("   playerLayer exists: \(playerCoordinator.playerLayer != nil)")
-            print("   hasDetectedSize: \(hasDetectedSize)")
-
-            // 页面出现时准备播放器
-            playerManager.prepare()
-
-            // 如果 playerLayer 已存在，立即显示播放器
-            if let playerLayer = playerCoordinator.playerLayer {
-                let naturalSize = playerLayer.player.naturalSize
-
-                print("   视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
-
-                if naturalSize.width > 1.0 && naturalSize.height > 1.0 {
-                    // 有有效尺寸，立即应用
-                    let ratio = naturalSize.width / naturalSize.height
-                    let isPortrait = ratio < 1.0
-
-                    print("   ✅ 应用视频尺寸，比例: \(ratio)")
-
-                    videoAspectRatio = ratio
-                    isVideoPortrait = isPortrait
-                }
-
-                // 强制显示播放器（解决横屏有声音无画面问题）
-                print("   🟢 设置 hasDetectedSize = true（已有 playerLayer）")
-                hasDetectedSize = true
-            } else {
-                print("   ⚠️ playerLayer 不存在，等待创建")
-            }
-        }
     }
 
     // MARK: - Player Content
@@ -131,42 +86,17 @@ struct PlayerContentView: View {
                     url: playURL,
                     options: viewModel.playerOption
                 ) { coordinator, isDisappear in
-                    print("🎬 KSVideoPlayerView liftCycleBlock - isDisappear: \(isDisappear)")
                     if !isDisappear {
-                        print("   ✅ 视图出现，设置播放器代理")
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                    } else {
-                        // 视图消失时不要清理 playerLayer，让全局 coordinator 保持状态
-                        print("   ⚠️ 视图消失，但不清理 playerLayer（保持全局状态）")
                     }
                 }
-                // 移除 .id() 修饰符，避免横竖屏切换时重建视图导致 playerLayer 丢失
-                // .id(playerViewKey)
                 .opacity(hasDetectedSize ? 1 : 0)
                 .task(id: playURL.absoluteString) {
                     // 使用异步任务定期检查视频尺寸
                     var retryCount = 0
-                    let maxRetries = 20 // 减少到 20 次（5 秒），更快显示
+                    let maxRetries = 40 // 最多重试 40 次（10 秒）
 
                     print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
-
-                    // 先等待 playerLayer 创建（最多等待 2 秒）
-                    var layerWaitCount = 0
-                    while !Task.isCancelled && layerWaitCount < 8 && playerCoordinator.playerLayer == nil {
-                        print("   ⏳ 等待 playerLayer 创建... (\(layerWaitCount)/8)")
-                        try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
-                        layerWaitCount += 1
-                    }
-
-                    if playerCoordinator.playerLayer == nil {
-                        print("   ❌ playerLayer 创建超时，强制显示")
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            hasDetectedSize = true
-                        }
-                        return
-                    }
-
-                    print("   ✅ playerLayer 已创建")
 
                     while !Task.isCancelled && retryCount < maxRetries {
                         if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
@@ -176,14 +106,15 @@ struct PlayerContentView: View {
                             let isValidSize = naturalSize.width > 1.0 && naturalSize.height > 1.0
 
                             if !isValidSize {
-                                print("   ⚠️ 无效尺寸: \(naturalSize.width) x \(naturalSize.height) (\(retryCount)/\(maxRetries))")
+                                print("⚠️ 检测到无效视频尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
                             } else if !hasDetectedSize {
                                 let ratio = naturalSize.width / naturalSize.height
                                 let isPortrait = ratio < 1.0
 
-                                print("   📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
-                                print("   📐 视频比例: \(ratio)")
-                                print("   📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                                print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
+                                print("📐 视频比例: \(ratio)")
+                                print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                                print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
 
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     videoAspectRatio = ratio
@@ -191,26 +122,28 @@ struct PlayerContentView: View {
                                     hasDetectedSize = true
                                 }
 
+                                // 打印应用的策略
                                 if isDeviceLandscape && isPortrait {
-                                    print("   ✅ 策略: 横屏设备+竖屏视频 → 限制宽度")
+                                    print("✅ 应用策略: 横屏设备+竖屏视频 → 限制宽度，居中显示")
                                 } else {
-                                    print("   ✅ 策略: 标准 aspect fit")
+                                    print("✅ 应用策略: 标准 aspect fit 显示")
                                 }
 
-                                break
+                                break // 获取到后退出循环
                             } else {
-                                print("   ✅ 已检测，退出")
+                                // 已经检测过，直接退出
+                                print("✅ 已有视频尺寸信息，无需重复检测")
                                 break
                             }
                         }
 
                         retryCount += 1
-                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
                     }
 
-                    // 超时后强制显示
+                    // 超时后仍未获取到有效尺寸，强制显示（使用默认 16:9 比例）
                     if retryCount >= maxRetries && !hasDetectedSize {
-                        print("   ⚠️ 检测超时，强制显示（默认 16:9）")
+                        print("⚠️ 无法获取有效视频尺寸，强制显示（默认 16:9 比例）")
                         withAnimation(.easeInOut(duration: 0.2)) {
                             hasDetectedSize = true
                         }
@@ -223,18 +156,6 @@ struct PlayerContentView: View {
                     isVideoPortrait = false
                     hasDetectedSize = false
                     // task(id: playURL.absoluteString) 会自动触发重新检测
-                }
-                .onChange(of: isDeviceLandscape) { oldValue, newValue in
-                    // 横竖屏切换时保持播放器可见
-                    print("🔄 设备方向变化: \(oldValue ? "横屏" : "竖屏") → \(newValue ? "横屏" : "竖屏")")
-                    print("   当前 hasDetectedSize: \(hasDetectedSize)")
-                    print("   playerLayer exists: \(playerCoordinator.playerLayer != nil)")
-
-                    // 如果 playerLayer 存在，确保播放器保持可见
-                    if playerCoordinator.playerLayer != nil && !hasDetectedSize {
-                        print("   🟢 横竖屏切换，强制显示已存在的 playerLayer")
-                        hasDetectedSize = true
-                    }
                 }
             } else {
                 if viewModel.isLoading {

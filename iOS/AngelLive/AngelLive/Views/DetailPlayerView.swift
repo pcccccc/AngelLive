@@ -14,7 +14,9 @@ struct DetailPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(PlayerCoordinatorManager.self) private var playerManager
+
+    /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
+    @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
 
     /// iPad 是否处于全屏模式
     @State private var isIPadFullscreen: Bool = false
@@ -26,45 +28,75 @@ struct DetailPlayerView: View {
         AppConstants.Device.isIPad
     }
 
-    /// 共享的播放器容器视图
-    /// 在不同布局间复用同一个实例，避免横竖屏切换时重建导致 playerLayer 丢失
-    private var sharedPlayerContainer: some View {
-        PlayerContainerView()
-            .environment(viewModel)
-            .id("shared_player_container") // 稳定的 ID，确保 SwiftUI 识别为同一视图
-    }
-
     // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // 模糊背景（使用主播头像）- 铺满整个屏幕
-            backgroundView
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
+            let isIPhoneLandscape = !isIPad && isLandscape
+            let showInfoPanel = !(isIPhoneLandscape || isIPadFullscreen)
 
-            // 内容区域
-            GeometryReader { geometry in
-                let isLandscape = geometry.size.width > geometry.size.height
-                let isIPhoneLandscape = !isIPad && isLandscape  // iPhone 横屏
+            // 计算播放器布局参数
+            let playerWidth: CGFloat = {
+                if showInfoPanel && isIPad && isLandscape {
+                    return geometry.size.width - 400 // iPad 横屏减去右侧信息栏
+                } else {
+                    return geometry.size.width
+                }
+            }()
 
-                ZStack(alignment: .topLeading) {
-                    // 根据设备和方向选择布局
-                    if isIPhoneLandscape || isIPadFullscreen {
-                        // iPhone 横屏 或 iPad 全屏：只显示播放器
-                        fullscreenPlayerLayout(playerContainer: sharedPlayerContainer)
-                    } else if AppConstants.Device.isIPad && isLandscape {
-                        // iPad 横屏（非全屏）：左右分栏布局
-                        iPadLandscapeLayout(playerContainer: sharedPlayerContainer)
+            let playerHeight: CGFloat = {
+                if showInfoPanel && !isIPad {
+                    return playerWidth / 16 * 9 // 竖屏保持 16:9 比例
+                } else {
+                    return geometry.size.height
+                }
+            }()
+
+            ZStack(alignment: .topLeading) {
+                // 模糊背景
+                backgroundView
+
+                // 播放器 - 始终在同一位置，只改变 frame，不会重建
+                PlayerContentView(playerCoordinator: playerCoordinator)
+                    .id("stable_player")
+                    .environment(viewModel)
+                    .frame(width: playerWidth, height: playerHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+                // 信息面板 - 根据布局动态显示/隐藏
+                if showInfoPanel {
+                    if isIPad && isLandscape {
+                        // iPad 横屏：右侧面板
+                        VStack(spacing: 0) {
+                            StreamerInfoView()
+                                .environment(viewModel)
+                            Divider()
+                                .background(Color.white.opacity(0.2))
+                            chatAreaWithMoreButton
+                        }
+                        .frame(width: 400)
+                        .frame(maxHeight: .infinity, alignment: .topLeading)
+                        .offset(x: geometry.size.width - 400, y: 0)
                     } else {
-                        // iPhone 竖屏 或 iPad 竖屏（非全屏）：上下布局
-                        portraitLayout(playerContainer: sharedPlayerContainer)
+                        // 竖屏：底部面板
+                        VStack(spacing: 0) {
+                            StreamerInfoView()
+                                .environment(viewModel)
+                            chatAreaWithMoreButton
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: geometry.size.height - playerHeight)
+                        .offset(x: 0, y: playerHeight)
                     }
+                }
 
-                    // 返回按钮（始终显示在左上角）
-                    // iPhone 横屏或 iPad 全屏时由播放器控制层显示，这里不显示
-                    if !isIPhoneLandscape && !isIPadFullscreen {
-                        backButton
-                            .zIndex(3)
-                    }
+                // 返回按钮
+                if showInfoPanel {
+                    backButton
+                        .padding(.top, 8)
+                        .padding(.leading, 8)
+                        .zIndex(10)
                 }
             }
         }
@@ -74,11 +106,7 @@ struct DetailPlayerView: View {
             await viewModel.loadPlayURL()
         }
         .onDisappear {
-            // 页面消失时断开弹幕连接
             viewModel.disconnectSocket()
-
-            // 重置全局播放器状态
-            playerManager.reset()
         }
     }
 
@@ -89,49 +117,53 @@ struct DetailPlayerView: View {
             .edgesIgnoringSafeArea(.all)
     }
 
-    // MARK: - 全屏播放器布局（iPhone 横屏 或 iPad 全屏）
+    // MARK: - Layouts
 
-    private func fullscreenPlayerLayout<Content: View>(playerContainer: Content) -> some View {
-        playerContainer
+    /// 全屏播放器布局（iPhone 横屏 或 iPad 全屏）
+    private var fullscreenPlayerLayout: some View {
+        PlayerContentView(playerCoordinator: playerCoordinator)
+            .id("stable_player") // 关键：所有布局使用相同的 id
+            .environment(viewModel)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .edgesIgnoringSafeArea(.all)
     }
 
-    // MARK: - iPad 横屏布局（左右分栏）
-
-    private func iPadLandscapeLayout<Content: View>(playerContainer: Content) -> some View {
+    /// iPad 横屏布局（左右分栏）
+    private var iPadLandscapeLayout: some View {
         HStack(spacing: 0) {
             // 左侧：播放器
-            playerContainer
+            PlayerContentView(playerCoordinator: playerCoordinator)
+                .id("stable_player") // 关键：所有布局使用相同的 id
+                .environment(viewModel)
                 .frame(maxWidth: .infinity)
 
             // 右侧：主播信息 + 聊天
             VStack(spacing: 0) {
-                // 主播信息
                 StreamerInfoView()
                     .environment(viewModel)
 
                 Divider()
                     .background(Color.white.opacity(0.2))
 
-                // 聊天区域
                 chatAreaWithMoreButton
             }
             .frame(width: 400)
         }
     }
 
-    // MARK: - 竖屏布局（上下排列）
-
-    private func portraitLayout<Content: View>(playerContainer: Content) -> some View {
+    /// 竖屏布局（上下排列）
+    private var portraitLayout: some View {
         VStack(spacing: 0) {
             // 播放器容器
-            playerContainer
+            PlayerContentView(playerCoordinator: playerCoordinator)
+                .id("stable_player") // 关键：所有布局使用相同的 id
+                .environment(viewModel)
                 .frame(maxWidth: .infinity)
 
             // 主播信息
             StreamerInfoView()
                 .environment(viewModel)
+
             // 聊天区域
             chatAreaWithMoreButton
         }
