@@ -17,6 +17,10 @@ final class PlayerCoordinatorManager {
     /// 全局共享的播放器协调器
     let coordinator: KSVideoPlayer.Coordinator
 
+    /// 是否已检测到视频尺寸（用于控制播放器可见性）
+    /// 保存在全局管理器中，避免横竖屏切换时重置
+    var hasDetectedSize: Bool = false
+
     init() {
         self.coordinator = KSVideoPlayer.Coordinator()
         print("🟢 PlayerCoordinatorManager init - 创建全局播放器协调器")
@@ -46,15 +50,17 @@ final class PlayerCoordinatorManager {
         coordinator.isScaleAspectFill = false
         coordinator.isRecord = false
         coordinator.isMaskShow = false
+        hasDetectedSize = false
     }
 
     /// 准备播放器
     /// 在进入播放页面时调用，确保播放器状态干净
     func prepare() {
         print("🟢 PlayerCoordinatorManager prepare - 准备播放器")
+        print("   当前 playerLayer 状态: \(coordinator.playerLayer != nil ? "存在" : "不存在")")
+        print("   当前 hasDetectedSize: \(hasDetectedSize)")
 
         // 不调用 shutdown，只是确保状态正确
         // shutdown 会清理 playerLayer，导致横竖屏切换时无法重新渲染
-        print("   当前 playerLayer 状态: \(coordinator.playerLayer != nil ? "存在" : "不存在")")
     }
 }
