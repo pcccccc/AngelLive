@@ -46,10 +46,14 @@ struct DetailPlayerView: View {
             }()
 
             let playerHeight: CGFloat = {
-                if showInfoPanel && !isIPad {
-                    return playerWidth / 16 * 9 // 竖屏保持 16:9 比例
+                if showInfoPanel {
+                    if isIPad && isLandscape {
+                        return geometry.size.height // iPad 横屏占满高度
+                    } else {
+                        return playerWidth / 16 * 9 // 竖屏（iPhone 或 iPad）保持 16:9
+                    }
                 } else {
-                    return geometry.size.height
+                    return geometry.size.height // 全屏模式占满高度
                 }
             }()
 
@@ -177,9 +181,12 @@ struct DetailPlayerView: View {
             chatListView
 
             // 更多功能按钮（右下角）
-            MoreActionsButton(onClearChat: clearChat)
-                .padding(.trailing, 16)
-                .padding(.bottom, 16)
+            MoreActionsButton(
+                onClearChat: clearChat,
+                onDismiss: { dismiss() }
+            )
+            .padding(.trailing, 16)
+            .padding(.bottom, 16)
         }
     }
 
