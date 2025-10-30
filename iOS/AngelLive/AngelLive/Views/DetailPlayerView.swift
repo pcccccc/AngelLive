@@ -21,6 +21,9 @@ struct DetailPlayerView: View {
     /// iPad 是否处于全屏模式
     @State private var isIPadFullscreen: Bool = false
 
+    /// iPhone 播放器实际高度（由 PlayerContentView 报告）
+    @State private var iPhonePlayerHeight: CGFloat = 0
+
     // MARK: - Device & Layout Detection
 
     /// 是否为 iPad
@@ -36,7 +39,7 @@ struct DetailPlayerView: View {
             let isIPhoneLandscape = !isIPad && isLandscape
             let showInfoPanel = !(isIPhoneLandscape || isIPadFullscreen)
 
-            // 计算播放器布局参数
+            // 计算播放器宽度
             let playerWidth: CGFloat = {
                 if showInfoPanel && isIPad && isLandscape {
                     return geometry.size.width - 400 // iPad 横屏减去右侧信息栏
@@ -45,15 +48,22 @@ struct DetailPlayerView: View {
                 }
             }()
 
+            // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
             let playerHeight: CGFloat = {
-                if showInfoPanel {
-                    if isIPad && isLandscape {
-                        return geometry.size.height // iPad 横屏占满高度
+                if isIPad {
+                    // iPad 保持原逻辑
+                    if showInfoPanel {
+                        if isLandscape {
+                            return geometry.size.height // iPad 横屏占满高度
+                        } else {
+                            return playerWidth / 16 * 9 // iPad 竖屏保持 16:9
+                        }
                     } else {
-                        return playerWidth / 16 * 9 // 竖屏（iPhone 或 iPad）保持 16:9
+                        return geometry.size.height // 全屏模式占满高度
                     }
                 } else {
-                    return geometry.size.height // 全屏模式占满高度
+                    // iPhone: 使用 PlayerContentView 报告的高度，如果还没报告则用默认 16:9
+                    return iPhonePlayerHeight > 0 ? iPhonePlayerHeight : (playerWidth / 16 * 9)
                 }
             }()
 
@@ -65,8 +75,13 @@ struct DetailPlayerView: View {
                 PlayerContentView(playerCoordinator: playerCoordinator)
                     .id("stable_player")
                     .environment(viewModel)
-                    .frame(width: playerWidth, height: playerHeight)
+                    .frame(width: playerWidth, height: isIPad ? playerHeight : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
+                        if !isIPad {
+                            iPhonePlayerHeight = height
+                        }
+                    }
 
                 // 信息面板 - 根据布局动态显示/隐藏
                 if showInfoPanel {

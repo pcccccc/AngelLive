@@ -21,6 +21,7 @@ struct VideoControllerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @State private var showDanmakuSettings = false
 
     private var playerWidth: CGFloat {
         model.config.playerLayer?.player.view.frame.width ?? 0
@@ -108,16 +109,24 @@ struct VideoControllerView: View {
                     .transition(.opacity)
                 }
 
-                // 右上角：投屏、设置按钮
+                // 右上角：投屏、画面平铺、画中画、设置按钮
                 VStack {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
-                            if model.config.playerLayer?.player.allowsExternalPlayback == true {
-                                AirPlayView()
-                                    .frame(width: 30, height: 30)
+                            // AirPlay 和画面平铺仅在横屏/全屏时显示
+                            if isLandscape || isIPadFullscreen.wrappedValue {
+                                if model.config.playerLayer?.player.allowsExternalPlayback == true {
+                                    AirPlayView()
+                                        .frame(width: 30, height: 30)
+                                }
+                                KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
                             }
-                            KSVideoPlayerViewBuilder.infoButton(showVideoSetting: $model.showVideoSetting)
+                            KSVideoPlayerViewBuilder.pipButton(config: model.config)
+                            SettingsButton(
+                                showVideoSetting: $model.showVideoSetting,
+                                showDanmakuSettings: $showDanmakuSettings
+                            )
                         }
                     }
                     Spacer()
@@ -207,7 +216,7 @@ struct VideoSettingHUDView: View {
         VStack(alignment: .leading, spacing: 0) {
             // 标题栏
             HStack {
-                Text("播放信息")
+                Text("视频信息统计")
                     .font(.headline)
                     .foregroundStyle(.white)
                 Spacer()

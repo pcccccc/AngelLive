@@ -52,9 +52,9 @@ final class RoomInfoViewModel {
         KSOptions.isSecondOpen = true
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
-
         let option = PlayerOptions()
         option.userAgent = "libmpv"
+//        option.allowsExternalPlayback = true  //启用 AirPlay 和外部播放
         self.playerOption = option
     }
 

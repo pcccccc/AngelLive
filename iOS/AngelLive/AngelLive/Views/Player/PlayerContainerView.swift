@@ -9,6 +9,16 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 
+// MARK: - Preference Key for Player Height
+
+struct PlayerHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// 播放器容器视图
 struct PlayerContainerView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
@@ -33,7 +43,7 @@ struct PlayerContentView: View {
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
-    @State private var videoAspectRatio: CGFloat? = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
+    @State private var videoAspectRatio: CGFloat = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -51,28 +61,33 @@ struct PlayerContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            // 播放器内容
-            playerContent
+        GeometryReader { geometry in
+            let playerHeight = calculatedHeight(for: geometry.size)
 
-            // 屏幕弹幕层（飞过效果）- 附在播放器上
-            if viewModel.showDanmu {
-                DanmuView(coordinator: viewModel.danmuCoordinator)
-                    .allowsHitTesting(false) // 不拦截触摸事件
-                    .zIndex(2)
-                    .clipped()
+            ZStack {
+                // 播放器内容
+                playerContent
+
+                // 屏幕弹幕层（飞过效果）- 附在播放器上
+                if viewModel.showDanmu {
+                    DanmuView(coordinator: viewModel.danmuCoordinator)
+                        .allowsHitTesting(false) // 不拦截触摸事件
+                        .zIndex(2)
+                        .clipped()
+                }
             }
+            .frame(width: geometry.size.width, height: playerHeight)
+            .background(Color.black)
+            .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
         }
-        .frame(
-            maxWidth: AppConstants.Device.isIPad ? (.infinity) : (shouldLimitWidth ? nil : .infinity),
-            maxHeight: .infinity
-        )
-        .modifier(VideoAspectRatioModifier(
-            aspectRatio: videoAspectRatio,
-            isIPad: AppConstants.Device.isIPad
-        ))
-        .frame(maxWidth: .infinity) // 外层容器仍然填满，用于居中
-        .background(Color.black)
+    }
+
+    // 计算视频高度
+    private func calculatedHeight(for size: CGSize) -> CGFloat {
+        let shouldFillHeight = isDeviceLandscape || AppConstants.Device.isIPad
+        let calculatedByRatio = size.width / videoAspectRatio
+
+        return shouldFillHeight ? size.height : calculatedByRatio
     }
 
     // MARK: - Player Content
@@ -190,22 +205,15 @@ struct PlayerContentView: View {
 // MARK: - Video Aspect Ratio Modifier
 
 /// 视频比例修饰器
-/// - iPad: 使用 .fill 模式填满容器，不限制比例
-/// - iPhone: 使用 .fit 模式保持原始比例
+/// - 所有情况: 填满容器，无比例限制
 private struct VideoAspectRatioModifier: ViewModifier {
     let aspectRatio: CGFloat?
     let isIPad: Bool
+    let isLandscape: Bool
 
     func body(content: Content) -> some View {
-        if isIPad {
-            // iPad: 填满容器，不设置 aspectRatio
-            content
-                
-        } else {
-            // iPhone: 保持原始比例
-            content
-                .aspectRatio(aspectRatio, contentMode: .fit)
-        }
+        // 所有情况都填满容器，不设置 aspectRatio
+        content
     }
 }
 

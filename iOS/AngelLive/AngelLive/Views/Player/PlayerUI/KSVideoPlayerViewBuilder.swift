@@ -20,7 +20,9 @@ public enum KSVideoPlayerViewBuilder {
             config.isScaleAspectFill.toggle()
         } label: {
             Image(systemName: config.isScaleAspectFill ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward")
-                .ksMenuLabelStyle()
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
         }
         .ksBorderlessButton()
     }
@@ -159,7 +161,9 @@ public enum KSVideoPlayerViewBuilder {
             }
         } label: {
             Image(systemName: "pip")
-                .ksMenuLabelStyle()
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
         }
         .ksBorderlessButton()
     }
