@@ -11,6 +11,7 @@ import SwiftUI
 import KSPlayer
 internal import AVFoundation
 import AngelLiveCore
+import AngelLiveDependencies
 
 struct VideoControllerView: View {
     @ObservedObject
@@ -21,6 +22,7 @@ struct VideoControllerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @State private var showDanmakuSettings = false
 
     private var playerWidth: CGFloat {
@@ -86,7 +88,11 @@ struct VideoControllerView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
 
-        ZStack {
+        // 根据模式选择不同的控制层
+        if isVerticalLiveMode {
+            VerticalLiveControllerView(model: model)
+        } else {
+            ZStack {
             // 控制按钮层（带 padding）
             ZStack {
                 // 左上角：返回按钮（横屏或 iPad 全屏时显示）
@@ -190,6 +196,7 @@ struct VideoControllerView: View {
         .font(.body)
         .buttonStyle(.borderless)
         .animation(.easeInOut(duration: 0.3), value: model.showVideoSetting)
+        }
     }
 }
 

@@ -13,11 +13,6 @@ import AngelLiveDependencies
 struct PlatformDetailSkeletonView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    // 检测是否为 iPad
-    private var isIPad: Bool {
-        horizontalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // 主分类导航骨架
@@ -72,7 +67,7 @@ struct PlatformDetailSkeletonView: View {
 
     @ViewBuilder
     private func roomListSkeletonView(geometry: GeometryProxy) -> some View {
-        let columns = isIPad ? 3 : 2
+        let columns = AppConstants.Device.isIPad ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20

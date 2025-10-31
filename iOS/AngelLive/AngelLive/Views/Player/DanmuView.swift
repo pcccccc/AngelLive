@@ -21,11 +21,6 @@ struct DanmuView: UIViewRepresentable {
     var showColorDanmu: Bool = true
     var speed: CGFloat = 0.5
 
-    // 检测是否为 iPad
-    private var isIPad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     func makeUIView(context: Context) -> DanmakuView {
         let screenWidth = UIScreen.main.bounds.width
         let screenHeight = UIScreen.main.bounds.height

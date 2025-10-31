@@ -84,7 +84,6 @@ public struct KSVideoPlayerView: View {
             .onTapGesture {
                 model.config.isMaskShow.toggle()
             }
-            .preferredColorScheme(.dark)
             .tint(.white)
             .persistentSystemOverlays(.hidden)
             .toolbar(.hidden, for: .automatic)

@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import UIKit
 
 // MARK: - Preference Key for Player Height
 
@@ -16,6 +17,29 @@ struct PlayerHeightPreferenceKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - Preference Key for Vertical Live Mode
+
+struct VerticalLiveModePreferenceKey: PreferenceKey {
+    static var defaultValue: Bool = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Safe Area Insets Environment Key
+
+struct SafeAreaInsetsKey: EnvironmentKey {
+    static let defaultValue: EdgeInsets = EdgeInsets()
+}
+
+extension EnvironmentValues {
+    var safeAreaInsetsCustom: EdgeInsets {
+        get { self[SafeAreaInsetsKey.self] }
+        set { self[SafeAreaInsetsKey.self] = newValue }
     }
 }
 
@@ -46,6 +70,7 @@ struct PlayerContentView: View {
     @State private var videoAspectRatio: CGFloat = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
+    @State private var isVerticalLiveMode: Bool = false // 是否为竖屏直播模式
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -69,22 +94,33 @@ struct PlayerContentView: View {
                 playerContent
 
                 // 屏幕弹幕层（飞过效果）- 附在播放器上
-                if viewModel.showDanmu {
+                // 竖屏直播模式下不显示飞过弹幕
+                if viewModel.showDanmu && !isVerticalLiveMode {
                     DanmuView(coordinator: viewModel.danmuCoordinator)
                         .allowsHitTesting(false) // 不拦截触摸事件
                         .zIndex(2)
                         .clipped()
                 }
             }
-            .frame(width: geometry.size.width, height: playerHeight)
+            .frame(
+                width: geometry.size.width,
+                height: isVerticalLiveMode ? nil : playerHeight
+            )
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: isVerticalLiveMode ? .infinity : nil,
+                alignment: .center
+            )
             .background(Color.black)
             .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
+            .preference(key: VerticalLiveModePreferenceKey.self, value: isVerticalLiveMode)
         }
+        .edgesIgnoringSafeArea(isVerticalLiveMode ? .all : [])
     }
 
     // 计算视频高度
     private func calculatedHeight(for size: CGSize) -> CGFloat {
-        let shouldFillHeight = isDeviceLandscape || AppConstants.Device.isIPad
+        let shouldFillHeight = isDeviceLandscape || AppConstants.Device.isIPad || isVerticalLiveMode
         let calculatedByRatio = size.width / videoAspectRatio
 
         return shouldFillHeight ? size.height : calculatedByRatio
@@ -105,6 +141,8 @@ struct PlayerContentView: View {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
+                .clipped()
                 .opacity(hasDetectedSize ? 1 : 0)
                 .task(id: playURL.absoluteString) {
                     // 使用异步任务定期检查视频尺寸
@@ -125,16 +163,26 @@ struct PlayerContentView: View {
                             } else if !hasDetectedSize {
                                 let ratio = naturalSize.width / naturalSize.height
                                 let isPortrait = ratio < 1.0
+                                let isVerticalLive = isPortrait && naturalSize.height >= 1280
 
                                 print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
                                 print("📐 视频比例: \(ratio)")
                                 print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
                                 print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
 
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    videoAspectRatio = ratio
-                                    isVideoPortrait = isPortrait
-                                    hasDetectedSize = true
+                                if isVerticalLive {
+                                    print("🎬 检测到竖屏直播模式！高度: \(naturalSize.height)")
+                                }
+
+                                await MainActor.run {
+                                    applyVideoFillMode(isVerticalLive: isVerticalLive)
+
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        videoAspectRatio = ratio
+                                        isVideoPortrait = isPortrait
+                                        isVerticalLiveMode = isVerticalLive
+                                        hasDetectedSize = true
+                                    }
                                 }
 
                                 // 打印应用的策略
@@ -159,8 +207,11 @@ struct PlayerContentView: View {
                     // 超时后仍未获取到有效尺寸，强制显示（使用默认 16:9 比例）
                     if retryCount >= maxRetries && !hasDetectedSize {
                         print("⚠️ 无法获取有效视频尺寸，强制显示（默认 16:9 比例）")
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            hasDetectedSize = true
+                        await MainActor.run {
+                            applyVideoFillMode(isVerticalLive: false)
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                hasDetectedSize = true
+                            }
                         }
                     }
                 }
@@ -169,7 +220,9 @@ struct PlayerContentView: View {
                     print("🔄 切换视频，重置为默认 16:9 比例")
                     videoAspectRatio = 16.0 / 9.0
                     isVideoPortrait = false
+                    isVerticalLiveMode = false
                     hasDetectedSize = false
+                    applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
                     // task(id: playURL.absoluteString) 会自动触发重新检测
                 }
             } else {
@@ -200,6 +253,27 @@ struct PlayerContentView: View {
     private var shouldLimitWidth: Bool {
         isDeviceLandscape && isVideoPortrait
     }
+
+    @MainActor
+    private func applyVideoFillMode(isVerticalLive: Bool) {
+        playerCoordinator.isScaleAspectFill = isVerticalLive
+
+        guard let playerLayer = playerCoordinator.playerLayer else {
+            return
+        }
+
+        let targetContentMode: UIView.ContentMode = isVerticalLive ? .scaleAspectFill : .scaleAspectFit
+
+        if playerLayer.player.contentMode != targetContentMode {
+            playerLayer.player.contentMode = targetContentMode
+        }
+
+        let playerView = playerLayer.player.view
+        playerView.clipsToBounds = isVerticalLive
+        playerView.layer.masksToBounds = isVerticalLive
+        playerView.setNeedsLayout()
+        playerView.layoutIfNeeded()
+    }
 }
 
 // MARK: - Video Aspect Ratio Modifier
@@ -216,4 +290,3 @@ private struct VideoAspectRatioModifier: ViewModifier {
         content
     }
 }
-

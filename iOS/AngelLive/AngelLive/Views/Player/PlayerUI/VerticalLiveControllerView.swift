@@ -1,0 +1,165 @@
+//
+//  VerticalLiveControllerView.swift
+//  AngelLive
+//
+//  Created by pangchong on 10/31/25.
+//
+
+import SwiftUI
+import KSPlayer
+import AngelLiveCore
+import AngelLiveDependencies
+
+/// 竖屏直播专用控制层
+/// 设计参考抖音/快手竖屏直播布局
+struct VerticalLiveControllerView: View {
+    @ObservedObject private var model: KSVideoPlayerModel
+    @Environment(RoomInfoViewModel.self) private var viewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
+    @State private var backTapped = false
+
+    init(model: KSVideoPlayerModel) {
+        self.model = model
+    }
+
+    var body: some View {
+        ZStack {
+            // 顶部信息栏
+            topBar
+                .padding(.top, safeAreaInsets.top)
+
+            // 左下角：弹幕气泡
+            bottomLeftArea
+                .padding(.bottom, safeAreaInsets.bottom)
+
+            // 右下角：更多按钮
+            bottomRightArea
+                .padding(.bottom, safeAreaInsets.bottom)
+        }
+        .opacity(model.config.isMaskShow ? 1 : 0)
+    }
+
+    // MARK: - 顶部信息栏
+
+    private var topBar: some View {
+        VStack {
+            HStack(spacing: 10) {
+                // 返回按钮 - iOS 26 Liquid Glass 风格
+                Button {
+                    backTapped.toggle()
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .fontWeight(.medium)
+                }
+                .buttonStyle(.glass)
+                .frame(width: 40, height: 40)
+                .glassEffect(in: .rect(cornerRadius: 20))
+
+                // 主播信息
+                HStack(spacing: 10) {
+                    KFImage(URL(string: viewModel.currentRoom.userHeadImg))
+                        .placeholder {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                        }
+                        .resizable()
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(viewModel.currentRoom.userName.prefix(10)))
+                            .foregroundStyle(.white)
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+
+                        // 直播间热度
+                        HStack(spacing: 6) {
+                            Image(systemName: "flame.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Text(formatPopularity(viewModel.currentRoom.liveWatchedCount ?? "0"))
+                                .foregroundStyle(.white)
+                                .font(.caption)
+                        }
+                    }
+
+                    // 收藏按钮
+                    Button {
+                        // TODO: 实现收藏功能
+                    } label: {
+                        Image(systemName: "heart")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.white)
+                            .frame(width: 28, height: 28)
+                    }
+                    .ksBorderlessButton()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .glassEffect()
+                .clipShape(Capsule())
+
+                Spacer()
+            }
+            .padding(.horizontal)
+            Spacer()
+        }
+    }
+
+    // MARK: - 左下角区域：弹幕气泡
+
+    private var bottomLeftArea: some View {
+        VStack {
+            Spacer()
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 8) {
+                    // 弹幕气泡（显示最近6条）- 使用 ChatBubbleView
+                    ForEach(viewModel.danmuMessages.suffix(6)) { message in
+                        ChatBubbleView(message: message)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.leading)
+        }
+    }
+
+    // MARK: - Helper Methods
+
+    /// 格式化热度数值
+    private func formatHeat(_ value: Int) -> String {
+        if value >= 10000 {
+            return String(format: "%.1f万", Double(value) / 10000.0)
+        } else {
+            return "\(value)"
+        }
+    }
+
+    // MARK: - 右下角区域：更多按钮
+
+    private var bottomRightArea: some View {
+        VStack {
+            Spacer()
+
+            HStack {
+                Spacer()
+
+                MoreActionsButton(
+                    onClearChat: {
+                        withAnimation {
+                            viewModel.danmuMessages.removeAll()
+                        }
+                    },
+                    onDismiss: {
+                        dismiss()
+                    }
+                )
+            }
+            .padding(.trailing, 16)
+        }
+    }
+}

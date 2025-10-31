@@ -16,17 +16,12 @@ struct LiveRoomCard: View {
     @Namespace private var namespace
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    // 检测是否为 iPad
-    private var isIPad: Bool {
-        horizontalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     init(room: LiveModel, width: CGFloat? = nil) {
         self.room = room
     }
 
     var body: some View {
-        if isIPad {
+        if AppConstants.Device.isIPad {
             // iPad: 使用 fullScreenCover
             Button {
                 showPlayer = true
@@ -55,28 +50,25 @@ struct LiveRoomCard: View {
     private var cardContent: some View {
         VStack {
             // 封面图
-            ZStack(alignment: .center) {
-                KFImage(URL(string: room.roomCover))
-                    .placeholder {
-                        Rectangle()
-                            .fill(AppConstants.Colors.placeholderGradient())
-                    }
-                    .resizable()
-                    .blur(radius: 10)
-                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
-
-                KFImage(URL(string: room.roomCover))
-                    .placeholder {
-                        Image("placeholder")
-                            .resizable()
-                            .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
-                    }
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
-            }
-            .matchedTransitionSource(id: room.roomId, in: namespace)
+            KFImage(URL(string: room.roomCover))
+                .placeholder {
+                    Rectangle()
+                        .fill(AppConstants.Colors.placeholderGradient())
+                }
+                .resizable()
+                .blur(radius: 10)
+                .overlay(
+                    KFImage(URL(string: room.roomCover))
+                        .placeholder {
+                            Image("placeholder")
+                                .resizable()
+                                .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                        }
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
+                .matchedTransitionSource(id: room.roomId, in: namespace)
 
             // 主播信息
             HStack(spacing: 8) {

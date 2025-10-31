@@ -26,11 +26,6 @@ struct ContentView: View {
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
 
-    // 检测是否为 iPad
-    private var isIPad: Bool {
-        horizontalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     // 动态获取 TabSection 标题
     private var platformSectionTitle: String {
         if case .platform(let platform) = selectedTab {
@@ -41,7 +36,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if isIPad {
+            if AppConstants.Device.isIPad {
                 iPadTabView
             } else {
                 iPhoneTabView

@@ -14,22 +14,6 @@ struct StreamerInfoView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var isFavorited = false
 
-    /// 格式化人气数字
-    /// - Parameter count: 人气数
-    /// - Returns: 格式化后的字符串（如：1.2万、10.5万）
-    private func formatPopularity(_ count: String) -> String {
-        guard let number = Int(count) else { return count }
-        if number >= 10000 {
-            let wan = Double(number) / 10000.0
-            return String(format: "%.1f万", wan)
-        } else if number >= 1000 {
-            let k = Double(number) / 1000.0
-            return String(format: "%.1fk", k)
-        } else {
-            return "\(number)"
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 直播间标题（置顶，加大加粗）

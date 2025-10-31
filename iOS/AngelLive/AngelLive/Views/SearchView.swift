@@ -153,16 +153,15 @@ struct SearchResultCard: View {
         HStack(spacing: 12) {
             // 封面图
             ZStack(alignment: .topLeading) {
-                AsyncImage(url: URL(string: room.roomCover)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(16/9, contentMode: .fill)
-                } placeholder: {
-                    Rectangle()
-                        .fill(AppConstants.Colors.placeholderGradient())
-                }
-                .frame(width: 120, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                KFImage(URL(string: room.roomCover))
+                    .placeholder {
+                        Rectangle()
+                            .fill(AppConstants.Colors.placeholderGradient())
+                    }
+                    .resizable()
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .frame(width: 120, height: 68)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 // 直播状态
                 if let liveState = room.liveState, !liveState.isEmpty {
@@ -187,16 +186,14 @@ struct SearchResultCard: View {
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
-                    AsyncImage(url: URL(string: room.userHeadImg)) { image in
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                    }
-                    .frame(width: 20, height: 20)
-                    .clipShape(Circle())
+                    KFImage(URL(string: room.userHeadImg))
+                        .placeholder {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                        }
+                        .resizable()
+                        .frame(width: 20, height: 20)
+                        .clipShape(Circle())
 
                     Text(room.userName)
                         .font(.caption)

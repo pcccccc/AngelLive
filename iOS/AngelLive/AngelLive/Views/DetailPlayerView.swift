@@ -24,24 +24,31 @@ struct DetailPlayerView: View {
     /// iPhone 播放器实际高度（由 PlayerContentView 报告）
     @State private var iPhonePlayerHeight: CGFloat = 0
 
-    // MARK: - Device & Layout Detection
-
-    /// 是否为 iPad
-    private var isIPad: Bool {
-        AppConstants.Device.isIPad
-    }
+    /// 是否为竖屏直播模式
+    @State private var isVerticalLiveMode: Bool = false
 
     // MARK: - Body
 
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
-            let isIPhoneLandscape = !isIPad && isLandscape
-            let showInfoPanel = !(isIPhoneLandscape || isIPadFullscreen)
+            let isIPhoneLandscape = !AppConstants.Device.isIPad && isLandscape
+            // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
+            let showInfoPanel = isVerticalLiveMode ? false : !(isIPhoneLandscape || isIPadFullscreen)
+
+            // 获取安全区信息（在任何 edgesIgnoringSafeArea 之前）
+            let safeInsets = EdgeInsets(
+                top: geometry.safeAreaInsets.top,
+                leading: geometry.safeAreaInsets.leading,
+                bottom: geometry.safeAreaInsets.bottom,
+                trailing: geometry.safeAreaInsets.trailing
+            )
 
             // 计算播放器宽度
             let playerWidth: CGFloat = {
-                if showInfoPanel && isIPad && isLandscape {
+                if isVerticalLiveMode {
+                    return geometry.size.width // 竖屏直播占满宽度
+                } else if showInfoPanel && AppConstants.Device.isIPad && isLandscape {
                     return geometry.size.width - 400 // iPad 横屏减去右侧信息栏
                 } else {
                     return geometry.size.width
@@ -50,7 +57,9 @@ struct DetailPlayerView: View {
 
             // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
             let playerHeight: CGFloat = {
-                if isIPad {
+                if isVerticalLiveMode {
+                    return geometry.size.height // 竖屏直播占满高度
+                } else if AppConstants.Device.isIPad {
                     // iPad 保持原逻辑
                     if showInfoPanel {
                         if isLandscape {
@@ -75,17 +84,22 @@ struct DetailPlayerView: View {
                 PlayerContentView(playerCoordinator: playerCoordinator)
                     .id("stable_player")
                     .environment(viewModel)
-                    .frame(width: playerWidth, height: isIPad ? playerHeight : nil)
+                    .environment(\.isVerticalLiveMode, isVerticalLiveMode)
+                    .environment(\.safeAreaInsetsCustom, safeInsets)
+                    .frame(width: playerWidth, height: AppConstants.Device.isIPad ? playerHeight : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
-                        if !isIPad {
+                        if !AppConstants.Device.isIPad {
                             iPhonePlayerHeight = height
                         }
+                    }
+                    .onPreferenceChange(VerticalLiveModePreferenceKey.self) { mode in
+                        isVerticalLiveMode = mode
                     }
 
                 // 信息面板 - 根据布局动态显示/隐藏
                 if showInfoPanel {
-                    if isIPad && isLandscape {
+                    if AppConstants.Device.isIPad && isLandscape {
                         // iPad 横屏：右侧面板
                         VStack(spacing: 0) {
                             StreamerInfoView()
@@ -281,5 +295,19 @@ extension EnvironmentValues {
     var isIPadFullscreen: Binding<Bool> {
         get { self[IPadFullscreenEnvironmentKey.self] }
         set { self[IPadFullscreenEnvironmentKey.self] = newValue }
+    }
+}
+
+// MARK: - Vertical Live Mode Environment Key
+
+/// 竖屏直播模式的 Environment Key
+struct VerticalLiveModeEnvironmentKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isVerticalLiveMode: Bool {
+        get { self[VerticalLiveModeEnvironmentKey.self] }
+        set { self[VerticalLiveModeEnvironmentKey.self] = newValue }
     }
 }

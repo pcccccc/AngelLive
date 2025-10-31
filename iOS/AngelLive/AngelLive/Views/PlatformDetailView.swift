@@ -14,11 +14,6 @@ struct PlatformDetailView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var dragProgress: CGFloat = 0.0  // 拖动进度
 
-    // 检测是否为 iPad
-    private var isIPad: Bool {
-        horizontalSizeClass == .regular && UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     var body: some View {
         
         @Bindable var viewModel = viewModel
@@ -169,7 +164,7 @@ struct PlatformDetailView: View {
 
     @ViewBuilder
     private func loadingSkeletonView(geometry: GeometryProxy) -> some View {
-        let columns = isIPad ? 3 : 2
+        let columns = AppConstants.Device.isIPad ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20
@@ -225,7 +220,7 @@ struct PlatformDetailView: View {
 
     @ViewBuilder
     private func roomGridView(geometry: GeometryProxy, rooms: [LiveModel]) -> some View {
-        let columns = isIPad ? 3 : 2
+        let columns = AppConstants.Device.isIPad ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20
