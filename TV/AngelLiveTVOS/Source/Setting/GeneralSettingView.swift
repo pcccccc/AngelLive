@@ -49,13 +49,13 @@ struct GeneralSettingView: View {
                         HStack {
                             Text("自动退出直播间时间：")
                             Menu(content: {
-                                ForEach(playerSettingModel.timeArray.indices, id: \.self) { index in
-                                    Button(playerSettingModel.timeArray[index]) {
+                                ForEach(PlayerSettingModel.timeArray.indices, id: \.self) { index in
+                                    Button(PlayerSettingModel.timeArray[index]) {
                                         playerSettingModel.getTimeSecond(index: index)
                                     }
                                 }
                             }, label: {
-                                Text("\(playerSettingModel.timeArray[playerSettingModel.openExitPlayerViewWhenLiveEndSecondIndex])")
+                                Text("\(PlayerSettingModel.timeArray[playerSettingModel.openExitPlayerViewWhenLiveEndSecondIndex])")
                                     .frame(width: 350, height: 45, alignment: .center)
                             })
                             

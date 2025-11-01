@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 import Observation
 
-public enum AngelLiveFavoriteStyle: Int, CaseIterable, CustomStringConvertible, Sendable {
+public enum AngelLiveFavoriteStyle: Int, CaseIterable, CustomStringConvertible {
 
     public var description: String {
         switch self {
@@ -28,7 +28,7 @@ public enum AngelLiveFavoriteStyle: Int, CaseIterable, CustomStringConvertible, 
 }
 
 @Observable
-public final class GeneralSettingModel: Sendable {
+public final class GeneralSettingModel {
 
     public static let globalGeneralDisableMaterialBackground = "SimpleLive.Setting.globalGeneralDisableMaterialBackground"
     public static let globalGeneralSettingFavoriteStyle = "SimpleLive.Setting.favorite.style"

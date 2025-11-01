@@ -1,8 +1,8 @@
 //
 //  PlayerSettingModel.swift
-//  SimpleLiveTVOS
+//  AngelLiveCore
 //
-//  Created by pangchong on 2024/9/21.
+//  Created by Claude on 11/1/25.
 //
 
 import Foundation
@@ -10,12 +10,16 @@ import SwiftUI
 import Observation
 
 @Observable
-final class PlayerSettingModel {
-    
-    static let globalOpenExitPlayerViewWhenLiveEnd = "SimpleLive.Setting.OpenExitPlayerViewWhenLiveEnd"
-    static let globalOpenExitPlayerViewWhenLiveEndSecond = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecond"
-    static let globalOpenExitPlayerViewWhenLiveEndSecondIndex = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecondIndex"
-    
+public final class PlayerSettingModel {
+
+    public static let globalOpenExitPlayerViewWhenLiveEnd = "SimpleLive.Setting.OpenExitPlayerViewWhenLiveEnd"
+    public static let globalOpenExitPlayerViewWhenLiveEndSecond = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecond"
+    public static let globalOpenExitPlayerViewWhenLiveEndSecondIndex = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecondIndex"
+
+    public init() {}
+
+    nonisolated public static let timeArray: [String] = ["1分钟", "2分钟", "3分钟", "5分钟", "10分钟"]
+
     @ObservationIgnored
     public var openExitPlayerViewWhenLiveEnd: Bool {
         get {
@@ -24,11 +28,11 @@ final class PlayerSettingModel {
         }
         set {
             withMutation(keyPath: \.openExitPlayerViewWhenLiveEnd) {
-                 UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEnd, synchronize: true)
+                UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEnd, synchronize: true)
             }
         }
     }
-    
+
     public var openExitPlayerViewWhenLiveEndSecond: Int {
         get {
             access(keyPath: \.openExitPlayerViewWhenLiveEndSecond)
@@ -40,8 +44,8 @@ final class PlayerSettingModel {
             }
         }
     }
-    
-    var openExitPlayerViewWhenLiveEndSecondIndex: Int {
+
+    public var openExitPlayerViewWhenLiveEndSecondIndex: Int {
         get {
             access(keyPath: \.openExitPlayerViewWhenLiveEndSecondIndex)
             return UserDefaults.shared.value(forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecondIndex, synchronize: true) as? Int ?? 2
@@ -52,22 +56,21 @@ final class PlayerSettingModel {
             }
         }
     }
-    
-    var timeArray: [String] = ["1分钟", "2分钟", "3分钟", "5分钟", "10分钟"]
-    func getTimeSecond(index: Int) {
+
+    public func getTimeSecond(index: Int) {
         openExitPlayerViewWhenLiveEndSecondIndex = index
         switch index {
-            case 0:
-                openExitPlayerViewWhenLiveEndSecond = 60
-            case 1:
-                openExitPlayerViewWhenLiveEndSecond = 120
-            case 2:
-                openExitPlayerViewWhenLiveEndSecond = 180
-            case 3:
-                openExitPlayerViewWhenLiveEndSecond = 300
-            case 4:
-                openExitPlayerViewWhenLiveEndSecond = 600
-            default:
+        case 0:
+            openExitPlayerViewWhenLiveEndSecond = 60
+        case 1:
+            openExitPlayerViewWhenLiveEndSecond = 120
+        case 2:
+            openExitPlayerViewWhenLiveEndSecond = 180
+        case 3:
+            openExitPlayerViewWhenLiveEndSecond = 300
+        case 4:
+            openExitPlayerViewWhenLiveEndSecond = 600
+        default:
             openExitPlayerViewWhenLiveEndSecond = 180
         }
     }

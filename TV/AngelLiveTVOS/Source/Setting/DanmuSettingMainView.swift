@@ -110,9 +110,9 @@ struct DanmuSettingMainView: View {
                             appViewModel.danmuSettingsViewModel.danmuSpeed = 0.5
                     }
                 })) {
-                    ForEach(appViewModel.danmuSettingsViewModel.danmuSpeedArray.indices, id: \.self) { index in
+                    ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
                         // 需要有一个变量text。不然会自动帮忙加很多0
-                        let text = appViewModel.danmuSettingsViewModel.danmuSpeedArray[index]
+                        let text = DanmuSettingModel.danmuSpeedArray[index]
                         Text(text)
                     }
                 } label: {
@@ -123,13 +123,13 @@ struct DanmuSettingMainView: View {
             HStack {
                 Text("显示区域：")
                 Menu(content: {
-                    ForEach(appViewModel.danmuSettingsViewModel.danmuAreaArray.indices, id: \.self) { index in
-                        Button(appViewModel.danmuSettingsViewModel.danmuAreaArray[index]) {
+                    ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
+                        Button(DanmuSettingModel.danmuAreaArray[index]) {
                             appViewModel.danmuSettingsViewModel.danmuAreaIndex = index
                         }
                     }
                 }, label: {
-                    Text("\(appViewModel.danmuSettingsViewModel.danmuAreaArray[appViewModel.danmuSettingsViewModel.danmuAreaIndex])")
+                    Text("\(DanmuSettingModel.danmuAreaArray[appViewModel.danmuSettingsViewModel.danmuAreaIndex])")
                         .frame(width: 535, height: 45, alignment: .center)
                 })
                 
