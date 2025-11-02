@@ -196,6 +196,11 @@ struct VideoControllerView: View {
         .font(.body)
         .buttonStyle(.borderless)
         .animation(.easeInOut(duration: 0.3), value: model.showVideoSetting)
+        .sheet(isPresented: $showDanmakuSettings) {
+            DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         }
     }
 }
