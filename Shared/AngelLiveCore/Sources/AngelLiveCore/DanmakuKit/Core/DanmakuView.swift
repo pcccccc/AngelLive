@@ -205,7 +205,7 @@ public class DanmakuView: UIView {
         super.init(coder: coder)
     }
     
-    deinit {
+    @MainActor deinit {
         stop()
     }
     
@@ -231,7 +231,7 @@ public class DanmakuView: UIView {
 
 public extension DanmakuView {
     
-    public func shoot(danmaku: DanmakuCellModel) {
+    func shoot(danmaku: DanmakuCellModel) {
         guard status == .play else { return }
         switch danmaku.type {
         case .floating:
@@ -289,14 +289,14 @@ public extension DanmakuView {
     }
     
     /// You can call this method when you need to change the size of the danmakuView.
-    public func recalculateTracks() {
+    func recalculateTracks() {
         recalculateFloatingTracks()
         recalculateTopTracks()
         recalculateBottomTracks()
     }
     
     
-    public func play() {
+    func play() {
         guard status != .play else { return }
         floatingTracks.forEach {
             $0.play()
@@ -310,7 +310,7 @@ public extension DanmakuView {
         status = .play
     }
     
-    public func pause() {
+    func pause() {
         guard status != .pause else { return }
         floatingTracks.forEach {
             $0.pause()
@@ -324,7 +324,7 @@ public extension DanmakuView {
         status = .pause
     }
     
-    public func stop() {
+    func stop() {
         guard status != .stop else { return }
         floatingTracks.forEach {
             $0.stop()
@@ -339,7 +339,7 @@ public extension DanmakuView {
     }
     
     @discardableResult
-    public func play(_ danmaku: DanmakuCellModel) -> Bool {
+    func play(_ danmaku: DanmakuCellModel) -> Bool {
         var track = floatingTracks.first { (t) -> Bool in
             return t.play(danmaku)
         }
@@ -357,7 +357,7 @@ public extension DanmakuView {
     }
     
     @discardableResult
-    public func pause(_ danmaku: DanmakuCellModel) -> Bool {
+    func pause(_ danmaku: DanmakuCellModel) -> Bool {
         var track = floatingTracks.first { (t) -> Bool in
             return t.pause(danmaku)
         }

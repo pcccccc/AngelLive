@@ -97,7 +97,7 @@ public enum KSVideoPlayerViewBuilder {
     @ViewBuilder
     static func refreshButton(isLoading: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: "arrow.clockwise")
+            Image(systemName: "arrow.trianglehead.2.counterclockwise")
                 .frame(width: 30, height: 30)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)

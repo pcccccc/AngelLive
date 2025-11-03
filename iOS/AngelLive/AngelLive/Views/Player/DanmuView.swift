@@ -12,6 +12,7 @@ import AngelLiveCore
 /// 弹幕视图（飞过屏幕的弹幕效果）
 struct DanmuView: UIViewRepresentable {
     var coordinator: Coordinator
+    var displayHeight: CGFloat // 实际显示区域的高度
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -20,20 +21,18 @@ struct DanmuView: UIViewRepresentable {
     var alpha: CGFloat = 1.0
     var showColorDanmu: Bool = true
     var speed: CGFloat = 0.5
+    var areaIndex: Int = 2 // 显示区域索引：0=顶部1/4, 1=顶部1/2, 2=全屏, 3=底部1/2, 4=底部1/4
 
     func makeUIView(context: Context) -> DanmakuView {
         let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
 
-        let view = DanmakuView(frame: .init(x: 0, y: 0, width: screenWidth, height: screenHeight))
+        let view = DanmakuView(frame: CGRect(x: 0, y: 0, width: screenWidth, height: displayHeight))
         view.playingSpeed = Float(speed)
         view.play()
         coordinator.uiView = view
 
-        // 初始配置
-        view.paddingTop = 5
+        // 基础配置
         view.trackHeight = fontSize * 1.35
-        view.displayArea = 1  // 1 = 全屏显示区域
 
         return view
     }
@@ -41,15 +40,12 @@ struct DanmuView: UIViewRepresentable {
     func updateUIView(_ uiView: DanmakuView, context: Context) {
         // 根据设备和方向动态调整尺寸
         let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
 
-        // 更新 frame
-        uiView.frame = .init(x: 0, y: 0, width: screenWidth, height: screenHeight)
+        // 更新 frame（使用实际显示高度）
+        uiView.frame = CGRect(x: 0, y: 0, width: screenWidth, height: displayHeight)
 
         // 更新配置
-        uiView.paddingTop = 5
         uiView.trackHeight = fontSize * 1.35
-        uiView.displayArea = 1
         uiView.playingSpeed = Float(speed)
 
         // 重新计算轨道

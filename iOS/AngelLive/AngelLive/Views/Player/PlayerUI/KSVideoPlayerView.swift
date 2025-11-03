@@ -10,6 +10,8 @@ import Combine
 import MediaPlayer
 import SwiftUI
 import KSPlayer
+import AngelLiveCore
+import AngelLiveDependencies
 
 @MainActor
 public struct KSVideoPlayerView: View {
@@ -19,6 +21,10 @@ public struct KSVideoPlayerView: View {
     private let liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)?
     @Environment(\.dismiss)
     private var dismiss
+    @Environment(RoomInfoViewModel.self) private var viewModel
+    @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
+    @State private var hasAutoRotatedForCurrentRoom = false // 当前直播间是否已自动旋转
+    @State private var actualPlayerHeight: CGFloat = 0 // 实际播放器高度
 
     public init(model: KSVideoPlayerModel, subtitleDataSource: SubtitleDataSource? = nil, liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)? = nil) {
         self.model = model
@@ -38,14 +44,21 @@ public struct KSVideoPlayerView: View {
                     }
                     // onChange不会马上就回调，会少一些状态的回调。要用onReceive才不会有这个问题
                     .onReceive(model.config.$state) { state in
-                        if state == .readyToPlay {
-                            if let playerLayer = model.config.playerLayer, playerLayer.player.naturalSize.isHorizonal == true, !UIApplication.isLandscape {
-                                KSOptions.supportedInterfaceOrientations = .landscapeLeft
-                                UIViewController.attemptRotationToDeviceOrientation()
-                            }
-                        } else if state == .playedToTheEnd {
-                            model.next()
-                        }
+//                        if state == .readyToPlay {
+//                            // 只在当前直播间首次加载且视频为横屏时自动旋转
+//                            // 切换清晰度、刷新等操作不会触发自动旋转
+//                            if !hasAutoRotatedForCurrentRoom, let playerLayer = model.config.playerLayer, playerLayer.player.naturalSize.isHorizonal == true, !UIApplication.isLandscape {
+//                                KSOptions.supportedInterfaceOrientations = .landscapeLeft
+//                                UIViewController.attemptRotationToDeviceOrientation()
+//                                hasAutoRotatedForCurrentRoom = true
+//                            }
+//                        } else if state == .playedToTheEnd {
+//                            model.next()
+//                        }
+                    }
+                    .onChange(of: viewModel.currentRoom.roomId) { _, _ in
+                        // 切换直播间时重置自动旋转标志
+                        hasAutoRotatedForCurrentRoom = false
                     }
                 if KSOptions.hudLog, let playerLayer = model.config.playerLayer {
                     HUDLogView(dynamicInfo: playerLayer.player.dynamicInfo)
@@ -78,6 +91,29 @@ public struct KSVideoPlayerView: View {
                 }
                 .ksIsFocused($model.focusableView, equals: .play)
                 .opacity(!model.config.isMaskShow ? 1 : 0)
+
+                // 弹幕层（在控制层下方）
+                if viewModel.danmuSettings.showDanmu && !isVerticalLiveMode && actualPlayerHeight > 0 {
+                    let config = danmuAreaConfiguration(
+                        areaIndex: viewModel.danmuSettings.danmuAreaIndex,
+                        containerHeight: actualPlayerHeight
+                    )
+
+                    DanmuView(
+                        coordinator: viewModel.danmuCoordinator,
+                        displayHeight: config.height,
+                        fontSize: CGFloat(viewModel.danmuSettings.danmuFontSize),
+                        alpha: viewModel.danmuSettings.danmuAlpha,
+                        showColorDanmu: viewModel.danmuSettings.showColorDanmu,
+                        speed: viewModel.danmuSettings.danmuSpeed,
+                        areaIndex: viewModel.danmuSettings.danmuAreaIndex
+                    )
+                    .frame(height: config.height)
+                    .offset(y: config.yOffset)
+                    .allowsHitTesting(false) // 不拦截触摸事件
+                    .clipped()
+                }
+
                 controllerView
             }
             // 要放在这里才可以生效
@@ -90,6 +126,9 @@ public struct KSVideoPlayerView: View {
             .toolbar(.hidden, for: .tabBar)
             .statusBar(hidden: !model.config.isMaskShow)
             .focusedObject(model.config)
+            .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
+                actualPlayerHeight = height
+            }
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
                     model.focusableView = .slider
@@ -133,6 +172,37 @@ public struct KSVideoPlayerView: View {
                 }
                 return true
             }
+    }
+
+    // 计算弹幕显示区域配置
+    private func danmuAreaConfiguration(areaIndex: Int, containerHeight: CGFloat) -> (height: CGFloat, yOffset: CGFloat) {
+        let padding: CGFloat = 5
+
+        switch areaIndex {
+        case 0: // 顶部1/4
+            let height = containerHeight * 0.25
+            return (height, padding)
+
+        case 1: // 顶部1/2
+            let height = containerHeight * 0.5
+            return (height, padding)
+
+        case 2: // 全屏
+            return (containerHeight - padding, padding)
+
+        case 3: // 底部1/2
+            let height = containerHeight * 0.5
+            let yOffset = containerHeight - height
+            return (height, yOffset)
+
+        case 4: // 底部1/4
+            let height = containerHeight * 0.25
+            let yOffset = containerHeight - height
+            return (height, yOffset)
+
+        default: // 默认全屏
+            return (containerHeight - padding, padding)
+        }
     }
 }
 

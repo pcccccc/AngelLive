@@ -11,10 +11,13 @@ import AngelLiveDependencies
 
 /// 播放器弹幕设置面板（BottomSheet 样式）
 struct DanmakuSettingsSheet: View {
-    @State private var danmuModel = DanmuSettingModel()
     @Binding var isPresented: Bool
+    @Environment(RoomInfoViewModel.self) private var viewModel
 
     var body: some View {
+        
+        @Bindable var viewModel = viewModel
+        
         NavigationStack {
             ScrollView {
                 VStack(spacing: AppConstants.Spacing.lg) {
@@ -22,7 +25,7 @@ struct DanmakuSettingsSheet: View {
                     settingSection(title: "基本设置") {
                         VStack(spacing: 0) {
                             settingRow {
-                                Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
+                                Toggle("开启弹幕", isOn: $viewModel.danmuSettings.showDanmu)
                                     .tint(AppConstants.Colors.link)
                             }
 
@@ -30,7 +33,7 @@ struct DanmakuSettingsSheet: View {
                                 .padding(.leading)
 
                             settingRow {
-                                Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
+                                Toggle("开启彩色弹幕", isOn: $viewModel.danmuSettings.showColorDanmu)
                                     .tint(AppConstants.Colors.link)
                             }
                         }
@@ -43,7 +46,7 @@ struct DanmakuSettingsSheet: View {
                                 Text("字体大小")
                                     .foregroundStyle(AppConstants.Colors.primaryText)
                                 Spacer()
-                                Text("\(danmuModel.danmuFontSize)")
+                                Text("\(viewModel.danmuSettings.danmuFontSize)")
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
                                     .font(.system(.body, design: .monospaced))
                             }
@@ -51,51 +54,67 @@ struct DanmakuSettingsSheet: View {
                             // 字体大小调节按钮
                             HStack(spacing: AppConstants.Spacing.md) {
                                 Button {
-                                    if danmuModel.danmuFontSize > 15 {
-                                        danmuModel.danmuFontSize -= 5
+                                    if viewModel.danmuSettings.danmuFontSize > 15 {
+                                        viewModel.danmuSettings.danmuFontSize -= 5
                                     }
                                 } label: {
-                                    Image(systemName: "minus.circle.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(AppConstants.Colors.error.gradient)
+                                    VStack(spacing: 4) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .font(.title2)
+                                        Text("-5")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(AppConstants.Colors.link)
                                 }
 
                                 Button {
-                                    if danmuModel.danmuFontSize > 10 {
-                                        danmuModel.danmuFontSize -= 1
+                                    if viewModel.danmuSettings.danmuFontSize > 10 {
+                                        viewModel.danmuSettings.danmuFontSize -= 1
                                     }
                                 } label: {
-                                    Image(systemName: "minus.circle")
-                                        .font(.title3)
-                                        .foregroundStyle(AppConstants.Colors.warning.gradient)
+                                    VStack(spacing: 4) {
+                                        Image(systemName: "minus.circle")
+                                            .font(.title3)
+                                        Text("-1")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(AppConstants.Colors.link)
                                 }
 
                                 Spacer()
 
                                 Text("这是测试弹幕")
-                                    .font(.system(size: CGFloat(danmuModel.danmuFontSize)))
+                                    .font(.system(size: CGFloat(viewModel.danmuSettings.danmuFontSize)))
                                     .foregroundStyle(AppConstants.Colors.primaryText)
 
                                 Spacer()
 
                                 Button {
-                                    if danmuModel.danmuFontSize < 100 {
-                                        danmuModel.danmuFontSize += 1
+                                    if viewModel.danmuSettings.danmuFontSize < 100 {
+                                        viewModel.danmuSettings.danmuFontSize += 1
                                     }
                                 } label: {
-                                    Image(systemName: "plus.circle")
-                                        .font(.title3)
-                                        .foregroundStyle(AppConstants.Colors.success.gradient)
+                                    VStack(spacing: 4) {
+                                        Image(systemName: "plus.circle")
+                                            .font(.title3)
+                                        Text("+1")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(AppConstants.Colors.link)
                                 }
 
                                 Button {
-                                    if danmuModel.danmuFontSize < 95 {
-                                        danmuModel.danmuFontSize += 5
+                                    if viewModel.danmuSettings.danmuFontSize < 95 {
+                                        viewModel.danmuSettings.danmuFontSize += 5
                                     }
                                 } label: {
-                                    Image(systemName: "plus.circle.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(AppConstants.Colors.link.gradient)
+                                    VStack(spacing: 4) {
+                                        Image(systemName: "plus.circle.fill")
+                                            .font(.title2)
+                                        Text("+5")
+                                            .font(.caption2)
+                                    }
+                                    .foregroundStyle(AppConstants.Colors.link)
                                 }
                             }
                         }
@@ -112,12 +131,12 @@ struct DanmakuSettingsSheet: View {
                                         Text("透明度")
                                             .foregroundStyle(AppConstants.Colors.primaryText)
                                         Spacer()
-                                        Text(String(format: "%.1f", danmuModel.danmuAlpha))
+                                        Text(String(format: "%.1f", viewModel.danmuSettings.danmuAlpha))
                                             .foregroundStyle(AppConstants.Colors.secondaryText)
                                             .font(.system(.body, design: .monospaced))
                                     }
 
-                                    Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
+                                    Slider(value: $viewModel.danmuSettings.danmuAlpha, in: 0.1...1.0, step: 0.1)
                                         .tint(AppConstants.Colors.link)
                                 }
                             }
@@ -127,15 +146,21 @@ struct DanmakuSettingsSheet: View {
 
                             // 弹幕速度
                             settingRow {
-                                Picker("弹幕速度", selection: $danmuModel.danmuSpeedIndex) {
-                                    ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
-                                        Text(DanmuSettingModel.danmuSpeedArray[index])
-                                            .tag(index)
+                                HStack {
+                                    Text("弹幕速度")
+                                        .foregroundStyle(AppConstants.Colors.primaryText)
+                                    Spacer()
+                                    Picker("", selection: $viewModel.danmuSettings.danmuSpeedIndex) {
+                                        ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
+                                            Text(DanmuSettingModel.danmuSpeedArray[index])
+                                                .tag(index)
+                                        }
                                     }
-                                }
-                                .tint(AppConstants.Colors.link)
-                                .onChange(of: danmuModel.danmuSpeedIndex) { _, newValue in
-                                    danmuModel.getDanmuSpeed(index: newValue)
+                                    .pickerStyle(.menu)
+                                    .tint(AppConstants.Colors.link)
+                                    .onChange(of: viewModel.danmuSettings.danmuSpeedIndex) { _, newValue in
+                                        viewModel.danmuSettings.getDanmuSpeed(index: newValue)
+                                    }
                                 }
                             }
 
@@ -144,13 +169,19 @@ struct DanmakuSettingsSheet: View {
 
                             // 显示区域
                             settingRow {
-                                Picker("显示区域", selection: $danmuModel.danmuAreaIndex) {
-                                    ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
-                                        Text(DanmuSettingModel.danmuAreaArray[index])
-                                            .tag(index)
+                                HStack {
+                                    Text("显示区域")
+                                        .foregroundStyle(AppConstants.Colors.primaryText)
+                                    Spacer()
+                                    Picker("", selection: $viewModel.danmuSettings.danmuAreaIndex) {
+                                        ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
+                                            Text(DanmuSettingModel.danmuAreaArray[index])
+                                                .tag(index)
+                                        }
                                     }
+                                    .pickerStyle(.menu)
+                                    .tint(AppConstants.Colors.link)
                                 }
-                                .tint(AppConstants.Colors.link)
                             }
                         }
                     }

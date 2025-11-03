@@ -134,6 +134,9 @@ struct VideoControllerView: View {
                                 showDanmakuSettings: $showDanmakuSettings
                             )
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .glassEffect(.regular, in: .buttonBorder)
                     }
                     Spacer()
                 }
@@ -153,6 +156,9 @@ struct VideoControllerView: View {
                                 viewModel.refreshPlayback()
                             }
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .glassEffect(.regular, in: .buttonBorder)
                         Spacer()
                     }
                 }
@@ -164,7 +170,7 @@ struct VideoControllerView: View {
                         Spacer()
                         HStack(spacing: 16) {
                             // 弹幕开关按钮
-                            KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.showDanmu)
+                            KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.danmuSettings.showDanmu)
 
                             // 清晰度设置菜单
                             KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel)
@@ -178,6 +184,9 @@ struct VideoControllerView: View {
                             // 全屏按钮
                             KSVideoPlayerViewBuilder.landscapeButton(isIPadFullscreen: isIPadFullscreen)
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .glassEffect(.regular, in: .buttonBorder)
                     }
                 }
             }

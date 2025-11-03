@@ -30,6 +30,12 @@ struct VerticalLiveModePreferenceKey: PreferenceKey {
     }
 }
 
+// MARK: - Vertical Live Mode Environment Key
+
+struct VerticalLiveModeKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
 // MARK: - Safe Area Insets Environment Key
 
 struct SafeAreaInsetsKey: EnvironmentKey {
@@ -89,19 +95,7 @@ struct PlayerContentView: View {
         GeometryReader { geometry in
             let playerHeight = calculatedHeight(for: geometry.size)
 
-            ZStack {
-                // 播放器内容
-                playerContent
-
-                // 屏幕弹幕层（飞过效果）- 附在播放器上
-                // 竖屏直播模式下不显示飞过弹幕
-                if viewModel.showDanmu && !isVerticalLiveMode {
-                    DanmuView(coordinator: viewModel.danmuCoordinator)
-                        .allowsHitTesting(false) // 不拦截触摸事件
-                        .zIndex(2)
-                        .clipped()
-                }
-            }
+            playerContent
             .frame(
                 width: geometry.size.width,
                 height: isVerticalLiveMode ? nil : playerHeight
@@ -111,7 +105,7 @@ struct PlayerContentView: View {
                 maxHeight: isVerticalLiveMode ? .infinity : nil,
                 alignment: .center
             )
-            .background(Color.black)
+            .background(AppConstants.Device.isIPad ? Color.black : (isDeviceLandscape ? Color.black : Color.clear))
             .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
             .preference(key: VerticalLiveModePreferenceKey.self, value: isVerticalLiveMode)
         }

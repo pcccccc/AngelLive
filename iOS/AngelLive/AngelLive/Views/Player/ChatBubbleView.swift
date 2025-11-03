@@ -8,9 +8,15 @@
 import SwiftUI
 import AngelLiveCore
 
-/// 聊天气泡视图（胶囊形状，自适应大小）
+/// 聊天气泡视图（自适应形状，短消息用胶囊，长消息用圆角矩形）
 struct ChatBubbleView: View {
     let message: ChatMessage
+
+    // 判断是否使用胶囊形状（短消息）
+    private var shouldUseCapsule: Bool {
+        let combinedLength = message.userName.count + message.message.count
+        return combinedLength < 30 // 总长度小于30使用胶囊形状
+    }
 
     var body: some View {
         if message.isSystemMessage {
@@ -36,16 +42,19 @@ struct ChatBubbleView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(
+            Group {
+                if message.message.count < 20 {
                     Capsule()
-                        .fill(.yellow.opacity(0.15))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Color.yellow.opacity(0.3), lineWidth: 0.5)
-                )
+                        .fill(.ultraThinMaterial)
+                        .overlay(Capsule().fill(.yellow.opacity(0.15)))
+                        .overlay(Capsule().strokeBorder(Color.yellow.opacity(0.3), lineWidth: 0.5))
+                } else {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius: 12).fill(.yellow.opacity(0.15)))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.yellow.opacity(0.3), lineWidth: 0.5))
+                }
+            }
         )
         .shadow(
             color: .black.opacity(0.1),
@@ -73,16 +82,19 @@ struct ChatBubbleView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(
+            Group {
+                if shouldUseCapsule {
                     Capsule()
-                        .fill(.black.opacity(0.3))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
-                )
+                        .fill(.ultraThinMaterial)
+                        .overlay(Capsule().fill(.black.opacity(0.3)))
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
+                } else {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius: 12).fill(.black.opacity(0.3)))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
+                }
+            }
         )
         .shadow(
             color: .black.opacity(0.1),

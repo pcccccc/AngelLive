@@ -41,8 +41,8 @@ final class RoomInfoViewModel {
     var danmuMessages: [ChatMessage] = []
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
-    var showDanmu = true // 是否显示弹幕
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
+    var danmuSettings = DanmuSettingModel() // 弹幕设置模型
 
     init(room: LiveModel) {
         self.currentRoom = room
@@ -88,7 +88,7 @@ final class RoomInfoViewModel {
             case .youtube:
                 playArgs = try await YoutubeParse.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
             }
-            await updateCurrentRoomPlayArgs(playArgs)
+            updateCurrentRoomPlayArgs(playArgs)
         } catch {
             await MainActor.run {
                 self.isLoading = false
@@ -106,7 +106,7 @@ final class RoomInfoViewModel {
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
 
         // 启动弹幕连接
-        if showDanmu {
+        if danmuSettings.showDanmu {
             getDanmuInfo()
         }
     }
@@ -381,14 +381,14 @@ final class RoomInfoViewModel {
     /// 切换弹幕显示状态
     @MainActor
     func toggleDanmuDisplay() {
-        setDanmuDisplay(!showDanmu)
+        setDanmuDisplay(!danmuSettings.showDanmu)
     }
 
     /// 设置弹幕显示状态
     @MainActor
     func setDanmuDisplay(_ enabled: Bool) {
-        guard enabled != showDanmu else { return }
-        showDanmu = enabled
+        guard enabled != danmuSettings.showDanmu else { return }
+        danmuSettings.showDanmu = enabled
         if enabled {
             danmuCoordinator.play()
             getDanmuInfo()
@@ -442,13 +442,13 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             addDanmuMessage(text: text)
 
             // 发射到屏幕弹幕（飞过效果）
-            if showDanmu {
+            if danmuSettings.showDanmu {
                 danmuCoordinator.shoot(
                     text: text,
-                    showColorDanmu: true,
+                    showColorDanmu: danmuSettings.showColorDanmu,
                     color: color,
-                    alpha: 1.0,
-                    font: 16
+                    alpha: danmuSettings.danmuAlpha,
+                    font: CGFloat(danmuSettings.danmuFontSize)
                 )
             }
         }
