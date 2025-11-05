@@ -436,10 +436,10 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         }
     }
 
-    func webSocketDidReceiveMessage(text: String, color: UInt32) {
+    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) {
         Task { @MainActor in
             // 将弹幕消息添加到聊天列表（底部气泡）
-            addDanmuMessage(text: text)
+            addDanmuMessage(text: text, userName: nickname)
 
             // 发射到屏幕弹幕（飞过效果）
             if danmuSettings.showDanmu {
