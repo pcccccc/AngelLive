@@ -15,9 +15,15 @@ struct LiveRoomCard: View {
     @State private var showPlayer = false
     @Namespace private var namespace
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(AppFavoriteModel.self) private var favoriteModel
 
     init(room: LiveModel, width: CGFloat? = nil) {
         self.room = room
+    }
+
+    // 判断是否已收藏
+    private var isFavorited: Bool {
+        favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
     }
 
     var body: some View {
@@ -29,6 +35,9 @@ struct LiveRoomCard: View {
                 cardContent
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                favoriteContextMenu
+            }
             .fullScreenCover(isPresented: $showPlayer) {
                 DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                     .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
@@ -44,6 +53,9 @@ struct LiveRoomCard: View {
                 cardContent
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                favoriteContextMenu
+            }
         }
     }
 
@@ -105,5 +117,44 @@ struct LiveRoomCard: View {
         .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
             isPressed = pressing
         }, perform: {})
+    }
+
+    @ViewBuilder
+    private var favoriteContextMenu: some View {
+        if isFavorited {
+            Button(role: .destructive) {
+                Task {
+                    await removeFavorite()
+                }
+            } label: {
+                Label("取消收藏", systemImage: "heart.slash.fill")
+            }
+        } else {
+            Button {
+                Task {
+                    await addFavorite()
+                }
+            } label: {
+                Label("收藏", systemImage: "heart.fill")
+            }
+        }
+    }
+
+    @MainActor
+    private func addFavorite() async {
+        do {
+            try await favoriteModel.addFavorite(room: room)
+        } catch {
+            print("收藏失败: \(error)")
+        }
+    }
+
+    @MainActor
+    private func removeFavorite() async {
+        do {
+            try await favoriteModel.removeFavoriteRoom(room: room)
+        } catch {
+            print("取消收藏失败: \(error)")
+        }
     }
 }

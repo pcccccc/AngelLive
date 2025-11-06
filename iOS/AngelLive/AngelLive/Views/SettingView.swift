@@ -40,10 +40,6 @@ struct SettingView: View {
                 } header: {
                     Text("账号")
                 }
-                .listRowBackground(
-                    RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                        .fill(AppConstants.Colors.materialBackground)
-                )
 
                 // 应用设置
                 Section {
@@ -73,10 +69,6 @@ struct SettingView: View {
                 } header: {
                     Text("设置")
                 }
-                .listRowBackground(
-                    RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                        .fill(AppConstants.Colors.materialBackground)
-                )
 
                 // 数据管理
                 Section {
@@ -117,10 +109,6 @@ struct SettingView: View {
                 } header: {
                     Text("数据")
                 }
-                .listRowBackground(
-                    RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                        .fill(AppConstants.Colors.materialBackground)
-                )
 
                 // 关于
                 Section {
@@ -150,10 +138,6 @@ struct SettingView: View {
                 } header: {
                     Text("信息")
                 }
-                .listRowBackground(
-                    RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                        .fill(AppConstants.Colors.materialBackground)
-                )
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("设置")
@@ -419,10 +403,6 @@ struct GeneralSettingViewiOS: View {
             } header: {
                 Text("播放设置")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                    .fill(AppConstants.Colors.materialBackground)
-            )
 
             // 通用设置
             Section {
@@ -436,10 +416,6 @@ struct GeneralSettingViewiOS: View {
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                    .fill(AppConstants.Colors.materialBackground)
-            )
 
             // 收藏设置
             Section {
@@ -452,10 +428,6 @@ struct GeneralSettingViewiOS: View {
             } header: {
                 Text("收藏设置")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                    .fill(AppConstants.Colors.materialBackground)
-            )
         }
         .scrollContentBackground(.hidden)
         .navigationTitle("通用")
@@ -477,10 +449,6 @@ struct DanmuSettingViewiOS: View {
             } header: {
                 Text("基本设置")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                    .fill(AppConstants.Colors.materialBackground)
-            )
 
             // 字体设置
             Section {
@@ -547,10 +515,6 @@ struct DanmuSettingViewiOS: View {
             } header: {
                 Text("字体设置")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                    .fill(AppConstants.Colors.materialBackground)
-            )
 
             // 显示设置
             Section {
@@ -585,10 +549,6 @@ struct DanmuSettingViewiOS: View {
             } header: {
                 Text("显示设置")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                    .fill(AppConstants.Colors.materialBackground)
-            )
         }
         .scrollContentBackground(.hidden)
         .navigationTitle("弹幕")

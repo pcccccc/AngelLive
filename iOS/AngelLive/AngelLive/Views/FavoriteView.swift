@@ -304,7 +304,7 @@ struct FavoriteView: View {
         guard let lastLeave = FavoriteView.lastLeaveTimestamp else {
             return false
         }
-        return Date().timeIntervalSince(lastLeave) > 60
+        return Date().timeIntervalSince(lastLeave) > 300
     }
 
     @MainActor

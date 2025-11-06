@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB5C42582EBB0498005E2D59 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB5C42572EBB0498005E2D59 /* LiveParse */; };
 		FB6991472EA77D7D00F29F0E /* JXSegmentedView in Frameworks */ = {isa = PBXBuildFile; productRef = FB6991462EA77D7D00F29F0E /* JXSegmentedView */; };
 		FBA85D9D2EA5E78600D976E1 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85D9C2EA5E78600D976E1 /* SharedAssets */; };
 		FBA85D9F2EA5E83800D976E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */; };
@@ -46,6 +47,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB5C42582EBB0498005E2D59 /* LiveParse in Frameworks */,
 				FBA85DA92EA6337C00D976E1 /* LiveParse in Frameworks */,
 				FBA85D9D2EA5E78600D976E1 /* SharedAssets in Frameworks */,
 				FBF74A6F2EA1F99B00591EEA /* AngelLiveCore in Frameworks */,
@@ -107,6 +109,7 @@
 				FBA85D9C2EA5E78600D976E1 /* SharedAssets */,
 				FBA85DA82EA6337C00D976E1 /* LiveParse */,
 				FB6991462EA77D7D00F29F0E /* JXSegmentedView */,
+				FB5C42572EBB0498005E2D59 /* LiveParse */,
 			);
 			productName = AngelLive;
 			productReference = FB7077B32EA1D6450059AFD9 /* AngelLive.app */;
@@ -399,6 +402,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		FB5C42572EBB0498005E2D59 /* LiveParse */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LiveParse;
+		};
 		FB6991462EA77D7D00F29F0E /* JXSegmentedView */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = FB6991452EA77D7D00F29F0E /* XCRemoteSwiftPackageReference "JXSegmentedView" */;

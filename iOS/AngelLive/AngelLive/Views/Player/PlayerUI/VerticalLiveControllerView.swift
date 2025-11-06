@@ -15,9 +15,16 @@ import AngelLiveDependencies
 struct VerticalLiveControllerView: View {
     @ObservedObject private var model: KSVideoPlayerModel
     @Environment(RoomInfoViewModel.self) private var viewModel
+    @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @State private var backTapped = false
+    @State private var isFavoriteAnimating = false
+
+    /// 判断是否已收藏
+    private var isFavorited: Bool {
+        favoriteModel.roomList.contains(where: { $0.roomId == viewModel.currentRoom.roomId })
+    }
 
     init(model: KSVideoPlayerModel) {
         self.model = model
@@ -52,10 +59,10 @@ struct VerticalLiveControllerView: View {
                 } label: {
                     Image(systemName: "chevron.backward")
                         .fontWeight(.medium)
+                        .frame(width: 40, height: 40)
                 }
-                .buttonStyle(.glass)
                 .frame(width: 40, height: 40)
-                .glassEffect(in: .rect(cornerRadius: 20))
+                .glassEffect(in: .rect(cornerRadius: 20.0))
 
                 // 主播信息
                 HStack(spacing: 10) {
@@ -87,14 +94,18 @@ struct VerticalLiveControllerView: View {
 
                     // 收藏按钮
                     Button {
-                        // TODO: 实现收藏功能
+                        Task {
+                            await toggleFavorite()
+                        }
                     } label: {
-                        Image(systemName: "heart")
+                        Image(systemName: isFavorited ? "heart.fill" : "heart")
                             .font(.system(size: 16))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(isFavorited ? .red : .white)
                             .frame(width: 28, height: 28)
+                            .symbolEffect(.bounce, value: isFavoriteAnimating)
                     }
                     .ksBorderlessButton()
+                    .sensoryFeedback(.success, trigger: isFavoriteAnimating)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -136,6 +147,21 @@ struct VerticalLiveControllerView: View {
             return String(format: "%.1f万", Double(value) / 10000.0)
         } else {
             return "\(value)"
+        }
+    }
+
+    @MainActor
+    private func toggleFavorite() async {
+        do {
+            if isFavorited {
+                try await favoriteModel.removeFavoriteRoom(room: viewModel.currentRoom)
+            } else {
+                try await favoriteModel.addFavorite(room: viewModel.currentRoom)
+            }
+            // 触发动画
+            isFavoriteAnimating.toggle()
+        } catch {
+            print("收藏操作失败: \(error)")
         }
     }
 

@@ -26,6 +26,9 @@ struct ContentView: View {
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
 
+    // 触觉反馈生成器
+    private let hapticFeedback = UISelectionFeedbackGenerator()
+
     // 动态获取 TabSection 标题
     private var platformSectionTitle: String {
         if case .platform(let platform) = selectedTab {
@@ -45,6 +48,9 @@ struct ContentView: View {
         .environment(platformViewModel)
         .environment(favoriteViewModel)
         .environment(searchViewModel)
+        .onChange(of: selectedTab) { _, _ in
+            hapticFeedback.selectionChanged()
+        }
     }
 
     // iPad 专用 TabView
@@ -90,8 +96,8 @@ struct ContentView: View {
     // iPhone 专用 TabView
     private var iPhoneTabView: some View {
         if #available(iOS 26.0, *) {
-            return TabView {
-                Tab {
+            return TabView(selection: $selectedTab) {
+                Tab(value: TabSelection.favorite) {
                     FavoriteView()
                 } label: {
                     Label {
@@ -100,24 +106,24 @@ struct ContentView: View {
                         CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
                     }
                 }
-                
-                Tab("平台", systemImage: "square.grid.2x2.fill") {
+
+                Tab("平台", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
                     PlatformView()
                 }
-                
-                Tab("设置", systemImage: "gearshape.fill") {
+
+                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
                     SettingView()
                 }
-                
-                Tab("搜索", systemImage: "magnifyingglass", role: .search) {
+
+                Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
                     SearchView()
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
             .tabBarMinimizeBehavior(.onScrollDown)
         } else {
-           return TabView {
-                Tab {
+           return TabView(selection: $selectedTab) {
+                Tab(value: TabSelection.favorite) {
                     FavoriteView()
                 } label: {
                     Label {
@@ -126,16 +132,16 @@ struct ContentView: View {
                         CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
                     }
                 }
-                
-                Tab("平台", systemImage: "square.grid.2x2.fill") {
+
+                Tab("平台", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
                     PlatformView()
                 }
-                
-                Tab("设置", systemImage: "gearshape.fill") {
+
+                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
                     SettingView()
                 }
-                
-                Tab("搜索", systemImage: "magnifyingglass", role: .search) {
+
+                Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
                     SearchView()
                 }
             }

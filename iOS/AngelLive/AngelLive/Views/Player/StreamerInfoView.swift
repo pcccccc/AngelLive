@@ -12,7 +12,13 @@ import AngelLiveDependencies
 /// 主播信息视图
 struct StreamerInfoView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
-    @State private var isFavorited = false
+    @Environment(AppFavoriteModel.self) private var favoriteModel
+    @State private var isFavoriteAnimating = false
+
+    /// 判断是否已收藏
+    private var isFavorited: Bool {
+        favoriteModel.roomList.contains(where: { $0.roomId == viewModel.currentRoom.roomId })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -60,8 +66,9 @@ struct StreamerInfoView: View {
 
                 // 收藏按钮
                 Button(action: {
-                    isFavorited.toggle()
-                    // TODO: 实现收藏逻辑
+                    Task {
+                        await toggleFavorite()
+                    }
                 }) {
                     Image(systemName: isFavorited ? "heart.fill" : "heart")
                         .font(.title3)
@@ -71,10 +78,29 @@ struct StreamerInfoView: View {
                             Circle()
                                 .fill(.white.opacity(0.1))
                         )
+                        .symbolEffect(.bounce, value: isFavoriteAnimating)
                 }
+                .sensoryFeedback(.success, trigger: isFavoriteAnimating)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
+    }
+
+    // MARK: - 收藏操作
+
+    @MainActor
+    private func toggleFavorite() async {
+        do {
+            if isFavorited {
+                try await favoriteModel.removeFavoriteRoom(room: viewModel.currentRoom)
+            } else {
+                try await favoriteModel.addFavorite(room: viewModel.currentRoom)
+            }
+            // 触发动画
+            isFavoriteAnimating.toggle()
+        } catch {
+            print("收藏操作失败: \(error)")
+        }
     }
 }
