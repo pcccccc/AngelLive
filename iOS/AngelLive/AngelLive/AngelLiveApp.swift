@@ -17,10 +17,14 @@ struct AngelLiveApp: App {
     // 全局播放器协调器管理器
     @State private var playerManager = PlayerCoordinatorManager()
 
+    // 首次启动管理器
+    @State private var welcomeManager = WelcomeManager()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(playerManager)
+                .environment(welcomeManager)
                 .onAppear {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }

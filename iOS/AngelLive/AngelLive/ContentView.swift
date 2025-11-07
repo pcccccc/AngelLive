@@ -21,6 +21,9 @@ struct ContentView: View {
     @State private var selectedTab: TabSelection = .favorite
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    // 首次启动管理器
+    @Environment(WelcomeManager.self) private var welcomeManager
+
     // 创建全局 ViewModels
     @State private var platformViewModel = PlatformViewModel()
     @State private var favoriteViewModel = AppFavoriteModel()
@@ -38,6 +41,8 @@ struct ContentView: View {
     }
 
     var body: some View {
+        @Bindable var manager = welcomeManager
+
         Group {
             if AppConstants.Device.isIPad {
                 iPadTabView
@@ -50,6 +55,12 @@ struct ContentView: View {
         .environment(searchViewModel)
         .onChange(of: selectedTab) { _, _ in
             hapticFeedback.selectionChanged()
+        }
+        .sheet(isPresented: $manager.showWelcome) {
+            WelcomeView {
+                welcomeManager.completeWelcome()
+            }
+            .presentationSizing(.page.fitted(horizontal: true, vertical: false))
         }
     }
 
