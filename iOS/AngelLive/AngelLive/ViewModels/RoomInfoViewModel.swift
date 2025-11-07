@@ -416,6 +416,24 @@ final class RoomInfoViewModel {
 
 // MARK: - WebSocketConnectionDelegate
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
+    func webSocketDidReceiveMessage(text: String, color: UInt32) { //旧版本
+        Task { @MainActor in
+            // 将弹幕消息添加到聊天列表（底部气泡）
+            addDanmuMessage(text: text, userName: "")
+            
+            // 发射到屏幕弹幕（飞过效果）
+            if danmuSettings.showDanmu {
+                danmuCoordinator.shoot(
+                    text: text,
+                    showColorDanmu: danmuSettings.showColorDanmu,
+                    color: color,
+                    alpha: danmuSettings.danmuAlpha,
+                    font: CGFloat(danmuSettings.danmuFontSize)
+                )
+            }
+        }
+    }
+    
     func webSocketDidConnect() {
         Task { @MainActor in
             danmuServerIsConnected = true
@@ -436,7 +454,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         }
     }
 
-    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) {
+    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) { // 新版本
         Task { @MainActor in
             // 将弹幕消息添加到聊天列表（底部气泡）
             addDanmuMessage(text: text, userName: nickname)
