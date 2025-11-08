@@ -219,16 +219,29 @@ final class RoomInfoViewModel {
 
         // 斗鱼特殊处理
         if currentRoom.liveType == .douyu && douyuFirstLoad == false {
+            // 斗鱼平台每次切换清晰度都需要重新请求流地址
+            isLoading = true
             Task {
-                let currentCdn = currentRoomPlayArgs![cdnIndex]
-                let currentQuality = currentCdn.qualitys[urlIndex]
-                let playArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: currentQuality.qn, cdn: currentCdn.douyuCdnName)
-                DispatchQueue.main.async {
-                    let currentQuality = playArgs.first?.qualitys[urlIndex]
-                    let lastCurrentPlayURL = self.currentPlayURL
-                    if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
-                       let url = URL(string: urlString) {
-                        self.currentPlayURL = url
+                do {
+                    let currentCdn = currentRoomPlayArgs![cdnIndex]
+                    let currentQuality = currentCdn.qualitys[urlIndex]
+                    let playArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: currentQuality.qn, cdn: currentCdn.douyuCdnName)
+                    await MainActor.run {
+                        if let newQuality = playArgs.first?.qualitys.first,
+                           let url = URL(string: newQuality.url) {
+                            self.currentPlayURL = url
+                            self.isLoading = false
+                        } else {
+                            // 如果获取失败，保持当前播放地址
+                            print("⚠️ 斗鱼切换清晰度失败：无法获取新的播放地址")
+                            self.isLoading = false
+                        }
+                    }
+                } catch {
+                    await MainActor.run {
+                        print("❌ 斗鱼切换清晰度失败: \(error.localizedDescription)")
+                        self.isLoading = false
+                        // 保持当前播放地址，不中断播放
                     }
                 }
             }
@@ -243,16 +256,32 @@ final class RoomInfoViewModel {
 
         // YY 特殊处理
         if currentRoom.liveType == .yy && yyFirstLoad == false {
+            // YY 平台每次切换清晰度都需要重新请求流地址
+            isLoading = true
             Task {
-                guard var playArgs = currentRoomPlayArgs,
-                      cdnIndex < playArgs.count else { return }
-                let currentCdn = playArgs[cdnIndex]
-                let currentQuality = currentCdn.qualitys[urlIndex]
-                playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq: Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
-                DispatchQueue.main.async {
-                    let currentQuality = playArgs.first?.qualitys[urlIndex]
-                    let lastCurrentPlayURL = self.currentPlayURL
-                    self.currentPlayURL = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
+                do {
+                    guard var playArgs = currentRoomPlayArgs,
+                          cdnIndex < playArgs.count else {
+                        await MainActor.run {
+                            self.isLoading = false
+                        }
+                        return
+                    }
+                    let currentCdn = playArgs[cdnIndex]
+                    let currentQuality = currentCdn.qualitys[urlIndex]
+                    playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq: Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
+                    await MainActor.run {
+                        if let newQuality = playArgs.first?.qualitys.first,
+                           let url = URL(string: newQuality.url) {
+                            self.currentPlayURL = url
+                        }
+                        self.isLoading = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        print("❌ YY 切换清晰度失败: \(error.localizedDescription)")
+                        self.isLoading = false
+                    }
                 }
             }
         } else {
@@ -264,8 +293,22 @@ final class RoomInfoViewModel {
             }
         }
 
-        DispatchQueue.main.async {
-            self.isLoading = false
+        // 只有非异步请求的平台才在这里设置 isLoading = false
+        // 斗鱼和YY平台会在各自的异步任务中管理 isLoading
+        if currentRoom.liveType != .douyu && currentRoom.liveType != .yy {
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+        } else if currentRoom.liveType == .douyu && douyuFirstLoad {
+            // 斗鱼首次加载时也需要设置
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
+        } else if currentRoom.liveType == .yy && yyFirstLoad {
+            // YY 首次加载时也需要设置
+            DispatchQueue.main.async {
+                self.isLoading = false
+            }
         }
     }
 

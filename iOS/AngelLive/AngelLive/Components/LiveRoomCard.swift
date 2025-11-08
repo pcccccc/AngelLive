@@ -17,6 +17,10 @@ struct LiveRoomCard: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppFavoriteModel.self) private var favoriteModel
 
+    // Toast 状态
+    @State private var toastType: ToastType = .loading("处理中...")
+    @State private var showToast = false
+
     init(room: LiveModel, width: CGFloat? = nil) {
         self.room = room
     }
@@ -27,36 +31,39 @@ struct LiveRoomCard: View {
     }
 
     var body: some View {
-        if AppConstants.Device.isIPad {
-            // iPad: 使用 fullScreenCover
-            Button {
-                showPlayer = true
-            } label: {
-                cardContent
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
-                favoriteContextMenu
-            }
-            .fullScreenCover(isPresented: $showPlayer) {
-                DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                    .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                    .toolbar(.hidden, for: .tabBar)
-            }
-        } else {
-            // iPhone: 使用 NavigationLink
-            NavigationLink {
-                DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                    .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                    .toolbar(.hidden, for: .tabBar)
-            } label: {
-                cardContent
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
-                favoriteContextMenu
+        Group {
+            if AppConstants.Device.isIPad {
+                // iPad: 使用 fullScreenCover
+                Button {
+                    showPlayer = true
+                } label: {
+                    cardContent
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    favoriteContextMenu
+                }
+                .fullScreenCover(isPresented: $showPlayer) {
+                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                        .toolbar(.hidden, for: .tabBar)
+                }
+            } else {
+                // iPhone: 使用 NavigationLink
+                NavigationLink {
+                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                        .toolbar(.hidden, for: .tabBar)
+                } label: {
+                    cardContent
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    favoriteContextMenu
+                }
             }
         }
+        .toast(isPresented: $showToast, type: toastType)
     }
 
     private var cardContent: some View {
@@ -142,19 +149,45 @@ struct LiveRoomCard: View {
 
     @MainActor
     private func addFavorite() async {
+        // 显示加载中
+        toastType = .loading("收藏中...")
+        showToast = true
+
         do {
             try await favoriteModel.addFavorite(room: room)
+
+            // 显示成功提示
+            toastType = .success("收藏成功")
+            try? await Task.sleep(for: .seconds(1.5))
+            showToast = false
         } catch {
+            // 显示失败提示
+            toastType = .error("收藏失败")
             print("收藏失败: \(error)")
+            try? await Task.sleep(for: .seconds(1.5))
+            showToast = false
         }
     }
 
     @MainActor
     private func removeFavorite() async {
+        // 显示加载中
+        toastType = .loading("取消收藏中...")
+        showToast = true
+
         do {
             try await favoriteModel.removeFavoriteRoom(room: room)
+
+            // 显示成功提示
+            toastType = .success("已取消收藏")
+            try? await Task.sleep(for: .seconds(1.5))
+            showToast = false
         } catch {
+            // 显示失败提示
+            toastType = .error("取消收藏失败")
             print("取消收藏失败: \(error)")
+            try? await Task.sleep(for: .seconds(1.5))
+            showToast = false
         }
     }
 }
