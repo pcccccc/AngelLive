@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 import AVKit
 
 /// 更多功能按钮（投屏、清屏、定时关闭）
@@ -15,12 +16,14 @@ struct MoreActionsButton: View {
     @State private var showAirPlayPicker = false
     @State private var showTimerPicker = false
     @State private var timerManager = TimerManager()
+    @State private var buttonPressed = false
 
     var onClearChat: () -> Void
     var onDismiss: () -> Void
 
     var body: some View {
         Button(action: {
+            buttonPressed.toggle()
             showActionSheet = true
         }) {
             ZStack {
@@ -53,6 +56,7 @@ struct MoreActionsButton: View {
                 }
             }
         }
+        .conditionalEffect(.pushDown, condition: buttonPressed)
         .confirmationDialog("更多功能", isPresented: $showActionSheet, titleVisibility: .visible) {
             Button("投屏") {
                 handleAirPlay()

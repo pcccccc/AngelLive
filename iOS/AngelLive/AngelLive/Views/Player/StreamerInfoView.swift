@@ -78,8 +78,13 @@ struct StreamerInfoView: View {
                             Circle()
                                 .fill(.white.opacity(0.1))
                         )
-                        .symbolEffect(.bounce, value: isFavoriteAnimating)
                 }
+                .changeEffect(
+                    .spray(origin: UnitPoint(x: 0.5, y: 0.5)) {
+                        Image(systemName: isFavorited ? "heart.fill" : "heart.slash.fill")
+                            .foregroundStyle(.red)
+                    }, value: isFavoriteAnimating
+                )
                 .sensoryFeedback(.success, trigger: isFavoriteAnimating)
             }
         }
