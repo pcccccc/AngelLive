@@ -16,10 +16,7 @@ struct LiveRoomCard: View {
     @Namespace private var namespace
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppFavoriteModel.self) private var favoriteModel
-
-    // Toast 状态
-    @State private var toastType: ToastType = .loading("处理中...")
-    @State private var showToast = false
+    @Environment(\.presentToast) private var presentToast
 
     init(room: LiveModel, width: CGFloat? = nil) {
         self.room = room
@@ -63,7 +60,6 @@ struct LiveRoomCard: View {
                 }
             }
         }
-        .toast(isPresented: $showToast, type: toastType)
     }
 
     private var cardContent: some View {
@@ -149,45 +145,45 @@ struct LiveRoomCard: View {
 
     @MainActor
     private func addFavorite() async {
-        // 显示加载中
-        toastType = .loading("收藏中...")
-        showToast = true
-
         do {
             try await favoriteModel.addFavorite(room: room)
 
             // 显示成功提示
-            toastType = .success("收藏成功")
-            try? await Task.sleep(for: .seconds(1.5))
-            showToast = false
+            let toast = ToastValue(
+                icon: Image(systemName: "heart.fill"),
+                message: "收藏成功"
+            )
+            presentToast(toast)
         } catch {
             // 显示失败提示
-            toastType = .error("收藏失败")
+            let toast = ToastValue(
+                icon: Image(systemName: "xmark.circle.fill"),
+                message: "收藏失败"
+            )
+            presentToast(toast)
             print("收藏失败: \(error)")
-            try? await Task.sleep(for: .seconds(1.5))
-            showToast = false
         }
     }
 
     @MainActor
     private func removeFavorite() async {
-        // 显示加载中
-        toastType = .loading("取消收藏中...")
-        showToast = true
-
         do {
             try await favoriteModel.removeFavoriteRoom(room: room)
 
             // 显示成功提示
-            toastType = .success("已取消收藏")
-            try? await Task.sleep(for: .seconds(1.5))
-            showToast = false
+            let toast = ToastValue(
+                icon: Image(systemName: "heart.slash.fill"),
+                message: "已取消收藏"
+            )
+            presentToast(toast)
         } catch {
             // 显示失败提示
-            toastType = .error("取消收藏失败")
+            let toast = ToastValue(
+                icon: Image(systemName: "xmark.circle.fill"),
+                message: "取消收藏失败"
+            )
+            presentToast(toast)
             print("取消收藏失败: \(error)")
-            try? await Task.sleep(for: .seconds(1.5))
-            showToast = false
         }
     }
 }

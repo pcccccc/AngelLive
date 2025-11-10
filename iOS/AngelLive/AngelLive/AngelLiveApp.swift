@@ -25,6 +25,7 @@ struct AngelLiveApp: App {
             ContentView()
                 .environment(playerManager)
                 .environment(welcomeManager)
+                .installToast(position: .bottom)
                 .onAppear {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }

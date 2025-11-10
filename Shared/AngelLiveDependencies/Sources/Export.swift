@@ -16,7 +16,7 @@
 @_exported import Shimmer
 @_exported import SimpleToast
 @_exported import Starscream
-@_exported import ToastUI
+@_exported import Toasts
 @_exported import SwiftyJSON
 @_exported import SWCompression
 @_exported import UDPBroadcast

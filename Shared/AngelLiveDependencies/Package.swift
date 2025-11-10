@@ -66,7 +66,7 @@ let package = Package(
                 "Kingfisher",
                 "KingfisherWebP",
                 "SimpleToast",
-                .product(name: "ToastUI", package: "swiftui-toasts"),
+                .product(name: "Toasts", package: "swiftui-toasts"),
                 .product(name: "InjectionNext", package: "InjectionNext")
             ],
             path: "Sources"
