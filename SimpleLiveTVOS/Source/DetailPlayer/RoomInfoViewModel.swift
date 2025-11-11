@@ -371,6 +371,10 @@ final class RoomInfoViewModel {
 }
 
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
+    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) {
+        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingsViewModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingsViewModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize))
+    }
+    
     func webSocketDidConnect() {
         danmuServerIsConnected = true
         danmuServerIsLoading = false

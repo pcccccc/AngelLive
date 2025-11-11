@@ -77,9 +77,14 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            Task {
-                try await Douyin.getRequestHeaders()
-            }
+//            Task {
+//                do {
+//                    try await Douyin.getRequestHeaders()
+//                } catch {
+//                    print("获取抖音请求头失败: \(error)")
+//                    // 抖音headers获取失败不应该阻止APP运行
+//                }
+//            }
         }
         .onPlayPauseCommand(perform: {
             if contentVM.selection == 0 {

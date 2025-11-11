@@ -149,6 +149,15 @@ class LiveViewModel {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: liveType)
             await MainActor.run {
                 self.categories = fetchedCategories
+
+                // 检查是否成功获取分类数据
+                if self.categories.isEmpty {
+                    print("警告: \(self.livePlatformName) 返回的分类列表为空")
+                    self.showToast(false, title: "获取\(self.livePlatformName)分类失败")
+                    self.isLoading = false
+                    return
+                }
+
                 self.getRoomList(index: self.selectedSubListIndex)
                 self.isLoading = false
             }
@@ -159,10 +168,11 @@ class LiveViewModel {
                 }
             }
         } catch {
+            print("获取\(livePlatformName)分类列表失败: \(error)")
             await MainActor.run {
                 self.isLoading = false
+                self.showToast(false, title: "获取\(self.livePlatformName)分类失败: \(error.localizedDescription)")
             }
-            // Handle error appropriately, maybe show a toast
         }
     }
     
@@ -177,9 +187,16 @@ class LiveViewModel {
             }
             return
         }
-        
+
         switch roomListType {
         case .live:
+            // 检查分类列表是否为空
+            if categories.isEmpty {
+                print("警告: \(livePlatformName) 分类列表为空，无法获取房间列表")
+                isLoading = false
+                showToast(false, title: "分类列表为空，请稍后重试")
+                return
+            }
             fetchLiveRooms(index: index)
         case .favorite:
             // Favorite logic remains here for now as it's complex and involves CloudKit.
@@ -202,11 +219,25 @@ class LiveViewModel {
                     if let subListCategory = self.categories.first?.subList.first {
                         let parentBiz = self.categories.first?.biz
                         newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
+                    } else {
+                        print("警告: \(livePlatformName) 没有可用的分类数据")
+                        await MainActor.run {
+                            self.isLoading = false
+                            self.showToast(false, title: "没有可用的分类数据")
+                        }
+                        return
                     }
                 } else {
                     if let subListCategory = self.selectedMainListCategory?.subList[index] {
                         let parentBiz = self.selectedMainListCategory?.biz
                         newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
+                    } else {
+                        print("警告: \(livePlatformName) 选中的分类索引 \(index) 无效")
+                        await MainActor.run {
+                            self.isLoading = false
+                            self.showToast(false, title: "选中的分类无效")
+                        }
+                        return
                     }
                 }
 
@@ -218,10 +249,11 @@ class LiveViewModel {
                     self.isLoading = false
                 }
             } catch {
+                print("获取\(livePlatformName)房间列表失败: \(error)")
                 await MainActor.run {
                     self.isLoading = false
+                    self.showToast(false, title: "获取房间列表失败: \(error.localizedDescription)")
                 }
-                // Handle error
             }
         }
     }
