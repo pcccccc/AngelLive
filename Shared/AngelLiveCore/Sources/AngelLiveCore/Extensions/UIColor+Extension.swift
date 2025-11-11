@@ -5,8 +5,10 @@
 //  Created by pangchong on 2023/11/24.
 //
 
-import UIKit
 import SwiftUI
+
+#if os(iOS) || os(tvOS)
+import UIKit
 
 public extension UIColor {
     convenience init(red: Int, green: Int, blue: Int, alpha: CGFloat = 1.0) {
@@ -26,6 +28,7 @@ public extension UIColor {
        )
    }
 }
+#endif
 
 public extension Color {
     init(hex: UInt, alpha: Double = 1) {

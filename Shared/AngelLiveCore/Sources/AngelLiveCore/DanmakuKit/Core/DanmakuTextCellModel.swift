@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuTextCellModel.swift
 //  DanmakuKit_Example
@@ -94,3 +95,4 @@ public class DanmakuTextCellModel: DanmakuCellModel, Equatable {
         calculateSize()
     }
 }
+#endif

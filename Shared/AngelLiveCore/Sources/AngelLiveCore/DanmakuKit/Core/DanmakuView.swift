@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuView.swift
 //  DanmakuKit
@@ -654,3 +655,4 @@ private extension DanmakuView {
     }
     
 }
+#endif

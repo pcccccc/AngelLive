@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuCell.swift
 //  DanmakuKit
@@ -96,3 +97,4 @@ extension DanmakuCell {
     }
     
 }
+#endif

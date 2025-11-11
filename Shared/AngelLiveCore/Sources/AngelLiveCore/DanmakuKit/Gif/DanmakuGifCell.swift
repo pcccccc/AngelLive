@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuGifCell.swift
 //  DanmakuKit
@@ -77,3 +78,4 @@ open class DanmakuGifCell: DanmakuCell {
     
 }
 
+#endif

@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuQueuePool.swift
 //  DanmakuKit
@@ -40,3 +41,4 @@ class DanmakuQueuePool {
     }
     
 }
+#endif

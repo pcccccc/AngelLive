@@ -14,9 +14,11 @@
 @_exported import NIOHTTP1
 @_exported import Pow
 @_exported import Shimmer
+#if os(iOS) || os(tvOS)
 @_exported import SimpleToast
-@_exported import Starscream
 @_exported import Toasts
+#endif
+@_exported import Starscream
 @_exported import SwiftyJSON
 @_exported import SWCompression
 @_exported import UDPBroadcast

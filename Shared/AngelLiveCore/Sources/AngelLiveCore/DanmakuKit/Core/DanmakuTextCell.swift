@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuTextCell.swift
 //  DanmakuKit_Example
@@ -54,3 +55,4 @@ public class DanmakuTextCell: DanmakuCell {
 
     public override func didDisplay(_ finished: Bool) {}
 }
+#endif

@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuTrack.swift
 //  DanmakuKit
@@ -383,3 +384,4 @@ func prepare(danmaku: DanmakuCell) {
     danmaku.animationBeginTime = 0
     danmaku.layer.opacity = 1
 }
+#endif

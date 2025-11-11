@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuAsyncLayer.swift
 //  DanmakuKit
@@ -168,3 +169,4 @@ public class DanmakuAsyncLayer: CALayer {
     }
     
 }
+#endif

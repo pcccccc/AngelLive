@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  DanmakuCellModel.swift
 //  DanmakuKit
@@ -34,3 +35,4 @@ public protocol DanmakuCellModel {
     func isEqual(to cellModel: DanmakuCellModel) -> Bool
     
 }
+#endif

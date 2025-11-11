@@ -6,7 +6,7 @@ let package = Package(
     name: "AngelLiveDependencies",
     platforms: [
         .iOS(.v18),
-        .macOS(.v11),
+        .macOS(.v15),
         .tvOS(.v17)
     ],
     products: [
@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
         .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
         .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.6.2"),
-        .package(url: "https://github.com/pcccccc/LiveParse", from: "1.9.1"),
+        .package(url: "https://github.com/pcccccc/LiveParse", from: "1.9.5"),
         .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
         .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
         .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),
@@ -65,9 +65,10 @@ let package = Package(
                 "KSPlayer",
                 "Kingfisher",
                 "KingfisherWebP",
-                "SimpleToast",
-                .product(name: "Toasts", package: "swiftui-toasts"),
-                .product(name: "InjectionNext", package: "InjectionNext")
+                .product(name: "InjectionNext", package: "InjectionNext"),
+                // 只在 iOS 和 tvOS 平台包含 Toast 相关依赖
+                .product(name: "SimpleToast", package: "SimpleToast", condition: .when(platforms: [.iOS, .tvOS])),
+                .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS, .tvOS]))
             ],
             path: "Sources"
         ),

@@ -1,3 +1,4 @@
+#if os(iOS) || os(tvOS)
 //
 //  GifAnimator.swift
 //  DanmakuKit
@@ -350,3 +351,4 @@ fileprivate class SafeArray<Element> {
         array = []
     }
 }
+#endif
