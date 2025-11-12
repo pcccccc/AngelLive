@@ -37,6 +37,12 @@ class PlatformDetailViewModel {
         return subList.indices.contains(selectedSubCategoryIndex) ? subList[selectedSubCategoryIndex] : nil
     }
 
+    var currentCategoryTitle: String {
+        guard let main = currentMainCategory else { return "全部分类" }
+        guard let sub = currentSubCategory else { return main.title }
+        return "\(main.title) · \(sub.title)"
+    }
+
     // 房间列表 - 使用字典按分类索引缓存
     var roomListCache: [String: [LiveModel]] = [:]
 

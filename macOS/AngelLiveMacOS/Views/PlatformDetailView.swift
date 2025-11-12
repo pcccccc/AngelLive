@@ -13,8 +13,7 @@ import Kingfisher
 
 struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
-    @State private var selectedMainCategory = 0
-    @State private var selectedSubCategory = 0
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -27,78 +26,118 @@ struct PlatformDetailView: View {
                     description: Text(error.localizedDescription)
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.categories.isEmpty && viewModel.isLoadingCategories {
+            } else if viewModel.isLoadingCategories && viewModel.categories.isEmpty {
                 ProgressView("加载分类中...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !viewModel.categories.isEmpty {
-                // 分类导航
-                VStack(spacing: 0) {
-                    // 一级分类
-                    if viewModel.categories.count > 1 {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(viewModel.categories.enumerated()), id: \.offset) { index, category in
-                                    Button(action: {
-                                        viewModel.selectedMainCategoryIndex = index
-                                        viewModel.selectedSubCategoryIndex = 0
-                                        Task {
-                                            await viewModel.loadRoomList()
-                                        }
-                                    }) {
-                                        Text(category.title)
-                                            .font(.headline)
-                                            .foregroundColor(viewModel.selectedMainCategoryIndex == index ? .white : .primary)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 8)
-                                            .background(
-                                                viewModel.selectedMainCategoryIndex == index ?
-                                                    Color.accentColor : Color.gray.opacity(0.2)
-                                            )
-                                            .clipShape(Capsule())
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                        }
-                        Divider()
-                    }
-
-                    // 二级分类
-                    if !viewModel.currentSubCategories.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                ForEach(Array(viewModel.currentSubCategories.enumerated()), id: \.offset) { index, subCategory in
-                                    Button(action: {
-                                        viewModel.selectedSubCategoryIndex = index
-                                        Task {
-                                            await viewModel.loadRoomList()
-                                        }
-                                    }) {
-                                        Text(subCategory.title)
-                                            .foregroundColor(viewModel.selectedSubCategoryIndex == index ? .accentColor : .secondary)
-                                            .padding(.horizontal, 12)
-                                            .padding(.vertical, 6)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                        }
-                        Divider()
-                    }
-                }
+                // 分类选择按钮
+                categoryButton
 
                 // 房间列表
                 roomListView
+            } else {
+                ContentUnavailableView(
+                    "暂无分类",
+                    systemImage: "list.bullet",
+                    description: Text("当前平台没有可用的分类")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle(viewModel.platform.title)
         .task {
-            await viewModel.loadCategories()
+            if viewModel.categories.isEmpty {
+                await viewModel.loadCategories()
+            }
         }
+    }
+
+    // MARK: - 分类选择按钮
+    private var categoryButton: some View {
+        NavigationLink(destination: CategoryManagementView().environment(viewModel)) {
+            HStack {
+                Text(viewModel.currentCategoryTitle)
+                    .font(.headline)
+                Spacer()
+                Image(systemName: "chevron.down")
+            }
+            .padding()
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 一级分类导航
+    private var mainCategoryNavigator: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 12) {
+                    ForEach(Array(viewModel.categories.enumerated()), id: \.offset) { index, category in
+                        Button(action: {
+                            Task {
+                                await viewModel.selectMainCategory(index: index)
+                            }
+                        }) {
+                            Text(category.title)
+                                .font(viewModel.selectedMainCategoryIndex == index ? .headline : .subheadline)
+                                .fontWeight(viewModel.selectedMainCategoryIndex == index ? .bold : .regular)
+                                .foregroundColor(viewModel.selectedMainCategoryIndex == index ? .white : .primary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(viewModel.selectedMainCategoryIndex == index ? Color.accentColor : Color.gray.opacity(0.2))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .id(index)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .onChange(of: viewModel.selectedMainCategoryIndex) { _, newValue in
+                withAnimation {
+                    proxy.scrollTo(newValue, anchor: .center)
+                }
+            }
+        }
+        .frame(height: 50)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    // MARK: - 二级分类导航
+    private var subCategoryNavigator: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 12) {
+                    ForEach(Array(viewModel.currentSubCategories.enumerated()), id: \.offset) { index, subCategory in
+                        Button(action: {
+                            Task {
+                                await viewModel.selectSubCategory(index: index)
+                            }
+                        }) {
+                            Text(subCategory.title)
+                                .foregroundColor(viewModel.selectedSubCategoryIndex == index ? .accentColor : .secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+                        .id(index)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .onChange(of: viewModel.selectedSubCategoryIndex) { _, newValue in
+                withAnimation {
+                    proxy.scrollTo(newValue, anchor: .center)
+                }
+            }
+        }
+        .frame(height: 40)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 
     // MARK: - 房间列表视图
@@ -128,18 +167,43 @@ struct PlatformDetailView: View {
             ScrollView {
                 LazyVGrid(
                     columns: [
-                        GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 16)
+                        GridItem(.adaptive(minimum: 220, maximum: 310), spacing: 16)
                     ],
                     spacing: 16
                 ) {
                     ForEach(rooms) { room in
-                        NavigationLink(value: room) {
+                        Button {
+                            openWindow(value: room)
+                        } label: {
                             LiveRoomCard(room: room)
                         }
                         .buttonStyle(.plain)
+                        .onAppear {
+                            // 分页加载
+                            if room.roomId == rooms.last?.roomId {
+                                Task {
+                                    await viewModel.loadMore()
+                                }
+                            }
+                        }
+                    }
+
+                    // 加载更多指示器
+                    if viewModel.isLoadingRooms {
+                        HStack {
+                            ProgressView()
+                            Text("加载更多...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
                     }
                 }
-                .padding()
+                .padding(16)
+            }
+            .refreshable {
+                await viewModel.loadRoomList()
             }
         }
     }
@@ -150,7 +214,7 @@ struct LiveRoomCard: View {
     let room: LiveModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
             // 封面图
             KFImage(URL(string: room.roomCover))
                 .placeholder {
@@ -158,56 +222,45 @@ struct LiveRoomCard: View {
                         .fill(Color.gray.opacity(0.2))
                 }
                 .resizable()
-                .aspectRatio(16/9, contentMode: .fill)
-                .frame(height: 160)
-                .clipped()
-                .overlay(alignment: .topLeading) {
-                    // 在线人数
-                    if let count = room.liveWatchedCount, !count.isEmpty {
-                        Text(count)
-                            .font(.caption)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.6))
-                            .clipShape(Capsule())
-                            .padding(8)
-                    }
-                }
-
-            // 房间信息
-            VStack(alignment: .leading, spacing: 6) {
-                Text(room.roomTitle)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .foregroundColor(.primary)
-
-                HStack(spacing: 8) {
-                    // 主播头像
-                    KFImage(URL(string: room.userHeadImg))
+                .blur(radius: 10)
+                .overlay(
+                    KFImage(URL(string: room.roomCover))
                         .placeholder {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
                         }
                         .resizable()
-                        .frame(width: 20, height: 20)
-                        .clipShape(Circle())
+                        .aspectRatio(contentMode: .fit)
+                )
+                .aspectRatio(16/9, contentMode: .fill)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            // 主播信息
+            HStack(spacing: 8) {
+                KFImage(URL(string: room.userHeadImg))
+                    .placeholder {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                    }
+                    .resizable()
+                    .frame(width: 32, height: 32)
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(room.roomTitle)
+                        .font(.subheadline.bold())
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
 
                     Text(room.userName)
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
+
+                Spacer()
             }
-            .padding(12)
         }
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
     }
 }
 

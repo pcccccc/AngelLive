@@ -9,12 +9,12 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import AppKit
 
 struct RoomPlayerView: View {
     let room: LiveModel
-    @Environment(PlayerCoordinatorManager.self) private var playerManager
     @State private var viewModel: RoomInfoViewModel
-    @State private var showQualitySelector = false
+    @ObservedObject private var coordinator = KSVideoPlayer.Coordinator()
 
     init(room: LiveModel) {
         self.room = room
@@ -26,14 +26,12 @@ struct RoomPlayerView: View {
             ZStack {
                 // 播放器
                 if let url = viewModel.currentPlayURL {
-                    KSVideoPlayerView(
-                        coordinator: playerManager.coordinator,
-                        url: url,
-                        options: viewModel.playerOption
-                    )
-                    .onAppear {
-                        viewModel.setPlayerDelegate(playerCoordinator: playerManager.coordinator)
-                    }
+                    KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
+                        .onAppear {
+                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                            hideWindowButtons()
+                        }
+                        .ignoresSafeArea()
                 } else {
                     // 加载中
                     VStack(spacing: 16) {
@@ -48,103 +46,25 @@ struct RoomPlayerView: View {
                 }
 
                 // 控制层
-                VStack {
-                    // 顶部控制栏
-                    HStack {
-                        Text(room.roomTitle)
-                            .font(.headline)
-                            .foregroundColor(.white)
-
-                        Spacer()
-
-                        // 清晰度选择
-                        if let playArgs = viewModel.currentRoomPlayArgs, !playArgs.isEmpty {
-                            Menu {
-                                ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
-                                    ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
-                                        Button(action: {
-                                            Task { @MainActor in
-                                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
-                                            }
-                                        }) {
-                                            HStack {
-                                                Text(quality.title)
-                                                if viewModel.currentPlayQualityString == quality.title {
-                                                    Image(systemName: "checkmark")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(viewModel.currentPlayQualityString)
-                                    Image(systemName: "chevron.down")
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.2))
-                                .clipShape(Capsule())
-                            }
-                            .menuStyle(.borderlessButton)
-                        }
-
-                        // 刷新按钮
-                        Button(action: {
-                            Task {
-                                await viewModel.refreshPlayback()
-                            }
-                        }) {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundColor(.white)
-                                .padding(8)
-                                .background(Color.white.opacity(0.2))
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding()
-                    .background(
-                        LinearGradient(
-                            colors: [Color.black.opacity(0.6), Color.clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                    Spacer()
-
-                    // 底部信息
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(room.userName)
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-
-                            if let count = room.liveWatchedCount, !count.isEmpty {
-                                Text("在线：\(count)")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        }
-
-                        Spacer()
-                    }
-                    .padding()
-                    .background(
-                        LinearGradient(
-                            colors: [Color.clear, Color.black.opacity(0.6)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                }
+                PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator)
             }
         }
-        .navigationTitle(room.roomTitle)
+        .ignoresSafeArea()
         .task {
             await viewModel.loadPlayURL()
+        }
+        .onDisappear {
+            viewModel.disconnectSocket()
+        }
+    }
+
+    private func hideWindowButtons() {
+        DispatchQueue.main.async {
+            if let window = NSApplication.shared.windows.first(where: { $0.isKeyWindow }) {
+                window.standardWindowButton(.closeButton)?.isHidden = true
+                window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+                window.standardWindowButton(.zoomButton)?.isHidden = true
+            }
         }
     }
 }
@@ -162,5 +82,4 @@ struct RoomPlayerView: View {
         liveWatchedCount: "1.2万"
     ))
     .frame(width: 800, height: 600)
-    .environment(PlayerCoordinatorManager())
 }

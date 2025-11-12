@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var platformViewModel = PlatformViewModel()
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
+    @State private var platformDetailViewModels: [LiveType: PlatformDetailViewModel] = [:]
 
     // 动态获取 TabSection 标题
     private var platformSectionTitle: String {
@@ -61,13 +62,7 @@ struct ContentView: View {
 
                 ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
                     Tab(platform.title, systemImage: "play.tv", value: TabSelection.platform(platform)) {
-                        NavigationStack {
-                            PlatformDetailView()
-                                .environment(PlatformDetailViewModel(platform: platform))
-                                .navigationDestination(for: LiveModel.self) { room in
-                                    RoomPlayerView(room: room)
-                                }
-                        }
+                        PlatformDetailTab(platform: platform, viewModels: $platformDetailViewModels)
                     }
                 }
             }
@@ -94,6 +89,30 @@ struct ContentView: View {
         .onAppear {
             BiliBiliCookie.cookie = ""
         }
+    }
+}
+
+struct PlatformDetailTab: View {
+    let platform: Platformdescription
+    @Binding var viewModels: [LiveType: PlatformDetailViewModel]
+
+    var body: some View {
+        NavigationStack {
+            PlatformDetailView()
+                .environment(viewModel)
+                .navigationDestination(for: LiveModel.self) { room in
+                    RoomPlayerView(room: room)
+                }
+        }
+    }
+
+    private var viewModel: PlatformDetailViewModel {
+        if let existing = viewModels[platform.liveType] {
+            return existing
+        }
+        let new = PlatformDetailViewModel(platform: platform)
+        viewModels[platform.liveType] = new
+        return new
     }
 }
 
