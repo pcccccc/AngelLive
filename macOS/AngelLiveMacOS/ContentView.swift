@@ -13,7 +13,6 @@ import LiveParse
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {
     case favorite
-    case allPlatforms
     case platform(Platformdescription)
     case settings
     case search
@@ -28,14 +27,6 @@ struct ContentView: View {
     @State private var searchViewModel = SearchViewModel()
     @State private var platformDetailViewModels: [LiveType: PlatformDetailViewModel] = [:]
 
-    // 动态获取 TabSection 标题
-    private var platformSectionTitle: String {
-        if case .platform(let platform) = selectedTab {
-            return platform.title
-        }
-        return "平台"
-    }
-
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab(value: TabSelection.favorite) {
@@ -49,20 +40,17 @@ struct ContentView: View {
                 Label("收藏", systemImage: "heart.fill")
             }
 
-            TabSection(platformSectionTitle) {
-                // 在侧边栏中显示"全部平台"
-                Tab("全部平台", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
-                    NavigationStack {
-                        PlatformView()
-                            .navigationDestination(for: LiveModel.self) { room in
-                                RoomPlayerView(room: room)
-                            }
-                    }
-                }
-
+            TabSection("平台") {
                 ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
-                    Tab(platform.title, systemImage: "play.tv", value: TabSelection.platform(platform)) {
+                    Tab(value: TabSelection.platform(platform)) {
                         PlatformDetailTab(platform: platform, viewModels: $platformDetailViewModels)
+                    } label: {
+                        Label {
+                            Text(platform.title)
+                        } icon: {
+                            Image(getImage(platform: platform))
+                                .frame(width: 18, height: 18)
+                        }
                     }
                 }
             }
@@ -88,6 +76,27 @@ struct ContentView: View {
         .environment(searchViewModel)
         .onAppear {
             BiliBiliCookie.cookie = ""
+        }
+    }
+    
+    func getImage(platform: Platformdescription) -> String {
+        switch platform.liveType {
+            case .bilibili:
+                return "mini_live_card_bili"
+            case .douyu:
+                return "mini_live_card_douyu"
+            case .huya:
+                return "mini_live_card_huya"
+            case .douyin:
+                return "mini_live_card_douyin"
+            case .yy:
+                return "mini_live_card_yy"
+            case .cc:
+                return "mini_live_card_cc"
+            case .ks:
+                return "mini_live_card_ks"
+            case .youtube:
+                return "mini_live_card_youtube"
         }
     }
 }
@@ -119,4 +128,3 @@ struct PlatformDetailTab: View {
 #Preview {
     ContentView()
 }
-

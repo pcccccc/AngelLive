@@ -7,11 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB0F0B8F2EC5DE940006AE6E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */; };
 		FBF74A742EA1F9A400591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A732EA1F9A400591EEA /* AngelLiveCore */; };
 		FBF74A762EA1F9A400591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
 		FB7077CA2EA1D6820059AFD9 /* AngelLiveMacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveMacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -52,6 +54,7 @@
 		FB7077C12EA1D6820059AFD9 = {
 			isa = PBXGroup;
 			children = (
+				FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */,
 				FB7077CC2EA1D6820059AFD9 /* AngelLiveMacOS */,
 				FBF74A722EA1F9A400591EEA /* Frameworks */,
 				FB7077CB2EA1D6820059AFD9 /* Products */,
@@ -141,6 +144,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB0F0B8F2EC5DE940006AE6E /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
