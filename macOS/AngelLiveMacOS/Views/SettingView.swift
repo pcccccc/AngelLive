@@ -18,14 +18,6 @@ struct SettingView: View {
             Section("播放设置") {
                 Toggle("自动播放", isOn: $autoPlay)
                     .help("进入直播间时自动开始播放")
-
-                Picker("默认清晰度", selection: $preferredQuality) {
-                    Text("原画").tag("原画")
-                    Text("超清").tag("超清")
-                    Text("高清").tag("高清")
-                    Text("流畅").tag("流畅")
-                }
-                .help("选择进入直播间时默认使用的清晰度")
             }
 
             Section("弹幕设置") {
@@ -39,9 +31,9 @@ struct SettingView: View {
             }
 
             Section("关于") {
-                LabeledContent("版本", value: "2.0.0")
-                LabeledContent("平台", value: "macOS")
-                LabeledContent("构建", value: "Debug")
+//                LabeledContent("版本", value: "2.0.0")
+//                LabeledContent("平台", value: "macOS")
+//                LabeledContent("构建", value: "Debug")
 
                 Link(destination: URL(string: "https://github.com")!) {
                     Label("访问 GitHub", systemImage: "link")
@@ -57,7 +49,6 @@ struct SettingView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("设置")
-        .frame(minWidth: 400, minHeight: 400)
     }
 }
 

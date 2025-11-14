@@ -14,7 +14,7 @@ struct FavoriteView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
 
     var body: some View {
-        NavigationStack {
+        Group {
             if favoriteModel.roomList.isEmpty {
                 ContentUnavailableView(
                     "暂无收藏",
@@ -33,9 +33,9 @@ struct FavoriteView: View {
                     }
                     .padding()
                 }
-                .navigationTitle("收藏")
             }
         }
+        .navigationTitle("收藏")
     }
 }
 
