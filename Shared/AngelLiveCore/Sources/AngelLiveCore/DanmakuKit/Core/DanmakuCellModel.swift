@@ -1,4 +1,3 @@
-#if os(iOS) || os(tvOS)
 //
 //  DanmakuCellModel.swift
 //  DanmakuKit
@@ -6,7 +5,7 @@
 //  Created by Q YiZhong on 2020/8/16.
 //
 
-import UIKit
+import Foundation
 
 public enum DanmakuCellType {
     case floating
@@ -35,4 +34,3 @@ public protocol DanmakuCellModel {
     func isEqual(to cellModel: DanmakuCellModel) -> Bool
     
 }
-#endif

@@ -1,4 +1,3 @@
-#if os(iOS) || os(tvOS)
 //
 //  DanmakuCell.swift
 //  DanmakuKit
@@ -6,9 +5,15 @@
 //  Created by Q YiZhong on 2020/8/16.
 //
 
+import Foundation
+import QuartzCore
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
-open class DanmakuCell: UIView {
+open class DanmakuCell: DanmakuBaseView {
 
     public var model: DanmakuCellModel?
     
@@ -16,12 +21,22 @@ open class DanmakuCell: UIView {
     
     var animationBeginTime: TimeInterval = 0
     
+#if os(iOS) || os(tvOS)
     public override class var layerClass: AnyClass {
-        return DanmakuAsyncLayer.self
+        DanmakuAsyncLayer.self
     }
+#else
+    public override func makeBackingLayer() -> CALayer {
+        DanmakuAsyncLayer()
+    }
+    public override var isFlipped: Bool { true }
+#endif
     
     public required override init(frame: CGRect) {
         super.init(frame: frame)
+#if os(macOS)
+        wantsLayer = true
+#endif
         setupLayer()
     }
     
@@ -60,16 +75,27 @@ open class DanmakuCell: UIView {
     
     /// This method can trigger the rendering process, the content can be re-rendered in the displaying(_:_:_:) method.
     public func redraw() {
-        layer.setNeedsDisplay()
+        layer?.setNeedsDisplay()
     }
        
 }
 
 extension DanmakuCell {
+
+    var danmakuLayer: CALayer? {
+#if os(macOS)
+        if layer == nil {
+            wantsLayer = true
+        }
+        return layer
+#else
+        return layer
+#endif
+    }
     
     var realFrame: CGRect {
-        if layer.presentation() != nil {
-            return layer.presentation()!.frame
+        if let presentation = layer?.presentation() {
+            return presentation.frame
         } else {
             return frame
         }
@@ -78,7 +104,7 @@ extension DanmakuCell {
     func setupLayer() {
         guard let layer = layer as? DanmakuAsyncLayer else { return }
         
-        layer.contentsScale = UIScreen.main.scale
+        layer.contentsScale = danmakuScreenScale()
         
         layer.willDisplay = { [weak self] (layer) in
             guard let strongSelf = self else { return }
@@ -97,4 +123,3 @@ extension DanmakuCell {
     }
     
 }
-#endif

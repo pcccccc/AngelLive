@@ -1,4 +1,3 @@
-#if os(iOS) || os(tvOS)
 //
 //  DanmakuAsyncLayer.swift
 //  DanmakuKit
@@ -6,7 +5,13 @@
 //  Created by Q YiZhong on 2020/8/16.
 //
 
+import Foundation
+import QuartzCore
+#if os(iOS) || os(tvOS)
 import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 class Sentinel {
     
@@ -51,7 +56,7 @@ public class DanmakuAsyncLayer: CALayer {
     
     override init() {
         super.init()
-        contentsScale = UIScreen.main.scale
+        contentsScale = danmakuScreenScale()
     }
     
     override init(layer: Any) {
@@ -105,7 +110,7 @@ public class DanmakuAsyncLayer: CALayer {
                 if opaque {
                     context.saveGState()
                     if backgroundColor == nil || (backgroundColor?.alpha ?? 0) < 1 {
-                        context.setFillColor(UIColor.white.cgColor)
+                        context.setFillColor(DanmakuColor.white.cgColor)
                         context.addRect(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
                         context.fillPath()
                     }
@@ -136,7 +141,7 @@ public class DanmakuAsyncLayer: CALayer {
                     if isCancelled() {
                         self.didDisplay?(self, false)
                     } else {
-                        self.contents = image?.cgImage
+                        self.contents = image?.danmakuCGImage
                         self.didDisplay?(self, true)
                     }
                 }
@@ -153,7 +158,7 @@ public class DanmakuAsyncLayer: CALayer {
             displaying?(context, bounds.size, {() -> Bool in return false})
             let image = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
-            contents = image?.cgImage
+            contents = image?.danmakuCGImage
             didDisplay?(self, true)
         }
     }
@@ -169,4 +174,3 @@ public class DanmakuAsyncLayer: CALayer {
     }
     
 }
-#endif

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Observation
 import AngelLiveCore
 import AngelLiveDependencies
 import AppKit
@@ -22,6 +23,7 @@ struct RoomPlayerView: View {
     }
 
     var body: some View {
+        @Bindable var viewModel = viewModel
         GeometryReader { geometry in
             ZStack {
                 // 播放器
@@ -45,8 +47,12 @@ struct RoomPlayerView: View {
                     .background(Color.black)
                 }
 
+                danmuOverlay(for: geometry.size)
+                    .zIndex(2)
+
                 // 控制层
                 PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator)
+                    .zIndex(3)
             }
         }
         .ignoresSafeArea()
@@ -66,6 +72,64 @@ struct RoomPlayerView: View {
                 window.standardWindowButton(.zoomButton)?.isHidden = true
             }
         }
+    }
+}
+
+private extension RoomPlayerView {
+    @ViewBuilder
+    func danmuOverlay(for containerSize: CGSize) -> some View {
+        let settings = viewModel.danmuSettings
+        if settings.showDanmu, viewModel.currentPlayURL != nil {
+            let config = danmuConfig(for: containerSize.height, index: settings.danmuAreaIndex)
+            VStack(spacing: 0) {
+                if config.position == .bottom {
+                    Spacer()
+                }
+
+                DanmuView(
+                    coordinator: viewModel.danmuCoordinator,
+                    size: CGSize(width: containerSize.width, height: config.height),
+                    fontSize: CGFloat(settings.danmuFontSize),
+                    speed: CGFloat(settings.danmuSpeed),
+                    paddingTop: CGFloat(settings.danmuTopMargin),
+                    paddingBottom: CGFloat(settings.danmuBottomMargin)
+                )
+                .frame(width: containerSize.width, height: config.height)
+                .opacity(settings.showDanmu ? 1 : 0)
+
+                if config.position == .top {
+                    Spacer()
+                }
+            }
+            .frame(width: containerSize.width, height: containerSize.height)
+            .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.25), value: settings.danmuAreaIndex)
+            .animation(.easeInOut(duration: 0.25), value: settings.danmuFontSize)
+            .animation(.easeInOut(duration: 0.25), value: settings.danmuSpeed)
+        } else {
+            EmptyView()
+        }
+    }
+
+    func danmuConfig(for containerHeight: CGFloat, index: Int) -> (height: CGFloat, position: DanmuPosition) {
+        let ratios: [CGFloat] = [0.25, 0.5, 1.0, 0.5, 0.25]
+        let clampedIndex = max(0, min(index, ratios.count - 1))
+        let heightRatio = ratios[clampedIndex]
+        let height = max(containerHeight * heightRatio, 1)
+
+        if clampedIndex == 2 {
+            return (height, .full)
+        } else if clampedIndex >= 3 {
+            return (height, .bottom)
+        } else {
+            return (height, .top)
+        }
+    }
+
+    enum DanmuPosition {
+        case top
+        case bottom
+        case full
     }
 }
 

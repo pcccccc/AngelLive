@@ -1,4 +1,3 @@
-#if os(iOS) || os(tvOS)
 //
 //  DanmakuTrack.swift
 //  DanmakuKit
@@ -6,7 +5,13 @@
 //  Created by Q YiZhong on 2020/8/17.
 //
 
+import Foundation
+import QuartzCore
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 let MAX_FLOAT_X = CGFloat.infinity / 2.0
 
@@ -26,7 +31,7 @@ protocol DanmakuTrack {
     
     var playingSpeed: Float { get set }
     
-    init(view: UIView)
+    init(view: DanmakuBaseView)
     
     func shoot(danmaku: DanmakuCell)
     
@@ -63,7 +68,10 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     var positionY: CGFloat = 0 {
         didSet {
             cells.forEach {
-                $0.layer.position.y = positionY
+                var center = $0.danmakuCenter
+                center.y = positionY
+                $0.danmakuCenter = center
+                $0.danmakuLayer?.position.y = positionY
             }
         }
     }
@@ -82,15 +90,17 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     
     private var cells: [DanmakuCell] = []
     
-    private weak var view: UIView?
+    private weak var view: DanmakuBaseView?
     
-    required init(view: UIView) {
+    required init(view: DanmakuBaseView) {
         self.view = view
     }
     
     func shoot(danmaku: DanmakuCell) {
         cells.append(danmaku)
-        danmaku.layer.position = CGPoint(x: view!.bounds.width + danmaku.bounds.width / 2.0, y: positionY)
+        let center = CGPoint(x: view!.bounds.width + danmaku.bounds.width / 2.0, y: positionY)
+        danmaku.danmakuCenter = center
+        danmaku.danmakuLayer?.position = center
         danmaku.model?.track = index
         prepare(danmaku: danmaku)
         addAnimation(to: danmaku)
@@ -148,8 +158,8 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     
     func pause() {
         cells.forEach {
-            $0.center = CGPoint(x: $0.realFrame.midX, y: $0.realFrame.midY)
-            $0.layer.removeAllAnimations()
+            $0.danmakuCenter = CGPoint(x: $0.realFrame.midX, y: $0.realFrame.midY)
+            $0.danmakuLayer?.removeAllAnimations()
         }
     }
     
@@ -157,15 +167,15 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
         guard let findCell = cells.first(where: { (c) -> Bool in
             return c.model?.isEqual(to: danmaku) ?? false
         }) else { return false }
-        findCell.center = CGPoint(x: findCell.realFrame.midX, y: findCell.realFrame.midY)
-        findCell.layer.removeAllAnimations()
+        findCell.danmakuCenter = CGPoint(x: findCell.realFrame.midX, y: findCell.realFrame.midY)
+        findCell.danmakuLayer?.removeAllAnimations()
         return true
     }
     
     func stop() {
         cells.forEach {
             $0.removeFromSuperview()
-            $0.layer.removeAllAnimations()
+            $0.danmakuLayer?.removeAllAnimations()
         }
         cells.removeAll()
     }
@@ -175,7 +185,7 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
         let totalWidth = view!.frame.width + danmaku.bounds.width
         let syncFrame = CGRect(x: view!.frame.width - totalWidth * CGFloat(progress), y: positionY - danmaku.bounds.height / 2.0, width: danmaku.bounds.width, height: danmaku.bounds.height)
         cells.append(danmaku)
-        danmaku.layer.opacity = 1
+        danmaku.danmakuLayer?.opacity = 1
         danmaku.frame = syncFrame
         danmaku.model?.track = index
         danmaku.animationTime = model.displayTime * Double(progress)
@@ -213,7 +223,7 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
                 return flag
             }
             if let cell = findCell {
-                cell.layer.removeAllAnimations()
+                cell.danmakuLayer?.removeAllAnimations()
                 cell.frame.origin.x = MAX_FLOAT_X
                 cell.leaveTrack()
                 stopClosure?(cell)
@@ -223,18 +233,19 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     
     private func addAnimation(to danmaku: DanmakuCell) {
         guard let cellModel = danmaku.model else { return }
+        guard let layer = danmaku.danmakuLayer else { return }
         danmaku.animationBeginTime = CFAbsoluteTimeGetCurrent()
         let rate = max(danmaku.frame.maxX / (view!.bounds.width + danmaku.frame.width), 0)
         let animation = CABasicAnimation(keyPath: "position.x")
         animation.beginTime = CACurrentMediaTime()
         animation.duration = (cellModel.displayTime * Double(rate)) / Double(playingSpeed)
         animation.delegate = self
-        animation.fromValue = NSNumber(value: Float(danmaku.layer.position.x))
+        animation.fromValue = NSNumber(value: Float(layer.position.x))
         animation.toValue = NSNumber(value: Float(-danmaku.bounds.width / 2.0))
         animation.isRemovedOnCompletion = false
         animation.fillMode = .forwards
         animation.setValue(danmaku, forKey: DANMAKU_CELL_KEY)
-        danmaku.layer.add(animation, forKey: FLOATING_ANIMATION_KEY)
+        layer.add(animation, forKey: FLOATING_ANIMATION_KEY)
     }
     
 }
@@ -246,7 +257,11 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     var positionY: CGFloat = 0 {
         didSet {
             cells.forEach {
-                $0.layer.position = CGPoint(x: view!.bounds.width / 2.0, y: positionY)
+                var center = $0.danmakuCenter
+                center.y = positionY
+                center.x = view!.bounds.width / 2.0
+                $0.danmakuCenter = center
+                $0.danmakuLayer?.position = center
             }
         }
     }
@@ -265,15 +280,17 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     
     var playingSpeed: Float = 1.0
     
-    private weak var view: UIView?
+    private weak var view: DanmakuBaseView?
     
-    required init(view: UIView) {
+    required init(view: DanmakuBaseView) {
         self.view = view
     }
     
     func shoot(danmaku: DanmakuCell) {
         cells.append(danmaku)
-        danmaku.layer.position = CGPoint(x: view!.bounds.width / 2.0, y: positionY)
+        let center = CGPoint(x: view!.bounds.width / 2.0, y: positionY)
+        danmaku.danmakuCenter = center
+        danmaku.danmakuLayer?.position = center
         danmaku.model?.track = index
         prepare(danmaku: danmaku)
         addAnimation(to: danmaku)
@@ -299,7 +316,7 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     
     func pause() {
         cells.forEach {
-            $0.layer.removeAllAnimations()
+            $0.danmakuLayer?.removeAllAnimations()
         }
     }
     
@@ -307,14 +324,14 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
         guard let findCell = cells.first(where: { (c) -> Bool in
             return c.model?.isEqual(to: danmaku) ?? false
         }) else { return false }
-        findCell.layer.removeAllAnimations()
+        findCell.danmakuLayer?.removeAllAnimations()
         return true
     }
     
     func stop() {
         cells.forEach {
             $0.removeFromSuperview()
-            $0.layer.removeAllAnimations()
+            $0.danmakuLayer?.removeAllAnimations()
         }
         cells.removeAll()
     }
@@ -324,8 +341,10 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
         cells.append(danmaku)
         danmaku.animationTime = model.displayTime * Double(progress)
         danmaku.model?.track = index
-        danmaku.layer.position = CGPoint(x: view!.bounds.width / 2.0, y: positionY)
-        danmaku.layer.opacity = 1
+        let center = CGPoint(x: view!.bounds.width / 2.0, y: positionY)
+        danmaku.danmakuCenter = center
+        danmaku.danmakuLayer?.position = center
+        danmaku.danmakuLayer?.opacity = 1
     }
     
     func syncAndPlay(_ danmaku: DanmakuCell, at progress: Float) {
@@ -354,7 +373,7 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
                 return flag
             }
             if let cell = findCell {
-                danmaku.layer.removeAllAnimations()
+                danmaku.danmakuLayer?.removeAllAnimations()
                 danmaku.frame.origin.x = MAX_FLOAT_X
                 stopClosure?(cell)
             }
@@ -374,7 +393,7 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
         animation.isRemovedOnCompletion = false
         animation.fillMode = .forwards
         animation.setValue(danmaku, forKey: DANMAKU_CELL_KEY)
-        danmaku.layer.add(animation, forKey: TOP_ANIMATION_KEY)
+        danmaku.danmakuLayer?.add(animation, forKey: TOP_ANIMATION_KEY)
     }
     
 }
@@ -382,6 +401,5 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
 func prepare(danmaku: DanmakuCell) {
     danmaku.animationTime = 0
     danmaku.animationBeginTime = 0
-    danmaku.layer.opacity = 1
+    danmaku.danmakuLayer?.opacity = 1
 }
-#endif

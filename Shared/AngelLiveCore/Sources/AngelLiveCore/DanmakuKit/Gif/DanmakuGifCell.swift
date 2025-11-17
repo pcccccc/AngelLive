@@ -1,4 +1,3 @@
-#if os(iOS) || os(tvOS)
 //
 //  DanmakuGifCell.swift
 //  DanmakuKit
@@ -6,8 +5,9 @@
 //  Created by Q YiZhong on 2021/8/30.
 //
 
-import UIKit
-import MobileCoreServices
+#if canImport(UIKit)
+import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 
 /// You can use or inherit this cell to shoot a danmaku with a GIF animation.
@@ -48,10 +48,6 @@ open class DanmakuGifCell: DanmakuCell {
         animator = nil
         guard let gifModel = gifModel else { return }
         guard let data = gifModel.resource else { return }
-        guard let image = UIImage(data: data) else {
-            debugPrint("Could not create gif animetion because image create failed.")
-            return
-        }
         
         let info: [CFString: Any] = [
             kCGImageSourceShouldCache: true,
@@ -65,17 +61,16 @@ open class DanmakuGifCell: DanmakuCell {
         let animator = GifAnimator(imageSource: imageSource,
                                    preloadCount: gifModel.preloadFrameCount,
                                    imageSize: gifModel.size,
-                                   imageScale: image.scale,
+                                   imageScale: danmakuScreenScale(),
                                    maxRepeatCount: gifModel.maxRepeatCount)
         animator.backgroundDecode = gifModel.backgroundDecode
         animator.prepare()
         animator.update = { [weak self] in
             guard let frame = $0 else { return }
-            self?.layer.contents = frame.cgImage
+            self?.layer.contents = frame
         }
         self.animator = animator
     }
     
 }
-
 #endif

@@ -1,4 +1,3 @@
-#if os(iOS) || os(tvOS)
 //
 //  DanmakuView.swift
 //  DanmakuKit
@@ -6,7 +5,13 @@
 //  Created by Q YiZhong on 2020/8/16.
 //
 
+import Foundation
+import QuartzCore
+#if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 public protocol DanmakuViewDelegate: AnyObject {
     
@@ -70,7 +75,7 @@ public enum DanmakuStatus {
     case stop
 }
 
-public class DanmakuView: UIView {
+public class DanmakuView: DanmakuBaseView {
     
     public weak var delegate: DanmakuViewDelegate?
     
@@ -199,6 +204,9 @@ public class DanmakuView: UIView {
 
     public override init(frame: CGRect) {
         super.init(frame: frame)
+#if os(macOS)
+        wantsLayer = true
+#endif
         recalculateTracks()
     }
     
@@ -210,24 +218,21 @@ public class DanmakuView: UIView {
         stop()
     }
     
-    public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard self.point(inside: point, with: event) else { return nil }
-        
-        for i in (0..<subviews.count).reversed() {
-            let subView = subviews[i]
-            var newPoint: CGPoint
-            if subView.layer.animationKeys() != nil, let presentationLayer = subView.layer.presentation() {
-                newPoint = layer.convert(point, to: presentationLayer)
-            } else {
-                newPoint = convert(point, to: subView)
-            }
-            if let findView = subView.hitTest(newPoint, with: event) {
-                return findView
-            }
-        }
-        return nil
+#if os(macOS)
+    public override var isFlipped: Bool { true }
+    
+    public override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !isHidden,
+              alphaValue > 0,
+              bounds.contains(point) else { return nil }
+        return performHitTest(point: point, event: nil)
     }
-
+#else
+    public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard super.point(inside: point, with: event) else { return nil }
+        return performHitTest(point: point, event: event)
+    }
+#endif
 }
 
 public extension DanmakuView {
@@ -264,7 +269,7 @@ public extension DanmakuView {
         }
         
         delegate?.danmakuView(self, willDisplay: cell)
-        cell.layer.setNeedsDisplay()
+        cell.danmakuLayer?.setNeedsDisplay()
         shootTrack.shoot(danmaku: cell)
     }
     
@@ -411,7 +416,7 @@ public extension DanmakuView {
         }
         
         delegate?.danmakuView(self, willDisplay: cell)
-        cell.layer.setNeedsDisplay()
+        cell.danmakuLayer?.setNeedsDisplay()
         if status == .play {
             syncTrack.syncAndPlay(cell, at: progress)
         } else {
@@ -623,7 +628,7 @@ private extension DanmakuView {
             }
             cell = cls.init(frame: frame)
             cell?.model = danmaku
-            let tap = UITapGestureRecognizer(target: self, action: #selector(danmakuDidTap(_:)))
+            let tap = DanmakuTapGestureRecognizer(target: self, action: #selector(danmakuDidTap(_:)))
             cell?.addGestureRecognizer(tap)
         } else {
             cell?.frame = frame
@@ -649,10 +654,34 @@ private extension DanmakuView {
     }
     
     @objc
-    func danmakuDidTap(_ tap: UITapGestureRecognizer) {
+    func danmakuDidTap(_ tap: DanmakuTapGestureRecognizer) {
         guard let view = tap.view as? DanmakuCell else { return }
         delegate?.danmakuView(self, didTapped: view)
     }
     
 }
+
+private extension DanmakuView {
+    func performHitTest(point: CGPoint, event: DanmakuEvent?) -> DanmakuBaseView? {
+        for subView in subviews.reversed() {
+            var newPoint: CGPoint
+            if let layer = subView.layer,
+               layer.animationKeys() != nil,
+               let presentationLayer = layer.presentation() {
+                newPoint = self.layer?.convert(point, to: presentationLayer) ?? point
+            } else {
+                newPoint = convert(point, to: subView)
+            }
+#if os(macOS)
+            if let found = subView.hitTest(newPoint) {
+                return found
+            }
+#else
+            if let found = subView.hitTest(newPoint, with: event) {
+                return found
+            }
 #endif
+        }
+        return nil
+    }
+}

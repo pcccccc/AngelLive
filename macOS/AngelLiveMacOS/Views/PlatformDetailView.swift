@@ -14,6 +14,7 @@ import Kingfisher
 struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
     @Environment(\.openWindow) private var openWindow
+    @State private var showCategorySheet = false
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -45,6 +46,50 @@ struct PlatformDetailView: View {
             }
         }
         .navigationTitle(viewModel.platform.title)
+        .overlay {
+            if showCategorySheet {
+                ZStack {
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showCategorySheet = false
+                            }
+                        }
+
+                    VStack(spacing: 12) {
+                        HStack {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showCategorySheet = false
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle")
+                                    .font(.title2)
+                            }
+                            .buttonStyle(.plain)
+                            .keyboardShortcut(.escape, modifiers: [])
+                            .foregroundColor(.secondary)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+
+                        CategoryManagementView()
+                            .environment(viewModel)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 12)
+                    }
+                    .frame(width: 560, height: 460)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(16)
+                    .shadow(radius: 20)
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showCategorySheet)
         .task {
             if viewModel.categories.isEmpty {
                 await viewModel.loadCategories()
@@ -54,14 +99,19 @@ struct PlatformDetailView: View {
 
     // MARK: - 分类选择按钮
     private var categoryButton: some View {
-        NavigationLink(destination: CategoryManagementView().environment(viewModel)) {
+        Button {
+            showCategorySheet.toggle()
+        } label: {
             HStack {
                 Text(viewModel.currentCategoryTitle)
                     .font(.headline)
                 Spacer()
                 Image(systemName: "chevron.down")
             }
-            .padding()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

@@ -42,9 +42,7 @@ final class RoomInfoViewModel {
     var danmuMessages: [ChatMessage] = []
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
-    #if os(iOS) || os(tvOS)
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
-    #endif
     var danmuSettings = DanmuSettingModel() // 弹幕设置模型
 
     init(room: LiveModel) {
@@ -435,14 +433,10 @@ final class RoomInfoViewModel {
         guard enabled != danmuSettings.showDanmu else { return }
         danmuSettings.showDanmu = enabled
         if enabled {
-            #if os(iOS) || os(tvOS)
             danmuCoordinator.play()
-            #endif
             getDanmuInfo()
         } else {
-            #if os(iOS) || os(tvOS)
             danmuCoordinator.clear()
-            #endif
             disconnectSocket()
         }
     }
@@ -471,7 +465,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             addDanmuMessage(text: text, userName: "")
 
             // 发射到屏幕弹幕（飞过效果）
-            #if os(iOS) || os(tvOS)
             if danmuSettings.showDanmu {
                 danmuCoordinator.shoot(
                     text: text,
@@ -481,7 +474,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
                     font: CGFloat(danmuSettings.danmuFontSize)
                 )
             }
-            #endif
         }
     }
 
@@ -511,7 +503,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             addDanmuMessage(text: text, userName: nickname)
 
             // 发射到屏幕弹幕（飞过效果）
-            #if os(iOS) || os(tvOS)
             if danmuSettings.showDanmu {
                 danmuCoordinator.shoot(
                     text: text,
@@ -521,7 +512,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
                     font: CGFloat(danmuSettings.danmuFontSize)
                 )
             }
-            #endif
         }
     }
 }
