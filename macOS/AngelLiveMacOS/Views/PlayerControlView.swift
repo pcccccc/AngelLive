@@ -18,6 +18,7 @@ struct PlayerControlView: View {
     @State private var isHovering = false
     @State private var hideTask: Task<Void, Never>?
     @State private var showSettings = false
+    @State private var showDanmakuSettings = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -161,8 +162,28 @@ struct PlayerControlView: View {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
-                            // 弹幕开关按钮（macOS 暂不实现）
-                            // Button { } label: { Image(systemName: "captions.bubble") }
+                            // 弹幕开关
+                            Button {
+                                viewModel.toggleDanmuDisplay()
+                            } label: {
+                                Image(systemName: viewModel.danmuSettings.showDanmu ? "captions.bubble.fill" : "captions.bubble")
+                                    .frame(width: 30, height: 30)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .contentTransition(.symbolEffect(.replace))
+                            .buttonStyle(.plain)
+
+                            // 弹幕设置
+                            Button {
+                                showDanmakuSettings.toggle()
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .frame(width: 30, height: 30)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
 
                             // 清晰度设置菜单
                             if let playArgs = viewModel.currentRoomPlayArgs, !playArgs.isEmpty {
@@ -227,6 +248,9 @@ struct PlayerControlView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isHovering)
+        .sheet(isPresented: $showDanmakuSettings) {
+            DanmakuSettingsPanel()
+        }
     }
 
     private func resetHideTimer() {

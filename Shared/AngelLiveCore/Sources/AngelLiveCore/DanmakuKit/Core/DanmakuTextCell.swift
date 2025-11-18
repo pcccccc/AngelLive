@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreGraphics
+import CoreText
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -38,6 +39,39 @@ public class DanmakuTextCell: DanmakuCell {
         defer { NSGraphicsContext.restoreGraphicsState() }
 #endif
         
+        let text = model.text
+#if canImport(AppKit) && !canImport(UIKit)
+        context.saveGState()
+        context.translateBy(x: 0, y: size.height)
+        context.scaleBy(x: 1, y: -1)
+
+        let ctFont = CTFontCreateCopyWithSymbolicTraits(model.font as CTFont, model.font.pointSize, nil, [.traitBold], .traitBold) ?? CTFontCreateWithName(model.font.fontName as CFString, model.font.pointSize, nil)
+        let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
+        let colorKey = NSAttributedString.Key(kCTForegroundColorAttributeName as String)
+        let baselineY = model.font.ascender + 12
+
+        let strokeAttributes: [NSAttributedString.Key: Any] = [
+            fontKey: ctFont,
+            colorKey: DanmakuColor.black.cgColor
+        ]
+        let fillAttributes: [NSAttributedString.Key: Any] = [
+            fontKey: ctFont,
+            colorKey: model.color.cgColor
+        ]
+
+        let strokeLine = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: strokeAttributes))
+        context.setLineWidth(2)
+        context.setLineJoin(.round)
+        context.setTextDrawingMode(.stroke)
+        context.textPosition = CGPoint(x: 25, y: baselineY)
+        CTLineDraw(strokeLine, context)
+
+        let fillLine = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: fillAttributes))
+        context.setTextDrawingMode(.fill)
+        context.textPosition = CGPoint(x: 25, y: baselineY)
+        CTLineDraw(fillLine, context)
+        context.restoreGState()
+#else
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
@@ -48,34 +82,31 @@ public class DanmakuTextCell: DanmakuCell {
             blue = 1
             alpha = 1
         }
-        
-        let text = NSString(string: model.text)
-        let attributesStroke: [NSAttributedString.Key: Any] = [
-            .font: model.font,
-            .foregroundColor: DanmakuColor(rgb: 0x000000, alpha: alpha)
-        ]
-        let attributesFill: [NSAttributedString.Key: Any] = [
-            .font: model.font,
-            .foregroundColor: model.color
-        ]
-#if canImport(AppKit) && !canImport(UIKit)
-        let attributedStroke = NSAttributedString(string: model.text, attributes: attributesStroke)
-        let attributedFill = NSAttributedString(string: model.text, attributes: attributesFill)
-        attributedStroke.draw(at: CGPoint(x: 25, y: 5))
-        attributedFill.draw(at: CGPoint(x: 25, y: 5))
-#else
+        let nsText = NSString(string: text)
+        context.setLineWidth(2)
+        context.setLineJoin(.round)
+        context.saveGState()
+        context.setTextDrawingMode(.stroke)
+
+        let attributesStroke: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: DanmakuColor(rgb: 0x000000, alpha: alpha)]
+        context.setStrokeColor(DanmakuColor.black.cgColor)
+        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesStroke)
+        context.restoreGState()
+
+        let attributesFill: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
         context.setLineWidth(2)
         context.setLineJoin(.round)
         context.saveGState()
         context.setTextDrawingMode(.stroke)
         let strokeColor = DanmakuColor.black.cgColor
         context.setStrokeColor(strokeColor)
-        text.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesStroke)
+        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesStroke)
         context.restoreGState()
 
+        let attributes1: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
         context.setTextDrawingMode(.fill)
         context.setStrokeColor(DanmakuColor.white.cgColor)
-        text.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesFill)
+        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributes1)
 #endif
     }
 
