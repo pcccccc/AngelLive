@@ -80,7 +80,11 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
                     Text("开始使用")
                         .font(.title3)
                         .frame(maxWidth: .infinity)
+                    #if os(macOS)
+                        .padding(.vertical, 8)
+                    #else
                         .padding(.vertical, 4)
+                    #endif
                 }
                 .tint(tint)
                 .buttonStyle(.borderedProminent)
@@ -89,7 +93,6 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
             }
             .blurSlide(animateFooter)
         }
-        .frame(maxWidth: 330)
         .interactiveDismissDisabled()
         .allowsHitTesting(animateFooter)
         .task {
@@ -116,7 +119,9 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
                 animateFooter = true
             }
         }
+        .setUpOnBoarding()
     }
+    
 
     @ViewBuilder
     func CardsView() -> some View {
@@ -158,12 +163,35 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
 }
 
 extension View {
-    @ViewBuilder func blurSlide(_ show: Bool) -> some View {
+    @ViewBuilder
+    func blurSlide(_ show: Bool) -> some View {
         self
             .compositingGroup()
             .blur(radius: show ? 0 : 10)
             .opacity(show ? 1: 0)
             .offset(y: show ? 0 : 100)
+    }
+    
+    @ViewBuilder
+    fileprivate func setUpOnBoarding() -> some View {
+        #if os(macOS)
+        self
+            .padding(.horizontal, 20)
+            .frame(minHeight: 600)
+        #else
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            if #available(iOS 18.0, *) {
+                self
+                    .padding(.horizontal, 25)
+                    .presentationDetents([.height(650)])
+            }else {
+                self
+            }
+        }else {
+            self
+                .presentationDetents([.height(650)])
+        }
+        #endif
     }
 }
 

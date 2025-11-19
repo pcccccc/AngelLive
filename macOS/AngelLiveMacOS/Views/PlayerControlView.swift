@@ -37,6 +37,9 @@ struct PlayerControlView: View {
                                 .foregroundStyle(.white)
                         }
                         .buttonStyle(.plain)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .adaptiveGlassEffect()
                         Spacer()
                     }
                     Spacer()
@@ -88,7 +91,7 @@ struct PlayerControlView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .adaptiveGlassEffect()
                     }
                     Spacer()
                 }
@@ -108,6 +111,7 @@ struct PlayerControlView: View {
                             .padding(20)
                     }
                     .buttonStyle(.plain)
+                    .adaptiveGlassEffect(in: .circle)
                 }
 
                 // 左下角：播放/暂停、刷新按钮
@@ -151,7 +155,7 @@ struct PlayerControlView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .adaptiveGlassEffect()
                         Spacer()
                     }
                 }
@@ -220,7 +224,7 @@ struct PlayerControlView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                        .adaptiveGlassEffect()
                     }
                 }
             }
@@ -391,4 +395,40 @@ struct InfoRow: View {
                 .font(.caption.monospacedDigit())
         }
     }
+}
+
+// MARK: - Glass Effect Extension
+private extension View {
+    @ViewBuilder
+    func adaptiveGlassEffect() -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(in: .capsule)
+        } else {
+            self.background(.ultraThinMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder
+    func adaptiveGlassEffect(in shape: GlassEffectShape) -> some View {
+        if #available(macOS 26.0, *) {
+            switch shape {
+            case .capsule:
+                self.glassEffect(in: .capsule)
+            case .circle:
+                self.glassEffect(in: .circle)
+            }
+        } else {
+            switch shape {
+            case .capsule:
+                self.background(.ultraThinMaterial, in: Capsule())
+            case .circle:
+                self.background(.ultraThinMaterial, in: Circle())
+            }
+        }
+    }
+}
+
+private enum GlassEffectShape {
+    case capsule
+    case circle
 }

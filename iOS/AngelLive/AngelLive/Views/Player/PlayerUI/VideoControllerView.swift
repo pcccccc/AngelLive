@@ -136,7 +136,7 @@ struct VideoControllerView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .glassEffect(.regular, in: .buttonBorder)
+                        .adaptiveGlassEffect()
                     }
                     Spacer()
                 }
@@ -158,7 +158,7 @@ struct VideoControllerView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .glassEffect(.regular, in: .buttonBorder)
+                        .adaptiveGlassEffect()
                         Spacer()
                     }
                 }
@@ -186,7 +186,7 @@ struct VideoControllerView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .glassEffect(.regular, in: .buttonBorder)
+                        .adaptiveGlassEffect()
                     }
                 }
             }
@@ -420,5 +420,17 @@ private extension DynamicInfo {
         }
         let gb = mb / 1024.0
         return String(format: "%.1fG", gb)
+    }
+}
+
+// MARK: - Glass Effect Extension
+private extension View {
+    @ViewBuilder
+    func adaptiveGlassEffect() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(in: .capsule)
+        } else {
+            self.background(.ultraThinMaterial, in: Capsule())
+        }
     }
 }

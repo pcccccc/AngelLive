@@ -34,6 +34,7 @@ struct DanmuView: UIViewRepresentable {
         // 基础配置
         view.trackHeight = fontSize * 1.35
 
+
         return view
     }
 

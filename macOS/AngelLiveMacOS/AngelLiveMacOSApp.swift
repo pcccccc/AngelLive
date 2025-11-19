@@ -20,10 +20,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct AngelLiveMacOSApp: App {
+    
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    // 首次启动管理器
+    @State private var welcomeManager = WelcomeManager()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(welcomeManager)
         }
         .commands {
             CommandGroup(after: .appInfo) {

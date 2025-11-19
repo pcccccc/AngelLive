@@ -20,13 +20,16 @@ enum TabSelection: Hashable {
 
 struct ContentView: View {
     @State private var selectedTab: TabSelection = .favorite
-
+    // 首次启动管理器
+    @Environment(WelcomeManager.self) private var welcomeManager
     // 创建全局 ViewModels
     @State private var platformViewModel = PlatformViewModel()
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
 
     var body: some View {
+        @Bindable var manager = welcomeManager
+        
         NavigationStack {
             TabView(selection: $selectedTab) {
                 Tab(value: TabSelection.favorite) {
@@ -59,6 +62,12 @@ struct ContentView: View {
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
+            .sheet(isPresented: $manager.showWelcome) {
+                WelcomeView {
+                    welcomeManager.completeWelcome()
+                }
+                .presentationSizing(.page.fitted(horizontal: true, vertical: false))
+            }
         }
         .navigationDestination(for: LiveModel.self) { room in
             RoomPlayerView(room: room)

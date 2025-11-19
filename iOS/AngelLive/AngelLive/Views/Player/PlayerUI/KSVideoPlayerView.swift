@@ -93,25 +93,28 @@ public struct KSVideoPlayerView: View {
                 .opacity(!model.config.isMaskShow ? 1 : 0)
 
                 // 弹幕层（在控制层下方）
-                if viewModel.danmuSettings.showDanmu && !isVerticalLiveMode && actualPlayerHeight > 0 {
-                    let config = danmuAreaConfiguration(
-                        areaIndex: viewModel.danmuSettings.danmuAreaIndex,
-                        containerHeight: actualPlayerHeight
-                    )
+                if viewModel.danmuSettings.showDanmu && !isVerticalLiveMode {
+                    GeometryReader { geometry in
+                        let playerHeight = geometry.size.height
+                        let config = danmuAreaConfiguration(
+                            areaIndex: viewModel.danmuSettings.danmuAreaIndex,
+                            containerHeight: playerHeight
+                        )
 
-                    DanmuView(
-                        coordinator: viewModel.danmuCoordinator,
-                        displayHeight: config.height,
-                        fontSize: CGFloat(viewModel.danmuSettings.danmuFontSize),
-                        alpha: viewModel.danmuSettings.danmuAlpha,
-                        showColorDanmu: viewModel.danmuSettings.showColorDanmu,
-                        speed: viewModel.danmuSettings.danmuSpeed,
-                        areaIndex: viewModel.danmuSettings.danmuAreaIndex
-                    )
-                    .frame(height: config.height)
-                    .offset(y: config.yOffset)
-                    .allowsHitTesting(false) // 不拦截触摸事件
-                    .clipped()
+                        DanmuView(
+                            coordinator: viewModel.danmuCoordinator,
+                            displayHeight: config.height,
+                            fontSize: CGFloat(viewModel.danmuSettings.danmuFontSize),
+                            alpha: viewModel.danmuSettings.danmuAlpha,
+                            showColorDanmu: viewModel.danmuSettings.showColorDanmu,
+                            speed: viewModel.danmuSettings.danmuSpeed,
+                            areaIndex: viewModel.danmuSettings.danmuAreaIndex
+                        )
+                        .frame(width: geometry.size.width, height: config.height)
+                        .position(x: geometry.size.width / 2, y: config.yOffset + config.height / 2)
+                        .allowsHitTesting(false)
+                        .clipped()
+                    }
                 }
 
                 controllerView
@@ -126,9 +129,6 @@ public struct KSVideoPlayerView: View {
             .toolbar(.hidden, for: .tabBar)
             .statusBar(hidden: !model.config.isMaskShow)
             .focusedObject(model.config)
-            .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
-                actualPlayerHeight = height
-            }
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
                     model.focusableView = .slider

@@ -62,7 +62,7 @@ struct VerticalLiveControllerView: View {
                         .frame(width: 40, height: 40)
                 }
                 .frame(width: 40, height: 40)
-                .glassEffect(in: .rect(cornerRadius: 20.0))
+                .adaptiveGlassEffect(in: .rect(cornerRadius: 20.0))
 
                 // 主播信息
                 HStack(spacing: 10) {
@@ -109,7 +109,7 @@ struct VerticalLiveControllerView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .glassEffect()
+                .adaptiveGlassEffect(in: .circle)
                 .clipShape(Capsule())
 
                 Spacer()
@@ -188,4 +188,31 @@ struct VerticalLiveControllerView: View {
             .padding(.trailing, 16)
         }
     }
+}
+
+// MARK: - Glass Effect Extension
+private extension View {
+    @ViewBuilder
+    func adaptiveGlassEffect(in shape: GlassEffectShape) -> some View {
+        if #available(iOS 26.0, *) {
+            switch shape {
+            case .rect(let radius):
+                self.glassEffect(in: .rect(cornerRadius: radius))
+            case .circle:
+                self.glassEffect()
+            }
+        } else {
+            switch shape {
+            case .rect(let radius):
+                self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius))
+            case .circle:
+                self.background(.ultraThinMaterial, in: Circle())
+            }
+        }
+    }
+}
+
+private enum GlassEffectShape {
+    case rect(cornerRadius: CGFloat)
+    case circle
 }

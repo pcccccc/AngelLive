@@ -8,17 +8,17 @@
 import SwiftUI
 
 @Observable
-class WelcomeManager {
+public class WelcomeManager {
     private let hasSeenWelcomeKey = "hasSeenWelcome"
 
-    var showWelcome: Bool
+    public var showWelcome: Bool
 
-    init() {
+    public init() {
         // 如果之前没有看过欢迎页，就显示
         self.showWelcome = !UserDefaults.standard.bool(forKey: hasSeenWelcomeKey)
     }
 
-    func completeWelcome() {
+    public func completeWelcome() {
         // 标记为已看过
         UserDefaults.standard.set(true, forKey: hasSeenWelcomeKey)
         // 隐藏欢迎页
@@ -26,7 +26,7 @@ class WelcomeManager {
     }
 
     // 重置首次启动状态（用于测试）
-    func resetWelcome() {
+    public func resetWelcome() {
         UserDefaults.standard.removeObject(forKey: hasSeenWelcomeKey)
         showWelcome = true
     }

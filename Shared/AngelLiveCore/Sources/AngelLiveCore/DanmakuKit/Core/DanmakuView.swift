@@ -664,6 +664,7 @@ private extension DanmakuView {
 private extension DanmakuView {
     func performHitTest(point: CGPoint, event: DanmakuEvent?) -> DanmakuBaseView? {
         for subView in subviews.reversed() {
+#if os(macOS)
             var newPoint: CGPoint
             if let layer = subView.layer,
                layer.animationKeys() != nil,
@@ -672,6 +673,13 @@ private extension DanmakuView {
             } else {
                 newPoint = convert(point, to: subView)
             }
+#else
+            var newPoint: CGPoint
+            let layer = subView.layer
+            let presentationLayer = layer.presentation()
+            newPoint = self.layer.convert(point, to: presentationLayer)
+#endif
+            
 #if os(macOS)
             if let found = subView.hitTest(newPoint) {
                 return found

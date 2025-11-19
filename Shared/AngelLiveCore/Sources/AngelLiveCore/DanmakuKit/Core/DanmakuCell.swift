@@ -75,7 +75,11 @@ open class DanmakuCell: DanmakuBaseView {
     
     /// This method can trigger the rendering process, the content can be re-rendered in the displaying(_:_:_:) method.
     public func redraw() {
+        #if os(macOS)
         layer?.setNeedsDisplay()
+        #else
+        layer.setNeedsDisplay()
+        #endif
     }
        
 }
@@ -94,11 +98,19 @@ extension DanmakuCell {
     }
     
     var realFrame: CGRect {
+#if os(macOS)
         if let presentation = layer?.presentation() {
             return presentation.frame
         } else {
             return frame
         }
+#else
+        if let presentation = layer.presentation() {
+            return presentation.frame
+        } else {
+            return frame
+        }
+#endif
     }
     
     func setupLayer() {

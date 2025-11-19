@@ -88,11 +88,6 @@ struct DetailPlayerView: View {
                     .environment(\.safeAreaInsetsCustom, safeInsets)
                     .frame(width: playerWidth, height: AppConstants.Device.isIPad ? playerHeight : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
-                        if !AppConstants.Device.isIPad {
-                            iPhonePlayerHeight = height
-                        }
-                    }
                     .onPreferenceChange(VerticalLiveModePreferenceKey.self) { mode in
                         isVerticalLiveMode = mode
                     }
@@ -104,8 +99,6 @@ struct DetailPlayerView: View {
                         VStack(spacing: 0) {
                             StreamerInfoView()
                                 .environment(viewModel)
-                            Divider()
-                                .background(Color.white.opacity(0.2))
                             chatAreaWithMoreButton
                         }
                         .frame(width: 400)

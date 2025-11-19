@@ -7,10 +7,14 @@
 
 import SwiftUI
 
-struct WelcomeView: View {
-    var onContinue: () -> Void
+public struct WelcomeView: View {
+    public var onContinue: () -> Void
 
-    var body: some View {
+    public init(onContinue: @escaping () -> Void) {
+        self.onContinue = onContinue
+    }
+
+    public var body: some View {
         WelcomePageView(
             tint: .blue,
             title: "欢迎使用 SimpleLive"
@@ -43,19 +47,16 @@ struct WelcomeView: View {
             WelcomeCard(
                 symbol: "message.fill",
                 title: "实时弹幕",
-                subTitle: "与主播和观众实时互动，感受热烈的直播氛围"
+                subTitle: "支持主流平台弹幕展示，感受热烈的直播氛围"
             )
             WelcomeCard(
                 symbol: "star.fill",
                 title: "便捷收藏",
-                subTitle: "轻松收藏喜欢的直播间，随时回看精彩内容"
+                subTitle: "通过iCloud轻松收藏喜欢的直播间，并同步到所有设备"
             )
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: "hand.raised.fill")
-                    .foregroundStyle(.blue)
-
-                Text("我们注重您的观看体验和隐私保护")
+                Text("开源、免费、请勿在任何平台购买此APP")
                     .font(.caption2)
                     .foregroundStyle(.gray)
             }
