@@ -199,6 +199,5 @@ extension View {
     Text("")
         .sheet(isPresented: .constant(true)) {
             WelcomeView(onContinue: {})
-                .presentationSizing(.page.fitted(horizontal: true, vertical: false))
         }
 }

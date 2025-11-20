@@ -26,7 +26,7 @@ let package = Package(
         .package(url: "https://github.com/johnno1962/InjectionNext", from: "1.4.3"),
         .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
         .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.6.2"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.7.0"),
         .package(url: "https://github.com/pcccccc/LiveParse", from: "1.9.5"),
         .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
         .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
@@ -37,7 +37,8 @@ let package = Package(
         .package(url: "https://github.com/markiv/SwiftUI-Shimmer", branch: "iOS17-animate-start-end-points"),
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON", from: "5.0.2"),
         .package(url: "https://github.com/gunterhager/UDPBroadcastConnection", from: "5.0.5"),
-        .package(url: "https://github.com/sunghyun-k/swiftui-toasts", from: "1.1.1")
+        .package(url: "https://github.com/sunghyun-k/swiftui-toasts", from: "1.1.1"),
+        .package(url: "https://github.com/sunghyun-k/swiftui-window-overlay.git", from: "1.0.2")
     ],
     targets: [
         .target(
@@ -66,9 +67,11 @@ let package = Package(
                 "Kingfisher",
                 "KingfisherWebP",
                 .product(name: "InjectionNext", package: "InjectionNext"),
-                // 只在 iOS 和 tvOS 平台包含 Toast 相关依赖
-                .product(name: "SimpleToast", package: "SimpleToast", condition: .when(platforms: [.iOS, .tvOS])),
-                .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS, .tvOS]))
+                // 只在 iOS 平台包含 WindowOverlay 和 Toasts
+                .product(name: "WindowOverlay", package: "swiftui-window-overlay", condition: .when(platforms: [.iOS])),
+                .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS])),
+                // 只在 tvOS 平台包含 SimpleToast
+                .product(name: "SimpleToast", package: "SimpleToast", condition: .when(platforms: [.tvOS]))
             ],
             path: "Sources"
         ),

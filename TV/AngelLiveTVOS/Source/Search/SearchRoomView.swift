@@ -64,8 +64,28 @@ struct SearchRoomView: View {
                     Spacer()
                 }
             }else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
+                if liveViewModel.hasError {
+                    ErrorView(
+                        title: "搜索失败",
+                        message: liveViewModel.errorMessage,
+                        showRetry: true,
+                        onDismiss: {
+                            liveViewModel.hasError = false
+                        },
+                        onRetry: {
+                            liveViewModel.hasError = false
+                            Task {
+                                if appModel.searchViewModel.searchTypeIndex == 0 {
+                                    await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
+                                } else {
+                                    await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
                                 .environment(liveViewModel)
@@ -80,6 +100,7 @@ struct SearchRoomView: View {
                         }
                     }
                     .safeAreaPadding(.top, 50)
+                    }
                 }
             }
         }

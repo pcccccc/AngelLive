@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import AngelLiveCore
+import AngelLiveDependencies
 
 struct GeneralSettingView: View {
     

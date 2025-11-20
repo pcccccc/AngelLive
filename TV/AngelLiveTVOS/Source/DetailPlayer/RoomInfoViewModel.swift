@@ -47,6 +47,8 @@ final class RoomInfoViewModel {
     
     var isLoading = false
     var rotationAngle = 0.0
+    var hasError = false
+    var errorMessage = ""
 
     var debugTimerIsActive = false
     var dynamicInfo: DynamicInfo?
@@ -285,7 +287,11 @@ final class RoomInfoViewModel {
                 }
                 await updateCurrentRoomPlayArgs(playArgs)
             }catch {
-                print(error)
+                await MainActor.run {
+                    isLoading = false
+                    hasError = true
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -370,6 +376,10 @@ final class RoomInfoViewModel {
 }
 
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
+    func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) {
+        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingsViewModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingsViewModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize))
+    }
+    
     func webSocketDidConnect() {
         danmuServerIsConnected = true
         danmuServerIsLoading = false
@@ -378,10 +388,6 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidDisconnect(error: Error?) {
         danmuServerIsConnected = false
         danmuServerIsLoading = false
-    }
-    
-    func webSocketDidReceiveMessage(text: String, color: UInt32) {
-        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingsViewModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingsViewModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize))
     }
     
     @MainActor func reloadRoom(liveModel: LiveModel) {
@@ -424,7 +430,10 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
     
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-
+        if let error = error {
+            hasError = true
+            errorMessage = error.localizedDescription
+        }
     }
     
     func player(layer: KSPlayer.KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {

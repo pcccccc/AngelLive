@@ -175,88 +175,68 @@ struct PlayerControlView: View {
                     }
                     Spacer()
                     HStack(alignment: .center, spacing: 15) {
-                        
+
                             Button(action: {}, label: {
-                                
+
                             })
                             .padding(.leading, -80)
                             .clipShape(.circle)
                             .frame(width: 40, height: 40)
                             .focused($state, equals: .left)
-                            
+
                         VStack {
-                            Button(action: {
-                                playPauseAction()
-                            }, label: {
-                                Image(systemName: roomInfoViewModel.isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 30, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .frame(width: 40, height: 40)
-                            })
-                            .contextMenu(menuItems: {
-                                Button("debug mode") {
-            //                        roomInfoViewModel.toggleTimer()
-                                }
-                            })
-                            .focused($state, equals: .playPause)
-                            .clipShape(.circle)
-                            .padding(.leading, -20)
-                            
-                            
-                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
-                                Text("")
-                                    .frame(width: 40)
-                            })
-                            .focused($state, equals: .list)
-                            .opacity(0)
-                        }
-                        .padding(.top, 60)
-                        VStack {
-                            Button(action: {
-                                refreshAction()
-                            }, label: {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 30, weight: .bold))
-                                    .frame(width: 40, height: 40)
-                            })
-                            .clipShape(.circle)
-                            .padding(.leading, -20)
-                            
-                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
-                                Text("")
-                                    .frame(width: 40)
-                            })
-                            .focused($state, equals: .list)
-                            .opacity(0)
-                        }
-                        .padding(.top, 60)
-                      
-                        VStack {
-                            Button(action: {
-                                favoriteBtnAction()
-                            }, label: {
-                                if roomInfoModel.currentRoomLikeLoading {
-                                    ProgressView()
-                                        .scaleEffect(0.6)
+                            HStack(spacing: 10) {
+                                Button(action: {
+                                    playPauseAction()
+                                }, label: {
+                                    Image(systemName: roomInfoViewModel.isPlaying ? "pause.fill" : "play.fill")
+                                        .font(.system(size: 30, weight: .bold))
+                                        .foregroundColor(.white)
                                         .frame(width: 40, height: 40)
-                                }else {
-                                    Image(systemName: "heart.fill")
-                                        .foregroundColor(roomInfoModel.currentRoomIsLiked ? .red : .white)
+                                })
+                                .contextMenu(menuItems: {
+                                    Button("debug mode") {
+                //                        roomInfoViewModel.toggleTimer()
+                                    }
+                                })
+                                .focused($state, equals: .playPause)
+
+                                Button(action: {
+                                    refreshAction()
+                                }, label: {
+                                    Image(systemName: "arrow.counterclockwise")
+                                        .foregroundColor(.white)
                                         .font(.system(size: 30, weight: .bold))
                                         .frame(width: 40, height: 40)
-                                        .padding(.top, 3)
-                                }
-                                    
-                            })
-                            .clipShape(.circle)
-                            .padding(.leading, -20)
-                            .changeEffect(
-                                .spray(origin: UnitPoint(x: 0.25, y: 0.5)) {
-                                    Image(systemName:roomInfoModel.currentRoomIsLiked ? "heart.fill" : "heart.slash.fill" )
-                                    .foregroundStyle(.red)
-                                }, value: roomInfoModel.currentRoomIsLiked)
-//                            .tint(roomInfoModel.currentRoomIsLiked ? .red : .gray)
+                                })
+                                .focused($state, equals: .refresh)
+
+                                Button(action: {
+                                    favoriteBtnAction()
+                                }, label: {
+                                    if roomInfoModel.currentRoomLikeLoading {
+                                        ProgressView()
+                                            .scaleEffect(0.6)
+                                            .frame(width: 40, height: 40)
+                                    }else {
+                                        Image(systemName: "heart.fill")
+                                            .foregroundColor(roomInfoModel.currentRoomIsLiked ? .red : .white)
+                                            .font(.system(size: 30, weight: .bold))
+                                            .frame(width: 40, height: 40)
+                                            .padding(.top, 3)
+                                    }
+                                })
+                                .focused($state, equals: .favorite)
+                                .changeEffect(
+                                    .spray(origin: UnitPoint(x: 0.25, y: 0.5)) {
+                                        Image(systemName:roomInfoModel.currentRoomIsLiked ? "heart.fill" : "heart.slash.fill" )
+                                        .foregroundStyle(.red)
+                                    }, value: roomInfoModel.currentRoomIsLiked)
+                            }
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 10)
+                            .adaptiveGlassEffect()
+
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
                                     .frame(width: 40)
@@ -266,111 +246,88 @@ struct PlayerControlView: View {
                         }
                         .padding(.top, 60)
                        
-//                        Color.green
-//                            .cornerRadius(10)
-//                            .frame(width: 20, height: 20)
-//                        Text("Live")
-//                            .foregroundStyle(.white)
                         Spacer()
                         VStack {
-                            Menu {
-                                ForEach(roomInfoViewModel.currentRoomPlayArgs?.indices ?? 0..<1, id: \.self) { index in
-                                    Button(action: {
-                                        if (roomInfoViewModel.showControlView == false) {
-                                            roomInfoViewModel.showControlView = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                                                if roomInfoViewModel.showControlView == true {
-                                                    roomInfoViewModel.showControlView = false
-                                                }
-                                            })
-                                        }else {}
-                                    }, label: {
-                                        if roomInfoViewModel.currentRoomPlayArgs == nil {
-                                            Text("测试")
-                                        }else {
-                                            Menu {
-                                                ForEach(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys.indices ?? 0 ..< 1, id: \.self) { subIndex in
-                                                    Button {
-                                                        roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
-                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                                                            if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
-                                                                playerCoordinator.playerLayer?.play()
-                                                                DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                                                                    roomInfoViewModel.showControlView = false
-                                                                })
+                            HStack(spacing: 10) {
+                                Menu {
+                                    ForEach(roomInfoViewModel.currentRoomPlayArgs?.indices ?? 0..<1, id: \.self) { index in
+                                        Button(action: {
+                                            if (roomInfoViewModel.showControlView == false) {
+                                                roomInfoViewModel.showControlView = true
+                                                DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                                                    if roomInfoViewModel.showControlView == true {
+                                                        roomInfoViewModel.showControlView = false
+                                                    }
+                                                })
+                                            }else {}
+                                        }, label: {
+                                            if roomInfoViewModel.currentRoomPlayArgs == nil {
+                                                Text("测试")
+                                            }else {
+                                                Menu {
+                                                    ForEach(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys.indices ?? 0 ..< 1, id: \.self) { subIndex in
+                                                        Button {
+                                                            roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
+                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+                                                                if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                                                                    playerCoordinator.playerLayer?.play()
+                                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                                                                        roomInfoViewModel.showControlView = false
+                                                                    })
+                                                                }
+                                                            })
+                                                        } label: {
+                                                            if index < roomInfoViewModel.currentRoomPlayArgs?.count ?? 0 {
+                                                                Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
+                                                            }else {
+                                                                Text("")
                                                             }
-                                                        })
-                                                    } label: {
-                                                        if index < roomInfoViewModel.currentRoomPlayArgs?.count ?? 0 {
-                                                            Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
-                                                        }else {
-                                                            Text("")
                                                         }
                                                     }
+                                                } label: {
+                                                    Text(roomInfoViewModel.currentRoomPlayArgs?[index].cdn ?? "")
                                                 }
-                                            } label: {
-                                                Text(roomInfoViewModel.currentRoomPlayArgs?[index].cdn ?? "")
                                             }
-                                        }
-                                    })
+                                        })
+                                    }
+                                } label: {
+                                    Text(roomInfoViewModel.currentPlayQualityString)
+                                        .font(.system(size: 30, weight: .bold))
+                                        .frame(height: 50, alignment: .center)
+                                        .padding(.top, 10)
+                                        .foregroundStyle(.white)
                                 }
-                            } label: {
-                                Text(roomInfoViewModel.currentPlayQualityString)
-                                    .font(.system(size: 30, weight: .bold))
-                                    .frame(height: 50, alignment: .center)
-                                    .padding(.top, 10)
-                                    .foregroundStyle(.white)
+                                .focused($state, equals: .playQuality)
+
+                                Button(action: {
+                                    if roomInfoModel.showControlView == false {
+                                        roomInfoModel.showControlView = true
+                                    }else {
+                                        roomInfoModel.showDanmuSettingView = true
+                                        roomInfoModel.showControl = false
+                                        showDanmuSetting = true
+                                        state = .danmuSetting
+                                    }
+                                }, label: {
+                                    Image("icon-danmu-setting-focus")
+                                        .resizable()
+                                        .frame(width: 40, height: 40)
+                                })
+                                .focused($state, equals: .danmuSetting)
+
+                                Button(action: {
+                                    danmuAction()
+                                }, label: {
+                                    Image(appViewModel.danmuSettingsViewModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
+                                        .resizable()
+                                        .frame(width: 40, height: 40)
+                                })
+                                .focused($state, equals: .danmu)
                             }
-                            .frame(height: 60)
-                            .clipShape(.capsule)
-                            
-                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
-                                Text("")
-                                    .frame(width: 40)
-                            })
-                            .focused($state, equals: .list)
-                            .opacity(0)
-                        }
-                        .padding(.top, 60)
-                        
-                        VStack {
-                            Button(action: {
-                                if roomInfoModel.showControlView == false {
-                                    roomInfoModel.showControlView = true
-                                }else {
-                                    roomInfoModel.showDanmuSettingView = true
-                                    roomInfoModel.showControl = false
-                                    showDanmuSetting = true
-                                    state = .danmuSetting
-                                }
-                            }, label: {
-                                Image("icon-danmu-setting-focus")
-                                    .resizable()
-                                    .frame(width: 40, height: 40)
-                            })
-                            .focused($state, equals: .danmuSetting)
-                            .clipShape(.circle)
-                            
-                            Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
-                                Text("")
-                                    .frame(width: 40)
-                            })
-                            .focused($state, equals: .list)
-                            .opacity(0)
-                        }
-                        .padding(.top, 60)
-                        
-                        VStack {
-                            Button(action: {
-                                danmuAction()
-                            }, label: {
-                                Image(appViewModel.danmuSettingsViewModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
-                                    .resizable()
-                                    .frame(width: 40, height: 40)
-                            })
-                            .focused($state, equals: .danmu)
-                            .clipShape(.circle)
-                            
+                            .padding(.horizontal, 15)
+                            .padding(.vertical, 10)
+                            .adaptiveGlassEffect()
+
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
                                     .frame(width: 40)

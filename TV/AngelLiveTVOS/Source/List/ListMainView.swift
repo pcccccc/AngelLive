@@ -37,15 +37,29 @@ struct ListMainView: View {
         @Bindable var liveModel = liveViewModel
         
         ZStack {
-            ScrollViewReader { reader in
-                ScrollView {
-                    ZStack {
-                        Text(liveModel.livePlatformName)
-                            .font(.largeTitle)
-                            .bold()
+            if liveViewModel.hasError {
+                ErrorView(
+                    title: "加载失败",
+                    message: liveViewModel.errorMessage,
+                    showRetry: true,
+                    onDismiss: {
+                        liveViewModel.hasError = false
+                    },
+                    onRetry: {
+                        liveViewModel.hasError = false
+                        liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
                     }
-                    .id(Self.topId)
-                    LazyVGrid(columns: [GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50)], spacing: 50) {
+                )
+            } else {
+                ScrollViewReader { reader in
+                    ScrollView {
+                        ZStack {
+                            Text(liveModel.livePlatformName)
+                                .font(.largeTitle)
+                                .bold()
+                        }
+                        .id(Self.topId)
+                        LazyVGrid(columns: [GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50), GridItem(.fixed(380), spacing: 50)], spacing: 50) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
                                 .environment(liveViewModel)
@@ -166,7 +180,8 @@ struct ListMainView: View {
                     .padding(.top, 50)
                     .padding(.leading, 10)
                 }
-                
+
+            }
             }
         }
         .background(.thinMaterial)

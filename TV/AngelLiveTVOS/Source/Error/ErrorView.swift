@@ -2,68 +2,136 @@
 //  ErrorView.swift
 //  SimpleLiveTVOS
 //
-//  Created by pangchong on 2025/2/6.
+//  Created by pc on 2025/11/20.
 //
 
 import SwiftUI
 
-enum AngelLiveErrorPageType: String {
-    case collect = "收藏"
-    case list = "平台列表"
-    case detail = "详情"
-}
-
 struct ErrorView: View {
-    var body: some View {
-        HStack {
-            VStack {
-                HStack {
-                    Text("出错了")
-                        .font(.title)
-                        .bold()
-                    Spacer()
-                }
-                HStack {
-                    Text("错误发生在" + AngelLiveErrorPageType.collect.rawValue + "页面")
-                        .font(.title2)
-                        .bold()
-                    Spacer()
-                }
-                .padding(.top, 10)
-                HStack {
-                    Text("错误信息:")
-                        .font(.title3)
-                        .bold()
-                    Spacer()
-                }
-                .padding(.top, 10)
-                HStack {
-                    Text("错误信息: 我是一段很长的错误信息我是一段很长的错误信息我是一段很长的错误信息我是一段很长的错误信息我是一段很长的错误信息我是一段很长的错误信息我是一段很长的错误信息")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    
-                }
-                .padding(.top, 10)
-                Spacer()
-            }
-            .padding(.top, 50)
-            VStack {
-                
-                Image(uiImage: Common.generateQRCode(from: "1111111"))
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 500, height: 500)
-                Text("请扫描二维码获取帮助信息")
-                Spacer()
-            }
-            .padding(.top, 50)
-        }
-        .safeAreaPadding()
-        .background(.thinMaterial)
-    }
-}
+    let title: String
+    let message: String
+    let errorCode: String?
+    let detailMessage: String?
+    let qrCodeURL: String
+    let showDismiss: Bool
+    let showRetry: Bool
+    let onDismiss: () -> Void
+    let onRetry: (() -> Void)?
 
-#Preview {
-    ErrorView()
+    init(
+        title: String = "播放遇到问题",
+        message: String,
+        errorCode: String? = nil,
+        detailMessage: String? = nil,
+        qrCodeURL: String = "https://github.com/pcccccc/SimpleLiveTVOS",
+        showDismiss: Bool = true,
+        showRetry: Bool = false,
+        onDismiss: @escaping () -> Void,
+        onRetry: (() -> Void)? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.errorCode = errorCode
+        self.detailMessage = detailMessage
+        self.qrCodeURL = qrCodeURL
+        self.showDismiss = showDismiss
+        self.showRetry = showRetry
+        self.onDismiss = onDismiss
+        self.onRetry = onRetry
+    }
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .background(.thinMaterial)
+                .ignoresSafeArea()
+
+            HStack(alignment: .top, spacing: 120) {
+                VStack(alignment: .leading, spacing: 28) {
+                    Text(title)
+                        .font(.system(size: 48, weight: .heavy))
+                        .foregroundColor(.white)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(message)
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineSpacing(6)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if let errorCode = errorCode {
+                            Text("错误代码：\(errorCode)")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.85))
+                                .padding(.top, 4)
+                        }
+
+                        if let detailMessage = detailMessage {
+                            Text(detailMessage)
+                                .font(.system(size: 20))
+                                .foregroundColor(.white.opacity(0.85))
+                                .lineSpacing(4)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Spacer(minLength: 20)
+
+                    HStack(spacing: 24) {
+                        if showDismiss {
+                            Button(action: onDismiss) {
+                                Label("返回", systemImage: "arrow.left")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 32)
+                                    .background(.ultraThinMaterial)
+                                    .foregroundColor(.white)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.card)
+                        }
+
+                        if showRetry, let onRetry = onRetry {
+                            Button(action: onRetry) {
+                                Label("重试", systemImage: "arrow.clockwise")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 32)
+                                    .background(.ultraThinMaterial)
+                                    .foregroundColor(.white)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.card)
+                        }
+                    }
+                }
+                .frame(maxWidth: 950, alignment: .leading)
+
+                VStack(spacing: 16) {
+                    Spacer()
+                    Image(uiImage: Common.generateQRCode(from: qrCodeURL))
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 330, height: 330)
+                        .padding(32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                .fill(Color.black.opacity(0.38))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                                )
+                        )
+                        .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 18)
+
+                    Text("扫码查看帮助文档")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                    Spacer()
+                }
+            }
+            .padding(80)
+        }
+    }
 }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 import AngelLiveDependencies
 
 struct FavoriteMainView: View {
@@ -27,8 +28,16 @@ struct FavoriteMainView: View {
                 if appViewModel.favoriteViewModel.groupedRoomList.isEmpty && appViewModel.favoriteViewModel.isLoading == false {
                     if appViewModel.favoriteViewModel.roomList.isEmpty {
                         if appViewModel.favoriteViewModel.cloudReturnError {
-                            Text(appViewModel.favoriteViewModel.cloudKitStateString)
-                                .font(.title3)
+                            ErrorView(
+                                title: "iCloud同步失败",
+                                message: appViewModel.favoriteViewModel.cloudKitStateString,
+                                showDismiss: false,
+                                showRetry: true,
+                                onDismiss: {},
+                                onRetry: {
+                                    getViewStateAndFavoriteList()
+                                }
+                            )
                         }else {
                             Text("暂无收藏")
                                 .font(.title3)
@@ -103,14 +112,16 @@ struct FavoriteMainView: View {
                     }
                 }
             }else {
-                Text(appViewModel.favoriteViewModel.cloudKitStateString)
-                    .font(.title3)
-                Button {
-                    getViewStateAndFavoriteList()
-                } label: {
-                    Label("刷新", systemImage: "arrow.counterclockwise")
-                        .font(.headline.bold())
-                }
+                ErrorView(
+                    title: "iCloud未就绪",
+                    message: appViewModel.favoriteViewModel.cloudKitStateString,
+                    showDismiss: false,
+                    showRetry: true,
+                    onDismiss: {},
+                    onRetry: {
+                        getViewStateAndFavoriteList()
+                    }
+                )
             }
         }
         .overlay {

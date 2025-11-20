@@ -18,7 +18,20 @@ struct DetailPlayerView: View {
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
-        if roomInfoViewModel.currentPlayURL == nil {
+        if roomInfoViewModel.hasError {
+            ErrorView(
+                title: "播放失败",
+                message: roomInfoViewModel.errorMessage,
+                showRetry: true,
+                onDismiss: {
+                    endPlay()
+                },
+                onRetry: {
+                    roomInfoViewModel.hasError = false
+                    playerCoordinator.playerLayer?.play()
+                }
+            )
+        } else if roomInfoViewModel.currentPlayURL == nil {
             VStack(spacing: 10) {
                 ProgressView()
                     .tint(.white)
@@ -30,7 +43,7 @@ struct DetailPlayerView: View {
             .background(.black)
         }else {
             ZStack {
-                KSVideoPlayer(coordinator: _playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
+                KSVideoPlayer(coordinator: playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
                     .onAppear {
                         playerCoordinator.playerLayer?.play()

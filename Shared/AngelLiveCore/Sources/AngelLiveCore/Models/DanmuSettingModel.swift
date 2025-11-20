@@ -81,7 +81,11 @@ public final class DanmuSettingModel {
     public var danmuFontSize: Int {
         get {
             access(keyPath: \.danmuFontSize)
+            #if os(tvOS)
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuFontSize, synchronize: true) as? Int ?? 50
+            #else
             return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuFontSize, synchronize: true) as? Int ?? 15
+            #endif
         }
         set {
             withMutation(keyPath: \.danmuFontSize) {

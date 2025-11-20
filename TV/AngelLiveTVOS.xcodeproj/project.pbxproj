@@ -12,6 +12,8 @@
 		4F6C40352C75885500A5BEDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F6C40342C75885500A5BEDA /* LiveParse */; };
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
+		FB140CF92ECEB68500D12FD9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB140CF82ECEB68500D12FD9 /* Assets.xcassets */; };
+		FB141A812ECEC20E00D12FD9 /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB141A802ECEC20E00D12FD9 /* Package.resolved */; };
 		FB1BAC812E81479D006BC677 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1BAC802E81479D006BC677 /* LiveParse */; };
 		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
 		FB8E940B2E7BEC670055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940A2E7BEC670055E746 /* LiveParse */; };
@@ -25,6 +27,8 @@
 
 /* Begin PBXFileReference section */
 		4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB140CF82ECEB68500D12FD9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
+		FB141A802ECEC20E00D12FD9 /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = AngelLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -70,6 +74,8 @@
 		4FC3DCD12A49382F00CA36B9 = {
 			isa = PBXGroup;
 			children = (
+				FB141A802ECEC20E00D12FD9 /* Package.resolved */,
+				FB140CF82ECEB68500D12FD9 /* Assets.xcassets */,
 				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
 				4FC3DCDB2A49382F00CA36B9 /* Products */,
 				FBDEF8382BB9CBCB002EE8FF /* Frameworks */,
@@ -170,6 +176,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB141A812ECEC20E00D12FD9 /* Package.resolved in Resources */,
+				FB140CF92ECEB68500D12FD9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -333,10 +341,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.2.0;
-				OTHER_LDFLAGS = (
-					"-Xlinker",
-					"-interposable",
-				);
+				OTHER_LDFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.simplelive;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

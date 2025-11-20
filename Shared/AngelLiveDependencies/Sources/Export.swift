@@ -14,9 +14,11 @@
 @_exported import NIOHTTP1
 @_exported import Pow
 @_exported import Shimmer
-#if os(iOS) || os(tvOS)
-@_exported import SimpleToast
+#if os(iOS)
 @_exported import Toasts
+@_exported import WindowOverlay
+#elseif os(tvOS)
+@_exported import SimpleToast
 #endif
 @_exported import Starscream
 @_exported import SwiftyJSON

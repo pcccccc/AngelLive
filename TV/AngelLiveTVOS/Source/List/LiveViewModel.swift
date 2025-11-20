@@ -57,6 +57,8 @@ class LiveViewModel {
     
     //加载状态
     var isLoading = false
+    var hasError = false
+    var errorMessage = ""
    
     //直播列表分页
     var subPageNumber = 0
@@ -160,8 +162,9 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 self.isLoading = false
+                self.hasError = true
+                self.errorMessage = error.localizedDescription
             }
-            // Handle error appropriately, maybe show a toast
         }
     }
     
@@ -219,8 +222,9 @@ class LiveViewModel {
             } catch {
                 await MainActor.run {
                     self.isLoading = false
+                    self.hasError = true
+                    self.errorMessage = error.localizedDescription
                 }
-                // Handle error
             }
         }
     }
@@ -247,8 +251,9 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 isLoading = false
+                hasError = true
+                errorMessage = error.localizedDescription
             }
-            // Handle error
         }
     }
 
@@ -264,10 +269,11 @@ class LiveViewModel {
                 }
             }
         } catch {
-            // Handle error
-        }
-        await MainActor.run {
-            isLoading = false
+            await MainActor.run {
+                isLoading = false
+                hasError = true
+                errorMessage = error.localizedDescription
+            }
         }
     }
     
@@ -297,6 +303,8 @@ class LiveViewModel {
             } catch {
                 await MainActor.run {
                     isLoading = false
+                    hasError = true
+                    errorMessage = error.localizedDescription
                 }
             }
         }

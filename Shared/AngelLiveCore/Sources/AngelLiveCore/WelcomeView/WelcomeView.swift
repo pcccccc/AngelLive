@@ -69,5 +69,4 @@ public struct WelcomeView: View {
 
 #Preview {
     WelcomeView(onContinue: {})
-        .presentationSizing(.page.fitted(horizontal: true, vertical: false))
 }

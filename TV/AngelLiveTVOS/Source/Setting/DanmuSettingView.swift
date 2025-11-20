@@ -40,8 +40,3 @@ struct DanmuSettingView: View {
         }
     }
 }
-
-#Preview {
-    DanmuSettingView()
-        .environment(DanmuSettingModel())
-}

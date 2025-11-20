@@ -7,6 +7,8 @@
 
 import Foundation
 import Observation
+import AngelLiveCore
+import AngelLiveDependencies
 
 @Observable
 class AppState {
