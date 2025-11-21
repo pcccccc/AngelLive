@@ -28,7 +28,7 @@ struct RoomPlayerView: View {
             ZStack {
                 // 播放器
                 if let url = viewModel.currentPlayURL {
-                    KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
+                    KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
                         .onAppear {
                             viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                             hideWindowButtons()

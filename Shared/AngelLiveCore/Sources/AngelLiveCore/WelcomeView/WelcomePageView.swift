@@ -177,7 +177,8 @@ extension View {
         #if os(macOS)
         self
             .padding(.horizontal, 20)
-            .frame(minHeight: 600)
+            .padding(.vertical, 15)
+            .frame(minHeight: 500)
         #else
         if UIDevice.current.userInterfaceIdiom == .pad {
             if #available(iOS 18.0, *) {

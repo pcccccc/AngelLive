@@ -6,7 +6,11 @@
 //
 
 import SwiftUI
+#if !os(macOS)
 import SharedAssets
+#else
+import AppKit
+#endif
 
 public struct WelcomeView: View {
     public var onContinue: () -> Void
@@ -21,11 +25,20 @@ public struct WelcomeView: View {
             title: "欢迎使用 AngelLive"
         ) {
             // App 图标
+#if os(macOS)
+            Image(nsImage: NSImage(named: "logoicon") ?? NSImage(named: "AppIcon") ?? NSApplication.shared.applicationIconImage)
+                .resizable()
+                .frame(width: 100, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 25))
+#else
             Image("AppIcon")
                 .resizable()
                 .frame(width: 100, height: 100)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 25))
+#endif
+           
+            
         } cards: {
             WelcomeCard(
                 symbol: "rectangle.stack.fill",

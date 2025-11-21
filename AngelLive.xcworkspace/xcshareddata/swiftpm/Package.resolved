@@ -86,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/GMObjC",
       "state" : {
-        "revision" : "c419f99df03473bdcd55df05bfc7926f14dd7354",
-        "version" : "1.0.9"
+        "revision" : "0cc7fc1f77fc15086c2e7481887bc45af26f862a",
+        "version" : "1.1.0"
       }
     },
     {
@@ -158,8 +158,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "59fc33ae03bc0cbda31a63752e5bbd1efdf3ba12",
-        "version" : "1.9.5"
+        "revision" : "e32ce03dfe4d84ad535366ca162cc920e4e294a9",
+        "version" : "1.9.6"
       }
     },
     {
