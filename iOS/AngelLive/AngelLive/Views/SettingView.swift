@@ -16,7 +16,7 @@ struct SettingView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            List {
                 // 账号设置
                 Section {
                     NavigationLink {
@@ -139,7 +139,7 @@ struct SettingView: View {
                     Text("信息")
                 }
             }
-            .scrollContentBackground(.hidden)
+            .listStyle(.insetGrouped)
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.large)
             .task {
@@ -384,7 +384,7 @@ struct GeneralSettingViewiOS: View {
     @StateObject private var settingStore = SettingStore()
 
     var body: some View {
-        Form {
+        List {
             // 播放设置
             Section {
                 Toggle("直播结束后自动退出直播间", isOn: $playerSettingModel.openExitPlayerViewWhenLiveEnd)
@@ -429,7 +429,7 @@ struct GeneralSettingViewiOS: View {
                 Text("收藏设置")
             }
         }
-        .scrollContentBackground(.hidden)
+        .listStyle(.insetGrouped)
         .navigationTitle("通用")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -440,7 +440,7 @@ struct DanmuSettingViewiOS: View {
     @State private var alphaText = ""
 
     var body: some View {
-        Form {
+        List {
             // 基本设置
             Section {
                 Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
@@ -550,7 +550,7 @@ struct DanmuSettingViewiOS: View {
                 Text("显示设置")
             }
         }
-        .scrollContentBackground(.hidden)
+        .listStyle(.insetGrouped)
         .navigationTitle("弹幕")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

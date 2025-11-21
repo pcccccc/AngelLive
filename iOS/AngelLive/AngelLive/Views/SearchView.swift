@@ -13,33 +13,42 @@ struct SearchView: View {
     @Environment(SearchViewModel.self) private var viewModel
     @State private var searchResults: [LiveModel] = []
     @State private var isSearching = false
-    @FocusState private var isSearchFieldFocused: Bool
+    @State private var searchError: String?
 
     var body: some View {
         
         @Bindable var viewModel = viewModel
-        
         NavigationStack {
-            VStack(spacing: 0) {
-                // 搜索类型选择器
-                Picker("搜索类型", selection: $viewModel.searchTypeIndex) {
-                    ForEach(viewModel.searchTypeArray.indices, id: \.self) { index in
-                        Text(viewModel.searchTypeArray[index])
-                            .tag(index)
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    // 搜索类型选择器
+                    Picker("搜索类型", selection: $viewModel.searchTypeIndex) {
+                        ForEach(viewModel.searchTypeArray.indices, id: \.self) { index in
+                            Text(viewModel.searchTypeArray[index])
+                                .tag(index)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .padding()
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    .padding(.top, AppConstants.Spacing.sm)
+                    .padding(.bottom, AppConstants.Spacing.md)
 
-                // 搜索结果列表
-                if searchResults.isEmpty && !isSearching {
-                    searchEmptyState()
-                } else if isSearching {
-                    ProgressView("搜索中...")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    searchResultsList()
+                    // 搜索结果
+                    Group {
+                        if isSearching {
+                            searchSkeletonGrid(geometry: geometry)
+                        } else if let searchError {
+                            searchErrorState(message: searchError)
+                        } else if searchResults.isEmpty {
+                            searchEmptyState()
+                        } else {
+                            searchResultsGrid(geometry: geometry)
+                        }
+                    }
+                    .animation(.easeInOut, value: isSearching)
+                    .animation(.easeInOut, value: searchResults.count)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle("搜索")
             .navigationBarTitleDisplayMode(.large)
@@ -113,124 +122,125 @@ struct SearchView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    @ViewBuilder
-    private func searchResultsList() -> some View {
-        ScrollView {
-            LazyVStack(spacing: 16) { // iOS 26: 增加间距
+    
+    private func searchResultsGrid(geometry: GeometryProxy) -> some View {
+        let isIPad = AppConstants.Device.isIPad
+        let columns = isIPad ? 3 : 2
+        let horizontalSpacing: CGFloat = 15
+        let verticalSpacing: CGFloat = 24
+        let horizontalPadding: CGFloat = 20
+        let screenWidth = geometry.size.width
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
+
+        return ScrollView {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+                spacing: verticalSpacing
+            ) {
                 ForEach(searchResults, id: \.roomId) { room in
-                    SearchResultCard(room: room)
-                        .transition(.opacity.combined(with: .move(edge: .top))) // iOS 26: 流畅过渡
+                    LiveRoomCard(room: room)
+                        .frame(width: cardWidth, height: cardHeight)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .padding()
-            .animation(.smooth(duration: 0.3), value: searchResults.count) // iOS 26: smooth 动画
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, AppConstants.Spacing.md)
         }
-        .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
-        .scrollDismissesKeyboard(.interactively) // iOS 26: 交互式键盘消失
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    @ViewBuilder
+    private func searchSkeletonGrid(geometry: GeometryProxy) -> some View {
+        let isIPad = AppConstants.Device.isIPad
+        let columns = isIPad ? 3 : 2
+        let horizontalSpacing: CGFloat = 15
+        let verticalSpacing: CGFloat = 24
+        let horizontalPadding: CGFloat = 20
+        let screenWidth = geometry.size.width
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
+
+        ScrollView {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+                spacing: verticalSpacing
+            ) {
+                ForEach(0..<columns * 2, id: \.self) { _ in
+                    LiveRoomCardSkeleton(width: cardWidth)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, AppConstants.Spacing.md)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    @ViewBuilder
+    private func searchErrorState(message: String) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.orange)
+
+            Text("搜索失败")
+                .font(.title3.bold())
+                .foregroundStyle(AppConstants.Colors.primaryText)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            Button {
+                performSearch()
+            } label: {
+                Label("重试", systemImage: "arrow.clockwise")
+                    .padding(.horizontal, AppConstants.Spacing.lg)
+                    .padding(.vertical, AppConstants.Spacing.sm)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 
     private func performSearch() {
-        guard !viewModel.searchText.isEmpty else { return }
+        let keyword = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return }
 
+        searchError = nil
+        searchResults = []
         isSearching = true
 
-        // TODO: Implement actual search logic
-        // Simulating search delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            // Mock results - replace with actual API call
-            searchResults = []
-            isSearching = false
-        }
-    }
-}
-
-// MARK: - Search Result Card Component
-struct SearchResultCard: View {
-    let room: LiveModel
-    @State private var isPressed = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // 封面图
-            ZStack(alignment: .topLeading) {
-                KFImage(URL(string: room.roomCover))
-                    .placeholder {
-                        Rectangle()
-                            .fill(AppConstants.Colors.placeholderGradient())
+        Task {
+            do {
+                if viewModel.searchTypeIndex == 0 {
+                    let rooms = try await LiveService.searchRooms(keyword: keyword, page: 1)
+                    await MainActor.run {
+                        searchResults = rooms
+                        isSearching = false
                     }
-                    .resizable()
-                    .aspectRatio(16/9, contentMode: .fill)
-                    .frame(width: 120, height: 68)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                // 直播状态
-                if let liveState = room.liveState, !liveState.isEmpty {
-                    Text(liveState)
-                        .font(.caption2.bold())
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(AppConstants.Colors.liveStatus.gradient)
-                        )
-                        .padding(4)
-                }
-            }
-
-            // 信息
-            VStack(alignment: .leading, spacing: 4) {
-                Text(room.roomTitle)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(AppConstants.Colors.primaryText)
-                    .lineLimit(2)
-
-                HStack(spacing: 6) {
-                    KFImage(URL(string: room.userHeadImg))
-                        .placeholder {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
+                } else {
+                    let room = try await LiveService.searchRoomWithShareCode(shareCode: keyword)
+                    await MainActor.run {
+                        if let room {
+                            searchResults = [room]
                         }
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                        .clipShape(Circle())
-
-                    Text(room.userName)
-                        .font(.caption)
-                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                        .lineLimit(1)
+                        isSearching = false
+                    }
                 }
-
-                Text(room.liveType.rawValue)
-                    .font(.caption2)
-                    .foregroundStyle(AppConstants.Colors.link)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(AppConstants.Colors.link.opacity(0.2))
-                    )
+            } catch {
+                await MainActor.run {
+                    searchResults = []
+                    searchError = error.localizedDescription
+                    isSearching = false
+                }
             }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(AppConstants.Colors.tertiaryText)
         }
-        .padding(AppConstants.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md)
-                .fill(AppConstants.Colors.materialBackground)
-        )
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.bouncy(duration: 0.3), value: isPressed) // iOS 26: bouncy 动画
-        .onTapGesture {
-            // TODO: Navigate to player view
-        }
-        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
     }
 }
 

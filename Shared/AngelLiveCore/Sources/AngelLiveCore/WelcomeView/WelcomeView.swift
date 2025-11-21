@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SharedAssets
 
 public struct WelcomeView: View {
     public var onContinue: () -> Void
@@ -17,22 +18,14 @@ public struct WelcomeView: View {
     public var body: some View {
         WelcomePageView(
             tint: .blue,
-            title: "欢迎使用 SimpleLive"
+            title: "欢迎使用 AngelLive"
         ) {
             // App 图标
-            Image(systemName: "play.tv.fill")
-                .font(.system(size: 50))
+            Image("AppIcon")
+                .resizable()
                 .frame(width: 100, height: 100)
                 .foregroundStyle(.white)
-                .background(
-                    LinearGradient(
-                        colors: [.blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: .rect(cornerRadius: 25)
-                )
-                .frame(height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: 25))
         } cards: {
             WelcomeCard(
                 symbol: "rectangle.stack.fill",

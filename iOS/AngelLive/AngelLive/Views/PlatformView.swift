@@ -11,6 +11,7 @@ import AngelLiveCore
 
 struct PlatformView: View {
     @Environment(PlatformViewModel.self) private var viewModel
+    @Environment(SearchViewModel.self) private var searchViewModel
     @State private var navigationPath: [Platformdescription] = []
     private let gridSpacing = AppConstants.Spacing.lg
 
@@ -25,11 +26,7 @@ struct PlatformView: View {
                         spacing: gridSpacing
                     ) {
                         ForEach(viewModel.platformInfo) { platform in
-                            NavigationLink(value: platform) {
-                                PlatformCard(platform: platform)
-                                    .frame(width: metrics.itemWidth, height: metrics.itemHeight)
-                            }
-                            .buttonStyle(.plain)
+                            platformNavigationItem(platform: platform, metrics: metrics)
                         }
                     }
                     .padding(.horizontal, gridSpacing)
@@ -53,6 +50,26 @@ struct PlatformView: View {
                     .navigationTitle(platform.title)
                     .toolbar(.hidden, for: .tabBar)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func platformNavigationItem(platform: Platformdescription, metrics: GridMetrics) -> some View {
+        if platform.liveType == .youtube {
+            Button {
+                searchViewModel.searchTypeIndex = 2
+                NotificationCenter.default.post(name: .switchToYouTubeSearch, object: nil)
+            } label: {
+                PlatformCard(platform: platform)
+                    .frame(width: metrics.itemWidth, height: metrics.itemHeight)
+            }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink(value: platform) {
+                PlatformCard(platform: platform)
+                    .frame(width: metrics.itemWidth, height: metrics.itemHeight)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -135,6 +152,10 @@ struct PlatformCard: View {
 
 extension Platformdescription: @retroactive Identifiable {
     public var id: String { title }
+}
+
+extension Notification.Name {
+    static let switchToYouTubeSearch = Notification.Name("switchToYouTubeSearch")
 }
 
 #Preview {

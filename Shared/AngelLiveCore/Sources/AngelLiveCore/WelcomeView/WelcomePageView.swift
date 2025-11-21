@@ -186,9 +186,11 @@ extension View {
                     .presentationDetents([.height(650)])
             }else {
                 self
+                   
             }
         }else {
             self
+                .padding(16)
                 .presentationDetents([.height(650)])
         }
         #endif

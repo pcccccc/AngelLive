@@ -43,7 +43,7 @@ struct FavoriteView: View {
             .navigationTitle("收藏")
             .navigationBarTitleDisplayMode(.large)
             .task {
-                await handleOnAppear()
+                handleOnAppear()
             }
         }
         .onDisappear {
@@ -157,9 +157,7 @@ struct FavoriteView: View {
                 .padding(.horizontal)
 
             Button(action: {
-                Task {
-                    await loadFavorites()
-                }
+                startFavoriteSync(force: true)
             }) {
                 Label("重试", systemImage: "arrow.counterclockwise")
                     .font(.headline)
@@ -286,17 +284,16 @@ struct FavoriteView: View {
         .frame(height: cardHeight)
     }
 
-    @MainActor
-    private func handleOnAppear() async {
+    private func handleOnAppear() {
         if !FavoriteView.hasPerformedInitialSync {
-            await loadFavorites(force: true)
             FavoriteView.hasPerformedInitialSync = true
+            startFavoriteSync(force: true)
             return
         }
 
         guard shouldForceRefresh() else { return }
 
-        await loadFavorites(force: true)
+        startFavoriteSync(force: true)
         FavoriteView.lastLeaveTimestamp = Date()
     }
 
@@ -327,6 +324,13 @@ struct FavoriteView: View {
         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
         withAnimation {
             scrollProxy.scrollTo("top", anchor: .top)
+        }
+    }
+
+    /// 启动一个与视图生命周期解耦的同步任务，避免切换页面时被系统取消
+    private func startFavoriteSync(force: Bool) {
+        Task(priority: .background) {
+            await loadFavorites(force: force)
         }
     }
 }
