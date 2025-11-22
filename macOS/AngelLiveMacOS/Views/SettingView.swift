@@ -79,7 +79,7 @@ struct SettingView: View {
             }
 
             Section("关于") {
-                Link(destination: URL(string: "https://github.com")!) {
+                Link(destination: URL(string: "https://github.com/pcccccc/SimpleLiveTVOS")!) {
                     Label("访问 GitHub", systemImage: "link")
                 }
             }

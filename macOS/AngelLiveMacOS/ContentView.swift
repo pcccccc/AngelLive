@@ -22,11 +22,12 @@ struct ContentView: View {
     @State private var selectedTab: TabSelection = .favorite
     // 首次启动管理器
     @Environment(WelcomeManager.self) private var welcomeManager
-    // 创建全局 ViewModels
+    // 从环境获取全局 ViewModels
+    @Environment(AppFavoriteModel.self) private var favoriteViewModel
+    @Environment(ToastManager.self) private var toastManager
+    // 创建局部 ViewModels
     @State private var platformViewModel = PlatformViewModel()
-    @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
-    @State private var toastManager = ToastManager()
 
     var body: some View {
         @Bindable var manager = welcomeManager

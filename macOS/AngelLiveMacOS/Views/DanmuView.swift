@@ -23,7 +23,8 @@ struct DanmuView: NSViewRepresentable {
         let view = DanmakuView(frame: CGRect(origin: .zero, size: size))
         view.danmakuBackgroundColor = .clear
         view.playingSpeed = Float(speed)
-        view.trackHeight = max(fontSize * 2.2, fontSize + 36)
+        // 轨道高度 = 文字实际高度 + padding，约为 fontSize * 1.2 + 12
+        view.trackHeight = fontSize * 1.2 + 12
         view.paddingTop = paddingTop
         view.paddingBottom = paddingBottom
         view.layer?.masksToBounds = true
@@ -36,7 +37,8 @@ struct DanmuView: NSViewRepresentable {
         nsView.frame = CGRect(origin: .zero, size: size)
         nsView.danmakuBackgroundColor = .clear
         nsView.playingSpeed = Float(speed)
-        nsView.trackHeight = max(fontSize * 2.2, fontSize + 36)
+        // 轨道高度 = 文字实际高度 + padding，约为 fontSize * 1.2 + 12
+        nsView.trackHeight = fontSize * 1.2 + 12
         nsView.paddingTop = paddingTop
         nsView.paddingBottom = paddingBottom
         nsView.layer?.masksToBounds = true

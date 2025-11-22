@@ -88,6 +88,11 @@ struct DetailPlayerView: View {
                     .environment(\.safeAreaInsetsCustom, safeInsets)
                     .frame(width: playerWidth, height: AppConstants.Device.isIPad ? playerHeight : nil)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
+                        if !AppConstants.Device.isIPad {
+                            iPhonePlayerHeight = height
+                        }
+                    }
                     .onPreferenceChange(VerticalLiveModePreferenceKey.self) { mode in
                         isVerticalLiveMode = mode
                     }

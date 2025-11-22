@@ -20,15 +20,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 struct AngelLiveMacOSApp: App {
-    
+
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     // 首次启动管理器
     @State private var welcomeManager = WelcomeManager()
+    // 全局 ViewModels（用于共享到所有窗口）
+    @State private var favoriteViewModel = AppFavoriteModel()
+    @State private var toastManager = ToastManager()
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(welcomeManager)
+                .environment(favoriteViewModel)
+                .environment(toastManager)
         }
         .commands {
             CommandGroup(after: .appInfo) {
@@ -42,6 +47,8 @@ struct AngelLiveMacOSApp: App {
         WindowGroup(for: LiveModel.self) { $room in
             if let room = room {
                 RoomPlayerView(room: room)
+                    .environment(favoriteViewModel)
+                    .environment(toastManager)
             }
         }
         .windowStyle(.hiddenTitleBar)

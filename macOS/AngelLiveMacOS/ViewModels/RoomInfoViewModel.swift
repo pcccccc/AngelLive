@@ -415,10 +415,9 @@ final class RoomInfoViewModel {
 
     /// 刷新当前播放流
     @MainActor
-    func refreshPlayback() {
-        Task {
-            await loadPlayURL()
-        }
+    func refreshPlayback() async {
+        isLoading = true
+        await getPlayArgs()
     }
 
     /// 切换弹幕显示状态
@@ -520,6 +519,10 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
 extension RoomInfoViewModel: KSPlayerLayerDelegate {
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying
+        // 当播放器开始播放时，停止 loading 状态
+        if layer.player.isPlaying {
+            isLoading = false
+        }
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {

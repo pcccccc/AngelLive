@@ -102,11 +102,21 @@ public class DanmakuAsyncLayer: CALayer {
             let backgroundColor = (opaque && self.backgroundColor != nil) ? self.backgroundColor : nil
             queue.async {
                 guard !isCancelled() else { return }
+#if os(iOS) || os(tvOS)
                 UIGraphicsBeginImageContextWithOptions(size, opaque, scale)
                 guard let context = UIGraphicsGetCurrentContext() else {
                     UIGraphicsEndImageContext()
                     return
                 }
+#elseif os(macOS)
+                // macOS: 创建离屏 NSImage 并获取 context
+                let image = NSImage(size: size)
+                image.lockFocus()
+                guard let context = NSGraphicsContext.current?.cgContext else {
+                    image.unlockFocus()
+                    return
+                }
+#endif
                 if opaque {
                     context.saveGState()
                     if backgroundColor == nil || (backgroundColor?.alpha ?? 0) < 1 {
@@ -123,14 +133,23 @@ public class DanmakuAsyncLayer: CALayer {
                 }
                 self.displaying?(context, size, isCancelled)
                 if isCancelled() {
+#if os(iOS) || os(tvOS)
                     UIGraphicsEndImageContext()
+#elseif os(macOS)
+                    image.unlockFocus()
+#endif
                     DispatchQueue.main.async {
                         self.didDisplay?(self, false)
                     }
                     return
                 }
+#if os(iOS) || os(tvOS)
                 let image = UIGraphicsGetImageFromCurrentImageContext()
                 UIGraphicsEndImageContext()
+#elseif os(macOS)
+                image.unlockFocus()
+                let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+#endif
                 if isCancelled() {
                     DispatchQueue.main.async {
                         self.didDisplay?(self, false)
@@ -141,7 +160,11 @@ public class DanmakuAsyncLayer: CALayer {
                     if isCancelled() {
                         self.didDisplay?(self, false)
                     } else {
+#if os(iOS) || os(tvOS)
                         self.contents = image?.danmakuCGImage
+#elseif os(macOS)
+                        self.contents = cgImage
+#endif
                         self.didDisplay?(self, true)
                     }
                 }
@@ -150,6 +173,7 @@ public class DanmakuAsyncLayer: CALayer {
         } else {
             sentinel.increase()
             willDisplay?(self)
+#if os(iOS) || os(tvOS)
             UIGraphicsBeginImageContextWithOptions(bounds.size, isOpaque, contentsScale)
             guard let context = UIGraphicsGetCurrentContext() else {
                 UIGraphicsEndImageContext()
@@ -159,6 +183,15 @@ public class DanmakuAsyncLayer: CALayer {
             let image = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
             contents = image?.danmakuCGImage
+#elseif os(macOS)
+            let image = NSImage(size: bounds.size)
+            image.lockFocus()
+            if let context = NSGraphicsContext.current?.cgContext {
+                displaying?(context, bounds.size, {() -> Bool in return false})
+            }
+            image.unlockFocus()
+            contents = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+#endif
             didDisplay?(self, true)
         }
     }

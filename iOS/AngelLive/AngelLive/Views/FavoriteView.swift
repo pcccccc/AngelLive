@@ -12,8 +12,30 @@ import AngelLiveCore
 struct FavoriteView: View {
     @Environment(AppFavoriteModel.self) private var viewModel
     @State private var isRefreshing = false
+    @State private var searchText = ""
     private static var lastLeaveTimestamp: Date?
     private static var hasPerformedInitialSync = false
+
+    // 过滤后的房间列表
+    private var filteredGroupedRoomList: [FavoriteLiveSectionModel] {
+        guard !searchText.isEmpty else {
+            return viewModel.groupedRoomList
+        }
+
+        let lowercasedSearch = searchText.lowercased()
+        return viewModel.groupedRoomList.compactMap { section in
+            let filteredRooms = section.roomList.filter { room in
+                room.userName.lowercased().contains(lowercasedSearch) ||
+                room.roomTitle.lowercased().contains(lowercasedSearch)
+            }
+
+            guard !filteredRooms.isEmpty else { return nil }
+
+            var newSection = section
+            newSection.roomList = filteredRooms
+            return newSection
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -42,6 +64,7 @@ struct FavoriteView: View {
             }
             .navigationTitle("收藏")
             .navigationBarTitleDisplayMode(.large)
+            .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
             .task {
                 handleOnAppear()
             }
@@ -176,13 +199,34 @@ struct FavoriteView: View {
 
     @ViewBuilder
     private func favoriteContentView(geometry: GeometryProxy) -> some View {
-        LazyVStack(spacing: 32) { // iOS 26: 增加分区间距，提升视觉层次
-            ForEach(viewModel.groupedRoomList, id: \.id) { section in
-                sectionView(section: section, geometry: geometry)
-                    .transition(.opacity.combined(with: .move(edge: .top))) // iOS 26: 流畅的过渡动画
+        let displayList = filteredGroupedRoomList
+
+        if displayList.isEmpty && !searchText.isEmpty {
+            // 搜索无结果
+            VStack(spacing: 20) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.gray.opacity(0.5))
+
+                Text("未找到相关主播")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+
+                Text("请尝试其他关键词")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 100)
+        } else {
+            LazyVStack(spacing: 32) { // iOS 26: 增加分区间距，提升视觉层次
+                ForEach(displayList, id: \.id) { section in
+                    sectionView(section: section, geometry: geometry)
+                        .transition(.opacity.combined(with: .move(edge: .top))) // iOS 26: 流畅的过渡动画
+                }
+            }
+            .animation(.smooth(duration: 0.4), value: displayList.count) // iOS 26: smooth 动画
         }
-        .animation(.smooth(duration: 0.4), value: viewModel.groupedRoomList.count) // iOS 26: smooth 动画
     }
 
     @ViewBuilder

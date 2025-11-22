@@ -28,7 +28,7 @@ struct RoomPlayerView: View {
             ZStack {
                 // 播放器
                 if let url = viewModel.currentPlayURL {
-                    KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
+                    KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
                         .onAppear {
                             viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                             hideWindowButtons()
@@ -55,7 +55,23 @@ struct RoomPlayerView: View {
                     .zIndex(3)
             }
         }
+        .navigationTitle(viewModel.currentRoom.roomTitle)
         .ignoresSafeArea()
+        .focusable()
+        .onKeyPress(.space) {
+            if viewModel.isPlaying {
+                coordinator.playerLayer?.pause()
+            } else {
+                coordinator.playerLayer?.play()
+            }
+            return .handled
+        }
+        .onKeyPress(.return) {
+            if let window = NSApplication.shared.keyWindow {
+                window.toggleFullScreen(nil)
+            }
+            return .handled
+        }
         .task {
             await viewModel.loadPlayURL()
         }

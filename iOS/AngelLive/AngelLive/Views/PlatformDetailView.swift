@@ -236,7 +236,7 @@ struct PlatformDetailView: View {
                 spacing: verticalSpacing
             ) {
                 ForEach(rooms, id: \.roomId) { room in
-                    LiveRoomCard(room: room)
+                    LiveRoomCard(room: room, skipLiveCheck: true)
                         .frame(width: cardWidth, height: cardHeight)
                         .onAppear {
                             // 加载更多逻辑

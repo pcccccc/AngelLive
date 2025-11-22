@@ -9,6 +9,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import Kingfisher
 internal import AVFoundation
 
 struct PlayerControlView: View {
@@ -19,29 +20,41 @@ struct PlayerControlView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var showSettings = false
     @State private var showDanmakuSettings = false
+    @State private var isFavoriteAnimating = false
+    @State private var isFullscreen = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppFavoriteModel.self) private var favoriteModel
+
+    /// 判断是否已收藏
+    private var isFavorited: Bool {
+        favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
+    }
 
     var body: some View {
         ZStack {
             // 控制按钮层（带 padding）
             ZStack {
-                // 左上角：返回按钮
+                // 左上角：关闭按钮和主播信息
                 VStack {
-                    HStack {
+                    HStack(spacing: 12) {
+                        // 关闭按钮
                         Button {
                             dismiss()
                         } label: {
-                            Image(systemName: "chevron.left")
-                                .frame(width: 30, height: 30)
-                                .font(.system(size: 18, weight: .semibold))
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .adaptiveGlassEffect()
+                        .adaptiveGlassEffect(in: .circle)
+
+                        // 主播信息卡片
+                        streamerInfoCard
+
                         Spacer()
                     }
+                    .frame(height: 44)  // 固定高度确保对齐
                     Spacer()
                 }
 
@@ -50,17 +63,6 @@ struct PlayerControlView: View {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
-                            // 画面平铺按钮
-                            Button {
-                                coordinator.isScaleAspectFill.toggle()
-                            } label: {
-                                Image(systemName: coordinator.isScaleAspectFill ? "rectangle.arrowtriangle.2.inward" : "rectangle.arrowtriangle.2.outward")
-                                    .frame(width: 30, height: 30)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white)
-                            }
-                            .buttonStyle(.plain)
-
                             // 画中画按钮
                             Button {
                                 if let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer {
@@ -89,10 +91,11 @@ struct PlayerControlView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
                         .adaptiveGlassEffect()
                     }
+                    .frame(height: 44)  // 固定高度与左侧对齐
                     Spacer()
                 }
 
@@ -221,6 +224,17 @@ struct PlayerControlView: View {
                                 .menuStyle(.borderlessButton)
                                 .menuIndicator(.hidden)
                             }
+
+                            // 全屏按钮
+                            Button {
+                                toggleFullscreen()
+                            } label: {
+                                Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                                    .frame(width: 30, height: 30)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -257,6 +271,66 @@ struct PlayerControlView: View {
         }
     }
 
+    // MARK: - 主播信息卡片
+    private var streamerInfoCard: some View {
+        HStack(spacing: 10) {
+            // 主播头像
+            KFImage(URL(string: room.userHeadImg))
+                .placeholder {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                }
+                .resizable()
+                .frame(width: 36, height: 36)
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                // 主播名称
+                Text(String(room.userName.prefix(10)))
+                    .foregroundStyle(.white)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+
+                // 房间标题
+                Text(String(room.roomTitle.prefix(20)))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .font(.caption)
+                    .lineLimit(1)
+            }
+
+            // 收藏按钮
+            Button {
+                Task {
+                    await toggleFavorite()
+                }
+            } label: {
+                Image(systemName: isFavorited ? "heart.fill" : "heart")
+                    .font(.system(size: 16))
+                    .foregroundStyle(isFavorited ? .red : .white)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .adaptiveGlassEffect()
+    }
+
+    // MARK: - Helper Methods
+    @MainActor
+    private func toggleFavorite() async {
+        do {
+            if isFavorited {
+                try await favoriteModel.removeFavoriteRoom(room: room)
+            } else {
+                try await favoriteModel.addFavorite(room: room)
+            }
+            isFavoriteAnimating.toggle()
+        } catch {
+            print("收藏操作失败: \(error)")
+        }
+    }
+
     private func resetHideTimer() {
         hideTask?.cancel()
         hideTask = Task {
@@ -267,6 +341,12 @@ struct PlayerControlView: View {
                 }
             }
         }
+    }
+
+    private func toggleFullscreen() {
+        guard let window = NSApplication.shared.keyWindow else { return }
+        window.toggleFullScreen(nil)
+        isFullscreen.toggle()
     }
 }
 

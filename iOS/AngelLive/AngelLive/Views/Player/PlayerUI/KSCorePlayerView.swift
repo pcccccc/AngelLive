@@ -28,7 +28,7 @@ public struct KSCorePlayerView: View {
     }
 
     public var body: some View {
-        KSVideoPlayer(coordinator: config, url: url, options: options)
+        KSVideoPlayer(coordinator: _config, url: url, options: options)
             .onStateChanged { playerLayer, state in
                 if state == .readyToPlay {
                     if let subtitleDataSource {

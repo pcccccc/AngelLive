@@ -54,29 +54,57 @@ public class DanmakuTextCellModel: DanmakuCellModel, Equatable {
 
     public var track: UInt?
 
-    public var displayTime: Double = 5
+    public var displayTime: Double = 10
 
     public var type: DanmakuCellType = .floating
 
     public var isPause = false
 
     public func calculateSize() {
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
-        let bounding = NSString(string: text).boundingRect(
-            with: CGSize(width: CGFloat.infinity, height: font.danmakuLineHeight * 1.2),
-            options: [.usesFontLeading, .usesLineFragmentOrigin],
-            attributes: attributes,
-            context: nil
-        ).size
+        // 验证文本不为空
+        guard !text.isEmpty else {
+            size = CGSize(width: 100, height: 60)
+            return
+        }
 
-        let horizontalPadding = font.pointSize * 0.8 + 40
-        let verticalPadding = font.pointSize * 0.45 + 24
-        let minWidth = font.danmakuLineHeight * 3.0
-        let minHeight = font.danmakuLineHeight + 36
+#if canImport(AppKit) && !canImport(UIKit)
+        // macOS: 使用 CoreText 计算，和渲染时完全一致
+        let ctFont = font as CTFont
+        let fontKey = NSAttributedString.Key(kCTFontAttributeName as String)
+        let attributes: [NSAttributedString.Key: Any] = [fontKey: ctFont]
+
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attributes))
+        let bounds = CTLineGetBoundsWithOptions(line, [])
+
+        // 直接使用 bounds，只加固定的左右 padding（渲染时 x=25）
+        let horizontalPadding: CGFloat = 50  // 左右各 25
+        let verticalPadding: CGFloat = 12  // 上下固定留一点空间，减半
+
         size = CGSize(
-            width: max(bounding.width + horizontalPadding, minWidth),
-            height: max(bounding.height + verticalPadding, minHeight)
+            width: bounds.width + horizontalPadding,
+            height: bounds.height + verticalPadding
         )
+
+        // 调试输出
+        print("📊 弹幕尺寸计算:")
+        print("  文本: \(text)")
+        print("  字体大小: \(font.pointSize)")
+        print("  CTLine bounds: width=\(bounds.width), height=\(bounds.height)")
+        print("  最终尺寸: width=\(size.width), height=\(size.height)")
+#else
+        // iOS/tvOS: 使用 NSString.size
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let nsText = NSString(string: text)
+        let textSize = nsText.size(withAttributes: attributes)
+
+        let horizontalPadding = font.pointSize + 25
+        let verticalPadding = font.pointSize * 0.5 + 12
+
+        size = CGSize(
+            width: textSize.width + horizontalPadding,
+            height: textSize.height + verticalPadding
+        )
+#endif
     }
 
     public static func == (lhs: DanmakuTextCellModel, rhs: DanmakuTextCellModel) -> Bool {

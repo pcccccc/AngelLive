@@ -11,6 +11,7 @@ import AngelLiveDependencies
 
 struct LiveRoomCard: View {
     let room: LiveModel
+    let skipLiveCheck: Bool
     @State private var isPressed = false
     @State private var showPlayer = false
     @Namespace private var namespace
@@ -18,8 +19,9 @@ struct LiveRoomCard: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.presentToast) private var presentToast
 
-    init(room: LiveModel, width: CGFloat? = nil) {
+    init(room: LiveModel, width: CGFloat? = nil, skipLiveCheck: Bool = false) {
         self.room = room
+        self.skipLiveCheck = skipLiveCheck
     }
 
     // 判断是否已收藏
@@ -27,12 +29,26 @@ struct LiveRoomCard: View {
         favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
     }
 
+    // 判断是否正在直播
+    private var isLive: Bool {
+        guard let liveState = room.liveState else { return true }
+        return LiveState(rawValue: liveState) == .live
+    }
+
     var body: some View {
         Group {
             if AppConstants.Device.isIPad {
                 // iPad: 使用 fullScreenCover
                 Button {
-                    showPlayer = true
+                    if skipLiveCheck || isLive {
+                        showPlayer = true
+                    } else {
+                        let toast = ToastValue(
+                            icon: Image(systemName: "tv.slash"),
+                            message: "主播已下播"
+                        )
+                        presentToast(toast)
+                    }
                 } label: {
                     cardContent
                 }
@@ -47,16 +63,27 @@ struct LiveRoomCard: View {
                 }
             } else {
                 // iPhone: 使用 NavigationLink
-                NavigationLink {
-                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                        .toolbar(.hidden, for: .tabBar)
+                Button {
+                    if skipLiveCheck || isLive {
+                        showPlayer = true
+                    } else {
+                        let toast = ToastValue(
+                            icon: Image(systemName: "tv.slash"),
+                            message: "主播已下播"
+                        )
+                        presentToast(toast)
+                    }
                 } label: {
                     cardContent
                 }
                 .buttonStyle(.plain)
                 .contextMenu {
                     favoriteContextMenu
+                }
+                .navigationDestination(isPresented: $showPlayer) {
+                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                        .toolbar(.hidden, for: .tabBar)
                 }
             }
         }

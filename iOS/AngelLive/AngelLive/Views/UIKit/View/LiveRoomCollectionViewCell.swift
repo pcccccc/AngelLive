@@ -35,7 +35,7 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
         hostingController?.removeFromParent()
 
         // 创建新的 SwiftUI 视图
-        let roomCard = LiveRoomCard(room: room)
+        let roomCard = LiveRoomCard(room: room, skipLiveCheck: true)
         let hosting = UIHostingController(rootView: roomCard)
         hosting.view.backgroundColor = .clear
         hosting.view.translatesAutoresizingMaskIntoConstraints = false

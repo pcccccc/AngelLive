@@ -295,10 +295,17 @@ struct LiveRoomCard: View {
     let room: LiveModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(ToastManager.self) private var toastManager
+    @State private var showOfflineAlert = false
 
     // 判断是否已收藏
     private var isFavorited: Bool {
         favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
+    }
+
+    // 判断是否正在直播
+    private var isLive: Bool {
+        guard let liveState = room.liveState else { return true }
+        return LiveState(rawValue: liveState) == .live
     }
 
     var body: some View {

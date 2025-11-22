@@ -13,7 +13,7 @@ import UIKit
 import AppKit
 #endif
 
-let MAX_FLOAT_X = CGFloat.infinity / 2.0
+let MAX_FLOAT_X: CGFloat = 100000.0  // 使用足够大的有限值代替 infinity
 
 //MARK: DanmakuTrack
 
@@ -241,7 +241,8 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
         animation.duration = (cellModel.displayTime * Double(rate)) / Double(playingSpeed)
         animation.delegate = self
         animation.fromValue = NSNumber(value: Float(layer.position.x))
-        animation.toValue = NSNumber(value: Float(-danmaku.bounds.width / 2.0))
+        // 确保弹幕完全飞出屏幕左侧后才停止动画
+        animation.toValue = NSNumber(value: Float(-danmaku.bounds.width - 20.0))
         animation.isRemovedOnCompletion = false
         animation.fillMode = .forwards
         animation.setValue(danmaku, forKey: DANMAKU_CELL_KEY)
