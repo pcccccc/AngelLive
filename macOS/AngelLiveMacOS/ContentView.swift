@@ -26,10 +26,11 @@ struct ContentView: View {
     @State private var platformViewModel = PlatformViewModel()
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
+    @State private var toastManager = ToastManager()
 
     var body: some View {
         @Bindable var manager = welcomeManager
-        
+
         NavigationStack {
             TabView(selection: $selectedTab) {
                 Tab(value: TabSelection.favorite) {
@@ -62,6 +63,9 @@ struct ContentView: View {
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
+            .navigationDestination(for: LiveModel.self) { room in
+                RoomPlayerView(room: room)
+            }
             .sheet(isPresented: $manager.showWelcome) {
                 WelcomeView {
                     welcomeManager.completeWelcome()
@@ -69,12 +73,17 @@ struct ContentView: View {
                 .presentationSizing(.page.fitted(horizontal: true, vertical: false))
             }
         }
-        .navigationDestination(for: LiveModel.self) { room in
-            RoomPlayerView(room: room)
-        }
         .environment(platformViewModel)
         .environment(favoriteViewModel)
         .environment(searchViewModel)
+        .environment(toastManager)
+        .overlay(alignment: .top) {
+            if let toast = toastManager.currentToast {
+                ToastView(toast: toast)
+                    .padding(.top, 16)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: toastManager.currentToast != nil)
+            }
+        }
         .onAppear {
             BiliBiliCookie.cookie = ""
         }

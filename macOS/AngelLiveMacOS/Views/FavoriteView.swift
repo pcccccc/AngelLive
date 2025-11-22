@@ -8,70 +8,251 @@
 
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 import LiveParse
 
 struct FavoriteView: View {
-    @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(AppFavoriteModel.self) private var viewModel
+    @State private var isRefreshing = false
+    @State private var rotationAngle: Double = 0
+    private static var lastLeaveTimestamp: Date?
+    private static var hasPerformedInitialSync = false
 
     var body: some View {
-        Group {
-            if favoriteModel.roomList.isEmpty {
-                ContentUnavailableView(
-                    "暂无收藏",
-                    systemImage: "heart.slash",
-                    description: Text("浏览直播间并添加收藏")
-                )
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 300))], spacing: 16) {
-                        ForEach(favoriteModel.roomList) { room in
-                            NavigationLink(value: room) {
-                                RoomCardView(room: room)
-                            }
-                            .buttonStyle(.plain)
-                        }
+        GeometryReader { geometry in
+            ScrollView {
+                if viewModel.isLoading {
+                    skeletonView(geometry: geometry)
+                } else if viewModel.cloudKitReady {
+                    if viewModel.roomList.isEmpty {
+                        emptyStateView()
+                    } else {
+                        favoriteContentView(geometry: geometry)
                     }
-                    .padding()
+                } else {
+                    cloudKitErrorView()
                 }
             }
         }
         .navigationTitle("收藏")
-    }
-}
-
-// 占位符卡片视图
-struct RoomCardView: View {
-    let room: LiveModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // 封面图
-            AsyncImage(url: URL(string: room.roomCover)) { image in
-                image
-                    .resizable()
-                    .aspectRatio(16/9, contentMode: .fill)
-            } placeholder: {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.2))
-                    .aspectRatio(16/9, contentMode: .fill)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button(action: {
+                    refreshContent()
+                }) {
+                    Label("刷新", systemImage: "arrow.trianglehead.2.counterclockwise")
+                }
+                .rotationEffect(.degrees(rotationAngle))
+                .disabled(isRefreshing || viewModel.isLoading)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            // 房间信息
-            VStack(alignment: .leading, spacing: 4) {
-                Text(room.roomTitle)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                Text(room.userName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
         }
-        .background(AppConstants.Colors.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .task {
+            handleOnAppear()
+        }
+        .onDisappear {
+            FavoriteView.lastLeaveTimestamp = Date()
+        }
+    }
+
+    @ViewBuilder
+    private func emptyStateView() -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "star.slash")
+                .font(.system(size: 60))
+                .foregroundStyle(.gray.opacity(0.5))
+
+            Text("暂无收藏")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+
+            Text("在其他页面添加您喜欢的直播间")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 100)
+    }
+
+    @ViewBuilder
+    private func cloudKitErrorView() -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.icloud")
+                .font(.system(size: 60))
+                .foregroundStyle(.red.opacity(0.7))
+
+            Text(viewModel.cloudKitStateString)
+                .font(.title3)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
+            Button(action: {
+                startFavoriteSync(force: true)
+            }) {
+                Label("重试", systemImage: "arrow.counterclockwise")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule()
+                            .fill(.blue.gradient)
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 100)
+    }
+
+    private func startFavoriteSync(force: Bool) {
+        Task(priority: .background) {
+            await loadFavorites(force: force)
+        }
+    }
+
+    @MainActor
+    private func loadFavorites(force: Bool = false) async {
+        if force {
+            await viewModel.syncWithActor()
+        } else if viewModel.shouldSync() {
+            await viewModel.syncWithActor()
+        }
+    }
+
+    private func handleOnAppear() {
+        if !FavoriteView.hasPerformedInitialSync {
+            FavoriteView.hasPerformedInitialSync = true
+            startFavoriteSync(force: true)
+            return
+        }
+
+        guard shouldForceRefresh() else { return }
+
+        startFavoriteSync(force: true)
+        FavoriteView.lastLeaveTimestamp = Date()
+    }
+
+    private func shouldForceRefresh() -> Bool {
+        guard let lastLeave = FavoriteView.lastLeaveTimestamp else {
+            return false
+        }
+        return Date().timeIntervalSince(lastLeave) > 300
+    }
+
+    private func refreshContent() {
+        guard !isRefreshing else { return }
+
+        Task {
+            isRefreshing = true
+            withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                rotationAngle = 360
+            }
+            await viewModel.pullToRefresh()
+            withAnimation {
+                rotationAngle = 0
+            }
+            isRefreshing = false
+        }
+    }
+
+    @ViewBuilder
+    private func skeletonView(geometry: GeometryProxy) -> some View {
+        LazyVStack(spacing: 20) {
+            skeletonLiveSection(geometry: geometry)
+        }
+        .padding(.top)
+        .padding(.bottom, 80)
+        .shimmering()
+    }
+
+    @ViewBuilder
+    private func skeletonLiveSection(geometry: GeometryProxy) -> some View {
+        let columns = 3
+        let horizontalSpacing: CGFloat = 15
+        let verticalSpacing: CGFloat = 24
+        let horizontalPadding: CGFloat = 20
+        let screenWidth = geometry.size.width
+
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
+
+        VStack(alignment: .leading, spacing: 12) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 24)
+                .padding(.horizontal)
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+                spacing: verticalSpacing
+            ) {
+                ForEach(0..<columns, id: \.self) { _ in
+                    LiveRoomCardSkeleton(width: cardWidth)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+        }
+    }
+
+    @ViewBuilder
+    private func favoriteContentView(geometry: GeometryProxy) -> some View {
+        LazyVStack(spacing: 32) {
+            ForEach(viewModel.groupedRoomList, id: \.id) { section in
+                sectionView(section: section, geometry: geometry)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(section: FavoriteLiveSectionModel, geometry: GeometryProxy) -> some View {
+        let isLiveSection = section.title == "正在直播"
+        let screenWidth = geometry.size.width
+
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isLiveSection ? Color.green.gradient : Color.gray.gradient)
+                    .frame(width: 4, height: 18)
+
+                Text(section.title)
+                    .font(.title2.bold())
+                    .foregroundStyle(AppConstants.Colors.primaryText)
+
+                Text("\(section.roomList.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(.quaternary.opacity(0.5))
+                    )
+
+                Spacer()
+            }
+            .padding(.horizontal)
+
+            liveSectionGrid(roomList: section.roomList, screenWidth: screenWidth)
+        }
+    }
+
+    @ViewBuilder
+    private func liveSectionGrid(roomList: [LiveModel], screenWidth: CGFloat) -> some View {
+        let horizontalSpacing: CGFloat = 15
+        let verticalSpacing: CGFloat = 24
+        let horizontalPadding: CGFloat = 20
+
+        LazyVGrid(
+            columns: [
+                GridItem(.adaptive(minimum: 220, maximum: 310), spacing: horizontalSpacing)
+            ],
+            spacing: verticalSpacing
+        ) {
+            ForEach(roomList, id: \.roomId) { room in
+                LiveRoomCard(room: room)
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
     }
 }
 

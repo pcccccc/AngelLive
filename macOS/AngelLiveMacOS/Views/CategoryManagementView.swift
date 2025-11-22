@@ -13,8 +13,8 @@ import Kingfisher
 
 struct CategoryManagementView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
-    @Environment(\.dismiss) private var dismiss
     @State private var selectedMainIndex = 0
+    let onDismiss: () -> Void  // 添加关闭回调
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -48,7 +48,7 @@ struct CategoryManagementView: View {
                                 Task {
                                     await viewModel.selectMainCategory(index: selectedMainIndex)
                                     await viewModel.selectSubCategory(index: index)
-                                    dismiss()
+                                    onDismiss()  // 调用关闭回调
                                 }
                             }
                     }

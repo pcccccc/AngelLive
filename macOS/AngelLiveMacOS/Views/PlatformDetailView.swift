@@ -15,6 +15,7 @@ struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
     @Environment(\.openWindow) private var openWindow
     @State private var showCategorySheet = false
+    @State private var isRefreshing = false
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -46,6 +47,21 @@ struct PlatformDetailView: View {
             }
         }
         .navigationTitle(viewModel.platform.title)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button(action: {
+                    refreshContent()
+                }) {
+                    Label("刷新", systemImage: "arrow.trianglehead.2.counterclockwise")
+                }
+                .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                .animation(
+                    isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                    value: isRefreshing
+                )
+                .disabled(isRefreshing || viewModel.isLoadingRooms)
+            }
+        }
         .overlay {
             if showCategorySheet {
                 ZStack {
@@ -76,7 +92,11 @@ struct PlatformDetailView: View {
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
 
-                        CategoryManagementView()
+                        CategoryManagementView(onDismiss: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showCategorySheet = false
+                            }
+                        })
                             .environment(viewModel)
                             .padding(.horizontal, 12)
                             .padding(.bottom, 12)
@@ -257,11 +277,29 @@ struct PlatformDetailView: View {
             }
         }
     }
+
+    // MARK: - Helper Functions
+    private func refreshContent() {
+        guard !isRefreshing else { return }
+
+        Task {
+            isRefreshing = true
+            await viewModel.loadRoomList()
+            isRefreshing = false
+        }
+    }
 }
 
 // MARK: - 直播间卡片
 struct LiveRoomCard: View {
     let room: LiveModel
+    @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(ToastManager.self) private var toastManager
+
+    // 判断是否已收藏
+    private var isFavorited: Bool {
+        favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -310,6 +348,73 @@ struct LiveRoomCard: View {
 
                 Spacer()
             }
+        }
+        .contextMenu {
+            favoriteContextMenu
+        }
+    }
+
+    @ViewBuilder
+    private var favoriteContextMenu: some View {
+        if isFavorited {
+            Button(role: .destructive) {
+                Task {
+                    await removeFavorite()
+                }
+            } label: {
+                Label("取消收藏", systemImage: "heart.slash.fill")
+            }
+        } else {
+            Button {
+                Task {
+                    await addFavorite()
+                }
+            } label: {
+                Label("收藏", systemImage: "heart.fill")
+            }
+        }
+
+        // TODO: 复制功能暂时注释，后续有好想法再开启
+        // Divider()
+        //
+        // Button {
+        //     // 复制房间标题
+        //     NSPasteboard.general.clearContents()
+        //     NSPasteboard.general.setString(room.roomTitle, forType: .string)
+        //     showToastMessage(icon: "doc.on.doc.fill", message: "已复制房间标题")
+        // } label: {
+        //     Label("复制房间标题", systemImage: "doc.on.doc")
+        // }
+        //
+        // Button {
+        //     // 复制主播名称
+        //     NSPasteboard.general.clearContents()
+        //     NSPasteboard.general.setString(room.userName, forType: .string)
+        //     showToastMessage(icon: "doc.on.doc.fill", message: "已复制主播名称")
+        // } label: {
+        //     Label("复制主播名称", systemImage: "person.fill")
+        // }
+    }
+
+    @MainActor
+    private func addFavorite() async {
+        do {
+            try await favoriteModel.addFavorite(room: room)
+            toastManager.show(icon: "heart.fill", message: "收藏成功", type: .success)
+        } catch {
+            toastManager.show(icon: "xmark.circle.fill", message: "收藏失败", type: .error)
+            print("收藏失败: \(error)")
+        }
+    }
+
+    @MainActor
+    private func removeFavorite() async {
+        do {
+            try await favoriteModel.removeFavoriteRoom(room: room)
+            toastManager.show(icon: "heart.slash.fill", message: "已取消收藏", type: .info)
+        } catch {
+            toastManager.show(icon: "xmark.circle.fill", message: "取消收藏失败", type: .error)
+            print("取消收藏失败: \(error)")
         }
     }
 }
