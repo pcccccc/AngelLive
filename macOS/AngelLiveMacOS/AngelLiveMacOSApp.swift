@@ -43,6 +43,7 @@ struct AngelLiveMacOSApp: App {
                 .keyboardShortcut("r", modifiers: .command)
             }
         }
+        .defaultSize(width: 1024, height: 960)
 
         WindowGroup(for: LiveModel.self) { $room in
             if let room = room {

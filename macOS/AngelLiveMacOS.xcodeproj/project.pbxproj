@@ -14,7 +14,7 @@
 
 /* Begin PBXFileReference section */
 		FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
-		FB7077CA2EA1D6820059AFD9 /* AngelLiveMacOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveMacOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB7077CA2EA1D6820059AFD9 /* Angel Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Angel Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -64,7 +64,7 @@
 		FB7077CB2EA1D6820059AFD9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FB7077CA2EA1D6820059AFD9 /* AngelLiveMacOS.app */,
+				FB7077CA2EA1D6820059AFD9 /* Angel Live.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -100,7 +100,7 @@
 				FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */,
 			);
 			productName = AngelLiveMacOS;
-			productReference = FB7077CA2EA1D6820059AFD9 /* AngelLiveMacOS.app */;
+			productReference = FB7077CA2EA1D6820059AFD9 /* Angel Live.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -318,7 +318,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLiveMacOS;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Angel Live";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -366,7 +366,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLiveMacOS;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Angel Live";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
