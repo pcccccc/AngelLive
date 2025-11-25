@@ -1,0 +1,137 @@
+//
+//  DanmakuCell.swift
+//  DanmakuKit
+//
+//  Created by Q YiZhong on 2020/8/16.
+//
+
+import Foundation
+import QuartzCore
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
+open class DanmakuCell: DanmakuBaseView {
+
+    public var model: DanmakuCellModel?
+    
+    public internal(set) var animationTime: TimeInterval = 0
+    
+    var animationBeginTime: TimeInterval = 0
+    
+#if os(iOS) || os(tvOS)
+    public override class var layerClass: AnyClass {
+        DanmakuAsyncLayer.self
+    }
+#else
+    public override func makeBackingLayer() -> CALayer {
+        DanmakuAsyncLayer()
+    }
+    public override var isFlipped: Bool { true }
+#endif
+    
+    public required override init(frame: CGRect) {
+        super.init(frame: frame)
+#if os(macOS)
+        wantsLayer = true
+#endif
+        setupLayer()
+    }
+    
+    public required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    /// Overriding this method, you can get the timing before the content rendering.
+    open func willDisplay() {}
+    
+    
+    /// Overriding this method to draw danmaku.
+    /// - Parameters:
+    ///   - context: drawing context
+    ///   - size: bounds.size
+    ///   - isCancelled: Whether drawing is cancelled
+    open func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {}
+    
+    /// Overriding this method, you can get the timing after the content rendering.
+    /// - Parameter finished: False if draw is cancelled
+    open func didDisplay(_ finished: Bool) {}
+    
+    /// Overriding this method, you can get th timing of danmaku enter track.
+    open func enterTrack() {}
+    
+    /// Overriding this method, you can get th timing of danmaku leave track.
+    open func leaveTrack() {}
+    
+    /// Decide whether to use asynchronous rendering.
+    public var displayAsync = true {
+        didSet {
+            guard let layer = layer as? DanmakuAsyncLayer else { return }
+            layer.displayAsync = displayAsync
+        }
+    }
+    
+    /// This method can trigger the rendering process, the content can be re-rendered in the displaying(_:_:_:) method.
+    public func redraw() {
+        #if os(macOS)
+        layer?.setNeedsDisplay()
+        #else
+        layer.setNeedsDisplay()
+        #endif
+    }
+       
+}
+
+extension DanmakuCell {
+
+    var danmakuLayer: CALayer? {
+#if os(macOS)
+        if layer == nil {
+            wantsLayer = true
+        }
+        return layer
+#else
+        return layer
+#endif
+    }
+    
+    var realFrame: CGRect {
+#if os(macOS)
+        if let presentation = layer?.presentation() {
+            return presentation.frame
+        } else {
+            return frame
+        }
+#else
+        if let presentation = layer.presentation() {
+            return presentation.frame
+        } else {
+            return frame
+        }
+#endif
+    }
+    
+    func setupLayer() {
+        guard let layer = layer as? DanmakuAsyncLayer else { return }
+        
+        layer.contentsScale = danmakuScreenScale()
+        
+        layer.willDisplay = { [weak self] (layer) in
+            guard let strongSelf = self else { return }
+            strongSelf.willDisplay()
+        }
+        
+        layer.displaying = { [weak self] (context, size, isCancelled) in
+            guard let strongSelf = self else { return }
+            strongSelf.displaying(context, size, isCancelled())
+        }
+        
+        layer.didDisplay = { [weak self] (layer, finished) in
+            guard let strongSelf = self else { return }
+            strongSelf.didDisplay(finished)
+        }
+    }
+    
+}

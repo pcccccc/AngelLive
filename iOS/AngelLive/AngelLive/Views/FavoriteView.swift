@@ -1,0 +1,384 @@
+//
+//  FavoriteView.swift
+//  AngelLive
+//
+//  Created by pangchong on 10/17/25.
+//
+
+import SwiftUI
+import AngelLiveDependencies
+import AngelLiveCore
+
+struct FavoriteView: View {
+    @Environment(AppFavoriteModel.self) private var viewModel
+    @State private var isRefreshing = false
+    @State private var searchText = ""
+    private static var lastLeaveTimestamp: Date?
+    private static var hasPerformedInitialSync = false
+
+    // 过滤后的房间列表
+    private var filteredGroupedRoomList: [FavoriteLiveSectionModel] {
+        guard !searchText.isEmpty else {
+            return viewModel.groupedRoomList
+        }
+
+        let lowercasedSearch = searchText.lowercased()
+        return viewModel.groupedRoomList.compactMap { section in
+            let filteredRooms = section.roomList.filter { room in
+                room.userName.lowercased().contains(lowercasedSearch) ||
+                room.roomTitle.lowercased().contains(lowercasedSearch)
+            }
+
+            guard !filteredRooms.isEmpty else { return nil }
+
+            var newSection = section
+            newSection.roomList = filteredRooms
+            return newSection
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            GeometryReader { geometry in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        if viewModel.isLoading {
+                            skeletonView(geometry: geometry)
+                        } else if viewModel.cloudKitReady {
+                            if viewModel.roomList.isEmpty {
+                                emptyStateView()
+                            } else {
+                                favoriteContentView(geometry: geometry)
+                                    .id("top") // 添加顶部标识
+                            }
+                        } else {
+                            cloudKitErrorView()
+                        }
+                    }
+                    .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
+                    .scrollIndicators(.visible, axes: .vertical) // iOS 26: 改进的滚动指示器
+                    .refreshable {
+                        await refreshFavorites(scrollProxy: proxy)
+                    }
+                }
+            }
+            .navigationTitle("收藏")
+            .navigationBarTitleDisplayMode(.large)
+            .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
+            .task {
+                handleOnAppear()
+            }
+        }
+        .onDisappear {
+            FavoriteView.lastLeaveTimestamp = Date()
+        }
+    }
+
+    @ViewBuilder
+    private func emptyStateView() -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "star.slash")
+                .font(.system(size: 60))
+                .foregroundStyle(.gray.opacity(0.5))
+
+            Text("暂无收藏")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+
+            Text("在其他页面添加您喜欢的直播间")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 100)
+    }
+
+    @ViewBuilder
+    private func skeletonView(geometry: GeometryProxy) -> some View {
+        LazyVStack(spacing: 20) {
+            // 第一个分组：正在直播（网格布局）
+            skeletonLiveSection(geometry: geometry)
+        }
+        .padding(.top)
+        .padding(.bottom, 80)  // 增加底部间距，与实际内容保持一致
+        .shimmering()  // 在最外层应用一次 shimmer，提升性能
+    }
+
+    @ViewBuilder
+    private func skeletonLiveSection(geometry: GeometryProxy) -> some View {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let columns = isIPad ? 3 : 2
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的水平间距
+        let verticalSpacing: CGFloat = 24    // 卡片之间的垂直间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
+        let screenWidth = geometry.size.width
+
+        // 计算卡片宽度：(屏幕宽度 - 左边距 - 右边距 - 卡片间距) / 列数
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
+
+        VStack(alignment: .leading, spacing: 12) {
+            // 分组标题骨架
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 24)
+                .padding(.horizontal)
+
+            // 网格卡片骨架 - 只显示一行，减少内存占用
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+                spacing: verticalSpacing
+            ) {
+                ForEach(0..<columns, id: \.self) { _ in
+                    LiveRoomCardSkeleton(width: cardWidth)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+        }
+    }
+
+    @ViewBuilder
+    private func skeletonHorizontalSection(geometry: GeometryProxy) -> some View {
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let visibleCards: CGFloat = isIPad ? 3.5 : 2.5
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
+        let screenWidth = geometry.size.width
+        let totalSpacing = horizontalSpacing * (visibleCards - 1) + horizontalPadding
+        let cardWidth = (screenWidth - totalSpacing) / visibleCards
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
+
+        VStack(alignment: .leading, spacing: 12) {
+            // 分组标题骨架
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.gray.opacity(0.3))
+                .frame(width: 120, height: 24)
+                .padding(.horizontal)
+
+            // 横向滚动的卡片骨架 - 只显示 2 张卡片，减少动画数量
+            HStack(spacing: horizontalSpacing) {
+                ForEach(0..<2, id: \.self) { _ in
+                    LiveRoomCardSkeleton(width: cardWidth)
+                        .frame(width: cardWidth, height: cardHeight)
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+        }
+    }
+
+    @ViewBuilder
+    private func cloudKitErrorView() -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.icloud")
+                .font(.system(size: 60))
+                .foregroundStyle(.red.opacity(0.7))
+
+            Text(viewModel.cloudKitStateString)
+                .font(.title3)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+
+            Button(action: {
+                startFavoriteSync(force: true)
+            }) {
+                Label("重试", systemImage: "arrow.counterclockwise")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 30)
+                    .padding(.vertical, 12)
+                    .background(
+                        Capsule()
+                            .fill(.blue.gradient)
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 100)
+    }
+
+    @ViewBuilder
+    private func favoriteContentView(geometry: GeometryProxy) -> some View {
+        let displayList = filteredGroupedRoomList
+
+        if displayList.isEmpty && !searchText.isEmpty {
+            // 搜索无结果
+            VStack(spacing: 20) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.gray.opacity(0.5))
+
+                Text("未找到相关主播")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+
+                Text("请尝试其他关键词")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.top, 100)
+        } else {
+            LazyVStack(spacing: 32) { // iOS 26: 增加分区间距，提升视觉层次
+                ForEach(displayList, id: \.id) { section in
+                    sectionView(section: section, geometry: geometry)
+                        .transition(.opacity.combined(with: .move(edge: .top))) // iOS 26: 流畅的过渡动画
+                }
+            }
+            .animation(.smooth(duration: 0.4), value: displayList.count) // iOS 26: smooth 动画
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(section: FavoriteLiveSectionModel, geometry: GeometryProxy) -> some View {
+        let isLiveSection = section.title == "正在直播"
+        let screenWidth = geometry.size.width
+        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+
+        VStack(alignment: .leading, spacing: 16) { // iOS 26: 增加内部间距
+            // 分组标题 - iOS 26 风格
+            HStack(alignment: .center, spacing: 8) { // 居中对齐
+                // 视觉指示器
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(isLiveSection ? Color.green.gradient : Color.gray.gradient) // iOS 26: gradient 效果
+                    .frame(width: 4, height: 18)
+
+                Text(section.title)
+                    .font(.title2.bold())
+                    .foregroundStyle(AppConstants.Colors.primaryText)
+
+                // 房间数量标签
+                Text("\(section.roomList.count)")
+                    .font(.caption.monospacedDigit()) // iOS 26: 等宽数字
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(.quaternary.opacity(0.5))
+                    )
+
+                Spacer()
+            }
+            .padding(.horizontal)
+
+            if isLiveSection {
+                // 正在直播：纵向网格布局
+                liveSectionGrid(roomList: section.roomList, screenWidth: screenWidth, isIPad: isIPad)
+            } else {
+                // 其他分组：横向滚动布局
+                horizontalScrollSection(roomList: section.roomList, screenWidth: screenWidth, isIPad: isIPad)
+            }
+        }
+        .safeAreaPadding(.vertical, 8) // iOS 26: 使用 safeAreaPadding
+    }
+
+    // 正在直播的网格布局
+    @ViewBuilder
+    private func liveSectionGrid(roomList: [LiveModel], screenWidth: CGFloat, isIPad: Bool) -> some View {
+        let columns = isIPad ? 3 : 2
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的水平间距
+        let verticalSpacing: CGFloat = 24    // 卡片之间的垂直间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
+
+        // 计算卡片宽度：(屏幕宽度 - 左边距 - 右边距 - 卡片间距) / 列数
+        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
+        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
+
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+            spacing: verticalSpacing
+        ) {
+            ForEach(roomList, id: \.roomId) { room in
+                LiveRoomCard(room: room)
+                    .frame(width: cardWidth, height: cardHeight)
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
+    }
+
+    // 其他分组的横向滚动布局
+    @ViewBuilder
+    private func horizontalScrollSection(roomList: [LiveModel], screenWidth: CGFloat, isIPad: Bool) -> some View {
+        let visibleCards: CGFloat = isIPad ? 3.5 : 2.5
+        let horizontalSpacing: CGFloat = 15  // 卡片之间的间距
+        let horizontalPadding: CGFloat = 20  // 左右边距
+        let totalSpacing = horizontalSpacing * (visibleCards - 1) + horizontalPadding
+        let cardWidth = (screenWidth - totalSpacing) / visibleCards
+        let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
+
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: horizontalSpacing) {
+                ForEach(roomList, id: \.roomId) { room in
+                    LiveRoomCard(room: room, width: cardWidth)
+                        .frame(width: cardWidth, height: cardHeight)
+                        .scrollTransition { content, phase in // iOS 26: 滚动过渡效果
+                            content
+                                .opacity(phase.isIdentity ? 1 : 0.8)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.95)
+                        }
+                }
+            }
+            .padding(.horizontal, horizontalPadding)
+            .scrollTargetLayout() // iOS 26: 优化滚动目标
+        }
+        .scrollTargetBehavior(.viewAligned) // iOS 26: 视图对齐滚动
+        .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性
+        .frame(height: cardHeight)
+    }
+
+    private func handleOnAppear() {
+        if !FavoriteView.hasPerformedInitialSync {
+            FavoriteView.hasPerformedInitialSync = true
+            startFavoriteSync(force: true)
+            return
+        }
+
+        guard shouldForceRefresh() else { return }
+
+        startFavoriteSync(force: true)
+        FavoriteView.lastLeaveTimestamp = Date()
+    }
+
+    private func shouldForceRefresh() -> Bool {
+        guard let lastLeave = FavoriteView.lastLeaveTimestamp else {
+            return false
+        }
+        return Date().timeIntervalSince(lastLeave) > 300
+    }
+
+    @MainActor
+    private func loadFavorites(force: Bool = false) async {
+        if force {
+            await viewModel.syncWithActor()
+        } else if viewModel.shouldSync() {
+            await viewModel.syncWithActor()
+        }
+    }
+
+    @MainActor
+    private func refreshFavorites(scrollProxy: ScrollViewProxy) async {
+        // 手动刷新时始终同步
+        isRefreshing = true
+        await viewModel.pullToRefresh()
+        isRefreshing = false
+
+        // 刷新完成后延迟 0.5 秒滚动到顶部
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+        withAnimation {
+            scrollProxy.scrollTo("top", anchor: .top)
+        }
+    }
+
+    /// 启动一个与视图生命周期解耦的同步任务，避免切换页面时被系统取消
+    private func startFavoriteSync(force: Bool) {
+        Task(priority: .background) {
+            await loadFavorites(force: force)
+        }
+    }
+}
+
+#Preview {
+    FavoriteView()
+}

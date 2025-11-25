@@ -1,0 +1,15 @@
+{
+  "originHash" : "155b28a1bb6dc58324138528567931fc3bfc8b09199e37f61571ee732fb62b06",
+  "pins" : [
+    {
+      "identity" : "jxsegmentedview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pujiaxin33/JXSegmentedView.git",
+      "state" : {
+        "revision" : "fbbf965d7396bd99ac1ce88a80b6c950b85313f6",
+        "version" : "1.4.1"
+      }
+    }
+  ],
+  "version" : 3
+}

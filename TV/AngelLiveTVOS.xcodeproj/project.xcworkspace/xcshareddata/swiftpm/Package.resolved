@@ -1,0 +1,303 @@
+{
+  "originHash" : "484578405571ac9034e26fa1b946d2da8946b6d6e193f50d6fc5a7581e2ea0a8",
+  "pins" : [
+    {
+      "identity" : "acknowlist",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/AcknowList",
+      "state" : {
+        "branch" : "main",
+        "revision" : "7648ed852ba8b9fb5460f8b57436ddd6847d2043"
+      }
+    },
+    {
+      "identity" : "alamofire",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Alamofire/Alamofire.git",
+      "state" : {
+        "revision" : "513364f870f6bfc468f9d2ff0a95caccc10044c5",
+        "version" : "5.10.2"
+      }
+    },
+    {
+      "identity" : "bitbytedata",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tsolomko/BitByteData",
+      "state" : {
+        "revision" : "cdcdc5177ad536cfb11b95c620f926a81014b7fe",
+        "version" : "2.0.4"
+      }
+    },
+    {
+      "identity" : "bugsnag-cocoa",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/bugsnag/bugsnag-cocoa",
+      "state" : {
+        "revision" : "1f991e92a6e3993c2763d071781d895ca4075a90",
+        "version" : "6.34.0"
+      }
+    },
+    {
+      "identity" : "cache",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hyperoslo/Cache",
+      "state" : {
+        "revision" : "24e47109e31b2031cb26e25cc1b81b607496066c",
+        "version" : "7.4.0"
+      }
+    },
+    {
+      "identity" : "cocoaasyncsocket",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/robbiehanson/CocoaAsyncSocket",
+      "state" : {
+        "revision" : "dbdc00669c1ced63b27c3c5f052ee4d28f10150c",
+        "version" : "7.6.5"
+      }
+    },
+    {
+      "identity" : "colorfulx",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/ColorfulX",
+      "state" : {
+        "revision" : "1f667feb13844f38d70488439682933b4d1ea65b",
+        "version" : "5.2.8"
+      }
+    },
+    {
+      "identity" : "colorvector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/ColorVector.git",
+      "state" : {
+        "revision" : "6da8726bf38d68eb943d0f2139ac2a1fac70e65b",
+        "version" : "1.0.4"
+      }
+    },
+    {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TracyPlayer/FFmpegKit/",
+      "state" : {
+        "revision" : "631784c6f5366193c407194ae93ee44e9525b170",
+        "version" : "7.1.1"
+      }
+    },
+    {
+      "identity" : "gmobjc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/GMObjC",
+      "state" : {
+        "revision" : "0cf4b70a3525d3954b269a5ed5200f4cd0f31052",
+        "version" : "1.0.2"
+      }
+    },
+    {
+      "identity" : "gzipswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1024jp/GzipSwift",
+      "state" : {
+        "revision" : "56bf51fdd2fe4b2cf254b2cf34aede3d7caccc6c",
+        "version" : "6.1.0"
+      }
+    },
+    {
+      "identity" : "injectionnext",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/InjectionNext",
+      "state" : {
+        "revision" : "c7da054b15d2337f6d49ecdc25e495e31e27b77f",
+        "version" : "1.4.3"
+      }
+    },
+    {
+      "identity" : "kingfisher",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/onevcat/Kingfisher",
+      "state" : {
+        "revision" : "dd3c422ec3088404d6f7e8c905a8318b3de12d6f",
+        "version" : "8.6.0"
+      }
+    },
+    {
+      "identity" : "kingfisherwebp",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/yeatse/KingfisherWebP.git",
+      "state" : {
+        "revision" : "dccea7e92e77b0aa9ae5955c0d8f78c88ac0a950",
+        "version" : "1.7.0"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TracyPlayer/KSPlayer",
+      "state" : {
+        "revision" : "62998ba783dca4d9a9643ef5dd717652a30b9dc5",
+        "version" : "2.6.2"
+      }
+    },
+    {
+      "identity" : "libwebp-xcode",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SDWebImage/libwebp-Xcode",
+      "state" : {
+        "revision" : "0d60654eeefd5d7d2bef3835804892c40225e8b2",
+        "version" : "1.5.0"
+      }
+    },
+    {
+      "identity" : "liveparse",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/LiveParse",
+      "state" : {
+        "revision" : "59fc33ae03bc0cbda31a63752e5bbd1efdf3ba12",
+        "version" : "1.9.5"
+      }
+    },
+    {
+      "identity" : "msdisplaylink",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/MSDisplayLink.git",
+      "state" : {
+        "revision" : "c2fcd28cb99300d83acc30860ce252ef97c20b61",
+        "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "pow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/EmergeTools/Pow",
+      "state" : {
+        "revision" : "a504eb6d144bcf49f4f33029a2795345cb39e6b4",
+        "version" : "1.0.5"
+      }
+    },
+    {
+      "identity" : "simpletoast",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sanzaru/SimpleToast",
+      "state" : {
+        "revision" : "8d49c8c16d218b03c3428a0d1c8fe79f4e2707a6",
+        "version" : "0.11.0"
+      }
+    },
+    {
+      "identity" : "springinterpolation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/SpringInterpolation.git",
+      "state" : {
+        "revision" : "f9ae95ece5d6b7cdceafd4381f1d5f0f9494e5d2",
+        "version" : "1.3.1"
+      }
+    },
+    {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/daltoniam/Starscream",
+      "state" : {
+        "revision" : "c6bfd1af48efcc9a9ad203665db12375ba6b145a",
+        "version" : "4.0.8"
+      }
+    },
+    {
+      "identity" : "swcompression",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tsolomko/SWCompression",
+      "state" : {
+        "revision" : "390e0b0af8dd19a600005a242a89e570ff482e09",
+        "version" : "4.8.6"
+      }
+    },
+    {
+      "identity" : "swift-atomics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-atomics.git",
+      "state" : {
+        "revision" : "b601256eab081c0f92f059e12818ac1d4f178ff7",
+        "version" : "1.3.0"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections.git",
+      "state" : {
+        "revision" : "7b847a3b7008b2dc2f47ca3110d8c782fb2e5c7e",
+        "version" : "1.3.0"
+      }
+    },
+    {
+      "identity" : "swift-nio",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-nio.git",
+      "state" : {
+        "revision" : "a18bddb0acf7a40d982b2f128ce73ce4ee31f352",
+        "version" : "2.86.2"
+      }
+    },
+    {
+      "identity" : "swift-protobuf",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-protobuf.git",
+      "state" : {
+        "revision" : "2547102afd04fe49f1b286090f13ebce07284980",
+        "version" : "1.31.1"
+      }
+    },
+    {
+      "identity" : "swift-system",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-system.git",
+      "state" : {
+        "revision" : "395a77f0aa927f0ff73941d7ac35f2b46d47c9db",
+        "version" : "1.6.3"
+      }
+    },
+    {
+      "identity" : "swiftui-shimmer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/markiv/SwiftUI-Shimmer",
+      "state" : {
+        "branch" : "iOS17-animate-start-end-points",
+        "revision" : "72769ccb238c86cfac69dd6aaa3239553188b27c"
+      }
+    },
+    {
+      "identity" : "swiftyjson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SwiftyJSON/SwiftyJSON",
+      "state" : {
+        "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
+        "version" : "5.0.2"
+      }
+    },
+    {
+      "identity" : "tarskit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/TarsKit",
+      "state" : {
+        "revision" : "68e2afd78327f047fa32afb2c339f3e8af5b3294",
+        "version" : "1.3.0"
+      }
+    },
+    {
+      "identity" : "udpbroadcastconnection",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gunterhager/UDPBroadcastConnection",
+      "state" : {
+        "revision" : "3680f532c00d18a168bb8da7b9f8f82fcd89180d",
+        "version" : "5.0.5"
+      }
+    },
+    {
+      "identity" : "youtubekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pcccccc/YouTubeKit",
+      "state" : {
+        "revision" : "19f2cd54b564044d2229400cf3828f22a2bd483f",
+        "version" : "0.0.3"
+      }
+    }
+  ],
+  "version" : 3
+}
