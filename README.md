@@ -2,13 +2,13 @@
 
 ## 下载地址：
 
-###iOS:
+##iOS:
 内测后提供。
 
-###macOS:
+##macOS:
 内测后提供。
 
-###TV:
+##TV:
 [https://testflight.apple.com/join/2oZuwSHJ](https://testflight.apple.com/join/2oZuwSHJ) `Testflight安装链接`
 
 ## 问题反馈
@@ -29,11 +29,14 @@
 
 ## 支持平台：
 
-liquid glass
+适配26系统，liquid glass
 
 iOS 18+
+
 macOS 15+
+
 tvOS 17+ 
+
 
 ## 开发环境配置：
 
@@ -69,7 +72,7 @@ tvOS 17+
 
 ## 感谢开源项目：
 
-###解析参考：
+##解析参考：
 
 [dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live/) `原项目`  [AllLive](https://github.com/xiaoyaocz/AllLive) `原作者开发的C#版本`
 
@@ -79,7 +82,7 @@ tvOS 17+
 
 [wbt5/real-url](https://github.com/wbt5/real-url)
 
-###引用开源项目：
+##引用开源项目：
 
 [Lakr233/ColorfulX](https://github.com/Lakr233/ColorfulX)
 
