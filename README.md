@@ -17,11 +17,11 @@
 
 ## 截图：
 
-  <img src="./ScreenShot/iOS.png" alt="iOS" width="300" />
+  <img src="./ScreenShot/iOS.png" alt="iOS" width="150" />
 
-  <img src="./ScreenShot/macOS.png" alt="macOS" width="300" />
+  <img src="./ScreenShot/macOS.png" alt="macOS" width="500" />
 
-  <img src="./ScreenShot/tvOS.png" alt="tvOS" width="300" />
+  <img src="./ScreenShot/tvOS.png" alt="tvOS" width="600" />
 
 ## 背景：
 
