@@ -103,10 +103,6 @@ tvOS 17+
 
 ---
 
-<a href="https://jb.gg/OpenSourceSupport" target="_blank"><img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo (Main) logo." width="150"></a>
-
-感谢JetBrains提供开源许可，在此表达我的感谢。
-
 <a href="https://www.bugsnag.com" target="_blank"><img src="https://images.typeform.com/images/QKuaAssrFCq7/image/default-firstframe.png" alt="Bugsnag Logo (Main) logo." width="150"></a>
 
 感谢bugsnag提供的开源许可，在此表达我的感谢。
