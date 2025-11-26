@@ -38,6 +38,7 @@ class RoomListViewController: UIViewController {
         return rc
     }()
 
+    private var errorHostingController: UIHostingController<ErrorView>?
     private var isLoadingMore = false
     private var lastKnownCollectionWidth: CGFloat = 0
 
@@ -221,7 +222,65 @@ class RoomListViewController: UIViewController {
         guard let viewModel = viewModel else { return }
         let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
         rooms = viewModel.roomListCache[cacheKey] ?? []
+
+        // 检查是否有错误需要显示
+        if let error = viewModel.roomError, rooms.isEmpty {
+            showErrorView(error: error)
+        } else {
+            hideErrorView()
+        }
+
         collectionView.reloadData()
+    }
+
+    // MARK: - Error Handling
+
+    private func showErrorView(error: Error) {
+        // 如果已经显示错误视图，先移除
+        hideErrorView()
+
+        let errorView = ErrorView(
+            title: "加载失败",
+            message: error.liveParseMessage,
+            detailMessage: error.liveParseDetail,
+            showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
+            onRetry: { [weak self] in
+                self?.hideErrorView()
+                self?.handleRefresh()
+            }
+        )
+
+        let hostingController = UIHostingController(rootView: errorView)
+        hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        hostingController.didMove(toParent: self)
+        errorHostingController = hostingController
+
+        // 隐藏 collectionView
+        collectionView.isHidden = true
+    }
+
+    private func hideErrorView() {
+        guard let errorHostingController = errorHostingController else { return }
+
+        errorHostingController.willMove(toParent: nil)
+        errorHostingController.view.removeFromSuperview()
+        errorHostingController.removeFromParent()
+        self.errorHostingController = nil
+
+        // 显示 collectionView
+        collectionView.isHidden = false
     }
 }
 

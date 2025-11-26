@@ -26,6 +26,8 @@ final class RoomInfoViewModel {
     var currentRoom: LiveModel
     var currentPlayURL: URL?
     var isLoading = false
+    var playError: Error?
+    var playErrorMessage: String?
 
     // 播放器相关属性
     var playerOption: PlayerOptions
@@ -62,6 +64,8 @@ final class RoomInfoViewModel {
     @MainActor
     func loadPlayURL() async {
         isLoading = true
+        playError = nil
+        playErrorMessage = nil
         await getPlayArgs()
     }
 
@@ -92,6 +96,8 @@ final class RoomInfoViewModel {
         } catch {
             await MainActor.run {
                 self.isLoading = false
+                self.playError = error
+                self.playErrorMessage = "获取播放地址失败"
             }
         }
     }
@@ -101,6 +107,7 @@ final class RoomInfoViewModel {
         self.currentRoomPlayArgs = playArgs
         if playArgs.count == 0 {
             self.isLoading = false
+            self.playErrorMessage = "暂无可用的播放源"
             return
         }
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)

@@ -34,6 +34,7 @@ struct AngelLiveMacOSApp: App {
                 .environment(welcomeManager)
                 .environment(favoriteViewModel)
                 .environment(toastManager)
+                .setupBilibiliCookieIfNeeded()
         }
         .commands {
             CommandGroup(after: .appInfo) {

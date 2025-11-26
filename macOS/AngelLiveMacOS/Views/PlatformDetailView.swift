@@ -22,12 +22,16 @@ struct PlatformDetailView: View {
 
         VStack(spacing: 0) {
             if let error = viewModel.categoryError {
-                ContentUnavailableView(
-                    "加载失败",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(error.localizedDescription)
+                ErrorView(
+                    title: "加载失败",
+                    message: errorMessage(from: error),
+                    detailMessage: errorDetail(from: error),
+                    onRetry: {
+                        Task {
+                            await viewModel.loadCategories()
+                        }
+                    }
                 )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.isLoadingCategories && viewModel.categories.isEmpty {
                 ProgressView("加载分类中...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -220,12 +224,16 @@ struct PlatformDetailView: View {
             ProgressView("加载直播间...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = viewModel.roomError, rooms.isEmpty {
-            ContentUnavailableView(
-                "加载失败",
-                systemImage: "exclamationmark.triangle",
-                description: Text(error.localizedDescription)
+            ErrorView(
+                title: "加载失败",
+                message: errorMessage(from: error),
+                detailMessage: errorDetail(from: error),
+                onRetry: {
+                    Task {
+                        await viewModel.loadRoomList()
+                    }
+                }
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if rooms.isEmpty {
             ContentUnavailableView(
                 "暂无直播",
@@ -287,6 +295,23 @@ struct PlatformDetailView: View {
             await viewModel.loadRoomList()
             isRefreshing = false
         }
+    }
+
+    // MARK: - 错误信息提取
+
+    private func errorMessage(from error: Error) -> String {
+        if let liveParseError = error as? LiveParseError {
+            return liveParseError.title
+        }
+        return error.localizedDescription
+    }
+
+    private func errorDetail(from error: Error) -> String? {
+        if let liveParseError = error as? LiveParseError {
+            let detail = liveParseError.detail
+            return detail.isEmpty ? nil : detail
+        }
+        return nil
     }
 }
 

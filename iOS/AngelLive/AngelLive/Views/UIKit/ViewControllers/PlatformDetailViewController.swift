@@ -20,6 +20,9 @@ class PlatformDetailViewController: UIViewController {
     // 骨架屏容器
     private var skeletonHostingController: UIHostingController<PlatformDetailSkeletonView>?
 
+    // 错误视图容器
+    private var errorHostingController: UIHostingController<ErrorView>?
+
     // 主分类 JXSegmentedView
     private lazy var mainCategoryDataSource = JXSegmentedTitleDataSource()
 
@@ -138,10 +141,15 @@ class PlatformDetailViewController: UIViewController {
         Task { @MainActor in
             await viewModel.loadCategories()
 
-            if !viewModel.categories.isEmpty {
+            if let error = viewModel.categoryError {
+                // 加载失败，显示错误视图
+                hideSkeletonView()
+                showErrorView(error: error)
+            } else if !viewModel.categories.isEmpty {
                 setupMainCategories()
                 // 加载完成后隐藏骨架屏
                 hideSkeletonView()
+                hideErrorView()
             }
         }
     }
@@ -184,6 +192,58 @@ class PlatformDetailViewController: UIViewController {
             skeletonHostingController.removeFromParent()
             self.skeletonHostingController = nil
         }
+    }
+
+    // MARK: - Error View Methods
+
+    private func showErrorView(error: Error) {
+        // 如果已经显示错误视图，先移除
+        hideErrorView()
+
+        let errorView = ErrorView(
+            title: "加载失败",
+            message: "无法获取分类列表",
+            detailMessage: error.localizedDescription,
+            showDismiss: true,
+            showRetry: true,
+            onDismiss: { [weak self] in
+                self?.navigationController?.popViewController(animated: true)
+            },
+            onRetry: { [weak self] in
+                self?.hideErrorView()
+                self?.showSkeletonView()
+                self?.loadCategories()
+            }
+        )
+
+        let hostingController = UIHostingController(rootView: errorView)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        hostingController.didMove(toParent: self)
+
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        errorHostingController = hostingController
+
+        // 隐藏实际内容
+        mainCategorySegmentedView.alpha = 0
+        mainListContainerView.alpha = 0
+    }
+
+    private func hideErrorView() {
+        guard let errorHostingController = errorHostingController else { return }
+
+        errorHostingController.willMove(toParent: nil)
+        errorHostingController.view.removeFromSuperview()
+        errorHostingController.removeFromParent()
+        self.errorHostingController = nil
     }
 
     // MARK: - Public Methods

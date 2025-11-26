@@ -7,12 +7,13 @@
 
 import SwiftUI
 import AngelLiveDependencies
+import AngelLiveCore
 
 @main
 struct SimpleLiveTVOSApp: App {
-    
+
     var appViewModel = AppState()
-    
+
     init() {
         KingfisherManager.shared.defaultOptions += [
             .processor(WebPProcessor.default),
@@ -20,10 +21,11 @@ struct SimpleLiveTVOSApp: App {
         ]
         Bugsnag.start()
     }
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView(appViewModel: appViewModel)
+                .setupBilibiliCookieIfNeeded()
         }
     }
 }

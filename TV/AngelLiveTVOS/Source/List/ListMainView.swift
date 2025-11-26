@@ -41,12 +41,15 @@ struct ListMainView: View {
                 ErrorView(
                     title: "加载失败",
                     message: liveViewModel.errorMessage,
+                    detailMessage: liveViewModel.errorDetail,
                     showRetry: true,
                     onDismiss: {
                         liveViewModel.hasError = false
+                        liveViewModel.errorDetail = nil
                     },
                     onRetry: {
                         liveViewModel.hasError = false
+                        liveViewModel.errorDetail = nil
                         liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
                     }
                 )

@@ -44,15 +44,14 @@ struct FavoriteView: View {
                     ScrollView {
                         if viewModel.isLoading {
                             skeletonView(geometry: geometry)
-                        } else if viewModel.cloudKitReady {
-                            if viewModel.roomList.isEmpty {
-                                emptyStateView()
-                            } else {
-                                favoriteContentView(geometry: geometry)
-                                    .id("top") // 添加顶部标识
-                            }
-                        } else {
+                        } else if viewModel.cloudReturnError || !viewModel.cloudKitReady {
+                            // 显示错误视图（包括 CloudKit 错误和同步错误）
                             cloudKitErrorView()
+                        } else if viewModel.roomList.isEmpty {
+                            emptyStateView()
+                        } else {
+                            favoriteContentView(geometry: geometry)
+                                .id("top") // 添加顶部标识
                         }
                     }
                     .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
@@ -168,33 +167,26 @@ struct FavoriteView: View {
 
     @ViewBuilder
     private func cloudKitErrorView() -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.icloud")
-                .font(.system(size: 60))
-                .foregroundStyle(.red.opacity(0.7))
+        let (title, message) = cloudKitErrorTitleAndMessage()
 
-            Text(viewModel.cloudKitStateString)
-                .font(.title3)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            Button(action: {
+        ErrorView(
+            title: title,
+            message: message,
+            onRetry: {
                 startFavoriteSync(force: true)
-            }) {
-                Label("重试", systemImage: "arrow.counterclockwise")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 12)
-                    .background(
-                        Capsule()
-                            .fill(.blue.gradient)
-                    )
             }
+        )
+    }
+
+    private func cloudKitErrorTitleAndMessage() -> (String, String) {
+        switch viewModel.syncStatus {
+        case .notLoggedIn:
+            return ("未登录 iCloud", "请在系统设置中登录 iCloud 账户以使用收藏同步功能")
+        case .error:
+            return ("同步失败", viewModel.cloudKitStateString)
+        default:
+            return ("iCloud 同步失败", viewModel.cloudKitStateString)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
     }
 
     @ViewBuilder

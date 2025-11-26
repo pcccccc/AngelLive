@@ -23,9 +23,10 @@ struct PlatformDetailView: View {
             if let error = viewModel.categoryError {
                 ErrorView(
                     title: "加载失败",
-                    message: "无法获取分类列表",
-                    details: error.localizedDescription,
-                    retryAction: {
+                    message: error.liveParseMessage,
+                    detailMessage: error.liveParseDetail,
+                    showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
+                    onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
@@ -95,9 +96,10 @@ struct PlatformDetailView: View {
                 // 如果当前页且加载房间列表失败，显示错误视图
                 ErrorView(
                     title: "加载失败",
-                    message: "无法获取直播间列表",
-                    details: error.localizedDescription,
-                    retryAction: {
+                    message: error.liveParseMessage,
+                    detailMessage: error.liveParseDetail,
+                    showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
+                    onRetry: {
                         Task {
                             await viewModel.loadRoomList()
                         }

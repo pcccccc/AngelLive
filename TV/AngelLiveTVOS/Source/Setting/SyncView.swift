@@ -26,7 +26,7 @@ struct SyncView: View {
         
         VStack {
             if qrCodeStore.fullScreenLoading {
-                KSVideoPlayer(coordinator: playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: playerOption)
+                KSVideoPlayer(coordinator: _playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: playerOption)
                     .background(Color.black)
                     .onAppear {
                         playerCoordinator.playerLayer?.play()

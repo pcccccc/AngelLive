@@ -10,6 +10,7 @@ import SwiftUI
 import Observation
 import AngelLiveCore
 import AngelLiveDependencies
+import LiveParse
 
 enum LiveRoomListType {
     case live
@@ -59,6 +60,8 @@ class LiveViewModel {
     var isLoading = false
     var hasError = false
     var errorMessage = ""
+    var errorDetail: String? = nil
+    var showErrorDetail = false
    
     //直播列表分页
     var subPageNumber = 0
@@ -162,12 +165,11 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 self.isLoading = false
-                self.hasError = true
-                self.errorMessage = error.localizedDescription
+                self.handleError(error)
             }
         }
     }
-    
+
     func getRoomList(index: Int) {
         if index == -1 || index == 1 {
             selectedRoomListIndex = 0
@@ -222,13 +224,12 @@ class LiveViewModel {
             } catch {
                 await MainActor.run {
                     self.isLoading = false
-                    self.hasError = true
-                    self.errorMessage = error.localizedDescription
+                    self.handleError(error)
                 }
             }
         }
     }
-    
+
     func searchRoomWithText(text: String) async {
         await MainActor.run {
             isLoading = true
@@ -251,8 +252,7 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 isLoading = false
-                hasError = true
-                errorMessage = error.localizedDescription
+                handleError(error)
             }
         }
     }
@@ -271,12 +271,11 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 isLoading = false
-                hasError = true
-                errorMessage = error.localizedDescription
+                handleError(error)
             }
         }
     }
-    
+
     /**
      获取平台直播主分类获取子分类。
      
@@ -303,13 +302,12 @@ class LiveViewModel {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    hasError = true
-                    errorMessage = error.localizedDescription
+                    handleError(error)
                 }
             }
         }
     }
-    
+
     @MainActor func updateList(_ newModel: LiveModel, index: Int) {
         if index < self.roomList.count {
             self.roomList[index] = newModel
@@ -335,5 +333,22 @@ class LiveViewModel {
         self.toastOptions = SimpleToastOptions(
             alignment: .topLeading, hideAfter: hideAfter
         )
+    }
+
+    // MARK: - 错误处理
+
+    /// 处理错误并提取详细信息
+    func handleError(_ error: Error) {
+        self.hasError = true
+
+        if let liveParseError = error as? LiveParseError {
+            // 使用用户友好的简短消息
+            self.errorMessage = liveParseError.title
+            // 存储详细信息供查看
+            self.errorDetail = liveParseError.detail
+        } else {
+            self.errorMessage = error.localizedDescription
+            self.errorDetail = nil
+        }
     }
 }

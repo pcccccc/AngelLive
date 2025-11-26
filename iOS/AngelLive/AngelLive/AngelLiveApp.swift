@@ -26,6 +26,7 @@ struct AngelLiveApp: App {
                 .environment(playerManager)
                 .environment(welcomeManager)
                 .installToast(position: .bottom)
+                .setupBilibiliCookieIfNeeded()
                 .onAppear {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }

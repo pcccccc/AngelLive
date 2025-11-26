@@ -80,54 +80,72 @@ struct DetailPlayerView: View {
                 // 模糊背景
                 backgroundView
 
-                // 播放器 - 始终在同一位置，只改变 frame，不会重建
-                PlayerContentView(playerCoordinator: playerCoordinator)
-                    .id("stable_player")
-                    .environment(viewModel)
-                    .environment(\.isVerticalLiveMode, isVerticalLiveMode)
-                    .environment(\.safeAreaInsetsCustom, safeInsets)
-                    .frame(width: playerWidth, height: AppConstants.Device.isIPad ? playerHeight : nil)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
-                        if !AppConstants.Device.isIPad {
-                            iPhonePlayerHeight = height
+                // 错误视图 - 当播放出错时显示
+                if viewModel.playError != nil || viewModel.playErrorMessage != nil {
+                    ErrorView.playback(
+                        message: viewModel.playErrorMessage ?? "播放失败",
+                        errorCode: nil,
+                        detailMessage: viewModel.playError?.liveParseDetail,
+                        onDismiss: {
+                            dismiss()
+                        },
+                        onRetry: {
+                            Task {
+                                await viewModel.loadPlayURL()
+                            }
                         }
-                    }
-                    .onPreferenceChange(VerticalLiveModePreferenceKey.self) { mode in
-                        isVerticalLiveMode = mode
+                    )
+                    .zIndex(100)
+                } else {
+                    // 播放器 - 始终在同一位置，只改变 frame，不会重建
+                    PlayerContentView(playerCoordinator: playerCoordinator)
+                        .id("stable_player")
+                        .environment(viewModel)
+                        .environment(\.isVerticalLiveMode, isVerticalLiveMode)
+                        .environment(\.safeAreaInsetsCustom, safeInsets)
+                        .frame(width: playerWidth, height: AppConstants.Device.isIPad ? playerHeight : nil)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
+                            if !AppConstants.Device.isIPad {
+                                iPhonePlayerHeight = height
+                            }
+                        }
+                        .onPreferenceChange(VerticalLiveModePreferenceKey.self) { mode in
+                            isVerticalLiveMode = mode
+                        }
+
+                    // 信息面板 - 根据布局动态显示/隐藏
+                    if showInfoPanel {
+                        if AppConstants.Device.isIPad && isLandscape {
+                            // iPad 横屏：右侧面板
+                            VStack(spacing: 0) {
+                                StreamerInfoView()
+                                    .environment(viewModel)
+                                chatAreaWithMoreButton
+                            }
+                            .frame(width: 400)
+                            .frame(maxHeight: .infinity, alignment: .topLeading)
+                            .offset(x: geometry.size.width - 400, y: 0)
+                        } else {
+                            // 竖屏：底部面板
+                            VStack(spacing: 0) {
+                                StreamerInfoView()
+                                    .environment(viewModel)
+                                chatAreaWithMoreButton
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: geometry.size.height - playerHeight)
+                            .offset(x: 0, y: playerHeight)
+                        }
                     }
 
-                // 信息面板 - 根据布局动态显示/隐藏
-                if showInfoPanel {
-                    if AppConstants.Device.isIPad && isLandscape {
-                        // iPad 横屏：右侧面板
-                        VStack(spacing: 0) {
-                            StreamerInfoView()
-                                .environment(viewModel)
-                            chatAreaWithMoreButton
-                        }
-                        .frame(width: 400)
-                        .frame(maxHeight: .infinity, alignment: .topLeading)
-                        .offset(x: geometry.size.width - 400, y: 0)
-                    } else {
-                        // 竖屏：底部面板
-                        VStack(spacing: 0) {
-                            StreamerInfoView()
-                                .environment(viewModel)
-                            chatAreaWithMoreButton
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: geometry.size.height - playerHeight)
-                        .offset(x: 0, y: playerHeight)
+                    // 返回按钮
+                    if showInfoPanel {
+                        backButton
+                            .padding(.top, 8)
+                            .padding(.leading, 8)
+                            .zIndex(10)
                     }
-                }
-
-                // 返回按钮
-                if showInfoPanel {
-                    backButton
-                        .padding(.top, 8)
-                        .padding(.leading, 8)
-                        .zIndex(10)
                 }
             }
         }

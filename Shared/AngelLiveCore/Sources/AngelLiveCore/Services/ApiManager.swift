@@ -39,7 +39,7 @@ public enum ApiManager {
     public static func fetchRoomList(liveCategory: LiveCategoryModel, page: Int, liveType: LiveType) async throws -> [LiveModel] {
         switch liveType {
             case .bilibili:
-                return try await Bilibili.getRoomList(id: liveCategory.id, parentId: liveCategory.parentId, page: page)
+                return try await fetchBilibiliRoomListWithRetry(id: liveCategory.id, parentId: liveCategory.parentId, page: page)
             case .huya:
                 return try await Huya.getRoomList(id: liveCategory.id, parentId: liveCategory.parentId, page: page)
             case .douyin:
@@ -55,6 +55,34 @@ public enum ApiManager {
             default:
                 return []
         }
+    }
+
+    /// B站请求带重试，失败3次后清除 cookie 重新获取
+    private static func fetchBilibiliRoomListWithRetry(id: String, parentId: String?, page: Int, maxRetries: Int = 3) async throws -> [LiveModel] {
+        var lastError: Error?
+
+        for attempt in 1...maxRetries {
+            do {
+                return try await Bilibili.getRoomList(id: id, parentId: parentId, page: page)
+            } catch {
+                lastError = error
+                print("[ApiManager] B站请求失败，第 \(attempt) 次尝试: \(error.localizedDescription)")
+
+                if attempt < maxRetries {
+                    // 等待一小段时间后重试
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+                }
+            }
+        }
+
+        // 3次都失败了，清除 cookie 并触发重新获取
+        print("[ApiManager] B站请求连续失败 \(maxRetries) 次，清除 Cookie 并重新获取")
+        await MainActor.run {
+            BilibiliCookieManager.shared.clearAndRefetch()
+        }
+
+        // 抛出最后一个错误
+        throw lastError ?? LiveParseError.liveParseError("B站请求失败", "连续 \(maxRetries) 次请求失败")
     }
 
     public static func fetchCategoryList(liveType: LiveType) async throws -> [LiveMainListModel] {

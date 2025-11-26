@@ -17,29 +17,29 @@ struct SettingView: View {
     var body: some View {
         NavigationStack {
             List {
-                // 账号设置
-                Section {
-                    NavigationLink {
-                        BilibiliLoginViewiOS()
-                    } label: {
-                        HStack {
-                            Image(systemName: "person.circle.fill")
-                                .font(.title3)
-                                .foregroundStyle(AppConstants.Colors.link.gradient)
-                                .frame(width: 32)
-
-                            Text("哔哩哔哩登录")
-
-                            Spacer()
-
-                            Text(settingStore.bilibiliCookie.isEmpty ? "未登录" : "已登录")
-                                .font(.caption)
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-                        }
-                    }
-                } header: {
-                    Text("账号")
-                }
+                // 账号设置（暂时隐藏）
+                // Section {
+                //     NavigationLink {
+                //         BilibiliLoginViewiOS()
+                //     } label: {
+                //         HStack {
+                //             Image(systemName: "person.circle.fill")
+                //                 .font(.title3)
+                //                 .foregroundStyle(AppConstants.Colors.link.gradient)
+                //                 .frame(width: 32)
+                //
+                //             Text("哔哩哔哩登录")
+                //
+                //             Spacer()
+                //
+                //             Text(settingStore.bilibiliCookie.isEmpty ? "未登录" : "已登录")
+                //                 .font(.caption)
+                //                 .foregroundStyle(AppConstants.Colors.secondaryText)
+                //         }
+                //     }
+                // } header: {
+                //     Text("账号")
+                // }
 
                 // 应用设置
                 Section {

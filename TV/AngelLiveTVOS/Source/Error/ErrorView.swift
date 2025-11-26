@@ -104,6 +104,34 @@ struct ErrorView: View {
                             .buttonStyle(.card)
                         }
                     }
+
+                    // 直接显示错误详情（tvOS 屏幕大，直接展示）
+                    if let detailMessage = detailMessage, !detailMessage.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("错误详情")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+
+                            ScrollView {
+                                Text(detailMessage)
+                                    .font(.system(size: 18, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 300)
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black.opacity(0.3))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                        .padding(.top, 20)
+                    }
                 }
                 .frame(maxWidth: 950, alignment: .leading)
 
