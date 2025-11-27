@@ -111,7 +111,20 @@ final class RoomInfoViewModel {
         }
     }
 
-    // 切换清晰度
+    /// 手动应用当前弹幕设置到正在展示的弹幕层（避免等待下一轮消息）
+    func applyDanmuSettings() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            danmuCoordinator.applyConfiguration(
+                speed: CGFloat(danmuSettings.danmuSpeed),
+                font: CGFloat(danmuSettings.danmuFontSize),
+                paddingTop: CGFloat(danmuSettings.danmuTopMargin),
+                paddingBottom: CGFloat(danmuSettings.danmuBottomMargin)
+            )
+        }
+    }
+
+    // 切换清晰度    的形成v吃吃吃v b
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
         guard currentRoomPlayArgs != nil else {

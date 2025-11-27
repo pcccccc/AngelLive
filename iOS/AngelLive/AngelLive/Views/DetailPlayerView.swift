@@ -46,14 +46,19 @@ struct DetailPlayerView: View {
 
             // 计算播放器宽度
             let playerWidth: CGFloat = {
+                // iPhone 横屏时补回安全区宽度，确保实际绘制能覆盖左右刘海区域
+                let baseWidth = isIPhoneLandscape ? (geometry.size.width + safeInsets.leading + safeInsets.trailing) : geometry.size.width
                 if isVerticalLiveMode {
-                    return geometry.size.width // 竖屏直播占满宽度
+                    return baseWidth // 竖屏直播占满宽度
                 } else if showInfoPanel && AppConstants.Device.isIPad && isLandscape {
-                    return geometry.size.width - 400 // iPad 横屏减去右侧信息栏
+                    return baseWidth - 400 // iPad 横屏减去右侧信息栏
                 } else {
-                    return geometry.size.width
+                    return baseWidth
                 }
             }()
+
+            // 横屏时补回安全区高度，让内容也能覆盖上下刘海/指示器
+            let safeAdjustedHeight = isIPhoneLandscape ? (geometry.size.height + safeInsets.top + safeInsets.bottom) : geometry.size.height
 
             // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
             let playerHeight: CGFloat = {
@@ -103,8 +108,13 @@ struct DetailPlayerView: View {
                         .environment(viewModel)
                         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
                         .environment(\.safeAreaInsetsCustom, safeInsets)
-                        .frame(width: playerWidth, height: AppConstants.Device.isIPad ? playerHeight : nil)
+                        .frame(
+                            width: playerWidth,
+                            height: AppConstants.Device.isIPad ? playerHeight : (isIPhoneLandscape ? safeAdjustedHeight : nil)
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        // iPhone 横屏时让播放器区域覆盖 Safe Area，避免控制层/统计被刘海遮挡
+                        .edgesIgnoringSafeArea(isIPhoneLandscape ? .all : [])
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height

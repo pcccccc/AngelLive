@@ -278,16 +278,16 @@ struct FavoriteView: View {
         let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
         let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
 
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
-            spacing: verticalSpacing
-        ) {
-            ForEach(roomList, id: \.roomId) { room in
-                LiveRoomCard(room: room)
-                    .frame(width: cardWidth, height: cardHeight)
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
+                spacing: verticalSpacing
+            ) {
+                ForEach(roomList, id: \.stableIdentity) { room in
+                    LiveRoomCard(room: room)
+                        .frame(width: cardWidth, height: cardHeight)
+                }
             }
-        }
-        .padding(.horizontal, horizontalPadding)
+            .padding(.horizontal, horizontalPadding)
     }
 
     // 其他分组的横向滚动布局
@@ -302,7 +302,7 @@ struct FavoriteView: View {
 
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: horizontalSpacing) {
-                ForEach(roomList, id: \.roomId) { room in
+                ForEach(roomList, id: \.stableIdentity) { room in
                     LiveRoomCard(room: room, width: cardWidth)
                         .frame(width: cardWidth, height: cardHeight)
                         .scrollTransition { content, phase in // iOS 26: 滚动过渡效果

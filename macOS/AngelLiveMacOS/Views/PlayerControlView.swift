@@ -239,6 +239,7 @@ struct PlayerControlView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .adaptiveGlassEffect()
+                        .fixedSize(horizontal: true, vertical: true) // macOS 15: 避免过度拉伸导致宽度异常
                     }
                 }
             }
@@ -267,7 +268,7 @@ struct PlayerControlView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: isHovering)
         .sheet(isPresented: $showDanmakuSettings) {
-            DanmakuSettingsPanel()
+            DanmakuSettingsPanel(viewModel: viewModel)
         }
     }
 
@@ -354,6 +355,8 @@ struct PlayerControlView: View {
 struct VideoSettingsPanel: View {
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
     @Binding var isShowing: Bool
+    @State private var resolvedPlayerLayer: KSPlayerLayer?
+    @State private var resolveTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -376,10 +379,10 @@ struct VideoSettingsPanel: View {
             .background(Color.black.opacity(0.8))
 
             // 内容区域
-            TimelineView(.periodic(from: .now, by: 1.0)) { context in
+            TimelineView(.periodic(from: .now, by: 1.0)) { _ in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        if let playerLayer = coordinator.playerLayer {
+                        if let playerLayer = resolvedPlayerLayer ?? coordinator.playerLayer {
                             videoInfoSection(playerLayer: playerLayer)
                             performanceInfoSection(playerLayer: playerLayer)
                         } else {
@@ -394,6 +397,25 @@ struct VideoSettingsPanel: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color.black.opacity(0.5))
+        .task(id: isShowing) {
+            // 打开面板时尝试获取 playerLayer，避免因未发布的属性导致一直“加载中”
+            resolveTask?.cancel()
+            guard isShowing else { return }
+            resolveTask = Task {
+                for _ in 0..<30 {
+                    if let layer = coordinator.playerLayer {
+                        await MainActor.run {
+                            resolvedPlayerLayer = layer
+                        }
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+                }
+            }
+        }
+        .onDisappear {
+            resolveTask?.cancel()
+        }
     }
 
     @ViewBuilder

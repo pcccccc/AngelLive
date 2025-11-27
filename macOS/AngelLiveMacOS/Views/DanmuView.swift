@@ -94,5 +94,20 @@ struct DanmuView: NSViewRepresentable {
                 self?.view?.stop()
             }
         }
+
+        /// 更新弹幕视图的配置，避免等待 SwiftUI 重新创建视图
+        func applyConfiguration(speed: CGFloat, font: CGFloat, paddingTop: CGFloat, paddingBottom: CGFloat) {
+            DispatchQueue.main.async { [weak self] in
+                guard let view = self?.view else { return }
+                view.playingSpeed = Float(speed)
+                view.trackHeight = font * 1.2 + 12
+                view.paddingTop = paddingTop
+                view.paddingBottom = paddingBottom
+                view.recalculateTracks()
+                if view.status != .play {
+                    view.play()
+                }
+            }
+        }
     }
 }

@@ -19,6 +19,16 @@ struct LiveRoomCard: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.presentToast) private var presentToast
 
+    private var coverURL: URL? {
+        guard !room.roomCover.isEmpty, let url = URL(string: room.roomCover) else { return nil }
+        return url
+    }
+
+    private var avatarURL: URL? {
+        guard !room.userHeadImg.isEmpty, let url = URL(string: room.userHeadImg) else { return nil }
+        return url
+    }
+
     init(room: LiveModel, width: CGFloat? = nil, skipLiveCheck: Bool = false) {
         self.room = room
         self.skipLiveCheck = skipLiveCheck
@@ -91,35 +101,14 @@ struct LiveRoomCard: View {
 
     private var cardContent: some View {
         VStack {
-            // 封面图
-            KFImage(URL(string: room.roomCover))
-                .placeholder {
-                    Rectangle()
-                        .fill(AppConstants.Colors.placeholderGradient())
-                }
-                .resizable()
-                .blur(radius: 10)
-                .overlay(
-                    KFImage(URL(string: room.roomCover))
-                        .placeholder {
-                            Image("placeholder")
-                                .resizable()
-                                .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
-                        }
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                )
+            // 封面图（带可靠的兜底占位）
+            coverView
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
                 .matchedTransitionSource(id: room.roomId, in: namespace)
 
             // 主播信息
             HStack(spacing: 8) {
-                KFImage(URL(string: room.userHeadImg))
-                    .placeholder {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                    }
-                    .resizable()
+                avatarView
                     .frame(width: 32, height: 32)
                     .clipShape(Circle())
 
@@ -147,6 +136,68 @@ struct LiveRoomCard: View {
         .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
             isPressed = pressing
         }, perform: {})
+    }
+
+    // MARK: - 子视图
+
+    /// 封面图容器：有 URL 时双层 KFImage，失败或无 URL 时用本地占位
+    private var coverView: some View {
+        Group {
+            if let url = coverURL {
+                KFImage(url)
+                    .placeholder {
+                        Rectangle()
+                            .fill(AppConstants.Colors.placeholderGradient())
+                    }
+                    .resizable()
+                    .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fill)
+                    .blur(radius: 10)
+                    .overlay(
+                        KFImage(url)
+                            .placeholder {
+                                placeholderCover()
+                            }
+                            .resizable()
+                            .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                    )
+            } else {
+                placeholderCover()
+            }
+        }
+    }
+
+    /// 头像：无效 URL 时展示占位
+    private var avatarView: some View {
+        Group {
+            if let url = avatarURL {
+                KFImage(url)
+                    .placeholder { avatarPlaceholder }
+                    .resizable()
+            } else {
+                avatarPlaceholder
+            }
+        }
+    }
+
+    private var avatarPlaceholder: some View {
+        Circle()
+            .fill(Color.gray.opacity(0.2))
+            .overlay(
+                Image(systemName: "person.crop.circle.fill")
+                    .foregroundStyle(.white.opacity(0.8))
+            )
+    }
+
+    private func placeholderCover() -> some View {
+        ZStack {
+            Rectangle()
+                .fill(AppConstants.Colors.placeholderGradient())
+            Image("placeholder")
+                .resizable()
+                .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                .opacity(0.7)
+        }
+        .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
     }
 
     @ViewBuilder
