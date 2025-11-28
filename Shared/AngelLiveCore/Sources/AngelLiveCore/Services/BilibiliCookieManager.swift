@@ -6,7 +6,9 @@
 //
 
 import SwiftUI
+#if !os(tvOS)
 import WebKit
+#endif
 import LiveParse
 
 /// Bilibili Cookie 自动获取管理器
@@ -49,7 +51,8 @@ public final class BilibiliCookieManager: ObservableObject {
         // 清除 UserDefaults 中的 cookie
         clearBilibiliCookie()
 
-        // 清除 WKWebView 的 cookie
+        #if !os(tvOS)
+        // 清除 WKWebView 的 cookie (tvOS 不支持)
         let dataStore = WKWebsiteDataStore.default()
         dataStore.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
             let bilibiliRecords = records.filter { $0.displayName.contains("bilibili") }
@@ -57,6 +60,7 @@ public final class BilibiliCookieManager: ObservableObject {
                 print("[BilibiliCookieManager] 已清除 WebView 中的 Bilibili cookie")
             }
         }
+        #endif
 
         // 重置状态并重新获取
         cookieReady = false
@@ -64,7 +68,8 @@ public final class BilibiliCookieManager: ObservableObject {
         isLoading = true
     }
 
-    /// 设置获取到的 Cookie
+    #if !os(tvOS)
+    /// 设置获取到的 Cookie (仅 iOS/macOS，tvOS 不支持 WebView)
     public func setCookie(from cookies: [HTTPCookie]) {
         // 只保留 bilibili 域名的 cookie
         let bilibiliCookies = cookies.filter { cookie in
@@ -89,6 +94,7 @@ public final class BilibiliCookieManager: ObservableObject {
         cookieReady = true
         error = nil
     }
+    #endif
 
     /// 设置错误
     public func setError(_ message: String) {
@@ -249,63 +255,42 @@ public struct BilibiliCookieFetcherView: UIViewRepresentable {
 }
 
 #elseif os(tvOS)
-// tvOS 不支持 WKWebView 的完整功能，使用简化版本
-public struct BilibiliCookieFetcherView: UIViewRepresentable {
+// tvOS 不支持 WKWebView，使用空视图占位
+// tvOS 通过 BilibiliCookieSyncService 的 iCloud 同步或局域网同步获取 Cookie
+public struct BilibiliCookieFetcherView: View {
     @ObservedObject var manager: BilibiliCookieManager
-
-    private let targetURL = URL(string: "https://live.bilibili.com/p/eden/area-tags?parentAreaId=2&areaId=0")!
-    private let pcUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 
     public init(manager: BilibiliCookieManager = .shared) {
         self.manager = manager
     }
 
-    public func makeUIView(context: Context) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = WKWebsiteDataStore.default()
-
-        let webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.navigationDelegate = context.coordinator
-        webView.customUserAgent = pcUserAgent
-
-        let request = URLRequest(url: targetURL)
-        webView.load(request)
-
-        return webView
+    public var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .task {
+                // tvOS 尝试从 iCloud 同步
+                await tryICloudSync()
+            }
     }
 
-    public func updateUIView(_ uiView: WKWebView, context: Context) {}
+    private func tryICloudSync() async {
+        let syncService = BilibiliCookieSyncService.shared
 
-    public func makeCoordinator() -> Coordinator {
-        Coordinator(manager: manager)
-    }
-
-    public class Coordinator: NSObject, WKNavigationDelegate {
-        let manager: BilibiliCookieManager
-
-        init(manager: BilibiliCookieManager) {
-            self.manager = manager
-        }
-
-        public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
-                Task { @MainActor in
-                    self?.manager.setCookie(from: cookies)
-                }
+        // 如果启用了 iCloud 同步，尝试从 iCloud 获取
+        if syncService.iCloudSyncEnabled {
+            let success = await syncService.syncFromICloud()
+            if success {
+                manager.cookieReady = true
+                manager.isLoading = false
+                print("[BilibiliCookieManager] tvOS: 从 iCloud 同步成功")
+                return
             }
         }
 
-        public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            Task { @MainActor in
-                manager.setError(error.localizedDescription)
-            }
-        }
-
-        public func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            Task { @MainActor in
-                manager.setError(error.localizedDescription)
-            }
-        }
+        // 如果 iCloud 同步失败或未启用，标记为需要手动登录
+        manager.isLoading = false
+        manager.cookieReady = false
+        print("[BilibiliCookieManager] tvOS: 需要通过账号管理页面登录")
     }
 }
 #endif

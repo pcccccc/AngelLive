@@ -25,7 +25,12 @@ struct SimpleLiveTVOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(appViewModel: appViewModel)
-                .setupBilibiliCookieIfNeeded()
+                .task {
+                    // tvOS 启动时尝试从 iCloud 同步 Cookie
+                    if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
+                        _ = await BilibiliCookieSyncService.shared.syncFromICloud()
+                    }
+                }
         }
     }
 }

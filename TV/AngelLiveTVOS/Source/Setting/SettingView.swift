@@ -6,12 +6,11 @@
 //
 
 import SwiftUI
-
-
+import AngelLiveCore
 
 struct SettingView: View {
-    
-    @State var titles = ["哔哩哔哩登录", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
+
+    @State var titles = ["账号管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
     @State var currentTitle: String?
     @State var isLogin = false
     @State var isPushed = false
@@ -39,13 +38,12 @@ struct SettingView: View {
                     Spacer()
                     ForEach(titles, id: \.self) { title in
                         NavigationLink {
-                            if title == "哔哩哔哩登录" {
-                                BilibiliLoginView()
-                                    .background(.thinMaterial)
+                            if title == "账号管理" {
+                                AccountManagementView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .environmentObject(settingStore)
                                     .environment(appViewModel)
-                            }else if title == "弹幕设置" {
+                            } else if title == "弹幕设置" {
                                 DanmuSettingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     .background(.thinMaterial)
@@ -80,11 +78,11 @@ struct SettingView: View {
                         } label: {
                             Text(title)
                             Spacer()
-                            if title == "哔哩哔哩登录" {
-                                Text(settingStore.bilibiliCookie.count == 0 ? "未登录" : "已登录")
+                            if title == "账号管理" {
+                                Text(BilibiliCookieSyncService.shared.loginStatusDescription)
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
-                            }else if title == "数据同步" {
+                            } else if title == "数据同步" {
                                 Text(appViewModel.favoriteViewModel.cloudKitReady == true ? "iCloud就绪" : "iCloud状态异常")
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)

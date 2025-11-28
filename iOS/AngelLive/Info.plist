@@ -11,5 +11,11 @@
 	<array>
 		<string>audio</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于在局域网内与 Apple TV 同步登录信息</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_angellive-cookie._tcp</string>
+	</array>
 </dict>
 </plist>

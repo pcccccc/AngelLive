@@ -50,26 +50,22 @@ struct ErrorView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     Text(title)
                         .font(.system(size: 48, weight: .heavy))
-                        .foregroundColor(.white)
 
                     VStack(alignment: .leading, spacing: 14) {
                         Text(message)
                             .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(.white.opacity(0.9))
                             .lineSpacing(6)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if let errorCode = errorCode {
                             Text("错误代码：\(errorCode)")
                                 .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.85))
                                 .padding(.top, 4)
                         }
 
                         if let detailMessage = detailMessage {
                             Text(detailMessage)
                                 .font(.system(size: 20))
-                                .foregroundColor(.white.opacity(0.85))
                                 .lineSpacing(4)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -77,33 +73,27 @@ struct ErrorView: View {
 
                     Spacer(minLength: 20)
 
-                    HStack(spacing: 24) {
+                    HStack(spacing: 18) {
                         if showDismiss {
                             Button(action: onDismiss) {
                                 Label("返回", systemImage: "arrow.left")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 32)
-                                    .background(.ultraThinMaterial)
-                                    .foregroundColor(.white)
-                                    .clipShape(Capsule())
+                                    .font(.title3.weight(.medium))
+                                    .foregroundStyle(.white)
                             }
-                            .buttonStyle(.card)
+                            .buttonStyle(.plain)
                         }
 
                         if showRetry, let onRetry = onRetry {
                             Button(action: onRetry) {
                                 Label("重试", systemImage: "arrow.clockwise")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 32)
-                                    .background(.ultraThinMaterial)
-                                    .foregroundColor(.white)
-                                    .clipShape(Capsule())
+                                    .font(.title3.weight(.medium))
+                                    .foregroundStyle(.white)
                             }
-                            .buttonStyle(.card)
+                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
 
                     // 直接显示错误详情（tvOS 屏幕大，直接展示）
                     if let detailMessage = detailMessage, !detailMessage.isEmpty {
@@ -116,7 +106,6 @@ struct ErrorView: View {
                                 Text(detailMessage)
                                     .font(.system(size: 18, design: .monospaced))
                                     .foregroundColor(.white.opacity(0.85))
-                                    .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .frame(maxHeight: 300)
@@ -145,7 +134,7 @@ struct ErrorView: View {
                         .padding(32)
                         .background(
                             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                .fill(Color.black.opacity(0.38))
+                                .fill(.ultraThinMaterial)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 30, style: .continuous)
                                         .stroke(Color.white.opacity(0.18), lineWidth: 1)
@@ -154,8 +143,7 @@ struct ErrorView: View {
                         .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 18)
 
                     Text("扫码查看帮助文档")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
+                        .font(.caption)
                     Spacer()
                 }
             }

@@ -13,7 +13,11 @@ extension View {
         if #available(tvOS 26.0, *) {
             self.glassEffect(in: .capsule)
         } else {
-            self.background(.ultraThinMaterial, in: Capsule())
+            self.background(
+                Color.red
+                    .clipped()
+                    .cornerRadius(10)
+            )
         }
     }
 }

@@ -140,25 +140,26 @@ struct LiveRoomCard: View {
 
     // MARK: - 子视图
 
-    /// 封面图容器：有 URL 时双层 KFImage，失败或无 URL 时用本地占位
+    /// 封面图容器：有 URL 时双层 KFImage（模糊背景 + 清晰前景，不变形），失败或无 URL 时用本地占位
     private var coverView: some View {
         Group {
             if let url = coverURL {
+                // 背景模糊层：填充整个容器，不设置 aspectRatio
                 KFImage(url)
                     .placeholder {
                         Rectangle()
                             .fill(AppConstants.Colors.placeholderGradient())
                     }
                     .resizable()
-                    .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fill)
-                    .blur(radius: 10)
+                    .blur(radius: 20)
                     .overlay(
+                        // 前景清晰层：保持原比例居中显示，不变形
                         KFImage(url)
                             .placeholder {
                                 placeholderCover()
                             }
                             .resizable()
-                            .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                            .aspectRatio(contentMode: .fit)
                     )
             } else {
                 placeholderCover()
