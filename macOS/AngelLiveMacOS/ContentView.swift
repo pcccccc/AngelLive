@@ -55,12 +55,12 @@ struct ContentView: View {
                     }
                 }
 
-                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
-                    SettingView()
-                }
-
                 Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
                     SearchView()
+                }
+
+                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
+                    SettingView()
                 }
             }
             .tabViewStyle(.sidebarAdaptable)

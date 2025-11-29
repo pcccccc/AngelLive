@@ -1,8 +1,8 @@
 //
 //  BilibiliLoginViewModel.swift
-//  AngelLive
+//  AngelLiveMacOS
 //
-//  Created by pangchong on 11/28/25.
+//  Created by Claude on 11/29/25.
 //
 
 import SwiftUI

@@ -107,7 +107,7 @@ public final class BilibiliCookieManager: ObservableObject {
     // 直接使用 UserDefaults 绕过 BiliBiliCookie 的并发安全问题
     // 使用与 LiveParse 库相同的 key
 
-    private static let cookieKey = "LiveParse.Bilibili.Cookie"
+    private static let cookieKey = "SimpleLive.Setting.BilibiliCookie"
     private static let uidKey = "LiveParse.Bilibili.uid"
 
     private func getBilibiliCookie() -> String {

@@ -12,10 +12,16 @@ import AngelLiveCore
 struct SettingView: View {
     @AppStorage("autoPlay") private var autoPlay = true
     @AppStorage("preferredQuality") private var preferredQuality = "原画"
+    @AppStorage("SimpleLive.Setting.BilibiliCookie") private var bilibiliCookie = ""
     @State private var danmuModel = DanmuSettingModel()
+    @State private var showBilibiliLogin = false
 
     var body: some View {
         Form {
+            Section("账号管理") {
+                bilibiliAccountRow
+            }
+
             Section("播放设置") {
                 Toggle("自动播放", isOn: $autoPlay)
                     .help("进入直播间时自动开始播放")
@@ -93,6 +99,42 @@ struct SettingView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("设置")
+        .sheet(isPresented: $showBilibiliLogin) {
+            BilibiliWebLoginView()
+        }
+    }
+
+    // MARK: - Bilibili Account Row
+
+    private var bilibiliAccountRow: some View {
+        Button {
+            showBilibiliLogin = true
+        } label: {
+            HStack {
+                Image("bilibili")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .cornerRadius(4)
+
+                Text("哔哩哔哩")
+
+                Spacer()
+
+                if !bilibiliCookie.isEmpty {
+                    Text("已登录")
+                        .foregroundStyle(AppConstants.Colors.success)
+                } else {
+                    Text("未登录")
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
