@@ -77,19 +77,19 @@ struct ErrorView: View {
                         if showDismiss {
                             Button(action: onDismiss) {
                                 Label("返回", systemImage: "arrow.left")
-                                    .font(.title3.weight(.medium))
+                                    .font(.caption)
                                     .foregroundStyle(.white)
                             }
-                            .buttonStyle(.plain)
+                            .clipShape(.capsule)
                         }
 
                         if showRetry, let onRetry = onRetry {
                             Button(action: onRetry) {
                                 Label("重试", systemImage: "arrow.clockwise")
-                                    .font(.title3.weight(.medium))
+                                    .font(.caption)
                                     .foregroundStyle(.white)
                             }
-                            .buttonStyle(.plain)
+                            .clipShape(.capsule)
                         }
                     }
                     .padding(.horizontal, 6)

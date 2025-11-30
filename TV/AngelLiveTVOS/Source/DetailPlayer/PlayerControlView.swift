@@ -54,18 +54,20 @@ struct PlayerControlView: View {
                             Spacer()
                             if appViewModel.favoriteViewModel.cloudKitReady {
                                 Button("收藏") {}
+                                .clipShape(.circle)
                                 .focused($topState, equals: .section(0))
                             }
                             Button("历史") {}
+                            .clipShape(.circle)
                             .focused($topState, equals: .section(1))
                             if roomInfoModel.roomType == .live {
                                 Button("分区") {}
+                                .clipShape(.circle)
                                 .focused($topState, equals: .section(2))
                             }
                             Spacer()
                         }
                         .foregroundColor(.white)
-                        .buttonStyle(.plain)
                         .focusSection()
                         .onChange(of: topState) { oldValue, newValue in
                             switch newValue {
@@ -100,7 +102,6 @@ struct PlayerControlView: View {
                 }
                 .frame(width: 1920)
                 .padding(.top, 30)
-                .buttonStyle(.plain)
                 .transition(.move(edge: .top))
                 .onExitCommand(perform: {
                     withAnimation {
@@ -194,6 +195,7 @@ struct PlayerControlView: View {
                                         .foregroundColor(.white)
                                         .frame(width: 40, height: 40)
                                 })
+                                .clipShape(.circle)
                                 .contextMenu(menuItems: {
                                     Button("debug mode") {
                 //                        roomInfoViewModel.toggleTimer()
@@ -209,6 +211,7 @@ struct PlayerControlView: View {
                                         .font(.system(size: 30, weight: .bold))
                                         .frame(width: 40, height: 40)
                                 })
+                                .clipShape(.circle)
                                 .focused($state, equals: .refresh)
 
                                 Button(action: {
@@ -226,6 +229,7 @@ struct PlayerControlView: View {
                                             .padding(.top, 3)
                                     }
                                 })
+                                .clipShape(.circle)
                                 .focused($state, equals: .favorite)
                                 .changeEffect(
                                     .spray(origin: UnitPoint(x: 0.25, y: 0.5)) {
@@ -313,6 +317,7 @@ struct PlayerControlView: View {
                                         .resizable()
                                         .frame(width: 40, height: 40)
                                 })
+                                .clipShape(.circle)
                                 .focused($state, equals: .danmuSetting)
 
                                 Button(action: {
@@ -322,6 +327,7 @@ struct PlayerControlView: View {
                                         .resizable()
                                         .frame(width: 40, height: 40)
                                 })
+                                .clipShape(.circle)
                                 .focused($state, equals: .danmu)
                             }
                             .padding(.horizontal, 15)
