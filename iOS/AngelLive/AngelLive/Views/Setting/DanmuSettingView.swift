@@ -44,6 +44,7 @@ struct DanmuSettingView: View {
                                 .font(.title2)
                                 .foregroundStyle(AppConstants.Colors.error.gradient)
                         }
+                        .buttonStyle(.borderless)
 
                         Button {
                             if danmuModel.danmuFontSize > 10 {
@@ -54,6 +55,7 @@ struct DanmuSettingView: View {
                                 .font(.title3)
                                 .foregroundStyle(AppConstants.Colors.warning.gradient)
                         }
+                        .buttonStyle(.borderless)
 
                         Spacer()
 
@@ -72,6 +74,7 @@ struct DanmuSettingView: View {
                                 .font(.title3)
                                 .foregroundStyle(AppConstants.Colors.success.gradient)
                         }
+                        .buttonStyle(.borderless)
 
                         Button {
                             if danmuModel.danmuFontSize < 95 {
@@ -82,6 +85,7 @@ struct DanmuSettingView: View {
                                 .font(.title2)
                                 .foregroundStyle(AppConstants.Colors.link.gradient)
                         }
+                        .buttonStyle(.borderless)
                     }
                 }
                 .padding(.vertical, AppConstants.Spacing.sm)
