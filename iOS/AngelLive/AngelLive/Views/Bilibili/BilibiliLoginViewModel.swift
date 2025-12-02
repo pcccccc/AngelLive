@@ -48,7 +48,12 @@ final class BilibiliLoginViewModel: ObservableObject {
     }
 
     var isLoggedIn: Bool {
-        !cookie.isEmpty || loginSuccess
+        hasSessData || loginSuccess
+    }
+
+    /// 检查 Cookie 中是否包含 SESSDATA
+    var hasSessData: Bool {
+        cookie.contains("SESSDATA")
     }
 
     // MARK: - Lifecycle

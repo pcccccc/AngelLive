@@ -16,6 +16,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 打印当前 Bilibili Cookie
+        let cookie = UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
+        print("[App Launch] Bilibili Cookie: \(cookie.isEmpty ? "(空)" : cookie)")
+    }
 }
 
 @main
@@ -27,6 +33,7 @@ struct AngelLiveMacOSApp: App {
     // 全局 ViewModels（用于共享到所有窗口）
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var toastManager = ToastManager()
+    @State private var fullscreenPlayerManager = FullscreenPlayerManager()
     
     var body: some Scene {
         WindowGroup {
@@ -34,7 +41,9 @@ struct AngelLiveMacOSApp: App {
                 .environment(welcomeManager)
                 .environment(favoriteViewModel)
                 .environment(toastManager)
+                .environment(fullscreenPlayerManager)
                 .setupBilibiliCookieIfNeeded()
+                .frame(minWidth: 800, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)
         }
         .commands {
             CommandGroup(after: .appInfo) {

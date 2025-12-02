@@ -42,13 +42,24 @@ final class BilibiliLoginViewModel: ObservableObject {
     private let cookieKey = "SimpleLive.Setting.BilibiliCookie"
     private let uidKey = "LiveParse.Bilibili.uid"
 
-    var cookie: String {
-        get { UserDefaults.standard.string(forKey: cookieKey) ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: cookieKey) }
-    }
+    @Published var cookie: String = ""
 
     var isLoggedIn: Bool {
-        !cookie.isEmpty || loginSuccess
+        hasSessData || loginSuccess
+    }
+
+    /// 检查 Cookie 中是否包含 SESSDATA
+    var hasSessData: Bool {
+        cookie.contains("SESSDATA")
+    }
+
+    private func loadCookie() {
+        cookie = UserDefaults.standard.string(forKey: cookieKey) ?? ""
+    }
+
+    private func saveCookie(_ value: String) {
+        cookie = value
+        UserDefaults.standard.set(value, forKey: cookieKey)
     }
 
     // MARK: - Lifecycle
@@ -57,6 +68,7 @@ final class BilibiliLoginViewModel: ObservableObject {
         viewVisible = true
         isLoading = true
         statusText = "正在加载登录页面..."
+        loadCookie()
     }
 
     func onDisappear() {
@@ -110,7 +122,7 @@ final class BilibiliLoginViewModel: ObservableObject {
                 let cookieString = self.buildCookieString(from: cookieDict)
 
                 if !cookieString.isEmpty {
-                    self.cookie = cookieString
+                    self.saveCookie(cookieString)
 
                     if let uid = self.extractValue(named: "DedeUserID", from: cookieDict) {
                         UserDefaults.standard.set(uid, forKey: self.uidKey)
@@ -167,7 +179,7 @@ final class BilibiliLoginViewModel: ObservableObject {
     // MARK: - Logout
 
     func logout() {
-        cookie = ""
+        saveCookie("")
         UserDefaults.standard.removeObject(forKey: uidKey)
 
         clearWebsiteData()

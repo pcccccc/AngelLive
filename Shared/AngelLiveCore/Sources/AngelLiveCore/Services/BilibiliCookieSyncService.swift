@@ -220,9 +220,9 @@ public final class BilibiliCookieSyncService: ObservableObject {
         lastValidationResult = nil
     }
 
-    /// 是否已登录
+    /// 是否已登录（检查 Cookie 中是否包含 SESSDATA）
     public var isLoggedIn: Bool {
-        !getCurrentCookie().isEmpty
+        getCurrentCookie().contains("SESSDATA")
     }
 
     // MARK: - iCloud 同步

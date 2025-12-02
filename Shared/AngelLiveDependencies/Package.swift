@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
         .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
         .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.6.2"),
-        .package(url: "https://github.com/pcccccc/LiveParse", from: "1.9.8"),
+        .package(url: "https://github.com/pcccccc/LiveParse", from: "1.9.9"),
         .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
         .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
         .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),
@@ -38,7 +38,8 @@ let package = Package(
         .package(url: "https://github.com/SwiftyJSON/SwiftyJSON", from: "5.0.2"),
         .package(url: "https://github.com/gunterhager/UDPBroadcastConnection", from: "5.0.5"),
         .package(url: "https://github.com/sunghyun-k/swiftui-toasts", from: "1.1.1"),
-        .package(url: "https://github.com/sunghyun-k/swiftui-window-overlay.git", from: "1.0.2")
+        .package(url: "https://github.com/sunghyun-k/swiftui-window-overlay.git", from: "1.0.2"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.1")
     ],
     targets: [
         .target(
@@ -71,7 +72,8 @@ let package = Package(
                 .product(name: "WindowOverlay", package: "swiftui-window-overlay", condition: .when(platforms: [.iOS])),
                 .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS])),
                 // 只在 tvOS 平台包含 SimpleToast
-                .product(name: "SimpleToast", package: "SimpleToast", condition: .when(platforms: [.tvOS]))
+                .product(name: "SimpleToast", package: "SimpleToast", condition: .when(platforms: [.tvOS])),
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))
             ],
             path: "Sources"
         ),

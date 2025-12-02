@@ -158,8 +158,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "4593fc20e21a303e72e2edbf8b2a4f5311c1391c",
-        "version" : "1.9.8"
+        "revision" : "7f42fc280ce3fabeeffa2c912675ae7c592a16d0",
+        "version" : "1.9.9"
       }
     },
     {
@@ -187,6 +187,15 @@
       "state" : {
         "revision" : "8d49c8c16d218b03c3428a0d1c8fe79f4e2707a6",
         "version" : "0.11.0"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "5581748cef2bae787496fe6d61139aebe0a451f6",
+        "version" : "2.8.1"
       }
     },
     {

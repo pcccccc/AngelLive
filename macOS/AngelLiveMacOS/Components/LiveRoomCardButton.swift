@@ -15,6 +15,7 @@ struct LiveRoomCardButton<Content: View>: View {
     let content: Content
     @Environment(\.openWindow) private var openWindow
     @Environment(ToastManager.self) private var toastManager
+    @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
 
     // 判断是否正在直播
     private var isLive: Bool {
@@ -30,7 +31,7 @@ struct LiveRoomCardButton<Content: View>: View {
     var body: some View {
         Button {
             if isLive {
-                openWindow(value: room)
+                fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
             } else {
                 toastManager.show(icon: "tv.slash", message: "主播已下播")
             }

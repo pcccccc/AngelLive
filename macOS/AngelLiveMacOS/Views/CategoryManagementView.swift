@@ -43,7 +43,7 @@ struct CategoryManagementView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 80, maximum: 120), spacing: 16)], spacing: 16) {
                     ForEach(Array(currentSubCategories.enumerated()), id: \.offset) { index, subCategory in
-                        CategoryCard(category: subCategory, isSelected: isSelected(mainIndex: selectedMainIndex, subIndex: index))
+                        CategoryCard(category: subCategory, isSelected: isSelected(mainIndex: selectedMainIndex, subIndex: index), platformIcon: platformIcon)
                             .onTapGesture {
                                 Task {
                                     await viewModel.selectMainCategory(index: selectedMainIndex)
@@ -70,21 +70,58 @@ struct CategoryManagementView: View {
     private func isSelected(mainIndex: Int, subIndex: Int) -> Bool {
         mainIndex == viewModel.selectedMainCategoryIndex && subIndex == viewModel.selectedSubCategoryIndex
     }
+
+    /// 平台默认图标
+    private var platformIcon: String {
+        switch viewModel.platform.liveType {
+        case .bilibili:
+            return "mini_live_card_bili"
+        case .douyu:
+            return "mini_live_card_douyu"
+        case .huya:
+            return "mini_live_card_huya"
+        case .douyin:
+            return "mini_live_card_douyin"
+        case .yy:
+            return "mini_live_card_yy"
+        case .cc:
+            return "mini_live_card_cc"
+        case .ks:
+            return "mini_live_card_ks"
+        case .youtube:
+            return "mini_live_card_youtube"
+        }
+    }
 }
 
 struct CategoryCard: View {
     let category: LiveCategoryModel
     let isSelected: Bool
+    let platformIcon: String
+
+    /// 分类图标 URL（如果有）
+    private var categoryIconURL: URL? {
+        guard !category.icon.isEmpty else { return nil }
+        return URL(string: category.icon)
+    }
 
     var body: some View {
         VStack(spacing: 6) {
-            KFImage(URL(string: category.icon))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 40, height: 40)
-                .padding(8)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(8)
+            Group {
+                if let iconURL = categoryIconURL {
+                    KFImage(iconURL)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    Image(platformIcon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                }
+            }
+            .frame(width: 40, height: 40)
+            .padding(8)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(8)
 
             Text(category.title)
                 .font(.system(size: 11))

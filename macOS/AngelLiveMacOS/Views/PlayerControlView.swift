@@ -24,6 +24,7 @@ struct PlayerControlView: View {
     @State private var isFullscreen = false
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager: FullscreenPlayerManager?
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
@@ -32,14 +33,14 @@ struct PlayerControlView: View {
 
     var body: some View {
         ZStack {
-            // 控制按钮层（带 padding）
+            // 控制按钮层（带 padding）- 强制 dark mode
             ZStack {
                 // 左上角：关闭按钮和主播信息
                 VStack {
                     HStack(spacing: 12) {
                         // 关闭按钮
                         Button {
-                            dismiss()
+                            closePlayer()
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .semibold))
@@ -244,6 +245,7 @@ struct PlayerControlView: View {
                 }
             }
             .padding()
+            .environment(\.colorScheme, .dark)
             .opacity(isHovering ? 1 : 0)
             .onContinuousHover { phase in
                 switch phase {
@@ -348,6 +350,16 @@ struct PlayerControlView: View {
         guard let window = NSApplication.shared.keyWindow else { return }
         window.toggleFullScreen(nil)
         isFullscreen.toggle()
+    }
+
+    private func closePlayer() {
+        // 如果是全屏模式打开的播放器，关闭时返回主界面
+        if let manager = fullscreenPlayerManager, manager.showFullscreenPlayer {
+            manager.closeFullscreenPlayer()
+        } else {
+            // 否则使用 dismiss 关闭窗口
+            dismiss()
+        }
     }
 }
 

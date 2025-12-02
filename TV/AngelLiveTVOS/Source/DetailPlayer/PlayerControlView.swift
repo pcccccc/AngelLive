@@ -366,6 +366,7 @@ struct PlayerControlView: View {
                     }
                     .frame(height: 150)
                 }
+                .environment(\.colorScheme, .dark)
                 .transition(.opacity)
                 .opacity(roomInfoViewModel.showControl ? 1 : 0)
                 .onExitCommand {

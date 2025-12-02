@@ -201,6 +201,7 @@ struct VideoControllerView: View {
                     }
                 }
                 .padding(controlPadding)
+                .environment(\.colorScheme, .dark)
                 .opacity(model.config.isMaskShow ? 1 : 0)
                 .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
 

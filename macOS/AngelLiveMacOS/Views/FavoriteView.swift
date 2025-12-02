@@ -17,6 +17,7 @@ struct FavoriteView: View {
     @State private var isRefreshing = false
     @State private var rotationAngle: Double = 0
     @State private var searchText = ""
+    @State private var isSearching = false
     private static var lastLeaveTimestamp: Date?
     private static var hasPerformedInitialSync = false
 
@@ -56,18 +57,71 @@ struct FavoriteView: View {
                     cloudKitErrorView()
                 }
             }
+            .onTapGesture {
+                if isSearching {
+                    withAnimation(.spring(duration: 0.25)) {
+                        isSearching = false
+                        searchText = ""
+                    }
+                }
+            }
         }
         .navigationTitle("收藏")
-        .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
         .toolbar {
-            ToolbarItem(placement: .automatic) {
+            ToolbarItemGroup(placement: .automatic) {
+                // 刷新按钮
                 Button(action: {
                     refreshContent()
                 }) {
-                    Label("刷新", systemImage: "arrow.trianglehead.2.counterclockwise")
+                    Image(systemName: "arrow.trianglehead.2.counterclockwise")
+                        .font(.body)
+                        .frame(width: 16, height: 16)
                 }
                 .rotationEffect(.degrees(rotationAngle))
                 .disabled(isRefreshing || viewModel.isLoading)
+                .buttonStyle(.plain)
+                .frame(width: 36, height: 36)
+            }
+
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.fixed)
+            }
+
+            ToolbarItemGroup(placement: .automatic) {
+                // 搜索按钮/搜索框
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .frame(width: isSearching ? nil : 16, height: 16)
+
+                    if isSearching {
+                        TextField("搜索主播名或房间标题", text: $searchText)
+                            .textFieldStyle(.plain)
+                            .frame(width: 160)
+
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(width: isSearching ? nil : 36, height: 36)
+                .padding(.horizontal, isSearching ? 8 : 0)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if !isSearching {
+                        withAnimation(.spring(duration: 0.25)) {
+                            isSearching = true
+                        }
+                    }
+                }
+                .animation(.spring(duration: 0.25), value: isSearching)
             }
         }
         .task {
@@ -289,7 +343,7 @@ struct FavoriteView: View {
 
         LazyVGrid(
             columns: [
-                GridItem(.adaptive(minimum: 220, maximum: 310), spacing: horizontalSpacing)
+                GridItem(.adaptive(minimum: 180, maximum: 260), spacing: horizontalSpacing)
             ],
             spacing: verticalSpacing
         ) {

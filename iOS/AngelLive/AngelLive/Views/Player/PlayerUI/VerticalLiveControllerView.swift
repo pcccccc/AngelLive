@@ -44,6 +44,7 @@ struct VerticalLiveControllerView: View {
             bottomRightArea
                 .padding(.bottom, safeAreaInsets.bottom)
         }
+        .environment(\.colorScheme, .dark)
         .opacity(model.config.isMaskShow ? 1 : 0)
     }
 

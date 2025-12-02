@@ -14,8 +14,38 @@ import Kingfisher
 struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
+    @State private var showBilibiliLogin = false
+
+    /// 当前分类图标 URL（如果有）
+    private var categoryIconURL: URL? {
+        guard let icon = viewModel.currentSubCategory?.icon, !icon.isEmpty else { return nil }
+        return URL(string: icon)
+    }
+
+    /// 平台默认图标
+    private var platformIcon: String {
+        switch viewModel.platform.liveType {
+        case .bilibili:
+            return "mini_live_card_bili"
+        case .douyu:
+            return "mini_live_card_douyu"
+        case .huya:
+            return "mini_live_card_huya"
+        case .douyin:
+            return "mini_live_card_douyin"
+        case .yy:
+            return "mini_live_card_yy"
+        case .cc:
+            return "mini_live_card_cc"
+        case .ks:
+            return "mini_live_card_ks"
+        case .youtube:
+            return "mini_live_card_youtube"
+        }
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -36,9 +66,6 @@ struct PlatformDetailView: View {
                 ProgressView("加载分类中...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !viewModel.categories.isEmpty {
-                // 分类选择按钮
-                categoryButton
-
                 // 房间列表
                 roomListView
             } else {
@@ -51,12 +78,47 @@ struct PlatformDetailView: View {
             }
         }
         .navigationTitle(viewModel.platform.title)
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button(action: {
+        .toolbar() {
+            ToolbarItemGroup() {
+                Button {
+                    showCategorySheet.toggle()
+                } label: {
+                    HStack(spacing: 6) {
+                        Group {
+                            if let iconURL = categoryIconURL {
+                                KFImage(iconURL)
+                                    .resizable()
+                                    .scaledToFit()
+                            } else {
+                                Image(platformIcon)
+                                    .resizable()
+                                    .scaledToFit()
+                            }
+                        }
+                        .frame(width: 16, height: 16)
+                        .background(Color.gray.opacity(0.2))
+                        .clipShape(Circle())
+                        
+                        Text(viewModel.currentCategoryTitle)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.fixed)
+            }
+            
+            ToolbarItemGroup() {
+                Button {
                     refreshContent()
-                }) {
-                    Label("刷新", systemImage: "arrow.trianglehead.2.counterclockwise")
+                } label: {
+                    Image(systemName: "arrow.trianglehead.2.counterclockwise")
+                        .font(.body)
+                        .frame(width: 16, height: 16)
                 }
                 .rotationEffect(.degrees(isRefreshing ? 360 : 0))
                 .animation(
@@ -64,6 +126,8 @@ struct PlatformDetailView: View {
                     value: isRefreshing
                 )
                 .disabled(isRefreshing || viewModel.isLoadingRooms)
+                .buttonStyle(.plain)
+                .frame(width: 36, height: 36)
             }
         }
         .overlay {
@@ -119,25 +183,6 @@ struct PlatformDetailView: View {
                 await viewModel.loadCategories()
             }
         }
-    }
-
-    // MARK: - 分类选择按钮
-    private var categoryButton: some View {
-        Button {
-            showCategorySheet.toggle()
-        } label: {
-            HStack {
-                Text(viewModel.currentCategoryTitle)
-                    .font(.headline)
-                Spacer()
-                Image(systemName: "chevron.down")
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - 一级分类导航
@@ -224,16 +269,21 @@ struct PlatformDetailView: View {
             ProgressView("加载直播间...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = viewModel.roomError, rooms.isEmpty {
-            ErrorView(
-                title: "加载失败",
-                message: errorMessage(from: error),
-                detailMessage: errorDetail(from: error),
-                onRetry: {
-                    Task {
-                        await viewModel.loadRoomList()
+            if isBilibiliLoginRequired(error: error) {
+                // B站需要登录的特殊错误提示
+                bilibiliLoginRequiredView
+            } else {
+                ErrorView(
+                    title: "加载失败",
+                    message: errorMessage(from: error),
+                    detailMessage: errorDetail(from: error),
+                    onRetry: {
+                        Task {
+                            await viewModel.loadRoomList()
+                        }
                     }
-                }
-            )
+                )
+            }
         } else if rooms.isEmpty {
             ContentUnavailableView(
                 "暂无直播",
@@ -245,13 +295,13 @@ struct PlatformDetailView: View {
             ScrollView {
                 LazyVGrid(
                     columns: [
-                        GridItem(.adaptive(minimum: 220, maximum: 310), spacing: 16)
+                        GridItem(.adaptive(minimum: 180, maximum: 260), spacing: 16)
                     ],
                     spacing: 16
                 ) {
                     ForEach(rooms) { room in
                         Button {
-                            openWindow(value: room)
+                            fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
                         } label: {
                             LiveRoomCard(room: room)
                         }
@@ -312,6 +362,71 @@ struct PlatformDetailView: View {
             return detail.isEmpty ? nil : detail
         }
         return nil
+    }
+
+    /// 检查是否是 B站 352 错误（需要登录）
+    private func isBilibiliLoginRequired(error: Error) -> Bool {
+        guard viewModel.platform.liveType == .bilibili else { return false }
+
+        if let liveParseError = error as? LiveParseError {
+            let detail = liveParseError.detail
+            // 检查 detail 中是否包含 code 352
+            return detail.contains("352") || detail.contains("\"code\":352") || detail.contains("\"code\": 352")
+        }
+        return false
+    }
+
+    // MARK: - B站登录提示视图
+    private var bilibiliLoginRequiredView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(.system(size: 56))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.pink, .orange],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            VStack(spacing: 8) {
+                Text("需要登录")
+                    .font(.title.bold())
+
+                Text("请先登录哔哩哔哩账号才能查看直播列表")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            HStack(spacing: 16) {
+                Button {
+                    Task {
+                        await viewModel.loadRoomList()
+                    }
+                } label: {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    showBilibiliLogin = true
+                } label: {
+                    Label("去登录", systemImage: "person.crop.circle")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.top, 8)
+
+            Spacer()
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $showBilibiliLogin) {
+            BilibiliWebLoginView()
+        }
     }
 }
 

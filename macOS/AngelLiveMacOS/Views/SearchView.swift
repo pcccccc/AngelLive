@@ -129,7 +129,7 @@ struct SearchView: View {
         return ScrollView {
             LazyVGrid(
                 columns: [
-                    GridItem(.adaptive(minimum: 220, maximum: 310), spacing: horizontalSpacing)
+                    GridItem(.adaptive(minimum: 180, maximum: 260), spacing: horizontalSpacing)
                 ],
                 spacing: verticalSpacing
             ) {
