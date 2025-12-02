@@ -120,7 +120,7 @@ struct SettingView: View {
                 Text("哔哩哔哩")
 
                 Spacer()
-
+                
                 if bilibiliCookie.contains("SESSDATA") {
                     Text("已登录")
                         .foregroundStyle(AppConstants.Colors.success)

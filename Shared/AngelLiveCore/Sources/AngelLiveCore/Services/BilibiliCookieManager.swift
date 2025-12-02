@@ -51,8 +51,17 @@ public final class BilibiliCookieManager: ObservableObject {
         // 清除 UserDefaults 中的 cookie
         clearBilibiliCookie()
 
+        clearWebViewCookies()
+
+        // 重置状态并重新获取
+        cookieReady = false
+        error = nil
+        isLoading = true
+    }
+
+    /// 仅清除 WebView 中的 Bilibili 相关缓存，不触发重新获取
+    public func clearWebViewCookies() {
         #if !os(tvOS)
-        // 清除 WKWebView 的 cookie (tvOS 不支持)
         let dataStore = WKWebsiteDataStore.default()
         dataStore.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
             let bilibiliRecords = records.filter { $0.displayName.contains("bilibili") }
@@ -61,11 +70,6 @@ public final class BilibiliCookieManager: ObservableObject {
             }
         }
         #endif
-
-        // 重置状态并重新获取
-        cookieReady = false
-        error = nil
-        isLoading = true
     }
 
     #if !os(tvOS)

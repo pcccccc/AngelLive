@@ -65,8 +65,8 @@ struct BilibiliWebLoginView: View {
                 onWebViewCreated: { webView in
                     viewModel.currentWebView = webView
                 },
-                onTitleChanged: { title in
-                    viewModel.checkLoginStatus(title: title)
+                onNavigationStateChange: { title, url, didFinish in
+                    viewModel.checkLoginStatus(title: title, url: url, didFinish: didFinish)
                 }
             )
             .id(viewModel.webViewKey)

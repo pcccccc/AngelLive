@@ -25,17 +25,16 @@ final class BilibiliLoginViewModel: ObservableObject {
     // MARK: - Properties
 
     nonisolated(unsafe) var currentWebView: WKWebView?
-    private var loopTimes = 0
     private var viewVisible = true
+    private var cookieExtractionWorkItem: DispatchWorkItem?
 
     // 登录页面 URL
     let loginURL = "https://passport.bilibili.com/h5-app/passport/login?gourl=https%3A%2F%2Flive.bilibili.com%2Fp%2Feden%2Farea-tags%3FparentAreaId%3D2%26areaId%3D86"
 
     // 登录成功后的标题关键词
     private let successTitleKeyword = "直播"
-
-    // 最大等待次数
-    private let maxWaitTimes = 2
+    private let targetRedirectKeyword = "live.bilibili.com/p/eden/area-tags"
+    private let postRedirectDelay: TimeInterval = 3.0
 
     // MARK: - Cookie Management
 
@@ -48,12 +47,7 @@ final class BilibiliLoginViewModel: ObservableObject {
     }
 
     var isLoggedIn: Bool {
-        hasSessData || loginSuccess
-    }
-
-    /// 检查 Cookie 中是否包含 SESSDATA
-    var hasSessData: Bool {
-        cookie.contains("SESSDATA")
+        loginSuccess
     }
 
     // MARK: - Lifecycle
@@ -66,23 +60,39 @@ final class BilibiliLoginViewModel: ObservableObject {
 
     func onDisappear() {
         viewVisible = false
+        cancelScheduledCookieExtraction()
     }
 
     // MARK: - Login Status Check
 
-    func checkLoginStatus(title: String?) {
+    func checkLoginStatus(title: String?, url: URL?, didFinish: Bool) {
         guard viewVisible else { return }
+
+        if cookieExtractionWorkItem != nil && !didFinish {
+            return
+        }
 
         let pageTitle = title ?? ""
         statusText = pageTitle.isEmpty ? "正在加载..." : pageTitle
 
-        if pageTitle.contains(successTitleKeyword) {
-            loopTimes += 1
-            if loopTimes >= maxWaitTimes {
-                extractAndSaveCookie()
-            }
+        guard didFinish else { return }
+
+        guard let currentURL = url else {
+            cancelScheduledCookieExtraction()
+            return
+        }
+
+        if isTargetRedirect(url: currentURL) {
+            isLoading = true
+            statusText = "登录成功，正在获取登录信息..."
+            scheduleCookieExtraction()
+        } else if pageTitle.contains(successTitleKeyword) {
+            // 登录成功后等待跳转到目标页
+            isLoading = true
+            statusText = "登录成功，正在跳转..."
+            cancelScheduledCookieExtraction()
         } else {
-            loopTimes = 0
+            cancelScheduledCookieExtraction()
             isLoading = false
             if pageTitle.isEmpty {
                 statusText = "请登录您的哔哩哔哩账号"
@@ -93,6 +103,9 @@ final class BilibiliLoginViewModel: ObservableObject {
     // MARK: - Cookie Extraction
 
     func extractAndSaveCookie() {
+        cancelScheduledCookieExtraction()
+
+        guard !loginSuccess else { return }
         guard let webView = currentWebView else {
             statusText = "获取登录信息失败，请重试"
             return
@@ -123,8 +136,8 @@ final class BilibiliLoginViewModel: ObservableObject {
 
                     BilibiliCookieSyncService.shared.syncToICloud()
 
-                    // 清理旧的 cookie 并重新获取
-                    BilibiliCookieManager.shared.clearAndRefetch()
+                    // 仅清理 WebView 缓存，避免刚保存的 Cookie 被覆盖
+                    BilibiliCookieManager.shared.clearWebViewCookies()
 
                     self.loginSuccess = true
                     self.isLoading = false
@@ -179,11 +192,11 @@ final class BilibiliLoginViewModel: ObservableObject {
 
         BilibiliCookieSyncService.shared.syncToICloud()
 
-        // 清理 BilibiliCookieManager 中的 cookie
-        BilibiliCookieManager.shared.clearAndRefetch()
+        // 清理 WebView 中的 Bilibili 缓存
+        BilibiliCookieManager.shared.clearWebViewCookies()
 
+        cancelScheduledCookieExtraction()
         loginSuccess = false
-        loopTimes = 0
         isLoading = true
         statusText = "正在加载登录页面..."
         currentWebView = nil
@@ -195,6 +208,27 @@ final class BilibiliLoginViewModel: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    private func scheduleCookieExtraction() {
+        guard !loginSuccess else { return }
+
+        cancelScheduledCookieExtraction()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.extractAndSaveCookie()
+        }
+        cookieExtractionWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + postRedirectDelay, execute: workItem)
+    }
+
+    private func cancelScheduledCookieExtraction() {
+        cookieExtractionWorkItem?.cancel()
+        cookieExtractionWorkItem = nil
+    }
+
+    private func isTargetRedirect(url: URL) -> Bool {
+        url.absoluteString.contains(targetRedirectKeyword)
+    }
 
     private func buildCookieString(from cookieDict: [String: Any]) -> String {
         var cookieString = ""

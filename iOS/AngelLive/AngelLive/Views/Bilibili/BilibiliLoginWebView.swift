@@ -13,10 +13,10 @@ import WebKit
 struct BilibiliLoginWebView: UIViewRepresentable {
     let url: String
     let onWebViewCreated: (WKWebView) -> Void
-    let onTitleChanged: (String?) -> Void
+    let onNavigationStateChange: (String?, URL?, Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onTitleChanged: onTitleChanged)
+        Coordinator(onNavigationStateChange: onNavigationStateChange)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -50,19 +50,19 @@ struct BilibiliLoginWebView: UIViewRepresentable {
     // MARK: - Coordinator
 
     class Coordinator: NSObject, WKNavigationDelegate {
-        let onTitleChanged: (String?) -> Void
+        let onNavigationStateChange: (String?, URL?, Bool) -> Void
         private var pollingTimer: Timer?
         private weak var webView: WKWebView?
 
-        init(onTitleChanged: @escaping (String?) -> Void) {
-            self.onTitleChanged = onTitleChanged
+        init(onNavigationStateChange: @escaping (String?, URL?, Bool) -> Void) {
+            self.onNavigationStateChange = onNavigationStateChange
         }
 
         func startPolling(webView: WKWebView) {
             self.webView = webView
             pollingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
                 guard let self = self, let webView = self.webView else { return }
-                self.onTitleChanged(webView.title)
+                self.onNavigationStateChange(webView.title, webView.url, false)
             }
         }
 
@@ -72,7 +72,7 @@ struct BilibiliLoginWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            onTitleChanged(webView.title)
+            onNavigationStateChange(webView.title, webView.url, true)
         }
     }
 }
