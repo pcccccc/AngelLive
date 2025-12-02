@@ -31,9 +31,9 @@ struct SettingView: View {
 
                             Spacer()
 
-                            Text(settingStore.bilibiliCookie.isEmpty ? "未登录" : "已登录")
+                            Text(settingStore.bilibiliCookie.contains("SESSDATA") ? "已登录" : "未登录")
                                 .font(.caption)
-                                .foregroundStyle(settingStore.bilibiliCookie.isEmpty ? AppConstants.Colors.secondaryText : AppConstants.Colors.success)
+                                .foregroundStyle(settingStore.bilibiliCookie.contains("SESSDATA") ? AppConstants.Colors.success : AppConstants.Colors.secondaryText)
                         }
                     }
                 } header: {
