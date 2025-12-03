@@ -47,25 +47,58 @@ public enum LiveService {
     }
     
     public static func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
-        let bilibiliResList = try await Bilibili.searchRooms(keyword: keyword, page: page)
-        let douyinResList = try await Douyin.searchRooms(keyword: keyword, page: page)
-        var finalDouyinResList: [LiveModel] = []
-        for room in douyinResList {
-            let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-            finalDouyinResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
-        }
-        let huyaResList = try await Huya.searchRooms(keyword: keyword, page: page)
-        let douyuResList = try await Douyu.searchRooms(keyword: keyword, page: page)
-        var finalDouyuResList: [LiveModel] = []
-        for room in douyuResList {
-            let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-            finalDouyuResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
-        }
         var resArray: [LiveModel] = []
-        resArray.append(contentsOf: bilibiliResList)
-        resArray.append(contentsOf: finalDouyinResList)
-        resArray.append(contentsOf: huyaResList)
-        resArray.append(contentsOf: finalDouyuResList)
+
+        // Bilibili 搜索
+        do {
+            let bilibiliResList = try await Bilibili.searchRooms(keyword: keyword, page: page)
+            resArray.append(contentsOf: bilibiliResList)
+        } catch {
+            print("⚠️ Bilibili 搜索失败: \(error)")
+        }
+
+        // 抖音搜索
+        do {
+            let douyinResList = try await Douyin.searchRooms(keyword: keyword, page: page)
+            var finalDouyinResList: [LiveModel] = []
+            for room in douyinResList {
+                do {
+                    let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                    finalDouyinResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
+                } catch {
+                    print("⚠️ 抖音获取直播状态失败: \(room.roomId)")
+                }
+            }
+            resArray.append(contentsOf: finalDouyinResList)
+        } catch {
+            print("⚠️ 抖音搜索失败: \(error)")
+        }
+
+        // 虎牙搜索
+        do {
+            let huyaResList = try await Huya.searchRooms(keyword: keyword, page: page)
+            resArray.append(contentsOf: huyaResList)
+        } catch {
+            print("⚠️ 虎牙搜索失败: \(error)")
+        }
+
+        // 斗鱼搜索
+        do {
+            let douyuResList = try await Douyu.searchRooms(keyword: keyword, page: page)
+            var finalDouyuResList: [LiveModel] = []
+            for room in douyuResList {
+                do {
+                    let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                    finalDouyuResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
+                } catch {
+                    print("⚠️ 斗鱼获取直播状态失败: \(room.roomId)")
+                }
+            }
+            resArray.append(contentsOf: finalDouyuResList)
+        } catch {
+            print("⚠️ 斗鱼搜索失败: \(error)")
+        }
+
         return resArray
     }
     

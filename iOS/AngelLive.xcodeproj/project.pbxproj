@@ -12,6 +12,7 @@
 		FBA85D9D2EA5E78600D976E1 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85D9C2EA5E78600D976E1 /* SharedAssets */; };
 		FBA85D9F2EA5E83800D976E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */; };
 		FBA85DA92EA6337C00D976E1 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85DA82EA6337C00D976E1 /* LiveParse */; };
+		FBE22D662EE027BB00866D4B /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FBE22D652EE027BB00866D4B /* Package.resolved */; };
 		FBF74A6F2EA1F99B00591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A6E2EA1F99B00591EEA /* AngelLiveCore */; };
 		FBF74A712EA1F99B00591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A702EA1F99B00591EEA /* AngelLiveDependencies */; };
 /* End PBXBuildFile section */
@@ -19,6 +20,7 @@
 /* Begin PBXFileReference section */
 		FB7077B32EA1D6450059AFD9 /* AngelLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
+		FBE22D652EE027BB00866D4B /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = ../AngelLive.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -62,6 +64,7 @@
 		FB7077AA2EA1D6450059AFD9 = {
 			isa = PBXGroup;
 			children = (
+				FBE22D652EE027BB00866D4B /* Package.resolved */,
 				FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */,
 				FB7077B52EA1D6450059AFD9 /* AngelLive */,
 				FBF74A6D2EA1F99B00591EEA /* Frameworks */,
@@ -157,6 +160,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBE22D662EE027BB00866D4B /* Package.resolved in Resources */,
 				FBA85D9F2EA5E83800D976E1 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

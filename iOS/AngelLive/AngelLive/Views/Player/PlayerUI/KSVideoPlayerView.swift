@@ -15,8 +15,9 @@ import AngelLiveDependencies
 
 @MainActor
 public struct KSVideoPlayerView: View {
-    @ObservedObject
+    @StateObject
     private var model: KSVideoPlayerModel
+    private let providedURL: URL?
     private let subtitleDataSource: SubtitleDataSource?
     private let liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)?
     @Environment(\.dismiss)
@@ -27,7 +28,8 @@ public struct KSVideoPlayerView: View {
     @State private var actualPlayerHeight: CGFloat = 0 // 实际播放器高度
 
     public init(model: KSVideoPlayerModel, subtitleDataSource: SubtitleDataSource? = nil, liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)? = nil) {
-        self.model = model
+        _model = StateObject(wrappedValue: model)
+        self.providedURL = model.url
         self.subtitleDataSource = subtitleDataSource
         self.liftCycleBlock = liftCycleBlock
     }
@@ -139,6 +141,12 @@ public struct KSVideoPlayerView: View {
             // iOS: 要放在最上面的view。这样才不会被controllerView盖住
             .onHover { new in
                 model.config.isMaskShow = new
+            }
+            // 父层传入的新 URL 时，复用同一个模型，只更新 URL，避免重复创建播放器
+            .onChange(of: providedURL) { newValue in
+                if let newValue, model.url != newValue {
+                    model.url = newValue
+                }
             }
         } else {
             controllerView

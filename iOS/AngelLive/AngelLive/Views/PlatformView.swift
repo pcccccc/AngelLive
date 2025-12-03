@@ -156,6 +156,7 @@ extension Platformdescription: @retroactive Identifiable {
 
 extension Notification.Name {
     static let switchToYouTubeSearch = Notification.Name("switchToYouTubeSearch")
+    static let switchToSettings = Notification.Name("switchToSettings")
 }
 
 #Preview {

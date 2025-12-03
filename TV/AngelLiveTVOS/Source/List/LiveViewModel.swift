@@ -62,6 +62,7 @@ class LiveViewModel {
     var errorMessage = ""
     var errorDetail: String? = nil
     var showErrorDetail = false
+    var currentError: Error? = nil
    
     //直播列表分页
     var subPageNumber = 0
@@ -252,7 +253,15 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 isLoading = false
-                handleError(error)
+                // 检查是否是空结果错误（搜索时空结果是正常情况，不应显示错误）
+                if let liveParseError = error as? LiveParseError,
+                   liveParseError.detail.contains("返回结果为空") {
+                    // 空结果不是错误，只是没有搜索到内容，不设置 hasError
+                    self.roomList = []
+                } else {
+                    // 真正的错误才调用 handleError
+                    handleError(error)
+                }
             }
         }
     }
@@ -271,7 +280,15 @@ class LiveViewModel {
         } catch {
             await MainActor.run {
                 isLoading = false
-                handleError(error)
+                // 检查是否是空结果错误（搜索时空结果是正常情况，不应显示错误）
+                if let liveParseError = error as? LiveParseError,
+                   liveParseError.detail.contains("返回结果为空") {
+                    // 空结果不是错误，只是没有搜索到内容，不设置 hasError
+                    self.roomList = []
+                } else {
+                    // 真正的错误才调用 handleError
+                    handleError(error)
+                }
             }
         }
     }
@@ -340,6 +357,7 @@ class LiveViewModel {
     /// 处理错误并提取详细信息
     func handleError(_ error: Error) {
         self.hasError = true
+        self.currentError = error
 
         if let liveParseError = error as? LiveParseError {
             // 使用用户友好的简短消息

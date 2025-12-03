@@ -37,21 +37,28 @@ struct ListMainView: View {
         @Bindable var liveModel = liveViewModel
         
         ZStack {
-            if liveViewModel.hasError {
+            if liveViewModel.hasError, let error = liveViewModel.currentError {
                 ErrorView(
-                    title: "加载失败",
-                    message: liveViewModel.errorMessage,
-                    detailMessage: liveViewModel.errorDetail,
+                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                    message: error.liveParseMessage,
+                    detailMessage: error.liveParseDetail,
+                    curlCommand: error.liveParseCurl,
                     showRetry: true,
+                    showLoginButton: error.isBilibiliAuthRequired,
                     onDismiss: {
                         liveViewModel.hasError = false
-                        liveViewModel.errorDetail = nil
+                        liveViewModel.currentError = nil
                     },
                     onRetry: {
                         liveViewModel.hasError = false
-                        liveViewModel.errorDetail = nil
+                        liveViewModel.currentError = nil
                         liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
-                    }
+                    },
+                    onLogin: error.isBilibiliAuthRequired ? {
+                        // tvOS doesn't have login functionality yet
+                        // Show a message or handle it appropriately
+                        liveViewModel.showToast(false, title: "tvOS 端暂不支持登录，请在 iOS 或 macOS 端登录后同步", hideAfter: 5)
+                    } : nil
                 )
             } else {
                 ScrollViewReader { reader in

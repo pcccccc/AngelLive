@@ -18,18 +18,27 @@ struct DetailPlayerView: View {
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
-        if roomInfoViewModel.hasError {
+        if roomInfoViewModel.hasError, let error = roomInfoViewModel.currentError {
             ErrorView(
-                title: "播放失败",
-                message: roomInfoViewModel.errorMessage,
+                title: error.isBilibiliAuthRequired ? "播放失败-请登录B站账号并检查官方页面" : "播放失败",
+                message: error.liveParseMessage,
+                detailMessage: error.liveParseDetail,
+                curlCommand: error.liveParseCurl,
                 showRetry: true,
+                showLoginButton: error.isBilibiliAuthRequired,
                 onDismiss: {
                     endPlay()
                 },
                 onRetry: {
                     roomInfoViewModel.hasError = false
+                    roomInfoViewModel.currentError = nil
                     playerCoordinator.playerLayer?.play()
-                }
+                },
+                onLogin: error.isBilibiliAuthRequired ? {
+                    // tvOS doesn't have login functionality yet
+                    // Just show message and dismiss
+                    endPlay()
+                } : nil
             )
         } else if roomInfoViewModel.currentPlayURL == nil {
             VStack(spacing: 10) {

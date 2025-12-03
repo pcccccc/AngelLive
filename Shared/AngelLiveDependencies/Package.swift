@@ -16,7 +16,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/pcccccc/AcknowList", branch: "main"),
+        .package(url: "https://github.com/vtourraine/AcknowList", from: "3.4.0"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.10.2"),
         .package(url: "https://github.com/bugsnag/bugsnag-cocoa", from: "6.34.0"),
         .package(url: "https://github.com/hyperoslo/Cache", from: "7.4.0"),
@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
         .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
         .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.6.2"),
-        .package(url: "https://github.com/pcccccc/LiveParse", from: "1.9.9"),
+        .package(url: "https://github.com/pcccccc/LiveParse", from: "2.0.3"),
         .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
         .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
         .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),

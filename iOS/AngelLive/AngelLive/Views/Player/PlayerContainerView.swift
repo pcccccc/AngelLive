@@ -53,6 +53,7 @@ extension EnvironmentValues {
 struct PlayerContainerView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
+    @ObservedObject var playerModel: KSVideoPlayerModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -64,7 +65,7 @@ struct PlayerContainerView: View {
     }
 
     var body: some View {
-        PlayerContentView(playerCoordinator: coordinator)
+        PlayerContentView(playerCoordinator: coordinator, playerModel: playerModel)
             .environment(viewModel)
     }
 }
@@ -73,6 +74,7 @@ struct PlayerContentView: View {
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
+    @ObservedObject var playerModel: KSVideoPlayerModel
     @State private var videoAspectRatio: CGFloat = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
@@ -127,9 +129,8 @@ struct PlayerContentView: View {
             // 如果有播放地址，显示播放器
             if let playURL = viewModel.currentPlayURL {
                 KSVideoPlayerView(
-                    coordinator: playerCoordinator,
-                    url: playURL,
-                    options: viewModel.playerOption
+                    model: playerModel,
+                    subtitleDataSource: nil
                 ) { coordinator, isDisappear in
                     if !isDisappear {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
@@ -139,6 +140,20 @@ struct PlayerContentView: View {
                 .clipped()
                 .opacity(hasDetectedSize ? 1 : 0)
                 .task(id: playURL.absoluteString) {
+                    configureModelIfNeeded(playURL: playURL)
+
+                    // iPad 直接使用默认 16:9，不做尺寸探测，避免频繁重建
+                    if AppConstants.Device.isIPad {
+                        await MainActor.run {
+                            applyVideoFillMode(isVerticalLive: false)
+                            videoAspectRatio = 16.0 / 9.0
+                            isVideoPortrait = false
+                            isVerticalLiveMode = false
+                            hasDetectedSize = true
+                        }
+                        return
+                    }
+
                     // 使用异步任务定期检查视频尺寸
                     var retryCount = 0
                     let maxRetries = 40 // 最多重试 40 次（10 秒）
@@ -267,6 +282,20 @@ struct PlayerContentView: View {
         playerView.layer.masksToBounds = isVerticalLive
         playerView.setNeedsLayout()
         playerView.layoutIfNeeded()
+    }
+
+    /// 确保播放器模型只创建一次并与全局 coordinator / options 对齐
+    private func configureModelIfNeeded(playURL: URL) {
+        // 让模型使用外部的 coordinator 和当前 options
+        if playerModel.config !== playerCoordinator {
+            playerModel.config = playerCoordinator
+        }
+        playerModel.options = viewModel.playerOption
+
+        // 仅当 URL 变化时才更新，避免重复创建/重置
+        if playerModel.url != playURL {
+            playerModel.url = playURL
+        }
     }
 }
 

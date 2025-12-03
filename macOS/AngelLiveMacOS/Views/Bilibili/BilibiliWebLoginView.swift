@@ -64,6 +64,16 @@ struct BilibiliWebLoginView: View {
                 }
                 .foregroundStyle(AppConstants.Colors.error)
             }
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("关闭")
         }
         .padding()
         .background(AppConstants.Colors.secondaryBackground)

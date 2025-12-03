@@ -39,9 +39,11 @@ struct SearchRoomView: View {
                         liveViewModel.roomPage = 1
                     }
 
-                    if appModel.searchViewModel.searchTypeIndex == 0 {
+                    if appModel.searchViewModel.searchTypeIndex == 1 {
+                        // 关键词搜索
                         await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
                     } else {
+                        // 链接/口令 或 YouTube 搜索
                         await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                     }
                 }
@@ -64,24 +66,34 @@ struct SearchRoomView: View {
                     Spacer()
                 }
             }else {
-                if liveViewModel.hasError {
+                if liveViewModel.hasError, let error = liveViewModel.currentError {
                     ErrorView(
-                        title: "搜索失败",
-                        message: liveViewModel.errorMessage,
+                        title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
+                        message: error.liveParseMessage,
+                        detailMessage: error.liveParseDetail,
+                        curlCommand: error.liveParseCurl,
                         showRetry: true,
+                        showLoginButton: error.isBilibiliAuthRequired,
                         onDismiss: {
                             liveViewModel.hasError = false
+                            liveViewModel.currentError = nil
                         },
                         onRetry: {
                             liveViewModel.hasError = false
+                            liveViewModel.currentError = nil
                             Task {
-                                if appModel.searchViewModel.searchTypeIndex == 0 {
+                                if appModel.searchViewModel.searchTypeIndex == 1 {
+                                    // 关键词搜索
                                     await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
                                 } else {
+                                    // 链接/口令 或 YouTube 搜索
                                     await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                                 }
                             }
-                        }
+                        },
+                        onLogin: error.isBilibiliAuthRequired ? {
+                            liveViewModel.showToast(false, title: "tvOS 端暂不支持登录，请在 iOS 或 macOS 端登录后同步", hideAfter: 5)
+                        } : nil
                     )
                 } else {
                     ScrollView {

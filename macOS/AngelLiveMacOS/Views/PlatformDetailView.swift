@@ -53,14 +53,20 @@ struct PlatformDetailView: View {
         VStack(spacing: 0) {
             if let error = viewModel.categoryError {
                 ErrorView(
-                    title: "加载失败",
-                    message: errorMessage(from: error),
-                    detailMessage: errorDetail(from: error),
+                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                    message: error.liveParseMessage,
+                    detailMessage: error.liveParseDetail,
+                    curlCommand: error.liveParseCurl,
+                    showRetry: true,
+                    showLoginButton: error.isBilibiliAuthRequired,
                     onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
-                    }
+                    },
+                    onLogin: error.isBilibiliAuthRequired ? {
+                        showBilibiliLogin = true
+                    } : nil
                 )
             } else if viewModel.isLoadingCategories && viewModel.categories.isEmpty {
                 ProgressView("加载分类中...")
@@ -178,6 +184,9 @@ struct PlatformDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showCategorySheet)
+        .sheet(isPresented: $showBilibiliLogin) {
+            BilibiliWebLoginView()
+        }
         .task {
             if viewModel.categories.isEmpty {
                 await viewModel.loadCategories()
@@ -269,21 +278,22 @@ struct PlatformDetailView: View {
             ProgressView("加载直播间...")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = viewModel.roomError, rooms.isEmpty {
-            if isBilibiliLoginRequired(error: error) {
-                // B站需要登录的特殊错误提示
-                bilibiliLoginRequiredView
-            } else {
-                ErrorView(
-                    title: "加载失败",
-                    message: errorMessage(from: error),
-                    detailMessage: errorDetail(from: error),
-                    onRetry: {
-                        Task {
-                            await viewModel.loadRoomList()
-                        }
+            ErrorView(
+                title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                message: error.liveParseMessage,
+                detailMessage: error.liveParseDetail,
+                curlCommand: error.liveParseCurl,
+                showRetry: true,
+                showLoginButton: error.isBilibiliAuthRequired,
+                onRetry: {
+                    Task {
+                        await viewModel.loadRoomList()
                     }
-                )
-            }
+                },
+                onLogin: error.isBilibiliAuthRequired ? {
+                    showBilibiliLogin = true
+                } : nil
+            )
         } else if rooms.isEmpty {
             ContentUnavailableView(
                 "暂无直播",
@@ -347,87 +357,6 @@ struct PlatformDetailView: View {
         }
     }
 
-    // MARK: - 错误信息提取
-
-    private func errorMessage(from error: Error) -> String {
-        if let liveParseError = error as? LiveParseError {
-            return liveParseError.title
-        }
-        return error.localizedDescription
-    }
-
-    private func errorDetail(from error: Error) -> String? {
-        if let liveParseError = error as? LiveParseError {
-            let detail = liveParseError.detail
-            return detail.isEmpty ? nil : detail
-        }
-        return nil
-    }
-
-    /// 检查是否是 B站 352 错误（需要登录）
-    private func isBilibiliLoginRequired(error: Error) -> Bool {
-        guard viewModel.platform.liveType == .bilibili else { return false }
-
-        if let liveParseError = error as? LiveParseError {
-            let detail = liveParseError.detail
-            // 检查 detail 中是否包含 code 352
-            return detail.contains("352") || detail.contains("\"code\":352") || detail.contains("\"code\": 352")
-        }
-        return false
-    }
-
-    // MARK: - B站登录提示视图
-    private var bilibiliLoginRequiredView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "person.crop.circle.badge.exclamationmark")
-                .font(.system(size: 56))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.pink, .orange],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-            VStack(spacing: 8) {
-                Text("需要登录")
-                    .font(.title.bold())
-
-                Text("请先登录哔哩哔哩账号才能查看直播列表")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            HStack(spacing: 16) {
-                Button {
-                    Task {
-                        await viewModel.loadRoomList()
-                    }
-                } label: {
-                    Label("重试", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    showBilibiliLogin = true
-                } label: {
-                    Label("去登录", systemImage: "person.crop.circle")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(.top, 8)
-
-            Spacer()
-        }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $showBilibiliLogin) {
-            BilibiliWebLoginView()
-        }
-    }
 }
 
 // MARK: - 直播间卡片

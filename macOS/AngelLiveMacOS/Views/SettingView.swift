@@ -10,27 +10,15 @@ import SwiftUI
 import AngelLiveCore
 
 struct SettingView: View {
-    @AppStorage("autoPlay") private var autoPlay = true
-    @AppStorage("preferredQuality") private var preferredQuality = "原画"
     @AppStorage("SimpleLive.Setting.BilibiliCookie") private var bilibiliCookie = ""
     @State private var danmuModel = DanmuSettingModel()
     @State private var showBilibiliLogin = false
+    @State private var showOpenSourceList = false
 
     var body: some View {
         Form {
             Section("账号管理") {
                 bilibiliAccountRow
-            }
-
-            Section("播放设置") {
-                Toggle("自动播放", isOn: $autoPlay)
-                    .help("进入直播间时自动开始播放")
-
-                Picker("默认清晰度", selection: $preferredQuality) {
-                    Text("原画").tag("原画")
-                    Text("高清").tag("高清")
-                    Text("流畅").tag("流畅")
-                }
             }
 
             Section("弹幕设置") {
@@ -85,6 +73,19 @@ struct SettingView: View {
             }
 
             Section("关于") {
+                Button {
+                    showOpenSourceList = true
+                } label: {
+                    HStack {
+                        Label("开源许可", systemImage: "doc.text.fill")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+
                 Link(destination: URL(string: "https://github.com/pcccccc/SimpleLiveTVOS")!) {
                     Label("访问 GitHub", systemImage: "link")
                 }
@@ -101,6 +102,19 @@ struct SettingView: View {
         .navigationTitle("设置")
         .sheet(isPresented: $showBilibiliLogin) {
             BilibiliWebLoginView()
+        }
+        .sheet(isPresented: $showOpenSourceList) {
+            NavigationStack {
+                OpenSourceListView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showOpenSourceList = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 500)
         }
     }
 

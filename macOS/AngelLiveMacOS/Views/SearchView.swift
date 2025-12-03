@@ -16,7 +16,9 @@ struct SearchView: View {
     @Environment(\.openWindow) private var openWindow
     @State private var searchResults: [LiveModel] = []
     @State private var isSearching = false
-    @State private var searchError: String?
+    @State private var searchError: Error?
+    @State private var showBilibiliLogin = false
+    @State private var hasSearched = false
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -40,9 +42,13 @@ struct SearchView: View {
                     if isSearching {
                         searchSkeletonGrid(geometry: geometry)
                     } else if let searchError {
-                        searchErrorState(message: searchError)
+                        searchErrorState(error: searchError)
                     } else if searchResults.isEmpty {
-                        searchEmptyState()
+                        if hasSearched {
+                            searchNoResultsState()
+                        } else {
+                            searchEmptyState()
+                        }
                     } else {
                         searchResultsGrid(geometry: geometry)
                     }
@@ -60,14 +66,25 @@ struct SearchView: View {
         .onSubmit(of: .search) {
             performSearch()
         }
+        .onChange(of: viewModel.searchText) { _, newValue in
+            // 当搜索框清空时，恢复到初始状态
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchResults = []
+                searchError = nil
+                hasSearched = false
+            }
+        }
+        .sheet(isPresented: $showBilibiliLogin) {
+            BilibiliWebLoginView()
+        }
     }
 
     private var searchPrompt: String {
         switch viewModel.searchTypeIndex {
         case 0:
-            return "输入关键词搜索..."
-        case 1:
             return "输入链接、分享口令或房间号..."
+        case 1:
+            return "输入关键词搜索..."
         case 2:
             return "输入 YouTube 链接或 Video ID..."
         default:
@@ -90,7 +107,7 @@ struct SearchView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "1.circle.fill")
                         .foregroundStyle(.blue)
-                    Text("关键词：搜索主播名或直播间标题")
+                    Text("链接/口令：直接打开分享链接或房间号")
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }
@@ -98,7 +115,7 @@ struct SearchView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "2.circle.fill")
                         .foregroundStyle(.purple)
-                    Text("链接：直接打开分享链接或房间号")
+                    Text("关键词：搜索主播名或直播间标题（不推荐）")
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }
@@ -117,6 +134,24 @@ struct SearchView: View {
                     .fill(Color.primary.opacity(0.05))
             )
             .padding(.horizontal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func searchNoResultsState() -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 60))
+                .foregroundStyle(.gray.opacity(0.5))
+
+            Text("暂无搜索结果")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+
+            Text("换个关键词试试吧")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -171,33 +206,19 @@ struct SearchView: View {
     }
 
     @ViewBuilder
-    private func searchErrorState(message: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.orange)
-
-            Text("搜索失败")
-                .font(.title3.bold())
-                .foregroundStyle(.primary)
-
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            Button {
-                performSearch()
-            } label: {
-                Label("重试", systemImage: "arrow.clockwise")
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+    private func searchErrorState(error: Error) -> some View {
+        ErrorView(
+            title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
+            message: error.liveParseMessage,
+            detailMessage: error.liveParseDetail,
+            curlCommand: error.liveParseCurl,
+            showRetry: true,
+            showLoginButton: error.isBilibiliAuthRequired,
+            onRetry: { performSearch() },
+            onLogin: error.isBilibiliAuthRequired ? {
+                showBilibiliLogin = true
+            } : nil
+        )
     }
 
     private func performSearch() {
@@ -207,16 +228,19 @@ struct SearchView: View {
         searchError = nil
         searchResults = []
         isSearching = true
+        hasSearched = true
 
         Task {
             do {
-                if viewModel.searchTypeIndex == 0 {
+                if viewModel.searchTypeIndex == 1 {
+                    // 关键词搜索
                     let rooms = try await LiveService.searchRooms(keyword: keyword, page: 1)
                     await MainActor.run {
                         searchResults = rooms
                         isSearching = false
                     }
                 } else {
+                    // 链接/口令 或 YouTube 搜索
                     let room = try await LiveService.searchRoomWithShareCode(shareCode: keyword)
                     await MainActor.run {
                         if let room {
@@ -227,8 +251,17 @@ struct SearchView: View {
                 }
             } catch {
                 await MainActor.run {
-                    searchResults = []
-                    searchError = error.localizedDescription
+                    // 检查是否是空结果错误（搜索时空结果是正常情况，不应显示错误）
+                    if let liveParseError = error as? LiveParseError,
+                       liveParseError.detail.contains("返回结果为空") {
+                        // 空结果不是错误，只是没有搜索到内容
+                        searchResults = []
+                        searchError = nil
+                    } else {
+                        // 真正的错误才显示
+                        searchResults = []
+                        searchError = error
+                    }
                     isSearching = false
                 }
             }

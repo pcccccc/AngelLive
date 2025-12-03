@@ -111,18 +111,20 @@ class SubCategoryCell: UICollectionViewCell {
 
     // MARK: - Public Methods
 
-    func configure(with category: LiveCategoryModel) {
+    func configure(with category: LiveCategoryModel, platformIcon: String) {
         titleLabel.text = category.title
 
         // 加载图标
-        if let iconURL = URL(string: category.icon) {
+        if !category.icon.isEmpty, let iconURL = URL(string: category.icon) {
             // 前景图片
             self.imageView.kf.setImage(with: iconURL)
             // 背景模糊图片
             self.backImageView.kf.setImage(with: iconURL)
-        } else if category.icon == "douyin" {
-            self.imageView.image = UIImage(named: "")
-            self.backImageView.image = UIImage(named: "")
+        } else {
+            // 没有分类图标时使用平台图标
+            let platformImage = UIImage(named: platformIcon)
+            self.imageView.image = platformImage
+            self.backImageView.image = platformImage
         }
     }
 }

@@ -80,15 +80,15 @@ class CategoryManagementViewController: UIViewController {
         NSLayoutConstraint.activate([
             // 主分类 SegmentedView
             mainCategorySegmentedView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            mainCategorySegmentedView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mainCategorySegmentedView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mainCategorySegmentedView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            mainCategorySegmentedView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             mainCategorySegmentedView.heightAnchor.constraint(equalToConstant: 50),
 
             // 子分类容器
             listContainerView.topAnchor.constraint(equalTo: mainCategorySegmentedView.bottomAnchor),
-            listContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            listContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            listContainerView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            listContainerView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            listContainerView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            listContainerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
 
         // 关联 segmentedView 和容器，支持左右滑动切换

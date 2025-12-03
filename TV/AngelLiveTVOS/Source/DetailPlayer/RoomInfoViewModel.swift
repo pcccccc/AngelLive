@@ -49,6 +49,7 @@ final class RoomInfoViewModel {
     var rotationAngle = 0.0
     var hasError = false
     var errorMessage = ""
+    var currentError: Error? = nil
 
     var debugTimerIsActive = false
     var dynamicInfo: DynamicInfo?
@@ -290,6 +291,7 @@ final class RoomInfoViewModel {
                 await MainActor.run {
                     isLoading = false
                     hasError = true
+                    currentError = error
                     errorMessage = error.localizedDescription
                 }
             }
@@ -432,6 +434,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
         if let error = error {
             hasError = true
+            currentError = error
             errorMessage = error.localizedDescription
         }
     }

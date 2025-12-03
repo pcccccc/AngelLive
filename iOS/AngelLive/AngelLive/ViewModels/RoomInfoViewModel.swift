@@ -28,6 +28,10 @@ final class RoomInfoViewModel {
     var isLoading = false
     var playError: Error?
     var playErrorMessage: String?
+    /// 防止并发/重复请求播放地址
+    private var isFetchingPlayURL = false
+    /// 是否已成功加载过当前房间的播放地址
+    private var hasLoadedPlayURL = false
 
     // 播放器相关属性
     var playerOption: PlayerOptions
@@ -51,7 +55,8 @@ final class RoomInfoViewModel {
 
         // 初始化播放器选项
         KSOptions.isAutoPlay = true
-        KSOptions.isSecondOpen = true
+        // 关闭双路自动重开，避免在弱网/失败时频繁重连导致 stop 循环
+        KSOptions.isSecondOpen = false
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
         let option = PlayerOptions()
@@ -62,7 +67,15 @@ final class RoomInfoViewModel {
 
     // 加载播放地址
     @MainActor
-    func loadPlayURL() async {
+    func loadPlayURL(force: Bool = false) async {
+        // 避免重复触发导致接口被频繁调用
+        guard !isFetchingPlayURL else { return }
+        // 已经加载过且不强制刷新时直接返回
+        guard force || !hasLoadedPlayURL else { return }
+
+        isFetchingPlayURL = true
+        defer { isFetchingPlayURL = false }
+
         isLoading = true
         playError = nil
         playErrorMessage = nil
@@ -111,6 +124,9 @@ final class RoomInfoViewModel {
             return
         }
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+
+        // 已成功获取到播放参数，标记已加载
+        hasLoadedPlayURL = true
 
         // 启动弹幕连接
         if danmuSettings.showDanmu {
@@ -424,7 +440,7 @@ final class RoomInfoViewModel {
     @MainActor
     func refreshPlayback() {
         Task {
-            await loadPlayURL()
+            await loadPlayURL(force: true)
         }
     }
 

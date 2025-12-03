@@ -17,6 +17,8 @@ struct DetailPlayerView: View {
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
+    /// 稳定的播放器模型，避免随视图重建
+    @StateObject private var playerModel = KSVideoPlayerModel(title: "", config: KSVideoPlayer.Coordinator(), options: KSOptions(), url: nil)
 
     /// iPad 是否处于全屏模式
     @State private var isIPadFullscreen: Bool = false
@@ -91,6 +93,7 @@ struct DetailPlayerView: View {
                         message: viewModel.playErrorMessage ?? "播放失败",
                         errorCode: nil,
                         detailMessage: viewModel.playError?.liveParseDetail,
+                        curlCommand: viewModel.playError?.liveParseCurl,
                         onDismiss: {
                             dismiss()
                         },
@@ -103,7 +106,7 @@ struct DetailPlayerView: View {
                     .zIndex(100)
                 } else {
                     // 播放器 - 始终在同一位置，只改变 frame，不会重建
-                    PlayerContentView(playerCoordinator: playerCoordinator)
+                    PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
                         .id("stable_player")
                         .environment(viewModel)
                         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
@@ -180,7 +183,7 @@ struct DetailPlayerView: View {
 
     /// 全屏播放器布局（iPhone 横屏 或 iPad 全屏）
     private var fullscreenPlayerLayout: some View {
-        PlayerContentView(playerCoordinator: playerCoordinator)
+        PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
             .id("stable_player") // 关键：所有布局使用相同的 id
             .environment(viewModel)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -191,7 +194,7 @@ struct DetailPlayerView: View {
     private var iPadLandscapeLayout: some View {
         HStack(spacing: 0) {
             // 左侧：播放器
-            PlayerContentView(playerCoordinator: playerCoordinator)
+            PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
                 .id("stable_player") // 关键：所有布局使用相同的 id
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)
@@ -214,7 +217,7 @@ struct DetailPlayerView: View {
     private var portraitLayout: some View {
         VStack(spacing: 0) {
             // 播放器容器
-            PlayerContentView(playerCoordinator: playerCoordinator)
+            PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
                 .id("stable_player") // 关键：所有布局使用相同的 id
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)

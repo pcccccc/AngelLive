@@ -12,32 +12,41 @@ struct ErrorView: View {
     let message: String
     let errorCode: String?
     let detailMessage: String?
+    let curlCommand: String?
     let qrCodeURL: String
     let showDismiss: Bool
     let showRetry: Bool
+    let showLoginButton: Bool
     let onDismiss: () -> Void
     let onRetry: (() -> Void)?
+    let onLogin: (() -> Void)?
 
     init(
         title: String = "播放遇到问题",
         message: String,
         errorCode: String? = nil,
         detailMessage: String? = nil,
+        curlCommand: String? = nil,
         qrCodeURL: String = "https://github.com/pcccccc/SimpleLiveTVOS",
         showDismiss: Bool = true,
         showRetry: Bool = false,
+        showLoginButton: Bool = false,
         onDismiss: @escaping () -> Void,
-        onRetry: (() -> Void)? = nil
+        onRetry: (() -> Void)? = nil,
+        onLogin: (() -> Void)? = nil
     ) {
         self.title = title
         self.message = message
         self.errorCode = errorCode
         self.detailMessage = detailMessage
+        self.curlCommand = curlCommand
         self.qrCodeURL = qrCodeURL
         self.showDismiss = showDismiss
         self.showRetry = showRetry
+        self.showLoginButton = showLoginButton
         self.onDismiss = onDismiss
         self.onRetry = onRetry
+        self.onLogin = onLogin
     }
 
     var body: some View {
@@ -83,6 +92,15 @@ struct ErrorView: View {
                             .clipShape(.capsule)
                         }
 
+                        if showLoginButton, let onLogin = onLogin {
+                            Button(action: onLogin) {
+                                Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                            }
+                            .clipShape(.capsule)
+                        }
+
                         if showRetry, let onRetry = onRetry {
                             Button(action: onRetry) {
                                 Label("重试", systemImage: "arrow.clockwise")
@@ -94,6 +112,37 @@ struct ErrorView: View {
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
+
+                    // CURL 命令（如果有）
+                    if let curlCommand = curlCommand, !curlCommand.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("CURL 调试命令")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+
+                            ScrollView {
+                                Text(curlCommand)
+                                    .font(.system(size: 18, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(maxHeight: 200)
+
+                            Text("提示：复制此命令到终端执行可以复现请求")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white.opacity(0.5))
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black.opacity(0.3))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        )
+                        .padding(.top, 20)
+                    }
 
                     // 直接显示错误详情（tvOS 屏幕大，直接展示）
                     if let detailMessage = detailMessage, !detailMessage.isEmpty {

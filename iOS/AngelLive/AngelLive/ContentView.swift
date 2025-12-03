@@ -67,6 +67,9 @@ struct ContentView: View {
             selectedTab = .search
             searchViewModel.searchTypeIndex = 2
         }
+        .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
+            selectedTab = .settings
+        }
         .sheet(isPresented: $manager.showWelcome) {
             WelcomeView {
                 welcomeManager.completeWelcome()

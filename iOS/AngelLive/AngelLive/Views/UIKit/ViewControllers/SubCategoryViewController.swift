@@ -51,7 +51,7 @@ class SubCategoryViewController: UIViewController {
     private lazy var manageButton: UIButton = {
         let button = UIButton(type: .system)
         let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
-        let image = UIImage(systemName: "chart.bar.yaxis", withConfiguration: config)
+        let image = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: config)
         button.setImage(image, for: .normal)
         button.tintColor = UIColor(AppConstants.Colors.accent)
         button.addTarget(self, action: #selector(manageButtonTapped), for: .touchUpInside)

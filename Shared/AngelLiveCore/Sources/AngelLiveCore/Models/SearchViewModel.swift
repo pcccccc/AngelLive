@@ -10,7 +10,7 @@ import Observation
 
 @Observable
 public final class SearchViewModel {
-    public var searchTypeArray = ["关键词 🔍", "链接/口令 🔗", "Youtube"]
+    public var searchTypeArray = ["链接/口令 🔗", "关键词 🔍（不推荐）", "Youtube"]
     public var searchTypeIndex = 0
     public var page = 0
     public var searchText: String = ""

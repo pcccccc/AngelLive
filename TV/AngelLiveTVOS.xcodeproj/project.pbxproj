@@ -13,7 +13,6 @@
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
 		FB140CF92ECEB68500D12FD9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB140CF82ECEB68500D12FD9 /* Assets.xcassets */; };
-		FB141A812ECEC20E00D12FD9 /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FB141A802ECEC20E00D12FD9 /* Package.resolved */; };
 		FB1BAC812E81479D006BC677 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1BAC802E81479D006BC677 /* LiveParse */; };
 		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
 		FB8E940B2E7BEC670055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940A2E7BEC670055E746 /* LiveParse */; };
@@ -21,6 +20,7 @@
 		FBA5C3832E58229100B1368B /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FBA5C3822E58229100B1368B /* LiveParse */; };
 		FBA85D9B2EA5E06100D976E1 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = FBA85D9A2EA5E06100D976E1 /* SharedAssets */; };
 		FBDEF83A2BB9CBCB002EE8FF /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */; };
+		FBE22D6A2EE027CA00866D4B /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FBE22D692EE027CA00866D4B /* Package.resolved */; };
 		FBF74A782EA1F9B000591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A772EA1F9B000591EEA /* AngelLiveCore */; };
 		FBF74A7A2EA1F9B000591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */; };
 /* End PBXBuildFile section */
@@ -28,8 +28,8 @@
 /* Begin PBXFileReference section */
 		4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB140CF82ECEB68500D12FD9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
-		FB141A802ECEC20E00D12FD9 /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = AngelLiveTVOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = "<group>"; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
+		FBE22D692EE027CA00866D4B /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = ../AngelLive.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -74,7 +74,7 @@
 		4FC3DCD12A49382F00CA36B9 = {
 			isa = PBXGroup;
 			children = (
-				FB141A802ECEC20E00D12FD9 /* Package.resolved */,
+				FBE22D692EE027CA00866D4B /* Package.resolved */,
 				FB140CF82ECEB68500D12FD9 /* Assets.xcassets */,
 				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
 				4FC3DCDB2A49382F00CA36B9 /* Products */,
@@ -176,7 +176,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FB141A812ECEC20E00D12FD9 /* Package.resolved in Resources */,
+				FBE22D6A2EE027CA00866D4B /* Package.resolved in Resources */,
 				FB140CF92ECEB68500D12FD9 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

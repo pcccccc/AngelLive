@@ -240,14 +240,20 @@ class RoomListViewController: UIViewController {
         hideErrorView()
 
         let errorView = ErrorView(
-            title: "加载失败",
+            title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
             message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
+            curlCommand: error.liveParseCurl,
+            showRetry: true,
+            showLoginButton: error.isBilibiliAuthRequired,
             showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
             onRetry: { [weak self] in
                 self?.hideErrorView()
                 self?.handleRefresh()
-            }
+            },
+            onLogin: error.isBilibiliAuthRequired ? {
+                NotificationCenter.default.post(name: .switchToSettings, object: nil)
+            } : nil
         )
 
         let hostingController = UIHostingController(rootView: errorView)

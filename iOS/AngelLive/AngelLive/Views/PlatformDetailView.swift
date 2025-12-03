@@ -22,15 +22,21 @@ struct PlatformDetailView: View {
             // 如果加载分类失败，显示错误视图
             if let error = viewModel.categoryError {
                 ErrorView(
-                    title: "加载失败",
+                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
                     message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
+                    curlCommand: error.liveParseCurl,
+                    showRetry: true,
+                    showLoginButton: error.isBilibiliAuthRequired,
                     showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
                     onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
-                    }
+                    },
+                    onLogin: error.isBilibiliAuthRequired ? {
+                        NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                    } : nil
                 )
             } else {
                 // 一级分类导航
@@ -95,15 +101,21 @@ struct PlatformDetailView: View {
             } else if let error = viewModel.roomError, isCurrentPage && rooms.isEmpty {
                 // 如果当前页且加载房间列表失败，显示错误视图
                 ErrorView(
-                    title: "加载失败",
+                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
                     message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
+                    curlCommand: error.liveParseCurl,
+                    showRetry: true,
+                    showLoginButton: error.isBilibiliAuthRequired,
                     showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
                     onRetry: {
                         Task {
                             await viewModel.loadRoomList()
                         }
-                    }
+                    },
+                    onLogin: error.isBilibiliAuthRequired ? {
+                        NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                    } : nil
                 )
             } else if rooms.isEmpty && !viewModel.isLoadingRooms && isCurrentPage {
                 emptyView()
