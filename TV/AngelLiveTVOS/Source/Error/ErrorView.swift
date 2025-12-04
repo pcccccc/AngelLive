@@ -21,6 +21,12 @@ struct ErrorView: View {
     let onRetry: (() -> Void)?
     let onLogin: (() -> Void)?
 
+    // 检查是否已登录B站
+    private var isBilibiliLoggedIn: Bool {
+        let cookie = UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
+        return !cookie.isEmpty && cookie.contains("SESSDATA")
+    }
+
     init(
         title: String = "播放遇到问题",
         message: String,
@@ -92,13 +98,19 @@ struct ErrorView: View {
                             .clipShape(.capsule)
                         }
 
-                        if showLoginButton, let onLogin = onLogin {
-                            Button(action: onLogin) {
-                                Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
-                                    .font(.caption)
-                                    .foregroundStyle(.white)
+                        if showLoginButton {
+                            if isBilibiliLoggedIn {
+                                // 已登录：不显示按钮（tvOS 没有 Cookie 调试页面）
+                                EmptyView()
+                            } else if let onLogin = onLogin {
+                                // 未登录：显示去登录按钮
+                                Button(action: onLogin) {
+                                    Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
+                                        .font(.caption)
+                                        .foregroundStyle(.white)
+                                }
+                                .clipShape(.capsule)
                             }
-                            .clipShape(.capsule)
                         }
 
                         if showRetry, let onRetry = onRetry {

@@ -59,6 +59,7 @@ final class BilibiliLoginViewModel: ObservableObject {
     private func saveCookie(_ value: String) {
         cookie = value
         UserDefaults.standard.set(value, forKey: cookieKey)
+        UserDefaults.standard.synchronize()
     }
 
     // MARK: - Lifecycle
@@ -146,7 +147,12 @@ final class BilibiliLoginViewModel: ObservableObject {
                         UserDefaults.standard.set(uid, forKey: self.uidKey)
                     }
 
-                    BilibiliCookieSyncService.shared.syncToICloud()
+                    // 确保 UserDefaults 写入完成
+                    UserDefaults.standard.synchronize()
+
+                    // 使用 BilibiliCookieSyncService 统一管理 cookie，确保同步
+                    let extractedUid = self.extractValue(named: "DedeUserID", from: cookieDict)
+                    BilibiliCookieSyncService.shared.setCookie(cookieString, uid: extractedUid, source: .local, save: true)
 
                     // 仅清理 WebView 缓存，避免刚保存的 Cookie 被覆盖
                     BilibiliCookieManager.shared.clearWebViewCookies()
@@ -181,7 +187,8 @@ final class BilibiliLoginViewModel: ObservableObject {
             userInfo = info
             validationError = nil
             if let mid = info.mid {
-                UserDefaults.standard.set("\(mid)", forKey: uidKey)
+                // 使用 BilibiliCookieSyncService 统一管理 uid
+                BilibiliCookieSyncService.shared.setCookie(cookie, uid: "\(mid)", source: .local, save: false)
             }
             print("[BilibiliLogin] Cookie 验证成功: \(info.displayName)")
 
@@ -197,12 +204,15 @@ final class BilibiliLoginViewModel: ObservableObject {
     // MARK: - Logout
 
     func logout() {
-        saveCookie("")
-        UserDefaults.standard.removeObject(forKey: uidKey)
+        // 使用 BilibiliCookieSyncService 统一清除
+        BilibiliCookieSyncService.shared.clearCookie()
 
         clearWebsiteData()
 
-        BilibiliCookieSyncService.shared.syncToICloud()
+        // 同步到 iCloud（清空状态）
+        if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
+            BilibiliCookieSyncService.shared.syncToICloud()
+        }
 
         // 清理 WebView 中的 Bilibili 缓存
         BilibiliCookieManager.shared.clearWebViewCookies()

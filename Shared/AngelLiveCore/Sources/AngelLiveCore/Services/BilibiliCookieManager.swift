@@ -120,10 +120,12 @@ public final class BilibiliCookieManager: ObservableObject {
 
     private func setBilibiliCookie(_ value: String) {
         UserDefaults.standard.set(value, forKey: Self.cookieKey)
+        UserDefaults.standard.synchronize()
     }
 
     private func setBilibiliUid(_ value: String) {
         UserDefaults.standard.set(value, forKey: Self.uidKey)
+        UserDefaults.standard.synchronize()
     }
 
     private func clearBilibiliCookie() {

@@ -151,23 +151,21 @@ struct BilibiliLoggedInView: View {
                             .font(.headline)
                             .padding(.top, 30)
                     } else if let user = userInfo {
-                        // 用户头像
-                        AsyncImage(url: URL(string: user.face ?? "")) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            Image(systemName: "person.circle.fill")
-                                .resizable()
-                                .foregroundStyle(.blue)
-                        }
-                        .frame(width: 150, height: 150)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.green, lineWidth: 4))
+                        // 登录状态图标
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 80))
+                            .foregroundStyle(.green)
 
                         Text(user.displayName)
                             .font(.title)
                             .padding(.top, 20)
+
+                        if let mid = user.mid {
+                            Text("UID: \(mid)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 4)
+                        }
 
                         if let sign = user.sign, !sign.isEmpty {
                             Text(sign)
@@ -176,24 +174,8 @@ struct BilibiliLoggedInView: View {
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .padding(.horizontal, 40)
+                                .padding(.top, 8)
                         }
-
-                        if let mid = user.mid {
-                            Text("UID: \(mid)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 5)
-                        }
-
-                        // 登录状态
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text("Cookie 有效")
-                                .foregroundStyle(.green)
-                        }
-                        .font(.subheadline)
-                        .padding(.top, 10)
 
                     } else if let error = validationError {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -245,16 +227,18 @@ struct BilibiliLoggedInView: View {
                             await validateCookie()
                         }
                     } label: {
-                        HStack {
+                        HStack(spacing: 16) {
                             Text("验证 Cookie")
                             Spacer()
                             if isValidating {
                                 ProgressView()
                             } else {
                                 Image(systemName: "checkmark.shield")
+                                    .font(.system(size: 24))
                                     .foregroundStyle(.gray)
                             }
                         }
+                        .padding(.vertical, 8)
                     }
                     .disabled(isValidating)
 
@@ -262,23 +246,27 @@ struct BilibiliLoggedInView: View {
                         BilibiliLoginOptionsView()
                             .environmentObject(settingStore)
                     } label: {
-                        HStack {
+                        HStack(spacing: 16) {
                             Text("重新登录")
                             Spacer()
                             Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 24))
                                 .foregroundStyle(.gray)
                         }
+                        .padding(.vertical, 8)
                     }
 
                     Button {
                         showLogoutConfirm = true
                     } label: {
-                        HStack {
+                        HStack(spacing: 16) {
                             Text("退出登录")
                             Spacer()
                             Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 24))
                                 .foregroundStyle(.gray)
                         }
+                        .padding(.vertical, 8)
                     }
 
                     Spacer().frame(height: 20)
@@ -305,12 +293,14 @@ struct BilibiliLoggedInView: View {
                                 await validateCookie()
                             }
                         } label: {
-                            HStack {
+                            HStack(spacing: 16) {
                                 Text("立即从 iCloud 同步")
                                 Spacer()
                                 Image(systemName: "icloud.and.arrow.down")
+                                    .font(.system(size: 24))
                                     .foregroundStyle(.gray)
                             }
+                            .padding(.vertical, 8)
                         }
                     }
 
@@ -364,7 +354,9 @@ struct BilibiliLoggedInView: View {
                 userInfo = info
                 validationError = nil
                 if let mid = info.mid {
-                    UserDefaults.standard.set("\(mid)", forKey: "LiveParse.Bilibili.uid")
+                    // 使用 BilibiliCookieSyncService 统一管理 uid
+                    let cookie = syncService.getCurrentCookie()
+                    syncService.setCookie(cookie, uid: "\(mid)", source: .local, save: false)
                 }
             } else {
                 userInfo = nil
@@ -380,6 +372,12 @@ struct BilibiliLoggedInView: View {
 
     private func logout() {
         syncService.clearCookie()
+
+        // 同步到 iCloud（清空状态）
+        if syncService.iCloudSyncEnabled {
+            syncService.syncToICloud()
+        }
+
         settingStore.bilibiliCookie = ""
         userInfo = nil
         validationError = nil
@@ -561,8 +559,14 @@ struct BilibiliLANSyncView: View {
         }
         .onChange(of: syncService.isLoggedIn) { _, newValue in
             if newValue && syncService.lastSyncedData?.source == .bonjour {
-                isSuccess = true
-                settingStore.bilibiliCookie = syncService.getCurrentCookie()
+                // 等待一小段时间确保 UserDefaults 写入完成
+                Task {
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+                    await MainActor.run {
+                        isSuccess = true
+                        settingStore.bilibiliCookie = syncService.getCurrentCookie()
+                    }
+                }
             }
         }
     }

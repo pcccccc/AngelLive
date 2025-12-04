@@ -195,6 +195,9 @@ public final class BilibiliCookieSyncService: ObservableObject {
             UserDefaults.standard.set(uid, forKey: Keys.uidKey)
         }
 
+        // 确保 UserDefaults 写入完成
+        UserDefaults.standard.synchronize()
+
         if save {
             let syncedData = SyncedCookieData(
                 cookie: cookie,
@@ -216,13 +219,15 @@ public final class BilibiliCookieSyncService: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Keys.cookieKey)
         UserDefaults.standard.removeObject(forKey: Keys.uidKey)
         UserDefaults.standard.removeObject(forKey: Keys.lastSyncedDataKey)
+        UserDefaults.standard.synchronize()
         lastSyncedData = nil
         lastValidationResult = nil
     }
 
-    /// 是否已登录（检查 Cookie 中是否包含 SESSDATA）
+    /// 是否已登录
     public var isLoggedIn: Bool {
-        getCurrentCookie().contains("SESSDATA")
+        print(getCurrentCookie())
+        return getCurrentCookie().contains("SESSDATA")
     }
 
     // MARK: - iCloud 同步
