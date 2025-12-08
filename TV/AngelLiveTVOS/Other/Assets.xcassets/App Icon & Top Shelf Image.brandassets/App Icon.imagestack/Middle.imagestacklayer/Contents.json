@@ -2,5 +2,11 @@
   "info" : {
     "author" : "xcode",
     "version" : 1
+  },
+  "properties" : {
+    "frame-center" : {
+      "x" : 152,
+      "y" : 195
+    }
   }
 }

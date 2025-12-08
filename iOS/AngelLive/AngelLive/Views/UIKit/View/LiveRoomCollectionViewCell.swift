@@ -13,7 +13,7 @@ import AngelLiveDependencies
 class LiveRoomCollectionViewCell: UICollectionViewCell {
     static let reuseIdentifier = "LiveRoomCollectionViewCell"
 
-    private var hostingController: UIHostingController<LiveRoomCard>?
+    private var hostingController: UIHostingController<AnyView>?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -36,7 +36,33 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
 
         // 创建新的 SwiftUI 视图
         let roomCard = LiveRoomCard(room: room, skipLiveCheck: true)
-        let hosting = UIHostingController(rootView: roomCard)
+        let hosting = UIHostingController(rootView: AnyView(roomCard))
+        hosting.view.backgroundColor = .clear
+        hosting.view.translatesAutoresizingMaskIntoConstraints = false
+
+        contentView.addSubview(hosting.view)
+
+        NSLayoutConstraint.activate([
+            hosting.view.topAnchor.constraint(equalTo: contentView.topAnchor),
+            hosting.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            hosting.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            hosting.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+
+        hostingController = hosting
+    }
+
+    /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
+    func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
+        // 移除旧的 hosting controller
+        hostingController?.view.removeFromSuperview()
+        hostingController?.removeFromParent()
+
+        // 创建新的 SwiftUI 视图，注入外部导航状态和命名空间
+        let roomCard = LiveRoomCard(room: room, skipLiveCheck: true)
+            .environment(\.liveRoomNavigationState, navigationState)
+            .environment(\.roomTransitionNamespace, namespace)
+        let hosting = UIHostingController(rootView: AnyView(roomCard))
         hosting.view.backgroundColor = .clear
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
 

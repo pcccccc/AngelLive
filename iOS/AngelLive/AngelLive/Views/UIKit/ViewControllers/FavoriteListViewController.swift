@@ -17,7 +17,10 @@ class FavoriteListViewController: UIViewController {
     private var viewModel: AppFavoriteModel
     private var filteredSections: [FavoriteLiveSectionModel] = []
     private var searchText: String = ""
-    var onRoomSelected: ((LiveModel) -> Void)?
+    /// 共享导航状态 - 用于解决 PiP 导航状态丢失问题
+    private let navigationState: LiveRoomNavigationState
+    /// 共享命名空间 - 用于 zoom 过渡动画
+    private let namespace: Namespace.ID
 
     private lazy var collectionView: UICollectionView = {
         let layout = createCompositionalLayout()
@@ -44,8 +47,10 @@ class FavoriteListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: AppFavoriteModel) {
+    init(viewModel: AppFavoriteModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
         self.viewModel = viewModel
+        self.navigationState = navigationState
+        self.namespace = namespace
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -385,7 +390,7 @@ extension FavoriteListViewController: UICollectionViewDataSource {
         }
 
         let room = filteredSections[indexPath.section].roomList[indexPath.item]
-        cell.configure(with: room)
+        cell.configure(with: room, navigationState: navigationState, namespace: namespace)
 
         return cell
     }
@@ -407,8 +412,8 @@ extension FavoriteListViewController: UICollectionViewDataSource {
 
 extension FavoriteListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let room = filteredSections[indexPath.section].roomList[indexPath.item]
-        onRoomSelected?(room)
+        // 导航由 LiveRoomCard 内部通过外部导航状态处理
+        // 此处保留 delegate 以便将来扩展（如统计分析等）
     }
 }
 

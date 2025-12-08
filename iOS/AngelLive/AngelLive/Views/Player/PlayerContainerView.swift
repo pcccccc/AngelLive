@@ -128,17 +128,26 @@ struct PlayerContentView: View {
         Group {
             // 如果有播放地址，显示播放器
             if let playURL = viewModel.currentPlayURL {
-                KSVideoPlayerView(
-                    model: playerModel,
-                    subtitleDataSource: nil
-                ) { coordinator, isDisappear in
-                    if !isDisappear {
-                        viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                ZStack {
+                    KSVideoPlayerView(
+                        model: playerModel,
+                        subtitleDataSource: nil
+                    ) { coordinator, isDisappear in
+                        if !isDisappear {
+                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
+                    .clipped()
+                    .opacity(hasDetectedSize ? 1 : 0)
+
+                    // 缓冲加载指示器 - 视频播放中但在缓冲时显示
+                    if playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
-                .clipped()
-                .opacity(hasDetectedSize ? 1 : 0)
                 .task(id: playURL.absoluteString) {
                     configureModelIfNeeded(playURL: playURL)
 

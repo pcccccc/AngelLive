@@ -21,7 +21,7 @@ public struct WelcomeView: View {
 
     public var body: some View {
         WelcomePageView(
-            tint: .blue,
+            tint: .accentColor,
             title: "欢迎使用 AngelLive"
         ) {
             // App 图标

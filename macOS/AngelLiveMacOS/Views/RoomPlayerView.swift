@@ -28,12 +28,21 @@ struct RoomPlayerView: View {
             ZStack {
                 // 播放器
                 if let url = viewModel.currentPlayURL {
-                    KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
-                        .onAppear {
-                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                            hideWindowButtons()
+                    ZStack {
+                        KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
+                            .onAppear {
+                                viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                                hideWindowButtons()
+                            }
+                            .ignoresSafeArea()
+
+                        // 缓冲加载指示器 - 视频播放中但在缓冲时显示
+                        if coordinator.state == .buffering || coordinator.playerLayer?.player.playbackState == .seeking {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
                         }
-                        .ignoresSafeArea()
+                    }
                 } else {
                     // 加载中
                     VStack(spacing: 16) {

@@ -395,7 +395,7 @@ public enum KSVideoPlayerViewBuilder {
                             } label: {
                                 HStack {
                                     Text(quality.title)
-                                    if viewModel.currentPlayQualityQn == quality.qn {
+                                    if viewModel.currentCdnIndex == cdnIndex && viewModel.currentPlayQualityQn == quality.qn {
                                         Image(systemName: "checkmark")
                                     }
                                 }

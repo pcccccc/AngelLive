@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24412" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+    <device id="iPad13_0rounded" orientation="portrait" layout="fullscreen" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24405"/>
+        <capability name="Named colors" minToolsVersion="9.0"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--View Controller-->
+        <scene sceneID="EHf-IW-A2E">
+            <objects>
+                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                        <rect key="frame" x="0.0" y="0.0" width="1032" height="1376"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="Cc2-TQ-PvD">
+                                <rect key="frame" x="0.0" y="0.0" width="1032" height="1376"/>
+                                <color key="backgroundColor" name="AppAccentColor"/>
+                            </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch_top_right" translatesAutoresizingMaskIntoConstraints="NO" id="Yec-7G-oCW">
+                                <rect key="frame" x="0.0" y="1286" width="100" height="100"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="100" id="Hrv-Ye-Fc2"/>
+                                    <constraint firstAttribute="width" constant="100" id="YxR-tE-L7Z"/>
+                                </constraints>
+                            </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch_bottom_left" translatesAutoresizingMaskIntoConstraints="NO" id="o3n-Ca-vq4">
+                                <rect key="frame" x="932" y="0.0" width="100" height="100"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="100" id="6JO-vR-jDO"/>
+                                    <constraint firstAttribute="height" constant="100" id="wyh-pO-GVR"/>
+                                </constraints>
+                            </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="launch_bottom" translatesAutoresizingMaskIntoConstraints="NO" id="V2D-dF-Hhu">
+                                <rect key="frame" x="57" y="1336" width="100" height="40"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="100" id="GNh-mZ-smH"/>
+                                    <constraint firstAttribute="height" constant="40" id="JGr-Pz-dv5"/>
+                                </constraints>
+                            </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Angel Live" textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="5hr-Ns-WLl">
+                                <rect key="frame" x="465.5" y="676" width="101" height="24"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="24" id="8CV-aO-Uzf"/>
+                                    <constraint firstAttribute="width" constant="101" id="Jtv-er-brb"/>
+                                </constraints>
+                                <fontDescription key="fontDescription" name="ArialRoundedMTBold" family="Arial Rounded MT Bold" pointSize="20"/>
+                                <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchScreen_Middle" translatesAutoresizingMaskIntoConstraints="NO" id="kwk-m5-HHF">
+                                <rect key="frame" x="366.5" y="547" width="240" height="128"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="128" id="15J-hm-W4G"/>
+                                    <constraint firstAttribute="width" constant="240" id="4Q6-KL-jYh"/>
+                                </constraints>
+                            </imageView>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchScreen_Front" translatesAutoresizingMaskIntoConstraints="NO" id="gg9-FJ-yve">
+                                <rect key="frame" x="500.5" y="580" width="53" height="45"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="53" id="Box-Ot-tBd"/>
+                                    <constraint firstAttribute="height" constant="45" id="JSY-UI-1r5"/>
+                                </constraints>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="Bcu-3y-fUS"/>
+                        <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+                        <constraints>
+                            <constraint firstAttribute="bottom" secondItem="Cc2-TQ-PvD" secondAttribute="bottom" id="4p8-DU-BTR"/>
+                            <constraint firstItem="V2D-dF-Hhu" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" constant="57" id="8r4-be-9xs"/>
+                            <constraint firstItem="Yec-7G-oCW" firstAttribute="leading" secondItem="Bcu-3y-fUS" secondAttribute="leading" id="AAb-5H-DkW"/>
+                            <constraint firstItem="kwk-m5-HHF" firstAttribute="trailing" secondItem="5hr-Ns-WLl" secondAttribute="trailing" constant="40" id="Bdb-I8-0IZ"/>
+                            <constraint firstItem="gg9-FJ-yve" firstAttribute="trailing" secondItem="kwk-m5-HHF" secondAttribute="trailing" constant="-53" id="KSZ-y7-186"/>
+                            <constraint firstItem="Cc2-TQ-PvD" firstAttribute="trailing" secondItem="Bcu-3y-fUS" secondAttribute="trailing" id="LmZ-gV-H0E"/>
+                            <constraint firstItem="5hr-Ns-WLl" firstAttribute="top" secondItem="kwk-m5-HHF" secondAttribute="bottom" constant="1" id="NxS-Gi-NwX"/>
+                            <constraint firstItem="Cc2-TQ-PvD" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="ZF4-bi-BOJ"/>
+                            <constraint firstAttribute="bottom" secondItem="Yec-7G-oCW" secondAttribute="bottom" constant="-10" id="ZYv-f5-8RA"/>
+                            <constraint firstAttribute="trailing" secondItem="o3n-Ca-vq4" secondAttribute="trailing" id="aup-JA-2ab"/>
+                            <constraint firstItem="Cc2-TQ-PvD" firstAttribute="leading" secondItem="Bcu-3y-fUS" secondAttribute="leading" id="eBV-sS-i7P"/>
+                            <constraint firstItem="5hr-Ns-WLl" firstAttribute="centerX" secondItem="Cc2-TQ-PvD" secondAttribute="centerX" id="eaF-hw-LMY"/>
+                            <constraint firstItem="o3n-Ca-vq4" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="jjC-CE-ORQ"/>
+                            <constraint firstAttribute="bottom" secondItem="V2D-dF-Hhu" secondAttribute="bottom" id="oH3-Zc-7yf"/>
+                            <constraint firstItem="gg9-FJ-yve" firstAttribute="top" secondItem="kwk-m5-HHF" secondAttribute="top" constant="33" id="yj0-ux-l9Y"/>
+                            <constraint firstItem="5hr-Ns-WLl" firstAttribute="centerY" secondItem="Cc2-TQ-PvD" secondAttribute="centerY" id="yok-bY-98S"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="51.81818181818182" y="374.05857740585776"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="LaunchScreen_Front" width="123.5" height="133.5"/>
+        <image name="LaunchScreen_Middle" width="489" height="330.5"/>
+        <image name="launch_bottom" width="494" height="133"/>
+        <image name="launch_bottom_left" width="331" height="319"/>
+        <image name="launch_top_right" width="381" height="340"/>
+        <namedColor name="AppAccentColor">
+            <color red="1" green="0.50588235294117645" blue="0.36862745098039218" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+    </resources>
+</document>

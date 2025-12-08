@@ -121,24 +121,6 @@ struct AboutUSView: View {
                 .background(AppConstants.Colors.materialBackground)
                 .cornerRadius(AppConstants.CornerRadius.lg)
 
-                // 功能特性
-                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
-                    Text("功能特性")
-                        .font(.headline)
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-
-                    VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
-                        AboutFeatureRow(icon: "sparkles", title: "多平台支持", description: "支持哔哩哔哩、斗鱼、虎牙等直播平台")
-                        AboutFeatureRow(icon: "icloud.fill", title: "iCloud 同步", description: "收藏数据跨设备自动同步")
-                        AboutFeatureRow(icon: "bubble.left.and.bubble.right.fill", title: "实时弹幕", description: "支持弹幕显示和自定义设置")
-                        AboutFeatureRow(icon: "heart.fill", title: "收藏功能", description: "快速收藏喜欢的主播")
-                        AboutFeatureRow(icon: "magnifyingglass", title: "搜索发现", description: "搜索和发现精彩直播")
-                    }
-                }
-                .padding()
-                .background(AppConstants.Colors.materialBackground)
-                .cornerRadius(AppConstants.CornerRadius.lg)
-
                 // 免责声明
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
                     Text("免责声明")
@@ -151,6 +133,7 @@ struct AboutUSView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding()
+                .frame(maxWidth: .infinity)
                 .background(AppConstants.Colors.materialBackground)
                 .cornerRadius(AppConstants.CornerRadius.lg)
 

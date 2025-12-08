@@ -38,6 +38,7 @@ final class RoomInfoViewModel {
     var currentRoomPlayArgs: [LiveQualityModel]?
     var currentPlayQualityString = "清晰度"
     var currentPlayQualityQn = 0
+    var currentCdnIndex = 0  // 当前选中的线路索引
     var isPlaying = false
     var douyuFirstLoad = true
     var yyFirstLoad = true
@@ -157,6 +158,7 @@ final class RoomInfoViewModel {
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
         currentPlayQualityQn = currentQuality.qn
+        currentCdnIndex = cdnIndex
 
 
         // 虎牙特殊处理

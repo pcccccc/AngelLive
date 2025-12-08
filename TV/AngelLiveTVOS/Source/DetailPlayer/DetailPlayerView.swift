@@ -61,6 +61,14 @@ struct DetailPlayerView: View {
                     .safeAreaPadding(.all)
                     .zIndex(1)
 
+                // 缓冲加载指示器 - 视频播放中但在缓冲时显示
+                if playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking {
+                    ProgressView()
+                        .scaleEffect(2.0)
+                        .tint(.white)
+                        .zIndex(4)
+                }
+
                 PlayerControlView(playerCoordinator: playerCoordinator)
                     .zIndex(3)
                     .frame(width: 1920, height: 1080)

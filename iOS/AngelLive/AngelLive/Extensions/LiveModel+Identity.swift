@@ -9,6 +9,12 @@ import Foundation
 import AngelLiveCore
 import AngelLiveDependencies
 
+extension LiveModel: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+}
+
 extension LiveModel {
     /// 用于 SwiftUI 列表/网格的稳定标识
     var stableIdentity: String {

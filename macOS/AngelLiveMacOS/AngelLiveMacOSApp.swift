@@ -34,7 +34,7 @@ struct AngelLiveMacOSApp: App {
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var toastManager = ToastManager()
     @State private var fullscreenPlayerManager = FullscreenPlayerManager()
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()

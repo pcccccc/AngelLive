@@ -17,11 +17,11 @@ struct LiveRoomCardSkeleton: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 封面图骨架
+            // 封面图骨架（与 LiveRoomCard 保持一致的比例）
             Rectangle()
                 .fill(Color.gray.opacity(0.3))
-                .aspectRatio(16/9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
 
             // 主播信息骨架
             HStack(spacing: 8) {
@@ -42,18 +42,7 @@ struct LiveRoomCardSkeleton: View {
             }
         }
         .frame(width: width)
-        .padding(AppConstants.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
-                .fill(AppConstants.Colors.materialBackground)
-                .shadow(
-                    color: AppConstants.Shadow.md.color,
-                    radius: AppConstants.Shadow.md.radius,
-                    x: AppConstants.Shadow.md.x,
-                    y: AppConstants.Shadow.md.y
-                )
-        )
-        .shimmering()  // 只在整个卡片上应用一次 shimmer
+        .shimmering()
     }
 }
 

@@ -1,0 +1,30 @@
+{
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.93118,0.53216,0.40573,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "automatic",
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "AppLogo.png",
+          "name" : "AppLogo"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

@@ -13,11 +13,46 @@ struct LiveRoomCard: View {
     let room: LiveModel
     let skipLiveCheck: Bool
     @State private var isPressed = false
-    @State private var showPlayer = false
-    @Namespace private var namespace
+    /// 本地导航状态 - 仅在没有外部导航状态时使用
+    @State private var localShowPlayer = false
+    /// 本地 Namespace - 仅在没有外部 Namespace 时使用
+    @Namespace private var localNamespace
+
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.presentToast) private var presentToast
+    /// 外部导航状态 - 用于解决 PiP 导航状态丢失问题
+    @Environment(\.liveRoomNavigationState) private var externalNavigationState
+    /// 外部 Namespace - 用于保持 zoom 过渡动画
+    @Environment(\.roomTransitionNamespace) private var externalNamespace
+
+    /// 使用外部 Namespace（如果有），否则使用本地
+    private var namespace: Namespace.ID {
+        externalNamespace ?? localNamespace
+    }
+
+    /// 是否使用外部导航（外部状态存在时使用外部导航）
+    private var useExternalNavigation: Bool {
+        externalNavigationState != nil
+    }
+
+    /// 导航绑定 - 使用外部状态或本地状态
+    private var showPlayerBinding: Binding<Bool> {
+        if let state = externalNavigationState {
+            return Binding(
+                get: { state.showPlayer && state.currentRoom?.roomId == room.roomId },
+                set: { newValue in
+                    if newValue {
+                        state.navigate(to: room)
+                    } else if state.currentRoom?.roomId == room.roomId {
+                        state.dismiss()
+                    }
+                }
+            )
+        } else {
+            return $localShowPlayer
+        }
+    }
 
     private var coverURL: URL? {
         guard !room.roomCover.isEmpty, let url = URL(string: room.roomCover) else { return nil }
@@ -51,7 +86,7 @@ struct LiveRoomCard: View {
                 // iPad: 使用 fullScreenCover
                 Button {
                     if skipLiveCheck || isLive {
-                        showPlayer = true
+                        showPlayerBinding.wrappedValue = true
                     } else {
                         let toast = ToastValue(
                             icon: Image(systemName: "tv.slash"),
@@ -66,7 +101,7 @@ struct LiveRoomCard: View {
                 .contextMenu {
                     favoriteContextMenu
                 }
-                .fullScreenCover(isPresented: $showPlayer) {
+                .fullScreenCover(isPresented: showPlayerBinding) {
                     DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                         .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
                         .toolbar(.hidden, for: .tabBar)
@@ -75,7 +110,7 @@ struct LiveRoomCard: View {
                 // iPhone: 使用 NavigationLink
                 Button {
                     if skipLiveCheck || isLive {
-                        showPlayer = true
+                        showPlayerBinding.wrappedValue = true
                     } else {
                         let toast = ToastValue(
                             icon: Image(systemName: "tv.slash"),
@@ -90,11 +125,14 @@ struct LiveRoomCard: View {
                 .contextMenu {
                     favoriteContextMenu
                 }
-                .navigationDestination(isPresented: $showPlayer) {
-                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                        .toolbar(.hidden, for: .tabBar)
-                }
+                // 仅在使用本地导航时添加 navigationDestination
+                // 使用外部导航时，由父视图处理
+                .modifier(ConditionalNavigationDestination(
+                    isPresented: showPlayerBinding,
+                    useExternalNavigation: useExternalNavigation,
+                    room: room,
+                    namespace: namespace
+                ))
             }
         }
     }
@@ -263,6 +301,32 @@ struct LiveRoomCard: View {
             )
             presentToast(toast)
             print("取消收藏失败: \(error)")
+        }
+    }
+}
+
+// MARK: - 条件导航目的地修饰符
+
+/// 条件性添加 navigationDestination，仅在不使用外部导航时添加
+private struct ConditionalNavigationDestination: ViewModifier {
+    @Binding var isPresented: Bool
+    let useExternalNavigation: Bool
+    let room: LiveModel
+    let namespace: Namespace.ID
+
+    func body(content: Content) -> some View {
+        if useExternalNavigation {
+            // 使用外部导航时，不添加 navigationDestination
+            // 由父视图处理导航
+            content
+        } else {
+            // 使用本地导航时，添加 navigationDestination
+            content
+                .navigationDestination(isPresented: $isPresented) {
+                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                        .toolbar(.hidden, for: .tabBar)
+                }
         }
     }
 }

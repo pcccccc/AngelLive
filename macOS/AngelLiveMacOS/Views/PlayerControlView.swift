@@ -64,15 +64,9 @@ struct PlayerControlView: View {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
-                            // 画中画按钮
+                            // 画中画按钮（系统 PiP）
                             Button {
-                                if let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer {
-                                    if playerLayer.isPictureInPictureActive {
-                                        playerLayer.pipStop(restoreUserInterface: true)
-                                    } else {
-                                        playerLayer.pipStart()
-                                    }
-                                }
+                                toggleSystemPip()
                             } label: {
                                 Image(systemName: "pip")
                                     .frame(width: 30, height: 30)
@@ -206,7 +200,7 @@ struct PlayerControlView: View {
                                                 } label: {
                                                     HStack {
                                                         Text(quality.title)
-                                                        if viewModel.currentPlayQualityString == quality.title {
+                                                        if viewModel.currentCdnIndex == cdnIndex && viewModel.currentPlayQualityQn == quality.qn {
                                                             Image(systemName: "checkmark")
                                                         }
                                                     }
@@ -359,6 +353,31 @@ struct PlayerControlView: View {
         } else {
             // 否则使用 dismiss 关闭窗口
             dismiss()
+        }
+    }
+
+    private func toggleSystemPip() {
+        if let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer {
+            if let mePlayer = playerLayer.player as? KSMEPlayer {
+                if mePlayer.pipController == nil {
+                    mePlayer.configPIP()
+                }
+                if let pipController = mePlayer.pipController {
+                    print("PIP controller type: \(String(describing: type(of: pipController)))")
+                } else {
+                    print("❌ ERROR: pipController is nil after configPIP()")
+                }
+            } else {
+                print("❌ ERROR: Player is not a KSMEPlayer.")
+            }
+
+            if playerLayer.isPictureInPictureActive {
+                playerLayer.pipStop(restoreUserInterface: true)
+            } else {
+                playerLayer.pipStart()
+            }
+        } else {
+            print("❌ ERROR: playerLayer is not a KSComplexPlayerLayer.")
         }
     }
 }

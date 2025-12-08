@@ -12,11 +12,15 @@ import AngelLiveDependencies
 struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(AppFavoriteModel.self) private var viewModel
     let searchText: String
-    let onRoomSelected: (LiveModel) -> Void
+    let navigationState: LiveRoomNavigationState
+    let namespace: Namespace.ID
 
     func makeUIViewController(context: Context) -> FavoriteListViewController {
-        let vc = FavoriteListViewController(viewModel: viewModel)
-        vc.onRoomSelected = onRoomSelected
+        let vc = FavoriteListViewController(
+            viewModel: viewModel,
+            navigationState: navigationState,
+            namespace: namespace
+        )
         return vc
     }
 

@@ -1,0 +1,29 @@
+{
+  "images" : [
+    {
+      "filename" : "Back_1242x2208.png",
+      "idiom" : "iphone",
+      "resizing" : {
+        "cap-insets" : {
+          "bottom" : 550,
+          "left" : 400,
+          "right" : 400,
+          "top" : 650
+        },
+        "center" : {
+          "height" : 908,
+          "mode" : "stretch",
+          "width" : 442
+        },
+        "mode" : "9-part"
+      }
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "template-rendering-intent" : "original"
+  }
+}
