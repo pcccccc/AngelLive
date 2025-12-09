@@ -108,6 +108,7 @@
 				4FC3DCD62A49382F00CA36B9 /* Sources */,
 				4FC3DCD72A49382F00CA36B9 /* Frameworks */,
 				4FC3DCD82A49382F00CA36B9 /* Resources */,
+				FBDB69F42EE7B9C800326980 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -182,6 +183,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		FBDB69F42EE7B9C800326980 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "${PROJECT_DIR}/scripts/sign_xcframeworks.sh\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		4FC3DCD62A49382F00CA36B9 /* Sources */ = {

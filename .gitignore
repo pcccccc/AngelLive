@@ -94,3 +94,6 @@ iOSInjectionProject/
 
 # MCP settings
 .mcp.json
+
+# Local environment config
+scripts/.env.local
