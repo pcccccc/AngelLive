@@ -200,7 +200,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "${PROJECT_DIR}/scripts/sign_xcframeworks.sh\n";
+			shellScript = "${PROJECT_DIR}/../scripts/sign_xcframeworks.sh\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
