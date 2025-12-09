@@ -84,28 +84,24 @@ struct PlatformView: View {
                         .transition(.moveAndOpacity)
                         .animation(.easeInOut(duration: 0.25) ,value: true)
                         .frame(width: 320, height: 192)
-                        .fullScreenCover(isPresented: $show, content: {
-                            if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
-                                ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
-                                    .background(
-                                        Color("sl-background", bundle: nil)
-//                                            .blur(radius: 10)
-//                                        Color.red
-//                                            .blur(radius: 10)
-//                                            .opacity(0.95)
-                                    )
-                                    .safeAreaPadding(.all)
-                                
-                            }else {
-                                ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
-                            }
-                        })
                     }
 
                 }
                 .safeAreaPadding([.leading], 125)
                 .padding(.top, 125)
             }
+            .fullScreenCover(isPresented: $show, content: {
+                if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
+                    ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                        .background(
+                            Color("sl-background", bundle: nil)
+                        )
+                        .safeAreaPadding(.all)
+
+                }else {
+                    ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                }
+            })
             
             Text("敬请期待更多平台...")
                 .foregroundStyle(.separator)
