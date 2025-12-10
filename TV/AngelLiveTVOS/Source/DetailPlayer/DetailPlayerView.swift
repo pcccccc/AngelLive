@@ -33,12 +33,7 @@ struct DetailPlayerView: View {
                     roomInfoViewModel.hasError = false
                     roomInfoViewModel.currentError = nil
                     playerCoordinator.playerLayer?.play()
-                },
-                onLogin: error.isBilibiliAuthRequired ? {
-                    // tvOS doesn't have login functionality yet
-                    // Just show message and dismiss
-                    endPlay()
-                } : nil
+                }
             )
         } else if roomInfoViewModel.currentPlayURL == nil {
             VStack(spacing: 10) {

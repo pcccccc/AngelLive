@@ -89,6 +89,9 @@ struct ContentView: View {
                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.favoriteRefresh, object: nil)
             }
         })
+        .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.navigateToSettings)) { _ in
+            contentVM.selection = 3
+        }
         
 //        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
 //            VStack(alignment: .leading) {

@@ -22,33 +22,28 @@ enum LiveRoomListType {
 
 @Observable
 class LiveViewModel {
-    
-    let leftMenuMinWidth: CGFloat = 180
-    let leftMenuMaxWidth: CGFloat = 300
-    let leftMenuMinHeight: CGFloat = 50
-    let leftMenuMaxHeight: CGFloat = 1080
-    
+
+    // MARK: - Sidebar 相关常量和状态
+    let sidebarWidth: CGFloat = 300
+    let sidebarPeekWidth: CGFloat = 40  // 收起时露出的宽度
+    var isSidebarExpanded: Bool = false
+
+    // 旧属性保持兼容（逐步移除）
+    var showOverlay: Bool {
+        get { isSidebarExpanded }
+        set { isSidebarExpanded = newValue }
+    }
+    var menuTitleIcon: String = ""
+
     //房间列表分类
     var roomListType: LiveRoomListType
     //直播分类
     var liveType: LiveType
     //分类名
     var livePlatformName: String = ""
-    
+
     //菜单列表
     var categories: [LiveMainListModel] = []
-    var showOverlay: Bool = false {
-        didSet {
-            leftWidth = showOverlay == true ? leftMenuMaxWidth : leftMenuMinWidth
-            leftHeight = showOverlay == true ? leftMenuMaxHeight : leftMenuMinHeight
-            leftMenuCornerRadius = showOverlay == true ? 10 : 25
-        }
-    }
-    var leftListOverlay: CGFloat = 0
-    var leftWidth: CGFloat = 180
-    var leftHeight: CGFloat = 60
-    var leftMenuCornerRadius: CGFloat = 30
-    var menuTitleIcon: String = ""
     
     //当前选中的主分类与子分类
     var selectedMainListCategory: LiveMainListModel?

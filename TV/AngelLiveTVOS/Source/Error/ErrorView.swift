@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 
 struct ErrorView: View {
     let title: String
@@ -19,12 +20,18 @@ struct ErrorView: View {
     let showLoginButton: Bool
     let onDismiss: () -> Void
     let onRetry: (() -> Void)?
-    let onLogin: (() -> Void)?
+
+    @State private var showDetailView = false
 
     // 检查是否已登录B站
     private var isBilibiliLoggedIn: Bool {
         let cookie = UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
         return !cookie.isEmpty && cookie.contains("SESSDATA")
+    }
+
+    // 是否有详情可显示
+    private var hasDetail: Bool {
+        (detailMessage != nil && !detailMessage!.isEmpty) || (curlCommand != nil && !curlCommand!.isEmpty)
     }
 
     init(
@@ -38,8 +45,7 @@ struct ErrorView: View {
         showRetry: Bool = false,
         showLoginButton: Bool = false,
         onDismiss: @escaping () -> Void,
-        onRetry: (() -> Void)? = nil,
-        onLogin: (() -> Void)? = nil
+        onRetry: (() -> Void)? = nil
     ) {
         self.title = title
         self.message = message
@@ -52,7 +58,6 @@ struct ErrorView: View {
         self.showLoginButton = showLoginButton
         self.onDismiss = onDismiss
         self.onRetry = onRetry
-        self.onLogin = onLogin
     }
 
     var body: some View {
@@ -61,55 +66,47 @@ struct ErrorView: View {
                 .background(.thinMaterial)
                 .ignoresSafeArea()
 
-            HStack(alignment: .top, spacing: 120) {
+            HStack(alignment: .center, spacing: 120) {
                 VStack(alignment: .leading, spacing: 28) {
                     Text(title)
                         .font(.system(size: 48, weight: .heavy))
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text(message)
-                            .font(.system(size: 24, weight: .medium))
-                            .lineSpacing(6)
-                            .fixedSize(horizontal: false, vertical: true)
+                    Text(message)
+                        .font(.system(size: 24, weight: .medium))
+                        .lineSpacing(6)
 
-                        if let errorCode = errorCode {
-                            Text("错误代码：\(errorCode)")
-                                .font(.system(size: 20, weight: .semibold))
-                                .padding(.top, 4)
-                        }
-
-                        if let detailMessage = detailMessage {
-                            Text(detailMessage)
-                                .font(.system(size: 20))
-                                .lineSpacing(4)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    // -352 错误且已登录时显示额外提示
+                    if showLoginButton && isBilibiliLoggedIn {
+                        Text("tvOS 用户如已经登录依旧报错，请等待几分钟后重试")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.yellow)
+                            .lineSpacing(4)
                     }
 
-                    Spacer(minLength: 20)
+                    if let errorCode = errorCode {
+                        Text("错误代码：\(errorCode)")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
 
-                    HStack(spacing: 18) {
+                    Spacer()
+
+                    HStack(spacing: 20) {
                         if showDismiss {
                             Button(action: onDismiss) {
                                 Label("返回", systemImage: "arrow.left")
                                     .font(.caption)
-                                    .foregroundStyle(.white)
                             }
-                            .clipShape(.capsule)
                         }
 
-                        if showLoginButton {
-                            if isBilibiliLoggedIn {
-                                // 已登录：不显示按钮（tvOS 没有 Cookie 调试页面）
-                                EmptyView()
-                            } else if let onLogin = onLogin {
-                                // 未登录：显示去登录按钮
-                                Button(action: onLogin) {
-                                    Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
-                                        .font(.caption)
-                                        .foregroundStyle(.white)
-                                }
-                                .clipShape(.capsule)
+                        // -352 错误时，只有未登录才显示登录按钮
+                        if showLoginButton && !isBilibiliLoggedIn {
+                            Button(action: {
+                                onDismiss()
+                                NotificationCenter.default.post(name: SimpleLiveNotificationNames.navigateToSettings, object: nil)
+                            }) {
+                                Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
+                                    .font(.caption)
                             }
                         }
 
@@ -117,73 +114,18 @@ struct ErrorView: View {
                             Button(action: onRetry) {
                                 Label("重试", systemImage: "arrow.clockwise")
                                     .font(.caption)
-                                    .foregroundStyle(.white)
                             }
-                            .clipShape(.capsule)
                         }
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
 
-                    // CURL 命令（如果有）
-                    if let curlCommand = curlCommand, !curlCommand.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("CURL 调试命令")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
-
-                            ScrollView {
-                                Text(curlCommand)
-                                    .font(.system(size: 18, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.85))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                        if hasDetail {
+                            Button(action: { showDetailView = true }) {
+                                Label("查看详情", systemImage: "doc.text.magnifyingglass")
+                                    .font(.caption)
                             }
-                            .frame(maxHeight: 200)
-
-                            Text("提示：复制此命令到终端执行可以复现请求")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white.opacity(0.5))
                         }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.black.opacity(0.3))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                )
-                        )
-                        .padding(.top, 20)
-                    }
-
-                    // 直接显示错误详情（tvOS 屏幕大，直接展示）
-                    if let detailMessage = detailMessage, !detailMessage.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("错误详情")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
-
-                            ScrollView {
-                                Text(detailMessage)
-                                    .font(.system(size: 18, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.85))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(maxHeight: 300)
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.black.opacity(0.3))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                )
-                        )
-                        .padding(.top, 20)
                     }
                 }
-                .frame(maxWidth: 950, alignment: .leading)
+                .frame(maxWidth: 900, alignment: .leading)
 
                 VStack(spacing: 16) {
                     Spacer()
@@ -191,13 +133,13 @@ struct ErrorView: View {
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 330, height: 330)
-                        .padding(32)
+                        .frame(width: 280, height: 280)
+                        .padding(28)
                         .background(
-                            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
                                 .fill(.ultraThinMaterial)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 24, style: .continuous)
                                         .stroke(Color.white.opacity(0.18), lineWidth: 1)
                                 )
                         )
@@ -209,6 +151,104 @@ struct ErrorView: View {
                 }
             }
             .padding(80)
+            .safeAreaPadding()
+
+            // 错误详情 Overlay
+            if showDetailView {
+                ErrorDetailOverlay(
+                    detailMessage: detailMessage,
+                    curlCommand: curlCommand,
+                    onClose: { showDetailView = false }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - 错误详情 Overlay
+struct ErrorDetailOverlay: View {
+    let detailMessage: String?
+    let curlCommand: String?
+    let onClose: () -> Void
+
+    @FocusState private var isCloseButtonFocused: Bool
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 30) {
+                // 标题栏
+                HStack {
+                    Text("错误详情")
+                        .font(.system(size: 48, weight: .heavy))
+
+                    Spacer()
+
+                    Button(action: onClose) {
+                        Label("关闭", systemImage: "xmark.circle.fill")
+                            .font(.caption)
+                    }
+                    .focused($isCloseButtonFocused)
+                }
+
+                HStack(alignment: .top, spacing: 50) {
+                    // 左侧：错误信息
+                    if let detailMessage = detailMessage, !detailMessage.isEmpty {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("错误信息")
+                                .font(.system(size: 24, weight: .semibold))
+
+                            ScrollView {
+                                Text(detailMessage)
+                                    .font(.system(size: 20, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .padding(24)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.black.opacity(0.4))
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    // 右侧：二维码
+                    if let curlCommand = curlCommand, !curlCommand.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(uiImage: Common.generateQRCode(from: curlCommand))
+                                .interpolation(.none)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 240, height: 240)
+                                .padding(20)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                )
+
+                            Text("扫码获取 CURL 命令")
+                                .font(.callout)
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                }
+            }
+            .padding(50)
+            .frame(maxWidth: 1200, maxHeight: 600)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+        }
+        .transition(.opacity)
+        .onExitCommand {
+            onClose()
+        }
+        .onAppear {
+            isCloseButtonFocused = true
         }
     }
 }

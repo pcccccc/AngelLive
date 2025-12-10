@@ -90,14 +90,11 @@ struct SearchRoomView: View {
                                     await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                                 }
                             }
-                        },
-                        onLogin: error.isBilibiliAuthRequired ? {
-                            liveViewModel.showToast(false, title: "tvOS 端暂不支持登录，请在 iOS 或 macOS 端登录后同步", hideAfter: 5)
-                        } : nil
+                        }
                     )
                 } else {
                     ScrollView {
-                        LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], spacing: 50) {
+                        LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], alignment: .center, spacing: 50) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
                                 .environment(liveViewModel)

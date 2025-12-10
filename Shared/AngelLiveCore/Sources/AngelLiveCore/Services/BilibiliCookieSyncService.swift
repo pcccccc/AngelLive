@@ -112,7 +112,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
     // MARK: - Cookie 有效性验证
 
-    /// 验证 Cookie 是否有效（通过调用 Bilibili.getRoomList）
+    /// 验证 Cookie 是否有效（通过获取用户信息接口）
     public func validateCookie(_ cookie: String? = nil) async -> CookieValidationResult {
         isValidating = true
         defer { isValidating = false }
@@ -125,46 +125,39 @@ public final class BilibiliCookieSyncService: ObservableObject {
             return result
         }
 
-        // 临时设置 cookie 进行验证
-        let originalCookie = getCurrentCookie()
-        if cookie != nil {
-            setCookie(cookieToValidate, uid: nil, source: .local, save: false)
-        }
-
-        do {
-            // 使用 getRoomList 验证 - 这是最严格的验证方式
-            let rooms = try await Bilibili.getRoomList(id: "0", parentId: "2", page: 1)
-
-            // 恢复原始 cookie（如果是临时验证）
-            if cookie != nil && cookie != originalCookie {
-                setCookie(originalCookie, uid: nil, source: .local, save: false)
-            }
-
-            if rooms.isEmpty {
-                let result = CookieValidationResult.invalid(reason: "无法获取房间列表")
-                lastValidationResult = result
-                return result
-            }
-
-            let result = CookieValidationResult.valid
+        guard let url = URL(string: "https://api.bilibili.com/x/member/web/account") else {
+            let result = CookieValidationResult.invalid(reason: "无效的验证 URL")
             lastValidationResult = result
             return result
-        } catch {
-            // 恢复原始 cookie
-            if cookie != nil && cookie != originalCookie {
-                setCookie(originalCookie, uid: nil, source: .local, save: false)
-            }
+        }
 
-            let errorMessage = error.localizedDescription.lowercased()
+        var request = URLRequest(url: url)
+        request.setValue(cookieToValidate, forHTTPHeaderField: "Cookie")
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
 
-            // 判断是否为过期错误
-            if errorMessage.contains("expired") || errorMessage.contains("过期") ||
-               errorMessage.contains("invalid") || errorMessage.contains("无效") {
-                let result = CookieValidationResult.expired
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            // 解析响应
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let code = json["code"] as? Int {
+                if code == 0 {
+                    let result = CookieValidationResult.valid
+                    lastValidationResult = result
+                    return result
+                } else {
+                    // code 非 0 表示未登录或 cookie 无效
+                    let message = json["message"] as? String ?? "Cookie 已失效"
+                    let result = CookieValidationResult.expired
+                    lastValidationResult = result
+                    return result
+                }
+            } else {
+                let result = CookieValidationResult.invalid(reason: "无法解析响应")
                 lastValidationResult = result
                 return result
             }
-
+        } catch {
             let result = CookieValidationResult.networkError(error)
             lastValidationResult = result
             return result

@@ -21,7 +21,7 @@ struct PlatformView: View {
     var body: some View {
         VStack {
             ScrollView {
-                LazyVGrid(columns: column, alignment: .leading, spacing: 70) {
+                LazyVGrid(columns: column, alignment: .center, spacing: 70) {
                     ForEach(platformViewModel.platformInfo.indices, id: \.self) { index in
                         Button {
                             selectedIndex = index

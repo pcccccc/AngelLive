@@ -40,22 +40,6 @@ struct AboutUSView: View {
                 }
                 .padding(.top, AppConstants.Spacing.xl)
 
-                // 项目描述
-                VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
-                    Text("关于 AngelLive")
-                        .font(.headline)
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-
-                    Text("一个简洁、优雅的多平台直播聚合应用，支持哔哩哔哩、斗鱼、虎牙等多个直播平台。")
-                        .font(.body)
-                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(AppConstants.Colors.materialBackground)
-                .cornerRadius(AppConstants.CornerRadius.lg)
-
                 // 项目地址
                 VStack(spacing: AppConstants.Spacing.md) {
                     Text("项目地址 & 问题反馈")

@@ -13,6 +13,7 @@ import AngelLiveDependencies
 struct SimpleLiveNotificationNames {
     static let playerEndPlay = Notification.Name("SimpleLive.Player.End.Play")
     static let favoriteRefresh = Notification.Name("SimpleLive.Favorite.Refresh")
+    static let navigateToSettings = Notification.Name("SimpleLive.Navigate.ToSettings")
 }
 
 class Common {

@@ -481,6 +481,7 @@ struct BilibiliLoginOptionsView: View {
                 .padding(.trailing, 50)
             }
         }
+        .background(.ultraThinMaterial)
     }
 }
 

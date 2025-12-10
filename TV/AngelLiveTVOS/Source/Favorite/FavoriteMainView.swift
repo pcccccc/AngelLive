@@ -92,7 +92,7 @@ struct FavoriteMainView: View {
                                 }
                             }
                         }else {
-                            LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], spacing: 60) {
+                            LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], alignment: .center, spacing: 60) {
                                 ForEach(appViewModel.favoriteViewModel.roomList.indices, id: \.self) { index in
                                     LiveCardView(index: index)
                                         .environment(liveViewModel)

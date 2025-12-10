@@ -24,7 +24,7 @@ struct HistoryListView: View {
             Text("历史记录")
                 .font(.title2)
             ScrollView {
-                LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], spacing: 60) {
+                LazyVGrid(columns: [GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380)), GridItem(.fixed(380))], alignment: .center, spacing: 60) {
                     ForEach(appViewModel.historyViewModel.watchList.indices, id: \.self) { index in
                         LiveCardView(index: index)
                             .environment(liveViewModel)
