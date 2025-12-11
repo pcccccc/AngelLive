@@ -25,7 +25,7 @@ class LiveViewModel {
 
     // MARK: - Sidebar 相关常量和状态
     let sidebarWidth: CGFloat = 300
-    let sidebarPeekWidth: CGFloat = 40  // 收起时露出的宽度
+    let sidebarPeekWidth: CGFloat = 50  // 收起时露出的宽度
     var isSidebarExpanded: Bool = false
 
     // 旧属性保持兼容（逐步移除）

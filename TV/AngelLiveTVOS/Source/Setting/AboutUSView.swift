@@ -11,7 +11,7 @@ struct AboutUSView: View {
     var body: some View {
         VStack {
             HStack(spacing: 15) {
-                Text("Simple Live")
+                Text("Angel Live")
                     .font(.title)
                 Text("v: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""))")
                     .padding(.top, 30)

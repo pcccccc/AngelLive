@@ -16,12 +16,12 @@ enum FocusableField: Hashable {
 }
 
 struct ListMainView: View {
-    
+
     @Environment(\.scenePhase) var scenePhase
     @State var needFullScreenLoading: Bool = false
     @State private var hasSetInitialFocus: Bool = false
     private static let topId = "topIdHere"
-    
+
     var liveType: LiveType
     var liveViewModel: LiveViewModel
     @FocusState var focusState: FocusableField?

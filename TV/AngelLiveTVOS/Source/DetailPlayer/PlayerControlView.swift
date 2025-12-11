@@ -186,7 +186,7 @@ struct PlayerControlView: View {
                             .focused($state, equals: .left)
 
                         VStack {
-                            HStack(spacing: 10) {
+                            HStack(spacing: 0) {
                                 Button(action: {
                                     playPauseAction()
                                 }, label: {
@@ -206,7 +206,7 @@ struct PlayerControlView: View {
                                 Button(action: {
                                     refreshAction()
                                 }, label: {
-                                    Image(systemName: "arrow.counterclockwise")
+                                    Image(systemName: "arrow.trianglehead.2.counterclockwise")
                                         .foregroundColor(.white)
                                         .font(.system(size: 30, weight: .bold))
                                         .frame(width: 40, height: 40)
@@ -237,9 +237,9 @@ struct PlayerControlView: View {
                                         .foregroundStyle(.red)
                                     }, value: roomInfoModel.currentRoomIsLiked)
                             }
-                            .padding(.horizontal, 15)
+                            .padding(.horizontal, 5)
                             .padding(.vertical, 10)
-                            .adaptiveGlassEffect()
+                            .adaptiveGlassEffectCapsule()
 
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
@@ -252,7 +252,7 @@ struct PlayerControlView: View {
                        
                         Spacer()
                         VStack {
-                            HStack(spacing: 10) {
+                            HStack(spacing: 0) {
                                 Menu {
                                     ForEach(roomInfoViewModel.currentRoomPlayArgs?.indices ?? 0..<1, id: \.self) { index in
                                         Button(action: {
@@ -295,13 +295,25 @@ struct PlayerControlView: View {
                                         })
                                     }
                                 } label: {
-                                    Text(roomInfoViewModel.currentPlayQualityString)
-                                        .font(.system(size: 30, weight: .bold))
-                                        .frame(height: 50, alignment: .center)
-                                        .padding(.top, 10)
-                                        .foregroundStyle(.white)
+                                    if #available(tvOS 26.0, *) {
+                                        Text(roomInfoViewModel.currentPlayQualityString)
+                                            .font(.system(size: 30, weight: .bold))
+                                            .frame(height: 50, alignment: .center)
+                                            .foregroundStyle(.white)
+                                    }else {
+                                        Text(roomInfoViewModel.currentPlayQualityString)
+                                            .font(.system(size: 30, weight: .bold))
+                                            .frame(height: 50, alignment: .center)
+                                            .padding(.top, 10)
+                                            .foregroundStyle(.white)
+                                    }
                                 }
                                 .focused($state, equals: .playQuality)
+                                .frame(height: 60)
+                                .clipShape(.capsule)
+
+                                Text("")
+                                    .frame(width: 15)
 
                                 Button(action: {
                                     if roomInfoModel.showControlView == false {
@@ -319,7 +331,8 @@ struct PlayerControlView: View {
                                 })
                                 .clipShape(.circle)
                                 .focused($state, equals: .danmuSetting)
-
+                                
+                                
                                 Button(action: {
                                     danmuAction()
                                 }, label: {
@@ -330,9 +343,9 @@ struct PlayerControlView: View {
                                 .clipShape(.circle)
                                 .focused($state, equals: .danmu)
                             }
-                            .padding(.horizontal, 15)
+                            .padding(.leading, 15)
                             .padding(.vertical, 10)
-                            .adaptiveGlassEffect()
+                            .adaptiveGlassEffectCapsule()
 
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")

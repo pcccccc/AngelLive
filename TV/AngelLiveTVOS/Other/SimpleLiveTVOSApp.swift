@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveDependencies
 import AngelLiveCore
+import TipKit
 
 @main
 struct SimpleLiveTVOSApp: App {
@@ -20,6 +21,12 @@ struct SimpleLiveTVOSApp: App {
             .cacheSerializer(WebPSerializer.default)
         ]
         Bugsnag.start()
+
+        // 配置 TipKit
+        try? Tips.configure([
+            .displayFrequency(.immediate),
+            .datastoreLocation(.applicationDefault)
+        ])
     }
 
     var body: some Scene {

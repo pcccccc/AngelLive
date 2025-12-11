@@ -22,7 +22,6 @@ struct DanmuSettingView: View {
                     Image("icon")
                         .resizable()
                         .frame(width: 500, height: 500)
-                        .padding(.top, 95)
                         .cornerRadius(50)
                     Text("弹幕设置")
                         .font(.headline)

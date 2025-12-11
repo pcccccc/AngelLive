@@ -103,6 +103,7 @@ struct DetailPlayerView: View {
     @MainActor func endPlay() {
 //        playerCoordinator.playerLayer?.observer.isObserving = false
         playerCoordinator.resetPlayer()
+        roomInfoViewModel.disConnectSocket()
         didExitView(false, "")
     }
 }

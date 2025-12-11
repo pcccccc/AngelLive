@@ -7,11 +7,24 @@
 
 import SwiftUI
 import AngelLiveDependencies
+import ColorfulX
+import TipKit
 
 struct SidebarView: View {
 
     @Environment(LiveViewModel.self) var liveViewModel
+    @Environment(\.colorScheme) var colorScheme
     @FocusState.Binding var focusState: FocusableField?
+
+    // 亮色预设（适合 dark mode）
+    private static let brightPresets: [ColorfulPreset] = [.sunrise, .barbie, .watermelon, .neon, .appleIntelligence]
+    // 暗色预设（适合 light mode）
+    private static let darkPresets: [ColorfulPreset] = [.starry, .ocean, .aurora, .jelly, .lavandula]
+
+    @State private var currentPreset: ColorfulPreset = .aurora
+
+    // Sidebar 提示
+    private let sidebarTip = SidebarTip()
 
     var body: some View {
         HStack(spacing: 0) {
@@ -27,6 +40,7 @@ struct SidebarView: View {
                     .frame(width: liveViewModel.sidebarPeekWidth)
                     .clipped()
                     .ignoresSafeArea()
+                    .popoverTip(sidebarTip, arrowEdge: .leading)
             }
             
             Spacer()
@@ -34,6 +48,12 @@ struct SidebarView: View {
         
         .frame(width: liveViewModel.sidebarPeekWidth + liveViewModel.sidebarWidth)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: liveViewModel.isSidebarExpanded)
+        .onChange(of: liveViewModel.isSidebarExpanded) { _, expanded in
+            if expanded {
+                // 用户已学会使用，使 tip 失效
+                sidebarTip.invalidate(reason: .actionPerformed)
+            }
+        }
         .onExitCommand {
             handleExitCommand()
         }
@@ -90,23 +110,38 @@ struct SidebarView: View {
 
     // MARK: - 右侧指示器
     private var edgeIndicator: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             // 当前分类图标
             currentCategoryIcon
-                .frame(width: 24, height: 24)
-                .cornerRadius(12)
+                .frame(width: 32, height: 32)
+                .cornerRadius(16)
 
             // 展开箭头
             Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white.opacity(0.8))
         }
-        .frame(width: liveViewModel.sidebarPeekWidth, height: 100)
+        .frame(width: liveViewModel.sidebarPeekWidth, height: 140)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.15))
+            ColorfulView(color: currentPreset, speed: .constant(0.5))
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: liveViewModel.sidebarPeekWidth / 2,
+                        topTrailingRadius: liveViewModel.sidebarPeekWidth / 2
+                    )
+                )
         )
         .frame(maxHeight: .infinity, alignment: .center)
+        .onAppear {
+            randomizePreset()
+        }
+        .onChange(of: liveViewModel.isSidebarExpanded) { _, expanded in
+            if !expanded {
+                randomizePreset()
+            }
+        }
     }
 
     @ViewBuilder
@@ -138,6 +173,11 @@ struct SidebarView: View {
             return firstSubCategory.icon
         }
         return ""
+    }
+
+    private func randomizePreset() {
+        let presets = colorScheme == .dark ? Self.brightPresets : Self.darkPresets
+        currentPreset = presets.randomElement() ?? .aurora
     }
 }
 
