@@ -358,19 +358,6 @@ struct PlayerControlView: View {
 
     private func toggleSystemPip() {
         if let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer {
-            if let mePlayer = playerLayer.player as? KSMEPlayer {
-                if mePlayer.pipController == nil {
-                    mePlayer.configPIP()
-                }
-                if let pipController = mePlayer.pipController {
-                    print("PIP controller type: \(String(describing: type(of: pipController)))")
-                } else {
-                    print("❌ ERROR: pipController is nil after configPIP()")
-                }
-            } else {
-                print("❌ ERROR: Player is not a KSMEPlayer.")
-            }
-
             if playerLayer.isPictureInPictureActive {
                 playerLayer.pipStop(restoreUserInterface: true)
             } else {
