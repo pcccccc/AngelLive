@@ -156,9 +156,7 @@ struct SidebarMenuItem: View {
         VStack(alignment: .leading, spacing: 0) {
             // 主分类按钮
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
-                }
+                isExpanded.toggle()
             } label: {
                 HStack(spacing: 14) {
                     // 图标
@@ -179,15 +177,16 @@ struct SidebarMenuItem: View {
                         .lineLimit(1)
                         .layoutPriority(1)
                         .frame(minWidth: 28 * 5, alignment: .leading)
-                        
+
 
                     Spacer()
-                    
+
                     // 展开箭头
                     Image(systemName: "chevron.right")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .animation(.easeInOut(duration: 0.15), value: isExpanded)
                 }
                 .padding(.vertical, 16)
                 .padding(.horizontal, 16)
@@ -195,14 +194,14 @@ struct SidebarMenuItem: View {
             .buttonStyle(.card)
             .focused($focusState, equals: .leftMenu(index, 0))
 
-            // 子分类列表（带动画）
+            // 子分类列表
             if isExpanded {
-                VStack(alignment: .leading, spacing: 28) {
-                    ForEach(subItems.indices, id: \.self) { subIndex in
+                LazyVStack(alignment: .leading, spacing: 28) {
+                    ForEach(Array(subItems.enumerated()), id: \.element.id) { subIndex, item in
                         SidebarSubMenuItem(
                             focusState: $focusState,
-                            icon: subItems[subIndex].icon.isEmpty ? liveViewModel.menuTitleIcon : subItems[subIndex].icon,
-                            title: subItems[subIndex].title,
+                            icon: item.icon.isEmpty ? liveViewModel.menuTitleIcon : item.icon,
+                            title: item.title,
                             subIndex: subIndex,
                             parentIndex: index
                         )
@@ -212,13 +211,10 @@ struct SidebarMenuItem: View {
                 .padding(.leading, 10)
                 .padding(.top, 28)
                 .padding(.bottom, 8)
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .top)),
-                    removal: .opacity
-                ))
+                .transition(.opacity)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpanded)
+        .animation(.easeInOut(duration: 0.3), value: isExpanded)
     }
 }
 

@@ -40,9 +40,14 @@ class AppFavoriteModel {
         cloudReturnError = false
         syncProgressInfo = ("", "", "", 0, 0)
         self.isLoading = true
+
+        // 先重置状态，确保 UI 能感知变化
+        self.cloudKitReady = false
+
         let state = await actor.getState()
-        self.cloudKitReady = state.0
         self.cloudKitStateString = state.1
+        self.cloudKitReady = state.0  // 在设置 stateString 后再设置 ready 状态
+
         if self.cloudKitReady {
             // 创建一个异步任务来处理进度更新
             let progressTask = Task { @MainActor in
@@ -67,12 +72,8 @@ class AppFavoriteModel {
                 cloudReturnError = true
             }
         }else {
-            let state = await FavoriteService.getCloudState()
-            if state == "无法确定状态" {
-                self.cloudKitStateString = "iCloud状态可能存在假登录，当前状态：" + state + "请尝试将Apple TV断电后重新在设置APP中登录iCloud"
-            }else {
-                self.cloudKitStateString = state
-            }
+            // cloudKitReady 为 false，不需要再次获取状态
+            // cloudKitStateString 已经在上面设置过了
             syncProgressInfo = ("", "", "", 0, 0)
             isLoading = false
             cloudReturnError = true

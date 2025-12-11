@@ -54,61 +54,72 @@ struct FavoriteMainView: View {
                     }
                 }else {
                     ScrollView(.vertical) {
-                        if AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingsViewModel.globalGeneralSettingFavoriteStyle) == .section || AngelLiveFavoriteStyle(rawValue: appViewModel.generalSettingsViewModel.globalGeneralSettingFavoriteStyle) == .liveState { //按平台分组展示页面
-                            ForEach(appViewModel.favoriteViewModel.groupedRoomList, id: \.id) { section in
-                                VStack {
-                                    HStack {
-                                        Text(section.title)
-                                            .font(.title2.bold())
-                                            .padding(.leading, 14)
-                                        Spacer()
+                        // 按直播状态分组展示：正在直播用竖向列表，其他用横向列表
+                        ForEach(appViewModel.favoriteViewModel.groupedRoomList, id: \.id) { section in
+                            if section.title == "正在直播" {
+                                // 正在直播 - 竖向网格布局
+                                VStack(alignment: .leading, spacing: 20) {
+                                    // Section Header
+                                    FavoriteSectionHeader(title: section.title, count: section.roomList.count, isLive: true)
+                                        .padding(.leading, 50)
+
+                                    LazyVGrid(
+                                        columns: [
+                                            GridItem(.fixed(380), spacing: 50),
+                                            GridItem(.fixed(380), spacing: 50),
+                                            GridItem(.fixed(380), spacing: 50),
+                                            GridItem(.fixed(380), spacing: 50)
+                                        ],
+                                        alignment: .center,
+                                        spacing: 50
+                                    ) {
+                                        ForEach(section.roomList.indices, id: \.self) { index in
+                                            LiveCardView(index: index, currentLiveModel: section.roomList[index])
+                                                .environment(liveViewModel)
+                                                .environment(appViewModel)
+                                                .frame(width: 370, height: 280)
+                                        }
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                }
+                                .padding(.bottom, 40)
+                                .focusSection()
+                            } else {
+                                // 其他状态（已下播、回放/轮播、未知状态） - 横向滚动列表
+                                VStack(alignment: .leading, spacing: 20) {
+                                    // Section Header
+                                    FavoriteSectionHeader(title: section.title, count: section.roomList.count, isLive: false)
+                                        .padding(.leading, 50)
+
                                     ScrollView(.horizontal) {
-                                        LazyHGrid(rows: [GridItem(.fixed(370), spacing: 60, alignment: .leading)], spacing: 60) {
+                                        LazyHGrid(rows: [GridItem(.fixed(280), spacing: 50, alignment: .leading)], spacing: 50) {
                                             ForEach(section.roomList.indices, id: \.self) { index in
                                                 LiveCardView(index: index, currentLiveModel: section.roomList[index])
                                                     .environment(liveViewModel)
                                                     .environment(appViewModel)
-                                                    .frame(width: 370, height: 240)
+                                                    .frame(width: 370, height: 280)
                                             }
-                                            
                                         }
-                                        .safeAreaPadding([.leading, .trailing], 25)
-                                        .padding([.top, .bottom], 0)
+                                        .safeAreaPadding([.leading, .trailing], 50)
+                                        .padding(.vertical, 30) // 为焦点放大效果留出空间
                                     }
-                                    .padding(.top, -45)
-                                    Spacer()
+                                    .padding(.top, -30) // 抵消上方多余的 padding
                                 }
+                                .padding(.bottom, 20)
                                 .focusSection()
                             }
-                            if appViewModel.favoriteViewModel.isLoading {
-                                HStack{
-                                    LoadingView()
-                                        .frame(width: 370, height: 275)
-                                        .cornerRadius(5)
-                                        .shimmering(active: true)
-                                        .redacted(reason: .placeholder)
-                                    Spacer()
-                                }
-                            }
-                        }else {
-                            LazyVGrid(columns: [GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60), GridItem(.fixed(370), spacing: 60)], alignment: .center, spacing: 60) {
-                                ForEach(appViewModel.favoriteViewModel.roomList.indices, id: \.self) { index in
-                                    LiveCardView(index: index)
-                                        .environment(liveViewModel)
-                                        .environment(appViewModel)
-                                        .frame(width: 370, height: 240)
-                                }
-                                if appViewModel.favoriteViewModel.isLoading {
-                                    LoadingView()
-                                        .frame(width: 370, height: 275)
-                                        .cornerRadius(5)
-                                        .shimmering(active: true)
-                                        .redacted(reason: .placeholder)
-                                }
-                            }
                         }
-                        
+                        if appViewModel.favoriteViewModel.isLoading {
+                            HStack {
+                                LoadingView()
+                                    .frame(width: 370, height: 280)
+                                    .cornerRadius(5)
+                                    .shimmering(active: true)
+                                    .redacted(reason: .placeholder)
+                                Spacer()
+                            }
+                            .padding(.leading, 50)
+                        }
                     }
                 }
             }else {
@@ -214,5 +225,38 @@ extension FavoriteMainView {
             second += 1
         }
         timer?.fire()
+    }
+}
+
+// MARK: - Section Header
+struct FavoriteSectionHeader: View {
+    let title: String
+    let count: Int
+    let isLive: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // 颜色指示条
+            RoundedRectangle(cornerRadius: 3)
+                .fill(isLive ? Color.green : Color.gray)
+                .frame(width: 6, height: 28)
+
+            // 标题
+            Text(title)
+                .font(.title2.bold())
+
+            // 数量标签
+            Text("\(count)")
+                .font(.system(size: 22, weight: .medium).monospacedDigit())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Color.gray.opacity(0.3))
+                )
+
+            Spacer()
+        }
     }
 }

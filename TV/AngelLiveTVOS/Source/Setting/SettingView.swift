@@ -26,7 +26,8 @@ struct SettingView: View {
                     Image("icon")
                         .resizable()
                         .frame(width: 500, height: 500)
-                    Text("Simple Live for tvOS")
+                        .cornerRadius(50)
+                    Text("Angel Live")
                         .font(.headline)
                         .padding(.top, 20)
                     Text("Version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""))")
@@ -88,6 +89,7 @@ struct SettingView: View {
                                     .foregroundStyle(.gray)
                             }
                         }
+                        .foregroundStyle(.primary)
                     }
                     Spacer(minLength: 200)
                 }
