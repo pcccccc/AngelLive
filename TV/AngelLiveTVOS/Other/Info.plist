@@ -7,6 +7,17 @@
 		<key>apiKey</key>
 		<string>YOUR_BUGSNAG_API_KEY_HERE</string>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.igod.simplelive</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>simplelive</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>用于在局域网内与 iPhone/iPad 同步登录信息</string>
 	<key>NSBonjourServices</key>

@@ -38,6 +38,15 @@ struct SimpleLiveTVOSApp: App {
                         _ = await BilibiliCookieSyncService.shared.syncFromICloud()
                     }
                 }
+                .onOpenURL { url in
+                    appViewModel.handleDeepLink(url: url)
+                }
+                .fullScreenCover(isPresented: Binding(
+                    get: { appViewModel.showDeepLinkPlayer },
+                    set: { appViewModel.showDeepLinkPlayer = $0 }
+                )) {
+                    DeepLinkPlayerView(appViewModel: appViewModel)
+                }
         }
     }
 }

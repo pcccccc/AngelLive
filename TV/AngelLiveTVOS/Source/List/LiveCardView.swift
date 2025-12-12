@@ -237,6 +237,7 @@ struct LiveCardView: View {
                     do {
                         try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
                         liveViewModel.showToast(true, title: "取消收藏成功")
+                        TopShelfManager.notifyContentChanged()
                     } catch {
                         liveViewModel.showToast(false, title: FavoriteService.formatErrorCode(error: error))
                     }
@@ -259,6 +260,7 @@ struct LiveCardView: View {
                         appViewModel.favoriteViewModel.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
                         liveViewModel.showToast(true, title: "取消收藏成功")
                         liveViewModel.currentRoomIsFavorited = false
+                        TopShelfManager.notifyContentChanged()
                     } catch {
                         liveViewModel.showToast(false, title: FavoriteService.formatErrorCode(error: error))
                     }
@@ -281,6 +283,7 @@ struct LiveCardView: View {
                         liveViewModel.showToast(true, title: "收藏成功")
                         appViewModel.favoriteViewModel.roomList.append(liveViewModel.currentRoom!)
                         liveViewModel.currentRoomIsFavorited = true
+                        TopShelfManager.notifyContentChanged()
                     } catch {
                         liveViewModel.showToast(false, title: FavoriteService.formatErrorCode(error: error))
                     }

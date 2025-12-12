@@ -123,6 +123,7 @@ class QRCodeViewModel {
             favoriteSyncTaskStart = false
             currentTaskState = .idle
             showToast(true, title: "收藏同步完成")
+            TopShelfManager.notifyContentChanged()
         } else if syncType == .history {
             if needOverlay {
                 appViewModel.historyViewModel.watchList = roomList

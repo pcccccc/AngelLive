@@ -438,6 +438,7 @@ struct PlayerControlView: View {
                 roomInfoViewModel.currentRoomIsLiked = true
                 roomInfoViewModel.showToast(true, title: "收藏成功")
                 roomInfoViewModel.currentRoomLikeLoading = false
+                TopShelfManager.notifyContentChanged()
             }
         }else {
             Task {
@@ -446,6 +447,7 @@ struct PlayerControlView: View {
                 roomInfoViewModel.currentRoomIsLiked = false
                 roomInfoViewModel.showToast(true, title: "取消收藏成功")
                 roomInfoViewModel.currentRoomLikeLoading = false
+                TopShelfManager.notifyContentChanged()
             }
         }
     }

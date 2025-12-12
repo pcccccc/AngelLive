@@ -217,6 +217,7 @@ extension FavoriteMainView {
             await appViewModel.favoriteViewModel.syncWithActor()
             liveViewModel.roomList = appViewModel.favoriteViewModel.roomList
             self.second = 0
+            TopShelfManager.notifyContentChanged()
         }
     }
     

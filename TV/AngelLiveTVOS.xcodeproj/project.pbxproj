@@ -13,6 +13,8 @@
 		4F70CD1D2BAAE2E100F21EDA /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F70CD1C2BAAE2E100F21EDA /* LiveParse */; };
 		4F9F9C282C1BDEE100B863A9 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = 4F9F9C272C1BDEE100B863A9 /* LiveParse */; };
 		FB140CF92ECEB68500D12FD9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB140CF82ECEB68500D12FD9 /* Assets.xcassets */; };
+		FB19EE6F2EEBA4260099C48D /* TVServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB19EE6E2EEBA4250099C48D /* TVServices.framework */; };
+		FB19EE762EEBA4260099C48D /* TopShelfExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FB19EE6D2EEBA4250099C48D /* TopShelfExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		FB1BAC812E81479D006BC677 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1BAC802E81479D006BC677 /* LiveParse */; };
 		FB1D86B92C7EC13F00A679F3 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB1D86B82C7EC13F00A679F3 /* LiveParse */; };
 		FB8E940B2E7BEC670055E746 /* LiveParse in Frameworks */ = {isa = PBXBuildFile; productRef = FB8E940A2E7BEC670055E746 /* LiveParse */; };
@@ -23,11 +25,39 @@
 		FBE22D6A2EE027CA00866D4B /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FBE22D692EE027CA00866D4B /* Package.resolved */; };
 		FBF74A782EA1F9B000591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A772EA1F9B000591EEA /* AngelLiveCore */; };
 		FBF74A7A2EA1F9B000591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */; };
+		FBFDF4052EEBAC8700C067F4 /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBFDF4042EEBAC8700C067F4 /* AngelLiveCore */; };
+		FBFDF4072EEBAC8900C067F4 /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBFDF4062EEBAC8900C067F4 /* AngelLiveDependencies */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FB19EE742EEBA4260099C48D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 4FC3DCD22A49382F00CA36B9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FB19EE6C2EEBA4250099C48D;
+			remoteInfo = TopShelfExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FB19EE7B2EEBA4260099C48D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FB19EE762EEBA4260099C48D /* TopShelfExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB140CF82ECEB68500D12FD9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
+		FB19EE6D2EEBA4250099C48D /* TopShelfExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TopShelfExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB19EE6E2EEBA4250099C48D /* TVServices.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = TVServices.framework; path = System/Library/Frameworks/TVServices.framework; sourceTree = SDKROOT; };
 		FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		FBE22D692EE027CA00866D4B /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = ../AngelLive.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -40,10 +70,18 @@
 			);
 			target = 4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */;
 		};
+		FB19EE7A2EEBA4260099C48D /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = FB19EE6C2EEBA4250099C48D /* TopShelfExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4F3150422DF98086009B9FF5 /* AngelLiveTVOS */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (4F3150862DF98086009B9FF5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = AngelLiveTVOS; sourceTree = "<group>"; };
+		FB19EE702EEBA4260099C48D /* TopShelfExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (FB19EE7A2EEBA4260099C48D /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = TopShelfExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +106,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FB19EE6A2EEBA4250099C48D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB19EE6F2EEBA4260099C48D /* TVServices.framework in Frameworks */,
+				FBFDF4072EEBAC8900C067F4 /* AngelLiveDependencies in Frameworks */,
+				FBFDF4052EEBAC8700C067F4 /* AngelLiveCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -77,6 +125,7 @@
 				FBE22D692EE027CA00866D4B /* Package.resolved */,
 				FB140CF82ECEB68500D12FD9 /* Assets.xcassets */,
 				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
+				FB19EE702EEBA4260099C48D /* TopShelfExtension */,
 				4FC3DCDB2A49382F00CA36B9 /* Products */,
 				FBDEF8382BB9CBCB002EE8FF /* Frameworks */,
 			);
@@ -86,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */,
+				FB19EE6D2EEBA4250099C48D /* TopShelfExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -94,6 +144,7 @@
 			isa = PBXGroup;
 			children = (
 				FBDEF8392BB9CBCB002EE8FF /* SystemConfiguration.framework */,
+				FB19EE6E2EEBA4250099C48D /* TVServices.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -109,10 +160,12 @@
 				4FC3DCD72A49382F00CA36B9 /* Frameworks */,
 				4FC3DCD82A49382F00CA36B9 /* Resources */,
 				FBDB69F42EE7B9C800326980 /* ShellScript */,
+				FB19EE7B2EEBA4260099C48D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FB19EE752EEBA4260099C48D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
@@ -137,6 +190,30 @@
 			productReference = 4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		FB19EE6C2EEBA4250099C48D /* TopShelfExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FB19EE772EEBA4260099C48D /* Build configuration list for PBXNativeTarget "TopShelfExtension" */;
+			buildPhases = (
+				FB19EE692EEBA4250099C48D /* Sources */,
+				FB19EE6A2EEBA4250099C48D /* Frameworks */,
+				FB19EE6B2EEBA4250099C48D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				FB19EE702EEBA4260099C48D /* TopShelfExtension */,
+			);
+			name = TopShelfExtension;
+			packageProductDependencies = (
+				FBFDF4042EEBAC8700C067F4 /* AngelLiveCore */,
+				FBFDF4062EEBAC8900C067F4 /* AngelLiveDependencies */,
+			);
+			productName = TopShelfExtension;
+			productReference = FB19EE6D2EEBA4250099C48D /* TopShelfExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -144,11 +221,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1430;
+				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
 					4FC3DCD92A49382F00CA36B9 = {
 						CreatedOnToolsVersion = 14.3.1;
+					};
+					FB19EE6C2EEBA4250099C48D = {
+						CreatedOnToolsVersion = 26.2;
 					};
 				};
 			};
@@ -168,6 +248,7 @@
 			projectRoot = "";
 			targets = (
 				4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */,
+				FB19EE6C2EEBA4250099C48D /* TopShelfExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -179,6 +260,13 @@
 			files = (
 				FBE22D6A2EE027CA00866D4B /* Package.resolved in Resources */,
 				FB140CF92ECEB68500D12FD9 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FB19EE6B2EEBA4250099C48D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -212,7 +300,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FB19EE692EEBA4250099C48D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		FB19EE752EEBA4260099C48D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB19EE6C2EEBA4250099C48D /* TopShelfExtension */;
+			targetProxy = FB19EE742EEBA4260099C48D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4FC3DCFC2A49383100CA36B9 /* Debug */ = {
@@ -351,7 +454,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
+				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于同步数据";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -386,7 +489,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Simple Live";
+				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于同步数据";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -402,6 +505,71 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Release;
+		};
+		FB19EE782EEBA4260099C48D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TopShelfExtension/TopShelfExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TopShelfExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TopShelfExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.simplelive.TopShelfExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
+			};
+			name = Debug;
+		};
+		FB19EE792EEBA4260099C48D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TopShelfExtension/TopShelfExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TopShelfExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TopShelfExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.simplelive.TopShelfExtension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
 				TVOS_DEPLOYMENT_TARGET = 17.0;
@@ -425,6 +593,15 @@
 			buildConfigurations = (
 				4FC3DCFF2A49383100CA36B9 /* Debug */,
 				4FC3DD002A49383100CA36B9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FB19EE772EEBA4260099C48D /* Build configuration list for PBXNativeTarget "TopShelfExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FB19EE782EEBA4260099C48D /* Debug */,
+				FB19EE792EEBA4260099C48D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -481,6 +658,14 @@
 			productName = AngelLiveCore;
 		};
 		FBF74A792EA1F9B000591EEA /* AngelLiveDependencies */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AngelLiveDependencies;
+		};
+		FBFDF4042EEBAC8700C067F4 /* AngelLiveCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AngelLiveCore;
+		};
+		FBFDF4062EEBAC8900C067F4 /* AngelLiveDependencies */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AngelLiveDependencies;
 		};
