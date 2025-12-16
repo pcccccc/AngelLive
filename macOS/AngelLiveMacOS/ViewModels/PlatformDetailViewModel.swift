@@ -130,9 +130,9 @@ class PlatformDetailViewModel {
             )
 
             if refresh {
-                roomList = fetchedRooms
+                roomList = fetchedRooms.removingDuplicates()
             } else {
-                roomList.append(contentsOf: fetchedRooms)
+                roomList = roomList.appendingUnique(contentsOf: fetchedRooms)
             }
             // 清除错误状态（加载成功）
             roomError = nil

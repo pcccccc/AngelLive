@@ -212,9 +212,10 @@ class LiveViewModel {
 
                 await MainActor.run {
                     if self.roomPage == 1 {
-                        self.roomList.removeAll()
+                        self.roomList = newRooms.removingDuplicates()
+                    } else {
+                        self.roomList = self.roomList.appendingUnique(contentsOf: newRooms)
                     }
-                    self.roomList += newRooms
                     self.isLoading = false
                 }
             } catch {
@@ -234,15 +235,10 @@ class LiveViewModel {
             let newRooms = try await LiveService.searchRooms(keyword: text, page: roomPage)
             await MainActor.run {
                 if roomPage == 1 {
-                    self.roomList.removeAll()
+                    self.roomList = newRooms.removingDuplicates()
+                } else {
+                    self.roomList = self.roomList.appendingUnique(contentsOf: newRooms)
                 }
-                var uniqueNewRooms: [LiveModel] = []
-                for item in newRooms {
-                    if !self.roomList.contains(where: { $0 == item }) {
-                        uniqueNewRooms.append(item)
-                    }
-                }
-                self.roomList.append(contentsOf: uniqueNewRooms)
                 isLoading = false
             }
         } catch {
