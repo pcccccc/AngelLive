@@ -78,28 +78,19 @@ struct ListMainView: View {
                                 spacing: 50
                             ) {
                                 ForEach(liveViewModel.roomList.indices, id: \.self) { index in
-                                    LiveCardView(index: index)
+                                    LiveCardView(index: index, externalFocusState: $focusState, onLeftEdgeMove: {
+                                        // 第一列向左 -> 展开 sidebar
+                                        liveViewModel.isSidebarExpanded = true
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            focusState = .leftMenu(0, 0)
+                                        }
+                                    })
                                         .environment(liveViewModel)
-                                        .onMoveCommand(perform: { direction in
-                                            switch direction {
-                                                case .left:
-                                                    if index % 4 == 0 {
-                                                        // 第一列向左 -> 展开 sidebar
-                                                        liveViewModel.isSidebarExpanded = true
-                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                            focusState = .leftMenu(0, 0)
-                                                        }
-                                                    }
-                                                default:
-                                                    break
-                                            }
-                                        })
                                         .onPlayPauseCommand(perform: {
                                             liveViewModel.roomPage = 1
                                             liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
                                             reader.scrollTo(Self.topId)
                                         })
-                                        .focused($focusState, equals: .mainContent(index))
                                         .frame(width: 370, height: 280)
                                 }
                                 if liveViewModel.isLoading {

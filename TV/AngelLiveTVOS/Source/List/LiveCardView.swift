@@ -15,9 +15,11 @@ struct LiveCardView: View {
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(AppState.self) var appViewModel
     @State var index: Int
+    var externalFocusState: FocusState<FocusableField?>.Binding?
+    var onLeftEdgeMove: (() -> Void)?
     @State var currentLiveModel: LiveModel?
     @State private var isLive: Bool = false
-    @FocusState var focusState: FocusableField?
+    @FocusState private var internalFocusState: FocusableField?
 
     /// 卡片底部渐变，用于显示观看人数
     private let cardGradient = LinearGradient(stops: [
@@ -28,7 +30,15 @@ struct LiveCardView: View {
 
     /// 是否获得焦点
     private var isFocused: Bool {
-        focusState == .mainContent(index)
+        if let external = externalFocusState {
+            return external.wrappedValue == .mainContent(index)
+        }
+        return internalFocusState == .mainContent(index)
+    }
+
+    /// 获取当前 focusState 的值
+    private var currentFocusValue: FocusableField? {
+        externalFocusState?.wrappedValue ?? internalFocusState
     }
 
     var body: some View {
@@ -96,8 +106,13 @@ struct LiveCardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.card)
-            .focused($focusState, equals: .mainContent(index))
-            .onChange(of: focusState) { oldValue, newValue in
+            .focused(externalFocusState ?? $internalFocusState, equals: .mainContent(index))
+            .onMoveCommand { direction in
+                if direction == .left && index % 4 == 0 {
+                    onLeftEdgeMove?()
+                }
+            }
+            .onChange(of: currentFocusValue) { oldValue, newValue in
                 handleFocusChange(newValue: newValue, liveModel: liveModel)
             }
             .alert("提示", isPresented: liveModel.showAlert) {

@@ -82,6 +82,12 @@ class AppFavoriteModel {
     
     func addFavorite(room: LiveModel) async throws {
         try await FavoriteService.saveRecord(liveModel: room)
+
+        // 检查是否已存在，避免重复添加
+        if roomList.contains(where: { $0.liveType == room.liveType && $0.roomId == room.roomId }) {
+            return
+        }
+
         var favIndex = -1
         for (index, favoriteRoom) in roomList.enumerated() {
             if LiveState(rawValue: favoriteRoom.liveState ?? "3") != .live {
@@ -91,8 +97,9 @@ class AppFavoriteModel {
         }
         if favIndex != -1 {
             roomList.insert(room, at: favIndex)
+        } else {
+            roomList.append(room)
         }
-        roomList.append(room)
         if AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) == .section {
             for (index, model) in groupedRoomList.enumerated() {
                 if model.type == room.liveType {
