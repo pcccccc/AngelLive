@@ -60,10 +60,10 @@ struct LiveCardView: View {
     // MARK: - 封面区域
     @ViewBuilder
     private func coverSection(currentLiveModel: LiveModel, liveModel: Bindable<LiveViewModel>) -> some View {
-        ZStack(alignment: .topLeading) {
-            Button {
-                enterDetailRoom()
-            } label: {
+        Button {
+            enterDetailRoom()
+        } label: {
+            ZStack(alignment: .topLeading) {
                 ZStack(alignment: .bottom) {
                     // 背景模糊层
                     KFImage(URL(string: currentLiveModel.roomCover))
@@ -103,32 +103,32 @@ struct LiveCardView: View {
                         .padding(.bottom, 8)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .buttonStyle(.card)
-            .focused(externalFocusState ?? $internalFocusState, equals: .mainContent(index))
-            .onMoveCommand { direction in
-                if direction == .left && index % 4 == 0 {
-                    onLeftEdgeMove?()
+
+                // 平台和直播状态标签（非直播列表页面显示）
+                if liveViewModel.roomListType != .live {
+                    platformAndStatusOverlay(currentLiveModel: currentLiveModel)
                 }
             }
-            .onChange(of: currentFocusValue) { oldValue, newValue in
-                handleFocusChange(newValue: newValue, liveModel: liveModel)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.card)
+        .focused(externalFocusState ?? $internalFocusState, equals: .mainContent(index))
+        .onMoveCommand { direction in
+            if direction == .left && index % 4 == 0 {
+                onLeftEdgeMove?()
             }
-            .alert("提示", isPresented: liveModel.showAlert) {
-                alertButtons
-            } message: {
-                Text("确认取消收藏吗")
-            }
-            .contextMenu { contextMenuContent }
-            .fullScreenCover(isPresented: $isLive) {
-                playerFullScreenContent
-            }
-
-            // 平台和直播状态标签（非直播列表页面显示）
-            if liveViewModel.roomListType != .live {
-                platformAndStatusOverlay(currentLiveModel: currentLiveModel)
-            }
+        }
+        .onChange(of: currentFocusValue) { oldValue, newValue in
+            handleFocusChange(newValue: newValue, liveModel: liveModel)
+        }
+        .alert("提示", isPresented: liveModel.showAlert) {
+            alertButtons
+        } message: {
+            Text("确认取消收藏吗")
+        }
+        .contextMenu { contextMenuContent }
+        .fullScreenCover(isPresented: $isLive) {
+            playerFullScreenContent
         }
     }
 
