@@ -97,9 +97,11 @@ struct PlatformView: View {
                             Color("sl-background", bundle: nil)
                         )
                         .safeAreaPadding(.all)
+                        .id(platformViewModel.platformInfo[selectedIndex].liveType)
 
                 }else {
                     ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                        .id(platformViewModel.platformInfo[selectedIndex].liveType)
                 }
             })
             

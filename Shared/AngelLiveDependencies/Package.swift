@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
         .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
         .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.6.2"),
-        .package(url: "https://github.com/pcccccc/LiveParse", from: "2.0.3"),
+        .package(url: "https://github.com/pcccccc/LiveParse", from: "2.0.4"),
         .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
         .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
         .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),
