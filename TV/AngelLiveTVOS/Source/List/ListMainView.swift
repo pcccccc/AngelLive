@@ -13,192 +13,314 @@ enum FocusableField: Hashable {
     case leftMenu(Int, Int)
     case mainContent(Int)
     case leftFavorite(Int, Int)
-}
-
-private enum SimpleCellMode {
-    case textOnly
-    case coverOnly
-    case coverAndText
+    case leftEdge(Int)
 }
 
 struct ListMainView: View {
 
     @Environment(\.scenePhase) var scenePhase
-    @State private var needFullScreenLoading: Bool = false
+    @State var needFullScreenLoading: Bool = false
     @State private var hasSetInitialFocus: Bool = false
+    @State private var showEmptyState: Bool = false
+    @State private var pendingEmptyState: DispatchWorkItem?
+    @State private var allowSidebarFromLeftEdge: Bool = false
     private static let topId = "topIdHere"
-    private let useMoveCommandProbe = false
-    private let probeUsesScrollView = true
-    private let useSimpleListCells = true
-    private let useStaticRooms = false
-    private let useStableRoomsSnapshot = true
-    private let deferRoomListUpdates = true
-    private let roomListUpdateDelay: TimeInterval = 0.25
-    private let disableSceneRefresh = true
-    private let forceFocusOnRoomListChange = true
-    private let staticRoomCount = 16
-    private let simpleCellMode: SimpleCellMode = .textOnly
-    private let simpleCellUsesRemoteImage = false
-    @State private var lastMoveDirection: MoveCommandDirection?
-    @State private var lastMoveCommandAt: TimeInterval = 0
-    @State private var deferredRooms: [LiveModel] = []
-    @State private var pendingRoomUpdate: DispatchWorkItem?
-    @State private var pendingFocusReset: DispatchWorkItem?
-    @State private var stableRooms: [LiveModel] = []
+    private let gridColumnCount = 4
+    private let gridSpacing: CGFloat = 50
+    private let cardWidth: CGFloat = 380
+    private let cardHeight: CGFloat = 280
+    private let leftEdgeColumnWidth: CGFloat = 60
+    private let emptyStateDelay: TimeInterval = 0.35
+    private let headerToGridSpacing: CGFloat = 24
+    private var leftEdgeCompensation: CGFloat {
+        // 额外一列会让网格整体右移，补偿半列宽度让卡片回到居中
+        (leftEdgeColumnWidth + gridSpacing) / 2
+    }
 
-    let liveType: LiveType
-    @State private var liveViewModel: LiveViewModel
-    @FocusState private var focusState: FocusableField?
-    let appViewModel: AppState
-
+    var liveType: LiveType
+    var liveViewModel: LiveViewModel
+    @FocusState var focusState: FocusableField?
+    var appViewModel: AppState
+    
     init(liveType: LiveType, appViewModel: AppState) {
         self.liveType = liveType
         self.appViewModel = appViewModel
-        _liveViewModel = State(wrappedValue: LiveViewModel(roomListType: .live, liveType: liveType, appViewModel: appViewModel))
+        self.liveViewModel = LiveViewModel(roomListType: .live, liveType: liveType, appViewModel: appViewModel)
     }
-    
+
+    private enum RoomGridItem: Hashable {
+        case leftEdge(Int)
+        case room(Int)
+        case loading(Int)
+    }
+
+    private var gridColumns: [GridItem] {
+        [
+            GridItem(.fixed(leftEdgeColumnWidth), spacing: gridSpacing),
+            GridItem(.fixed(cardWidth), spacing: gridSpacing),
+            GridItem(.fixed(cardWidth), spacing: gridSpacing),
+            GridItem(.fixed(cardWidth), spacing: gridSpacing),
+            GridItem(.fixed(cardWidth), spacing: gridSpacing)
+        ]
+    }
+
+    private var roomGridItems: [RoomGridItem] {
+        let roomCount = liveViewModel.roomList.count
+        let rowCount = (roomCount + gridColumnCount - 1) / gridColumnCount
+        var items: [RoomGridItem] = []
+        items.reserveCapacity(max(1, rowCount) * (gridColumnCount + 1))
+
+        for row in 0..<rowCount {
+            items.append(.leftEdge(row))
+            let start = row * gridColumnCount
+            let end = min(start + gridColumnCount, roomCount)
+            for index in start..<end {
+                items.append(.room(index))
+            }
+        }
+
+        if shouldShowLoadingPlaceholder {
+            // 补一行：哨兵 + Loading 卡片，避免落到哨兵列上
+            let loadingRow = rowCount
+            items.append(.leftEdge(loadingRow))
+            items.append(.loading(loadingRow))
+        }
+
+        return items
+    }
+
+    private func handleMoveCommand(_ direction: MoveCommandDirection) {
+        print("ListMainView handleMoveCommand direction=\(direction) focus=\(String(describing: focusState)) selectedIndex=\(liveViewModel.selectedRoomListIndex)")
+        switch focusState {
+        case .mainContent:
+            // 左侧展开由“哨兵焦点”触发，避免 onMoveCommand 在大列表下不稳定
+            break
+        case .leftMenu, .leftFavorite:
+            if direction == .right {
+                liveViewModel.isSidebarExpanded = false
+                focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
+            }
+        default:
+            break
+        }
+    }
+
+    private func leftEdgeSentinel(row: Int) -> some View {
+        Button(action: {}) {
+            // 透明但可聚焦：仅用于从第一列“再向左”时接管焦点
+            Rectangle()
+                .fill(Color.clear)
+        }
+        .frame(width: leftEdgeColumnWidth, height: cardHeight)
+        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .focused($focusState, equals: .leftEdge(row))
+        .opacity(0.001)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func roomGridItemView(_ item: RoomGridItem, reader: ScrollViewProxy) -> some View {
+        switch item {
+        case .leftEdge(let row):
+            leftEdgeSentinel(row: row)
+        case .room(let index):
+            LiveCardView(index: index, externalFocusState: $focusState, onMoveCommand: handleMoveCommand)
+                .environment(liveViewModel)
+                .onPlayPauseCommand(perform: {
+                    liveViewModel.roomPage = 1
+                    liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+                    reader.scrollTo(Self.topId)
+                })
+                .frame(width: 370, height: cardHeight)
+        case .loading:
+            LoadingView()
+                .frame(width: 370, height: cardHeight)
+                .cornerRadius(5)
+                .shimmering(active: true)
+                .redacted(reason: .placeholder)
+        }
+    }
+
+    private var platformTitleView: some View {
+        Text(liveViewModel.livePlatformName)
+            .font(.largeTitle)
+            .bold()
+    }
+
+    private var shouldShowLoadingPlaceholder: Bool {
+        liveViewModel.isLoading || (liveViewModel.roomList.isEmpty && !showEmptyState)
+    }
+
+    private func updateEmptyState() {
+        pendingEmptyState?.cancel()
+        pendingEmptyState = nil
+
+        if liveViewModel.isLoading {
+            showEmptyState = false
+            return
+        }
+
+        if liveViewModel.roomList.isEmpty {
+            let workItem = DispatchWorkItem {
+                showEmptyState = true
+            }
+            pendingEmptyState = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + emptyStateDelay, execute: workItem)
+        } else {
+            showEmptyState = false
+        }
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Text("暂无房间")
+                .font(.title2.bold())
+            Text("请稍后重试或切换分类")
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+    }
+
+    private var roomListView: some View {
+        ScrollViewReader { reader in
+            ScrollView {
+                VStack(spacing: headerToGridSpacing) {
+                    platformTitleView
+                        .id(Self.topId)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    LazyVGrid(
+                        columns: gridColumns,
+                        alignment: .center,
+                        spacing: gridSpacing
+                    ) {
+                        ForEach(roomGridItems, id: \.self) { item in
+                            roomGridItemView(item, reader: reader)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    // 只偏移网格，避免标题跟着偏移
+                    .offset(x: -leftEdgeCompensation)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+
+    private var listContainerView: some View {
+        ZStack(alignment: .leading) {
+            Group {
+            if shouldShowLoadingPlaceholder {
+                // roomList 为空时先展示加载态，避免“空列表一闪而过”
+                roomListView
+            } else if liveViewModel.roomList.isEmpty && showEmptyState {
+                // 已提示错误则不会走到这里，空态只在无错误且无加载时展示
+                emptyStateView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // 主内容区域
+                    roomListView
+                }
+            }
+            .blur(radius: liveViewModel.isSidebarExpanded ? 5 : 0)
+            .animation(.easeInOut(duration: 0.25), value: liveViewModel.isSidebarExpanded)
+
+            // 遮罩层
+            if liveViewModel.isSidebarExpanded {
+                Color.black.opacity(0.4)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        liveViewModel.isSidebarExpanded = false
+                        focusState = .mainContent(liveViewModel.selectedRoomListIndex)
+                    }
+                    .transition(.opacity)
+            }
+
+            // Sidebar
+            if liveViewModel.roomList.count > 0 || liveViewModel.categories.count > 0 {
+                SidebarView(focusState: $focusState)
+                    .environment(liveViewModel)
+                    .zIndex(2)
+                    .onMoveCommand { direction in
+                        if direction == .right {
+                            liveViewModel.isSidebarExpanded = false
+                            focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
+                        }
+                    }
+            }
+        }
+    }
+
+    private func errorView(_ error: Error) -> some View {
+        ErrorView(
+            title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+            message: error.liveParseMessage,
+            detailMessage: error.liveParseDetail,
+            curlCommand: error.liveParseCurl,
+            showRetry: true,
+            showLoginButton: error.isBilibiliAuthRequired,
+            onDismiss: {
+                liveViewModel.hasError = false
+                liveViewModel.currentError = nil
+            },
+            onRetry: {
+                liveViewModel.hasError = false
+                liveViewModel.currentError = nil
+                liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+            }
+        )
+    }
+
     var body: some View {
         
         @Bindable var liveModel = liveViewModel
         
-        Group {
-            if useMoveCommandProbe {
-                moveCommandProbeView
+        ZStack {
+            if liveViewModel.hasError, let error = liveViewModel.currentError {
+                errorView(error)
             } else {
-                ZStack {
-                    if liveViewModel.hasError, let error = liveViewModel.currentError {
-                        ErrorView(
-                            title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
-                            message: error.liveParseMessage,
-                            detailMessage: error.liveParseDetail,
-                            curlCommand: error.liveParseCurl,
-                            showRetry: true,
-                            showLoginButton: error.isBilibiliAuthRequired,
-                            onDismiss: {
-                                liveViewModel.hasError = false
-                                liveViewModel.currentError = nil
-                            },
-                            onRetry: {
-                                liveViewModel.hasError = false
-                                liveViewModel.currentError = nil
-                                liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
-                            }
-                        )
-                    } else {
-                        ZStack(alignment: .leading) {
-                            // 主内容区域
-                            ScrollViewReader { reader in
-                                ScrollView {
-                                    ZStack {
-                                        Text(liveModel.livePlatformName)
-                                            .font(.largeTitle)
-                                            .bold()
-                                    }
-                                    .id(Self.topId)
-                                    let rooms = displayRooms
-                                    LazyVGrid(
-                                        columns: [
-                                            GridItem(.fixed(380), spacing: 50),
-                                            GridItem(.fixed(380), spacing: 50),
-                                            GridItem(.fixed(380), spacing: 50),
-                                            GridItem(.fixed(380), spacing: 50)
-                                        ],
-                                        alignment: .center,
-                                        spacing: 50
-                                    ) {
-                                        ForEach(rooms.indices, id: \.self) { index in
-                                            if useSimpleListCells {
-                                                simpleListCell(index: index, room: rooms[index])
-                                            } else {
-                                                LiveCardView(index: index, externalFocusState: $focusState)
-                                                    .environment(liveViewModel)
-                                                    .onPlayPauseCommand(perform: {
-                                                        liveViewModel.roomPage = 1
-                                                        liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
-                                                        reader.scrollTo(Self.topId)
-                                                    })
-                                                    .frame(width: 370, height: 280)
-                                            }
-                                        }
-                                        if !useStaticRooms && liveViewModel.isLoading {
-                                            LoadingView()
-                                                .frame(width: 370, height: 280)
-                                                .cornerRadius(5)
-                                                .shimmering(active: true)
-                                                .redacted(reason: .placeholder)
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                }
-                            }
-                            .blur(radius: liveViewModel.isSidebarExpanded ? 5 : 0)
-                            .animation(.easeInOut(duration: 0.25), value: liveViewModel.isSidebarExpanded)
-
-                            // 遮罩层
-                            if liveViewModel.isSidebarExpanded {
-                                Color.black.opacity(0.4)
-                                    .ignoresSafeArea()
-                                    .onTapGesture {
-                                        liveViewModel.isSidebarExpanded = false
-                                        focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                                    }
-                                    .transition(.opacity)
-                            }
-                            
-                            // Sidebar
-                            if liveModel.roomList.count > 0 || liveModel.categories.count > 0 {
-                                SidebarView(focusState: $focusState)
-                                    .environment(liveViewModel)
-                                    .zIndex(2)
-                            }
-                        }
-                    }
-                }
+                listContainerView
             }
         }
         .background(.thinMaterial)
-        .onMoveCommand { direction in
-            if useMoveCommandProbe {
-                lastMoveDirection = direction
-            }
-            lastMoveCommandAt = Date.timeIntervalSinceReferenceDate
-            handleMoveCommand(direction)
-        }
         .onChange(of: focusState) { _, newValue in
-            guard !useMoveCommandProbe else { return }
             // 当焦点移到主内容时，关闭 sidebar
             switch newValue {
-            case .mainContent(let idx):
-                if useSimpleListCells {
-                    liveViewModel.selectedRoomListIndex = idx
-                }
+            case .mainContent:
+                allowSidebarFromLeftEdge = true
                 if liveViewModel.isSidebarExpanded {
                     liveViewModel.isSidebarExpanded = false
+                }
+            case .leftEdge:
+                // 左侧哨兵获取焦点 -> 展开 sidebar 并把焦点转交
+                guard allowSidebarFromLeftEdge else { return }
+                liveViewModel.isSidebarExpanded = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    focusState = .leftMenu(0, 0)
                 }
             default:
                 break
             }
         }
         .onChange(of: liveViewModel.roomList) { _, newValue in
-            guard !useMoveCommandProbe else { return }
-            guard !useStaticRooms else { return }
-            if useStableRoomsSnapshot && stableRooms.isEmpty && !newValue.isEmpty {
-                stableRooms = newValue
+            updateEmptyState()
+            if newValue.isEmpty {
+                allowSidebarFromLeftEdge = false
             }
-            if deferRoomListUpdates {
-                scheduleRoomListUpdate(newValue)
-            }
-            if forceFocusOnRoomListChange {
-                scheduleFocusResetIfNeeded(newValue)
-            } else {
-                // 当 roomList 首次加载完成时，设置初始焦点到主内容
-                if !hasSetInitialFocus && !newValue.isEmpty {
-                    hasSetInitialFocus = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        focusState = .mainContent(0)
-                    }
+            // 当 roomList 首次加载完成时，设置初始焦点到主内容
+            if !hasSetInitialFocus && !newValue.isEmpty {
+                hasSetInitialFocus = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    focusState = .mainContent(0)
                 }
             }
+        }
+        .onChange(of: liveViewModel.isLoading) { _, _ in
+            updateEmptyState()
+        }
+        .onAppear {
+            allowSidebarFromLeftEdge = false
+            updateEmptyState()
         }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
@@ -212,15 +334,10 @@ struct ListMainView: View {
             .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
-            guard !useMoveCommandProbe else { return }
-            guard !useStaticRooms else { return }
             guard liveViewModel.isLoading == true else { return }
             liveViewModel.getRoomList(index: 1)
         })
         .onChange(of: scenePhase) { oldValue, newValue in
-            guard !useMoveCommandProbe else { return }
-            guard !useStaticRooms else { return }
-            guard !disableSceneRefresh else { return }
             switch newValue {
                 case .active:
                     liveViewModel.showToast(true, title: "程序返回前台，正在为您刷新列表", hideAfter: 3)
@@ -234,7 +351,7 @@ struct ListMainView: View {
             }
         }
         .overlay {
-            if !useMoveCommandProbe && !displayRooms.isEmpty {
+            if liveViewModel.roomList.count > 0 {
                 VStack {
                     Spacer()
                     HStack {
@@ -254,234 +371,5 @@ struct ListMainView: View {
                 }
             }
         }
-    }
-
-    private var moveCommandProbeView: some View {
-        ZStack(alignment: .leading) {
-            VStack(spacing: 24) {
-                Text("Move: \(moveCommandLabel(lastMoveDirection))")
-                    .font(.title2)
-                Text("Focus: \(focusLabel)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                if probeUsesScrollView {
-                    ScrollView {
-                        probeGrid
-                    }
-                } else {
-                    probeGrid
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .blur(radius: liveViewModel.isSidebarExpanded ? 5 : 0)
-            .animation(.easeInOut(duration: 0.25), value: liveViewModel.isSidebarExpanded)
-
-            if liveViewModel.isSidebarExpanded {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        liveViewModel.isSidebarExpanded = false
-                        focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
-                    }
-                    .transition(.opacity)
-            }
-
-            SidebarView(focusState: $focusState)
-                .environment(liveViewModel)
-                .zIndex(2)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            if focusState == nil {
-                focusState = .mainContent(0)
-            }
-        }
-    }
-
-    private var probeGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.fixed(380), spacing: 50),
-                GridItem(.fixed(380), spacing: 50),
-                GridItem(.fixed(380), spacing: 50),
-                GridItem(.fixed(380), spacing: 50)
-            ],
-            alignment: .center,
-            spacing: 50
-        ) {
-            ForEach(0..<12, id: \.self) { index in
-                Button("Item \(index)") { }
-                    .buttonStyle(.card)
-                    .frame(width: 370, height: 280)
-                    .focused($focusState, equals: .mainContent(index))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
-    private func handleMoveCommand(_ direction: MoveCommandDirection) {
-        switch focusState {
-        case .mainContent(let idx):
-            if direction == .left && idx % 4 == 0 {
-                liveViewModel.isSidebarExpanded = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    focusState = .leftMenu(0, 0)
-                }
-            }
-        case .leftMenu, .leftFavorite:
-            if direction == .right {
-                liveViewModel.isSidebarExpanded = false
-                focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
-            }
-        default:
-            break
-        }
-    }
-
-    private func simpleListCell(index: Int, room: LiveModel) -> some View {
-        return Button {
-            // No-op: test focus and move commands only.
-        } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                if simpleCellMode == .coverOnly || simpleCellMode == .coverAndText {
-                    simpleCellCover(room: room)
-                }
-                if simpleCellMode == .textOnly || simpleCellMode == .coverAndText {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(room.userName.isEmpty ? "主播 \(index)" : room.userName)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text(room.roomTitle.isEmpty ? "房间标题" : room.roomTitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(16)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.card)
-        .frame(width: 370, height: 280)
-        .focused($focusState, equals: .mainContent(index))
-        .onPlayPauseCommand(perform: {
-            guard !useStaticRooms else { return }
-            liveViewModel.roomPage = 1
-            liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
-        })
-    }
-
-    @ViewBuilder
-    private func simpleCellCover(room: LiveModel) -> some View {
-        if simpleCellUsesRemoteImage, let url = URL(string: room.roomCover), !room.roomCover.isEmpty {
-            KFImage(url)
-                .placeholder {
-                    Image("placeholder")
-                        .resizable()
-                        .scaledToFill()
-                }
-                .resizable()
-                .scaledToFill()
-                .frame(height: 160)
-                .clipped()
-        } else {
-            Image("placeholder")
-                .resizable()
-                .scaledToFill()
-                .frame(height: 160)
-                .clipped()
-        }
-    }
-
-    private var focusLabel: String {
-        guard let focusState else { return "none" }
-        switch focusState {
-        case .leftMenu(let parent, let child):
-            return "leftMenu \(parent)-\(child)"
-        case .mainContent(let index):
-            return "mainContent \(index)"
-        case .leftFavorite(let parent, let child):
-            return "leftFavorite \(parent)-\(child)"
-        }
-    }
-
-    private func moveCommandLabel(_ direction: MoveCommandDirection?) -> String {
-        switch direction {
-        case .up:
-            return "up"
-        case .down:
-            return "down"
-        case .left:
-            return "left"
-        case .right:
-            return "right"
-        case .none:
-            return "none"
-        @unknown default:
-            return "unknown"
-        }
-    }
-
-    private var displayRooms: [LiveModel] {
-        if useStaticRooms {
-            return staticRooms
-        }
-        if useStableRoomsSnapshot {
-            return stableRooms.isEmpty ? liveViewModel.roomList : stableRooms
-        }
-        if deferRoomListUpdates {
-            return deferredRooms.isEmpty ? liveViewModel.roomList : deferredRooms
-        }
-        return liveViewModel.roomList
-    }
-
-    private var staticRooms: [LiveModel] {
-        (0..<staticRoomCount).map { index in
-            LiveModel(
-                userName: "主播 \(index)",
-                roomTitle: "标题 \(index)",
-                roomCover: "",
-                userHeadImg: "",
-                liveType: liveType,
-                liveState: "1",
-                userId: "user-\(index)",
-                roomId: "room-\(index)",
-                liveWatchedCount: nil
-            )
-        }
-    }
-
-    private func scheduleRoomListUpdate(_ rooms: [LiveModel]) {
-        pendingRoomUpdate?.cancel()
-        let workItem = DispatchWorkItem { [rooms] in
-            let now = Date.timeIntervalSinceReferenceDate
-            if now - lastMoveCommandAt >= roomListUpdateDelay {
-                deferredRooms = rooms
-            } else {
-                scheduleRoomListUpdate(rooms)
-            }
-        }
-        pendingRoomUpdate = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + roomListUpdateDelay, execute: workItem)
-    }
-
-    private func scheduleFocusResetIfNeeded(_ rooms: [LiveModel]) {
-        guard !rooms.isEmpty else { return }
-        let maxIndex = rooms.count - 1
-        let desiredIndex = max(0, min(liveViewModel.selectedRoomListIndex, maxIndex))
-        if case .mainContent(let currentIndex) = focusState,
-           currentIndex >= 0,
-           currentIndex <= maxIndex {
-            return
-        }
-
-        pendingFocusReset?.cancel()
-        let workItem = DispatchWorkItem {
-            focusState = .mainContent(desiredIndex)
-        }
-        pendingFocusReset = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: workItem)
     }
 }

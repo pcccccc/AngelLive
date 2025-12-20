@@ -16,6 +16,7 @@ struct LiveCardView: View {
     @Environment(AppState.self) var appViewModel
     @State var index: Int
     var externalFocusState: FocusState<FocusableField?>.Binding?
+    var onMoveCommand: ((MoveCommandDirection) -> Void)? = nil
     @State var currentLiveModel: LiveModel?
     @State private var isLive: Bool = false
     @FocusState private var internalFocusState: FocusableField?
@@ -112,6 +113,10 @@ struct LiveCardView: View {
         }
         .buttonStyle(.card)
         .focused(externalFocusState ?? $internalFocusState, equals: .mainContent(index))
+        .onMoveCommand { direction in
+            print("LiveCardView onMoveCommand index=\(index) direction=\(direction)")
+            onMoveCommand?(direction)
+        }
         .onChange(of: currentFocusValue) { oldValue, newValue in
             handleFocusChange(newValue: newValue, liveModel: liveModel)
         }

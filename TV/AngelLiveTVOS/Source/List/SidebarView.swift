@@ -100,7 +100,7 @@ struct SidebarView: View {
                     .environment(liveViewModel)
                     .padding(.top, index == 0 ? 20 : 0)
                     .padding(.bottom, index == liveViewModel.categories.count - 1 ? 50 : 0)
-                    .padding(.trailing, 45)
+                    .padding(.horizontal, 45)
                 }
             }
         }

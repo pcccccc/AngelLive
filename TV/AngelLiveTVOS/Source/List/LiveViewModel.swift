@@ -24,7 +24,7 @@ enum LiveRoomListType {
 class LiveViewModel {
 
     // MARK: - Sidebar 相关常量和状态
-    let sidebarWidth: CGFloat = 300
+    let sidebarWidth: CGFloat = 320
     let sidebarPeekWidth: CGFloat = 50  // 收起时露出的宽度
     var isSidebarExpanded: Bool = false
 
@@ -103,11 +103,12 @@ class LiveViewModel {
     var lodingTimer: Timer?
 
     
-    init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: AppState) {
+    init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: AppState, shouldLoadData: Bool = true) {
         self.liveType = liveType
         self.roomListType = roomListType
         self.appViewModel = appViewModel
         menuTitleIcon = Common.getImage(liveType)
+        guard shouldLoadData else { return }
         switch roomListType {
             case .live:
                 Task {
@@ -119,7 +120,7 @@ class LiveViewModel {
                 getRoomList(index: 0)
             default:
                 break
-                
+
         }
     }
 
@@ -211,10 +212,25 @@ class LiveViewModel {
                 }
 
                 await MainActor.run {
+                    let mergedRooms: [LiveModel]
                     if self.roomPage == 1 {
-                        self.roomList = newRooms.removingDuplicates()
+                        mergedRooms = newRooms.removingDuplicates()
                     } else {
-                        self.roomList = self.roomList.appendingUnique(contentsOf: newRooms)
+                        mergedRooms = self.roomList.appendingUnique(contentsOf: newRooms)
+                    }
+                    if self.liveType == .douyin {
+                        if mergedRooms.isEmpty {
+                            self.roomList = []
+                        } else {
+                            var expandedRooms: [LiveModel] = []
+                            expandedRooms.reserveCapacity(120)
+                            while expandedRooms.count < 120 {
+                                expandedRooms.append(contentsOf: mergedRooms)
+                            }
+                            self.roomList = Array(expandedRooms.prefix(120))
+                        }
+                    } else {
+                        self.roomList = mergedRooms
                     }
                     self.isLoading = false
                 }
