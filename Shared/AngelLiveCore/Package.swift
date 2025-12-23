@@ -17,7 +17,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/pcccccc/LiveParse", from: "2.0.5"),
+        .package(url: "https://github.com/pcccccc/LiveParse", from: "2.0.6"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.10.2"),
         .package(url: "https://github.com/hyperoslo/Cache", from: "7.4.0")
     ],

@@ -309,7 +309,7 @@
 		FB7077D62EA1D6860059AFD9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AngelLive;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AngelLiveMacOS/AngelLiveMacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -357,7 +357,7 @@
 		FB7077D72EA1D6860059AFD9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AngelLive;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AngelLiveMacOS/AngelLiveMacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
