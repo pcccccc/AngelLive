@@ -87,8 +87,29 @@ struct DetailPlayerView: View {
                 // 模糊背景
                 backgroundView
 
+                // 主播已下播视图
+                if viewModel.displayState == .streamerOffline {
+                    VStack(spacing: 20) {
+                        Image(systemName: "tv.slash")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        Text("主播已下播")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                        Text(viewModel.currentRoom.userName)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        Button("返回") {
+                            dismiss()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, 10)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .zIndex(100)
+                }
                 // 错误视图 - 当播放出错时显示
-                if viewModel.playError != nil || viewModel.playErrorMessage != nil {
+                else if viewModel.playError != nil || viewModel.playErrorMessage != nil {
                     ErrorView.playback(
                         message: viewModel.playErrorMessage ?? "播放失败",
                         errorCode: nil,

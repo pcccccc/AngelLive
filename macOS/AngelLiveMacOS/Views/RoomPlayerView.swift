@@ -26,8 +26,49 @@ struct RoomPlayerView: View {
         @Bindable var viewModel = viewModel
         GeometryReader { geometry in
             ZStack {
+                // 主播已下播视图
+                if viewModel.displayState == .streamerOffline {
+                    VStack(spacing: 20) {
+                        Image(systemName: "tv.slash")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        Text("主播已下播")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                        Text(viewModel.currentRoom.userName)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                }
+                // 错误视图
+                else if viewModel.displayState == .error {
+                    VStack(spacing: 20) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 60))
+                            .foregroundColor(.orange)
+                        Text("播放失败")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                        if let errorMsg = viewModel.playErrorMessage {
+                            Text(errorMsg)
+                                .font(.subheadline)
+                                .foregroundColor(.gray)
+                        }
+                        Button("重试") {
+                            viewModel.displayState = .loading
+                            Task {
+                                await viewModel.refreshPlayback()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                }
                 // 播放器
-                if let url = viewModel.currentPlayURL {
+                else if let url = viewModel.currentPlayURL {
                     ZStack {
                         KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
                             .onAppear {

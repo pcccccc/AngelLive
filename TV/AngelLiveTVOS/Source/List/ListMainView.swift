@@ -210,15 +210,12 @@ struct ListMainView: View {
     private var listContainerView: some View {
         ZStack(alignment: .leading) {
             Group {
-            if shouldShowLoadingPlaceholder {
-                // roomList 为空时先展示加载态，避免“空列表一闪而过”
-                roomListView
-            } else if liveViewModel.roomList.isEmpty && showEmptyState {
-                // 已提示错误则不会走到这里，空态只在无错误且无加载时展示
-                emptyStateView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if liveViewModel.roomList.isEmpty && showEmptyState && !liveViewModel.isLoading {
+                    // 已确认为空态时才显示空态视图
+                    emptyStateView
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // 主内容区域
+                    // 其他情况都显示列表（包括加载中、有数据）
                     roomListView
                 }
             }

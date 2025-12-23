@@ -176,6 +176,7 @@ struct LiveCardView: View {
     private var placeholderImage: some View {
         Image("placeholder")
             .resizable()
+            .aspectRatio(contentMode: .fit)
             .frame(height: 210)
     }
 

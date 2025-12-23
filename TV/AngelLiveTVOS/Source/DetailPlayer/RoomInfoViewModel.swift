@@ -24,16 +24,24 @@ public class PlayerOptions: KSOptions, @unchecked Sendable {
   }
 }
 
+/// 播放器显示状态
+enum PlayerDisplayState {
+    case loading
+    case playing
+    case error
+    case streamerOffline  // 主播已下播
+}
+
 @Observable
 final class RoomInfoViewModel {
-    
+
     var appViewModel: AppState
-    
+
     var roomList: [LiveModel] = []
     var currentRoom: LiveModel
     var currentRoomIsLiked = false
     var currentRoomLikeLoading = false
-    
+
     let settingModel = SettingStore()
     var playerOption: PlayerOptions
     var currentRoomPlayArgs: [LiveQualityModel]?
@@ -44,12 +52,13 @@ final class RoomInfoViewModel {
     var isPlaying = false
     var douyuFirstLoad = true
     var yyFirstLoad = true
-    
+
     var isLoading = false
     var rotationAngle = 0.0
     var hasError = false
     var errorMessage = ""
     var currentError: Error? = nil
+    var displayState: PlayerDisplayState = .loading  // 播放器显示状态
 
     var debugTimerIsActive = false
     var dynamicInfo: DynamicInfo?
@@ -147,9 +156,9 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = currentQuality.qn
         
         if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = "HYSDK(Windows, \(20000308))"
+            self.playerOption.userAgent = "HYSDK(Windows,30000002)_APP(pc_exe&7030003&official)_SDK(trans&2.29.0.5493)"
             self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows, \(20000308))"
+                "user-agent": "HYSDK(Windows,30000002)_APP(pc_exe&7030003&official)_SDK(trans&2.29.0.5493)"
             ])
         }else {
             self.playerOption.userAgent = "libmpv"
@@ -433,9 +442,46 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
         if let error = error {
-            hasError = true
-            currentError = error
-            errorMessage = error.localizedDescription
+            let errorMsg = error.localizedDescription
+            // 检测流断开相关错误，可能是主播下播
+            if errorMsg.contains("avformat can't open input") || errorMsg.contains("timed out") || errorMsg.contains("Operation timed out") {
+                checkLiveStatusOnError(error: error)
+            } else {
+                hasError = true
+                currentError = error
+                errorMessage = errorMsg
+                displayState = .error
+            }
+        }
+    }
+
+    /// 播放器错误时检查直播状态
+    @MainActor
+    func checkLiveStatusOnError(error: Error) {
+        Task {
+            do {
+                let state = try await ApiManager.getCurrentRoomLiveState(
+                    roomId: currentRoom.roomId,
+                    userId: currentRoom.userId,
+                    liveType: currentRoom.liveType
+                )
+                if state == .close || state == .unknow {
+                    // 主播已下播
+                    displayState = .streamerOffline
+                } else {
+                    // 仍在直播但连接失败，显示错误
+                    hasError = true
+                    currentError = error
+                    errorMessage = error.localizedDescription
+                    displayState = .error
+                }
+            } catch {
+                // 检查状态失败，显示原始错误
+                hasError = true
+                currentError = error
+                errorMessage = error.localizedDescription
+                displayState = .error
+            }
         }
     }
     

@@ -21,6 +21,14 @@ public class PlayerOptions: KSOptions, @unchecked Sendable {
     }
 }
 
+/// 播放器显示状态
+enum PlayerDisplayState {
+    case loading
+    case playing
+    case error
+    case streamerOffline  // 主播已下播
+}
+
 @Observable
 final class RoomInfoViewModel {
     var currentRoom: LiveModel
@@ -28,6 +36,7 @@ final class RoomInfoViewModel {
     var isLoading = false
     var playError: Error?
     var playErrorMessage: String?
+    var displayState: PlayerDisplayState = .loading  // 播放器显示状态
     /// 防止并发/重复请求播放地址
     private var isFetchingPlayURL = false
     /// 是否已成功加载过当前房间的播放地址
@@ -163,9 +172,9 @@ final class RoomInfoViewModel {
 
         // 虎牙特殊处理
         if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = "HYSDK(Windows, \(20000308))"
+            self.playerOption.userAgent = "HYSDK(Windows,30000002)_APP(pc_exe&7030003&official)_SDK(trans&2.29.0.5493)"
             self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows, \(20000308))"
+                "user-agent": "HYSDK(Windows,30000002)_APP(pc_exe&7030003&official)_SDK(trans&2.29.0.5493)"
             ])
         } else {
             self.playerOption.userAgent = "libmpv"
@@ -552,10 +561,48 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-        // 播放完成回调
+        if let error = error {
+            let errorMsg = error.localizedDescription
+            // 检测流断开相关错误，可能是主播下播
+            if errorMsg.contains("avformat can't open input") || errorMsg.contains("timed out") || errorMsg.contains("Operation timed out") {
+                checkLiveStatusOnError(error: error)
+            } else {
+                playError = error
+                playErrorMessage = errorMsg
+                displayState = .error
+            }
+        }
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {
         // 缓冲回调
+    }
+
+    /// 播放器错误时检查直播状态
+    @MainActor
+    func checkLiveStatusOnError(error: Error) {
+        Task {
+            do {
+                let state = try await ApiManager.getCurrentRoomLiveState(
+                    roomId: currentRoom.roomId,
+                    userId: currentRoom.userId,
+                    liveType: currentRoom.liveType
+                )
+                if state == .close || state == .unknow {
+                    // 主播已下播
+                    displayState = .streamerOffline
+                } else {
+                    // 仍在直播但连接失败，显示错误
+                    playError = error
+                    playErrorMessage = error.localizedDescription
+                    displayState = .error
+                }
+            } catch {
+                // 检查状态失败，显示原始错误
+                playError = error
+                playErrorMessage = error.localizedDescription
+                displayState = .error
+            }
+        }
     }
 }
