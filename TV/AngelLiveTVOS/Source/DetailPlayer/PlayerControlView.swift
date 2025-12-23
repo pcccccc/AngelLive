@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TipKit
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -29,19 +30,26 @@ enum PlayControlTopField: Hashable {
 
 
 struct PlayerControlView: View {
-    
+
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
-    
+
     @State var sectionList: [LiveModel] = []
     @State var selectIndex = 0
 
     @FocusState var state: PlayControlFocusableField?
     @FocusState var topState: PlayControlTopField?
     @FocusState var showDanmuSetting: Bool
-    
+
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
-    
+
+    private let multiCameraTip = MultiCameraTip()
+
+    /// 是否有多机位（cdn数量大于1）
+    private var hasMultiCamera: Bool {
+        (roomInfoViewModel.currentRoomPlayArgs?.count ?? 0) > 1
+    }
+
     var body: some View {
         
         @Bindable var roomInfoModel = roomInfoViewModel
@@ -311,6 +319,15 @@ struct PlayerControlView: View {
                                 .focused($state, equals: .playQuality)
                                 .frame(height: 60)
                                 .clipShape(.capsule)
+                                .popoverTip(multiCameraTip, arrowEdge: .top) { _ in
+                                    // 点击 Tip 后关闭
+                                }
+                                .task {
+                                    // 只有多机位时才显示 Tip
+                                    if !hasMultiCamera {
+                                        multiCameraTip.invalidate(reason: .actionPerformed)
+                                    }
+                                }
 
                                 Text("")
                                     .frame(width: 15)

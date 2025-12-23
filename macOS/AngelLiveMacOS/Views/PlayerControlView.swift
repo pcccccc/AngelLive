@@ -58,6 +58,7 @@ struct PlayerControlView: View {
                     .frame(height: 44)  // 固定高度确保对齐
                     Spacer()
                 }
+                .environment(\.colorScheme, .dark)
 
                 // 右上角：画面平铺、画中画、设置按钮
                 VStack {
@@ -91,8 +92,10 @@ struct PlayerControlView: View {
                         .adaptiveGlassEffect()
                     }
                     .frame(height: 44)  // 固定高度与左侧对齐
+                    .environment(\.colorScheme, .dark)
                     Spacer()
                 }
+                .environment(\.colorScheme, .dark)
 
                 // 中间：播放/暂停大按钮（暂停时显示）
                 if !viewModel.isPlaying {
@@ -157,6 +160,7 @@ struct PlayerControlView: View {
                         Spacer()
                     }
                 }
+                .environment(\.colorScheme, .dark)
 
                 // 右下角：弹幕开关、清晰度设置
                 VStack {
@@ -207,7 +211,7 @@ struct PlayerControlView: View {
                                                 }
                                             }
                                         } label: {
-                                            Text("线路 \(cdnIndex + 1)")
+                                            Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
                                         }
                                     }
                                 } label: {
@@ -237,6 +241,7 @@ struct PlayerControlView: View {
                         .fixedSize(horizontal: true, vertical: true) // macOS 15: 避免过度拉伸导致宽度异常
                     }
                 }
+                .environment(\.colorScheme, .dark)
             }
             .padding()
             .environment(\.colorScheme, .dark)

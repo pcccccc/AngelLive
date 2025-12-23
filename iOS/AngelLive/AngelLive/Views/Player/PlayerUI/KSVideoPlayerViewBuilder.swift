@@ -402,7 +402,7 @@ public enum KSVideoPlayerViewBuilder {
                             }
                         }
                     } label: {
-                        Text("线路 \(cdnIndex + 1)")
+                        Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
                     }
                 }
             }
