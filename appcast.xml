@@ -6,8 +6,8 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
-            <title>Version 2.0.0</title>
-            <sparkle:version>10</sparkle:version>
+            <title>Version 2.0.0 (Build 11)</title>
+            <sparkle:version>11</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
             <description><![CDATA[
                 <h2>更新内容</h2>
@@ -15,12 +15,14 @@
                     <li>适配抖音多机位</li>
                     <li>优化快手解析，搜索实效问题</li>
                     <li>更换 Icon Composer 图标</li>
+                    <li>集成 Sparkle 自动更新</li>
+                    <li>关闭 App Sandbox 以支持更新安装</li>
                 </ul>
             ]]></description>
-            <pubDate>Tue, 24 Dec 2024 20:45:00 +0800</pubDate>
-            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.Ver10.dmg"
-                       sparkle:edSignature="Kp61GtA7lWwkDFQqMzdHPLkFhPlZJ/cPGH7HhLTix3Oh33YWj7Fmhvhf6jXtnSc6yhBA3IBW3kFwzk4alb+TCQ=="
-                       length="23097997"
+            <pubDate>Tue, 24 Dec 2024 21:30:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.arm64.Ver11.dmg"
+                       sparkle:edSignature="DswEVXDiTnYpJIUYKQ8wIQ/ObeuVv30ut8zUFuEiSj4By9+NT4NRy8AMy/W0haXkbFiI8D1i+ARmtkXOtRo2Bg=="
+                       length="23100535"
                        type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
         </item>
