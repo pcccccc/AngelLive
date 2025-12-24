@@ -7,5 +7,11 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/pcccccc/AngelLive/main/appcast.xml</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUPublicEDKey</key>
+	<string>8hoZllQiDUeF689sC3DSHWnFNQSCVhwW4MSIp7tNZy0=</string>
 </dict>
 </plist>

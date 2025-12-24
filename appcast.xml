@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Angel Live Updates</title>
+        <link>https://raw.githubusercontent.com/pcccccc/AngelLive/main/appcast.xml</link>
+        <description>Angel Live macOS 应用更新</description>
+        <language>zh-cn</language>
+        <item>
+            <title>Version 2.0.0</title>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>适配抖音多机位</li>
+                    <li>优化快手解析，搜索实效问题</li>
+                    <li>更换 Icon Composer 图标</li>
+                </ul>
+            ]]></description>
+            <pubDate>Tue, 24 Dec 2024 20:45:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.Ver10.dmg"
+                       sparkle:edSignature="Kp61GtA7lWwkDFQqMzdHPLkFhPlZJ/cPGH7HhLTix3Oh33YWj7Fmhvhf6jXtnSc6yhBA3IBW3kFwzk4alb+TCQ=="
+                       length="23097997"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+    </channel>
+</rss>

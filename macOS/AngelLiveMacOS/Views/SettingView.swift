@@ -11,6 +11,7 @@ import AngelLiveCore
 
 struct SettingView: View {
     @AppStorage("SimpleLive.Setting.BilibiliCookie") private var bilibiliCookie = ""
+    @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     @State private var danmuModel = DanmuSettingModel()
     @State private var showBilibiliLogin = false
     @State private var showOpenSourceList = false
@@ -73,6 +74,20 @@ struct SettingView: View {
             }
 
             Section("关于") {
+                Button {
+                    updaterViewModel.checkForUpdates()
+                } label: {
+                    HStack {
+                        Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(!updaterViewModel.canCheckForUpdates)
+
                 Button {
                     showOpenSourceList = true
                 } label: {
@@ -154,4 +169,5 @@ struct SettingView: View {
 
 #Preview {
     SettingView()
+        .environmentObject(UpdaterViewModel())
 }

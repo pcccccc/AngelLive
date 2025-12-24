@@ -11,6 +11,7 @@
 		FBE22D682EE027C300866D4B /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FBE22D672EE027C300866D4B /* Package.resolved */; };
 		FBF74A742EA1F9A400591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A732EA1F9A400591EEA /* AngelLiveCore */; };
 		FBF74A762EA1F9A400591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */; };
+		FBSPARKLE12EE8A0000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FBSPARKLE12EE8A0000000002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +46,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FBSPARKLE12EE8A0000000001 /* Sparkle in Frameworks */,
 				FBF74A742EA1F9A400591EEA /* AngelLiveCore in Frameworks */,
 				FBF74A762EA1F9A400591EEA /* AngelLiveDependencies in Frameworks */,
 			);
@@ -102,6 +104,7 @@
 			packageProductDependencies = (
 				FBF74A732EA1F9A400591EEA /* AngelLiveCore */,
 				FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */,
+				FBSPARKLE12EE8A0000000002 /* Sparkle */,
 			);
 			productName = AngelLiveMacOS;
 			productReference = FB7077CA2EA1D6820059AFD9 /* Angel Live.app */;
@@ -132,6 +135,7 @@
 			mainGroup = FB7077C12EA1D6820059AFD9;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				FBSPARKLE12EE8A0000000003 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FB7077CB2EA1D6820059AFD9 /* Products */;
@@ -314,7 +318,7 @@
 				CODE_SIGN_ENTITLEMENTS = AngelLiveMacOS/AngelLiveMacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -362,7 +366,7 @@
 				CODE_SIGN_ENTITLEMENTS = AngelLiveMacOS/AngelLiveMacOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -434,7 +438,23 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = AngelLiveDependencies;
 		};
+		FBSPARKLE12EE8A0000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FBSPARKLE12EE8A0000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 /* End XCSwiftPackageProductDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		FBSPARKLE12EE8A0000000003 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = FB7077C22EA1D6820059AFD9 /* Project object */;
 }
