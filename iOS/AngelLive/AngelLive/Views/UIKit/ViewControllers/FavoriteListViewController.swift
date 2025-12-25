@@ -381,6 +381,9 @@ extension FavoriteListViewController: UICollectionViewDataSource {
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        guard section >= 0, section < filteredSections.count else {
+            return 0
+        }
         return filteredSections[section].roomList.count
     }
 
@@ -389,7 +392,14 @@ extension FavoriteListViewController: UICollectionViewDataSource {
             return UICollectionViewCell()
         }
 
-        let room = filteredSections[indexPath.section].roomList[indexPath.item]
+        guard indexPath.section < filteredSections.count else {
+            return cell
+        }
+        let rooms = filteredSections[indexPath.section].roomList
+        guard indexPath.item < rooms.count else {
+            return cell
+        }
+        let room = rooms[indexPath.item]
         cell.configure(with: room, navigationState: navigationState, namespace: namespace)
 
         return cell
@@ -401,6 +411,9 @@ extension FavoriteListViewController: UICollectionViewDataSource {
             return UICollectionReusableView()
         }
 
+        guard indexPath.section < filteredSections.count else {
+            return header
+        }
         let section = filteredSections[indexPath.section]
         header.configure(title: section.title, count: section.roomList.count)
 
