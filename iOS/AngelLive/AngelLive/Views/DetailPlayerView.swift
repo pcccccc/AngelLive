@@ -14,6 +14,7 @@ struct DetailPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(HistoryModel.self) private var historyModel
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
@@ -173,13 +174,6 @@ struct DetailPlayerView: View {
                         }
                     }
 
-                    // 返回按钮
-                    if showInfoPanel {
-                        backButton
-                            .padding(.top, 8)
-                            .padding(.leading, 8)
-                            .zIndex(10)
-                    }
                 }
             }
         }
@@ -188,6 +182,10 @@ struct DetailPlayerView: View {
         .task {
             await viewModel.loadPlayURL()
         }
+        .onAppear {
+            // 添加观看历史记录
+            historyModel.addHistory(room: viewModel.currentRoom)
+        }
         .onDisappear {
             viewModel.disconnectSocket()
             // iPhone 返回时强制竖屏
@@ -195,7 +193,7 @@ struct DetailPlayerView: View {
                 // 设置支持的方向为竖屏
                 KSOptions.supportedInterfaceOrientations = .portrait
 
-                guard let windowScene = UIApplication.shared.connectedScenes
+                    guard let windowScene = UIApplication.shared.connectedScenes
                     .compactMap({ $0 as? UIWindowScene })
                     .first else {
                     return
@@ -284,8 +282,8 @@ struct DetailPlayerView: View {
 
             // 更多功能按钮（右下角）
             MoreActionsButton(
-                onClearChat: clearChat,
-                onDismiss: { dismiss() }
+                room: viewModel.currentRoom,
+                onClearChat: clearChat
             )
             .padding(.trailing, 16)
             .padding(.bottom, 16)
@@ -313,31 +311,6 @@ struct DetailPlayerView: View {
                 scrollToBottom(proxy: proxy)
             }
         }
-    }
-
-    // MARK: - 返回按钮
-
-    private var backButton: some View {
-        Button(action: {
-            dismiss()
-        }) {
-            Image(systemName: "chevron.left")
-                .font(.title3)
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                )
-                .shadow(
-                    color: .black.opacity(0.2),
-                    radius: 4,
-                    x: 0,
-                    y: 2
-                )
-        }
-        .padding(.top, 8)
-        .padding(.leading, 16)
     }
 
     // MARK: - Helper Methods

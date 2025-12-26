@@ -8,11 +8,17 @@
 import SwiftUI
 import AngelLiveDependencies
 
+enum HistoryFocusField: Hashable {
+    case clearButton
+    case card(Int)
+}
+
 struct HistoryListView: View {
 
     var appViewModel: AppState
-    @FocusState var focusState: FocusableField?
+    @FocusState var focusState: HistoryFocusField?
     var liveViewModel: LiveViewModel?
+    @State private var showClearAlert = false
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
@@ -21,8 +27,22 @@ struct HistoryListView: View {
 
     var body: some View {
         VStack {
-            Text("历史记录")
-                .font(.title2)
+            HStack {
+                Text("历史记录")
+                    .font(.title2)
+
+                Spacer()
+
+                if !appViewModel.historyViewModel.watchList.isEmpty {
+                    Button(action: { showClearAlert = true }) {
+                        Label("清空全部", systemImage: "trash")
+                            .font(.caption)
+                    }
+                    .focused($focusState, equals: .clearButton)
+                }
+            }
+            .padding(.horizontal, 50)
+            .focusSection()
 
             if appViewModel.historyViewModel.watchList.isEmpty {
                 Spacer()
@@ -59,6 +79,7 @@ struct HistoryListView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .safeAreaPadding(.top, 30)
+                    .focusSection()
                 }
             }
         }
@@ -69,5 +90,13 @@ struct HistoryListView: View {
         }
         .onPlayPauseCommand(perform: {
         })
+        .alert("清空历史记录", isPresented: $showClearAlert) {
+            Button("取消", role: .cancel) { }
+            Button("清空", role: .destructive) {
+                appViewModel.historyViewModel.clearAll()
+            }
+        } message: {
+            Text("确定要清空所有观看记录吗？此操作不可恢复。")
+        }
     }
 }

@@ -2,7 +2,7 @@
 //  HistoryListView.swift
 //  AngelLive
 //
-//  Created by pangchong on 10/17/25.
+//  历史记录列表 - 使用 UICollectionView 实现
 //
 
 import SwiftUI
@@ -10,52 +10,21 @@ import AngelLiveCore
 import AngelLiveDependencies
 
 struct HistoryListView: View {
-    @State private var historyModel = HistoryModel()
+    @Environment(HistoryModel.self) private var historyModel
     @State private var showClearAlert = false
-    @State private var selectedRoom: LiveModel?
-    @State private var showDeleteAlert = false
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 160), spacing: AppConstants.Spacing.md)
-    ]
+    /// 共享导航状态 - 在 PiP 背景/前台切换时保持稳定
+    @State private var navigationState = LiveRoomNavigationState()
+    /// 共享命名空间 - 用于 zoom 过渡动画
+    @Namespace private var roomTransitionNamespace
 
     var body: some View {
-        ZStack {
-            if historyModel.watchList.isEmpty {
-                // 空状态视图
-                VStack(spacing: AppConstants.Spacing.lg) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 60))
-                        .foregroundStyle(AppConstants.Colors.secondaryText.opacity(0.5))
-
-                    Text("暂无观看记录")
-                        .font(.title3)
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-
-                    Text("开始观看直播后会显示在这里")
-                        .font(.caption)
-                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: AppConstants.Spacing.lg) {
-                        ForEach(historyModel.watchList, id: \.roomId) { room in
-                            LiveRoomCard(room: room)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        selectedRoom = room
-                                        showDeleteAlert = true
-                                    } label: {
-                                        Label("删除此记录", systemImage: "trash")
-                                    }
-                                }
-                        }
-                    }
-                    .padding()
-                }
-                .scrollContentBackground(.hidden)
-            }
+        HistoryListViewControllerWrapper(
+            navigationState: navigationState,
+            namespace: roomTransitionNamespace
+        )
+        .fullScreenCover(isPresented: playerPresentedBinding) {
+            playerDestination
         }
         .navigationTitle("历史记录")
         .navigationBarTitleDisplayMode(.inline)
@@ -79,20 +48,41 @@ struct HistoryListView: View {
         } message: {
             Text("确定要清空所有观看记录吗？此操作不可恢复。")
         }
-        .alert("删除记录", isPresented: $showDeleteAlert) {
-            Button("取消", role: .cancel) {
-                selectedRoom = nil
-            }
-            Button("删除", role: .destructive) {
-                if let room = selectedRoom {
-                    historyModel.removeHistory(room: room)
-                    selectedRoom = nil
-                }
-            }
-        } message: {
-            if let room = selectedRoom {
-                Text("确定要删除 \(room.userName) 的观看记录吗？")
-            }
+    }
+
+    private var playerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { navigationState.showPlayer },
+            set: { navigationState.showPlayer = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var playerDestination: some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
+                .toolbar(.hidden, for: .tabBar)
         }
+    }
+}
+
+// MARK: - UIKit Wrapper
+
+struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
+    @Environment(HistoryModel.self) private var historyModel
+    let navigationState: LiveRoomNavigationState
+    let namespace: Namespace.ID
+
+    func makeUIViewController(context: Context) -> HistoryListViewController {
+        return HistoryListViewController(
+            historyModel: historyModel,
+            navigationState: navigationState,
+            namespace: namespace
+        )
+    }
+
+    func updateUIViewController(_ uiViewController: HistoryListViewController, context: Context) {
+        uiViewController.reloadData()
     }
 }

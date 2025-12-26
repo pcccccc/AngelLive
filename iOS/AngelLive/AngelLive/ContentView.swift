@@ -29,6 +29,7 @@ struct ContentView: View {
     @State private var platformViewModel = PlatformViewModel()
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var searchViewModel = SearchViewModel()
+    @State private var historyViewModel = HistoryModel()
 
     // 触觉反馈生成器
     private let hapticFeedback = UISelectionFeedbackGenerator()
@@ -54,6 +55,7 @@ struct ContentView: View {
         .environment(platformViewModel)
         .environment(favoriteViewModel)
         .environment(searchViewModel)
+        .environment(historyViewModel)
         .onChange(of: selectedTab) { _, newValue in
             hapticFeedback.selectionChanged()
             if case .platform(let platform) = newValue, platform.liveType == .youtube {

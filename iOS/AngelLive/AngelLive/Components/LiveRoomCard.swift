@@ -12,6 +12,8 @@ import AngelLiveDependencies
 struct LiveRoomCard: View {
     let room: LiveModel
     let skipLiveCheck: Bool
+    /// 可选的删除回调（用于历史记录）
+    var onDelete: (() -> Void)? = nil
     @State private var isPressed = false
     /// 本地导航状态 - 仅在没有外部导航状态时使用
     @State private var localShowPlayer = false
@@ -82,57 +84,33 @@ struct LiveRoomCard: View {
 
     var body: some View {
         Group {
-            if AppConstants.Device.isIPad {
-                // iPad: 使用 fullScreenCover
-                Button {
-                    if skipLiveCheck || isLive {
-                        showPlayerBinding.wrappedValue = true
-                    } else {
-                        let toast = ToastValue(
-                            icon: Image(systemName: "tv.slash"),
-                            message: "主播已下播"
-                        )
-                        presentToast(toast)
-                    }
-                } label: {
-                    cardContent
+            let baseButton = Button {
+                if skipLiveCheck || isLive {
+                    showPlayerBinding.wrappedValue = true
+                } else {
+                    let toast = ToastValue(
+                        icon: Image(systemName: "tv.slash"),
+                        message: "主播已下播"
+                    )
+                    presentToast(toast)
                 }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    favoriteContextMenu
-                }
-                .fullScreenCover(isPresented: showPlayerBinding) {
-                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                        .toolbar(.hidden, for: .tabBar)
-                }
+            } label: {
+                cardContent
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                favoriteContextMenu
+            }
+
+            if useExternalNavigation {
+                baseButton
             } else {
-                // iPhone: 使用 NavigationLink
-                Button {
-                    if skipLiveCheck || isLive {
-                        showPlayerBinding.wrappedValue = true
-                    } else {
-                        let toast = ToastValue(
-                            icon: Image(systemName: "tv.slash"),
-                            message: "主播已下播"
-                        )
-                        presentToast(toast)
+                baseButton
+                    .fullScreenCover(isPresented: showPlayerBinding) {
+                        DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                            .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                            .toolbar(.hidden, for: .tabBar)
                     }
-                } label: {
-                    cardContent
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    favoriteContextMenu
-                }
-                // 仅在使用本地导航时添加 navigationDestination
-                // 使用外部导航时，由父视图处理
-                .modifier(ConditionalNavigationDestination(
-                    isPresented: showPlayerBinding,
-                    useExternalNavigation: useExternalNavigation,
-                    room: room,
-                    namespace: namespace
-                ))
             }
         }
     }
@@ -258,6 +236,15 @@ struct LiveRoomCard: View {
                 Label("收藏", systemImage: "heart.fill")
             }
         }
+
+        // 删除历史记录选项（仅在提供 onDelete 回调时显示）
+        if let onDelete = onDelete {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("删除记录", systemImage: "trash")
+            }
+        }
     }
 
     @MainActor
@@ -301,32 +288,6 @@ struct LiveRoomCard: View {
             )
             presentToast(toast)
             print("取消收藏失败: \(error)")
-        }
-    }
-}
-
-// MARK: - 条件导航目的地修饰符
-
-/// 条件性添加 navigationDestination，仅在不使用外部导航时添加
-private struct ConditionalNavigationDestination: ViewModifier {
-    @Binding var isPresented: Bool
-    let useExternalNavigation: Bool
-    let room: LiveModel
-    let namespace: Namespace.ID
-
-    func body(content: Content) -> some View {
-        if useExternalNavigation {
-            // 使用外部导航时，不添加 navigationDestination
-            // 由父视图处理导航
-            content
-        } else {
-            // 使用本地导航时，添加 navigationDestination
-            content
-                .navigationDestination(isPresented: $isPresented) {
-                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                        .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
-                        .toolbar(.hidden, for: .tabBar)
-                }
         }
     }
 }
