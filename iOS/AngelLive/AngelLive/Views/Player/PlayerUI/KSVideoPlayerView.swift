@@ -119,11 +119,12 @@ public struct KSVideoPlayerView: View {
                     }
                 }
 
+                // 手势层（亮度、音量、双击全屏）
+                PlayerGestureView(onSingleTap: {
+                    model.config.isMaskShow.toggle()
+                }, isLocked: $model.isLocked)
+
                 controllerView
-            }
-            // 要放在这里才可以生效
-            .onTapGesture {
-                model.config.isMaskShow.toggle()
             }
             .tint(.white)
             .persistentSystemOverlays(.hidden)
@@ -261,6 +262,10 @@ public class KSVideoPlayerModel: ObservableObject {
 
     @Published
     var showVideoSetting = false
+
+    /// 锁定状态 - 锁定后禁用所有手势和控制按钮
+    @Published
+    var isLocked = false
     private var cancellables = Set<AnyCancellable>()
     @MainActor
     public init(title: String, config: KSVideoPlayer.Coordinator, options: KSOptions, url: URL? = nil) {

@@ -128,8 +128,17 @@ struct ContentView: View {
                 SettingView()
             }
 
-            Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
-                SearchView()
+            // iOS 26+ 支持 search role，iOS 18 需要普通 Tab
+            if #available(iOS 26.0, *) {
+                Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
+                    SearchView()
+                }
+            } else {
+                Tab(value: TabSelection.search) {
+                    SearchView()
+                } label: {
+                    Label("搜索", systemImage: "magnifyingglass")
+                }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
@@ -183,8 +192,11 @@ struct ContentView: View {
                     SettingView()
                 }
 
-                Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
+                // iOS 18 不支持 search role
+                Tab(value: TabSelection.search) {
                     SearchView()
+                } label: {
+                    Label("搜索", systemImage: "magnifyingglass")
                 }
             }
         }

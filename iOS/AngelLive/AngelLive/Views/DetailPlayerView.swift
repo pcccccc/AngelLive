@@ -190,6 +190,29 @@ struct DetailPlayerView: View {
         }
         .onDisappear {
             viewModel.disconnectSocket()
+            // iPhone 返回时强制竖屏
+            if !AppConstants.Device.isIPad {
+                // 设置支持的方向为竖屏
+                KSOptions.supportedInterfaceOrientations = .portrait
+
+                guard let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first else {
+                    return
+                }
+
+                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: .portrait
+                )
+
+                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                    print("❌ 强制竖屏失败: \(error)")
+                }
+
+                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            }
         }
     }
 

@@ -313,15 +313,15 @@ struct PlayerControlView: View {
                                             .font(.system(size: 30, weight: .bold))
                                             .frame(height: 50, alignment: .center)
                                             .padding(.top, 10)
-                                            .foregroundStyle(.white)
+                                             .foregroundStyle(.white)
                                     }
                                 }
                                 .focused($state, equals: .playQuality)
                                 .frame(height: 60)
                                 .clipShape(.capsule)
-                                .popoverTip(multiCameraTip, arrowEdge: .top) { _ in
-                                    // 点击 Tip 后关闭
-                                }
+//                                .popoverTip(multiCameraTip, arrowEdge: .top) { _ in
+//                                    // 点击 Tip 后关闭
+//                                }
                                 .task {
                                     // 只有多机位时才显示 Tip
                                     if !hasMultiCamera {

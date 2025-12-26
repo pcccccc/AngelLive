@@ -103,10 +103,35 @@ struct VideoControllerView: View {
             VerticalLiveControllerView(model: model)
         } else {
             ZStack {
+
                 // 控制按钮层（带 padding）
                 ZStack {
-                    // 左上角：返回按钮（横屏或 iPad 全屏时显示）
-                    if isLandscape || isIPadFullscreen.wrappedValue {
+                    // 左侧中间：锁定按钮（始终显示）
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    model.isLocked.toggle()
+                                }
+                            } label: {
+                                Image(systemName: model.isLocked ? "lock.fill" : "lock.open")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 40, height: 40)
+                                    .adaptiveCircleGlassEffect()
+                            }
+                            .ksBorderlessButton()
+                            // 横屏时增加左侧内边距避开刘海
+                            .padding(.leading, isLandscape ? 30 : 0)
+                            Spacer()
+                        }
+                        Spacer()
+                    }
+                    .transition(.opacity)
+
+                    // 左上角：返回按钮（横屏或 iPad 全屏时显示，锁定时隐藏）
+                    if (isLandscape || isIPadFullscreen.wrappedValue) && !model.isLocked {
                         VStack {
                             HStack {
                                 Button {
@@ -125,78 +150,84 @@ struct VideoControllerView: View {
                         .transition(.opacity)
                     }
 
-                    // 右上角：投屏、画面平铺、画中画、设置按钮
-                    VStack {
-                        HStack {
-                            Spacer()
-                            HStack(spacing: 16) {
-                                // AirPlay 和画面平铺仅在横屏/全屏时显示
-                                if isLandscape || isIPadFullscreen.wrappedValue {
-                                    if model.config.playerLayer?.player.allowsExternalPlayback == true {
-                                        AirPlayView()
-                                            .frame(width: 30, height: 30)
+                    // 右上角：投屏、画面平铺、画中画、设置按钮（锁定时隐藏）
+                    if !model.isLocked {
+                        VStack {
+                            HStack {
+                                Spacer()
+                                HStack(spacing: 16) {
+                                    // AirPlay 和画面平铺仅在横屏/全屏时显示
+                                    if isLandscape || isIPadFullscreen.wrappedValue {
+                                        if model.config.playerLayer?.player.allowsExternalPlayback == true {
+                                            AirPlayView()
+                                                .frame(width: 30, height: 30)
+                                        }
+                                        KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
                                     }
-                                    KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
+                                    KSVideoPlayerViewBuilder.pipButton(config: model.config)
+                                    SettingsButton(
+                                        showVideoSetting: $model.showVideoSetting,
+                                        showDanmakuSettings: $showDanmakuSettings
+                                    )
                                 }
-                                KSVideoPlayerViewBuilder.pipButton(config: model.config)
-                                SettingsButton(
-                                    showVideoSetting: $model.showVideoSetting,
-                                    showDanmakuSettings: $showDanmakuSettings
-                                )
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .adaptiveGlassEffect()
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .adaptiveGlassEffect()
+                            Spacer()
                         }
-                        Spacer()
                     }
 
-                    // 中间：播放/暂停按钮（播放时隐藏）
-                    if !viewModel.isPlaying {
+                    // 中间：播放/暂停按钮（播放时隐藏，锁定时隐藏）
+                    if !viewModel.isPlaying && !model.isLocked {
                         KSVideoPlayerViewBuilder.playButton(config: model.config, isPlaying: viewModel.isPlaying)
                     }
 
-                    // 左下角：播放/暂停、刷新按钮
-                    VStack {
-                        Spacer()
-                        HStack {
-                            HStack(spacing: 16) {
-                                KSVideoPlayerViewBuilder.playButton(config: model.config, isToolbar: true, isPlaying: viewModel.isPlaying)
-                                KSVideoPlayerViewBuilder.refreshButton(isLoading: viewModel.isLoading) {
-                                    viewModel.refreshPlayback()
-                                }
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .adaptiveGlassEffect()
+                    // 左下角：播放/暂停、刷新按钮（锁定时隐藏）
+                    if !model.isLocked {
+                        VStack {
                             Spacer()
+                            HStack {
+                                HStack(spacing: 16) {
+                                    KSVideoPlayerViewBuilder.playButton(config: model.config, isToolbar: true, isPlaying: viewModel.isPlaying)
+                                    KSVideoPlayerViewBuilder.refreshButton(isLoading: viewModel.isLoading) {
+                                        viewModel.refreshPlayback()
+                                    }
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .adaptiveGlassEffect()
+                                Spacer()
+                            }
                         }
                     }
 
-                    // 右下角：弹幕开关、清晰度设置、竖屏按钮（可选）、全屏按钮
-                    VStack {
-                        Spacer()
-                        HStack {
+                    // 右下角：弹幕开关、清晰度设置、竖屏按钮（可选）、全屏按钮（锁定时隐藏）
+                    if !model.isLocked {
+                        VStack {
                             Spacer()
-                            HStack(spacing: 16) {
-                                // 弹幕开关按钮
-                                KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.danmuSettings.showDanmu)
+                            HStack {
+                                Spacer()
+                                HStack(spacing: 16) {
+                                    // 弹幕开关按钮
+                                    KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.danmuSettings.showDanmu)
 
-                                // 清晰度设置菜单
-                                KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel)
+                                    // 清晰度设置菜单
+                                    KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel)
 
-                                // 竖屏按钮（仅在视频为竖屏时显示）
-                                if let naturalSize = model.config.playerLayer?.player.naturalSize,
-                                   !naturalSize.isHorizonal {
-                                    KSVideoPlayerViewBuilder.portraitButton
+                                    // 竖屏按钮（仅在视频为竖屏时显示）
+                                    if let naturalSize = model.config.playerLayer?.player.naturalSize,
+                                       !naturalSize.isHorizonal {
+                                        KSVideoPlayerViewBuilder.portraitButton
+                                    }
+
+                                    // 全屏按钮
+                                    KSVideoPlayerViewBuilder.landscapeButton(isIPadFullscreen: isIPadFullscreen)
                                 }
-
-                                // 全屏按钮
-                                KSVideoPlayerViewBuilder.landscapeButton(isIPadFullscreen: isIPadFullscreen)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .adaptiveGlassEffect()
                             }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .adaptiveGlassEffect()
                         }
                     }
                 }
@@ -443,9 +474,18 @@ private extension View {
     @ViewBuilder
     func adaptiveGlassEffect() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(in: .capsule)
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .capsule)
         } else {
             self.background(.ultraThinMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder
+    func adaptiveCircleGlassEffect() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .circle)
+        } else {
+            self.background(.ultraThinMaterial, in: Circle())
         }
     }
 }

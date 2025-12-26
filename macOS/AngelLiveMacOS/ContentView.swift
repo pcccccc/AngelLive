@@ -79,8 +79,17 @@ struct ContentView: View {
                             }
                         }
 
-                        Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
-                            SearchView()
+                        // macOS 26+ 支持 search role，macOS 15 需要普通 Tab
+                        if #available(macOS 26.0, *) {
+                            Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
+                                SearchView()
+                            }
+                        } else {
+                            Tab(value: TabSelection.search) {
+                                SearchView()
+                            } label: {
+                                Label("搜索", systemImage: "magnifyingglass")
+                            }
                         }
 
                         Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {

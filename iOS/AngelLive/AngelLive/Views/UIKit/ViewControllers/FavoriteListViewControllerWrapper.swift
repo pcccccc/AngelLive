@@ -26,6 +26,7 @@ struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: FavoriteListViewController, context: Context) {
         uiViewController.updateSearchText(searchText)
+        // 当 viewModel 数据变化时（如 isLoading、groupedRoomList 变化），需要刷新
         uiViewController.reloadData()
     }
 }

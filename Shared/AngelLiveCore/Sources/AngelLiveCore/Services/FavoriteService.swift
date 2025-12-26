@@ -65,15 +65,23 @@ public final class FavoriteService: NSObject {
         // 使用新的 API
         let recordArray = try await database.records(matching: query, resultsLimit: 99999)
         var temp: Array<LiveModel> = []
+        var seenRoomIds: Set<String> = []  // 用于去重
         for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
+            let roomId = record.value(forKey: CloudFavoriteFields.roomId) as? String ?? ""
+            let liveType = LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") ?? .bilibili
+            // 使用 roomId + liveType 组合作为唯一标识，避免重复
+            let uniqueKey = "\(liveType.rawValue)_\(roomId)"
+            guard !seenRoomIds.contains(uniqueKey) else { continue }
+            seenRoomIds.insert(uniqueKey)
+
             temp.append(LiveModel(userName: record.value(forKey: CloudFavoriteFields.userName) as? String ?? "",
                                   roomTitle: record.value(forKey: CloudFavoriteFields.roomTitle) as? String ?? "",
                                   roomCover: record.value(forKey: CloudFavoriteFields.roomCover) as? String ?? "",
                                   userHeadImg: record.value(forKey: CloudFavoriteFields.userHeadImage) as? String ?? "",
-                                  liveType: LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") ?? .bilibili,
+                                  liveType: liveType,
                                   liveState: record.value(forKey: CloudFavoriteFields.liveState) as? String ?? "",
                                   userId: record.value(forKey: CloudFavoriteFields.userId) as? String ?? "",
-                                  roomId: record.value(forKey: CloudFavoriteFields.roomId) as? String ?? "",
+                                  roomId: roomId,
                                   liveWatchedCount: nil))
         }
         return temp

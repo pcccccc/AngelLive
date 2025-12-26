@@ -149,86 +149,84 @@ public final class AppFavoriteModel {
         }
     }
 
+    @MainActor
     public func addFavorite(room: LiveModel) async throws {
         try await FavoriteService.saveRecord(liveModel: room)
-        await MainActor.run {
-            // 查找第一个非直播状态的房间位置
-            var favIndex = -1
-            for (index, favoriteRoom) in roomList.enumerated() {
-                if LiveState(rawValue: favoriteRoom.liveState ?? "3") != .live {
-                    favIndex = index
+        // 查找第一个非直播状态的房间位置
+        var favIndex = -1
+        for (index, favoriteRoom) in roomList.enumerated() {
+            if LiveState(rawValue: favoriteRoom.liveState ?? "3") != .live {
+                favIndex = index
+                break
+            }
+        }
+
+        // 插入到合适的位置
+        if favIndex != -1 {
+            roomList.insert(room, at: favIndex)
+        } else {
+            // 如果所有房间都在直播，则添加到末尾
+            roomList.append(room)
+        }
+
+        // 更新分组列表
+        if AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) == .section {
+            // 按平台分组
+            var found = false
+            for (index, model) in groupedRoomList.enumerated() {
+                if model.type == room.liveType {
+                    groupedRoomList[index].roomList.append(room)
+                    found = true
                     break
                 }
             }
-
-            // 插入到合适的位置
-            if favIndex != -1 {
-                roomList.insert(room, at: favIndex)
-            } else {
-                // 如果所有房间都在直播，则添加到末尾
-                roomList.append(room)
+            // 如果没有找到对应平台的分组，创建新分组
+            if !found {
+                let newSection = FavoriteLiveSectionModel()
+                newSection.roomList = [room]
+                newSection.title = LiveParseTools.getLivePlatformName(room.liveType)
+                newSection.type = room.liveType
+                groupedRoomList.append(newSection)
             }
-
-            // 更新分组列表
-            if AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) == .section {
-                // 按平台分组
-                var found = false
-                for (index, model) in groupedRoomList.enumerated() {
-                    if model.type == room.liveType {
-                        groupedRoomList[index].roomList.append(room)
-                        found = true
-                        break
-                    }
+        } else {
+            // 按直播状态分组
+            var found = false
+            for (index, model) in groupedRoomList.enumerated() {
+                if model.title == room.liveStateFormat() {
+                    groupedRoomList[index].roomList.append(room)
+                    found = true
+                    break
                 }
-                // 如果没有找到对应平台的分组，创建新分组
-                if !found {
-                    let newSection = FavoriteLiveSectionModel()
-                    newSection.roomList = [room]
-                    newSection.title = LiveParseTools.getLivePlatformName(room.liveType)
-                    newSection.type = room.liveType
-                    groupedRoomList.append(newSection)
-                }
-            } else {
-                // 按直播状态分组
-                var found = false
-                for (index, model) in groupedRoomList.enumerated() {
-                    if model.title == room.liveStateFormat() {
-                        groupedRoomList[index].roomList.append(room)
-                        found = true
-                        break
-                    }
-                }
-                // 如果没有找到对应状态的分组，创建新分组
-                if !found {
-                    let newSection = FavoriteLiveSectionModel()
-                    newSection.roomList = [room]
-                    newSection.title = room.liveStateFormat()
-                    newSection.type = room.liveType
-                    groupedRoomList.append(newSection)
-                }
+            }
+            // 如果没有找到对应状态的分组，创建新分组
+            if !found {
+                let newSection = FavoriteLiveSectionModel()
+                newSection.roomList = [room]
+                newSection.title = room.liveStateFormat()
+                newSection.type = room.liveType
+                groupedRoomList.append(newSection)
             }
         }
     }
 
+    @MainActor
     public func removeFavoriteRoom(room: LiveModel) async throws {
         try await FavoriteService.deleteRecord(liveModel: room)
-        await MainActor.run {
-            // 从 roomList 中删除
-            if let index = roomList.firstIndex(where: { $0.roomId == room.roomId }) {
-                roomList.remove(at: index)
-            }
+        // 从 roomList 中删除
+        if let index = roomList.firstIndex(where: { $0.roomId == room.roomId }) {
+            roomList.remove(at: index)
+        }
 
-            // 从 groupedRoomList 中删除
-            for (sectionIndex, section) in groupedRoomList.enumerated() {
-                if let roomIndex = section.roomList.firstIndex(where: { $0.roomId == room.roomId }) {
-                    groupedRoomList[sectionIndex].roomList.remove(at: roomIndex)
+        // 从 groupedRoomList 中删除
+        for (sectionIndex, section) in groupedRoomList.enumerated() {
+            if let roomIndex = section.roomList.firstIndex(where: { $0.roomId == room.roomId }) {
+                groupedRoomList[sectionIndex].roomList.remove(at: roomIndex)
 
-                    // 如果该分组已经空了，删除整个分组
-                    if groupedRoomList[sectionIndex].roomList.isEmpty {
-                        groupedRoomList.remove(at: sectionIndex)
-                    }
-                    break
+                // 如果该分组已经空了，删除整个分组
+                if groupedRoomList[sectionIndex].roomList.isEmpty {
+                    groupedRoomList.remove(at: sectionIndex)
                 }
+                break
             }
         }
     }

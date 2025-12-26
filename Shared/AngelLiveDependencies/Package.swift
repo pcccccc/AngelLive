@@ -39,7 +39,8 @@ let package = Package(
         .package(url: "https://github.com/gunterhager/UDPBroadcastConnection", from: "5.0.5"),
         .package(url: "https://github.com/sunghyun-k/swiftui-toasts", from: "1.1.1"),
         .package(url: "https://github.com/sunghyun-k/swiftui-window-overlay.git", from: "1.0.2"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.1")
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.1"),
+        .package(url: "https://github.com/siteline/SwiftUI-Introspect", from: "1.3.0")
     ],
     targets: [
         .target(
@@ -73,7 +74,8 @@ let package = Package(
                 .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS])),
                 // 只在 tvOS 平台包含 SimpleToast
                 .product(name: "SimpleToast", package: "SimpleToast", condition: .when(platforms: [.tvOS])),
-                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))
+                .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS])),
+                .product(name: "SwiftUIIntrospect", package: "SwiftUI-Introspect", condition: .when(platforms: [.iOS]))
             ],
             path: "Sources"
         ),

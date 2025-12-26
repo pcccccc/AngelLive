@@ -204,14 +204,17 @@ struct PlayerControlView: View {
                                                 } label: {
                                                     HStack {
                                                         Text(quality.title)
+                                                            .foregroundStyle(.white)
                                                         if viewModel.currentCdnIndex == cdnIndex && viewModel.currentPlayQualityQn == quality.qn {
                                                             Image(systemName: "checkmark")
+                                                                .foregroundStyle(.white)
                                                         }
                                                     }
                                                 }
                                             }
                                         } label: {
                                             Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
+                                                .foregroundStyle(.white)
                                         }
                                     }
                                 } label: {
@@ -222,6 +225,9 @@ struct PlayerControlView: View {
                                 }
                                 .menuStyle(.borderlessButton)
                                 .menuIndicator(.hidden)
+                                .tint(.white)
+                                .foregroundColor(.white)
+                                .environment(\.colorScheme, .dark)
                             }
 
                             // 全屏按钮
@@ -527,7 +533,7 @@ private extension View {
     @ViewBuilder
     func adaptiveGlassEffect() -> some View {
         if #available(macOS 26.0, *) {
-            self.glassEffect(in: .capsule)
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .capsule)
         } else {
             self.background(.ultraThinMaterial, in: Capsule())
         }
@@ -538,9 +544,9 @@ private extension View {
         if #available(macOS 26.0, *) {
             switch shape {
             case .capsule:
-                self.glassEffect(in: .capsule)
+                self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .capsule)
             case .circle:
-                self.glassEffect(in: .circle)
+                self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .circle)
             }
         } else {
             switch shape {

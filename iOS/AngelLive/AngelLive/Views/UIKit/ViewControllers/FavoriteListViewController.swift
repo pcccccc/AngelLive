@@ -25,7 +25,7 @@ class FavoriteListViewController: UIViewController {
     private lazy var collectionView: UICollectionView = {
         let layout = createCompositionalLayout()
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        cv.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        cv.backgroundColor = .clear
         cv.delegate = self
         cv.dataSource = self
         cv.register(LiveRoomCollectionViewCell.self, forCellWithReuseIdentifier: LiveRoomCollectionViewCell.reuseIdentifier)
@@ -64,6 +64,12 @@ class FavoriteListViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         updateFilteredSections()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // 确保导航栏大标题可以正常折叠
+        navigationController?.navigationBar.prefersLargeTitles = true
     }
 
     // MARK: - Setup
@@ -199,6 +205,8 @@ class FavoriteListViewController: UIViewController {
     // MARK: - Data
 
     func updateSearchText(_ text: String) {
+        // 只在搜索文本真正变化时才更新
+        guard searchText != text else { return }
         searchText = text
         updateFilteredSections()
     }

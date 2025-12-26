@@ -11,7 +11,7 @@ extension View {
     @ViewBuilder
     func adaptiveGlassEffect() -> some View {
         if #available(tvOS 26.0, *) {
-            self.glassEffect()
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)))
         } else {
             self.background(.ultraThinMaterial)
         }
@@ -20,7 +20,7 @@ extension View {
     @ViewBuilder
     func adaptiveGlassEffectCapsule() -> some View {
         if #available(tvOS 26.0, *) {
-            self.glassEffect(in: .capsule)
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .capsule)
         } else {
             self.background(
                 .ultraThinMaterial,
@@ -32,7 +32,7 @@ extension View {
     @ViewBuilder
     func adaptiveGlassEffectRoundedRect(cornerRadius: CGFloat = 16) -> some View {
         if #available(tvOS 26.0, *) {
-            self.glassEffect(in: .rect(cornerRadius: cornerRadius))
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .rect(cornerRadius: cornerRadius))
         } else {
             self.background(
                 .ultraThinMaterial,
