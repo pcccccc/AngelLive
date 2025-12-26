@@ -15,6 +15,8 @@ public final class PlayerSettingModel {
     public static let globalOpenExitPlayerViewWhenLiveEnd = "SimpleLive.Setting.OpenExitPlayerViewWhenLiveEnd"
     public static let globalOpenExitPlayerViewWhenLiveEndSecond = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecond"
     public static let globalOpenExitPlayerViewWhenLiveEndSecondIndex = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecondIndex"
+    public static let globalEnableBackgroundAudio = "SimpleLive.Setting.EnableBackgroundAudio"
+    public static let globalEnableAutoPiPOnBackground = "SimpleLive.Setting.EnableAutoPiPOnBackground"
 
     public init() {}
 
@@ -53,6 +55,32 @@ public final class PlayerSettingModel {
         set {
             withMutation(keyPath: \.openExitPlayerViewWhenLiveEndSecondIndex) {
                 UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalOpenExitPlayerViewWhenLiveEndSecondIndex, synchronize: true)
+            }
+        }
+    }
+
+    @ObservationIgnored
+    public var enableBackgroundAudio: Bool {
+        get {
+            access(keyPath: \.enableBackgroundAudio)
+            return UserDefaults.shared.value(forKey: PlayerSettingModel.globalEnableBackgroundAudio, synchronize: true) as? Bool ?? false
+        }
+        set {
+            withMutation(keyPath: \.enableBackgroundAudio) {
+                UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalEnableBackgroundAudio, synchronize: true)
+            }
+        }
+    }
+
+    @ObservationIgnored
+    public var enableAutoPiPOnBackground: Bool {
+        get {
+            access(keyPath: \.enableAutoPiPOnBackground)
+            return UserDefaults.shared.value(forKey: PlayerSettingModel.globalEnableAutoPiPOnBackground, synchronize: true) as? Bool ?? false
+        }
+        set {
+            withMutation(keyPath: \.enableAutoPiPOnBackground) {
+                UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalEnableAutoPiPOnBackground, synchronize: true)
             }
         }
     }

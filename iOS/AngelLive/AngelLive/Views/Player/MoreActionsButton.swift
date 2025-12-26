@@ -10,13 +10,15 @@ import AngelLiveCore
 import AngelLiveDependencies
 import AVKit
 
-/// 更多功能按钮（投屏、清屏、定时关闭）
+/// 更多功能按钮（投屏、清屏、定时关闭、后台播放）
 struct MoreActionsButton: View {
     @State private var showActionSheet = false
     @State private var showAirPlayPicker = false
     @State private var showTimerPicker = false
+    @State private var showSettingsSheet = false
     @State private var timerManager = TimerManager()
     @State private var buttonPressed = false
+    @State private var playerSettingModel = PlayerSettingModel()
 
     var onClearChat: () -> Void
     var onDismiss: () -> Void
@@ -77,6 +79,11 @@ struct MoreActionsButton: View {
                 }
             }
 
+            // 播放设置
+            Button("播放设置") {
+                showSettingsSheet = true
+            }
+
             Button("取消", role: .cancel) {
                 showActionSheet = false
             }
@@ -90,6 +97,11 @@ struct MoreActionsButton: View {
             TimerPickerView { minutes in
                 startTimer(minutes: minutes)
             }
+        }
+        .sheet(isPresented: $showSettingsSheet) {
+            PlayerSettingsSheet(playerSettingModel: $playerSettingModel)
+                .presentationDetents([.height(200)])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -112,6 +124,47 @@ struct MoreActionsButton: View {
 }
 
 // MARK: - AirPlay Picker Sheet
+
+/// 播放设置弹窗
+private struct PlayerSettingsSheet: View {
+    @Binding var playerSettingModel: PlayerSettingModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Toggle("后台播放", isOn: $playerSettingModel.enableBackgroundAudio)
+                    .onChange(of: playerSettingModel.enableBackgroundAudio) { _, newValue in
+                        // 实时更新 KSPlayer 后台播放设置
+                        KSOptions.canBackgroundPlay = newValue
+                    }
+                Toggle("自动画中画", isOn: $playerSettingModel.enableAutoPiPOnBackground)
+                    .onChange(of: playerSettingModel.enableAutoPiPOnBackground) { _, newValue in
+                        // 开启自动画中画时，必须同时开启后台播放
+                        if newValue && !playerSettingModel.enableBackgroundAudio {
+                            playerSettingModel.enableBackgroundAudio = true
+                            KSOptions.canBackgroundPlay = true
+                        }
+                    }
+            }
+            .navigationTitle("播放设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") {
+                        // 关闭时确保同步最新设置到 KSPlayer
+                        KSOptions.canBackgroundPlay = playerSettingModel.enableBackgroundAudio
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            // 打开设置时同步当前设置到 KSPlayer
+            KSOptions.canBackgroundPlay = playerSettingModel.enableBackgroundAudio
+        }
+    }
+}
 
 /// AirPlay 投屏选择器弹窗
 private struct AirPlayPickerSheet: View {

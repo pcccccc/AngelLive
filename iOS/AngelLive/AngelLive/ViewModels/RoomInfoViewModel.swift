@@ -69,9 +69,13 @@ final class RoomInfoViewModel {
         KSOptions.isSecondOpen = false
         KSOptions.firstPlayerType = KSMEPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
+        // 根据用户设置启用后台播放
+        KSOptions.canBackgroundPlay = PlayerSettingModel().enableBackgroundAudio
         let option = PlayerOptions()
         option.userAgent = "libmpv"
 //        option.allowsExternalPlayback = true  //启用 AirPlay 和外部播放
+        // 根据用户设置控制自动画中画行为
+        option.canStartPictureInPictureAutomaticallyFromInline = PlayerSettingModel().enableAutoPiPOnBackground
         self.playerOption = option
     }
 
