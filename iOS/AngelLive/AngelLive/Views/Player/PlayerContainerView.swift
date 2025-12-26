@@ -79,6 +79,7 @@ struct PlayerContentView: View {
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var isVerticalLiveMode: Bool = false // 是否为竖屏直播模式
+    @State private var playerSettingModel = PlayerSettingModel()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -112,6 +113,15 @@ struct PlayerContentView: View {
             .preference(key: VerticalLiveModePreferenceKey.self, value: isVerticalLiveMode)
         }
         .edgesIgnoringSafeArea(isVerticalLiveMode ? .all : [])
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            // 进入后台时自动开启画中画
+            if playerSettingModel.enableAutoPiPOnBackground {
+                if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
+                   !playerLayer.isPictureInPictureActive {
+                    playerLayer.pipStart()
+                }
+            }
+        }
     }
 
     // 计算视频高度

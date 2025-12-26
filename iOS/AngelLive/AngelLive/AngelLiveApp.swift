@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+internal import AVFoundation
 
 @main
 struct AngelLiveApp: App {
@@ -39,6 +40,9 @@ struct AngelLiveApp: App {
 class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // 配置音频会话以支持后台播放
+        configureAudioSession()
+
         // 初始化屏幕方向设置
         if AppConstants.Device.isIPad {
             KSOptions.supportedInterfaceOrientations = .all
@@ -47,6 +51,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             KSOptions.supportedInterfaceOrientations = .portrait
         }
         return true
+    }
+
+    /// 配置音频会话以支持后台播放
+    private func configureAudioSession() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
+            try audioSession.setActive(true)
+        } catch {
+            print("配置音频会话失败: \(error)")
+        }
     }
 
     // MARK: - Orientation Support
