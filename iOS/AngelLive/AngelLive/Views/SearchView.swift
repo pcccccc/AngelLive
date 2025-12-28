@@ -16,8 +16,13 @@ struct SearchView: View {
     @State private var searchError: Error?
     @State private var hasSearched = false
 
+    /// 共享导航状态 - 在旋转时保持稳定，避免重复请求API
+    @State private var navigationState = LiveRoomNavigationState()
+    /// 共享命名空间 - 用于 zoom 过渡动画
+    @Namespace private var roomTransitionNamespace
+
     var body: some View {
-        
+
         @Bindable var viewModel = viewModel
         NavigationStack {
             GeometryReader { geometry in
@@ -73,6 +78,27 @@ struct SearchView: View {
                     hasSearched = false
                 }
             }
+            .fullScreenCover(isPresented: playerPresentedBinding) {
+                playerDestination
+            }
+        }
+    }
+
+    // MARK: - 播放器导航
+
+    private var playerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { navigationState.showPlayer },
+            set: { navigationState.showPlayer = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var playerDestination: some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
+                .toolbar(.hidden, for: .tabBar)
         }
     }
 
@@ -172,6 +198,8 @@ struct SearchView: View {
             ) {
                 ForEach(searchResults, id: \.roomId) { room in
                     LiveRoomCard(room: room)
+                        .environment(\.liveRoomNavigationState, navigationState)
+                        .environment(\.roomTransitionNamespace, roomTransitionNamespace)
                         .frame(width: cardWidth, height: cardHeight)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
