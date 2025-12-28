@@ -13,7 +13,7 @@ enum FocusableField: Hashable {
     case leftMenu(Int, Int)
     case mainContent(Int)
     case leftFavorite(Int, Int)
-    case leftEdge(Int)
+    case leftTrigger
 }
 
 struct ListMainView: View {
@@ -23,19 +23,14 @@ struct ListMainView: View {
     @State private var hasSetInitialFocus: Bool = false
     @State private var showEmptyState: Bool = false
     @State private var pendingEmptyState: DispatchWorkItem?
-    @State private var allowSidebarFromLeftEdge: Bool = false
+    @State private var isOpeningSidebar: Bool = false
     private static let topId = "topIdHere"
     private let gridColumnCount = 4
     private let gridSpacing: CGFloat = 50
     private let cardWidth: CGFloat = 380
     private let cardHeight: CGFloat = 280
-    private let leftEdgeColumnWidth: CGFloat = 60
     private let emptyStateDelay: TimeInterval = 0.35
     private let headerToGridSpacing: CGFloat = 24
-    private var leftEdgeCompensation: CGFloat {
-        // 额外一列会让网格整体右移，补偿半列宽度让卡片回到居中
-        (leftEdgeColumnWidth + gridSpacing) / 2
-    }
 
     var liveType: LiveType
     var liveViewModel: LiveViewModel
@@ -49,14 +44,12 @@ struct ListMainView: View {
     }
 
     private enum RoomGridItem: Hashable {
-        case leftEdge(Int)
         case room(Int)
         case loading(Int)
     }
 
     private var gridColumns: [GridItem] {
         [
-            GridItem(.fixed(leftEdgeColumnWidth), spacing: gridSpacing),
             GridItem(.fixed(cardWidth), spacing: gridSpacing),
             GridItem(.fixed(cardWidth), spacing: gridSpacing),
             GridItem(.fixed(cardWidth), spacing: gridSpacing),
@@ -68,10 +61,9 @@ struct ListMainView: View {
         let roomCount = liveViewModel.roomList.count
         let rowCount = (roomCount + gridColumnCount - 1) / gridColumnCount
         var items: [RoomGridItem] = []
-        items.reserveCapacity(max(1, rowCount) * (gridColumnCount + 1))
+        items.reserveCapacity(max(1, rowCount) * gridColumnCount)
 
         for row in 0..<rowCount {
-            items.append(.leftEdge(row))
             let start = row * gridColumnCount
             let end = min(start + gridColumnCount, roomCount)
             for index in start..<end {
@@ -80,9 +72,8 @@ struct ListMainView: View {
         }
 
         if shouldShowLoadingPlaceholder {
-            // 补一行：哨兵 + Loading 卡片，避免落到哨兵列上
+            // 补一行 Loading 卡片
             let loadingRow = rowCount
-            items.append(.leftEdge(loadingRow))
             items.append(.loading(loadingRow))
         }
 
@@ -92,9 +83,10 @@ struct ListMainView: View {
     private func handleMoveCommand(_ direction: MoveCommandDirection) {
         print("ListMainView handleMoveCommand direction=\(direction) focus=\(String(describing: focusState)) selectedIndex=\(liveViewModel.selectedRoomListIndex)")
         switch focusState {
-        case .mainContent:
-            // 左侧展开由“哨兵焦点”触发，避免 onMoveCommand 在大列表下不稳定
-            break
+        case .mainContent(let focusedIndex):
+            if direction == .left && focusedIndex % gridColumnCount == 0 && !liveViewModel.isSidebarExpanded {
+                focusState = .leftTrigger
+            }
         case .leftMenu, .leftFavorite:
             if direction == .right {
                 liveViewModel.isSidebarExpanded = false
@@ -105,25 +97,9 @@ struct ListMainView: View {
         }
     }
 
-    private func leftEdgeSentinel(row: Int) -> some View {
-        Button(action: {}) {
-            // 透明但可聚焦：仅用于从第一列“再向左”时接管焦点
-            Rectangle()
-                .fill(Color.clear)
-        }
-        .frame(width: leftEdgeColumnWidth, height: cardHeight)
-        .contentShape(Rectangle())
-        .buttonStyle(.plain)
-        .focused($focusState, equals: .leftEdge(row))
-        .opacity(0.001)
-        .accessibilityHidden(true)
-    }
-
     @ViewBuilder
     private func roomGridItemView(_ item: RoomGridItem, reader: ScrollViewProxy) -> some View {
         switch item {
-        case .leftEdge(let row):
-            leftEdgeSentinel(row: row)
         case .room(let index):
             LiveCardView(index: index, externalFocusState: $focusState, onMoveCommand: handleMoveCommand)
                 .environment(liveViewModel)
@@ -172,6 +148,15 @@ struct ListMainView: View {
         }
     }
 
+    private func openSidebar() {
+        guard !liveViewModel.isSidebarExpanded else { return }
+        isOpeningSidebar = true
+        liveViewModel.isSidebarExpanded = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            focusState = .leftMenu(0, 0)
+        }
+    }
+
     private var emptyStateView: some View {
         VStack(spacing: 16) {
             Text("暂无房间")
@@ -199,8 +184,6 @@ struct ListMainView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
-                    // 只偏移网格，避免标题跟着偏移
-                    .offset(x: -leftEdgeCompensation)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -246,6 +229,24 @@ struct ListMainView: View {
                     }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var leftSidebarTrigger: some View {
+        Button(action: {
+            openSidebar()
+        }) {
+            Rectangle()
+                .fill(Color.clear)
+        }
+        .frame(width: liveViewModel.sidebarWidth)
+        .frame(maxHeight: .infinity)
+        .opacity(0.001)
+        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .focusable(liveViewModel.endFirstLoading && !liveViewModel.isSidebarExpanded)
+        .focused($focusState, equals: .leftTrigger)
+        .accessibilityHidden(true)
     }
 
     private func errorView(_ error: Error) -> some View {
@@ -278,32 +279,37 @@ struct ListMainView: View {
             } else {
                 listContainerView
             }
+
+            if !liveViewModel.isSidebarExpanded && (liveViewModel.roomList.count > 0 || liveViewModel.categories.count > 0) {
+                HStack(spacing: 0) {
+                    leftSidebarTrigger
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .ignoresSafeArea()
+            }
         }
         .background(.thinMaterial)
         .onChange(of: focusState) { _, newValue in
             // 当焦点移到主内容时，关闭 sidebar
             switch newValue {
             case .mainContent:
-                allowSidebarFromLeftEdge = true
                 if liveViewModel.isSidebarExpanded {
+                    if isOpeningSidebar {
+                        return
+                    }
                     liveViewModel.isSidebarExpanded = false
                 }
-            case .leftEdge:
-                // 左侧哨兵获取焦点 -> 展开 sidebar 并把焦点转交
-                guard allowSidebarFromLeftEdge else { return }
-                liveViewModel.isSidebarExpanded = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    focusState = .leftMenu(0, 0)
-                }
+            case .leftTrigger:
+                openSidebar()
+            case .leftMenu, .leftFavorite:
+                isOpeningSidebar = false
             default:
                 break
             }
         }
         .onChange(of: liveViewModel.roomList) { _, newValue in
             updateEmptyState()
-            if newValue.isEmpty {
-                allowSidebarFromLeftEdge = false
-            }
             // 当 roomList 首次加载完成时，设置初始焦点到主内容
             if !hasSetInitialFocus && !newValue.isEmpty {
                 hasSetInitialFocus = true
@@ -316,7 +322,6 @@ struct ListMainView: View {
             updateEmptyState()
         }
         .onAppear {
-            allowSidebarFromLeftEdge = false
             updateEmptyState()
         }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {

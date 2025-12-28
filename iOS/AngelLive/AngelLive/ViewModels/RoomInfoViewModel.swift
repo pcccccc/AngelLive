@@ -142,10 +142,8 @@ final class RoomInfoViewModel {
         // 已成功获取到播放参数，标记已加载
         hasLoadedPlayURL = true
 
-        // 启动弹幕连接
-        if danmuSettings.showDanmu {
-            getDanmuInfo()
-        }
+        // 始终启动弹幕连接（聊天区域需要），showDanmu 仅控制浮动弹幕显示
+        getDanmuInfo()
     }
 
     // 切换清晰度
@@ -465,18 +463,17 @@ final class RoomInfoViewModel {
         setDanmuDisplay(!danmuSettings.showDanmu)
     }
 
-    /// 设置弹幕显示状态
+    /// 设置弹幕显示状态（仅控制浮动弹幕，不影响聊天区域）
     @MainActor
     func setDanmuDisplay(_ enabled: Bool) {
         guard enabled != danmuSettings.showDanmu else { return }
         danmuSettings.showDanmu = enabled
         if enabled {
             danmuCoordinator.play()
-            getDanmuInfo()
         } else {
             danmuCoordinator.clear()
-            disconnectSocket()
         }
+        // 注意：不断开 WebSocket，让底部聊天区域继续接收消息
     }
 
     /// 添加弹幕消息到聊天列表

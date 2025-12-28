@@ -20,19 +20,32 @@ struct PlatformDetailViewControllerWrapper: View {
     @Namespace private var roomTransitionNamespace
 
     var body: some View {
+        baseView
+            .fullScreenCover(isPresented: playerPresentedBinding) {
+                playerDestination
+            }
+    }
+
+    private var baseView: some View {
         PlatformDetailViewControllerRepresentable(viewModel: viewModel)
             .environment(\.liveRoomNavigationState, navigationState)
             .environment(\.roomTransitionNamespace, roomTransitionNamespace)
-            .navigationDestination(isPresented: Binding(
-                get: { navigationState.showPlayer },
-                set: { navigationState.showPlayer = $0 }
-            )) {
-                if let room = navigationState.currentRoom {
-                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                        .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
-                        .toolbar(.hidden, for: .tabBar)
-                }
-            }
+    }
+
+    private var playerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { navigationState.showPlayer },
+            set: { navigationState.showPlayer = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var playerDestination: some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
+                .toolbar(.hidden, for: .tabBar)
+        }
     }
 }
 

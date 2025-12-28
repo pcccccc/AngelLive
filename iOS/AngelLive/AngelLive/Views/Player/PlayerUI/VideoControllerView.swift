@@ -130,8 +130,8 @@ struct VideoControllerView: View {
                     }
                     .transition(.opacity)
 
-                    // 左上角：返回按钮（横屏或 iPad 全屏时显示，锁定时隐藏）
-                    if (isLandscape || isIPadFullscreen.wrappedValue) && !model.isLocked {
+                    // 左上角：返回按钮（始终显示，锁定时隐藏）
+                    if !model.isLocked {
                         VStack {
                             HStack {
                                 Button {
@@ -167,7 +167,8 @@ struct VideoControllerView: View {
                                     KSVideoPlayerViewBuilder.pipButton(config: model.config)
                                     SettingsButton(
                                         showVideoSetting: $model.showVideoSetting,
-                                        showDanmakuSettings: $showDanmakuSettings
+                                        showDanmakuSettings: $showDanmakuSettings,
+                                        onDismiss: { dismiss() }
                                     )
                                 }
                                 .padding(.horizontal, 8)

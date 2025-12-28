@@ -176,13 +176,11 @@ struct VerticalLiveControllerView: View {
                 Spacer()
 
                 MoreActionsButton(
+                    room: viewModel.currentRoom,
                     onClearChat: {
                         withAnimation {
                             viewModel.danmuMessages.removeAll()
                         }
-                    },
-                    onDismiss: {
-                        dismiss()
                     }
                 )
             }

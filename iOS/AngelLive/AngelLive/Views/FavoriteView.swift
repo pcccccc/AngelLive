@@ -20,31 +20,48 @@ struct FavoriteView: View {
     private static var lastLeaveTimestamp: Date?
 
     var body: some View {
-        NavigationStack {
-            FavoriteListViewControllerWrapper(
-                searchText: searchText,
-                navigationState: navigationState,
-                namespace: roomTransitionNamespace
-            )
-            .navigationTitle("收藏")
-            .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(isPresented: Binding(
-                get: { navigationState.showPlayer },
-                set: { navigationState.showPlayer = $0 }
-            )) {
-                if let room = navigationState.currentRoom {
-                    DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                        .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
-                        .toolbar(.hidden, for: .tabBar)
-                }
+        baseNavigation
+            .fullScreenCover(isPresented: playerPresentedBinding) {
+                playerDestination
             }
-        }
         .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
         .task {
             await loadIfNeeded()
         }
         .onDisappear {
             FavoriteView.lastLeaveTimestamp = Date()
+        }
+    }
+
+    private var baseNavigation: some View {
+        NavigationStack {
+            FavoriteListViewControllerWrapper(
+                searchText: searchText,
+                navigationState: navigationState,
+                namespace: roomTransitionNamespace
+            )
+            // 安全区域处理 - 同时支持 TabBar 透视和大标题动画
+            .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
+            .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 0) }
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
+            .navigationTitle("收藏")
+            .navigationBarTitleDisplayMode(.large)
+        }
+    }
+
+    private var playerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { navigationState.showPlayer },
+            set: { navigationState.showPlayer = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var playerDestination: some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
+                .toolbar(.hidden, for: .tabBar)
         }
     }
 

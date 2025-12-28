@@ -334,19 +334,14 @@ struct LiveCardView: View {
     // MARK: - 事件处理
 
     private func handleFocusChange(newValue: FocusableField?, liveModel: Bindable<LiveViewModel>) {
+        guard case .mainContent(let focusedIndex) = newValue, focusedIndex == index else { return }
+        guard index < liveViewModel.roomList.count else { return }
+
         liveViewModel.currentRoom = liveViewModel.roomList[index]
-        liveViewModel.selectedRoomListIndex = index
-        if liveViewModel.roomListType != .history {
-            switch newValue {
-            case .mainContent(let focusedIndex):
-                liveViewModel.selectedRoomListIndex = focusedIndex
-                if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search {
-                    if focusedIndex >= liveViewModel.roomList.count - 4 && liveModel.wrappedValue.roomListType != .favorite {
-                        liveViewModel.roomPage += 1
-                    }
-                }
-            default:
-                break
+        liveViewModel.selectedRoomListIndex = focusedIndex
+        if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search {
+            if focusedIndex >= liveViewModel.roomList.count - 4 && liveModel.wrappedValue.roomListType != .favorite {
+                liveViewModel.roomPage += 1
             }
         }
     }

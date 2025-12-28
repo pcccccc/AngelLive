@@ -122,6 +122,13 @@ struct PlayerContentView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // 返回前台时自动关闭画中画
+            if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
+               playerLayer.isPictureInPictureActive {
+                playerLayer.pipStop(restoreUserInterface: true)
+            }
+        }
     }
 
     // 计算视频高度

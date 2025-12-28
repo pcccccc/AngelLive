@@ -18,6 +18,7 @@ struct SettingView: View {
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @StateObject var settingStore = SettingStore()
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
     @Environment(AppState.self) var appViewModel
     @FocusState private var focusedIndex: Int?
 
@@ -87,7 +88,7 @@ struct SettingView: View {
                         Text(titles[index])
                         Spacer()
                         if index == 0 {
-                            Text(BilibiliCookieSyncService.shared.loginStatusDescription)
+                            Text(syncService.loginStatusDescription)
                                 .font(.system(size: 30))
                                 .foregroundStyle(.gray)
                         } else if index == 3 {
