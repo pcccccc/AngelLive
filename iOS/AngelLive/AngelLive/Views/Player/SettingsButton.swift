@@ -14,6 +14,7 @@ struct SettingsButton: View {
     @Binding var showVideoSetting: Bool
     @Binding var showDanmakuSettings: Bool
     var onDismiss: () -> Void
+    var onPopupStateChanged: ((Bool) -> Void)? // 弹窗状态变化回调
 
     @State private var showActionSheet = false
     @State private var showAirPlayPicker = false
@@ -21,6 +22,11 @@ struct SettingsButton: View {
     @State private var showPlayerSettings = false
     @State private var timerManager = TimerManager()
     @State private var playerSettingModel = PlayerSettingModel()
+
+    /// 是否有任何弹窗展开
+    private var isAnyPopupOpen: Bool {
+        showActionSheet || showAirPlayPicker || showTimerPicker || showPlayerSettings
+    }
 
     var body: some View {
         ZStack {
@@ -96,6 +102,9 @@ struct SettingsButton: View {
             PlayerSettingsSheet(playerSettingModel: $playerSettingModel)
                 .presentationDetents([.height(200)])
                 .presentationDragIndicator(.visible)
+        }
+        .onChange(of: isAnyPopupOpen) { _, isOpen in
+            onPopupStateChanged?(isOpen)
         }
     }
 }

@@ -24,6 +24,13 @@ struct VideoControllerView: View {
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @State private var showDanmakuSettings = false
+    @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
+    @State private var isSettingsPopupOpen = false // SettingsButton 内部弹窗状态
+
+    /// 是否有弹窗/菜单展开（展开时暂停自动隐藏）
+    private var isPopupOpen: Bool {
+        showDanmakuSettings || model.showVideoSetting || isSettingsPopupOpen
+    }
 
     private var playerWidth: CGFloat {
         model.config.playerLayer?.player.view.frame.width ?? 0
@@ -50,6 +57,23 @@ struct VideoControllerView: View {
     }
 
     // MARK: - Helper Methods
+
+    /// 启动/重置自动隐藏计时器
+    private func startAutoHideTimer() {
+        autoHideTask?.cancel()
+        autoHideTask = Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if !Task.isCancelled && !isPopupOpen {
+                model.config.isMaskShow = false
+            }
+        }
+    }
+
+    /// 取消自动隐藏计时器
+    private func cancelAutoHideTimer() {
+        autoHideTask?.cancel()
+        autoHideTask = nil
+    }
 
     /// 处理返回按钮点击
     /// - iPad 全屏时：退出全屏
@@ -168,7 +192,15 @@ struct VideoControllerView: View {
                                     SettingsButton(
                                         showVideoSetting: $model.showVideoSetting,
                                         showDanmakuSettings: $showDanmakuSettings,
-                                        onDismiss: { dismiss() }
+                                        onDismiss: { dismiss() },
+                                        onPopupStateChanged: { isOpen in
+                                            isSettingsPopupOpen = isOpen
+                                            if isOpen {
+                                                cancelAutoHideTimer()
+                                            } else if model.config.isMaskShow {
+                                                startAutoHideTimer()
+                                            }
+                                        }
                                     )
                                 }
                                 .padding(.horizontal, 8)
@@ -236,6 +268,15 @@ struct VideoControllerView: View {
                 .environment(\.colorScheme, .dark)
                 .opacity(model.config.isMaskShow ? 1 : 0)
                 .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
+                // 捕获控制层上的任何触摸，重置自动隐藏计时器
+                .simultaneousGesture(
+                    TapGesture()
+                        .onEnded { _ in
+                            if model.config.isMaskShow && !isPopupOpen {
+                                startAutoHideTimer()
+                            }
+                        }
+                )
 
                 // HUD 设置面板（右侧滑入，无 padding）
                 if model.showVideoSetting {
@@ -256,6 +297,38 @@ struct VideoControllerView: View {
                 DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
+            }
+            // 控制层显示时启动自动隐藏计时器
+            .onChange(of: model.config.isMaskShow) { _, isMaskShow in
+                if isMaskShow && !isPopupOpen {
+                    startAutoHideTimer()
+                } else if !isMaskShow {
+                    cancelAutoHideTimer()
+                }
+            }
+            // 弹窗关闭后重新启动计时器
+            .onChange(of: showDanmakuSettings) { _, isShowing in
+                if !isShowing && model.config.isMaskShow && !isPopupOpen {
+                    startAutoHideTimer()
+                } else if isShowing {
+                    cancelAutoHideTimer()
+                }
+            }
+            .onChange(of: model.showVideoSetting) { _, isShowing in
+                if !isShowing && model.config.isMaskShow && !isPopupOpen {
+                    startAutoHideTimer()
+                } else if isShowing {
+                    cancelAutoHideTimer()
+                }
+            }
+            .onAppear {
+                // 视图首次出现时，如果控制层显示则启动自动隐藏计时器
+                if model.config.isMaskShow && !isPopupOpen {
+                    startAutoHideTimer()
+                }
+            }
+            .onDisappear {
+                cancelAutoHideTimer()
             }
         }
     }

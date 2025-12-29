@@ -30,14 +30,17 @@ struct DetailPlayerView: View {
     /// 是否为竖屏直播模式
     @State private var isVerticalLiveMode: Bool = false
 
+    /// 当前是否 iPhone 横屏（用于禁用下滑手势）
+    @State private var isIPhoneLandscape: Bool = false
+
     // MARK: - Body
 
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
-            let isIPhoneLandscape = !AppConstants.Device.isIPad && isLandscape
+            let iPhoneLandscapeMode = !AppConstants.Device.isIPad && isLandscape
             // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
-            let showInfoPanel = isVerticalLiveMode ? false : !(isIPhoneLandscape || isIPadFullscreen)
+            let showInfoPanel = isVerticalLiveMode ? false : !(iPhoneLandscapeMode || isIPadFullscreen)
 
             // 获取安全区信息（在任何 edgesIgnoringSafeArea 之前）
             let safeInsets = EdgeInsets(
@@ -50,7 +53,7 @@ struct DetailPlayerView: View {
             // 计算播放器宽度
             let playerWidth: CGFloat = {
                 // iPhone 横屏时补回安全区宽度，确保实际绘制能覆盖左右刘海区域
-                let baseWidth = isIPhoneLandscape ? (geometry.size.width + safeInsets.leading + safeInsets.trailing) : geometry.size.width
+                let baseWidth = iPhoneLandscapeMode ? (geometry.size.width + safeInsets.leading + safeInsets.trailing) : geometry.size.width
                 if isVerticalLiveMode {
                     return baseWidth // 竖屏直播占满宽度
                 } else if showInfoPanel && AppConstants.Device.isIPad && isLandscape {
@@ -61,7 +64,7 @@ struct DetailPlayerView: View {
             }()
 
             // 横屏时补回安全区高度，让内容也能覆盖上下刘海/指示器
-            let safeAdjustedHeight = isIPhoneLandscape ? (geometry.size.height + safeInsets.top + safeInsets.bottom) : geometry.size.height
+            let safeAdjustedHeight = iPhoneLandscapeMode ? (geometry.size.height + safeInsets.top + safeInsets.bottom) : geometry.size.height
 
             // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
             let playerHeight: CGFloat = {
@@ -135,11 +138,11 @@ struct DetailPlayerView: View {
                         .environment(\.safeAreaInsetsCustom, safeInsets)
                         .frame(
                             width: playerWidth,
-                            height: AppConstants.Device.isIPad ? playerHeight : (isIPhoneLandscape ? safeAdjustedHeight : nil)
+                            height: AppConstants.Device.isIPad ? playerHeight : (iPhoneLandscapeMode ? safeAdjustedHeight : nil)
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         // iPhone 横屏时让播放器区域覆盖 Safe Area，避免控制层/统计被刘海遮挡
-                        .edgesIgnoringSafeArea(isIPhoneLandscape ? .all : [])
+                        .edgesIgnoringSafeArea(iPhoneLandscapeMode ? .all : [])
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height
@@ -176,10 +179,18 @@ struct DetailPlayerView: View {
 
                 }
             }
+            .onChange(of: geometry.size) { _, newSize in
+                let isLandscape = newSize.width > newSize.height
+                isIPhoneLandscape = !AppConstants.Device.isIPad && isLandscape
+            }
+            .onAppear {
+                let isLandscape = geometry.size.width > geometry.size.height
+                isIPhoneLandscape = !AppConstants.Device.isIPad && isLandscape
+            }
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
         .navigationBarBackButtonHidden(true)
-        .interactiveDismissDisabled(true)
+        .interactiveDismissDisabled(isIPhoneLandscape)
         .task {
             await viewModel.loadPlayURL()
         }

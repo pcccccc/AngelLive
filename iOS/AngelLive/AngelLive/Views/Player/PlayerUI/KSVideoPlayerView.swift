@@ -44,20 +44,6 @@ public struct KSVideoPlayerView: View {
                     .onDisappear {
                         liftCycleBlock?(model.config, true)
                     }
-                    // onChange不会马上就回调，会少一些状态的回调。要用onReceive才不会有这个问题
-                    .onReceive(model.config.$state) { state in
-//                        if state == .readyToPlay {
-//                            // 只在当前直播间首次加载且视频为横屏时自动旋转
-//                            // 切换清晰度、刷新等操作不会触发自动旋转
-//                            if !hasAutoRotatedForCurrentRoom, let playerLayer = model.config.playerLayer, playerLayer.player.naturalSize.isHorizonal == true, !UIApplication.isLandscape {
-//                                KSOptions.supportedInterfaceOrientations = .landscapeLeft
-//                                UIViewController.attemptRotationToDeviceOrientation()
-//                                hasAutoRotatedForCurrentRoom = true
-//                            }
-//                        } else if state == .playedToTheEnd {
-//                            model.next()
-//                        }
-                    }
                     .onChange(of: viewModel.currentRoom.roomId) { _, _ in
                         // 切换直播间时重置自动旋转标志
                         hasAutoRotatedForCurrentRoom = false
