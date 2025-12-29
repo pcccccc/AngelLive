@@ -179,6 +179,7 @@ struct DetailPlayerView: View {
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
         .navigationBarBackButtonHidden(true)
+        .interactiveDismissDisabled(true)
         .task {
             await viewModel.loadPlayURL()
         }
