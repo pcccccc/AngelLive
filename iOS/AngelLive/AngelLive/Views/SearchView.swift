@@ -159,6 +159,10 @@ struct SearchView: View {
             .padding(.horizontal)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            hideKeyboard()
+        }
     }
 
     @ViewBuilder
@@ -177,6 +181,10 @@ struct SearchView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            hideKeyboard()
+        }
     }
 
     
@@ -257,6 +265,7 @@ struct SearchView: View {
     }
 
     private func performSearch() {
+        hideKeyboard()
         let keyword = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty else { return }
 
@@ -303,6 +312,10 @@ struct SearchView: View {
                 }
             }
         }
+    }
+
+    private func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
