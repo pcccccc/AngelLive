@@ -63,13 +63,13 @@ struct PlatformView: View {
                 PlatformCard(platform: platform)
                     .frame(width: metrics.itemWidth, height: metrics.itemHeight)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlatformCardButtonStyle())
         } else {
             NavigationLink(value: platform) {
                 PlatformCard(platform: platform)
                     .frame(width: metrics.itemWidth, height: metrics.itemHeight)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PlatformCardButtonStyle())
         }
     }
 
@@ -111,7 +111,6 @@ private struct GridMetrics {
 // MARK: - Platform Card Component
 struct PlatformCard: View {
     let platform: Platformdescription
-    @State private var isPressed = false
 
     var body: some View {
         ZStack {
@@ -136,17 +135,22 @@ struct PlatformCard: View {
             .padding(AppConstants.Spacing.lg)
         }
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.bouncy(duration: 0.3), value: isPressed) // iOS 26: bouncy 动画
         .shadow(
             color: AppConstants.Shadow.lg.color,
             radius: AppConstants.Shadow.lg.radius,
             x: AppConstants.Shadow.lg.x,
             y: AppConstants.Shadow.lg.y
         )
-        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
+        .contentShape(Rectangle())
+    }
+}
+
+/// 平台卡片按钮样式 - 提供按压缩放效果
+struct PlatformCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.bouncy(duration: 0.3), value: configuration.isPressed)
     }
 }
 

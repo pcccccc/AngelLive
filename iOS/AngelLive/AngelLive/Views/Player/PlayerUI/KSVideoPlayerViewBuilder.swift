@@ -97,15 +97,28 @@ public enum KSVideoPlayerViewBuilder {
     @ViewBuilder
     static func refreshButton(isLoading: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: "arrow.trianglehead.2.counterclockwise")
-                .frame(width: 30, height: 30)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .rotationEffect(.degrees(isLoading ? 360 : 0))
-                .animation(
-                    isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
-                    value: isLoading
-                )
+            if #available(iOS 18.0, *) {
+                Image(systemName: "arrow.trianglehead.2.counterclockwise")
+                    .frame(width: 30, height: 30)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .rotationEffect(.degrees(isLoading ? 360 : 0))
+                    .animation(
+                        isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                        value: isLoading
+                    )
+            }else {
+                Image(systemName: "arrow.counterclockwise")
+                    .renderingMode(.template)
+                    .frame(width: 30, height: 30)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .rotationEffect(.degrees(isLoading ? 360 : 0))
+                    .animation(
+                        isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
+                        value: isLoading
+                    )
+            }
         }
         .ksBorderlessButton()
         .disabled(isLoading)

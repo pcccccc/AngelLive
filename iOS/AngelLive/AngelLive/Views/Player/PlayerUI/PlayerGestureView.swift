@@ -62,6 +62,10 @@ struct PlayerGestureView: View {
             ZStack {
                 // 透明手势接收层
                 Color.clear
+                    // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        resetGestureState()
+                    }
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 20)
@@ -238,6 +242,13 @@ struct PlayerGestureView: View {
             adjustType = .none
             isDragging = false
         }
+    }
+
+    /// 重置手势状态（用于 PIP 模式切换时清理 HUD）
+    private func resetGestureState() {
+        showIndicator = false
+        adjustType = .none
+        isDragging = false
     }
 
     // MARK: - 音量控制

@@ -14,7 +14,6 @@ struct LiveRoomCard: View {
     let skipLiveCheck: Bool
     /// 可选的删除回调（用于历史记录）
     var onDelete: (() -> Void)? = nil
-    @State private var isPressed = false
     /// 本地导航状态 - 仅在没有外部导航状态时使用
     @State private var localShowPlayer = false
     /// 本地 Namespace - 仅在没有外部 Namespace 时使用
@@ -97,7 +96,7 @@ struct LiveRoomCard: View {
             } label: {
                 cardContent
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LiveRoomCardButtonStyle())
             .contextMenu {
                 favoriteContextMenu
             }
@@ -147,11 +146,7 @@ struct LiveRoomCard: View {
             RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
                 .fill(.clear)
         )
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3), value: isPressed)
-        .onLongPressGesture(minimumDuration: 0.1, pressing: { pressing in
-            isPressed = pressing
-        }, perform: {})
+        .contentShape(Rectangle())
     }
 
     // MARK: - 子视图
@@ -289,5 +284,14 @@ struct LiveRoomCard: View {
             presentToast(toast)
             print("取消收藏失败: \(error)")
         }
+    }
+}
+
+/// 直播间卡片按钮样式 - 提供按压缩放效果
+struct LiveRoomCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.3), value: configuration.isPressed)
     }
 }
