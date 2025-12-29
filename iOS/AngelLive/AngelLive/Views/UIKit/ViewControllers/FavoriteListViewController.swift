@@ -389,10 +389,12 @@ extension FavoriteListViewController: UICollectionViewDataSource {
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        guard section >= 0, section < filteredSections.count else {
+        // 使用局部快照避免数据竞争导致的崩溃
+        let sections = filteredSections
+        guard section >= 0, section < sections.count else {
             return 0
         }
-        return filteredSections[section].roomList.count
+        return sections[section].roomList.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -400,10 +402,12 @@ extension FavoriteListViewController: UICollectionViewDataSource {
             return UICollectionViewCell()
         }
 
-        guard indexPath.section < filteredSections.count else {
+        // 使用局部快照避免数据竞争导致的崩溃
+        let sections = filteredSections
+        guard indexPath.section < sections.count else {
             return cell
         }
-        let rooms = filteredSections[indexPath.section].roomList
+        let rooms = sections[indexPath.section].roomList
         guard indexPath.item < rooms.count else {
             return cell
         }
@@ -419,10 +423,12 @@ extension FavoriteListViewController: UICollectionViewDataSource {
             return UICollectionReusableView()
         }
 
-        guard indexPath.section < filteredSections.count else {
+        // 使用局部快照避免数据竞争导致的崩溃
+        let sections = filteredSections
+        guard indexPath.section < sections.count else {
             return header
         }
-        let section = filteredSections[indexPath.section]
+        let section = sections[indexPath.section]
         header.configure(title: section.title, count: section.roomList.count)
 
         return header

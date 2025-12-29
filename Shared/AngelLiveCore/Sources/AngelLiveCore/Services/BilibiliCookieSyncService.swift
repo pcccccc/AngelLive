@@ -279,10 +279,9 @@ public final class BilibiliCookieSyncService: ObservableObject {
         }
     }
 
-    @objc private func iCloudDidChange(_ notification: Notification) {
-        guard iCloudSyncEnabled else { return }
-
+    @objc nonisolated private func iCloudDidChange(_ notification: Notification) {
         Task { @MainActor in
+            guard iCloudSyncEnabled else { return }
             _ = await syncFromICloud()
         }
     }

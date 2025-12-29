@@ -11,6 +11,7 @@ import AngelLiveDependencies
 
 struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(AppFavoriteModel.self) private var viewModel
+    @Environment(\.scenePhase) private var scenePhase
     let searchText: String
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
@@ -25,6 +26,10 @@ struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: FavoriteListViewController, context: Context) {
+        // 当应用在后台时跳过 UI 更新，避免 iOS 18 的 DiffableDataSource 崩溃
+        // 这是 iOS 18 的已知问题：后台 UI 更新会触发 reconfigureItemsWithIdentifiers 崩溃
+        guard scenePhase == .active else { return }
+
         uiViewController.updateSearchText(searchText)
         // 当 viewModel 数据变化时（如 isLoading、groupedRoomList 变化），需要刷新
         uiViewController.reloadData()
