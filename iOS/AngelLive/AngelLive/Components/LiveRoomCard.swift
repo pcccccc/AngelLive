@@ -108,7 +108,7 @@ struct LiveRoomCard: View {
                 baseButton
                     .fullScreenCover(isPresented: showPlayerBinding) {
                         DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                            .navigationTransition(.zoom(sourceID: room.roomId, in: namespace))
+                            .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
                             .toolbar(.hidden, for: .tabBar)
                     }
             }
@@ -120,7 +120,7 @@ struct LiveRoomCard: View {
             // 封面图（带可靠的兜底占位）
             coverView
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
-                .matchedTransitionSource(id: room.roomId, in: namespace)
+                .modifier(MatchedTransitionSourceModifier(id: room.roomId, namespace: namespace))
 
             // 主播信息
             HStack(spacing: 8) {

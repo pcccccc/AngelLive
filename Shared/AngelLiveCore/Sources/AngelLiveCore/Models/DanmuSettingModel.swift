@@ -97,7 +97,7 @@ public final class DanmuSettingModel {
     public var danmuSpeed: Double {
         get {
             access(keyPath: \.danmuSpeed)
-            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuSpeed, synchronize: true) as? Double ?? 0.5
+            return UserDefaults.shared.value(forKey: DanmuSettingModel.globalDanmuSpeed, synchronize: true) as? Double ?? 0.7
         }
         set {
             withMutation(keyPath: \.danmuSpeed) {
@@ -194,13 +194,13 @@ public final class DanmuSettingModel {
         danmuSpeedIndex = index
         switch index {
         case 0:
-            danmuSpeed = 0.3
+            danmuSpeed = 0.5
         case 1:
-            danmuSpeed = 0.5
-        case 2:
             danmuSpeed = 0.7
+        case 2:
+            danmuSpeed = 0.85
         default:
-            danmuSpeed = 0.5
+            danmuSpeed = 0.7
         }
     }
 }

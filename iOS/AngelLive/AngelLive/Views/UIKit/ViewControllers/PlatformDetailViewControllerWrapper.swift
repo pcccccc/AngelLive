@@ -43,7 +43,7 @@ struct PlatformDetailViewControllerWrapper: View {
     private var playerDestination: some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                .navigationTransition(.zoom(sourceID: room.roomId, in: roomTransitionNamespace))
+                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
                 .toolbar(.hidden, for: .tabBar)
         }
     }

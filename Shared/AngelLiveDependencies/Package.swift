@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "AngelLiveDependencies",
     platforms: [
-        .iOS(.v18),
+        .iOS(.v17),
         .macOS(.v15),
         .tvOS(.v17)
     ],

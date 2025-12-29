@@ -20,6 +20,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         BilibiliWebLoginView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "person.circle.fill")
@@ -44,6 +45,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         GeneralSettingView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "gearshape.fill")
@@ -56,6 +58,7 @@ struct SettingView: View {
 
                     NavigationLink {
                         DanmuSettingView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "bubble.left.and.bubble.right.fill")
@@ -74,8 +77,10 @@ struct SettingView: View {
                     NavigationLink {
                         if cloudKitReady {
                             SyncView()
+                                .toolbar(.hidden, for: .tabBar)
                         } else {
                             CloudKitStatusView(stateString: cloudKitStateString)
+                                .toolbar(.hidden, for: .tabBar)
                         }
                     } label: {
                         HStack {
@@ -96,6 +101,7 @@ struct SettingView: View {
 
                     NavigationLink {
                         HistoryListView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "clock.fill")
@@ -113,6 +119,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         TVOSSyncView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "appletv.fill")
@@ -141,6 +148,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         OpenSourceListView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "doc.text.fill")
@@ -153,6 +161,7 @@ struct SettingView: View {
 
                     NavigationLink {
                         AboutUSView()
+                            .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
                             Image(systemName: "info.circle.fill")

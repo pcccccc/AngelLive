@@ -121,6 +121,7 @@ struct DeepLinkPlayerView: View {
     }
 
     private func cleanupAndDismiss() {
+        roomInfoViewModel?.disConnectSocket()
         appViewModel.pendingDeepLinkRoom = nil
         appViewModel.showDeepLinkPlayer = false
         dismiss()

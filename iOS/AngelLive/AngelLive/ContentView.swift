@@ -46,10 +46,19 @@ struct ContentView: View {
         @Bindable var manager = welcomeManager
 
         Group {
-            if AppConstants.Device.isIPad {
-                iPadTabView
+            if #available(iOS 18.0, *) {
+                if AppConstants.Device.isIPad {
+                    iPadTabView
+                } else {
+                    iPhoneTabView
+                }
             } else {
-                iPhoneTabView
+                // iOS 17 兼容版本
+                if AppConstants.Device.isIPad {
+                    iOS17iPadTabView
+                } else {
+                    iOS17iPhoneTabView
+                }
             }
         }
         .environment(platformViewModel)
@@ -76,11 +85,12 @@ struct ContentView: View {
             WelcomeView {
                 welcomeManager.completeWelcome()
             }
-            .presentationSizing(.page.fitted(horizontal: true, vertical: false))
+            .modifier(WelcomePresentationModifier())
         }
     }
 
-    // iPad 专用 TabView
+    // iPad 专用 TabView (iOS 18+)
+    @available(iOS 18.0, *)
     private var iPadTabView: some View {
         TabView(selection: $selectedTab) {
             Tab(value: TabSelection.favorite) {
@@ -146,7 +156,8 @@ struct ContentView: View {
         .tabViewStyle(.sidebarAdaptable)
     }
 
-    // iPhone 专用 TabView
+    // iPhone 专用 TabView (iOS 18+)
+    @available(iOS 18.0, *)
     private var iPhoneTabView: some View {
         if #available(iOS 26.0, *) {
             return TabView(selection: $selectedTab) {
@@ -203,7 +214,75 @@ struct ContentView: View {
             }
         }
     }
-    
+
+    // MARK: - iOS 17 兼容版本
+
+    // iPad iOS 17 TabView
+    private var iOS17iPadTabView: some View {
+        TabView(selection: $selectedTab) {
+            FavoriteView()
+                .tabItem {
+                    Label {
+                        Text("收藏")
+                    } icon: {
+                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                    }
+                }
+                .tag(TabSelection.favorite)
+
+            PlatformView()
+                .tabItem {
+                    Label("平台", systemImage: "square.grid.2x2.fill")
+                }
+                .tag(TabSelection.allPlatforms)
+
+            SettingView()
+                .tabItem {
+                    Label("设置", systemImage: "gearshape.fill")
+                }
+                .tag(TabSelection.settings)
+
+            SearchView()
+                .tabItem {
+                    Label("搜索", systemImage: "magnifyingglass")
+                }
+                .tag(TabSelection.search)
+        }
+    }
+
+    // iPhone iOS 17 TabView
+    private var iOS17iPhoneTabView: some View {
+        TabView(selection: $selectedTab) {
+            FavoriteView()
+                .tabItem {
+                    Label {
+                        Text("收藏")
+                    } icon: {
+                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                    }
+                }
+                .tag(TabSelection.favorite)
+
+            PlatformView()
+                .tabItem {
+                    Label("平台", systemImage: "square.grid.2x2.fill")
+                }
+                .tag(TabSelection.allPlatforms)
+
+            SettingView()
+                .tabItem {
+                    Label("设置", systemImage: "gearshape.fill")
+                }
+                .tag(TabSelection.settings)
+
+            SearchView()
+                .tabItem {
+                    Label("搜索", systemImage: "magnifyingglass")
+                }
+                .tag(TabSelection.search)
+        }
+    }
+
     func getImage(platform: Platformdescription) -> String {
         switch platform.liveType {
             case .bilibili:

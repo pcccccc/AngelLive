@@ -107,6 +107,10 @@ struct DetailPlayerView: View {
             .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
                 endPlay()
             }
+            .onDisappear {
+                playerCoordinator.resetPlayer()
+                roomInfoViewModel.disConnectSocket()
+            }
 //            .onExitCommand(perform: {
 //                if roomInfoViewModel.showControlView == true {
 //                    return

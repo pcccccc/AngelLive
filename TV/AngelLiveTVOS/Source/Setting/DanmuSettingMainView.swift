@@ -103,13 +103,13 @@ struct DanmuSettingMainView: View {
                     appViewModel.danmuSettingsViewModel.danmuSpeedIndex = value
                     switch appViewModel.danmuSettingsViewModel.danmuSpeedIndex {
                         case 0:
-                            appViewModel.danmuSettingsViewModel.danmuSpeed = 0.3
+                            appViewModel.danmuSettingsViewModel.danmuSpeed = 0.5
                         case 1:
-                            appViewModel.danmuSettingsViewModel.danmuSpeed = 0.5
-                        case 2:
                             appViewModel.danmuSettingsViewModel.danmuSpeed = 0.7
+                        case 2:
+                            appViewModel.danmuSettingsViewModel.danmuSpeed = 0.85
                         default:
-                            appViewModel.danmuSettingsViewModel.danmuSpeed = 0.5
+                            appViewModel.danmuSettingsViewModel.danmuSpeed = 0.7
                     }
                 })) {
                     ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in

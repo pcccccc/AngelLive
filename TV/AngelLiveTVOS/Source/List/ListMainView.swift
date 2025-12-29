@@ -83,10 +83,6 @@ struct ListMainView: View {
     private func handleMoveCommand(_ direction: MoveCommandDirection) {
         print("ListMainView handleMoveCommand direction=\(direction) focus=\(String(describing: focusState)) selectedIndex=\(liveViewModel.selectedRoomListIndex)")
         switch focusState {
-        case .mainContent(let focusedIndex):
-            if direction == .left && focusedIndex % gridColumnCount == 0 && !liveViewModel.isSidebarExpanded {
-                focusState = .leftTrigger
-            }
         case .leftMenu, .leftFavorite:
             if direction == .right {
                 liveViewModel.isSidebarExpanded = false
@@ -239,7 +235,7 @@ struct ListMainView: View {
             Rectangle()
                 .fill(Color.clear)
         }
-        .frame(width: liveViewModel.sidebarWidth)
+        .frame(width: 1)
         .frame(maxHeight: .infinity)
         .opacity(0.001)
         .contentShape(Rectangle())

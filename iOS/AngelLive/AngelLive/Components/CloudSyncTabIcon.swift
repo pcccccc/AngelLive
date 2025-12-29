@@ -12,14 +12,20 @@ import AngelLiveCore
 struct CloudSyncTabIcon: View {
     let syncStatus: CloudSyncStatus
     var body: some View {
-        Image(systemName: iconName)
-            .symbolEffect(
-                .rotate.byLayer,
-                options: .repeat(.periodic(delay: 0.0)),
-                isActive: syncStatus == .syncing
-            )
-            .symbolRenderingMode(.hierarchical)
-            .contentTransition(.symbolEffect(.replace))
+        if #available(iOS 18.0, *) {
+            Image(systemName: iconName)
+                .symbolEffect(
+                    .rotate.byLayer,
+                    options: .repeat(.periodic(delay: 0.0)),
+                    isActive: syncStatus == .syncing
+                )
+                .symbolRenderingMode(.hierarchical)
+                .contentTransition(.symbolEffect(.replace))
+        } else {
+            Image(systemName: iconName)
+                .symbolRenderingMode(.hierarchical)
+                .contentTransition(.symbolEffect(.replace))
+        }
     }
 
     private var iconName: String {
