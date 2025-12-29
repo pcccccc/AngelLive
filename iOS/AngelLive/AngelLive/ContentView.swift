@@ -136,10 +136,6 @@ struct ContentView: View {
                 }
             }
 
-            Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
-                SettingView()
-            }
-
             // iOS 26+ 支持 search role，iOS 18 需要普通 Tab
             if #available(iOS 26.0, *) {
                 Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
@@ -151,6 +147,10 @@ struct ContentView: View {
                 } label: {
                     Label("搜索", systemImage: "magnifyingglass")
                 }
+            }
+
+            Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
+                SettingView()
             }
         }
         .tabViewStyle(.sidebarAdaptable)
@@ -175,12 +175,12 @@ struct ContentView: View {
                     PlatformView()
                 }
 
-                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
-                    SettingView()
-                }
-
                 Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
                     SearchView()
+                }
+
+                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
+                    SettingView()
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
@@ -201,15 +201,15 @@ struct ContentView: View {
                     PlatformView()
                 }
 
-                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
-                    SettingView()
-                }
-
                 // iOS 18 不支持 search role
                 Tab(value: TabSelection.search) {
                     SearchView()
                 } label: {
                     Label("搜索", systemImage: "magnifyingglass")
+                }
+
+                Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
+                    SettingView()
                 }
             }
         }
@@ -236,17 +236,17 @@ struct ContentView: View {
                 }
                 .tag(TabSelection.allPlatforms)
 
-            SettingView()
-                .tabItem {
-                    Label("设置", systemImage: "gearshape.fill")
-                }
-                .tag(TabSelection.settings)
-
             SearchView()
                 .tabItem {
                     Label("搜索", systemImage: "magnifyingglass")
                 }
                 .tag(TabSelection.search)
+
+            SettingView()
+                .tabItem {
+                    Label("设置", systemImage: "gearshape.fill")
+                }
+                .tag(TabSelection.settings)
         }
     }
 
@@ -269,17 +269,17 @@ struct ContentView: View {
                 }
                 .tag(TabSelection.allPlatforms)
 
-            SettingView()
-                .tabItem {
-                    Label("设置", systemImage: "gearshape.fill")
-                }
-                .tag(TabSelection.settings)
-
             SearchView()
                 .tabItem {
                     Label("搜索", systemImage: "magnifyingglass")
                 }
                 .tag(TabSelection.search)
+
+            SettingView()
+                .tabItem {
+                    Label("设置", systemImage: "gearshape.fill")
+                }
+                .tag(TabSelection.settings)
         }
     }
 
