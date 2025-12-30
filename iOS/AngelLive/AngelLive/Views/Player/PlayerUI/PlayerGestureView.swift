@@ -12,6 +12,7 @@
 import SwiftUI
 import MediaPlayer
 import KSPlayer
+import AngelLiveCore
 internal import AVFoundation
 
 /// 手势调节类型
@@ -59,19 +60,24 @@ struct PlayerGestureView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let bottomSafeArea: CGFloat = 50 // 底部安全区域高度，避免与系统手势冲突
+
             ZStack {
-                // 透明手势接收层
+                // 透明手势接收层（底部留出安全区域）
                 Color.clear
                     // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                         resetGestureState()
                     }
                     .contentShape(Rectangle())
+                    .padding(.bottom, bottomSafeArea)
                     .gesture(
                         DragGesture(minimumDistance: 20)
                             .onChanged { value in
-                                // 锁定时禁用拖动手势
-                                guard !isLocked else { return }
+                                // 锁定时或禁用滑动手势时不响应
+                                guard !isLocked && GeneralSettingModel().enablePlayerGesture else { return }
+                                // 检查起始位置是否在底部安全区域内
+                                guard value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
                                 handleDragChanged(value: value, in: geometry.size)
                             }
                             .onEnded { _ in
@@ -111,6 +117,21 @@ struct PlayerGestureView: View {
                     .opacity(0.01)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            // 进入后台/画中画时重置手势状态
+            resetGestureState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            // 返回前台时重置手势状态
+            resetGestureState()
+        }
+    }
+
+    /// 重置手势状态
+    private func resetGestureState() {
+        showIndicator = false
+        adjustType = .none
+        isDragging = false
     }
 
     // MARK: - 调节指示器

@@ -18,6 +18,7 @@ struct VerticalLiveControllerView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
+    @Environment(\.scenePhase) private var scenePhase
     @State private var backTapped = false
     @State private var isFavoriteAnimating = false
 
@@ -128,9 +129,11 @@ struct VerticalLiveControllerView: View {
 
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 8) {
-                    // 弹幕气泡（显示最近6条）- 使用 ChatBubbleView
-                    ForEach(viewModel.danmuMessages.suffix(6)) { message in
-                        ChatBubbleView(message: message)
+                    if scenePhase == .active {
+                        // 弹幕气泡（显示最近6条）- 使用 ChatBubbleView
+                        ForEach(viewModel.danmuMessages.suffix(6)) { message in
+                            ChatBubbleView(message: message)
+                        }
                     }
                 }
 

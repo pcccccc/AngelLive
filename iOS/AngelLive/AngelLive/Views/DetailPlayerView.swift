@@ -15,6 +15,7 @@ struct DetailPlayerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(HistoryModel.self) private var historyModel
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
@@ -191,6 +192,16 @@ struct DetailPlayerView: View {
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
         .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(isIPhoneLandscape)
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .active:
+                viewModel.resumeDanmuUpdatesIfNeeded()
+            case .inactive, .background:
+                viewModel.pauseDanmuUpdatesForBackground()
+            @unknown default:
+                break
+            }
+        }
         .task {
             await viewModel.loadPlayURL()
         }
@@ -303,24 +314,30 @@ struct DetailPlayerView: View {
     }
 
     private var chatListView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(viewModel.danmuMessages) { message in
-                        ChatBubbleView(message: message)
-                            .id(message.id)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+        Group {
+            if scenePhase == .active {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(viewModel.danmuMessages) { message in
+                                ChatBubbleView(message: message)
+                                    .id(message.id)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .padding(.bottom, 60) // 为更多按钮留出空间
+                    }
+                    .onChange(of: viewModel.danmuMessages.count) { oldValue, newValue in
+                        scrollToBottom(proxy: proxy)
+                    }
+                    .onAppear {
+                        scrollToBottom(proxy: proxy)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .padding(.bottom, 60) // 为更多按钮留出空间
-            }
-            .onChange(of: viewModel.danmuMessages.count) { oldValue, newValue in
-                scrollToBottom(proxy: proxy)
-            }
-            .onAppear {
-                scrollToBottom(proxy: proxy)
+            } else {
+                EmptyView()
             }
         }
     }

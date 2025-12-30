@@ -71,6 +71,7 @@ struct HistoryListView: View {
 
 struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(HistoryModel.self) private var historyModel
+    @Environment(\.scenePhase) private var scenePhase
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
 
@@ -83,6 +84,8 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: HistoryListViewController, context: Context) {
+        // 避免后台状态触发 UICollectionView 更新导致 iOS 18 崩溃
+        guard scenePhase == .active else { return }
         uiViewController.reloadData()
     }
 }
