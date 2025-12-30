@@ -89,7 +89,7 @@ struct AboutUSView: View {
                                 .foregroundStyle(AppConstants.Colors.primaryText)
 
                             Button {
-                                if let url = URL(string: "https://t.me/SimpleLiveTV") {
+                                if let url = URL(string: "https://t.me/simplelivetvos") {
                                     openURL(url)
                                 }
                             } label: {
@@ -123,11 +123,11 @@ struct AboutUSView: View {
 
                 // 版权信息
                 VStack(spacing: AppConstants.Spacing.xs) {
-                    Text("© 2024 AngelLive")
+                    Text("© \(Calendar.current.component(.year, from: Date())) AngelLive")
                         .font(.caption2)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
 
-                    Text("Made with ♥ by the community")
+                    Text("Made with LaoPC by the community")
                         .font(.caption2)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }

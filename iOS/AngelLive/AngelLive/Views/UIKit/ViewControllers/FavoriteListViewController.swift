@@ -283,7 +283,7 @@ class FavoriteListViewController: UIViewController {
         view.addSubview(hostingController.view)
 
         NSLayoutConstraint.activate([
-            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -360,7 +360,7 @@ class FavoriteListViewController: UIViewController {
         self.view.addSubview(hostingController.view)
 
         NSLayoutConstraint.activate([
-            hostingController.view.topAnchor.constraint(equalTo: self.view.topAnchor),
+            hostingController.view.topAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.topAnchor),
             hostingController.view.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
             hostingController.view.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
             hostingController.view.bottomAnchor.constraint(equalTo: self.view.bottomAnchor)

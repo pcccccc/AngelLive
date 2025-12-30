@@ -46,18 +46,6 @@ struct GeneralSettingView: View {
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
-
-            // 收藏设置
-            Section {
-                Picker("收藏页面展示样式", selection: $generalSettingModel.globalGeneralSettingFavoriteStyle) {
-                    ForEach(AngelLiveFavoriteStyle.allCases, id: \.self) { style in
-                        Text(style.description)
-                            .tag(style.rawValue)
-                    }
-                }
-            } header: {
-                Text("收藏设置")
-            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("通用")
