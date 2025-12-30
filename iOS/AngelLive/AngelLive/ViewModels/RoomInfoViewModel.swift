@@ -59,6 +59,7 @@ final class RoomInfoViewModel {
     var danmuServerIsLoading = false
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
     var danmuSettings = DanmuSettingModel() // 弹幕设置模型
+    private var shouldReconnectDanmuOnActive = false
 
     init(room: LiveModel) {
         self.currentRoom = room
@@ -447,6 +448,22 @@ final class RoomInfoViewModel {
         socketConnection?.delegate = nil
         socketConnection = nil
         danmuServerIsConnected = false
+        danmuServerIsLoading = false
+    }
+
+    /// 进入后台时暂停弹幕更新，避免后台 UI 更新触发崩溃
+    @MainActor
+    func pauseDanmuUpdatesForBackground() {
+        shouldReconnectDanmuOnActive = danmuServerIsConnected || danmuServerIsLoading
+        disconnectSocket()
+    }
+
+    /// 回到前台时恢复弹幕连接（如果之前连接过）
+    @MainActor
+    func resumeDanmuUpdatesIfNeeded() {
+        guard shouldReconnectDanmuOnActive else { return }
+        shouldReconnectDanmuOnActive = false
+        getDanmuInfo()
     }
 
     /// 刷新当前播放流
