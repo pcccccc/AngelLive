@@ -484,6 +484,10 @@ struct BilibiliLANSyncPageView: View {
                         Text("Cookie 已保存")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                        Button("完成") {
+                            onBack()
+                        }
+                        .padding(.top, 20)
                     } else {
                         Image(systemName: "wifi")
                             .font(.system(size: 80))
@@ -562,6 +566,10 @@ struct BilibiliManualInputPageView: View {
                             .foregroundColor(.green)
                         Text("设置成功")
                             .font(.title2.bold())
+                        Button("完成") {
+                            onBack()
+                        }
+                        .padding(.top, 20)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 50)

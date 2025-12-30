@@ -265,13 +265,6 @@ struct PlayerGestureView: View {
         }
     }
 
-    /// 重置手势状态（用于 PIP 模式切换时清理 HUD）
-    private func resetGestureState() {
-        showIndicator = false
-        adjustType = .none
-        isDragging = false
-    }
-
     // MARK: - 音量控制
 
     /// 获取系统音量

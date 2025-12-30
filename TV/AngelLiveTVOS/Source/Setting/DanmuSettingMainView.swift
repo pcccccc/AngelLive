@@ -30,7 +30,7 @@ struct DanmuSettingMainView: View {
                     .multilineTextAlignment(.leading)
                 Spacer()
                 Button {
-                    appViewModel.danmuSettingsViewModel.danmuFontSize -= 5
+                    appViewModel.danmuSettingsViewModel.danmuFontSize = max(10, appViewModel.danmuSettingsViewModel.danmuFontSize - 5)
                 } label: {
                     Text("-5")
                         .font(.subheadline)
@@ -39,7 +39,7 @@ struct DanmuSettingMainView: View {
                 .clipShape(.circle)
                 .frame(width: 40, height:40)
                 Button {
-                    appViewModel.danmuSettingsViewModel.danmuFontSize -= 1
+                    appViewModel.danmuSettingsViewModel.danmuFontSize = max(10, appViewModel.danmuSettingsViewModel.danmuFontSize - 1)
                 } label: {
                     Text("-1")
                         .font(.subheadline)
@@ -47,12 +47,12 @@ struct DanmuSettingMainView: View {
                 }
                 .clipShape(.circle)
                 .frame(width: 40, height:40)
-                
+
                 Text("\(appViewModel.danmuSettingsViewModel.danmuFontSize)")
                     .font(.system(size: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize)))
-                
+
                 Button {
-                    appViewModel.danmuSettingsViewModel.danmuFontSize += 1
+                    appViewModel.danmuSettingsViewModel.danmuFontSize = min(100, appViewModel.danmuSettingsViewModel.danmuFontSize + 1)
                 } label: {
                     Text("+1")
                         .font(.subheadline)
@@ -60,9 +60,9 @@ struct DanmuSettingMainView: View {
                 }
                 .clipShape(.circle)
                 .frame(width: 40, height:40)
-                
+
                 Button {
-                    appViewModel.danmuSettingsViewModel.danmuFontSize += 5
+                    appViewModel.danmuSettingsViewModel.danmuFontSize = min(100, appViewModel.danmuSettingsViewModel.danmuFontSize + 5)
                 } label: {
                     Text("+5")
                         .font(.subheadline)
