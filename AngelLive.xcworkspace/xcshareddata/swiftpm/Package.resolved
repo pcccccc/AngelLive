@@ -77,8 +77,8 @@
       "kind" : "remoteSourceControl",
       "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
       "state" : {
-        "revision" : "ca75c62d3ae5142c029154e8015eed5c2fab8cc1",
-        "version" : "7.1.2"
+        "revision" : "96874d4ffd5064122d25878e1f8611edffe445c5",
+        "version" : "8.0.2"
       }
     },
     {
@@ -86,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/GMObjC",
       "state" : {
-        "revision" : "0cc7fc1f77fc15086c2e7481887bc45af26f862a",
-        "version" : "1.1.0"
+        "revision" : "a040357e3dea9e2ba5932b814edcb97fba55fb0b",
+        "version" : "1.1.4"
       }
     },
     {
@@ -140,8 +140,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "62998ba783dca4d9a9643ef5dd717652a30b9dc5",
-        "version" : "2.6.2"
+        "revision" : "540ffc987aca95edd3bd3ee82c0964c8bfa64a5c",
+        "version" : "2.7.3"
       }
     },
     {

@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/GMObjC",
       "state" : {
-        "revision" : "0cf4b70a3525d3954b269a5ed5200f4cd0f31052",
-        "version" : "1.0.2"
+        "revision" : "0cc7fc1f77fc15086c2e7481887bc45af26f862a",
+        "version" : "1.1.0"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "62998ba783dca4d9a9643ef5dd717652a30b9dc5",
-        "version" : "2.6.2"
+        "revision" : "540ffc987aca95edd3bd3ee82c0964c8bfa64a5c",
+        "version" : "2.7.3"
       }
     },
     {
@@ -150,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/LiveParse",
       "state" : {
-        "revision" : "59fc33ae03bc0cbda31a63752e5bbd1efdf3ba12",
-        "version" : "1.9.5"
+        "revision" : "9999abb1c9ccda0367841b3ae7e0770eba3dcb16",
+        "version" : "2.0.6"
       }
     },
     {

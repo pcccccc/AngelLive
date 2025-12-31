@@ -12,7 +12,8 @@ import AngelLiveDependencies
 
 struct DetailPlayerView: View {
     
-    @ObservedObject private var playerCoordinator: KSVideoPlayer.Coordinator = KSVideoPlayer.Coordinator()
+    @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
+    @State private var didCleanup = false
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
     public var didExitView: (Bool, String) -> Void = {_, _ in}
@@ -66,7 +67,7 @@ struct DetailPlayerView: View {
             .background(.black)
         }else {
             ZStack {
-                KSVideoPlayer(coordinator: _playerCoordinator, url:roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
+                KSVideoPlayer(coordinator: playerCoordinator, url: roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
                     .background(Color.black)
                     .onAppear {
                         playerCoordinator.playerLayer?.play()
@@ -108,27 +109,24 @@ struct DetailPlayerView: View {
                 endPlay()
             }
             .onDisappear {
-                playerCoordinator.resetPlayer()
-                roomInfoViewModel.disConnectSocket()
+                cleanupPlayer()
             }
-//            .onExitCommand(perform: {
-//                if roomInfoViewModel.showControlView == true {
-//                    return
-//                }
-//                if roomInfoViewModel.showControlView == false {
-//                    endPlay()
-//                }
-//            })
-            
+            .onPlayPauseCommand {
+                roomInfoViewModel.togglePlayPause()
+            }
         }
     }
     
     @MainActor func endPlay() {
-//        playerCoordinator.playerLayer?.observer.isObserving = false
-        playerCoordinator.resetPlayer()
-        roomInfoViewModel.disConnectSocket()
+        cleanupPlayer()
         didExitView(false, "")
     }
+
+    @MainActor
+    private func cleanupPlayer() {
+        guard !didCleanup else { return }
+        didCleanup = true
+        playerCoordinator.resetPlayer()
+        roomInfoViewModel.disConnectSocket()
+    }
 }
-
-

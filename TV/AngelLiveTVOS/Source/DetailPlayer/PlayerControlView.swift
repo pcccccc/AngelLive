@@ -196,9 +196,9 @@ struct PlayerControlView: View {
                         VStack {
                             HStack(spacing: 0) {
                                 Button(action: {
-                                    playPauseAction()
+                                    roomInfoViewModel.togglePlayPause()
                                 }, label: {
-                                    Image(systemName: roomInfoViewModel.isPlaying ? "pause.fill" : "play.fill")
+                                    Image(systemName: roomInfoViewModel.userPaused ? "play.fill" : "pause.fill")
                                         .font(.system(size: 30, weight: .bold))
                                         .foregroundColor(.white)
                                         .frame(width: 40, height: 40)
@@ -421,11 +421,7 @@ struct PlayerControlView: View {
             roomInfoViewModel.showControl = true
         }
         .onChange(of: state, { oldValue, newValue in
-            if roomInfoViewModel.showControl == false {
-                roomInfoViewModel.showControl.toggle()
-            }else {
-                roomInfoViewModel.controlViewOptionSecond = 5
-            }
+            roomInfoViewModel.controlViewOptionSecond = 5
             
             if oldValue != .list && isListContentField(oldValue) == false && oldValue != nil {
                 roomInfoViewModel.lastOptionState = oldValue
@@ -440,9 +436,6 @@ struct PlayerControlView: View {
                     state = .listContent(0)
                 }
             }
-        })
-        .onPlayPauseCommand(perform: {
-            playPauseAction()
         })
     }
     
@@ -468,21 +461,7 @@ struct PlayerControlView: View {
             }
         }
     }
-    
-    func playPauseAction() {
-        if (roomInfoViewModel.showControl == false) {
-            roomInfoViewModel.showControl = true
-        }else {
-            DispatchQueue.main.async {
-                if playerCoordinator.playerLayer?.player.isPlaying ?? false {
-                    playerCoordinator.playerLayer?.pause()
-                }else {
-                    playerCoordinator.playerLayer?.play()
-                }
-            }
-        }
-    }
-    
+
     func refreshAction() {
         if (roomInfoViewModel.showControl == false) {
             roomInfoViewModel.showControl = true

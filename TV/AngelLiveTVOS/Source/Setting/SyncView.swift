@@ -11,7 +11,7 @@ import AngelLiveDependencies
 struct SyncView: View {
     
     @Environment(AppState.self) var appViewModel
-    @ObservedObject var playerCoordinator = KSVideoPlayer.Coordinator()
+    @StateObject var playerCoordinator = KSVideoPlayer.Coordinator()
     var qrCodeStore = QRCodeViewModel()
     var playerOption = {
         let option = KSOptions()
@@ -26,7 +26,7 @@ struct SyncView: View {
         
         VStack {
             if qrCodeStore.fullScreenLoading {
-                KSVideoPlayer(coordinator: _playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: playerOption)
+                KSVideoPlayer(coordinator: playerCoordinator, url: Bundle.main.url(forResource: "loading", withExtension: "mp4")!, options: playerOption)
                     .background(Color.black)
                     .onAppear {
                         playerCoordinator.playerLayer?.play()

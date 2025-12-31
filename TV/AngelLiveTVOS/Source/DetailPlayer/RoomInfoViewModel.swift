@@ -50,6 +50,8 @@ final class RoomInfoViewModel {
     var currentPlayQualityQn = 0 //当前清晰度，虎牙用来存放回放时间
     var showControlView: Bool = true
     var isPlaying = false
+    var userPaused = false  // 跟踪用户是否手动暂停
+    weak var playerCoordinator: KSVideoPlayer.Coordinator?
     var douyuFirstLoad = true
     var yyFirstLoad = true
 
@@ -115,7 +117,7 @@ final class RoomInfoViewModel {
     init(currentRoom: LiveModel, appViewModel: AppState, enterFromLive: Bool, roomType: LiveRoomListType) {
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
-        KSOptions.firstPlayerType = KSMEPlayer.self
+        KSOptions.firstPlayerType = KSAVPlayer.self
         KSOptions.secondPlayerType = KSMEPlayer.self
         let option = PlayerOptions()
         option.userAgent = "libmpv"
@@ -162,41 +164,51 @@ final class RoomInfoViewModel {
             ])
         }else {
             self.playerOption.userAgent = "libmpv"
+            self.playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
+            self.playerOption.formatContextOptions["headers"] = nil
         }
         
         
-        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 { //bilibili 优先HLS播放
+        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 { // bilibili 优先 HLS 播放
             for item in currentRoomPlayArgs! {
                 for liveQuality in item.qualitys {
-                    if liveQuality.liveCodeType == .hls {
-                        KSOptions.firstPlayerType = KSAVPlayer.self
-                        KSOptions.secondPlayerType = KSMEPlayer.self
-                        self.currentPlayURL = URL(string: liveQuality.url)!
+                    let urlString = liveQuality.url.lowercased()
+                    let isHls = liveQuality.liveCodeType == .hls || urlString.contains(".m3u8")
+                    if isHls {
+                        applyPlayerTypes(first: KSAVPlayer.self, second: nil)
+                        let url = URL(string: liveQuality.url)!
+                        if self.currentPlayURL != url {
+                            self.currentPlayURL = url
+                        }
                         currentPlayQualityString = liveQuality.title
                         return
                     }
                 }
             } 
             if self.currentPlayURL == nil {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
+                applyPlayerTypes(first: KSMEPlayer.self, second: nil)
             }
         }else if (currentRoom.liveType == .douyin) { //douyin 优先HLS播放
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
+            applyPlayerTypes(first: KSMEPlayer.self, second: nil)
             if cdnIndex == 0 && urlIndex == 0 {
                 for item in currentRoomPlayArgs! {
                     for liveQuality in item.qualitys {
-                        if liveQuality.liveCodeType == .hls {
-                            KSOptions.firstPlayerType = KSAVPlayer.self
-                            KSOptions.secondPlayerType = KSMEPlayer.self
-                            self.currentPlayURL = URL(string: liveQuality.url)!
+                        let urlString = liveQuality.url.lowercased()
+                        let isHls = liveQuality.liveCodeType == .hls || urlString.contains(".m3u8")
+                        if isHls {
+                            applyPlayerTypes(first: KSAVPlayer.self, second: nil)
+                            let url = URL(string: liveQuality.url)!
+                            if self.currentPlayURL != url {
+                                self.currentPlayURL = url
+                            }
                             currentPlayQualityString = liveQuality.title
                             return
                         }else {
-                            KSOptions.firstPlayerType = KSMEPlayer.self
-                            KSOptions.secondPlayerType = KSMEPlayer.self
-                            self.currentPlayURL = URL(string: liveQuality.url)!
+                            applyPlayerTypes(first: KSMEPlayer.self, second: nil)
+                            let url = URL(string: liveQuality.url)!
+                            if self.currentPlayURL != url {
+                                self.currentPlayURL = url
+                            }
                             currentPlayQualityString = liveQuality.title
                             return
                         }
@@ -204,21 +216,19 @@ final class RoomInfoViewModel {
                 }
             }
         } else {
-            if currentQuality.liveCodeType == .hls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-            }else if currentQuality.liveCodeType == .hls {
-                KSOptions.firstPlayerType = KSAVPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
+            let urlString = currentQuality.url.lowercased()
+            let isHls = currentQuality.liveCodeType == .hls || urlString.contains(".m3u8")
+            if isHls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
+                applyPlayerTypes(first: KSMEPlayer.self, second: nil)
+            }else if isHls {
+                applyPlayerTypes(first: KSAVPlayer.self, second: nil)
             }else {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
+                applyPlayerTypes(first: KSMEPlayer.self, second: nil)
             }
         }
         
         if currentRoom.liveType == .ks {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
+            applyPlayerTypes(first: KSMEPlayer.self, second: nil)
         }
         
         if currentRoom.liveType == .douyu && douyuFirstLoad == false {
@@ -231,14 +241,18 @@ final class RoomInfoViewModel {
                     let lastCurrentPlayURL = self.currentPlayURL
                     if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
                        let url = URL(string: urlString) {
-                        self.currentPlayURL = url
+                        if self.currentPlayURL != url {
+                            self.currentPlayURL = url
+                        }
                     }
                 }
             }
         }else {
             douyuFirstLoad = false
             if let url = URL(string: currentQuality.url) {
-                self.currentPlayURL = url
+                if self.currentPlayURL != url {
+                    self.currentPlayURL = url
+                }
             }            
         }
         
@@ -252,13 +266,18 @@ final class RoomInfoViewModel {
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
-                    self.currentPlayURL = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
+                    let url = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
+                    if self.currentPlayURL != url {
+                        self.currentPlayURL = url
+                    }
                 }
             }
         }else {
             yyFirstLoad = false
             if let url = URL(string: currentQuality.url) {
-                self.currentPlayURL = url
+                if self.currentPlayURL != url {
+                    self.currentPlayURL = url
+                }
             }
         }
         
@@ -337,8 +356,30 @@ final class RoomInfoViewModel {
     }
     
     @MainActor func setPlayerDelegate(playerCoordinator: KSVideoPlayer.Coordinator) {
+        self.playerCoordinator = playerCoordinator
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
+    }
+
+    @MainActor func togglePlayPause() {
+        if userPaused {
+            playerCoordinator?.playerLayer?.play()
+            userPaused = false
+        } else {
+            playerCoordinator?.playerLayer?.pause()
+            userPaused = true
+        }
+    }
+
+    @MainActor
+    private func applyPlayerTypes(first: MediaPlayerProtocol.Type, second: MediaPlayerProtocol.Type?) {
+        KSOptions.firstPlayerType = first
+        KSOptions.secondPlayerType = second
+        if let second {
+            playerOption.playerTypes = [first, second]
+        } else {
+            playerOption.playerTypes = [first]
+        }
     }
     
     func getDanmuInfo() {
@@ -408,6 +449,8 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         disConnectSocket()
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
+        KSOptions.firstPlayerType = KSAVPlayer.self
+        KSOptions.secondPlayerType = KSMEPlayer.self
         self.currentRoom = liveModel
         douyuFirstLoad = true
         yyFirstLoad = true
@@ -419,6 +462,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying
+        userPaused = !layer.player.isPlaying
         self.dynamicInfo = layer.player.dynamicInfo
         if state == .paused {
             showControlView = true
