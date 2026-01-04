@@ -26,7 +26,7 @@ struct DanmakuSettingsSheet: View {
                         VStack(spacing: 0) {
                             settingRow {
                                 Toggle("开启弹幕", isOn: $viewModel.danmuSettings.showDanmu)
-                                    .tint(AppConstants.Colors.link)
+                                    .tint(AppConstants.Colors.accent)
                             }
 
                             Divider()
@@ -34,7 +34,7 @@ struct DanmakuSettingsSheet: View {
 
                             settingRow {
                                 Toggle("开启彩色弹幕", isOn: $viewModel.danmuSettings.showColorDanmu)
-                                    .tint(AppConstants.Colors.link)
+                                    .tint(AppConstants.Colors.accent)
                             }
                         }
                     }

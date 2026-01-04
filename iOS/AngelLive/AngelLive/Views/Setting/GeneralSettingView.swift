@@ -17,10 +17,13 @@ struct GeneralSettingView: View {
             // 通用设置
             Section {
                 Toggle("匹配系统帧率", isOn: $settingStore.syncSystemRate)
+                    .tint(AppConstants.Colors.accent)
 
                 Toggle("禁用渐变背景", isOn: $generalSettingModel.generalDisableMaterialBackground)
+                    .tint(AppConstants.Colors.accent)
 
                 Toggle("播放层滑动手势", isOn: $generalSettingModel.enablePlayerGesture)
+                    .tint(AppConstants.Colors.accent)
             } header: {
                 Text("通用设置")
             } footer: {

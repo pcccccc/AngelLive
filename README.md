@@ -1,19 +1,16 @@
 # Angel Live
 
-## 下载地址：
+<p align="center">
+  <img src="./ScreenShot/logo.png" alt="Angel Live Logo" width="120" />
+</p>
 
-##iOS:
-内测后提供。
-
-##macOS:
-内测后提供。
-
-##TV:
-[https://testflight.apple.com/join/2oZuwSHJ](https://testflight.apple.com/join/2oZuwSHJ) `Testflight安装链接`
+<p align="center">
+  多平台直播聚合应用 | Multi-platform Live Streaming Aggregator
+</p>
 
 ## 问题反馈
 
-[Telegram](https://t.me/+N1BDeo05leU0OWVl) 或 [提交issue](https://github.com/pcccccc/AngelLive/issues/new/choose)
+[常见问题](./docs/FAQ.md) | [Telegram](https://t.me/angelliveapp) | [提交issue](https://github.com/pcccccc/AngelLive/issues/new/choose)
 
 ## 截图：
 
@@ -31,7 +28,7 @@
 
 适配26系统，liquid glass
 
-iOS 18+
+iOS 17+
 
 macOS 15+
 
@@ -40,17 +37,19 @@ tvOS 17+
 
 ## 开发环境配置：
 
+> ⚠️ **重要提示**：本项目依赖 [KSPlayer](https://github.com/kingslay/KSPlayer) 的 LGPL 版本。如没有 LGPL 仓库权限，请联系 KSPlayer 作者获取权限，或使用 GPL 版本并修改部分代码。
+
 1. **克隆项目**：
    ```bash
    git clone https://github.com/pcccccc/AngelLive.git
    cd AngelLive
    ```
 
-2. **配置 API Keys**：
-   - 首次克隆后，在 `SimpleLiveTVOS/Other/Info.plist` 中将 `YOUR_BUGSNAG_API_KEY_HERE` 替换为你的 Bugsnag API key
-
-3. **打开项目**：
+2. **打开项目**：
    使用 Xcode 打开 `AngelLive.workspace`
+
+3. **配置 API Keys（可选）**：
+   - 在 `SimpleLiveTVOS/Other/Info.plist` 中将 `YOUR_BUGSNAG_API_KEY_HERE` 替换为你的 Bugsnag API key
 
 4. **运行项目**：
    选择模拟器或真机设备运行
@@ -94,7 +93,7 @@ tvOS 17+
 
 [Kingfisher](https://github.com/onevcat/Kingfisher)
 
-[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` (目前使用LGPL版本，fork代码请退回GPL版本)
+[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` (目前使用LGPL版本，fork代码请联系作者授权或退回GPL版本)
 
 [FFMPEG](https://github.com/FFmpeg/FFmpeg)
 

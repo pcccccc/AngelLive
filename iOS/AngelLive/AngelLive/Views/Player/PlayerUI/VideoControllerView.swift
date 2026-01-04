@@ -181,8 +181,9 @@ struct VideoControllerView: View {
                                 Spacer()
                                 HStack(spacing: 16) {
                                     // AirPlay 和画面平铺仅在横屏/全屏时显示
+                                    // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
                                     if isLandscape || isIPadFullscreen.wrappedValue {
-                                        if model.config.playerLayer?.player.allowsExternalPlayback == true {
+                                        if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
                                             AirPlayView()
                                                 .frame(width: 30, height: 30)
                                         }

@@ -89,7 +89,7 @@ struct AboutUSView: View {
                                 .foregroundStyle(AppConstants.Colors.primaryText)
 
                             Button {
-                                if let url = URL(string: "https://t.me/simplelivetvos") {
+                                if let url = URL(string: "https://t.me/angelliveapp") {
                                     openURL(url)
                                 }
                             } label: {

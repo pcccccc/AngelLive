@@ -478,7 +478,8 @@ struct LiveRoomCard: View {
             try await favoriteModel.addFavorite(room: room)
             toastManager.show(icon: "heart.fill", message: "收藏成功", type: .success)
         } catch {
-            toastManager.show(icon: "xmark.circle.fill", message: "收藏失败", type: .error)
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
+            toastManager.show(icon: "xmark.circle.fill", message: "收藏失败：\(errorMessage)", type: .error)
             print("收藏失败: \(error)")
         }
     }
@@ -489,7 +490,8 @@ struct LiveRoomCard: View {
             try await favoriteModel.removeFavoriteRoom(room: room)
             toastManager.show(icon: "heart.slash.fill", message: "已取消收藏", type: .info)
         } catch {
-            toastManager.show(icon: "xmark.circle.fill", message: "取消收藏失败", type: .error)
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
+            toastManager.show(icon: "xmark.circle.fill", message: "取消收藏失败：\(errorMessage)", type: .error)
             print("取消收藏失败: \(error)")
         }
     }

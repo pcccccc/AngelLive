@@ -62,6 +62,7 @@ struct TVOSSyncView: View {
                         Spacer()
 
                         Toggle("", isOn: $syncService.iCloudSyncEnabled)
+                            .tint(AppConstants.Colors.accent)
                             .labelsHidden()
                     }
 

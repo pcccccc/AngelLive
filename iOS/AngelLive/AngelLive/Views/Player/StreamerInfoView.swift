@@ -13,6 +13,7 @@ import AngelLiveDependencies
 struct StreamerInfoView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(\.presentToast) private var presentToast
     @State private var isFavoriteAnimating = false
 
     /// 判断是否已收藏
@@ -105,6 +106,12 @@ struct StreamerInfoView: View {
             // 触发动画
             isFavoriteAnimating.toggle()
         } catch {
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
+            let toast = ToastValue(
+                icon: Image(systemName: "xmark.circle.fill"),
+                message: isFavorited ? "取消收藏失败：\(errorMessage)" : "收藏失败：\(errorMessage)"
+            )
+            presentToast(toast)
             print("收藏操作失败: \(error)")
         }
     }

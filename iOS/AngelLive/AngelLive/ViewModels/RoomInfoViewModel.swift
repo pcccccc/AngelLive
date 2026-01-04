@@ -49,6 +49,7 @@ final class RoomInfoViewModel {
     var currentPlayQualityQn = 0
     var currentCdnIndex = 0  // 当前选中的线路索引
     var isPlaying = false
+    var isHLSStream = false  // 当前是否为 HLS 流（支持 AirPlay 投屏）
     var douyuFirstLoad = true
     var yyFirstLoad = true
 
@@ -194,6 +195,7 @@ final class RoomInfoViewModel {
                             self.currentPlayURL = URL(string: liveQuality.url)!
                             self.currentPlayQualityString = liveQuality.title
                             self.isLoading = false
+                            self.isHLSStream = true
                         }
                         return
                     }
@@ -202,12 +204,14 @@ final class RoomInfoViewModel {
             if self.currentPlayURL == nil {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
+                self.isHLSStream = false
             }
         }
         // 抖音优先使用 HLS
         else if currentRoom.liveType == .douyin {
             KSOptions.firstPlayerType = KSMEPlayer.self
             KSOptions.secondPlayerType = KSMEPlayer.self
+            isHLSStream = false
             if cdnIndex == 0 && urlIndex == 0 {
                 for item in currentRoomPlayArgs! {
                     for liveQuality in item.qualitys {
@@ -218,6 +222,7 @@ final class RoomInfoViewModel {
                                 self.currentPlayURL = URL(string: liveQuality.url)!
                                 self.currentPlayQualityString = liveQuality.title
                                 self.isLoading = false
+                                self.isHLSStream = true
                             }
                             return
                         } else {
@@ -227,6 +232,7 @@ final class RoomInfoViewModel {
                                 self.currentPlayURL = URL(string: liveQuality.url)!
                                 self.currentPlayQualityString = liveQuality.title
                                 self.isLoading = false
+                                self.isHLSStream = false
                             }
                             return
                         }
@@ -239,12 +245,15 @@ final class RoomInfoViewModel {
             if currentQuality.liveCodeType == .hls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
+                isHLSStream = false
             } else if currentQuality.liveCodeType == .hls {
                 KSOptions.firstPlayerType = KSAVPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
+                isHLSStream = true
             } else {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
+                isHLSStream = false
             }
         }
 
@@ -252,6 +261,7 @@ final class RoomInfoViewModel {
         if currentRoom.liveType == .ks {
             KSOptions.firstPlayerType = KSMEPlayer.self
             KSOptions.secondPlayerType = KSMEPlayer.self
+            isHLSStream = false
         }
 
         // 斗鱼特殊处理

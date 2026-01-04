@@ -6,7 +6,7 @@
 
 ## 问题反馈
 
-[Telegram](https://t.me/+N1BDeo05leU0OWVl) 或 [提交issue](https://github.com/pcccccc/SimpleLiveTVOS/issues/new/choose)
+[Telegram](https://t.me/angelliveapp) 或 [提交issue](https://github.com/pcccccc/SimpleLiveTVOS/issues/new/choose)
 
 ## 截图：
 

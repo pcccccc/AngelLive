@@ -255,9 +255,10 @@ struct LiveRoomCard: View {
             presentToast(toast)
         } catch {
             // 显示失败提示
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
             let toast = ToastValue(
                 icon: Image(systemName: "xmark.circle.fill"),
-                message: "收藏失败"
+                message: "收藏失败：\(errorMessage)"
             )
             presentToast(toast)
             print("收藏失败: \(error)")
@@ -277,9 +278,10 @@ struct LiveRoomCard: View {
             presentToast(toast)
         } catch {
             // 显示失败提示
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
             let toast = ToastValue(
                 icon: Image(systemName: "xmark.circle.fill"),
-                message: "取消收藏失败"
+                message: "取消收藏失败：\(errorMessage)"
             )
             presentToast(toast)
             print("取消收藏失败: \(error)")

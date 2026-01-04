@@ -17,8 +17,10 @@ struct DanmuSettingView: View {
             // 基本设置
             Section {
                 Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
+                    .tint(AppConstants.Colors.accent)
 
                 Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
+                    .tint(AppConstants.Colors.accent)
             } header: {
                 Text("基本设置")
             }

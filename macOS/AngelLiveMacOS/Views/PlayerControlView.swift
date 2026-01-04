@@ -25,6 +25,7 @@ struct PlayerControlView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager: FullscreenPlayerManager?
+    @Environment(ToastManager.self) private var toastManager: ToastManager?
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
@@ -335,6 +336,8 @@ struct PlayerControlView: View {
             }
             isFavoriteAnimating.toggle()
         } catch {
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
+            toastManager?.show(icon: "xmark.circle.fill", message: isFavorited ? "取消收藏失败：\(errorMessage)" : "收藏失败：\(errorMessage)", type: .error)
             print("收藏操作失败: \(error)")
         }
     }
