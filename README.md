@@ -4,10 +4,6 @@
   <img src="./ScreenShot/logo.png" alt="Angel Live Logo" width="120" />
 </p>
 
-<p align="center">
-  多平台直播聚合应用 | Multi-platform Live Streaming Aggregator
-</p>
-
 ## 问题反馈
 
 [常见问题](./docs/FAQ.md) | [Telegram](https://t.me/angelliveapp) | [提交issue](https://github.com/pcccccc/AngelLive/issues/new/choose)
