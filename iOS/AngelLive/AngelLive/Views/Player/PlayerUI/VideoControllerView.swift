@@ -83,63 +83,73 @@ struct VideoControllerView: View {
         playerSetting.videoScaleMode = mode
 
         guard let playerLayer = model.config.playerLayer else { return }
-        let playerView = playerLayer.player.view
+        let player = playerLayer.player
+
+        // 重置变换
+        player.view.layer.transform = CATransform3DIdentity
 
         switch mode {
         case .fit:
             // 适应：保持比例，可能有黑边
-            model.config.isScaleAspectFill = false
-            playerLayer.player.contentMode = .scaleAspectFit
-            playerView.layer.transform = CATransform3DIdentity
-            playerView.clipsToBounds = false
+            player.contentMode = .scaleAspectFit
+            player.view.clipsToBounds = false
         case .stretch:
             // 拉伸：填满屏幕，不保持比例
-            model.config.isScaleAspectFill = false
-            playerLayer.player.contentMode = .scaleToFill
-            playerView.layer.transform = CATransform3DIdentity
-            playerView.clipsToBounds = false
+            // 注意：不能用 isScaleAspectFill，它只支持 fit/fill 两种模式
+            player.contentMode = .scaleToFill
+            player.view.clipsToBounds = false
         case .fill:
             // 铺满：保持比例，裁剪填满
-            model.config.isScaleAspectFill = true
-            playerLayer.player.contentMode = .scaleAspectFill
-            playerView.layer.transform = CATransform3DIdentity
-            playerView.clipsToBounds = true
+            player.contentMode = .scaleAspectFill
+            player.view.clipsToBounds = true
         case .ratio16x9:
-            // 16:9：强制16:9比例
-            applyAspectRatioTransform(playerView: playerView, targetRatio: 16.0 / 9.0)
-            model.config.isScaleAspectFill = false
-            playerLayer.player.contentMode = .scaleAspectFit
+            // 16:9：使用 scaleToFill 配合 frame 调整
+            applyCustomAspectRatio(player: player, targetRatio: 16.0 / 9.0)
         case .ratio4x3:
-            // 4:3：强制4:3比例
-            applyAspectRatioTransform(playerView: playerView, targetRatio: 4.0 / 3.0)
-            model.config.isScaleAspectFill = false
-            playerLayer.player.contentMode = .scaleAspectFit
+            // 4:3：使用 scaleToFill 配合 frame 调整
+            applyCustomAspectRatio(player: player, targetRatio: 4.0 / 3.0)
         }
 
-        playerView.setNeedsLayout()
-        playerView.layoutIfNeeded()
+        player.view.setNeedsLayout()
+        player.view.layoutIfNeeded()
     }
 
-    /// 应用指定比例的变换
-    private func applyAspectRatioTransform(playerView: UIView, targetRatio: CGFloat) {
-        let viewSize = playerView.bounds.size
-        guard viewSize.width > 0 && viewSize.height > 0 else { return }
-
-        let currentRatio = viewSize.width / viewSize.height
-
-        var scaleX: CGFloat = 1.0
-        var scaleY: CGFloat = 1.0
-
-        if currentRatio > targetRatio {
-            // 当前比例更宽，需要压缩宽度
-            scaleX = targetRatio / currentRatio
-        } else if currentRatio < targetRatio {
-            // 当前比例更窄，需要压缩高度
-            scaleY = currentRatio / targetRatio
+    /// 应用自定义比例（通过调整 frame 实现）
+    private func applyCustomAspectRatio(player: MediaPlayerProtocol, targetRatio: CGFloat) {
+        guard let superview = player.view.superview else {
+            player.contentMode = .scaleAspectFit
+            return
         }
 
-        playerView.layer.transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
-        playerView.clipsToBounds = true
+        let containerSize = superview.bounds.size
+        guard containerSize.width > 0 && containerSize.height > 0 else {
+            player.contentMode = .scaleAspectFit
+            return
+        }
+
+        let containerRatio = containerSize.width / containerSize.height
+
+        var newWidth: CGFloat
+        var newHeight: CGFloat
+
+        if containerRatio > targetRatio {
+            // 容器更宽，以高度为基准
+            newHeight = containerSize.height
+            newWidth = newHeight * targetRatio
+        } else {
+            // 容器更窄，以宽度为基准
+            newWidth = containerSize.width
+            newHeight = newWidth / targetRatio
+        }
+
+        // 计算缩放比例
+        let scaleX = newWidth / containerSize.width
+        let scaleY = newHeight / containerSize.height
+
+        // 使用 scaleToFill 让视频填满整个 view，然后通过 transform 缩放到目标比例
+        player.contentMode = .scaleToFill
+        player.view.layer.transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
+        player.view.clipsToBounds = false
     }
 
     /// 处理返回按钮点击
