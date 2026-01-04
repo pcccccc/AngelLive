@@ -86,8 +86,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/GMObjC",
       "state" : {
-        "revision" : "a040357e3dea9e2ba5932b814edcb97fba55fb0b",
-        "version" : "1.1.4"
+        "revision" : "09393de89140f9d2926c6edbde8de65224b7c07c",
+        "version" : "1.1.5"
       }
     },
     {
