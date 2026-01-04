@@ -16,6 +16,7 @@ struct RoomPlayerView: View {
     let room: LiveModel
     @State private var viewModel: RoomInfoViewModel
     @ObservedObject private var coordinator = KSVideoPlayer.Coordinator()
+    @State private var sleepActivity: NSObjectProtocol?
 
     init(room: LiveModel) {
         self.room = room
@@ -70,7 +71,7 @@ struct RoomPlayerView: View {
                 // 播放器
                 else if let url = viewModel.currentPlayURL {
                     ZStack {
-                        KSVideoPlayer(coordinator: _coordinator, url: url, options: viewModel.playerOption)
+                        KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
                             .onAppear {
                                 viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                                 hideWindowButtons()
@@ -98,16 +99,15 @@ struct RoomPlayerView: View {
                 }
 
                 danmuOverlay(for: geometry.size)
-                    .zIndex(2)
 
                 // 控制层
                 PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator)
-                    .zIndex(3)
             }
         }
         .navigationTitle(viewModel.currentRoom.roomTitle)
         .ignoresSafeArea()
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.space) {
             if viewModel.isPlaying {
                 coordinator.playerLayer?.pause()
@@ -127,6 +127,29 @@ struct RoomPlayerView: View {
         }
         .onDisappear {
             viewModel.disconnectSocket()
+            allowSleep()
+        }
+        .onChange(of: viewModel.isPlaying) { _, isPlaying in
+            if isPlaying {
+                preventSleep()
+            } else {
+                allowSleep()
+            }
+        }
+    }
+
+    private func preventSleep() {
+        guard sleepActivity == nil else { return }
+        sleepActivity = ProcessInfo.processInfo.beginActivity(
+            options: [.idleDisplaySleepDisabled, .idleSystemSleepDisabled],
+            reason: "Video playback in progress"
+        )
+    }
+
+    private func allowSleep() {
+        if let activity = sleepActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            sleepActivity = nil
         }
     }
 
@@ -136,6 +159,8 @@ struct RoomPlayerView: View {
                 window.standardWindowButton(.closeButton)?.isHidden = true
                 window.standardWindowButton(.miniaturizeButton)?.isHidden = true
                 window.standardWindowButton(.zoomButton)?.isHidden = true
+                // 完全禁用窗口移动，只能通过自定义的 WindowDragArea 移动
+                window.isMovable = false
             }
         }
     }

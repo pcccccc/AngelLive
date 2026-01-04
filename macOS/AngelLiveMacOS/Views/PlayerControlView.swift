@@ -22,6 +22,8 @@ struct PlayerControlView: View {
     @State private var showDanmakuSettings = false
     @State private var isFavoriteAnimating = false
     @State private var isFullscreen = false
+    @State private var volume: Float = 1.0  // 独立音量控制
+    @State private var isMuted = false      // 独立静音状态
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager: FullscreenPlayerManager?
@@ -34,6 +36,13 @@ struct PlayerControlView: View {
 
     var body: some View {
         ZStack {
+            // 顶部窗口拖动区域（放在最底层，不影响其他控件）
+            VStack {
+                WindowDragArea()
+                    .frame(height: 60)
+                Spacer()
+            }
+
             // 控制按钮层（带 padding）- 强制 dark mode
             ZStack {
                 // 左上角：关闭按钮和主播信息
@@ -61,11 +70,30 @@ struct PlayerControlView: View {
                 }
                 .environment(\.colorScheme, .dark)
 
-                // 右上角：画面平铺、画中画、设置按钮
+                // 右上角：音量控制、画中画、设置按钮
                 VStack {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
+                            // 静音按钮
+                            Button {
+                                isMuted.toggle()
+                                coordinator.playerLayer?.player.isMuted = isMuted
+                            } label: {
+                                Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                    .frame(width: 30, height: 30)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+
+                            // 音量滑块（使用 AppKit NSSlider 避免窗口拖动冲突）
+                            VolumeSlider(value: $volume)
+                                .frame(width: 80, height: 20)
+                                .onChange(of: volume) { _, newValue in
+                                    coordinator.playerLayer?.player.playbackVolume = newValue
+                                }
+
                             // 画中画按钮（系统 PiP）
                             Button {
                                 toggleSystemPip()
@@ -565,4 +593,60 @@ private extension View {
 private enum GlassEffectShape {
     case capsule
     case circle
+}
+
+// MARK: - Volume Slider (AppKit)
+/// 使用 AppKit NSSlider 实现的音量滑块
+private struct VolumeSlider: NSViewRepresentable {
+    @Binding var value: Float
+
+    func makeNSView(context: Context) -> NSSlider {
+        let slider = NSSlider(value: Double(value), minValue: 0, maxValue: 1, target: context.coordinator, action: #selector(Coordinator.valueChanged(_:)))
+        slider.sliderType = .linear
+        slider.isContinuous = true
+        slider.trackFillColor = .white.withAlphaComponent(0.8)
+        return slider
+    }
+
+    func updateNSView(_ nsView: NSSlider, context: Context) {
+        nsView.doubleValue = Double(value)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    class Coordinator: NSObject {
+        var parent: VolumeSlider
+
+        init(_ parent: VolumeSlider) {
+            self.parent = parent
+        }
+
+        @objc func valueChanged(_ sender: NSSlider) {
+            parent.value = Float(sender.doubleValue)
+        }
+    }
+}
+
+// MARK: - Window Drag Area
+/// 用于拖动窗口的透明区域
+private struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> DraggableView {
+        let view = DraggableView()
+        return view
+    }
+
+    func updateNSView(_ nsView: DraggableView, context: Context) {}
+}
+
+private class DraggableView: NSView {
+    override var mouseDownCanMoveWindow: Bool {
+        return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        // 调用窗口的拖动方法
+        window?.performDrag(with: event)
+    }
 }
