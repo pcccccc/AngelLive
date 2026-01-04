@@ -9,8 +9,41 @@ import Foundation
 import SwiftUI
 import Observation
 
+// MARK: - Video Scale Mode
+
+/// 视频缩放模式
+public enum VideoScaleMode: Int, CaseIterable, Sendable {
+    case fit = 0        // 适应（保持比例，可能有黑边）
+    case stretch = 1    // 拉伸（填满屏幕，不保持比例）
+    case fill = 2       // 铺满（保持比例，裁剪填满）
+    case ratio16x9 = 3  // 16:9
+    case ratio4x3 = 4   // 4:3
+
+    public var title: String {
+        switch self {
+        case .fit: return "适应"
+        case .stretch: return "拉伸"
+        case .fill: return "铺满"
+        case .ratio16x9: return "16:9"
+        case .ratio4x3: return "4:3"
+        }
+    }
+
+    public var iconName: String {
+        switch self {
+        case .fit: return "rectangle.arrowtriangle.2.inward"
+        case .stretch: return "arrow.up.left.and.arrow.down.right"
+        case .fill: return "rectangle.arrowtriangle.2.outward"
+        case .ratio16x9: return "rectangle.ratio.16.to.9"
+        case .ratio4x3: return "rectangle.ratio.4.to.3"
+        }
+    }
+}
+
 @Observable
 public final class PlayerSettingModel {
+
+    public static let globalVideoScaleMode = "SimpleLive.Setting.VideoScaleMode"
 
     public static let globalOpenExitPlayerViewWhenLiveEnd = "SimpleLive.Setting.OpenExitPlayerViewWhenLiveEnd"
     public static let globalOpenExitPlayerViewWhenLiveEndSecond = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecond"
@@ -21,6 +54,20 @@ public final class PlayerSettingModel {
     public init() {}
 
     nonisolated public static let timeArray: [String] = ["1分钟", "2分钟", "3分钟", "5分钟", "10分钟"]
+
+    @ObservationIgnored
+    public var videoScaleMode: VideoScaleMode {
+        get {
+            access(keyPath: \.videoScaleMode)
+            let rawValue = UserDefaults.shared.value(forKey: PlayerSettingModel.globalVideoScaleMode, synchronize: true) as? Int ?? 0
+            return VideoScaleMode(rawValue: rawValue) ?? .fit
+        }
+        set {
+            withMutation(keyPath: \.videoScaleMode) {
+                UserDefaults.shared.set(newValue.rawValue, forKey: PlayerSettingModel.globalVideoScaleMode, synchronize: true)
+            }
+        }
+    }
 
     @ObservationIgnored
     public var openExitPlayerViewWhenLiveEnd: Bool {

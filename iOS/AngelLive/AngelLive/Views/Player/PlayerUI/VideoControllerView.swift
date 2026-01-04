@@ -26,6 +26,7 @@ struct VideoControllerView: View {
     @State private var showDanmakuSettings = false
     @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
     @State private var isSettingsPopupOpen = false // SettingsButton 内部弹窗状态
+    @State private var videoScaleMode: VideoScaleMode = PlayerSettingModel().videoScaleMode
 
     /// 是否有弹窗/菜单展开（展开时暂停自动隐藏）
     private var isPopupOpen: Bool {
@@ -73,6 +74,72 @@ struct VideoControllerView: View {
     private func cancelAutoHideTimer() {
         autoHideTask?.cancel()
         autoHideTask = nil
+    }
+
+    /// 应用视频缩放模式
+    private func applyVideoScaleMode(_ mode: VideoScaleMode) {
+        // 保存设置
+        let playerSetting = PlayerSettingModel()
+        playerSetting.videoScaleMode = mode
+
+        guard let playerLayer = model.config.playerLayer else { return }
+        let playerView = playerLayer.player.view
+
+        switch mode {
+        case .fit:
+            // 适应：保持比例，可能有黑边
+            model.config.isScaleAspectFill = false
+            playerLayer.player.contentMode = .scaleAspectFit
+            playerView.layer.transform = CATransform3DIdentity
+            playerView.clipsToBounds = false
+        case .stretch:
+            // 拉伸：填满屏幕，不保持比例
+            model.config.isScaleAspectFill = false
+            playerLayer.player.contentMode = .scaleToFill
+            playerView.layer.transform = CATransform3DIdentity
+            playerView.clipsToBounds = false
+        case .fill:
+            // 铺满：保持比例，裁剪填满
+            model.config.isScaleAspectFill = true
+            playerLayer.player.contentMode = .scaleAspectFill
+            playerView.layer.transform = CATransform3DIdentity
+            playerView.clipsToBounds = true
+        case .ratio16x9:
+            // 16:9：强制16:9比例
+            applyAspectRatioTransform(playerView: playerView, targetRatio: 16.0 / 9.0)
+            model.config.isScaleAspectFill = false
+            playerLayer.player.contentMode = .scaleAspectFit
+        case .ratio4x3:
+            // 4:3：强制4:3比例
+            applyAspectRatioTransform(playerView: playerView, targetRatio: 4.0 / 3.0)
+            model.config.isScaleAspectFill = false
+            playerLayer.player.contentMode = .scaleAspectFit
+        }
+
+        playerView.setNeedsLayout()
+        playerView.layoutIfNeeded()
+    }
+
+    /// 应用指定比例的变换
+    private func applyAspectRatioTransform(playerView: UIView, targetRatio: CGFloat) {
+        let viewSize = playerView.bounds.size
+        guard viewSize.width > 0 && viewSize.height > 0 else { return }
+
+        let currentRatio = viewSize.width / viewSize.height
+
+        var scaleX: CGFloat = 1.0
+        var scaleY: CGFloat = 1.0
+
+        if currentRatio > targetRatio {
+            // 当前比例更宽，需要压缩宽度
+            scaleX = targetRatio / currentRatio
+        } else if currentRatio < targetRatio {
+            // 当前比例更窄，需要压缩高度
+            scaleY = currentRatio / targetRatio
+        }
+
+        playerView.layer.transform = CATransform3DMakeScale(scaleX, scaleY, 1.0)
+        playerView.clipsToBounds = true
     }
 
     /// 处理返回按钮点击
@@ -180,14 +247,20 @@ struct VideoControllerView: View {
                             HStack {
                                 Spacer()
                                 HStack(spacing: 16) {
-                                    // AirPlay 和画面平铺仅在横屏/全屏时显示
+                                    // AirPlay 和画面缩放仅在横屏/全屏时显示
                                     // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
                                     if isLandscape || isIPadFullscreen.wrappedValue {
                                         if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
                                             AirPlayView()
                                                 .frame(width: 30, height: 30)
                                         }
-                                        KSVideoPlayerViewBuilder.contentModeButton(config: model.config)
+                                        KSVideoPlayerViewBuilder.scaleModeMenuButton(
+                                            config: model.config,
+                                            currentMode: $videoScaleMode,
+                                            onModeChange: { mode in
+                                                applyVideoScaleMode(mode)
+                                            }
+                                        )
                                     }
                                     KSVideoPlayerViewBuilder.pipButton(config: model.config)
                                     SettingsButton(

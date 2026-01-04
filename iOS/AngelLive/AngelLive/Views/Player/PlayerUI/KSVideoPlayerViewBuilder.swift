@@ -14,6 +14,33 @@ import AngelLiveDependencies
 
 @MainActor
 public enum KSVideoPlayerViewBuilder {
+    /// 画面缩放模式菜单按钮
+    @ViewBuilder
+    static func scaleModeMenuButton(config: KSVideoPlayer.Coordinator, currentMode: Binding<VideoScaleMode>, onModeChange: @escaping (VideoScaleMode) -> Void) -> some View {
+        Menu {
+            ForEach(VideoScaleMode.allCases, id: \.rawValue) { mode in
+                Button {
+                    currentMode.wrappedValue = mode
+                    onModeChange(mode)
+                } label: {
+                    HStack {
+                        Image(systemName: mode.iconName)
+                        Text(mode.title)
+                        if currentMode.wrappedValue == mode {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: currentMode.wrappedValue.iconName)
+                .frame(width: 30, height: 30)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .menuStyle(.borderlessButton)
+    }
+
     @ViewBuilder
     static func contentModeButton(config: KSVideoPlayer.Coordinator) -> some View {
         Button {
