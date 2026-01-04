@@ -218,20 +218,7 @@ class LiveViewModel {
                     } else {
                         mergedRooms = self.roomList.appendingUnique(contentsOf: newRooms)
                     }
-                    if self.liveType == .douyin {
-                        if mergedRooms.isEmpty {
-                            self.roomList = []
-                        } else {
-                            var expandedRooms: [LiveModel] = []
-                            expandedRooms.reserveCapacity(120)
-                            while expandedRooms.count < 120 {
-                                expandedRooms.append(contentsOf: mergedRooms)
-                            }
-                            self.roomList = Array(expandedRooms.prefix(120))
-                        }
-                    } else {
-                        self.roomList = mergedRooms
-                    }
+                    self.roomList = mergedRooms
                     self.isLoading = false
                 }
             } catch {
