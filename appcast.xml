@@ -6,23 +6,27 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
-            <title>Version 2.0.0 (Build 12)</title>
-            <sparkle:version>12</sparkle:version>
+            <title>Version 2.0.0 (Build 13)</title>
+            <sparkle:version>13</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
             <description><![CDATA[
                 <h2>更新内容</h2>
                 <ul>
                     <li>添加播放器音量控制功能，每个播放窗口支持独立音量调节</li>
                     <li>添加防止屏幕休眠功能</li>
+                    <li>添加双击全屏、回车键全屏、ESC 退出全屏</li>
+                    <li>修复全屏后非 Dark Mode 背景显示白色问题</li>
                     <li>修复 macOS 15 以下左侧栏搜索缺失问题</li>
                     <li>修复缩放窗口出现红框问题</li>
                     <li>修复视频为白色时 macOS 26 液态玻璃效果异常</li>
+                    <li>修复 Sparkle 更新失败问题</li>
                 </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.arm64.Ver13.dmg">点击下载</a></p>
             ]]></description>
             <pubDate>Sat, 04 Jan 2025 16:00:00 +0800</pubDate>
-            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.arm64.Ver12.dmg"
-                       sparkle:edSignature="RtMniX70xtJMwNRIxCzOKNWpBlNXl/HmBWlU9Xt6rjWLSoXdYeWNPnEqchCoMwc3qHsS5n9gB8iTmF5Vlz/CAg=="
-                       length="24161354"
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.arm64.Ver13.dmg"
+                       sparkle:edSignature="LL+Q5IYt/bhbrA2tVOzNXTqx2JQ8QpOHotb+gCzLnS1xW2fixisvXGIDKSlZ82BO+5B1tCOPP3p7zZUtEt+uDQ=="
+                       length="24160218"
                        type="application/octet-stream"/>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
         </item>

@@ -27,6 +27,8 @@ struct RoomPlayerView: View {
         @Bindable var viewModel = viewModel
         GeometryReader { geometry in
             ZStack {
+                // 黑色背景，确保全屏时非 Dark Mode 下也显示黑色
+                Color.black.ignoresSafeArea()
                 // 主播已下播视图
                 if viewModel.displayState == .streamerOffline {
                     VStack(spacing: 20) {
@@ -118,6 +120,17 @@ struct RoomPlayerView: View {
         }
         .onKeyPress(.return) {
             if let window = NSApplication.shared.keyWindow {
+                window.toggleFullScreen(nil)
+            }
+            return .handled
+        }
+        .onTapGesture(count: 2) {
+            if let window = NSApplication.shared.keyWindow {
+                window.toggleFullScreen(nil)
+            }
+        }
+        .onKeyPress(.escape) {
+            if let window = NSApplication.shared.keyWindow, window.styleMask.contains(.fullScreen) {
                 window.toggleFullScreen(nil)
             }
             return .handled
