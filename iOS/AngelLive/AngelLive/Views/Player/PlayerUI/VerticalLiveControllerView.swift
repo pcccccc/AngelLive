@@ -111,7 +111,7 @@ struct VerticalLiveControllerView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .adaptiveGlassEffect(in: .circle)
+                .adaptiveGlassEffect(in: .capsule)
                 .clipShape(Capsule())
 
                 Spacer()
@@ -202,6 +202,8 @@ private extension View {
                 self.glassEffect(in: .rect(cornerRadius: radius))
             case .circle:
                 self.glassEffect()
+            case .capsule:
+                self.glassEffect(in: .capsule)
             }
         } else {
             switch shape {
@@ -209,6 +211,8 @@ private extension View {
                 self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius))
             case .circle:
                 self.background(.ultraThinMaterial, in: Circle())
+            case .capsule:
+                self.background(.ultraThinMaterial, in: Capsule())
             }
         }
     }
@@ -217,4 +221,5 @@ private extension View {
 private enum GlassEffectShape {
     case rect(cornerRadius: CGFloat)
     case circle
+    case capsule
 }
