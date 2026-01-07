@@ -164,9 +164,9 @@ final class RoomInfoViewModel {
 
         // 虎牙特殊处理
         if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = "HYSDK(Windows,30000002)_APP(pc_exe&7030003&official)_SDK(trans&2.29.0.5493)"
+            self.playerOption.userAgent = "HYSDK(Windows,30000002)_APP(pc_exe&7060000&officia)_SDK(trans&2.32.3.5646)"
             self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows,30000002)_APP(pc_exe&7030003&official)_SDK(trans&2.29.0.5493)"
+                "user-agent": "HYSDK(Windows,30000002)_APP(pc_exe&7060000&officia)_SDK(trans&2.32.3.5646)"
             ])
         } else {
             self.playerOption.userAgent = "libmpv"
