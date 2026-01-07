@@ -6,6 +6,25 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 14)</title>
+            <sparkle:version>14</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>修复虎牙播放问题</li>
+                    <li>适配 Intel Mac</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.Universal.Ver14.dmg">点击下载</a></p>
+            ]]></description>
+            <pubDate>Tue, 07 Jan 2025 15:30:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.Universal.Ver14.dmg"
+                       sparkle:edSignature="phJLwHQotlRaoIE7bW62c/QcDzTXXXsXbMg0Q4YGXHCG52U9uli7HY7V2DVu2gpAc0++ZIBILKCqszIwf/RZBw=="
+                       length="42513088"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 13)</title>
             <sparkle:version>13</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
@@ -21,7 +40,6 @@
                     <li>修复视频为白色时 macOS 26 液态玻璃效果异常</li>
                     <li>修复 Sparkle 更新失败问题</li>
                 </ul>
-                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.arm64.Ver13.dmg">点击下载</a></p>
             ]]></description>
             <pubDate>Sat, 04 Jan 2025 16:00:00 +0800</pubDate>
             <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.arm64.Ver13.dmg"
