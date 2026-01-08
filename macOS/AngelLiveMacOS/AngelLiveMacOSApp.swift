@@ -90,9 +90,10 @@ struct AngelLiveMacOSApp: App {
                 RoomPlayerView(room: room)
                     .environment(favoriteViewModel)
                     .environment(toastManager)
+                    .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))
             }
         }
-        .windowStyle(.hiddenTitleBar)
+        // .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             CommandGroup(replacing: .windowSize) {
@@ -105,3 +106,79 @@ struct AngelLiveMacOSApp: App {
     }
 }
 
+private struct PlayerWindowChromeView: NSViewRepresentable {
+    let hidesWindowButtons: Bool
+    let allowsBackgroundDrag: Bool
+
+    func makeNSView(context: Context) -> PlayerWindowChromeNSView {
+        PlayerWindowChromeNSView(
+            hidesWindowButtons: hidesWindowButtons,
+            allowsBackgroundDrag: allowsBackgroundDrag
+        )
+    }
+
+    func updateNSView(_ nsView: PlayerWindowChromeNSView, context: Context) {
+        nsView.hidesWindowButtons = hidesWindowButtons
+        nsView.allowsBackgroundDrag = allowsBackgroundDrag
+        nsView.applyIfPossible()
+    }
+}
+
+private final class PlayerWindowChromeNSView: NSView {
+    var hidesWindowButtons: Bool
+    var allowsBackgroundDrag: Bool
+    private var previousState: WindowChromeState?
+
+    init(hidesWindowButtons: Bool, allowsBackgroundDrag: Bool) {
+        self.hidesWindowButtons = hidesWindowButtons
+        self.allowsBackgroundDrag = allowsBackgroundDrag
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        applyIfPossible()
+    }
+
+    func applyIfPossible() {
+        guard let window = window else { return }
+        if previousState == nil {
+            let closeButton = window.standardWindowButton(.closeButton)
+            let miniButton = window.standardWindowButton(.miniaturizeButton)
+            let zoomButton = window.standardWindowButton(.zoomButton)
+            previousState = WindowChromeState(
+                window: window,
+                closeHidden: closeButton?.isHidden ?? false,
+                miniHidden: miniButton?.isHidden ?? false,
+                zoomHidden: zoomButton?.isHidden ?? false,
+                isMovableByWindowBackground: window.isMovableByWindowBackground
+            )
+        }
+        if let state = previousState {
+            window.standardWindowButton(.closeButton)?.isHidden = hidesWindowButtons ? true : state.closeHidden
+            window.standardWindowButton(.miniaturizeButton)?.isHidden = hidesWindowButtons ? true : state.miniHidden
+            window.standardWindowButton(.zoomButton)?.isHidden = hidesWindowButtons ? true : state.zoomHidden
+        }
+        window.isMovableByWindowBackground = allowsBackgroundDrag
+    }
+
+    deinit {
+        guard let state = previousState else { return }
+        state.window.standardWindowButton(.closeButton)?.isHidden = state.closeHidden
+        state.window.standardWindowButton(.miniaturizeButton)?.isHidden = state.miniHidden
+        state.window.standardWindowButton(.zoomButton)?.isHidden = state.zoomHidden
+        state.window.isMovableByWindowBackground = state.isMovableByWindowBackground
+    }
+}
+
+private struct WindowChromeState {
+    let window: NSWindow
+    let closeHidden: Bool
+    let miniHidden: Bool
+    let zoomHidden: Bool
+    let isMovableByWindowBackground: Bool
+}

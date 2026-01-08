@@ -17,6 +17,8 @@ struct RoomPlayerView: View {
     @State private var viewModel: RoomInfoViewModel
     @ObservedObject private var coordinator = KSVideoPlayer.Coordinator()
     @State private var sleepActivity: NSObjectProtocol?
+    @State private var playerWindow: NSWindow?
+    @State private var volume: Float = 1.0
 
     init(room: LiveModel) {
         self.room = room
@@ -27,89 +29,24 @@ struct RoomPlayerView: View {
         @Bindable var viewModel = viewModel
         GeometryReader { geometry in
             ZStack {
-                // 黑色背景，确保全屏时非 Dark Mode 下也显示黑色
                 Color.black.ignoresSafeArea()
-                // 主播已下播视图
-                if viewModel.displayState == .streamerOffline {
-                    VStack(spacing: 20) {
-                        Image(systemName: "tv.slash")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        Text("主播已下播")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                        Text(viewModel.currentRoom.userName)
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                }
-                // 错误视图
-                else if viewModel.displayState == .error {
-                    VStack(spacing: 20) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 60))
-                            .foregroundColor(.orange)
-                        Text("播放失败")
-                            .font(.title2)
-                            .foregroundColor(.white)
-                        if let errorMsg = viewModel.playErrorMessage {
-                            Text(errorMsg)
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                        }
-                        Button("重试") {
-                            viewModel.displayState = .loading
-                            Task {
-                                await viewModel.refreshPlayback()
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                }
-                // 播放器
-                else if let url = viewModel.currentPlayURL {
-                    ZStack {
-                        KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
-                            .onAppear {
-                                viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                                hideWindowButtons()
-                            }
-                            .ignoresSafeArea()
-
-                        // 缓冲加载指示器 - 视频播放中但在缓冲时显示
-                        if coordinator.state == .buffering || coordinator.playerLayer?.player.playbackState == .seeking {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(.white)
-                        }
-                    }
-                } else {
-                    // 加载中
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.5)
-                        Text("正在加载...")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                }
+                playerSurface(for: viewModel)
 
                 danmuOverlay(for: geometry.size)
 
                 // 控制层
-                PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator)
+                PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume)
             }
         }
         .navigationTitle(viewModel.currentRoom.roomTitle)
+        .toolbar(.hidden, for: .windowToolbar)
         .ignoresSafeArea()
         .focusable()
         .focusEffectDisabled()
+        .background(PlayerWindowReferenceView(window: $playerWindow))
+        .onAppear {
+            disableWindowBackgroundDrag()
+        }
         .onKeyPress(.space) {
             if viewModel.isPlaying {
                 coordinator.playerLayer?.pause()
@@ -135,6 +72,14 @@ struct RoomPlayerView: View {
             }
             return .handled
         }
+        .onKeyPress(.upArrow) {
+            adjustVolume(by: 0.05)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            adjustVolume(by: -0.05)
+            return .handled
+        }
         .task {
             await viewModel.loadPlayURL()
         }
@@ -148,6 +93,10 @@ struct RoomPlayerView: View {
             } else {
                 allowSleep()
             }
+            disableWindowBackgroundDrag()
+        }
+        .onChange(of: coordinator.state) { _, _ in
+            disableWindowBackgroundDrag()
         }
     }
 
@@ -166,20 +115,87 @@ struct RoomPlayerView: View {
         }
     }
 
-    private func hideWindowButtons() {
+    private func disableWindowBackgroundDrag() {
         DispatchQueue.main.async {
-            if let window = NSApplication.shared.windows.first(where: { $0.isKeyWindow }) {
-                window.standardWindowButton(.closeButton)?.isHidden = true
-                window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-                window.standardWindowButton(.zoomButton)?.isHidden = true
-                // 完全禁用窗口移动，只能通过自定义的 WindowDragArea 移动
-                window.isMovable = false
-            }
+            playerWindow?.isMovableByWindowBackground = false
         }
     }
+
+    private func adjustVolume(by delta: Float) {
+        let newValue = min(1.0, max(0.0, volume + delta))
+        guard newValue != volume else { return }
+        volume = newValue
+    }
+
 }
 
 private extension RoomPlayerView {
+    @ViewBuilder
+    func playerSurface(for viewModel: RoomInfoViewModel) -> some View {
+        if viewModel.displayState == .streamerOffline {
+            VStack(spacing: 20) {
+                Image(systemName: "tv.slash")
+                    .font(.system(size: 60))
+                    .foregroundColor(.gray)
+                Text("主播已下播")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                Text(viewModel.currentRoom.userName)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+        } else if viewModel.displayState == .error {
+            VStack(spacing: 20) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+                Text("播放失败")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                if let errorMsg = viewModel.playErrorMessage {
+                    Text(errorMsg)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                Button("重试") {
+                    viewModel.displayState = .loading
+                    Task {
+                        await viewModel.refreshPlayback()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+        } else if let url = viewModel.currentPlayURL {
+            ZStack {
+                KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
+                    .onAppear {
+                        viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                    }
+                    .ignoresSafeArea()
+
+                if coordinator.state == .buffering || coordinator.playerLayer?.player.playbackState == .seeking {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .tint(.white)
+                }
+            }
+        } else {
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("正在加载...")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black)
+        }
+    }
+
     @ViewBuilder
     func danmuOverlay(for containerSize: CGSize) -> some View {
         let settings = viewModel.danmuSettings
@@ -234,6 +250,34 @@ private extension RoomPlayerView {
         case top
         case bottom
         case full
+    }
+}
+
+private struct PlayerWindowReferenceView: NSViewRepresentable {
+    @Binding var window: NSWindow?
+
+    func makeNSView(context: Context) -> WindowReferenceView {
+        WindowReferenceView(window: $window)
+    }
+
+    func updateNSView(_ nsView: WindowReferenceView, context: Context) {}
+}
+
+private final class WindowReferenceView: NSView {
+    @Binding var windowBinding: NSWindow?
+
+    init(window: Binding<NSWindow?>) {
+        _windowBinding = window
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        windowBinding = self.window
     }
 }
 

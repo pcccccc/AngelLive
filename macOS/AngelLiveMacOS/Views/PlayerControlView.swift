@@ -22,7 +22,7 @@ struct PlayerControlView: View {
     @State private var showDanmakuSettings = false
     @State private var isFavoriteAnimating = false
     @State private var isFullscreen = false
-    @State private var volume: Float = 1.0  // 独立音量控制
+    @Binding var volume: Float  // 独立音量控制
     @State private var isMuted = false      // 独立静音状态
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
@@ -36,10 +36,11 @@ struct PlayerControlView: View {
 
     var body: some View {
         ZStack {
-            // 顶部窗口拖动区域（放在最底层，不影响其他控件）
+            // 顶部拖动区域（放在最底层，不影响控件点击）
             VStack {
                 WindowDragArea()
-                    .frame(height: 60)
+                    .frame(maxWidth: .infinity, minHeight: 60, maxHeight: 60)
+                    .background(Color.red.opacity(0.25))
                 Spacer()
             }
 
@@ -91,6 +92,10 @@ struct PlayerControlView: View {
                             VolumeSlider(value: $volume)
                                 .frame(width: 80, height: 20)
                                 .onChange(of: volume) { _, newValue in
+                                    if isMuted, newValue > 0 {
+                                        isMuted = false
+                                        coordinator.playerLayer?.player.isMuted = false
+                                    }
                                     coordinator.playerLayer?.player.playbackVolume = newValue
                                 }
 
@@ -601,7 +606,7 @@ private struct VolumeSlider: NSViewRepresentable {
     @Binding var value: Float
 
     func makeNSView(context: Context) -> NSSlider {
-        let slider = NSSlider(value: Double(value), minValue: 0, maxValue: 1, target: context.coordinator, action: #selector(Coordinator.valueChanged(_:)))
+        let slider = NoWindowDragSlider(value: Double(value), minValue: 0, maxValue: 1, target: context.coordinator, action: #selector(Coordinator.valueChanged(_:)))
         slider.sliderType = .linear
         slider.isContinuous = true
         slider.trackFillColor = .white.withAlphaComponent(0.8)
@@ -629,24 +634,26 @@ private struct VolumeSlider: NSViewRepresentable {
     }
 }
 
-// MARK: - Window Drag Area
-/// 用于拖动窗口的透明区域
+private final class NoWindowDragSlider: NSSlider {
+    override var mouseDownCanMoveWindow: Bool {
+        false
+    }
+}
+
 private struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> DraggableView {
-        let view = DraggableView()
-        return view
+        DraggableView()
     }
 
     func updateNSView(_ nsView: DraggableView, context: Context) {}
 }
 
-private class DraggableView: NSView {
+private final class DraggableView: NSView {
     override var mouseDownCanMoveWindow: Bool {
-        return true
+        true
     }
 
     override func mouseDown(with event: NSEvent) {
-        // 调用窗口的拖动方法
         window?.performDrag(with: event)
     }
 }
