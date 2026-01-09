@@ -453,9 +453,10 @@ final class RoomInfoViewModel {
     }
 
     /// 断开弹幕连接
+    @MainActor
     func disconnectSocket() {
-        socketConnection?.disconnect()
         socketConnection?.delegate = nil
+        socketConnection?.disconnect()
         socketConnection = nil
         danmuServerIsConnected = false
         danmuServerIsLoading = false
@@ -464,13 +465,18 @@ final class RoomInfoViewModel {
     /// 进入后台时暂停弹幕更新，避免后台 UI 更新触发崩溃
     @MainActor
     func pauseDanmuUpdatesForBackground() {
-        shouldReconnectDanmuOnActive = danmuServerIsConnected || danmuServerIsLoading
+        // 只在首次进入后台时记录状态，避免 inactive → background 两次调用覆盖
+        if !shouldReconnectDanmuOnActive {
+            shouldReconnectDanmuOnActive = danmuServerIsConnected || danmuServerIsLoading
+        }
+        print("📱 进入后台，断开弹幕连接，shouldReconnect: \(shouldReconnectDanmuOnActive)")
         disconnectSocket()
     }
 
     /// 回到前台时恢复弹幕连接（如果之前连接过）
     @MainActor
     func resumeDanmuUpdatesIfNeeded() {
+        print("📱 回到前台，shouldReconnect: \(shouldReconnectDanmuOnActive)")
         guard shouldReconnectDanmuOnActive else { return }
         shouldReconnectDanmuOnActive = false
         getDanmuInfo()

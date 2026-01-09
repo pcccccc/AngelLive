@@ -193,6 +193,7 @@ struct DetailPlayerView: View {
         .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(isIPhoneLandscape)
         .onChange(of: scenePhase) { _, newPhase in
+            print("📱 scenePhase changed to: \(newPhase)")
             switch newPhase {
             case .active:
                 viewModel.resumeDanmuUpdatesIfNeeded()
