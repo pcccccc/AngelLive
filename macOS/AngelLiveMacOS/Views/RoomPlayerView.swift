@@ -15,10 +15,12 @@ import AppKit
 struct RoomPlayerView: View {
     let room: LiveModel
     @State private var viewModel: RoomInfoViewModel
-    @ObservedObject private var coordinator = KSVideoPlayer.Coordinator()
+    @StateObject private var coordinator = KSVideoPlayer.Coordinator()
     @State private var sleepActivity: NSObjectProtocol?
     @State private var playerWindow: NSWindow?
     @State private var volume: Float = 1.0
+    @State private var isMuted = false
+    @State private var didCleanup = false
 
     init(room: LiveModel) {
         self.room = room
@@ -35,7 +37,7 @@ struct RoomPlayerView: View {
                 danmuOverlay(for: geometry.size)
 
                 // 控制层
-                PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume)
+                PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume, isMuted: $isMuted)
             }
         }
         .navigationTitle(viewModel.currentRoom.roomTitle)
@@ -84,8 +86,15 @@ struct RoomPlayerView: View {
             await viewModel.loadPlayURL()
         }
         .onDisappear {
-            viewModel.disconnectSocket()
-            allowSleep()
+            cleanupPlayer()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            guard let closedWindow = notification.object as? NSWindow else { return }
+            // 其他播放窗口关闭时，重新应用当前窗口的音频设置，避免状态被意外重置。
+            guard closedWindow != playerWindow else { return }
+            DispatchQueue.main.async {
+                applyAudioSettings()
+            }
         }
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
             if isPlaying {
@@ -115,6 +124,14 @@ struct RoomPlayerView: View {
         }
     }
 
+    private func cleanupPlayer() {
+        guard !didCleanup else { return }
+        didCleanup = true
+        coordinator.resetPlayer()
+        viewModel.disconnectSocket()
+        allowSleep()
+    }
+
     private func disableWindowBackgroundDrag() {
         DispatchQueue.main.async {
             playerWindow?.isMovableByWindowBackground = false
@@ -127,6 +144,14 @@ struct RoomPlayerView: View {
         volume = newValue
     }
 
+    private func applyAudioSettings() {
+        guard let player = coordinator.playerLayer?.player else { return }
+        player.isMuted = isMuted
+        player.playbackVolume = volume
+        if viewModel.isPlaying {
+            coordinator.playerLayer?.play()
+        }
+    }
 }
 
 private extension RoomPlayerView {
@@ -174,6 +199,7 @@ private extension RoomPlayerView {
                 KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
                     .onAppear {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                        applyAudioSettings()
                     }
                     .ignoresSafeArea()
 

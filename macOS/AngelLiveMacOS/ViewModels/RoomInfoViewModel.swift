@@ -437,12 +437,16 @@ final class RoomInfoViewModel {
         socketConnection?.delegate = nil
         socketConnection = nil
         danmuServerIsConnected = false
+        danmuServerIsLoading = false
     }
 
     /// 刷新当前播放流
     @MainActor
     func refreshPlayback() async {
         isLoading = true
+        if danmuSettings.showDanmu {
+            disconnectSocket()
+        }
         await getPlayArgs()
     }
 

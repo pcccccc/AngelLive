@@ -10,6 +10,7 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 import Kingfisher
+import AppKit
 internal import AVFoundation
 
 struct PlayerControlView: View {
@@ -22,8 +23,9 @@ struct PlayerControlView: View {
     @State private var showDanmakuSettings = false
     @State private var isFavoriteAnimating = false
     @State private var isFullscreen = false
+    @State private var isPinned = false
     @Binding var volume: Float  // 独立音量控制
-    @State private var isMuted = false      // 独立静音状态
+    @Binding var isMuted: Bool      // 独立静音状态
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager: FullscreenPlayerManager?
@@ -40,7 +42,7 @@ struct PlayerControlView: View {
             VStack {
                 WindowDragArea()
                     .frame(maxWidth: .infinity, minHeight: 60, maxHeight: 60)
-                    .background(Color.red.opacity(0.25))
+                    .background(Color.black.opacity(0.001))
                 Spacer()
             }
 
@@ -99,14 +101,16 @@ struct PlayerControlView: View {
                                     coordinator.playerLayer?.player.playbackVolume = newValue
                                 }
 
-                            // 画中画按钮（系统 PiP）
+                            // 置顶按钮
                             Button {
-                                toggleSystemPip()
+                                toggleWindowPin()
                             } label: {
-                                Image(systemName: "pip")
+                                Image(systemName: isPinned ? "pin.fill" : "pin")
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
+                                    .contentTransition(.opacity)
+                                    .animation(.easeInOut(duration: 0.15), value: isPinned)
                             }
                             .buttonStyle(.plain)
 
@@ -311,6 +315,9 @@ struct PlayerControlView: View {
         .sheet(isPresented: $showDanmakuSettings) {
             DanmakuSettingsPanel(viewModel: viewModel)
         }
+        .onAppear {
+            syncPinnedState()
+        }
     }
 
     // MARK: - 主播信息卡片
@@ -403,16 +410,15 @@ struct PlayerControlView: View {
         }
     }
 
-    private func toggleSystemPip() {
-        if let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer {
-            if playerLayer.isPictureInPictureActive {
-                playerLayer.pipStop(restoreUserInterface: true)
-            } else {
-                playerLayer.pipStart()
-            }
-        } else {
-            print("❌ ERROR: playerLayer is not a KSComplexPlayerLayer.")
-        }
+    private func toggleWindowPin() {
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow else { return }
+        isPinned.toggle()
+        window.level = isPinned ? .floating : .normal
+    }
+
+    private func syncPinnedState() {
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow else { return }
+        isPinned = window.level == .floating
     }
 }
 

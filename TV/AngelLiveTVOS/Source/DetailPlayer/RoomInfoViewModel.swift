@@ -176,9 +176,8 @@ final class RoomInfoViewModel {
                     let isHls = liveQuality.liveCodeType == .hls || urlString.contains(".m3u8")
                     if isHls {
                         applyPlayerTypes(first: KSAVPlayer.self, second: nil)
-                        let url = URL(string: liveQuality.url)!
-                        if self.currentPlayURL != url {
-                            self.currentPlayURL = url
+                        if let url = URL(string: liveQuality.url) {
+                            setPlayURL(url)
                         }
                         currentPlayQualityString = liveQuality.title
                         return
@@ -197,17 +196,15 @@ final class RoomInfoViewModel {
                         let isHls = liveQuality.liveCodeType == .hls || urlString.contains(".m3u8")
                         if isHls {
                             applyPlayerTypes(first: KSAVPlayer.self, second: nil)
-                            let url = URL(string: liveQuality.url)!
-                            if self.currentPlayURL != url {
-                                self.currentPlayURL = url
+                            if let url = URL(string: liveQuality.url) {
+                                setPlayURL(url)
                             }
                             currentPlayQualityString = liveQuality.title
                             return
                         }else {
                             applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-                            let url = URL(string: liveQuality.url)!
-                            if self.currentPlayURL != url {
-                                self.currentPlayURL = url
+                            if let url = URL(string: liveQuality.url) {
+                                setPlayURL(url)
                             }
                             currentPlayQualityString = liveQuality.title
                             return
@@ -241,18 +238,14 @@ final class RoomInfoViewModel {
                     let lastCurrentPlayURL = self.currentPlayURL
                     if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
                        let url = URL(string: urlString) {
-                        if self.currentPlayURL != url {
-                            self.currentPlayURL = url
-                        }
+                        self.setPlayURL(url)
                     }
                 }
             }
         }else {
             douyuFirstLoad = false
             if let url = URL(string: currentQuality.url) {
-                if self.currentPlayURL != url {
-                    self.currentPlayURL = url
-                }
+                setPlayURL(url)
             }            
         }
         
@@ -266,18 +259,16 @@ final class RoomInfoViewModel {
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
-                    let url = URL(string: currentQuality?.url ?? "") ?? lastCurrentPlayURL
-                    if self.currentPlayURL != url {
-                        self.currentPlayURL = url
+                    if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
+                       let url = URL(string: urlString) {
+                        self.setPlayURL(url)
                     }
                 }
             }
         }else {
             yyFirstLoad = false
             if let url = URL(string: currentQuality.url) {
-                if self.currentPlayURL != url {
-                    self.currentPlayURL = url
-                }
+                setPlayURL(url)
             }
         }
         
@@ -386,30 +377,66 @@ final class RoomInfoViewModel {
         if danmuServerIsConnected == true || danmuServerIsLoading == true {
             return
         }
+        danmuServerIsLoading = true
         Task {
-            danmuServerIsLoading = true
-            var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
-            switch currentRoom.liveType {
-                case .bilibili:
-                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
-                case .huya:
-                    danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
-                case .douyin:
-                    danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                case .douyu:
-                    danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
-                default: break
+            do {
+                var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
+                switch currentRoom.liveType {
+                    case .bilibili:
+                        danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                    case .huya:
+                        danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                    case .douyin:
+                        danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .douyu:
+                        danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                    default:
+                        await MainActor.run {
+                            danmuServerIsLoading = false
+                        }
+                        return
+                }
+                await MainActor.run {
+                    socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: currentRoom.liveType)
+                    socketConnection?.delegate = self
+                    socketConnection?.connect()
+                }
+            } catch {
+                await MainActor.run {
+                    danmuServerIsLoading = false
+                }
             }
-            socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: currentRoom.liveType)
-            socketConnection?.delegate = self
-            socketConnection?.connect()
         }
     }
     
     func disConnectSocket() {
+        socketConnection?.delegate = nil
         self.socketConnection?.disconnect()
         self.socketConnection = nil
-        socketConnection?.delegate = nil
+        danmuServerIsConnected = false
+        danmuServerIsLoading = false
+    }
+
+    @MainActor
+    func refreshPlayback() {
+        if appViewModel.danmuSettingsViewModel.showDanmu {
+            disConnectSocket()
+        }
+        getPlayArgs()
+    }
+
+    @MainActor
+    private func setPlayURL(_ url: URL) {
+        if currentPlayURL == url {
+            // 强制刷新同一 URL，避免播放器忽略相同地址的更新
+            currentPlayURL = nil
+            Task { @MainActor in
+                await Task.yield()
+                self.currentPlayURL = url
+            }
+        } else {
+            currentPlayURL = url
+        }
     }
 
     func stopTimer() {

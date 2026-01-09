@@ -196,6 +196,7 @@ struct PlayerControlView: View {
                         VStack {
                             HStack(spacing: 0) {
                                 Button(action: {
+                                    guard ensureControlVisible() else { return }
                                     roomInfoViewModel.togglePlayPause()
                                 }, label: {
                                     Image(systemName: roomInfoViewModel.userPaused ? "play.fill" : "pause.fill")
@@ -261,23 +262,14 @@ struct PlayerControlView: View {
                         Spacer()
                         VStack {
                             HStack(spacing: 0) {
-                                Menu {
-                                    ForEach(roomInfoViewModel.currentRoomPlayArgs?.indices ?? 0..<1, id: \.self) { index in
-                                        Button(action: {
-                                            if (roomInfoViewModel.showControlView == false) {
-                                                roomInfoViewModel.showControlView = true
-                                                DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                                                    if roomInfoViewModel.showControlView == true {
-                                                        roomInfoViewModel.showControlView = false
-                                                    }
-                                                })
-                                            }else {}
-                                        }, label: {
-                                            if roomInfoViewModel.currentRoomPlayArgs == nil {
-                                                Text("测试")
-                                            }else {
-                                                Menu {
-                                                    ForEach(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys.indices ?? 0 ..< 1, id: \.self) { subIndex in
+                                if roomInfoViewModel.showControl {
+                                    Menu {
+                                        if let playArgs = roomInfoViewModel.currentRoomPlayArgs, !playArgs.isEmpty {
+                                            ForEach(playArgs.indices, id: \.self) { index in
+                                                let cdn = playArgs[index]
+                                                let cdnName = cdn.cdn.isEmpty ? "线路 \(index + 1)" : cdn.cdn
+                                                Menu(cdnName) {
+                                                    ForEach(cdn.qualitys.indices, id: \.self) { subIndex in
                                                         Button {
                                                             roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
                                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
@@ -289,58 +281,44 @@ struct PlayerControlView: View {
                                                                 }
                                                             })
                                                         } label: {
-                                                            if index < roomInfoViewModel.currentRoomPlayArgs?.count ?? 0 {
-                                                                Text(roomInfoViewModel.currentRoomPlayArgs?[index].qualitys[subIndex].title ?? "")
-                                                            }else {
-                                                                Text("")
-                                                            }
+                                                            Text(cdn.qualitys[subIndex].title)
                                                         }
                                                     }
-                                                } label: {
-                                                    Text(roomInfoViewModel.currentRoomPlayArgs?[index].cdn ?? "")
                                                 }
                                             }
-                                        })
+                                        } else {
+                                            Button("暂无线路") {}
+                                                .disabled(true)
+                                        }
+                                    } label: {
+                                        qualityLabel()
                                     }
-                                } label: {
-                                    if #available(tvOS 26.0, *) {
-                                        Text(roomInfoViewModel.currentPlayQualityString)
-                                            .font(.system(size: 30, weight: .bold))
-                                            .frame(height: 50, alignment: .center)
-                                            .foregroundStyle(.white)
-                                    }else {
-                                        Text(roomInfoViewModel.currentPlayQualityString)
-                                            .font(.system(size: 30, weight: .bold))
-                                            .frame(height: 50, alignment: .center)
-                                            .padding(.top, 10)
-                                             .foregroundStyle(.white)
-                                    }
+                                    .focused($state, equals: .playQuality)
+                                    .frame(height: 60)
+                                    .clipShape(.capsule)
+                                } else {
+                                    Button(action: {
+                                        roomInfoViewModel.showControl = true
+                                    }, label: {
+                                        qualityLabel()
+                                    })
+                                    .focused($state, equals: .playQuality)
+                                    .frame(height: 60)
+                                    .clipShape(.capsule)
                                 }
-                                .focused($state, equals: .playQuality)
-                                .frame(height: 60)
-                                .clipShape(.capsule)
 //                                .popoverTip(multiCameraTip, arrowEdge: .top) { _ in
 //                                    // 点击 Tip 后关闭
 //                                }
-                                .task {
-                                    // 只有多机位时才显示 Tip
-                                    if !hasMultiCamera {
-                                        multiCameraTip.invalidate(reason: .actionPerformed)
-                                    }
-                                }
 
                                 Text("")
                                     .frame(width: 15)
 
                                 Button(action: {
-                                    if roomInfoModel.showControlView == false {
-                                        roomInfoModel.showControlView = true
-                                    }else {
-                                        roomInfoModel.showDanmuSettingView = true
-                                        roomInfoModel.showControl = false
-                                        showDanmuSetting = true
-                                        state = .danmuSetting
-                                    }
+                                    guard ensureControlVisible() else { return }
+                                    roomInfoModel.showDanmuSettingView = true
+                                    roomInfoModel.showControl = false
+                                    showDanmuSetting = true
+                                    state = .danmuSetting
                                 }, label: {
                                     Image("icon-danmu-setting-focus")
                                         .resizable()
@@ -363,6 +341,11 @@ struct PlayerControlView: View {
                             .padding(.leading, 15)
                             .padding(.vertical, 10)
                             .adaptiveGlassEffectCapsule()
+                            .onAppear {
+                                if !hasMultiCamera {
+                                    multiCameraTip.invalidate(reason: .actionPerformed)
+                                }
+                            }
 
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
@@ -463,39 +446,55 @@ struct PlayerControlView: View {
     }
 
     func refreshAction() {
-        if (roomInfoViewModel.showControl == false) {
-            roomInfoViewModel.showControl = true
-        }else {
-            roomInfoViewModel.getPlayArgs()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
-                    playerCoordinator.playerLayer?.play()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                        roomInfoViewModel.showControlView = false
-                    })
-                }
-            })
-        }
+        guard ensureControlVisible() else { return }
+        roomInfoViewModel.refreshPlayback()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+            if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                playerCoordinator.playerLayer?.play()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
+                    roomInfoViewModel.showControlView = false
+                })
+            }
+        })
     }
     
     func favoriteBtnAction() {
-        if (roomInfoViewModel.showControl == false) {
-            roomInfoViewModel.showControl = true
-        }else {
-            favoriteAction()
-        }
+        guard ensureControlVisible() else { return }
+        favoriteAction()
     }
     
     func danmuAction() {
-        if (roomInfoViewModel.showControl == false) {
-            roomInfoViewModel.showControl = true
+        guard ensureControlVisible() else { return }
+        appViewModel.danmuSettingsViewModel.showDanmu.toggle()
+        if appViewModel.danmuSettingsViewModel.showDanmu == false {
+            roomInfoViewModel.disConnectSocket()
         }else {
-            appViewModel.danmuSettingsViewModel.showDanmu.toggle()
-            if appViewModel.danmuSettingsViewModel.showDanmu == false {
-                roomInfoViewModel.disConnectSocket()
-            }else {
-                roomInfoViewModel.getDanmuInfo()
-            }
+            roomInfoViewModel.getDanmuInfo()
+        }
+    }
+
+    @discardableResult
+    private func ensureControlVisible() -> Bool {
+        if roomInfoViewModel.showControl == false {
+            roomInfoViewModel.showControl = true
+            return false
+        }
+        return true
+    }
+
+    @ViewBuilder
+    private func qualityLabel() -> some View {
+        if #available(tvOS 26.0, *) {
+            Text(roomInfoViewModel.currentPlayQualityString)
+                .font(.system(size: 30, weight: .bold))
+                .frame(height: 50, alignment: .center)
+                .foregroundStyle(.white)
+        }else {
+            Text(roomInfoViewModel.currentPlayQualityString)
+                .font(.system(size: 30, weight: .bold))
+                .frame(height: 50, alignment: .center)
+                .padding(.top, 10)
+                .foregroundStyle(.white)
         }
     }
     

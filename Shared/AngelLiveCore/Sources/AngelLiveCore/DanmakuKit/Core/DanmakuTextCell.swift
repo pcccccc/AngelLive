@@ -34,11 +34,22 @@ public class DanmakuTextCell: DanmakuCell {
         guard !text.isEmpty else { return }
 
 #if canImport(AppKit) && !canImport(UIKit)
-        // macOS: 和 iOS 实现完全一致
+        // macOS: 描边 + 填充
         let nsText = NSString(string: text)
+        let drawPoint = CGPoint(x: 25, y: 5)
 
-        let attributesFill: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
-        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesFill)
+        // 描边
+        context.saveGState()
+        context.setTextDrawingMode(.stroke)
+        context.setLineWidth(2)
+        context.setLineJoin(.round)
+        let strokeAttrs: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: NSColor.black]
+        nsText.draw(at: drawPoint, withAttributes: strokeAttrs)
+        context.restoreGState()
+
+        // 填充
+        let fillAttrs: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
+        nsText.draw(at: drawPoint, withAttributes: fillAttrs)
 #else
         var red: CGFloat = 0
         var green: CGFloat = 0
