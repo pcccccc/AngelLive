@@ -23,12 +23,10 @@ public enum KSVideoPlayerViewBuilder {
                     currentMode.wrappedValue = mode
                     onModeChange(mode)
                 } label: {
-                    HStack {
-                        Image(systemName: mode.iconName)
+                    Label {
                         Text(mode.title)
-                        if currentMode.wrappedValue == mode {
-                            Image(systemName: "checkmark")
-                        }
+                    } icon: {
+                        Image(systemName: currentMode.wrappedValue == mode ? "checkmark" : mode.iconName)
                     }
                 }
             }
@@ -39,6 +37,7 @@ public enum KSVideoPlayerViewBuilder {
                 .foregroundStyle(.white)
         }
         .menuStyle(.borderlessButton)
+        .tint(.primary)
     }
 
     @ViewBuilder
@@ -448,9 +447,11 @@ public enum KSVideoPlayerViewBuilder {
             }
         } label: {
             Text(viewModel.currentPlayQualityString)
+                .foregroundStyle(.white)
         }
         .menuIndicator(.hidden)
         .menuStyle(.borderlessButton)
+        .tint(.primary)
     }
 }
 

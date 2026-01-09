@@ -6,6 +6,28 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 15)</title>
+            <sparkle:version>15</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>修复：刷新时弹幕重复连接导致双倍弹幕的问题</li>
+                    <li>修复：macOS 15 与 26 部分情况下无法通过鼠标拖动窗口的问题</li>
+                    <li>优化：多窗口音频，窗口关闭时正确恢复音量/静音状态</li>
+                    <li>优化：右上角按钮改为「置顶」功能</li>
+                    <li>优化：弹幕添加描边效果，提升可读性</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.build15.dmg">点击下载</a></p>
+            ]]></description>
+            <pubDate>Thu, 09 Jan 2026 17:00:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.build15.dmg"
+                       sparkle:edSignature="HbEr5soGZsqrrY30pP+SQ/QGGD5CYTk7zPeQdwjtrSkn0R5mXN2IKsXD9Hm+UOM18/YH9iM2mCQ57xE6se3jCA=="
+                       length="42464635"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 14)</title>
             <sparkle:version>14</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>

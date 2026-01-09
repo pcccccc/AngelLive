@@ -61,6 +61,7 @@ struct MoreActionsButton: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .tint(.primary)
     }
 }
 

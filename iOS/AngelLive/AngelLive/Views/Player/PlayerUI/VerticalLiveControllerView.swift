@@ -21,6 +21,7 @@ struct VerticalLiveControllerView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var backTapped = false
     @State private var isFavoriteAnimating = false
+    @State private var showStreamerInfo = false
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
@@ -68,14 +69,19 @@ struct VerticalLiveControllerView: View {
 
                 // 主播信息
                 HStack(spacing: 10) {
-                    KFImage(URL(string: viewModel.currentRoom.userHeadImg))
-                        .placeholder {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
-                        }
-                        .resizable()
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
+                    Button {
+                        showStreamerInfo = true
+                    } label: {
+                        KFImage(URL(string: viewModel.currentRoom.userHeadImg))
+                            .placeholder {
+                                Circle()
+                                    .fill(Color.gray.opacity(0.3))
+                            }
+                            .resizable()
+                            .frame(width: 36, height: 36)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(viewModel.currentRoom.userName.prefix(10)))
@@ -113,6 +119,9 @@ struct VerticalLiveControllerView: View {
                 .padding(.vertical, 6)
                 .adaptiveGlassEffect(in: .capsule)
                 .clipShape(Capsule())
+                .sheet(isPresented: $showStreamerInfo) {
+                    StreamerInfoSheet(room: viewModel.currentRoom)
+                }
 
                 Spacer()
             }

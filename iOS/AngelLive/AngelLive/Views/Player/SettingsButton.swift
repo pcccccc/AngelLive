@@ -110,6 +110,7 @@ struct SettingsButton: View {
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)
         }
+        .tint(.primary)
     }
 }
 

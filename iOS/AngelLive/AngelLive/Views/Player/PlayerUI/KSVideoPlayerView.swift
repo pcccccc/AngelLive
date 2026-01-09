@@ -24,8 +24,22 @@ public struct KSVideoPlayerView: View {
     private var dismiss
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
+    @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var hasAutoRotatedForCurrentRoom = false // 当前直播间是否已自动旋转
     @State private var actualPlayerHeight: CGFloat = 0 // 实际播放器高度
+
+    /// 是否处于全屏模式（iPad全屏 或 iPhone横屏）
+    private var isFullscreen: Bool {
+        if AppConstants.Device.isIPad {
+            return isIPadFullscreen.wrappedValue
+        } else {
+            // iPhone 横屏判断
+            return horizontalSizeClass == .compact && verticalSizeClass == .compact ||
+                   horizontalSizeClass == .regular && verticalSizeClass == .compact
+        }
+    }
 
     public init(model: KSVideoPlayerModel, subtitleDataSource: SubtitleDataSource? = nil, liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)? = nil) {
         _model = StateObject(wrappedValue: model)
@@ -116,8 +130,9 @@ public struct KSVideoPlayerView: View {
             .persistentSystemOverlays(.hidden)
             .toolbar(.hidden, for: .automatic)
             .toolbar(.hidden, for: .tabBar)
-            .statusBar(hidden: !model.config.isMaskShow)
             .focusedObject(model.config)
+            .statusBar(hidden: isFullscreen)
+            .ignoresSafeArea(isFullscreen ? .container : [], edges: .top)
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
                     model.focusableView = .slider

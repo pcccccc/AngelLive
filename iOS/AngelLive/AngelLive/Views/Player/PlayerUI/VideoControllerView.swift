@@ -27,6 +27,7 @@ struct VideoControllerView: View {
     @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
     @State private var isSettingsPopupOpen = false // SettingsButton 内部弹窗状态
     @State private var videoScaleMode: VideoScaleMode = PlayerSettingModel().videoScaleMode
+    @State private var statusBarVM = StatusBarViewModel()
 
     /// 是否有弹窗/菜单展开（展开时暂停自动隐藏）
     private var isPopupOpen: Bool {
@@ -98,6 +99,32 @@ struct VideoControllerView: View {
         }
     }
 
+    /// 状态栏内容（电池 + 时间），iPhone 有玻璃背景，iPad 无背景
+    @ViewBuilder
+    private var statusBarContent: some View {
+        let content = HStack(spacing: 4) {
+            Text("\(statusBarVM.batteryPercentage)%")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white)
+            Image(systemName: statusBarVM.batteryIconName)
+                .font(.system(size: 14))
+                .foregroundStyle(statusBarVM.batteryColor)
+            Text("·")
+                .foregroundStyle(.white.opacity(0.6))
+            Text(statusBarVM.formattedTime)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+
+        if AppConstants.Device.isIPad {
+            content
+        } else {
+            content.adaptiveGlassEffect()
+        }
+    }
+
     /// 处理返回按钮点击
     /// - iPad 全屏时：退出全屏
     /// - iPhone 横屏时：退出全屏（切换到竖屏）
@@ -150,6 +177,20 @@ struct VideoControllerView: View {
             VerticalLiveControllerView(model: model)
         } else {
             ZStack {
+                // 底部渐变背景（锁定时隐藏）
+                if !model.isLocked {
+                    VStack {
+                        Spacer()
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.3), .black.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 120)
+                    }
+                    .ignoresSafeArea()
+                    .opacity(model.config.isMaskShow ? 1 : 0)
+                }
 
                 // 控制按钮层（带 padding）
                 ZStack {
@@ -195,6 +236,14 @@ struct VideoControllerView: View {
                             Spacer()
                         }
                         .transition(.opacity)
+                    }
+
+                    // 顶部居中：电池电量 + 时间（仅全屏时显示，锁定时隐藏）
+                    if !model.isLocked && (isLandscape || isIPadFullscreen.wrappedValue) {
+                        VStack {
+                            statusBarContent
+                            Spacer()
+                        }
                     }
 
                     // 右上角：投屏、画面平铺、画中画、设置按钮（锁定时隐藏）
@@ -295,7 +344,6 @@ struct VideoControllerView: View {
                     }
                 }
                 .padding(controlPadding)
-                .environment(\.colorScheme, .dark)
                 .opacity(model.config.isMaskShow ? 1 : 0)
                 .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 // 捕获控制层上的任何触摸，重置自动隐藏计时器
