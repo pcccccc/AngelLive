@@ -119,6 +119,17 @@ public enum ApiManager {
                 return try await YoutubeParse.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
         }
     }
+
+    /// 轻量版房间信息获取，用于收藏同步场景（减少重试，跳过回退）
+    public static func fetchLastestLiveInfoFast(liveModel: LiveModel) async throws -> LiveModel {
+        switch liveModel.liveType {
+            case .douyin:
+                return try await Douyin.getLiveLastestInfoFast(roomId: liveModel.roomId, userId: liveModel.userId)
+            default:
+                // 其他平台使用原有方法（虎牙等必须拉取完整 HTML 才能获取头像标题）
+                return try await fetchLastestLiveInfo(liveModel: liveModel)
+        }
+    }
     
     public static func fetchSearchWithShareCode(shareCode: String) async throws -> LiveModel? {
 
