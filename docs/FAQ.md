@@ -92,6 +92,7 @@
    - 检查 iCloud Drive 是否已开启
    - 确认应用的 iCloud 同步权限已开启（设置 > Apple ID > iCloud > 使用 iCloud 的 App）
 4. **CloudKit 服务异常**：苹果服务偶尔会出现故障，可稍后重试
+5. **tvOS系统bug**：请尝试将Apple TV断电重启
 
 ## 其他问题
 
