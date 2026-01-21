@@ -19,13 +19,31 @@ struct HistoryListView: View {
     @Namespace private var roomTransitionNamespace
 
     var body: some View {
-        HistoryListViewControllerWrapper(
+        playerPresentation
+    }
+
+    private var playerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { navigationState.showPlayer },
+            set: { navigationState.showPlayer = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var playerDestination: some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .toolbar(.hidden, for: .tabBar)
+        }
+    }
+
+    @ViewBuilder
+    private var playerPresentation: some View {
+        let baseView = HistoryListViewControllerWrapper(
             navigationState: navigationState,
             namespace: roomTransitionNamespace
         )
-        .fullScreenCover(isPresented: playerPresentedBinding) {
-            playerDestination
-        }
         .navigationTitle("历史记录")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -48,21 +66,17 @@ struct HistoryListView: View {
         } message: {
             Text("确定要清空所有观看记录吗？此操作不可恢复。")
         }
-    }
 
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
-    }
-
-    @ViewBuilder
-    private var playerDestination: some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
-                .toolbar(.hidden, for: .tabBar)
+        if #available(iOS 18.0, *) {
+            baseView
+                .fullScreenCover(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
+        } else {
+            baseView
+                .navigationDestination(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
         }
     }
 }

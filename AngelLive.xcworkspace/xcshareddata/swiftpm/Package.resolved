@@ -154,15 +154,6 @@
       }
     },
     {
-      "identity" : "liveparse",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/LiveParse",
-      "state" : {
-        "revision" : "37c07274ccf8f86829c63ac54c73a2eef1b70c6c",
-        "version" : "2.0.7"
-      }
-    },
-    {
       "identity" : "msdisplaylink",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/MSDisplayLink.git",

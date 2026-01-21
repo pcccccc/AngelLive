@@ -18,18 +18,31 @@ struct FavoriteView: View {
     /// 共享命名空间 - 用于 zoom 过渡动画
     @Namespace private var roomTransitionNamespace
     private static var lastLeaveTimestamp: Date?
+    private static let syncCooldown: TimeInterval = 180
 
     var body: some View {
-        baseNavigation
-            .fullScreenCover(isPresented: playerPresentedBinding) {
-                playerDestination
+        playerPresentation
+            .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
+            .task {
+                await loadIfNeeded()
             }
-        .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
-        .task {
-            await loadIfNeeded()
-        }
-        .onDisappear {
-            FavoriteView.lastLeaveTimestamp = Date()
+            .onDisappear {
+                FavoriteView.lastLeaveTimestamp = Date()
+            }
+    }
+
+    @ViewBuilder
+    private var playerPresentation: some View {
+        if #available(iOS 18.0, *) {
+            baseNavigation
+                .fullScreenCover(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
+        } else {
+            baseNavigation
+                .navigationDestination(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
         }
     }
 
@@ -67,9 +80,20 @@ struct FavoriteView: View {
 
     @MainActor
     private func loadIfNeeded() async {
+        if shouldSkipSyncAfterReturn() {
+            return
+        }
         if viewModel.shouldSync() {
             await viewModel.syncWithActor()
         }
+    }
+
+    private func shouldSkipSyncAfterReturn() -> Bool {
+        guard let lastLeave = FavoriteView.lastLeaveTimestamp else {
+            return false
+        }
+        let timeSinceLeave = Date().timeIntervalSince(lastLeave)
+        return timeSinceLeave < FavoriteView.syncCooldown
     }
 }
 

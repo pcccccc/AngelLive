@@ -16,6 +16,8 @@ class PlatformDetailViewController: UIViewController {
     // MARK: - Properties
 
     private var viewModel: PlatformDetailViewModel
+    private let navigationState: LiveRoomNavigationState
+    private let namespace: Namespace.ID
 
     // 骨架屏容器
     private var skeletonHostingController: UIHostingController<PlatformDetailSkeletonView>?
@@ -55,8 +57,10 @@ class PlatformDetailViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel) {
+    init(viewModel: PlatformDetailViewModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
         self.viewModel = viewModel
+        self.navigationState = navigationState
+        self.namespace = namespace
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -295,7 +299,9 @@ extension PlatformDetailViewController: JXSegmentedListContainerViewDataSource {
     func listContainerView(_ listContainerView: JXSegmentedListContainerView, initListAt index: Int) -> JXSegmentedListContainerViewListDelegate {
         let vc = SubCategoryViewController(
             viewModel: viewModel,
-            mainCategoryIndex: index
+            mainCategoryIndex: index,
+            navigationState: navigationState,
+            namespace: namespace
         )
         return vc
     }

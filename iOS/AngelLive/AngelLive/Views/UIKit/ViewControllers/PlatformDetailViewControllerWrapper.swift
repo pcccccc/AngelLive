@@ -20,16 +20,15 @@ struct PlatformDetailViewControllerWrapper: View {
     @Namespace private var roomTransitionNamespace
 
     var body: some View {
-        baseView
-            .fullScreenCover(isPresented: playerPresentedBinding) {
-                playerDestination
-            }
+        playerPresentation
     }
 
     private var baseView: some View {
-        PlatformDetailViewControllerRepresentable(viewModel: viewModel)
-            .environment(\.liveRoomNavigationState, navigationState)
-            .environment(\.roomTransitionNamespace, roomTransitionNamespace)
+        PlatformDetailViewControllerRepresentable(
+            viewModel: viewModel,
+            navigationState: navigationState,
+            namespace: roomTransitionNamespace
+        )
     }
 
     private var playerPresentedBinding: Binding<Bool> {
@@ -47,14 +46,35 @@ struct PlatformDetailViewControllerWrapper: View {
                 .toolbar(.hidden, for: .tabBar)
         }
     }
+
+    @ViewBuilder
+    private var playerPresentation: some View {
+        if #available(iOS 18.0, *) {
+            baseView
+                .fullScreenCover(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
+        } else {
+            baseView
+                .navigationDestination(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
+        }
+    }
 }
 
 /// UIKit 控制器的 UIViewControllerRepresentable 包装
 private struct PlatformDetailViewControllerRepresentable: UIViewControllerRepresentable {
     let viewModel: PlatformDetailViewModel
+    let navigationState: LiveRoomNavigationState
+    let namespace: Namespace.ID
 
     func makeUIViewController(context: Context) -> PlatformDetailViewController {
-        return PlatformDetailViewController(viewModel: viewModel)
+        return PlatformDetailViewController(
+            viewModel: viewModel,
+            navigationState: navigationState,
+            namespace: namespace
+        )
     }
 
     func updateUIViewController(_ uiViewController: PlatformDetailViewController, context: Context) {

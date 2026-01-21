@@ -22,9 +22,44 @@ struct SearchView: View {
     @Namespace private var roomTransitionNamespace
 
     var body: some View {
+        playerPresentation
+    }
 
+    // MARK: - 播放器导航
+
+    private var playerPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { navigationState.showPlayer },
+            set: { navigationState.showPlayer = $0 }
+        )
+    }
+
+    @ViewBuilder
+    private var playerDestination: some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .toolbar(.hidden, for: .tabBar)
+        }
+    }
+
+    private var searchPrompt: String {
+        switch viewModel.searchTypeIndex {
+        case 0:
+            return "输入链接、分享口令或房间号..."
+        case 1:
+            return "输入关键词搜索..."
+        case 2:
+            return "输入 YouTube 链接或 Video ID..."
+        default:
+            return "搜索直播间..."
+        }
+    }
+
+    @ViewBuilder
+    private var playerPresentation: some View {
         @Bindable var viewModel = viewModel
-        NavigationStack {
+        let baseView = NavigationStack {
             GeometryReader { geometry in
                 VStack(spacing: 0) {
                     // 搜索类型选择器
@@ -78,40 +113,17 @@ struct SearchView: View {
                     hasSearched = false
                 }
             }
-            .fullScreenCover(isPresented: playerPresentedBinding) {
-                playerDestination
-            }
         }
-    }
-
-    // MARK: - 播放器导航
-
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
-    }
-
-    @ViewBuilder
-    private var playerDestination: some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
-                .toolbar(.hidden, for: .tabBar)
-        }
-    }
-
-    private var searchPrompt: String {
-        switch viewModel.searchTypeIndex {
-        case 0:
-            return "输入链接、分享口令或房间号..."
-        case 1:
-            return "输入关键词搜索..."
-        case 2:
-            return "输入 YouTube 链接或 Video ID..."
-        default:
-            return "搜索直播间..."
+        if #available(iOS 18.0, *) {
+            baseView
+                .fullScreenCover(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
+        } else {
+            baseView
+                .navigationDestination(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
         }
     }
 

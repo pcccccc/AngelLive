@@ -31,6 +31,7 @@ public final class AppFavoriteModel {
     public var cloudReturnError = false
     public var syncStatus: CloudSyncStatus = .syncing
     public var lastSyncTime: Date?
+    public var listVersion: Int = 0
     private var isSyncing: Bool = false  // 添加同步状态标记
 
     public init() {}
@@ -84,6 +85,7 @@ public final class AppFavoriteModel {
                 isLoading = false
                 syncStatus = .success
                 lastSyncTime = Date() // 记录同步时间
+                listVersion &+= 1
             } catch {
                 self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
                 syncProgressInfo = ("", "", "", 0, 0)
@@ -132,6 +134,7 @@ public final class AppFavoriteModel {
                 self.groupedRoomList = resp.1
                 syncStatus = .success
                 lastSyncTime = Date()
+                listVersion &+= 1
             } catch {
                 self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
                 cloudReturnError = true
@@ -207,6 +210,7 @@ public final class AppFavoriteModel {
                 groupedRoomList.append(newSection)
             }
         }
+        listVersion &+= 1
     }
 
     @MainActor
@@ -229,6 +233,7 @@ public final class AppFavoriteModel {
                 break
             }
         }
+        listVersion &+= 1
     }
 
     public func refreshView() {
@@ -272,5 +277,6 @@ public final class AppFavoriteModel {
             }
             self.groupedRoomList = groupedRoomList
         }
+        listVersion &+= 1
     }
 }

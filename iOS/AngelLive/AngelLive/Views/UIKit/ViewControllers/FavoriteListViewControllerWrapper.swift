@@ -18,7 +18,11 @@ struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
 
     /// 触发 SwiftUI 感知 viewModel 变化的计算属性
     private var dataVersion: Int {
-        viewModel.groupedRoomList.count + viewModel.roomList.count
+        viewModel.listVersion
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
     }
 
     func makeUIViewController(context: Context) -> FavoriteListViewController {
@@ -38,8 +42,60 @@ struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
         // 使用 dataVersion 确保 SwiftUI 感知到数据变化
         _ = dataVersion
 
-        uiViewController.updateSearchText(searchText)
-        // 当 viewModel 数据变化时（如 isLoading、groupedRoomList 变化），需要刷新
-        uiViewController.reloadData()
+        let currentSignature = ViewStateSignature(
+            isLoading: viewModel.isLoading,
+            cloudReturnError: viewModel.cloudReturnError,
+            cloudKitReady: viewModel.cloudKitReady,
+            cloudKitStateString: viewModel.cloudKitStateString,
+            syncStatusID: syncStatusID(viewModel.syncStatus)
+        )
+        let currentListVersion = viewModel.listVersion
+        let searchChanged = searchText != context.coordinator.lastSearchText
+
+        if searchChanged {
+            uiViewController.updateSearchText(searchText)
+            context.coordinator.lastSearchText = searchText
+            context.coordinator.lastListVersion = currentListVersion
+            context.coordinator.lastSignature = currentSignature
+            return
+        }
+
+        let shouldReload = context.coordinator.lastListVersion != currentListVersion ||
+            context.coordinator.lastSignature != currentSignature
+        if shouldReload {
+            // 当 viewModel 数据变化时（如 isLoading、groupedRoomList 变化），需要刷新
+            uiViewController.reloadData()
+            context.coordinator.lastListVersion = currentListVersion
+            context.coordinator.lastSignature = currentSignature
+        }
+    }
+}
+
+struct ViewStateSignature: Equatable {
+    let isLoading: Bool
+    let cloudReturnError: Bool
+    let cloudKitReady: Bool
+    let cloudKitStateString: String
+    let syncStatusID: Int
+}
+
+func syncStatusID(_ status: CloudSyncStatus) -> Int {
+    switch status {
+    case .syncing:
+        return 0
+    case .success:
+        return 1
+    case .error:
+        return 2
+    case .notLoggedIn:
+        return 3
+    }
+}
+
+extension FavoriteListViewControllerWrapper {
+    final class Coordinator {
+        var lastSearchText: String = ""
+        var lastListVersion: Int = -1
+        var lastSignature: ViewStateSignature?
     }
 }

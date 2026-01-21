@@ -76,7 +76,7 @@ public actor FavoriteStateModel: ObservableObject {
                     // 不在任务中修改 actor 属性，而是返回状态信息
                     let taskStart = CFAbsoluteTimeGetCurrent()
                     do {
-                        let dataReq = try await ApiManager.fetchLastestLiveInfo(liveModel: liveModel)
+                        let dataReq = try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
                         let duration = CFAbsoluteTimeGetCurrent() - taskStart
                         if liveModel.liveType == .ks {
                             var finalLiveModel = liveModel

@@ -17,6 +17,8 @@ class SubCategoryViewController: UIViewController {
 
     private weak var viewModel: PlatformDetailViewModel?
     private let mainCategoryIndex: Int
+    private let navigationState: LiveRoomNavigationState
+    private let namespace: Namespace.ID
 
     // 子分类 JXSegmentedView
     private lazy var subCategoryDataSource = JXSegmentedTitleDataSource()
@@ -61,9 +63,11 @@ class SubCategoryViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int) {
+    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
         self.viewModel = viewModel
         self.mainCategoryIndex = mainCategoryIndex
+        self.navigationState = navigationState
+        self.namespace = namespace
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -271,7 +275,9 @@ extension SubCategoryViewController: JXSegmentedListContainerViewDataSource {
         let vc = RoomListViewController(
             viewModel: viewModel!,
             mainCategoryIndex: mainCategoryIndex,
-            subCategoryIndex: index
+            subCategoryIndex: index,
+            navigationState: navigationState,
+            namespace: namespace
         )
         return vc
     }

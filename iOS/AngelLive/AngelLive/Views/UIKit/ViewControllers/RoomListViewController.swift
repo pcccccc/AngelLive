@@ -18,6 +18,8 @@ class RoomListViewController: UIViewController {
     private weak var viewModel: PlatformDetailViewModel?
     private let mainCategoryIndex: Int
     private let subCategoryIndex: Int
+    private let navigationState: LiveRoomNavigationState?
+    private let namespace: Namespace.ID?
     private var rooms: [LiveModel] = []
 
     private lazy var collectionView: UICollectionView = {
@@ -44,10 +46,12 @@ class RoomListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, subCategoryIndex: Int) {
+    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, subCategoryIndex: Int, navigationState: LiveRoomNavigationState? = nil, namespace: Namespace.ID? = nil) {
         self.viewModel = viewModel
         self.mainCategoryIndex = mainCategoryIndex
         self.subCategoryIndex = subCategoryIndex
+        self.navigationState = navigationState
+        self.namespace = namespace
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -303,7 +307,11 @@ extension RoomListViewController: UICollectionViewDataSource {
         }
 
         let room = rooms[indexPath.item]
-        cell.configure(with: room)
+        if let navigationState, let namespace {
+            cell.configure(with: room, navigationState: navigationState, namespace: namespace)
+        } else {
+            cell.configure(with: room)
+        }
 
         return cell
     }

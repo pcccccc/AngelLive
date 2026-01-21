@@ -104,12 +104,21 @@ struct LiveRoomCard: View {
             if useExternalNavigation {
                 baseButton
             } else {
-                baseButton
-                    .fullScreenCover(isPresented: showPlayerBinding) {
-                        DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                            .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
-                            .toolbar(.hidden, for: .tabBar)
-                    }
+                if #available(iOS 18.0, *) {
+                    baseButton
+                        .fullScreenCover(isPresented: showPlayerBinding) {
+                            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
+                                .toolbar(.hidden, for: .tabBar)
+                        }
+                } else {
+                    baseButton
+                        .navigationDestination(isPresented: showPlayerBinding) {
+                            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+                                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
+                                .toolbar(.hidden, for: .tabBar)
+                        }
+                }
             }
         }
     }
