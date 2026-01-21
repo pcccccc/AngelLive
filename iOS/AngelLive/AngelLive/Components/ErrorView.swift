@@ -340,107 +340,119 @@ private extension ErrorView {
     }
 
     var actionButtons: some View {
-        HStack(spacing: 16) {
-            if showDismiss, let onDismiss = onDismiss {
-                Button(action: onDismiss) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.left")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("返回")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+        return VStack(spacing: 12) {
+            actionButtonItems
+        }
+    }
 
-            if showLoginButton {
-                if isBilibiliLoggedIn {
-                    // 已登录：显示查看官方页面按钮
-                    Button(action: {
-                        showingCookieDebugView = true
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("查看官方页面")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule()
-                                .fill(Color.blue)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                } else if let onLogin = onLogin {
-                    // 未登录：显示去登录按钮
-                    Button(action: onLogin) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "person.crop.circle.badge.checkmark")
-                                .font(.system(size: 15, weight: .semibold))
-                            Text("去登录")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule()
-                                .fill(Color.green)
-                        )
-                    }
-                    .buttonStyle(.plain)
+    @ViewBuilder
+    private var actionButtonItems: some View {
+        if showDismiss, let onDismiss = onDismiss {
+            Button(action: onDismiss) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("返回")
+                        .font(.system(size: 16, weight: .semibold))
                 }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
             }
+            .buttonStyle(.plain)
+        }
 
-            if showRetry, let onRetry = onRetry {
-                Button(action: onRetry) {
+        if showLoginButton {
+            if isBilibiliLoggedIn {
+                // 已登录：显示查看官方页面按钮
+                Button(action: {
+                    showingCookieDebugView = true
+                }) {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.clockwise")
+                        Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 15, weight: .semibold))
-                        Text("重试")
+                        Text("查看官方页面")
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
                     .background(
                         Capsule()
-                            .fill(Color.accentColor)
+                            .fill(Color.blue)
                     )
                 }
                 .buttonStyle(.plain)
-            }
-
-            if showDetailButton, detailMessage != nil, !detailMessage!.isEmpty {
-                Button(action: {
-                    showingDetailSheet = true
-                }) {
+            } else if let onLogin = onLogin {
+                // 未登录：显示去登录按钮
+                Button(action: onLogin) {
                     HStack(spacing: 6) {
-                        Image(systemName: "doc.text.magnifyingglass")
+                        Image(systemName: "person.crop.circle.badge.checkmark")
                             .font(.system(size: 15, weight: .semibold))
-                        Text("查看详情")
+                        Text("去登录")
                             .font(.system(size: 16, weight: .semibold))
                     }
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
                     .background(
                         Capsule()
-                            .fill(.ultraThinMaterial)
+                            .fill(Color.green)
                     )
                 }
                 .buttonStyle(.plain)
             }
+        }
+
+        if showRetry, let onRetry = onRetry {
+            Button(action: onRetry) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("重试")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(Color.accentColor)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        if showDetailButton, detailMessage?.isEmpty == false {
+            Button(action: {
+                showingDetailSheet = true
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("查看详情")
+                        .font(.system(size: 16, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 

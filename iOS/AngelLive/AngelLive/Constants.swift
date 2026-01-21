@@ -163,6 +163,18 @@ enum AppConstants {
         static let md = (color: AppConstants.Colors.primaryShadow, radius: CGFloat(8), x: CGFloat(0), y: CGFloat(4))
         static let lg = (color: AppConstants.Colors.primaryShadow, radius: CGFloat(10), x: CGFloat(0), y: CGFloat(5))
     }
+
+    // MARK: - Player UI
+
+    enum PlayerUI {
+        enum Opacity {
+            static let overlayLight: CGFloat = 0.3
+            static let overlayMedium: CGFloat = 0.5
+            static let overlayStrong: CGFloat = 0.6
+            static let overlayHeavy: CGFloat = 0.8
+            static let backplate: CGFloat = 0.35
+        }
+    }
     
     enum AspectRatio {
         static let pic = 16.0 / 9.0

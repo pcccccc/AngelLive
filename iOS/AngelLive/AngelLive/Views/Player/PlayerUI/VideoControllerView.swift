@@ -182,7 +182,11 @@ struct VideoControllerView: View {
                     VStack {
                         Spacer()
                         LinearGradient(
-                            colors: [.clear, .black.opacity(0.3), .black.opacity(0.6)],
+                            colors: [
+                                .clear,
+                                .black.opacity(AppConstants.PlayerUI.Opacity.overlayLight),
+                                .black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong)
+                            ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -449,7 +453,7 @@ struct VideoSettingHUDView: View {
                 .buttonStyle(.plain)
             }
             .padding()
-            .background(Color.black.opacity(0.8))
+            .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayHeavy))
 
             // 内容区域 - 使用 TimelineView 实现定期刷新
             TimelineView(.periodic(from: .now, by: 1.0)) { context in
@@ -465,12 +469,12 @@ struct VideoSettingHUDView: View {
                     }
                     .padding()
                 }
-                .background(Color.black.opacity(0.7))
+                .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong))
             }
         }
         .frame(width: 320)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color.black.opacity(0.5))
+        .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayMedium))
     }
 
     // 视频信息分组
@@ -494,7 +498,7 @@ struct VideoSettingHUDView: View {
             Label("视频信息", systemImage: "film")
                 .foregroundStyle(.white)
         }
-        .backgroundStyle(Color.black.opacity(0.3))
+        .backgroundStyle(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayLight))
     }
 
     // 性能信息分组
@@ -521,7 +525,7 @@ struct VideoSettingHUDView: View {
             Label("性能信息", systemImage: "speedometer")
                 .foregroundStyle(.white)
         }
-        .backgroundStyle(Color.black.opacity(0.3))
+        .backgroundStyle(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayLight))
     }
 
     // 格式化字节数
@@ -626,7 +630,7 @@ private extension View {
     @ViewBuilder
     func adaptiveGlassEffect() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .capsule)
+            self.glassEffect(.regular.interactive().tint(.black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong)), in: .capsule)
         } else {
             self.background(.ultraThinMaterial, in: Capsule())
         }
@@ -635,7 +639,7 @@ private extension View {
     @ViewBuilder
     func adaptiveCircleGlassEffect() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .circle)
+            self.glassEffect(.regular.interactive().tint(.black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong)), in: .circle)
         } else {
             self.background(.ultraThinMaterial, in: Circle())
         }

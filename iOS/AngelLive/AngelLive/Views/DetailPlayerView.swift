@@ -34,6 +34,11 @@ struct DetailPlayerView: View {
     /// 当前是否 iPhone 横屏（用于禁用下滑手势）
     @State private var isIPhoneLandscape: Bool = false
 
+    /// 用户离开底部时显示“查看最新评论”按钮
+    @State private var showJumpToLatest: Bool = false
+    /// 触发跳到底部的请求
+    @State private var scrollToBottomRequest: Bool = false
+
     // MARK: - Body
 
     var body: some View {
@@ -304,6 +309,13 @@ struct DetailPlayerView: View {
             // 聊天消息列表
             chatListView
 
+            if showJumpToLatest {
+                jumpToLatestButton
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 72)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // 更多功能按钮（右下角）
             MoreActionsButton(
                 room: viewModel.currentRoom,
@@ -317,45 +329,47 @@ struct DetailPlayerView: View {
     private var chatListView: some View {
         Group {
             if scenePhase == .active {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            ForEach(viewModel.danmuMessages) { message in
-                                ChatBubbleView(message: message)
-                                    .id(message.id)
-                                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .padding(.bottom, 60) // 为更多按钮留出空间
-                    }
-                    .onChange(of: viewModel.danmuMessages.count) { oldValue, newValue in
-                        scrollToBottom(proxy: proxy)
-                    }
-                    .onAppear {
-                        scrollToBottom(proxy: proxy)
-                    }
-                }
+                ChatTableView(
+                    messages: viewModel.danmuMessages,
+                    showJumpToLatest: $showJumpToLatest,
+                    scrollToBottomRequest: $scrollToBottomRequest
+                )
             } else {
                 EmptyView()
             }
         }
     }
 
-    // MARK: - Helper Methods
-
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        withAnimation {
-            if let lastMessage = viewModel.danmuMessages.last {
-                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+    private var jumpToLatestButton: some View {
+        Button {
+            scrollToBottomRequest = true
+        } label: {
+            HStack(spacing: 6) {
+                Text("查看最新评论")
+                Image(systemName: "arrow.down")
             }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayMedium))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
         }
     }
+
+    // MARK: - Helper Methods
 
     private func clearChat() {
         withAnimation {
             viewModel.danmuMessages.removeAll()
+            showJumpToLatest = false
         }
     }
 }

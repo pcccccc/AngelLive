@@ -155,7 +155,6 @@ struct PlayerContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
                     .clipped()
-                    .opacity(hasDetectedSize ? 1 : 0)
 
                     // 缓冲加载指示器 - 视频播放中但在缓冲时显示
                     if playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking {

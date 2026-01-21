@@ -65,6 +65,7 @@ struct VerticalLiveControllerView: View {
                         .frame(width: 40, height: 40)
                 }
                 .frame(width: 40, height: 40)
+                .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.backplate), in: RoundedRectangle(cornerRadius: 20))
                 .adaptiveGlassEffect(in: .rect(cornerRadius: 20.0))
 
                 // 主播信息
@@ -117,6 +118,7 @@ struct VerticalLiveControllerView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
+                .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.backplate), in: Capsule())
                 .adaptiveGlassEffect(in: .capsule)
                 .clipShape(Capsule())
                 .sheet(isPresented: $showStreamerInfo) {
