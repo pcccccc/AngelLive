@@ -153,7 +153,7 @@ class AppFavoriteModel {
                 roomList.filter { $0.liveType == type }
             }
             for array in formatedRoomList {
-                let model = FavoriteLiveSectionModel()
+                var model = FavoriteLiveSectionModel()
                 model.roomList = array
                 model.title = LiveParseTools.getLivePlatformName(array.first?.liveType ?? .bilibili)
                 model.type = array.first?.liveType ?? .bilibili
@@ -167,7 +167,7 @@ class AppFavoriteModel {
                 roomList.filter { $0.liveState == state }
             }
             for array in formatedRoomList {
-                let model = FavoriteLiveSectionModel()
+                var model = FavoriteLiveSectionModel()
                 model.roomList = array
                 model.title = array.first?.liveStateFormat() ?? "未知状态"
                 model.type = array.first?.liveType ?? .bilibili

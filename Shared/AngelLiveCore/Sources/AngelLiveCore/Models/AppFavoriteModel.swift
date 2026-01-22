@@ -185,7 +185,7 @@ public final class AppFavoriteModel {
             }
             // 如果没有找到对应平台的分组，创建新分组
             if !found {
-                let newSection = FavoriteLiveSectionModel()
+                var newSection = FavoriteLiveSectionModel()
                 newSection.roomList = [room]
                 newSection.title = LiveParseTools.getLivePlatformName(room.liveType)
                 newSection.type = room.liveType
@@ -203,7 +203,7 @@ public final class AppFavoriteModel {
             }
             // 如果没有找到对应状态的分组，创建新分组
             if !found {
-                let newSection = FavoriteLiveSectionModel()
+                var newSection = FavoriteLiveSectionModel()
                 newSection.roomList = [room]
                 newSection.title = room.liveStateFormat()
                 newSection.type = room.liveType
@@ -247,7 +247,7 @@ public final class AppFavoriteModel {
                 roomList.filter { $0.liveType == type }
             }
             for array in formatedRoomList {
-                let model = FavoriteLiveSectionModel()
+                var model = FavoriteLiveSectionModel()
                 model.roomList = array
                 model.title = LiveParseTools.getLivePlatformName(array.first?.liveType ?? .bilibili)
                 model.type = array.first?.liveType ?? .bilibili
@@ -261,7 +261,7 @@ public final class AppFavoriteModel {
                 roomList.filter { $0.liveState == state }
             }
             for array in formatedRoomList {
-                let model = FavoriteLiveSectionModel()
+                var model = FavoriteLiveSectionModel()
                 model.roomList = array
                 model.title = array.first?.liveStateFormat() ?? "未知状态"
                 model.type = array.first?.liveType ?? .bilibili

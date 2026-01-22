@@ -222,7 +222,7 @@ class FavoriteListViewController: UIViewController {
                     room.roomTitle.lowercased().contains(keyword)
                 }
                 guard !rooms.isEmpty else { return nil }
-                let newSection = FavoriteLiveSectionModel()
+                var newSection = FavoriteLiveSectionModel()
                 newSection.roomList = rooms
                 newSection.title = section.title
                 newSection.type = section.type
