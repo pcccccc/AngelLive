@@ -39,10 +39,23 @@ struct FavoriteView: View {
                     playerDestination
                 }
         } else {
-            baseNavigation
+            // iOS 17: navigationDestination 必须在 NavigationStack 内部
+            NavigationStack {
+                FavoriteListViewControllerWrapper(
+                    searchText: searchText,
+                    navigationState: navigationState,
+                    namespace: roomTransitionNamespace
+                )
+                // 安全区域处理 - 同时支持 TabBar 透视和大标题动画
+                .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
+                .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 0) }
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
+                .navigationTitle("收藏")
+                .navigationBarTitleDisplayMode(.large)
                 .navigationDestination(isPresented: playerPresentedBinding) {
                     playerDestination
                 }
+            }
         }
     }
 

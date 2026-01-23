@@ -6,6 +6,33 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 17)</title>
+            <sparkle:version>17</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>修复：刷新/切换清晰度后播放状态不同步</li>
+                    <li>修复：清晰度菜单样式显示异常</li>
+                    <li>修复：弹幕边框颜色不随透明度设置变化</li>
+                    <li>修复：鼠标隐藏功能现在仅在全屏模式下生效</li>
+                    <li>优化：收藏按钮添加 loading 状态和动画效果</li>
+                    <li>优化：Toast 使用 Pow 动画效果</li>
+                    <li>优化：控制层按钮扩大点击区域</li>
+                    <li>优化：音量控制移至左下角，悬停展开滑块</li>
+                    <li>优化：全屏播放时自动隐藏鼠标指针</li>
+                    <li>优化：收藏错误页面 UI 布局</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.build17.dmg">点击下载</a></p>
+            ]]></description>
+            <pubDate>Thu, 23 Jan 2026 15:00:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.build17.dmg"
+                       sparkle:edSignature="fqyPPxmbFVAKb0Y6WMXF6crlSnAyAAv1BN04lb3BhzLDbm5iA3gBRNGDM99nAF0jhJ+OASbWe8OWO/xxIhOFAA=="
+                       length="42440963"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 16)</title>
             <sparkle:version>16</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>

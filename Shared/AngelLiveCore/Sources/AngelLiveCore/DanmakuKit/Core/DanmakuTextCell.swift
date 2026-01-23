@@ -38,12 +38,18 @@ public class DanmakuTextCell: DanmakuCell {
         let nsText = NSString(string: text)
         let drawPoint = CGPoint(x: 25, y: 5)
 
-        // 描边
+        // 获取填充色的 alpha 值，用于描边
+        var alpha: CGFloat = 1.0
+        if let colorSpace = model.color.usingColorSpace(.sRGB) {
+            alpha = colorSpace.alphaComponent
+        }
+
+        // 描边（使用与填充相同的透明度，但颜色更淡）
         context.saveGState()
         context.setTextDrawingMode(.stroke)
         context.setLineWidth(2)
         context.setLineJoin(.round)
-        let strokeAttrs: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: NSColor.black]
+        let strokeAttrs: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: NSColor.black.withAlphaComponent(alpha * 0.5)]
         nsText.draw(at: drawPoint, withAttributes: strokeAttrs)
         context.restoreGState()
 

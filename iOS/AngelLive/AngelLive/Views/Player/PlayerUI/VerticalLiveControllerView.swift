@@ -114,7 +114,6 @@ struct VerticalLiveControllerView: View {
                             .symbolEffect(.bounce, value: isFavoriteAnimating)
                     }
                     .ksBorderlessButton()
-                    .sensoryFeedback(.success, trigger: isFavoriteAnimating)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -173,7 +172,7 @@ struct VerticalLiveControllerView: View {
             } else {
                 try await favoriteModel.addFavorite(room: viewModel.currentRoom)
             }
-            // 触发动画
+            // 成功后触发动画
             isFavoriteAnimating.toggle()
         } catch {
             print("收藏操作失败: \(error)")

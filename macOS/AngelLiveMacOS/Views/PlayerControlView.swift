@@ -479,7 +479,9 @@ struct PlayerControlView: View {
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2秒后隐藏鼠标
             if !Task.isCancelled {
                 await MainActor.run {
-                    if !isHovering && !isCursorHidden {
+                    // 只在全屏模式下隐藏鼠标
+                    let windowIsFullscreen = NSApplication.shared.keyWindow?.styleMask.contains(.fullScreen) ?? false
+                    if windowIsFullscreen && !isHovering && !isCursorHidden {
                         NSCursor.hide()
                         isCursorHidden = true
                     }

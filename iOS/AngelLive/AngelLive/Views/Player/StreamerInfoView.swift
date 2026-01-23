@@ -92,7 +92,6 @@ struct StreamerInfoView: View {
                             .foregroundStyle(.red)
                     }, value: isFavoriteAnimating
                 )
-                .sensoryFeedback(.success, trigger: isFavoriteAnimating)
             }
         }
         .padding(.horizontal, 20)
@@ -112,7 +111,7 @@ struct StreamerInfoView: View {
             } else {
                 try await favoriteModel.addFavorite(room: viewModel.currentRoom)
             }
-            // 触发动画
+            // 成功后触发动画
             isFavoriteAnimating.toggle()
         } catch {
             let errorMessage = FavoriteService.formatErrorCode(error: error)
