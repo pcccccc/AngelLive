@@ -178,10 +178,10 @@ struct FavoriteMainView: View {
         .onChange(of: scenePhase) { oldValue, newValue in
             switch newValue {
                 case .active:
-                    
                     self.timer?.invalidate()
                     self.timer = nil
-                    if second > 300 {
+                    // 只有当前在收藏页面时才触发刷新
+                    if second > 300 && appViewModel.selection == 0 {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: {
                             getViewStateAndFavoriteList()
                         })
