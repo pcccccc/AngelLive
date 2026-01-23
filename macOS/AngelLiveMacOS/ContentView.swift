@@ -121,14 +121,12 @@ struct ContentView: View {
         .environment(toastManager)
         .environment(fullscreenPlayerManager)
         .overlay(alignment: .top) {
-            if toastManager.currentToast != nil && !fullscreenPlayerManager.showFullscreenPlayer {
-                if let toast = toastManager.currentToast {
-                    ToastView(toast: toast)
-                        .padding(.top, 16)
-                        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: toastManager.currentToast != nil)
-                }
+            if let toast = toastManager.currentToast, !fullscreenPlayerManager.showFullscreenPlayer {
+                ToastView(toast: toast)
+                    .padding(.top, 16)
             }
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: toastManager.currentToast)
     }
     
     func getImage(platform: Platformdescription) -> String {

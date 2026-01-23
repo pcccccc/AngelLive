@@ -168,18 +168,18 @@ struct FavoriteView: View {
                 startFavoriteSync(force: true)
             }) {
                 Label("重试", systemImage: "arrow.counterclockwise")
-                    .font(.headline)
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 8)
                     .background(
                         Capsule()
-                            .fill(.blue.gradient)
+                            .fill(Color.accentColor)
                     )
             }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
     }
 
     private func startFavoriteSync(force: Bool) {

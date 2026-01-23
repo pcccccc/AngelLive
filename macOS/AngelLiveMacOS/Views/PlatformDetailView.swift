@@ -10,6 +10,7 @@ import SwiftUI
 import AngelLiveCore
 import LiveParse
 import Kingfisher
+import Pow
 
 struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
@@ -365,6 +366,8 @@ struct LiveRoomCard: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(ToastManager.self) private var toastManager
     @State private var showOfflineAlert = false
+    @State private var isFavoriteLoading = false
+    @State private var isFavoriteAnimating = false
 
     // 判断是否已收藏
     private var isFavorited: Bool {
@@ -425,6 +428,21 @@ struct LiveRoomCard: View {
                 Spacer()
             }
         }
+        .overlay {
+            if isFavoriteLoading {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.ultraThinMaterial)
+                    ProgressView()
+                }
+            }
+        }
+        .changeEffect(
+            .spray(origin: UnitPoint(x: 0.5, y: 0.3)) {
+                Image(systemName: isFavorited ? "heart.fill" : "heart.slash.fill")
+                    .foregroundStyle(.red)
+            }, value: isFavoriteAnimating
+        )
         .contextMenu {
             favoriteContextMenu
         }
@@ -474,8 +492,13 @@ struct LiveRoomCard: View {
 
     @MainActor
     private func addFavorite() async {
+        guard !isFavoriteLoading else { return }
+        isFavoriteLoading = true
+        defer { isFavoriteLoading = false }
+
         do {
             try await favoriteModel.addFavorite(room: room)
+            isFavoriteAnimating.toggle()
             toastManager.show(icon: "heart.fill", message: "收藏成功", type: .success)
         } catch {
             let errorMessage = FavoriteService.formatErrorCode(error: error)
@@ -486,8 +509,13 @@ struct LiveRoomCard: View {
 
     @MainActor
     private func removeFavorite() async {
+        guard !isFavoriteLoading else { return }
+        isFavoriteLoading = true
+        defer { isFavoriteLoading = false }
+
         do {
             try await favoriteModel.removeFavoriteRoom(room: room)
+            isFavoriteAnimating.toggle()
             toastManager.show(icon: "heart.slash.fill", message: "已取消收藏", type: .info)
         } catch {
             let errorMessage = FavoriteService.formatErrorCode(error: error)

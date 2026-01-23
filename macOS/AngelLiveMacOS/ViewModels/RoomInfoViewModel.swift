@@ -156,6 +156,7 @@ final class RoomInfoViewModel {
             return
         }
 
+        isPlaying = false
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
         currentPlayQualityQn = currentQuality.qn
@@ -444,6 +445,7 @@ final class RoomInfoViewModel {
     @MainActor
     func refreshPlayback() async {
         isLoading = true
+        isPlaying = false
         if danmuSettings.showDanmu {
             disconnectSocket()
         }

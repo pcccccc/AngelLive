@@ -7,9 +7,10 @@
 //
 
 import SwiftUI
+import AngelLiveDependencies
 
 // Toast 数据模型
-struct ToastMessage: Identifiable {
+struct ToastMessage: Identifiable, Equatable {
     let id = UUID()
     let icon: String
     let message: String
@@ -27,6 +28,10 @@ struct ToastMessage: Identifiable {
             case .info: return .blue
             }
         }
+    }
+
+    static func == (lhs: ToastMessage, rhs: ToastMessage) -> Bool {
+        lhs.id == rhs.id
     }
 }
 
@@ -81,6 +86,11 @@ struct ToastView: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
         )
-        .transition(.move(edge: .top).combined(with: .opacity))
+        .transition(
+            .asymmetric(
+                insertion: .movingParts.pop(.white),
+                removal: .movingParts.vanish(.white)
+            )
+        )
     }
 }

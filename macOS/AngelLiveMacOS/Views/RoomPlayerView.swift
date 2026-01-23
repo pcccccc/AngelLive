@@ -201,6 +201,13 @@ private extension RoomPlayerView {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                         applyAudioSettings()
                     }
+                    .onChange(of: viewModel.currentPlayURL) { _, _ in
+                        // URL 变化时重新设置 delegate
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                            applyAudioSettings()
+                        }
+                    }
                     .ignoresSafeArea()
 
                 if coordinator.state == .buffering || coordinator.playerLayer?.player.playbackState == .seeking {

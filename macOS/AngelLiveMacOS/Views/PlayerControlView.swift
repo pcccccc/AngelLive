@@ -22,8 +22,12 @@ struct PlayerControlView: View {
     @State private var showSettings = false
     @State private var showDanmakuSettings = false
     @State private var isFavoriteAnimating = false
+    @State private var isFavoriteLoading = false
     @State private var isFullscreen = false
     @State private var isPinned = false
+    @State private var showVolumeSlider = false
+    @State private var isCursorHidden = false
+    @State private var cursorHideTask: Task<Void, Never>?
     @Binding var volume: Float  // 独立音量控制
     @Binding var isMuted: Bool      // 独立静音状态
     @Environment(\.dismiss) private var dismiss
@@ -59,8 +63,10 @@ struct PlayerControlView: View {
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .frame(width: 36, height: 36)
+                                .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
+                        .contentShape(Circle())
                         .adaptiveGlassEffect(in: .circle)
 
                         // 主播信息卡片
@@ -73,34 +79,11 @@ struct PlayerControlView: View {
                 }
                 .environment(\.colorScheme, .dark)
 
-                // 右上角：音量控制、画中画、设置按钮
+                // 右上角：置顶、设置按钮
                 VStack {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
-                            // 静音按钮
-                            Button {
-                                isMuted.toggle()
-                                coordinator.playerLayer?.player.isMuted = isMuted
-                            } label: {
-                                Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                    .frame(width: 30, height: 30)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white)
-                            }
-                            .buttonStyle(.plain)
-
-                            // 音量滑块（使用 AppKit NSSlider 避免窗口拖动冲突）
-                            VolumeSlider(value: $volume)
-                                .frame(width: 80, height: 20)
-                                .onChange(of: volume) { _, newValue in
-                                    if isMuted, newValue > 0 {
-                                        isMuted = false
-                                        coordinator.playerLayer?.player.isMuted = false
-                                    }
-                                    coordinator.playerLayer?.player.playbackVolume = newValue
-                                }
-
                             // 置顶按钮
                             Button {
                                 toggleWindowPin()
@@ -111,8 +94,10 @@ struct PlayerControlView: View {
                                     .foregroundStyle(.white)
                                     .contentTransition(.opacity)
                                     .animation(.easeInOut(duration: 0.15), value: isPinned)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
 
                             // 设置按钮
                             Button {
@@ -122,8 +107,10 @@ struct PlayerControlView: View {
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
@@ -148,12 +135,14 @@ struct PlayerControlView: View {
                             .font(.system(size: 60, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(20)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Circle())
                     .adaptiveGlassEffect(in: .circle)
                 }
 
-                // 左下角：播放/暂停、刷新按钮
+                // 左下角：播放/暂停、刷新、音量按钮
                 VStack {
                     Spacer()
                     HStack {
@@ -170,8 +159,10 @@ struct PlayerControlView: View {
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
 
                             // 刷新按钮
                             Button {
@@ -188,9 +179,57 @@ struct PlayerControlView: View {
                                         viewModel.isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default,
                                         value: viewModel.isLoading
                                     )
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
                             .disabled(viewModel.isLoading)
+
+                            // 音量控制（悬停展开）
+                            HStack(spacing: 12) {
+                                // 音量按钮（点击静音/取消静音）
+                                Button {
+                                    isMuted.toggle()
+                                    coordinator.playerLayer?.player.isMuted = isMuted
+                                } label: {
+                                    Image(systemName: isMuted ? "speaker.slash.fill" : (volume > 0.5 ? "speaker.wave.2.fill" : (volume > 0 ? "speaker.wave.1.fill" : "speaker.fill")))
+                                        .frame(width: 30, height: 30)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
+
+                                // 音量滑块（悬停时显示）
+                                if showVolumeSlider {
+                                    HStack(spacing: 8) {
+                                        VolumeSlider(value: $volume)
+                                            .frame(width: 80, height: 20)
+                                            .onChange(of: volume) { _, newValue in
+                                                if isMuted, newValue > 0 {
+                                                    isMuted = false
+                                                    coordinator.playerLayer?.player.isMuted = false
+                                                }
+                                                coordinator.playerLayer?.player.playbackVolume = newValue
+                                            }
+
+                                        Text("\(Int(volume * 100))%")
+                                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                                            .foregroundStyle(.white.opacity(0.8))
+                                            .frame(width: 36, alignment: .trailing)
+                                    }
+                                    .transition(.asymmetric(
+                                        insertion: .scale(scale: 0.8, anchor: .leading).combined(with: .opacity),
+                                        removal: .scale(scale: 0.8, anchor: .leading).combined(with: .opacity)
+                                    ))
+                                }
+                            }
+                            .onHover { hovering in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showVolumeSlider = hovering
+                                }
+                            }
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -214,9 +253,11 @@ struct PlayerControlView: View {
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
+                                    .contentShape(Rectangle())
                             }
                             .contentTransition(.symbolEffect(.replace))
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
 
                             // 弹幕设置
                             Button {
@@ -226,8 +267,10 @@ struct PlayerControlView: View {
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
 
                             // 清晰度设置菜单
                             if let playArgs = viewModel.currentRoomPlayArgs, !playArgs.isEmpty {
@@ -242,30 +285,26 @@ struct PlayerControlView: View {
                                                 } label: {
                                                     HStack {
                                                         Text(quality.title)
-                                                            .foregroundStyle(.white)
                                                         if viewModel.currentCdnIndex == cdnIndex && viewModel.currentPlayQualityQn == quality.qn {
                                                             Image(systemName: "checkmark")
-                                                                .foregroundStyle(.white)
                                                         }
                                                     }
                                                 }
                                             }
                                         } label: {
                                             Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
-                                                .foregroundStyle(.white)
                                         }
                                     }
                                 } label: {
                                     Text(viewModel.currentPlayQualityString)
-                                        .frame(width: 60, height: 30)
+                                        .frame(height: 30)
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(.white)
+                                        .contentShape(Rectangle())
                                 }
-                                .menuStyle(.borderlessButton)
+                                .menuStyle(.button)
+                                .buttonStyle(.plain)
                                 .menuIndicator(.hidden)
-                                .tint(.white)
-                                .foregroundColor(.white)
-                                .environment(\.colorScheme, .dark)
                             }
 
                             // 全屏按钮
@@ -276,8 +315,10 @@ struct PlayerControlView: View {
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .contentShape(Rectangle())
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -290,13 +331,16 @@ struct PlayerControlView: View {
             .padding()
             .environment(\.colorScheme, .dark)
             .opacity(isHovering ? 1 : 0)
+            .animation(.easeInOut(duration: 0.3), value: isHovering)
             .onContinuousHover { phase in
                 switch phase {
                 case .active:
                     isHovering = true
                     resetHideTimer()
+                    showCursor()
                 case .ended:
                     isHovering = false
+                    scheduleCursorHide()
                 }
             }
 
@@ -311,12 +355,17 @@ struct PlayerControlView: View {
                 .animation(.easeInOut(duration: 0.3), value: showSettings)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: isHovering)
         .sheet(isPresented: $showDanmakuSettings) {
             DanmakuSettingsPanel(viewModel: viewModel)
         }
         .onAppear {
             syncPinnedState()
+        }
+        .onDisappear {
+            // 恢复鼠标指针
+            showCursor()
+            cursorHideTask?.cancel()
+            hideTask?.cancel()
         }
     }
 
@@ -353,12 +402,29 @@ struct PlayerControlView: View {
                     await toggleFavorite()
                 }
             } label: {
-                Image(systemName: isFavorited ? "heart.fill" : "heart")
-                    .font(.system(size: 16))
-                    .foregroundStyle(isFavorited ? .red : .white)
-                    .frame(width: 28, height: 28)
+                Group {
+                    if isFavoriteLoading {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 28, height: 28)
+                    } else {
+                        Image(systemName: isFavorited ? "heart.fill" : "heart")
+                            .font(.system(size: 16))
+                            .foregroundStyle(isFavorited ? .red : .white)
+                            .frame(width: 28, height: 28)
+                    }
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .disabled(isFavoriteLoading)
+            .changeEffect(
+                .spray(origin: UnitPoint(x: 0.5, y: 0.5)) {
+                    Image(systemName: isFavorited ? "heart.fill" : "heart.slash.fill")
+                        .foregroundStyle(.red)
+                }, value: isFavoriteAnimating
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -368,6 +434,10 @@ struct PlayerControlView: View {
     // MARK: - Helper Methods
     @MainActor
     private func toggleFavorite() async {
+        guard !isFavoriteLoading else { return }
+        isFavoriteLoading = true
+        defer { isFavoriteLoading = false }
+
         do {
             if isFavorited {
                 try await favoriteModel.removeFavoriteRoom(room: room)
@@ -389,6 +459,30 @@ struct PlayerControlView: View {
             if !Task.isCancelled {
                 await MainActor.run {
                     isHovering = false
+                    scheduleCursorHide()
+                }
+            }
+        }
+    }
+
+    private func showCursor() {
+        cursorHideTask?.cancel()
+        if isCursorHidden {
+            NSCursor.unhide()
+            isCursorHidden = false
+        }
+    }
+
+    private func scheduleCursorHide() {
+        cursorHideTask?.cancel()
+        cursorHideTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2秒后隐藏鼠标
+            if !Task.isCancelled {
+                await MainActor.run {
+                    if !isHovering && !isCursorHidden {
+                        NSCursor.hide()
+                        isCursorHidden = true
+                    }
                 }
             }
         }
@@ -401,6 +495,10 @@ struct PlayerControlView: View {
     }
 
     private func closePlayer() {
+        // 恢复鼠标指针
+        showCursor()
+        cursorHideTask?.cancel()
+
         // 如果是全屏模式打开的播放器，关闭时返回主界面
         if let manager = fullscreenPlayerManager, manager.showFullscreenPlayer {
             manager.closeFullscreenPlayer()
