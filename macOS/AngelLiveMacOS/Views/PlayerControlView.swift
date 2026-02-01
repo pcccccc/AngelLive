@@ -480,8 +480,12 @@ struct PlayerControlView: View {
             if !Task.isCancelled {
                 await MainActor.run {
                     // 只在全屏模式下隐藏鼠标
-                    let windowIsFullscreen = NSApplication.shared.keyWindow?.styleMask.contains(.fullScreen) ?? false
-                    if windowIsFullscreen && !isHovering && !isCursorHidden {
+                    guard NSApplication.shared.isActive else { return }
+                    guard let window = NSApplication.shared.keyWindow, window.isKeyWindow else { return }
+                    let windowIsFullscreen = window.styleMask.contains(.fullScreen)
+                    let mouseLocation = NSEvent.mouseLocation
+                    let isMouseInsideWindow = window.frame.contains(mouseLocation)
+                    if windowIsFullscreen && isMouseInsideWindow && !isHovering && !isCursorHidden {
                         NSCursor.hide()
                         isCursorHidden = true
                     }
