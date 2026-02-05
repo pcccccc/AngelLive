@@ -180,61 +180,12 @@ public actor FavoriteStateModel {
         let overallDuration = CFAbsoluteTimeGetCurrent() - overallStart
         favoriteSyncLog("Favorite sync total time \(formatSeconds(overallDuration))s")
         
-        let sortedModels = fetchedModels.sorted { firstModel, secondModel in
-            switch (firstModel.liveState, secondModel.liveState) {
-                case ("1", "1"):
-                    return true // 两个都是1，保持原有顺序
-                case ("1", _):
-                    return true // 第一个是1，应该排在前面
-                case (_, "1"):
-                    return false // 第二个是1，应该排在前面
-                case ("2", "2"):
-                    return true // 两个都是2，保持原有顺序
-                case ("2", _):
-                    return true // 第一个是2，应该排在非1的前面
-                case (_, "2"):
-                    return false // 第二个是2，应该排在非1的前面
-                default:
-                    return true // 两个都不是1和2，保持原有顺序
-            }
-        }
-        roomList = sortedModels
-        var groupedRoomList: [FavoriteLiveSectionModel] = []
-        if AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) == .section {
-            let types = Set(sortedModels.map { $0.liveType })
-            let formatedRoomList = types.map { type in
-                roomList.filter { $0.liveType == type }
-            }
-            for array in formatedRoomList {
-                var model = FavoriteLiveSectionModel()
-                model.roomList = array
-                model.title = LiveParseTools.getLivePlatformName(array.first?.liveType ?? .bilibili)
-                model.type = array.first?.liveType ?? .bilibili
-                groupedRoomList.append(model)
-            }
-            groupedRoomList = groupedRoomList.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        }else {
-            let types = Set(sortedModels.map { $0.liveState })
-            let formatedRoomList = types.map { state in
-                roomList.filter { $0.liveState == state }
-            }
-            for array in formatedRoomList {
-                var model = FavoriteLiveSectionModel()
-                model.roomList = array
-                model.title = array.first?.liveStateFormat() ?? "未知状态"
-                model.type = array.first?.liveType ?? .bilibili
-                groupedRoomList.append(model)
-            }
-            groupedRoomList = groupedRoomList.sorted { model1, model2 in
-                let order = ["正在直播", "回放/轮播", "已下播", "未知状态"]
-                if let index1 = order.firstIndex(of: model1.title),
-                   let index2 = order.firstIndex(of: model2.title) {
-                    return index1 < index2
-                }
-                return model1.title < model2.title
-            }
-        }
-        return (roomList,groupedRoomList)
+        // 使用抽取的排序和分组方法，消除重复代码
+        let sortedModels = fetchedModels.sortedByLiveState()
+        let style = AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) ?? .liveState
+        let groupedRoomList = sortedModels.groupedBySections(style: style)
+        
+        return (sortedModels, groupedRoomList)
     }
 
 

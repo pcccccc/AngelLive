@@ -46,60 +46,123 @@ public enum LiveService {
         return roomList
     }
     
+    /// 并行搜索所有平台的直播间
+    /// - Parameters:
+    ///   - keyword: 搜索关键词
+    ///   - page: 页码
+    /// - Returns: 合并后的搜索结果
     public static func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
-        var resArray: [LiveModel] = []
-
-        // Bilibili 搜索
-        do {
-            let bilibiliResList = try await Bilibili.searchRooms(keyword: keyword, page: page)
-            resArray.append(contentsOf: bilibiliResList)
-        } catch {
-            print("⚠️ Bilibili 搜索失败: \(error)")
-        }
-
-        // 抖音搜索
-        do {
-            let douyinResList = try await Douyin.searchRooms(keyword: keyword, page: page)
-            var finalDouyinResList: [LiveModel] = []
-            for room in douyinResList {
+        // 使用 TaskGroup 并行搜索所有平台，显著提升搜索速度
+        await withTaskGroup(of: [LiveModel].self) { group in
+            // Bilibili 搜索
+            group.addTask {
                 do {
-                    let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    finalDouyinResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
+                    return try await Bilibili.searchRooms(keyword: keyword, page: page)
                 } catch {
-                    print("⚠️ 抖音获取直播状态失败: \(room.roomId)")
+                    print("⚠️ Bilibili 搜索失败: \(error)")
+                    return []
                 }
             }
-            resArray.append(contentsOf: finalDouyinResList)
-        } catch {
-            print("⚠️ 抖音搜索失败: \(error)")
-        }
-
-        // 虎牙搜索
-        do {
-            let huyaResList = try await Huya.searchRooms(keyword: keyword, page: page)
-            resArray.append(contentsOf: huyaResList)
-        } catch {
-            print("⚠️ 虎牙搜索失败: \(error)")
-        }
-
-        // 斗鱼搜索
-        do {
-            let douyuResList = try await Douyu.searchRooms(keyword: keyword, page: page)
-            var finalDouyuResList: [LiveModel] = []
-            for room in douyuResList {
+            
+            // 虎牙搜索
+            group.addTask {
                 do {
-                    let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
-                    finalDouyuResList.append(.init(userName: room.userName, roomTitle: room.roomTitle, roomCover: room.roomCover, userHeadImg: room.userHeadImg, liveType: room.liveType, liveState: liveState, userId: room.userId, roomId: room.roomId, liveWatchedCount: room.liveWatchedCount))
+                    return try await Huya.searchRooms(keyword: keyword, page: page)
                 } catch {
-                    print("⚠️ 斗鱼获取直播状态失败: \(room.roomId)")
+                    print("⚠️ 虎牙搜索失败: \(error)")
+                    return []
                 }
             }
-            resArray.append(contentsOf: finalDouyuResList)
-        } catch {
-            print("⚠️ 斗鱼搜索失败: \(error)")
+            
+            // 抖音搜索（需要额外获取直播状态）
+            group.addTask {
+                do {
+                    let douyinResList = try await Douyin.searchRooms(keyword: keyword, page: page)
+                    // 并行获取所有房间的直播状态
+                    return await withTaskGroup(of: LiveModel?.self) { stateGroup in
+                        for room in douyinResList {
+                            stateGroup.addTask {
+                                do {
+                                    let liveState = try await Douyin.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                                    return LiveModel(
+                                        userName: room.userName,
+                                        roomTitle: room.roomTitle,
+                                        roomCover: room.roomCover,
+                                        userHeadImg: room.userHeadImg,
+                                        liveType: room.liveType,
+                                        liveState: liveState,
+                                        userId: room.userId,
+                                        roomId: room.roomId,
+                                        liveWatchedCount: room.liveWatchedCount
+                                    )
+                                } catch {
+                                    print("⚠️ 抖音获取直播状态失败: \(room.roomId)")
+                                    return nil
+                                }
+                            }
+                        }
+                        var results: [LiveModel] = []
+                        for await room in stateGroup {
+                            if let room = room {
+                                results.append(room)
+                            }
+                        }
+                        return results
+                    }
+                } catch {
+                    print("⚠️ 抖音搜索失败: \(error)")
+                    return []
+                }
+            }
+            
+            // 斗鱼搜索（需要额外获取直播状态）
+            group.addTask {
+                do {
+                    let douyuResList = try await Douyu.searchRooms(keyword: keyword, page: page)
+                    // 并行获取所有房间的直播状态
+                    return await withTaskGroup(of: LiveModel?.self) { stateGroup in
+                        for room in douyuResList {
+                            stateGroup.addTask {
+                                do {
+                                    let liveState = try await Douyu.getLiveState(roomId: room.roomId, userId: room.userId).rawValue
+                                    return LiveModel(
+                                        userName: room.userName,
+                                        roomTitle: room.roomTitle,
+                                        roomCover: room.roomCover,
+                                        userHeadImg: room.userHeadImg,
+                                        liveType: room.liveType,
+                                        liveState: liveState,
+                                        userId: room.userId,
+                                        roomId: room.roomId,
+                                        liveWatchedCount: room.liveWatchedCount
+                                    )
+                                } catch {
+                                    print("⚠️ 斗鱼获取直播状态失败: \(room.roomId)")
+                                    return nil
+                                }
+                            }
+                        }
+                        var results: [LiveModel] = []
+                        for await room in stateGroup {
+                            if let room = room {
+                                results.append(room)
+                            }
+                        }
+                        return results
+                    }
+                } catch {
+                    print("⚠️ 斗鱼搜索失败: \(error)")
+                    return []
+                }
+            }
+            
+            // 收集所有平台的结果
+            var allResults: [LiveModel] = []
+            for await platformResults in group {
+                allResults.append(contentsOf: platformResults)
+            }
+            return allResults
         }
-
-        return resArray
     }
     
     public static func searchRoomWithShareCode(shareCode: String) async throws -> LiveModel? {

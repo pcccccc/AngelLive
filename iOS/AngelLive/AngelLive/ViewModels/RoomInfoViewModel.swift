@@ -61,6 +61,9 @@ final class RoomInfoViewModel {
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
     var danmuSettings = DanmuSettingModel() // 弹幕设置模型
     private var shouldReconnectDanmuOnActive = false
+    
+    /// 弹幕消息最大数量限制
+    private let maxDanmuMessageCount = 100
 
     init(room: LiveModel) {
         self.currentRoom = room
@@ -191,12 +194,11 @@ final class RoomInfoViewModel {
                     if liveQuality.liveCodeType == .hls {
                         KSOptions.firstPlayerType = KSAVPlayer.self
                         KSOptions.secondPlayerType = KSMEPlayer.self
-                        DispatchQueue.main.async {
-                            self.currentPlayURL = URL(string: liveQuality.url)!
-                            self.currentPlayQualityString = liveQuality.title
-                            self.isLoading = false
-                            self.isHLSStream = true
-                        }
+                        // 已在 @MainActor 上下文中，无需 DispatchQueue.main.async
+                        self.currentPlayURL = URL(string: liveQuality.url)!
+                        self.currentPlayQualityString = liveQuality.title
+                        self.isLoading = false
+                        self.isHLSStream = true
                         return
                     }
                 }
@@ -218,22 +220,20 @@ final class RoomInfoViewModel {
                         if liveQuality.liveCodeType == .hls {
                             KSOptions.firstPlayerType = KSAVPlayer.self
                             KSOptions.secondPlayerType = KSMEPlayer.self
-                            DispatchQueue.main.async {
-                                self.currentPlayURL = URL(string: liveQuality.url)!
-                                self.currentPlayQualityString = liveQuality.title
-                                self.isLoading = false
-                                self.isHLSStream = true
-                            }
+                            // 已在 @MainActor 上下文中，直接赋值
+                            self.currentPlayURL = URL(string: liveQuality.url)!
+                            self.currentPlayQualityString = liveQuality.title
+                            self.isLoading = false
+                            self.isHLSStream = true
                             return
                         } else {
                             KSOptions.firstPlayerType = KSMEPlayer.self
                             KSOptions.secondPlayerType = KSMEPlayer.self
-                            DispatchQueue.main.async {
-                                self.currentPlayURL = URL(string: liveQuality.url)!
-                                self.currentPlayQualityString = liveQuality.title
-                                self.isLoading = false
-                                self.isHLSStream = false
-                            }
+                            // 已在 @MainActor 上下文中，直接赋值
+                            self.currentPlayURL = URL(string: liveQuality.url)!
+                            self.currentPlayQualityString = liveQuality.title
+                            self.isLoading = false
+                            self.isHLSStream = false
                             return
                         }
                     }
@@ -295,9 +295,8 @@ final class RoomInfoViewModel {
         } else {
             douyuFirstLoad = false
             if let url = URL(string: currentQuality.url) {
-                DispatchQueue.main.async {
-                    self.currentPlayURL = url
-                }
+                // 已在 @MainActor 上下文中，直接赋值
+                self.currentPlayURL = url
             }
         }
 
@@ -334,28 +333,22 @@ final class RoomInfoViewModel {
         } else {
             yyFirstLoad = false
             if let url = URL(string: currentQuality.url) {
-                DispatchQueue.main.async {
-                    self.currentPlayURL = url
-                }
+                // 已在 @MainActor 上下文中，直接赋值
+                self.currentPlayURL = url
             }
         }
 
         // 只有非异步请求的平台才在这里设置 isLoading = false
         // 斗鱼和YY平台会在各自的异步任务中管理 isLoading
         if currentRoom.liveType != .douyu && currentRoom.liveType != .yy {
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
+            // 已在 @MainActor 上下文中，直接赋值
+            self.isLoading = false
         } else if currentRoom.liveType == .douyu && douyuFirstLoad {
             // 斗鱼首次加载时也需要设置
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
+            self.isLoading = false
         } else if currentRoom.liveType == .yy && yyFirstLoad {
             // YY 首次加载时也需要设置
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
+            self.isLoading = false
         }
     }
 
@@ -385,12 +378,7 @@ final class RoomInfoViewModel {
             message: message,
             isSystemMessage: true
         )
-        danmuMessages.append(systemMsg)
-
-        // 限制消息数量
-        if danmuMessages.count > 100 {
-            danmuMessages.removeFirst(danmuMessages.count - 100)
-        }
+        appendDanmuMessage(systemMsg)
     }
 
     /// 获取弹幕连接信息并连接
@@ -516,12 +504,18 @@ final class RoomInfoViewModel {
             userName: userName,
             message: text
         )
-        danmuMessages.append(message)
-
-        // 限制消息数量，避免内存占用过大
-        if danmuMessages.count > 100 {
-            danmuMessages.removeFirst(danmuMessages.count - 100)
+        appendDanmuMessage(message)
+    }
+    
+    /// 统一的消息追加方法，自动管理消息数量
+    /// 优化：在追加前检查容量，避免数组频繁扩容和移除操作
+    @MainActor
+    private func appendDanmuMessage(_ message: ChatMessage) {
+        // 如果已满，先移除最旧的消息
+        if danmuMessages.count >= maxDanmuMessageCount {
+            danmuMessages.removeFirst()
         }
+        danmuMessages.append(message)
     }
 }
 

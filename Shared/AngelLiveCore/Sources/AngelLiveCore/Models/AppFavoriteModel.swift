@@ -237,46 +237,14 @@ public final class AppFavoriteModel {
     }
 
     public func refreshView() {
+        // 触发 Observation 更新
         let theRoomList = roomList
         roomList.removeAll()
         roomList = theRoomList
-        var groupedRoomList: [FavoriteLiveSectionModel] = []
-        if AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) == .section {
-            let types = Set(roomList.map { $0.liveType })
-            let formatedRoomList = types.map { type in
-                roomList.filter { $0.liveType == type }
-            }
-            for array in formatedRoomList {
-                var model = FavoriteLiveSectionModel()
-                model.roomList = array
-                model.title = LiveParseTools.getLivePlatformName(array.first?.liveType ?? .bilibili)
-                model.type = array.first?.liveType ?? .bilibili
-                groupedRoomList.append(model)
-            }
-            groupedRoomList = groupedRoomList.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            self.groupedRoomList = groupedRoomList
-        }else {
-            let types = Set(roomList.map { $0.liveState })
-            let formatedRoomList = types.map { state in
-                roomList.filter { $0.liveState == state }
-            }
-            for array in formatedRoomList {
-                var model = FavoriteLiveSectionModel()
-                model.roomList = array
-                model.title = array.first?.liveStateFormat() ?? "未知状态"
-                model.type = array.first?.liveType ?? .bilibili
-                groupedRoomList.append(model)
-            }
-            groupedRoomList = groupedRoomList.sorted { model1, model2 in
-                let order = ["正在直播", "回放/轮播", "已下播", "未知状态"]
-                if let index1 = order.firstIndex(of: model1.title),
-                   let index2 = order.firstIndex(of: model2.title) {
-                    return index1 < index2
-                }
-                return model1.title < model2.title
-            }
-            self.groupedRoomList = groupedRoomList
-        }
+        
+        // 使用抽取的分组方法，消除重复代码
+        let style = AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) ?? .liveState
+        self.groupedRoomList = roomList.groupedBySections(style: style)
         listVersion &+= 1
     }
 }
