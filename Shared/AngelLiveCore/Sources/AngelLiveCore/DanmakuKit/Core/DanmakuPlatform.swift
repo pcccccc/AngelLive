@@ -17,8 +17,25 @@ public typealias DanmakuImage = UIImage
 public typealias DanmakuEvent = UIEvent
 public typealias DanmakuTapGestureRecognizer = UITapGestureRecognizer
 
+/// Cached screen scale to avoid MainActor access from background threads
+nonisolated(unsafe) private var cachedScreenScale: CGFloat = 0
+
+private func initScreenScaleIfNeeded() {
+    guard cachedScreenScale == 0 else { return }
+    if Thread.isMainThread {
+        MainActor.assumeIsolated {
+            cachedScreenScale = UIScreen.main.scale
+        }
+    } else {
+        DispatchQueue.main.sync {
+            cachedScreenScale = UIScreen.main.scale
+        }
+    }
+}
+
 func danmakuScreenScale() -> CGFloat {
-    UIScreen.main.scale
+    initScreenScaleIfNeeded()
+    return cachedScreenScale
 }
 
 public extension UIView {
@@ -57,8 +74,25 @@ public typealias DanmakuImage = NSImage
 public typealias DanmakuEvent = NSEvent
 public typealias DanmakuTapGestureRecognizer = NSClickGestureRecognizer
 
+/// Cached screen scale to avoid MainActor access from background threads
+nonisolated(unsafe) private var cachedScreenScale: CGFloat = 0
+
+private func initScreenScaleIfNeeded() {
+    guard cachedScreenScale == 0 else { return }
+    if Thread.isMainThread {
+        MainActor.assumeIsolated {
+            cachedScreenScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        }
+    } else {
+        DispatchQueue.main.sync {
+            cachedScreenScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        }
+    }
+}
+
 func danmakuScreenScale() -> CGFloat {
-    NSScreen.main?.backingScaleFactor ?? 2.0
+    initScreenScaleIfNeeded()
+    return cachedScreenScale
 }
 
 public extension NSView {
@@ -83,7 +117,7 @@ public extension NSView {
 }
 
 public extension NSImage {
-    var danmakuScale: CGFloat { NSScreen.main?.backingScaleFactor ?? 1.0 }
+    var danmakuScale: CGFloat { cachedScreenScale }
     var danmakuCGImage: CGImage? {
         var rect = CGRect(origin: .zero, size: size)
         return cgImage(forProposedRect: &rect, context: nil, hints: nil)

@@ -7,37 +7,35 @@
 
 import Foundation
 import QuartzCore
+import os.lock
 #if os(iOS) || os(tvOS)
 import UIKit
 #elseif os(macOS)
 import AppKit
 #endif
 
-class Sentinel {
-    
-    private var value: Int32 = 0
-    
+final class Sentinel: @unchecked Sendable {
+
+    private let lock = OSAllocatedUnfairLock(initialState: Int32(0))
+
     public func getValue() -> Int32 {
-        return value
+        lock.withLock { $0 }
     }
-    
+
     public func increase() {
-        let p = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
-        p.pointee = value
-        OSAtomicIncrement32(p)
-        p.deallocate()
+        lock.withLock { $0 += 1 }
     }
-    
+
 }
 
-public class DanmakuAsyncLayer: CALayer {
+public class DanmakuAsyncLayer: CALayer, @unchecked Sendable {
     
     /// When true, it is drawn asynchronously and is ture by default.
     public var displayAsync = true
     
     public var willDisplay: ((_ layer: DanmakuAsyncLayer) -> Void)?
     
-    public var displaying: ((_ context: CGContext, _ size: CGSize, _ isCancelled:(() -> Bool)) -> Void)?
+    public var displaying: (@Sendable (_ context: CGContext, _ size: CGSize, _ isCancelled: @Sendable () -> Bool) -> Void)?
     
     public var didDisplay: ((_ layer: DanmakuAsyncLayer, _ finished: Bool) -> Void)?
     
@@ -93,14 +91,16 @@ public class DanmakuAsyncLayer: CALayer {
         if isAsync {
             willDisplay?(self)
             let value = sentinel.getValue()
-            let isCancelled = {() -> Bool in
-                return value != self.sentinel.getValue()
+            let sentinel = self.sentinel
+            let isCancelled: @Sendable () -> Bool = {
+                return value != sentinel.getValue()
             }
             let size = bounds.size
             let scale = contentsScale
             let opaque = isOpaque
             let backgroundColor = (opaque && self.backgroundColor != nil) ? self.backgroundColor : nil
-            queue.async {
+            let displaying = self.displaying
+            queue.async { [weak self] in
                 guard !isCancelled() else { return }
 #if os(iOS) || os(tvOS)
                 UIGraphicsBeginImageContextWithOptions(size, opaque, scale)
@@ -131,14 +131,15 @@ public class DanmakuAsyncLayer: CALayer {
                     }
                     context.restoreGState()
                 }
-                self.displaying?(context, size, isCancelled)
+                displaying?(context, size, isCancelled)
                 if isCancelled() {
 #if os(iOS) || os(tvOS)
                     UIGraphicsEndImageContext()
 #elseif os(macOS)
                     image.unlockFocus()
 #endif
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
                         self.didDisplay?(self, false)
                     }
                     return
@@ -151,12 +152,14 @@ public class DanmakuAsyncLayer: CALayer {
                 let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
 #endif
                 if isCancelled() {
-                    DispatchQueue.main.async {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self else { return }
                         self.didDisplay?(self, false)
                     }
                     return
                 }
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
                     if isCancelled() {
                         self.didDisplay?(self, false)
                     } else {

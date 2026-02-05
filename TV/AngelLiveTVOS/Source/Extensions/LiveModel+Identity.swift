@@ -7,12 +7,6 @@ import Foundation
 import AngelLiveCore
 import AngelLiveDependencies
 
-extension LiveModel: Hashable {
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-}
-
 extension LiveModel {
     var stableIdentity: String {
         let liveTypeKey = liveType.rawValue

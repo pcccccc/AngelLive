@@ -15,10 +15,13 @@ import AppKit
 
 open class DanmakuCell: DanmakuBaseView {
 
-    public var model: DanmakuCellModel?
-    
+    /// The model associated with this cell.
+    /// - Important: This property is accessed from background threads during async rendering.
+    ///   It is safe because the model is set before display begins and not modified during the display cycle.
+    nonisolated(unsafe) public var model: DanmakuCellModel?
+
     public internal(set) var animationTime: TimeInterval = 0
-    
+
     var animationBeginTime: TimeInterval = 0
     
 #if os(iOS) || os(tvOS)
@@ -53,7 +56,9 @@ open class DanmakuCell: DanmakuBaseView {
     ///   - context: drawing context
     ///   - size: bounds.size
     ///   - isCancelled: Whether drawing is cancelled
-    open func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {}
+    /// - Important: This method is called on a background thread for async rendering.
+    ///   Access to `model` is safe because it's set before display and not modified during the display cycle.
+    nonisolated open func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {}
     
     /// Overriding this method, you can get the timing after the content rendering.
     /// - Parameter finished: False if draw is cancelled
@@ -115,19 +120,19 @@ extension DanmakuCell {
     
     func setupLayer() {
         guard let layer = layer as? DanmakuAsyncLayer else { return }
-        
+
         layer.contentsScale = danmakuScreenScale()
-        
+
         layer.willDisplay = { [weak self] (layer) in
             guard let strongSelf = self else { return }
             strongSelf.willDisplay()
         }
-        
+
         layer.displaying = { [weak self] (context, size, isCancelled) in
             guard let strongSelf = self else { return }
             strongSelf.displaying(context, size, isCancelled())
         }
-        
+
         layer.didDisplay = { [weak self] (layer, finished) in
             guard let strongSelf = self else { return }
             strongSelf.didDisplay(finished)

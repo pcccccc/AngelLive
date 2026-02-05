@@ -147,7 +147,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
                     return result
                 } else {
                     // code 非 0 表示未登录或 cookie 无效
-                    let message = json["message"] as? String ?? "Cookie 已失效"
+                    _ = json["message"] as? String ?? "Cookie 已失效"
                     let result = CookieValidationResult.expired
                     lastValidationResult = result
                     return result

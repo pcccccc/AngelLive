@@ -17,44 +17,45 @@ let MAX_FLOAT_X: CGFloat = 100000.0  // 使用足够大的有限值代替 infini
 
 //MARK: DanmakuTrack
 
+@MainActor
 protocol DanmakuTrack {
-    
+
     var positionY: CGFloat { get set }
-    
+
     var index: UInt { get set }
-    
+
     var stopClosure: ((_ cell: DanmakuCell) -> Void)? { get set }
-    
+
     var danmakuCount: Int { get }
-    
+
     var isOverlap: Bool { get set }
-    
+
     var playingSpeed: Float { get set }
-    
+
     init(view: DanmakuBaseView)
-    
+
     func shoot(danmaku: DanmakuCell)
-    
+
     func canShoot(danmaku: DanmakuCellModel) -> Bool
-    
+
     func play()
-    
+
     func pause()
-    
+
     func stop()
-    
+
     func pause(_ danmaku: DanmakuCellModel) -> Bool
-    
+
     func play(_ danmaku: DanmakuCellModel) -> Bool
-    
+
     func sync(_ danmaku: DanmakuCell, at progress: Float)
-    
+
     func syncAndPlay(_ danmaku: DanmakuCell, at progress: Float)
-    
+
     func canSync(_ danmaku: DanmakuCellModel, at progress: Float) -> Bool
-    
+
     func clean()
-    
+
 }
 
 let FLOATING_ANIMATION_KEY = "FLOATING_ANIMATION_KEY"
@@ -63,7 +64,8 @@ let DANMAKU_CELL_KEY = "DANMAKU_CELL_KEY"
 
 //MARK: DanmakuFloatingTrack
 
-class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
+@MainActor
+class DanmakuFloatingTrack: NSObject, DanmakuTrack, @preconcurrency CAAnimationDelegate {
     
     var positionY: CGFloat = 0 {
         didSet {
@@ -253,7 +255,8 @@ class DanmakuFloatingTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
 
 //MARK: DanmakuVerticalTrack
 
-class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
+@MainActor
+class DanmakuVerticalTrack: NSObject, DanmakuTrack, @preconcurrency CAAnimationDelegate {
     
     var positionY: CGFloat = 0 {
         didSet {
@@ -399,6 +402,7 @@ class DanmakuVerticalTrack: NSObject, DanmakuTrack, CAAnimationDelegate {
     
 }
 
+@MainActor
 func prepare(danmaku: DanmakuCell) {
     danmaku.animationTime = 0
     danmaku.animationBeginTime = 0

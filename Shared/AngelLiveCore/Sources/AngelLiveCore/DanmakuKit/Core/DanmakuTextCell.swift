@@ -27,7 +27,7 @@ public class DanmakuTextCell: DanmakuCell {
 
     public override func willDisplay() {}
 
-    public override func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {
+    nonisolated public override func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {
         guard let model = model as? DanmakuTextCellModel else { return }
 
         let text = model.text
@@ -79,19 +79,9 @@ public class DanmakuTextCell: DanmakuCell {
         context.restoreGState()
 
         let attributesFill: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
-        context.setLineWidth(2)
-        context.setLineJoin(.round)
-        context.saveGState()
-        context.setTextDrawingMode(.stroke)
-        let strokeColor = DanmakuColor.black.cgColor
-        context.setStrokeColor(strokeColor)
-        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesStroke)
-        context.restoreGState()
-
-        let attributes1: [NSAttributedString.Key: Any] = [.font: model.font, .foregroundColor: model.color]
         context.setTextDrawingMode(.fill)
         context.setStrokeColor(DanmakuColor.white.cgColor)
-        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributes1)
+        nsText.draw(at: CGPoint(x: 25, y: 5), withAttributes: attributesFill)
 #endif
     }
 

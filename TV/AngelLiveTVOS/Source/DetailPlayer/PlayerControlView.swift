@@ -537,7 +537,7 @@ struct PlayerControlView: View {
         sectionList.removeAll()
         switch index {
             case 0:
-                for item in appViewModel.favoriteViewModel.roomList ?? [] {
+                for item in appViewModel.favoriteViewModel.roomList {
                     if item.liveState ?? "0" == LiveState.live.rawValue {
                         sectionList.append(item)
                     }

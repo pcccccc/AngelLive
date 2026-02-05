@@ -125,7 +125,7 @@ final class RoomInfoViewModel {
         self.playerOption = option
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
-        let list = appViewModel.favoriteViewModel.roomList ?? []
+        let list = appViewModel.favoriteViewModel.roomList
         self.currentRoomIsLiked = list.contains { $0.roomId == currentRoom.roomId }
         self.roomType = roomType
         getPlayArgs()
@@ -328,9 +328,13 @@ final class RoomInfoViewModel {
         //开一个定时，检查主播是否已经下播
         if appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEnd == true {
             if currentRoom.liveType != .youtube && currentRoom.liveType != .ks {
-                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { _ in
-                    Task {
-                        let state = try await ApiManager.getCurrentRoomLiveState(roomId: self.currentRoom.roomId, userId: self.currentRoom.userId, liveType: self.currentRoom.liveType)
+                let roomId = currentRoom.roomId
+                let userId = currentRoom.userId
+                let liveType = currentRoom.liveType
+                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        guard let self = self else { return }
+                        let state = try await ApiManager.getCurrentRoomLiveState(roomId: roomId, userId: userId, liveType: liveType)
                         if state == .close || state == .unknow {
                             NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
                             self.liveFlagTimer?.invalidate()
@@ -378,18 +382,21 @@ final class RoomInfoViewModel {
             return
         }
         danmuServerIsLoading = true
+        let roomId = currentRoom.roomId
+        let userId = currentRoom.userId
+        let liveType = currentRoom.liveType
         Task {
             do {
-                var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
-                switch currentRoom.liveType {
+                let danmuArgs: ([String : String], [String : String]?)
+                switch liveType {
                     case .bilibili:
-                        danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                        danmuArgs = try await Bilibili.getDanmukuArgs(roomId: roomId, userId: nil)
                     case .huya:
-                        danmuArgs =  try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                        danmuArgs = try await Huya.getDanmukuArgs(roomId: roomId, userId: nil)
                     case .douyin:
-                        danmuArgs =  try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                        danmuArgs = try await Douyin.getDanmukuArgs(roomId: roomId, userId: userId)
                     case .douyu:
-                        danmuArgs =  try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                        danmuArgs = try await Douyu.getDanmukuArgs(roomId: roomId, userId: nil)
                     default:
                         await MainActor.run {
                             danmuServerIsLoading = false
@@ -397,7 +404,7 @@ final class RoomInfoViewModel {
                         return
                 }
                 await MainActor.run {
-                    socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: currentRoom.liveType)
+                    socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: liveType)
                     socketConnection?.delegate = self
                     socketConnection?.connect()
                 }

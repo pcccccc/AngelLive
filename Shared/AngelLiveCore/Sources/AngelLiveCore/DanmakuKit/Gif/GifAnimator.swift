@@ -12,7 +12,7 @@ import QuartzCore
 
 /// This is a class for managing GIF animations.
 /// If you want to customize GIF DanmakuCell, you can refer to this class or use it.
-public class GifAnimator {
+public class GifAnimator: @unchecked Sendable {
     /// Total animation frames.
     public private(set) var frameCount: Int = 0
     /// The duration of an animation loop.
