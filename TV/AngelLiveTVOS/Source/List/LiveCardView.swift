@@ -27,6 +27,8 @@ struct LiveCardView: View {
         .init(color: .black.opacity(0.3), location: 0.5),
         .init(color: .clear, location: 1.0)
     ], startPoint: .bottom, endPoint: .top)
+    private let cardWidth: CGFloat = 370
+    private let coverHeight: CGFloat = 210
 
     /// 是否获得焦点
     private var isFocused: Bool {
@@ -72,7 +74,7 @@ struct LiveCardView: View {
                         }
                         .resizable()
                         .scaledToFill()
-                        .frame(height: 210)
+                        .frame(width: cardWidth, height: coverHeight)
                         .blur(radius: 15)
                         .clipped()
 
@@ -85,8 +87,8 @@ struct LiveCardView: View {
                             placeholderImage
                         }
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 210)
+                        .scaledToFit()
+                        .frame(width: cardWidth, height: coverHeight)
 
                     // 底部渐变遮罩
                     Rectangle()
@@ -103,6 +105,7 @@ struct LiveCardView: View {
                         .padding(.bottom, 8)
                     }
                 }
+                .frame(width: cardWidth, height: coverHeight)
 
                 // 平台和直播状态标签（非直播列表页面显示）
                 if liveViewModel.roomListType != .live {
@@ -177,7 +180,7 @@ struct LiveCardView: View {
         Image("placeholder")
             .resizable()
             .aspectRatio(contentMode: .fit)
-            .frame(height: 210)
+            .frame(width: cardWidth, height: coverHeight)
     }
 
     /// 观看人数标签

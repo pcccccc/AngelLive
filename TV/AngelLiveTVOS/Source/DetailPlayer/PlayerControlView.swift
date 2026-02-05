@@ -49,6 +49,15 @@ struct PlayerControlView: View {
     private var hasMultiCamera: Bool {
         (roomInfoViewModel.currentRoomPlayArgs?.count ?? 0) > 1
     }
+    
+    private func topTabLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.bold())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 8)
+            .contentShape(Capsule())
+    }
 
     var body: some View {
         
@@ -60,19 +69,27 @@ struct PlayerControlView: View {
                     VStack {
                         HStack {
                             Spacer()
-                            if appViewModel.favoriteViewModel.cloudKitReady {
-                                Button("收藏") {}
-                                .clipShape(.circle)
-                                .focused($topState, equals: .section(0))
+                            HStack(spacing: 12) {
+                                if appViewModel.favoriteViewModel.cloudKitReady {
+                                    Button(action: {}) {
+                                        topTabLabel("收藏")
+                                    }
+                                    .focused($topState, equals: .section(0))
+                                }
+                                Button(action: {}) {
+                                    topTabLabel("历史")
+                                }
+                                .focused($topState, equals: .section(1))
+                                if roomInfoModel.roomType == .live {
+                                    Button(action: {}) {
+                                        topTabLabel("分区")
+                                    }
+                                    .focused($topState, equals: .section(2))
+                                }
                             }
-                            Button("历史") {}
-                            .clipShape(.circle)
-                            .focused($topState, equals: .section(1))
-                            if roomInfoModel.roomType == .live {
-                                Button("分区") {}
-                                .clipShape(.circle)
-                                .focused($topState, equals: .section(2))
-                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .adaptiveGlassEffectCapsule()
                             Spacer()
                         }
                         .foregroundColor(.white)
@@ -252,10 +269,10 @@ struct PlayerControlView: View {
 
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
-                                    .frame(width: 40)
+                                    .frame(width: 150, height: 40)
                             })
                             .focused($state, equals: .list)
-                            .opacity(0)
+                            .opacity(0.01)
                         }
                         .padding(.top, 60)
                        
@@ -349,10 +366,10 @@ struct PlayerControlView: View {
 
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
-                                    .frame(width: 40)
+                                    .frame(width: 150, height: 40)
                             })
                             .focused($state, equals: .list)
-                            .opacity(0)
+                            .opacity(0.01)
                         }
                         .padding(.top, 60)
                         
