@@ -99,29 +99,16 @@ struct VideoControllerView: View {
         }
     }
 
-    /// 状态栏内容（电池 + 时间），iPhone 有玻璃背景，iPad 无背景
+    /// 状态栏内容（时间 + 电池），模仿系统状态栏样式，无背景
     @ViewBuilder
     private var statusBarContent: some View {
-        let content = HStack(spacing: 4) {
-            Text("\(statusBarVM.batteryPercentage)%")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+        HStack(spacing: 4) {
+            Text(statusBarVM.formattedTime)
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white)
             Image(systemName: statusBarVM.batteryIconName)
-                .font(.system(size: 14))
+                .font(.system(size: 11))
                 .foregroundStyle(statusBarVM.batteryColor)
-            Text("·")
-                .foregroundStyle(.white.opacity(0.6))
-            Text(statusBarVM.formattedTime)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-
-        if AppConstants.Device.isIPad {
-            content
-        } else {
-            content.adaptiveGlassEffect()
         }
     }
 
@@ -242,53 +229,51 @@ struct VideoControllerView: View {
                         .transition(.opacity)
                     }
 
-                    // 顶部居中：电池电量 + 时间（仅全屏时显示，锁定时隐藏）
-                    if !model.isLocked && (isLandscape || isIPadFullscreen.wrappedValue) {
-                        VStack {
-                            statusBarContent
-                            Spacer()
-                        }
-                    }
-
                     // 右上角：投屏、画面平铺、画中画、设置按钮（锁定时隐藏）
                     if !model.isLocked {
                         VStack {
                             HStack {
                                 Spacer()
-                                HStack(spacing: 16) {
-                                    // AirPlay 和画面缩放仅在横屏/全屏时显示
-                                    // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    // 状态栏（仅横屏/全屏时显示，放在控制按钮正上方的空隙中）
                                     if isLandscape || isIPadFullscreen.wrappedValue {
-                                        if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
-                                            AirPlayView()
-                                                .frame(width: 30, height: 30)
+                                        statusBarContent
+                                    }
+                                    HStack(spacing: 16) {
+                                        // AirPlay 和画面缩放仅在横屏/全屏时显示
+                                        // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
+                                        if isLandscape || isIPadFullscreen.wrappedValue {
+                                            if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
+                                                AirPlayView()
+                                                    .frame(width: 30, height: 30)
+                                            }
+                                            KSVideoPlayerViewBuilder.scaleModeMenuButton(
+                                                config: model.config,
+                                                currentMode: $videoScaleMode,
+                                                onModeChange: { mode in
+                                                    applyVideoScaleMode(mode)
+                                                }
+                                            )
                                         }
-                                        KSVideoPlayerViewBuilder.scaleModeMenuButton(
-                                            config: model.config,
-                                            currentMode: $videoScaleMode,
-                                            onModeChange: { mode in
-                                                applyVideoScaleMode(mode)
+                                        KSVideoPlayerViewBuilder.pipButton(config: model.config)
+                                        SettingsButton(
+                                            showVideoSetting: $model.showVideoSetting,
+                                            showDanmakuSettings: $showDanmakuSettings,
+                                            onDismiss: { dismiss() },
+                                            onPopupStateChanged: { isOpen in
+                                                isSettingsPopupOpen = isOpen
+                                                if isOpen {
+                                                    cancelAutoHideTimer()
+                                                } else if model.config.isMaskShow {
+                                                    startAutoHideTimer()
+                                                }
                                             }
                                         )
                                     }
-                                    KSVideoPlayerViewBuilder.pipButton(config: model.config)
-                                    SettingsButton(
-                                        showVideoSetting: $model.showVideoSetting,
-                                        showDanmakuSettings: $showDanmakuSettings,
-                                        onDismiss: { dismiss() },
-                                        onPopupStateChanged: { isOpen in
-                                            isSettingsPopupOpen = isOpen
-                                            if isOpen {
-                                                cancelAutoHideTimer()
-                                            } else if model.config.isMaskShow {
-                                                startAutoHideTimer()
-                                            }
-                                        }
-                                    )
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .adaptiveGlassEffect()
                                 }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .adaptiveGlassEffect()
                             }
                             Spacer()
                         }

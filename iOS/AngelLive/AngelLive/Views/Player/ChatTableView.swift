@@ -29,19 +29,22 @@ struct ChatTableView: UIViewRepresentable {
         tableView.contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 72, right: 0)
         tableView.dataSource = context.coordinator
         tableView.delegate = context.coordinator
-        tableView.register(ChatBubbleTableViewCell.self, forCellReuseIdentifier: ChatBubbleTableViewCell.reuseIdentifier)
+        tableView.register(ChatBubbleCapsuleCell.self, forCellReuseIdentifier: ChatBubbleCapsuleCell.reuseIdentifier)
+        tableView.register(ChatBubbleRoundedCell.self, forCellReuseIdentifier: ChatBubbleRoundedCell.reuseIdentifier)
         return tableView
     }
 
     func updateUIView(_ uiView: UITableView, context: Context) {
-        context.coordinator.setShowJumpToLatest = { value in
+        context.coordinator.setShowJumpToLatest = { [self] value in
             if showJumpToLatest != value {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showJumpToLatest = value
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showJumpToLatest = value
+                    }
                 }
             }
         }
-        context.coordinator.update(messages: messages, in: uiView)
+        context.coordinator.update(messages: messages, tableView: uiView)
         if scrollToBottomRequest {
             context.coordinator.scrollToBottom(in: uiView, animated: true)
             DispatchQueue.main.async {
@@ -55,10 +58,28 @@ struct ChatTableView: UIViewRepresentable {
         private var messages: [ChatMessage] = []
         private var messageIDs: [UUID] = []
         private var isUserAtBottom = true
+        private var cachedCellTypes: [UUID: Bool] = [:] // true = capsule, false = rounded
+        private var lastTableWidth: CGFloat = 0
         var setShowJumpToLatest: ((Bool) -> Void)?
 
-        func update(messages: [ChatMessage], in tableView: UITableView) {
+        func update(messages: [ChatMessage], tableView: UITableView) {
             let newIDs = messages.map { $0.id }
+            let tableWidth = tableView.bounds.width
+            
+            // 宽度变化时，清除缓存并刷新
+            if tableWidth != lastTableWidth && lastTableWidth > 0 {
+                cachedCellTypes.removeAll()
+                self.messages = messages
+                messageIDs = newIDs
+                lastTableWidth = tableWidth
+                tableView.reloadData()
+                if isUserAtBottom {
+                    scrollToBottom(in: tableView, animated: false)
+                }
+                return
+            }
+            lastTableWidth = tableWidth
+            
             if newIDs == messageIDs {
                 return
             }
@@ -120,6 +141,53 @@ struct ChatTableView: UIViewRepresentable {
             guard messages.indices.contains(row) else { return }
             tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .bottom, animated: animated)
         }
+        
+        /// 判断消息是否为单行（使用胶囊样式）
+        private func isSingleLine(message: ChatMessage, tableWidth: CGFloat) -> Bool {
+            if let cached = cachedCellTypes[message.id] {
+                return cached
+            }
+            
+            let horizontalPadding: CGFloat = 16 * 2  // cell 左右边距
+            let bubblePadding: CGFloat = 12 * 2      // bubble 内边距
+            let spacing: CGFloat = 8                  // userName 和 message 之间的间距
+            
+            let availableWidth = tableWidth - horizontalPadding - bubblePadding
+            
+            let font = UIFont.preferredFont(forTextStyle: .caption1)
+            let userNameFont = font.withWeight(.semibold)
+            
+            if message.isSystemMessage {
+                let iconWidth: CGFloat = 14 + spacing
+                let textWidth = availableWidth - iconWidth
+                let messageSize = (message.message as NSString).boundingRect(
+                    with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: [.font: UIFont.preferredFont(forTextStyle: .caption2)],
+                    context: nil
+                )
+                let isSingle = messageSize.height <= font.lineHeight + 2
+                cachedCellTypes[message.id] = isSingle
+                return isSingle
+            } else {
+                let userNameSize = (message.userName as NSString).boundingRect(
+                    with: CGSize(width: .greatestFiniteMagnitude, height: font.lineHeight),
+                    options: [.usesLineFragmentOrigin],
+                    attributes: [.font: userNameFont],
+                    context: nil
+                )
+                let textWidth = availableWidth - userNameSize.width - spacing
+                let messageSize = (message.message as NSString).boundingRect(
+                    with: CGSize(width: textWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: [.font: font],
+                    context: nil
+                )
+                let isSingle = messageSize.height <= font.lineHeight + 2
+                cachedCellTypes[message.id] = isSingle
+                return isSingle
+            }
+        }
 
         // MARK: - UITableViewDataSource
 
@@ -128,11 +196,22 @@ struct ChatTableView: UIViewRepresentable {
         }
 
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-            guard let cell = tableView.dequeueReusableCell(withIdentifier: ChatBubbleTableViewCell.reuseIdentifier, for: indexPath) as? ChatBubbleTableViewCell else {
-                return UITableViewCell()
+            let message = messages[indexPath.row]
+            let useCapsule = isSingleLine(message: message, tableWidth: tableView.bounds.width)
+            
+            if useCapsule {
+                guard let cell = tableView.dequeueReusableCell(withIdentifier: ChatBubbleCapsuleCell.reuseIdentifier, for: indexPath) as? ChatBubbleCapsuleCell else {
+                    return UITableViewCell()
+                }
+                cell.configure(with: message)
+                return cell
+            } else {
+                guard let cell = tableView.dequeueReusableCell(withIdentifier: ChatBubbleRoundedCell.reuseIdentifier, for: indexPath) as? ChatBubbleRoundedCell else {
+                    return UITableViewCell()
+                }
+                cell.configure(with: message)
+                return cell
             }
-            cell.configure(with: messages[indexPath.row])
-            return cell
         }
 
         // MARK: - UITableViewDelegate
@@ -154,53 +233,34 @@ struct ChatTableView: UIViewRepresentable {
     }
 }
 
-final class ChatBubbleTableViewCell: UITableViewCell {
-    static let reuseIdentifier = "ChatBubbleTableViewCell"
+// MARK: - Base Cell Class
 
-    private let bubbleView = UIView()
-    private let stackView = UIStackView()
-    private let iconView = UIImageView()
-    private let userNameLabel = UILabel()
-    private let messageLabel = UILabel()
-
-    private var usesCapsule = true
-    private var isSystemMessage = false
-
+class ChatBubbleBaseCell: UITableViewCell {
+    let bubbleView = UIView()
+    let stackView = UIStackView()
+    let iconView = UIImageView()
+    let userNameLabel = UILabel()
+    let messageLabel = UILabel()
+    
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         setupUI()
     }
-
+    
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let baseLineHeight = max(messageLabel.font.lineHeight, userNameLabel.font.lineHeight, iconView.bounds.height)
-        if stackView.bounds.height > 0 {
-            usesCapsule = stackView.bounds.height <= (baseLineHeight + 1)
-        }
-        let targetRadius = usesCapsule ? bubbleView.bounds.height / 2 : 12
-        if bubbleView.layer.cornerRadius != targetRadius {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            bubbleView.layer.cornerRadius = targetRadius
-            CATransaction.commit()
-        }
-    }
-
-    private func setupUI() {
+    
+    func setupUI() {
         selectionStyle = .none
         backgroundColor = .clear
         contentView.backgroundColor = .clear
         let horizontalPadding: CGFloat = 16
-        let verticalPadding = AppConstants.Spacing.sm
+        let verticalPadding = AppConstants.Spacing.xs
 
         bubbleView.translatesAutoresizingMaskIntoConstraints = false
         bubbleView.layer.masksToBounds = true
         bubbleView.layer.cornerCurve = .continuous
-        bubbleView.layer.actions = ["cornerRadius": NSNull()]
         contentView.addSubview(bubbleView)
 
         stackView.axis = .horizontal
@@ -241,13 +301,11 @@ final class ChatBubbleTableViewCell: UITableViewCell {
             iconView.heightAnchor.constraint(equalToConstant: 14)
         ])
     }
-
+    
     func configure(with message: ChatMessage) {
-        isSystemMessage = message.isSystemMessage
-
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        if isSystemMessage {
+        if message.isSystemMessage {
             iconView.image = UIImage(systemName: "info.circle.fill")
             messageLabel.text = message.message
             messageLabel.textColor = UIColor.systemYellow.withAlphaComponent(0.9)
@@ -272,10 +330,8 @@ final class ChatBubbleTableViewCell: UITableViewCell {
             bubbleView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
             bubbleView.layer.borderWidth = 0.5
         }
-
-        setNeedsLayout()
     }
-
+    
     private func chatUserColor(for userName: String) -> UIColor {
         let colors: [UIColor] = [
             .systemBlue, .systemGreen, .systemOrange, .systemPurple,
@@ -285,6 +341,32 @@ final class ChatBubbleTableViewCell: UITableViewCell {
         return colors[index]
     }
 }
+
+// MARK: - Capsule Cell (单行，胶囊圆角)
+
+final class ChatBubbleCapsuleCell: ChatBubbleBaseCell {
+    static let reuseIdentifier = "ChatBubbleCapsuleCell"
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // 胶囊样式：圆角 = 高度/2
+        bubbleView.layer.cornerRadius = bubbleView.bounds.height / 2
+    }
+}
+
+// MARK: - Rounded Cell (多行，固定圆角)
+
+final class ChatBubbleRoundedCell: ChatBubbleBaseCell {
+    static let reuseIdentifier = "ChatBubbleRoundedCell"
+    
+    override func setupUI() {
+        super.setupUI()
+        // 固定圆角 12
+        bubbleView.layer.cornerRadius = 12
+    }
+}
+
+// MARK: - UIFont Extension
 
 private extension UIFont {
     func withWeight(_ weight: UIFont.Weight) -> UIFont {
