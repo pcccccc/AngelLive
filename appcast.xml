@@ -6,6 +6,26 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 19)</title>
+            <sparkle:version>19</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>优化：全屏鼠标指针隐藏</li>
+                    <li>优化：弹幕边框颜色随透明度设置变化</li>
+                    <li>优化：隐藏斗鱼机器人弹幕</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.build19.dmg">点击下载</a></p>
+            ]]></description>
+            <pubDate>Thu, 06 Feb 2026 16:00:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.build19.dmg"
+                       sparkle:edSignature="HRJzLPjri1UXPNM1WvQH/UmR4BnCE4lohkDgQnL0a30EuR9pM44YJ4DhfXK8ciTFvPVEvRxDvUwZAN3GvZtWAA=="
+                       length="43296511"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 17)</title>
             <sparkle:version>17</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
