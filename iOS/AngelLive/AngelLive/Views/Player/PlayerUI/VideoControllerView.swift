@@ -231,7 +231,7 @@ struct VideoControllerView: View {
 
                     // 右上角：投屏、画面平铺、画中画、设置按钮（锁定时隐藏）
                     if !model.isLocked {
-                        VStack {
+                        VStack(spacing: 0) {
                             HStack {
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
@@ -275,6 +275,9 @@ struct VideoControllerView: View {
                                     .adaptiveGlassEffect()
                                 }
                             }
+                            // 横屏时贴顶，右侧稍微内收
+                            .padding(.top, isLandscape ? -controlPadding : 0)
+                            .padding(.trailing, isLandscape ? -controlPadding / 2 : 0)
                             Spacer()
                         }
                     }
