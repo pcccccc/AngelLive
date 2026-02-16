@@ -23,6 +23,7 @@ struct VideoControllerView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
+    @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @State private var showDanmakuSettings = false
     @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
     @State private var isSettingsPopupOpen = false // SettingsButton 内部弹窗状态
@@ -52,6 +53,14 @@ struct VideoControllerView: View {
     /// 控制层基础内边距，横屏时适当增大，避免过贴边
     private var controlPadding: CGFloat {
         isLandscape ? 20 : 12
+    }
+
+    /// iPhone 横屏时，状态栏内容向左内收，避免被圆角/刘海区域遮挡
+    private var statusBarTrailingInset: CGFloat {
+        guard isLandscape && !AppConstants.Device.isIPad else { return 0 }
+        let currentTrailingInset = controlPadding / 2
+        let targetTrailingInset = safeAreaInsets.trailing + 8
+        return max(0, targetTrailingInset - currentTrailingInset)
     }
 
     init(model: KSVideoPlayerModel) {
@@ -238,6 +247,7 @@ struct VideoControllerView: View {
                                     // 状态栏（仅横屏/全屏时显示，放在控制按钮正上方的空隙中）
                                     if isLandscape || isIPadFullscreen.wrappedValue {
                                         statusBarContent
+                                            .padding(.trailing, statusBarTrailingInset)
                                     }
                                     HStack(spacing: 16) {
                                         // AirPlay 和画面缩放仅在横屏/全屏时显示
