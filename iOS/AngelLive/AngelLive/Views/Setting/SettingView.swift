@@ -9,7 +9,7 @@ import SwiftUI
 import AngelLiveCore
 
 struct SettingView: View {
-    @StateObject private var settingStore = SettingStore()
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
     @State private var cloudKitReady = false
     @State private var cloudKitStateString = "检查中..."
 
@@ -32,9 +32,9 @@ struct SettingView: View {
 
                             Spacer()
 
-                            Text(settingStore.bilibiliCookie.contains("SESSDATA") ? "已登录" : "未登录")
+                            Text(syncService.isLoggedIn ? "已登录" : "未登录")
                                 .font(.caption)
-                                .foregroundStyle(settingStore.bilibiliCookie.contains("SESSDATA") ? AppConstants.Colors.success : AppConstants.Colors.secondaryText)
+                                .foregroundStyle(syncService.isLoggedIn ? AppConstants.Colors.success : AppConstants.Colors.secondaryText)
                         }
                     }
                 } header: {

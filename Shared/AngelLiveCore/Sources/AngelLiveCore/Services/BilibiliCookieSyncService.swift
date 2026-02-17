@@ -104,6 +104,11 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
         // 启动 iCloud 同步
         NSUbiquitousKeyValueStore.default.synchronize()
+
+        // 兼容迁移：如果本地旧 key 为空，则从 SessionStore 回填一次
+        Task {
+            await hydrateLegacyCacheFromSessionStoreIfNeeded()
+        }
     }
 
     deinit {
@@ -125,42 +130,32 @@ public final class BilibiliCookieSyncService: ObservableObject {
             return result
         }
 
-        guard let url = URL(string: "https://api.bilibili.com/x/member/web/account") else {
-            let result = CookieValidationResult.invalid(reason: "无效的验证 URL")
-            lastValidationResult = result
-            return result
-        }
+        let result = await BilibiliAccountService.shared.loadUserInfo(
+            cookie: cookieToValidate,
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+        )
 
-        var request = URLRequest(url: url)
-        request.setValue(cookieToValidate, forHTTPHeaderField: "Cookie")
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
-
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-
-            // 解析响应
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let code = json["code"] as? Int {
-                if code == 0 {
-                    let result = CookieValidationResult.valid
-                    lastValidationResult = result
-                    return result
-                } else {
-                    // code 非 0 表示未登录或 cookie 无效
-                    _ = json["message"] as? String ?? "Cookie 已失效"
-                    let result = CookieValidationResult.expired
-                    lastValidationResult = result
-                    return result
-                }
-            } else {
-                let result = CookieValidationResult.invalid(reason: "无法解析响应")
-                lastValidationResult = result
-                return result
+        switch result {
+        case .success:
+            let validation = CookieValidationResult.valid
+            lastValidationResult = validation
+            return validation
+        case .failure(let error):
+            let validation: CookieValidationResult
+            switch error {
+            case .cookieExpired:
+                validation = .expired
+            case .networkError(let message):
+                validation = .networkError(NSError(domain: "BilibiliAccountService", code: -1, userInfo: [NSLocalizedDescriptionKey: message]))
+            case .emptyCookie:
+                validation = .invalid(reason: "Cookie 为空")
+            case .invalidURL:
+                validation = .invalid(reason: "无效的验证 URL")
+            case .decodingError(let message), .invalidResponse(let message):
+                validation = .invalid(reason: message)
             }
-        } catch {
-            let result = CookieValidationResult.networkError(error)
-            lastValidationResult = result
-            return result
+            lastValidationResult = validation
+            return validation
         }
     }
 
@@ -186,10 +181,14 @@ public final class BilibiliCookieSyncService: ObservableObject {
         UserDefaults.standard.set(cookie, forKey: Keys.cookieKey)
         if let uid = uid {
             UserDefaults.standard.set(uid, forKey: Keys.uidKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Keys.uidKey)
         }
 
         // 确保 UserDefaults 写入完成
         UserDefaults.standard.synchronize()
+
+        mirrorSessionUpdate(cookie: cookie, uid: uid, source: source)
 
         if save {
             let syncedData = SyncedCookieData(
@@ -207,19 +206,22 @@ public final class BilibiliCookieSyncService: ObservableObject {
         }
     }
 
-    /// 清除 Cookie
-    public func clearCookie() {
+    /// 清除 Cookie（本地 + iCloud）
+    public func clearCookie(clearICloud: Bool = true) {
         UserDefaults.standard.removeObject(forKey: Keys.cookieKey)
         UserDefaults.standard.removeObject(forKey: Keys.uidKey)
         UserDefaults.standard.removeObject(forKey: Keys.lastSyncedDataKey)
         UserDefaults.standard.synchronize()
         lastSyncedData = nil
         lastValidationResult = nil
+        mirrorSessionClear()
+        if clearICloud {
+            clearICloudCookie()
+        }
     }
 
     /// 是否已登录
     public var isLoggedIn: Bool {
-        print(getCurrentCookie())
         return getCurrentCookie().contains("SESSDATA")
     }
 
@@ -234,7 +236,10 @@ public final class BilibiliCookieSyncService: ObservableObject {
             deviceName: getDeviceName()
         )
 
-        guard !syncData.cookie.isEmpty else { return }
+        guard !syncData.cookie.isEmpty else {
+            clearICloudCookie()
+            return
+        }
 
         if let encoded = try? JSONEncoder().encode(syncData) {
             NSUbiquitousKeyValueStore.default.set(encoded, forKey: Keys.iCloudCookieKey)
@@ -516,6 +521,59 @@ public final class BilibiliCookieSyncService: ObservableObject {
             UserDefaults.standard.set(encoded, forKey: Keys.lastSyncedDataKey)
         }
         lastSyncedData = data
+    }
+
+    private func mirrorSessionUpdate(cookie: String, uid: String?, source: CookieSyncSource) {
+        let state: PlatformSessionState = cookie.contains("SESSDATA") ? .authenticated : .invalid
+        let sessionData = PlatformSessionData(
+            cookie: cookie,
+            uid: uid,
+            source: mapSessionSource(source),
+            state: state
+        )
+        Task {
+            await PlatformSessionManager.shared.updateSession(platformId: .bilibili, data: sessionData)
+        }
+    }
+
+    private func mirrorSessionClear() {
+        Task {
+            await PlatformSessionManager.shared.clearSession(platformId: .bilibili)
+        }
+    }
+
+    private func mapSessionSource(_ source: CookieSyncSource) -> PlatformSessionSource {
+        switch source {
+        case .local:
+            return .local
+        case .iCloud:
+            return .iCloud
+        case .bonjour:
+            return .bonjour
+        case .manual:
+            return .manual
+        }
+    }
+
+    private func hydrateLegacyCacheFromSessionStoreIfNeeded() async {
+        guard getCurrentCookie().isEmpty else { return }
+        guard let session = await PlatformSessionManager.shared.getSession(platformId: .bilibili),
+              let cookie = session.cookie,
+              !cookie.isEmpty else {
+            return
+        }
+
+        UserDefaults.standard.set(cookie, forKey: Keys.cookieKey)
+        if let uid = session.uid {
+            UserDefaults.standard.set(uid, forKey: Keys.uidKey)
+        }
+        UserDefaults.standard.synchronize()
+    }
+
+    private func clearICloudCookie() {
+        NSUbiquitousKeyValueStore.default.removeObject(forKey: Keys.iCloudCookieKey)
+        NSUbiquitousKeyValueStore.default.synchronize()
+        print("[BilibiliCookieSyncService] 已清除 iCloud Cookie")
     }
 
     private func getDeviceName() -> String {

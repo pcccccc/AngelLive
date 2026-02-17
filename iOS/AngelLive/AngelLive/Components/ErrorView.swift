@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 
 /// 全局错误提示视图
 struct ErrorView: View {
@@ -26,15 +27,15 @@ struct ErrorView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var showingDetailSheet = false
     @State private var showingCookieDebugView = false
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
 
     // 检查是否已登录B站
     private var isBilibiliLoggedIn: Bool {
-        let cookie = UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
-        return !cookie.isEmpty && cookie.contains("SESSDATA")
+        syncService.isLoggedIn
     }
 
     private var bilibiliCookie: String {
-        UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
+        syncService.getCurrentCookie()
     }
 
     init(

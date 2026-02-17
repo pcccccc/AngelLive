@@ -32,22 +32,17 @@ struct BilibiliUserInfoTV: Codable {
     }
 }
 
-struct BilibiliUserInfoResponseTV: Codable {
-    let code: Int
-    let message: String?
-    let ttl: Int?
-    let data: BilibiliUserInfoTV?
-
-    enum CodingKeys: String, CodingKey {
-        case code, message, ttl, data
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        code = try container.decode(Int.self, forKey: .code)
-        message = try container.decodeIfPresent(String.self, forKey: .message)
-        ttl = try container.decodeIfPresent(Int.self, forKey: .ttl)
-        data = try container.decodeIfPresent(BilibiliUserInfoTV.self, forKey: .data)
+private extension BilibiliUserInfoTV {
+    init(from info: BilibiliAccountUserInfo) {
+        self.mid = info.mid
+        self.uname = info.uname
+        self.userid = info.userid
+        self.sign = info.sign
+        self.birthday = info.birthday
+        self.sex = info.sex
+        self.rank = info.rank
+        self.face = info.face
+        self.nickFree = info.nickFree
     }
 }
 
@@ -55,7 +50,6 @@ struct BilibiliUserInfoResponseTV: Codable {
 
 struct AccountManagementView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @EnvironmentObject var settingStore: SettingStore
 
     @State private var currentPage: AccountPage = .main
 
@@ -75,7 +69,6 @@ struct AccountManagementView: View {
             case .bilibiliDetail:
                 if syncService.isLoggedIn {
                     BilibiliLoggedInPageView(onBack: { currentPage = .main })
-                        .environmentObject(settingStore)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 } else {
                     BilibiliLoginOptionsPageView(
@@ -83,16 +76,13 @@ struct AccountManagementView: View {
                         onLanSync: { currentPage = .lanSync },
                         onManualInput: { currentPage = .manualInput }
                     )
-                    .environmentObject(settingStore)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             case .lanSync:
                 BilibiliLANSyncPageView(onBack: { currentPage = .bilibiliDetail })
-                    .environmentObject(settingStore)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             case .manualInput:
                 BilibiliManualInputPageView(onBack: { currentPage = .bilibiliDetail })
-                    .environmentObject(settingStore)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
@@ -145,7 +135,6 @@ struct AccountManagementView: View {
 
 struct BilibiliLoggedInPageView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @EnvironmentObject var settingStore: SettingStore
     let onBack: () -> Void
 
     @State private var userInfo: BilibiliUserInfoTV?
@@ -310,34 +299,21 @@ struct BilibiliLoggedInPageView: View {
             return
         }
 
-        guard let url = URL(string: "https://api.bilibili.com/x/member/web/account") else {
-            validationError = "无效的 URL"
-            isValidating = false
-            return
-        }
+        let result = await BilibiliAccountService.shared.loadUserInfo(
+            cookie: cookie,
+            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
+        )
 
-        var request = URLRequest(url: url)
-        request.setValue(cookie, forHTTPHeaderField: "Cookie")
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
-
-        do {
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let response = try JSONDecoder().decode(BilibiliUserInfoResponseTV.self, from: data)
-
-            if response.code == 0, let info = response.data {
-                userInfo = info
-                validationError = nil
-                if let mid = info.mid {
-                    let cookie = syncService.getCurrentCookie()
-                    syncService.setCookie(cookie, uid: "\(mid)", source: .local, save: false)
-                }
-            } else {
-                userInfo = nil
-                validationError = response.message ?? "Cookie 已失效 (code: \(response.code))"
+        switch result {
+        case .success(let info):
+            userInfo = BilibiliUserInfoTV(from: info)
+            validationError = nil
+            if let mid = info.mid {
+                syncService.setCookie(cookie, uid: "\(mid)", source: .local, save: false)
             }
-        } catch {
+        case .failure(let error):
             userInfo = nil
-            validationError = "网络错误: \(error.localizedDescription)"
+            validationError = error.localizedDescription
         }
 
         isValidating = false
@@ -345,10 +321,6 @@ struct BilibiliLoggedInPageView: View {
 
     private func logout() {
         syncService.clearCookie()
-        if syncService.iCloudSyncEnabled {
-            syncService.syncToICloud()
-        }
-        settingStore.bilibiliCookie = ""
         userInfo = nil
         validationError = nil
     }
@@ -358,7 +330,6 @@ struct BilibiliLoggedInPageView: View {
 
 struct BilibiliLoginOptionsPageView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @EnvironmentObject var settingStore: SettingStore
     let onBack: () -> Void
     let onLanSync: () -> Void
     let onManualInput: () -> Void
@@ -465,7 +436,6 @@ struct BilibiliLoginOptionsPageView: View {
 
 struct BilibiliLANSyncPageView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @EnvironmentObject var settingStore: SettingStore
     let onBack: () -> Void
 
     @State private var isSuccess = false
@@ -536,7 +506,6 @@ struct BilibiliLANSyncPageView: View {
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     await MainActor.run {
                         isSuccess = true
-                        settingStore.bilibiliCookie = syncService.getCurrentCookie()
                     }
                 }
             }
@@ -548,7 +517,6 @@ struct BilibiliLANSyncPageView: View {
 
 struct BilibiliManualInputPageView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @EnvironmentObject var settingStore: SettingStore
     let onBack: () -> Void
 
     @State private var cookieInput = ""
@@ -656,7 +624,6 @@ struct BilibiliManualInputPageView: View {
 
         switch result {
         case .valid:
-            settingStore.bilibiliCookie = cookieInput
             isSuccess = true
         case .invalid(let reason):
             validationMessage = "Cookie 无效: \(reason)"

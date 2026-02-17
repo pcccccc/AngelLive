@@ -38,15 +38,8 @@ final class BilibiliLoginViewModel: ObservableObject {
 
     // MARK: - Cookie Management
 
-    private let cookieKey = "SimpleLive.Setting.BilibiliCookie"
-    private let uidKey = "LiveParse.Bilibili.uid"
-
     var cookie: String {
-        get { UserDefaults.standard.string(forKey: cookieKey) ?? "" }
-        set {
-            UserDefaults.standard.set(newValue, forKey: cookieKey)
-            UserDefaults.standard.synchronize()
-        }
+        BilibiliCookieSyncService.shared.getCurrentCookie()
     }
 
     var isLoggedIn: Bool {
@@ -131,15 +124,6 @@ final class BilibiliLoginViewModel: ObservableObject {
                 let cookieString = self.buildCookieString(from: cookieDict)
 
                 if !cookieString.isEmpty {
-                    self.cookie = cookieString
-
-                    if let uid = self.extractValue(named: "DedeUserID", from: cookieDict) {
-                        UserDefaults.standard.set(uid, forKey: self.uidKey)
-                    }
-
-                    // 确保 UserDefaults 写入完成
-                    UserDefaults.standard.synchronize()
-
                     // 使用 BilibiliCookieSyncService 统一管理 cookie，确保同步
                     let extractedUid = self.extractValue(named: "DedeUserID", from: cookieDict)
                     BilibiliCookieSyncService.shared.setCookie(cookieString, uid: extractedUid, source: .local, save: true)
@@ -199,11 +183,6 @@ final class BilibiliLoginViewModel: ObservableObject {
         BilibiliCookieSyncService.shared.clearCookie()
 
         clearWebsiteData()
-
-        // 同步到 iCloud（清空状态）
-        if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
-            BilibiliCookieSyncService.shared.syncToICloud()
-        }
 
         // 清理 WebView 中的 Bilibili 缓存
         BilibiliCookieManager.shared.clearWebViewCookies()
@@ -265,7 +244,7 @@ final class BilibiliLoginViewModel: ObservableObject {
     }
 
     func extractUidFromCookie() -> String? {
-        UserDefaults.standard.string(forKey: uidKey)
+        BilibiliCookieSyncService.shared.getCurrentUid()
     }
 
     private func clearWebsiteData() {

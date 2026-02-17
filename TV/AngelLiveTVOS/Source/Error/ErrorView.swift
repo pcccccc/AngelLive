@@ -22,11 +22,11 @@ struct ErrorView: View {
     let onRetry: (() -> Void)?
 
     @State private var showDetailView = false
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
 
     // 检查是否已登录B站
     private var isBilibiliLoggedIn: Bool {
-        let cookie = UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
-        return !cookie.isEmpty && cookie.contains("SESSDATA")
+        syncService.isLoggedIn
     }
 
     // 是否有详情可显示

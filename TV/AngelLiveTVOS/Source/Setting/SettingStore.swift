@@ -8,6 +8,5 @@
 import SwiftUI
 
 class SettingStore: ObservableObject {
-    @AppStorage("SimpleLive.Setting.BilibiliCookie") var bilibiliCookie = ""
     @AppStorage("SimpleLive.Setting.SyncSystemRate") var syncSystemRate = true
 }

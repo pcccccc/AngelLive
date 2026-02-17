@@ -39,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 打印当前 Bilibili Cookie
-        let cookie = UserDefaults.standard.string(forKey: "SimpleLive.Setting.BilibiliCookie") ?? ""
+        let cookie = BilibiliCookieSyncService.shared.getCurrentCookie()
         print("[App Launch] Bilibili Cookie: \(cookie.isEmpty ? "(空)" : cookie)")
     }
 }

@@ -10,7 +10,7 @@ import SwiftUI
 import AngelLiveCore
 
 struct SettingView: View {
-    @AppStorage("SimpleLive.Setting.BilibiliCookie") private var bilibiliCookie = ""
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     @State private var danmuModel = DanmuSettingModel()
     @State private var showBilibiliLogin = false
@@ -150,7 +150,7 @@ struct SettingView: View {
 
                 Spacer()
                 
-                if bilibiliCookie.contains("SESSDATA") {
+                if syncService.isLoggedIn {
                     Text("已登录")
                         .foregroundStyle(AppConstants.Colors.success)
                 } else {

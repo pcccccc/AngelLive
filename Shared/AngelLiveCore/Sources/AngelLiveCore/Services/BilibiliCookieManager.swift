@@ -85,12 +85,10 @@ public final class BilibiliCookieManager: ObservableObject {
         print("[BilibiliCookieManager] 获取到 \(cookies.count) 个 Cookie，过滤后 \(bilibiliCookies.count) 个 Bilibili Cookie")
         print("[BilibiliCookieManager] Cookie 字符串: \(cookieString.prefix(100))...")
 
-        // 设置到 BiliBiliCookie
-        setBilibiliCookie(cookieString)
-
-        // 尝试提取 DedeUserID
-        if let dedeUserID = bilibiliCookies.first(where: { $0.name == "DedeUserID" })?.value {
-            setBilibiliUid(dedeUserID)
+        // 统一通过 SyncService 持久化（含 uid）
+        let dedeUserID = bilibiliCookies.first(where: { $0.name == "DedeUserID" })?.value
+        setBilibiliCookie(cookieString, uid: dedeUserID)
+        if let dedeUserID {
             print("[BilibiliCookieManager] 设置 uid = \(dedeUserID)")
         }
 
@@ -107,30 +105,16 @@ public final class BilibiliCookieManager: ObservableObject {
         isLoading = false
     }
 
-    // MARK: - Private helpers for thread-safe access to BiliBiliCookie
-    // 直接使用 UserDefaults 绕过 BiliBiliCookie 的并发安全问题
-    // 使用与 LiveParse 库相同的 key
-
-    private static let cookieKey = "SimpleLive.Setting.BilibiliCookie"
-    private static let uidKey = "LiveParse.Bilibili.uid"
-
     private func getBilibiliCookie() -> String {
-        UserDefaults.standard.string(forKey: Self.cookieKey) ?? ""
+        BilibiliCookieSyncService.shared.getCurrentCookie()
     }
 
-    private func setBilibiliCookie(_ value: String) {
-        UserDefaults.standard.set(value, forKey: Self.cookieKey)
-        UserDefaults.standard.synchronize()
-    }
-
-    private func setBilibiliUid(_ value: String) {
-        UserDefaults.standard.set(value, forKey: Self.uidKey)
-        UserDefaults.standard.synchronize()
+    private func setBilibiliCookie(_ value: String, uid: String?) {
+        BilibiliCookieSyncService.shared.setCookie(value, uid: uid, source: .local, save: true)
     }
 
     private func clearBilibiliCookie() {
-        UserDefaults.standard.removeObject(forKey: Self.cookieKey)
-        UserDefaults.standard.removeObject(forKey: Self.uidKey)
+        BilibiliCookieSyncService.shared.clearCookie(clearICloud: false)
     }
 }
 
