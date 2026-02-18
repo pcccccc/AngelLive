@@ -41,6 +41,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 打印当前 Bilibili Cookie
         let cookie = BilibiliCookieSyncService.shared.getCurrentCookie()
         print("[App Launch] Bilibili Cookie: \(cookie.isEmpty ? "(空)" : cookie)")
+
+        Task {
+            await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
+        }
     }
 }
 

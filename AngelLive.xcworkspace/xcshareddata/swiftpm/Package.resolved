@@ -327,10 +327,10 @@
     {
       "identity" : "youtubekit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/YouTubeKit",
+      "location" : "https://github.com/alexeichhorn/YouTubeKit",
       "state" : {
-        "revision" : "19f2cd54b564044d2229400cf3828f22a2bd483f",
-        "version" : "0.0.3"
+        "revision" : "068403f2b7523c7620eab257e64402f722821e05",
+        "version" : "0.4.3"
       }
     }
   ],

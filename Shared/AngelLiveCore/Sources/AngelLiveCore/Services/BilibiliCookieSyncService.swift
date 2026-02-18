@@ -73,15 +73,24 @@ public final class BilibiliCookieSyncService: ObservableObject {
     // MARK: - Private Properties
 
     private enum Keys {
-        static let cookieKey = "SimpleLive.Setting.BilibiliCookie"
-        static let uidKey = "LiveParse.Bilibili.uid"
+        static let legacyCookieKey = "SimpleLive.Setting.BilibiliCookie"
+        static let legacyUidKey = "LiveParse.Bilibili.uid"
+        static let sessionSnapshotKey = "BilibiliCookieSyncService.sessionSnapshot"
         static let lastSyncedDataKey = "BilibiliCookieSyncService.lastSyncedData"
         static let iCloudSyncEnabled = "BilibiliCookieSyncService.iCloudSyncEnabled"
         static let iCloudCookieKey = "bilibili_cookie_sync"
     }
 
+    private struct SessionSnapshot: Codable {
+        let cookie: String
+        let uid: String?
+        let updatedAt: Date
+    }
+
     private var bonjourListener: NWListener?
     private var bonjourBrowser: NWBrowser?
+    private var currentCookieStorage = ""
+    private var currentUidStorage: String?
 
     // MARK: - Init
 
@@ -92,6 +101,15 @@ public final class BilibiliCookieSyncService: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Keys.lastSyncedDataKey),
            let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) {
             self.lastSyncedData = syncedData
+        }
+
+        if let snapshot = loadSessionSnapshot() {
+            currentCookieStorage = snapshot.cookie
+            currentUidStorage = snapshot.uid
+        } else {
+            let legacy = loadLegacyCache()
+            currentCookieStorage = legacy.cookie
+            currentUidStorage = legacy.uid
         }
 
         // 监听 iCloud 变化
@@ -105,9 +123,9 @@ public final class BilibiliCookieSyncService: ObservableObject {
         // 启动 iCloud 同步
         NSUbiquitousKeyValueStore.default.synchronize()
 
-        // 兼容迁移：如果本地旧 key 为空，则从 SessionStore 回填一次
+        // 冷启动时统一从 SessionStore 启动，旧 key 仅用于兼容兜底
         Task {
-            await hydrateLegacyCacheFromSessionStoreIfNeeded()
+            await bootstrapSessionCache()
         }
     }
 
@@ -168,25 +186,19 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
     /// 获取当前 Cookie
     public func getCurrentCookie() -> String {
-        UserDefaults.standard.string(forKey: Keys.cookieKey) ?? ""
+        currentCookieStorage
     }
 
     /// 获取当前 UID
     public func getCurrentUid() -> String? {
-        UserDefaults.standard.string(forKey: Keys.uidKey)
+        currentUidStorage
     }
 
     /// 设置 Cookie
     public func setCookie(_ cookie: String, uid: String?, source: CookieSyncSource, save: Bool = true) {
-        UserDefaults.standard.set(cookie, forKey: Keys.cookieKey)
-        if let uid = uid {
-            UserDefaults.standard.set(uid, forKey: Keys.uidKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: Keys.uidKey)
-        }
-
-        // 确保 UserDefaults 写入完成
-        UserDefaults.standard.synchronize()
+        applyRuntimeCache(cookie: cookie, uid: uid)
+        saveSessionSnapshot(cookie: cookie, uid: uid)
+        syncLegacyCache(cookie: cookie, uid: uid)
 
         mirrorSessionUpdate(cookie: cookie, uid: uid, source: source)
 
@@ -208,10 +220,10 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
     /// 清除 Cookie（本地 + iCloud）
     public func clearCookie(clearICloud: Bool = true) {
-        UserDefaults.standard.removeObject(forKey: Keys.cookieKey)
-        UserDefaults.standard.removeObject(forKey: Keys.uidKey)
+        applyRuntimeCache(cookie: "", uid: nil)
+        clearSessionSnapshot()
+        clearLegacyCache()
         UserDefaults.standard.removeObject(forKey: Keys.lastSyncedDataKey)
-        UserDefaults.standard.synchronize()
         lastSyncedData = nil
         lastValidationResult = nil
         mirrorSessionClear()
@@ -524,12 +536,28 @@ public final class BilibiliCookieSyncService: ObservableObject {
     }
 
     private func mirrorSessionUpdate(cookie: String, uid: String?, source: CookieSyncSource) {
-        let state: PlatformSessionState = cookie.contains("SESSDATA") ? .authenticated : .invalid
+        let sessionSource = mapSessionSource(source)
+
+        // 登录态统一走 PlatformSessionManager.loginWithCookie 入口；
+        // 非登录态 cookie 仍保留为 invalid，会话用于兼容旧链路。
+        if cookie.contains("SESSDATA") {
+            Task {
+                _ = await PlatformSessionManager.shared.loginWithCookie(
+                    platformId: .bilibili,
+                    cookie: cookie,
+                    uid: uid,
+                    source: sessionSource,
+                    validateBeforeSave: false
+                )
+            }
+            return
+        }
+
         let sessionData = PlatformSessionData(
             cookie: cookie,
             uid: uid,
-            source: mapSessionSource(source),
-            state: state
+            source: sessionSource,
+            state: .invalid
         )
         Task {
             await PlatformSessionManager.shared.updateSession(platformId: .bilibili, data: sessionData)
@@ -555,19 +583,68 @@ public final class BilibiliCookieSyncService: ObservableObject {
         }
     }
 
-    private func hydrateLegacyCacheFromSessionStoreIfNeeded() async {
-        guard getCurrentCookie().isEmpty else { return }
-        guard let session = await PlatformSessionManager.shared.getSession(platformId: .bilibili),
-              let cookie = session.cookie,
-              !cookie.isEmpty else {
+    private func bootstrapSessionCache() async {
+        if let session = await PlatformSessionManager.shared.getSession(platformId: .bilibili),
+           let cookie = session.cookie,
+           !cookie.isEmpty {
+            applyRuntimeCache(cookie: cookie, uid: session.uid)
+            saveSessionSnapshot(cookie: cookie, uid: session.uid)
+            syncLegacyCache(cookie: cookie, uid: session.uid)
             return
         }
 
-        UserDefaults.standard.set(cookie, forKey: Keys.cookieKey)
-        if let uid = session.uid {
-            UserDefaults.standard.set(uid, forKey: Keys.uidKey)
+        guard currentCookieStorage.isEmpty else { return }
+        let legacy = loadLegacyCache()
+        guard !legacy.cookie.isEmpty else { return }
+
+        applyRuntimeCache(cookie: legacy.cookie, uid: legacy.uid)
+        saveSessionSnapshot(cookie: legacy.cookie, uid: legacy.uid)
+        mirrorSessionUpdate(cookie: legacy.cookie, uid: legacy.uid, source: .local)
+    }
+
+    private func applyRuntimeCache(cookie: String, uid: String?) {
+        currentCookieStorage = cookie
+        currentUidStorage = uid
+    }
+
+    private func saveSessionSnapshot(cookie: String, uid: String?) {
+        let snapshot = SessionSnapshot(cookie: cookie, uid: uid, updatedAt: Date())
+        if let encoded = try? JSONEncoder().encode(snapshot) {
+            UserDefaults.standard.set(encoded, forKey: Keys.sessionSnapshotKey)
         }
-        UserDefaults.standard.synchronize()
+    }
+
+    private func clearSessionSnapshot() {
+        UserDefaults.standard.removeObject(forKey: Keys.sessionSnapshotKey)
+    }
+
+    private func loadSessionSnapshot() -> SessionSnapshot? {
+        guard let data = UserDefaults.standard.data(forKey: Keys.sessionSnapshotKey),
+              let snapshot = try? JSONDecoder().decode(SessionSnapshot.self, from: data) else {
+            return nil
+        }
+        return snapshot
+    }
+
+    private func syncLegacyCache(cookie: String, uid: String?) {
+        UserDefaults.standard.set(cookie, forKey: Keys.legacyCookieKey)
+        if let uid = uid {
+            UserDefaults.standard.set(uid, forKey: Keys.legacyUidKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Keys.legacyUidKey)
+        }
+    }
+
+    private func clearLegacyCache() {
+        UserDefaults.standard.removeObject(forKey: Keys.legacyCookieKey)
+        UserDefaults.standard.removeObject(forKey: Keys.legacyUidKey)
+    }
+
+    private func loadLegacyCache() -> (cookie: String, uid: String?) {
+        (
+            UserDefaults.standard.string(forKey: Keys.legacyCookieKey) ?? "",
+            UserDefaults.standard.string(forKey: Keys.legacyUidKey)
+        )
     }
 
     private func clearICloudCookie() {

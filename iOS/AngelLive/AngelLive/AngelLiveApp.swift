@@ -43,6 +43,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // 配置音频会话以支持后台播放
         configureAudioSession()
 
+        Task {
+            await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
+        }
+
         // 初始化屏幕方向设置
         if AppConstants.Device.isIPad {
             KSOptions.supportedInterfaceOrientations = .all

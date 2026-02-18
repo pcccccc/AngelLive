@@ -10,6 +10,8 @@ import Security
 
 public enum PlatformSessionID: String, Codable, Sendable {
     case bilibili
+    case douyin
+    case kuaishou
 }
 
 public enum PlatformSessionState: String, Codable, Sendable {
@@ -107,6 +109,50 @@ public actor PlatformSessionManager {
         store.loadSession(for: platformId)
     }
 
+    @discardableResult
+    public func loginWithCookie(
+        platformId: PlatformSessionID,
+        cookie: String,
+        uid: String? = nil,
+        source: PlatformSessionSource = .local,
+        validateBeforeSave: Bool = true
+    ) async -> PlatformSessionValidationResult {
+        let normalizedCookie = cookie.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCookie.isEmpty else {
+            return .invalid(reason: "Cookie 为空")
+        }
+
+        let validationResult: PlatformSessionValidationResult
+        if validateBeforeSave {
+            validationResult = await validateCookie(platformId: platformId, cookie: normalizedCookie)
+        } else {
+            validationResult = .valid
+        }
+
+        switch validationResult {
+        case .valid:
+            let sessionData = PlatformSessionData(
+                cookie: normalizedCookie,
+                uid: uid,
+                source: source,
+                state: .authenticated
+            )
+            updateSession(platformId: platformId, data: sessionData)
+        case .expired:
+            let sessionData = PlatformSessionData(
+                cookie: normalizedCookie,
+                uid: uid,
+                source: source,
+                state: .expired
+            )
+            updateSession(platformId: platformId, data: sessionData)
+        case .invalid, .networkError:
+            break
+        }
+
+        return validationResult
+    }
+
     public func updateSession(platformId: PlatformSessionID, data: PlatformSessionData) {
         let session = PlatformSession(
             platformId: platformId,
@@ -120,10 +166,12 @@ public actor PlatformSessionManager {
             updatedAt: Date()
         )
         store.saveSession(session)
+        PlatformSessionLiveParseBridge.syncSessionToLiveParse(session)
     }
 
     public func clearSession(platformId: PlatformSessionID) {
         store.clearSession(for: platformId)
+        PlatformSessionLiveParseBridge.clearForPlatform(platformId)
     }
 
     public func validateSession(platformId: PlatformSessionID) async -> PlatformSessionValidationResult {
@@ -133,9 +181,17 @@ public actor PlatformSessionManager {
             return .invalid(reason: "Cookie 为空")
         }
 
+        return await validateCookie(platformId: platformId, cookie: cookie)
+    }
+
+    private func validateCookie(platformId: PlatformSessionID, cookie: String) async -> PlatformSessionValidationResult {
         switch platformId {
         case .bilibili:
             return await validateBilibiliSession(cookie: cookie)
+        case .douyin:
+            return validateDouyinSession(cookie: cookie)
+        case .kuaishou:
+            return validateKuaishouSession(cookie: cookie)
         }
     }
 
@@ -162,6 +218,20 @@ public actor PlatformSessionManager {
                 return .invalid(reason: message)
             }
         }
+    }
+
+    private func validateDouyinSession(cookie: String) -> PlatformSessionValidationResult {
+        guard cookie.contains("ttwid=") else {
+            return .invalid(reason: "抖音 Cookie 缺少 ttwid")
+        }
+        return .valid
+    }
+
+    private func validateKuaishouSession(cookie: String) -> PlatformSessionValidationResult {
+        guard cookie.contains("=") else {
+            return .invalid(reason: "快手 Cookie 格式无效")
+        }
+        return .valid
     }
 }
 

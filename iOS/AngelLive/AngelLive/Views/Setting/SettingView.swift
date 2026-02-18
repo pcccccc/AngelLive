@@ -19,7 +19,7 @@ struct SettingView: View {
                 // 账号设置
                 Section {
                     NavigationLink {
-                        BilibiliWebLoginView()
+                        PlatformAccountLoginView()
                             .toolbar(.hidden, for: .tabBar)
                     } label: {
                         HStack {
@@ -28,13 +28,13 @@ struct SettingView: View {
                                 .foregroundStyle(AppConstants.Colors.link.gradient)
                                 .frame(width: 32)
 
-                            Text("哔哩哔哩登录")
+                            Text("平台账号登录")
 
                             Spacer()
 
-                            Text(syncService.isLoggedIn ? "已登录" : "未登录")
+                            Text("哔哩/抖音/快手")
                                 .font(.caption)
-                                .foregroundStyle(syncService.isLoggedIn ? AppConstants.Colors.success : AppConstants.Colors.secondaryText)
+                                .foregroundStyle(AppConstants.Colors.secondaryText)
                         }
                     }
                 } header: {
