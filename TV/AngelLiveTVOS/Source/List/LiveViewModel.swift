@@ -84,7 +84,7 @@ class LiveViewModel {
     var isLeftFocused: Bool = false
     
     var loadingText: String = "正在获取内容"
-    var searchTypeArray = ["链接/口令 🔗", "关键词 🔍（不推荐）", "Youtube"]
+    var searchTypeArray = ["链接/口令 🔗", "关键词 🔍（不推荐）"]
     var searchTypeIndex = 0
     var searchText: String = ""
     var showAlert: Bool = false

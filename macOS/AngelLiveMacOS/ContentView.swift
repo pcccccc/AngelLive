@@ -16,7 +16,6 @@ enum TabSelection: Hashable {
     case platform(Platformdescription)
     case settings
     case search
-    case youtube  // YouTube 特殊处理，跳转到搜索页面并选中 YouTube
 }
 
 struct ContentView: View {
@@ -52,28 +51,14 @@ struct ContentView: View {
 
                         TabSection("平台") {
                             ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
-                                // YouTube 特殊处理：跳转到搜索页面并选中 YouTube
-                                if platform.liveType == .youtube {
-                                    Tab(value: TabSelection.youtube) {
-                                        SearchView()
-                                    } label: {
-                                        Label {
-                                            Text(platform.title)
-                                        } icon: {
-                                            Image(getImage(platform: platform))
-                                                .frame(width: 25, height: 25)
-                                        }
-                                    }
-                                } else {
-                                    Tab(value: TabSelection.platform(platform)) {
-                                        PlatformDetailTab(platform: platform)
-                                    } label: {
-                                        Label {
-                                            Text(platform.title)
-                                        } icon: {
-                                            Image(getImage(platform: platform))
-                                                .frame(width: 25, height: 25)
-                                        }
+                                Tab(value: TabSelection.platform(platform)) {
+                                    PlatformDetailTab(platform: platform)
+                                } label: {
+                                    Label {
+                                        Text(platform.title)
+                                    } icon: {
+                                        Image(getImage(platform: platform))
+                                            .frame(width: 25, height: 25)
                                     }
                                 }
                             }
@@ -105,12 +90,6 @@ struct ContentView: View {
                             welcomeManager.completeWelcome()
                         }
                         .presentationSizing(.page.fitted(horizontal: true, vertical: false))
-                    }
-                    .onChange(of: selectedTab) { _, newValue in
-                        // 点击 YouTube tab 时，自动选中 YouTube 搜索类型
-                        if newValue == .youtube {
-                            searchViewModel.searchTypeIndex = 2
-                        }
                     }
                 }
             }
@@ -145,8 +124,6 @@ struct ContentView: View {
                 return "mini_live_card_cc"
             case .ks:
                 return "mini_live_card_ks"
-            case .youtube:
-                return "mini_live_card_youtube"
         }
     }
 }

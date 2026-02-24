@@ -115,8 +115,6 @@ public enum ApiManager {
                 return try await KuaiShou.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
             case .yy:
                 return try await YY.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
-            case .youtube:
-                return try await YoutubeParse.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
         }
     }
 
@@ -143,7 +141,6 @@ public enum ApiManager {
             if shareCode.contains("cc.163.com") { return .cc }
             if shareCode.contains("kuaishou.com") { return .ks }
             if shareCode.contains("yy.com") { return .yy }
-            if shareCode.contains("youtube") { return .youtube }
             return nil
         }()
         
@@ -202,66 +199,6 @@ public enum ApiManager {
                             liveType: room.liveType, liveState: liveState,
                             userId: room.userId, roomId: room.roomId,
                             liveWatchedCount: room.liveWatchedCount)
-        case .youtube:
-            return try await YoutubeParse.getRoomInfoFromShareCode(shareCode: text)
-        }
-    }
-
-    // YouTube 可达性缓存管理器（使用 actor 保证并发安全）
-    private actor YouTubeReachabilityCache {
-        private var cachedResult: Bool?
-        private var cacheTime: Date?
-        private let cacheTTL: TimeInterval = 300 // 5分钟缓存
-
-        func getCached() -> Bool? {
-            guard let cached = cachedResult,
-                  let time = cacheTime,
-                  Date().timeIntervalSince(time) < cacheTTL else {
-                return nil
-            }
-            return cached
-        }
-
-        func setCache(_ result: Bool) {
-            cachedResult = result
-            cacheTime = Date()
-        }
-    }
-
-    private static let youtubeReachabilityCache = YouTubeReachabilityCache()
-
-    /**
-     获取用户是否可以访问google（用于判断YouTube可达性）。
-     - 使用 HEAD 请求，更轻量
-     - 超时 2 秒，快速失败
-     - 结果缓存 5 分钟
-
-     - Returns: 是否可达
-    */
-    public static func checkInternetConnection() async -> Bool {
-        // 检查缓存
-        if let cached = await youtubeReachabilityCache.getCached() {
-            return cached
-        }
-
-        let url = URL(string: "https://www.google.com/generate_204")! // 更轻量的检测端点
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD" // HEAD 请求不下载 body
-        request.timeoutInterval = 2 // 缩短超时时间
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let resp = response as? HTTPURLResponse else {
-                await youtubeReachabilityCache.setCache(false)
-                return false
-            }
-            // generate_204 正常返回 204，但 HEAD 可能返回 200
-            let result = resp.statusCode == 200 || resp.statusCode == 204
-            await youtubeReachabilityCache.setCache(result)
-            return result
-        } catch {
-            await youtubeReachabilityCache.setCache(false)
-            return false
         }
     }
 }

@@ -97,8 +97,6 @@ final class RoomInfoViewModel {
                 playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
             case .yy:
                 playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-            case .youtube:
-                playArgs = try await YoutubeParse.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
             }
             updateCurrentRoomPlayArgs(playArgs)
         } catch {
@@ -352,7 +350,7 @@ final class RoomInfoViewModel {
         switch currentRoom.liveType {
         case .bilibili, .huya, .douyin, .douyu:
             return true
-        case .cc, .ks, .yy, .youtube:
+        case .cc, .ks, .yy:
             return false
         }
     }

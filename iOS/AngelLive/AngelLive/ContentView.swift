@@ -67,16 +67,6 @@ struct ContentView: View {
         .environment(historyViewModel)
         .onChange(of: selectedTab) { _, newValue in
             hapticFeedback.selectionChanged()
-            if case .platform(let platform) = newValue, platform.liveType == .youtube {
-                Task { @MainActor in
-                    searchViewModel.searchTypeIndex = 2
-                    selectedTab = .search
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .switchToYouTubeSearch)) { _ in
-            selectedTab = .search
-            searchViewModel.searchTypeIndex = 2
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
             selectedTab = .settings
@@ -299,8 +289,6 @@ struct ContentView: View {
                 return "pad_live_card_cc"
             case .ks:
                 return "pad_live_card_ks"
-            case .youtube:
-                return "pad_live_card_youtube"
         }
     }
 }

@@ -122,8 +122,6 @@ class Common {
                 return "live_card_cc"
             case .ks:
                 return "live_card_ks"
-            case .youtube:
-                return "live_card_youtube"
         }
     }
 }

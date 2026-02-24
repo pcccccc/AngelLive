@@ -43,30 +43,13 @@ struct SearchRoomView: View {
                         // 关键词搜索
                         await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
                     } else {
-                        // 链接/口令 或 YouTube 搜索
+                        // 链接/口令搜索
                         await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                     }
                 }
             }
             Spacer()
-            if appModel.searchViewModel.searchTypeIndex == 2 && liveViewModel.roomList.count == 0 {
-                HStack {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("可选格式:")
-                            .font(.title3)
-                        Text("https://www.youtube.com/watch?v=36YnV9STBqc")
-                            .font(.headline)
-                        Text("https://www.youtube.com/live/36YnV9STBqc")
-                            .font(.headline)
-                        Text("36YnV9STBqc")
-                            .font(.headline)
-                        Spacer()
-                    }
-                    .foregroundStyle(.secondary)
-                    Spacer()
-                }
-            }else {
-                if liveViewModel.hasError, let error = liveViewModel.currentError {
+            if liveViewModel.hasError, let error = liveViewModel.currentError {
                     ErrorView(
                         title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
                         message: error.liveParseMessage,
@@ -86,7 +69,7 @@ struct SearchRoomView: View {
                                     // 关键词搜索
                                     await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
                                 } else {
-                                    // 链接/口令 或 YouTube 搜索
+                                    // 链接/口令搜索
                                     await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                                 }
                             }

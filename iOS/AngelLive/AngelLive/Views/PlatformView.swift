@@ -55,22 +55,11 @@ struct PlatformView: View {
 
     @ViewBuilder
     private func platformNavigationItem(platform: Platformdescription, metrics: GridMetrics) -> some View {
-        if platform.liveType == .youtube {
-            Button {
-                searchViewModel.searchTypeIndex = 2
-                NotificationCenter.default.post(name: .switchToYouTubeSearch, object: nil)
-            } label: {
-                PlatformCard(platform: platform)
-                    .frame(width: metrics.itemWidth, height: metrics.itemHeight)
-            }
-            .buttonStyle(PlatformCardButtonStyle())
-        } else {
-            NavigationLink(value: platform) {
-                PlatformCard(platform: platform)
-                    .frame(width: metrics.itemWidth, height: metrics.itemHeight)
-            }
-            .buttonStyle(PlatformCardButtonStyle())
+        NavigationLink(value: platform) {
+            PlatformCard(platform: platform)
+                .frame(width: metrics.itemWidth, height: metrics.itemHeight)
         }
+        .buttonStyle(PlatformCardButtonStyle())
     }
 
     private func columnCount(for size: CGSize) -> Int {
@@ -159,7 +148,6 @@ extension Platformdescription: @retroactive Identifiable {
 }
 
 extension Notification.Name {
-    static let switchToYouTubeSearch = Notification.Name("switchToYouTubeSearch")
     static let switchToSettings = Notification.Name("switchToSettings")
 }
 

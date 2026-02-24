@@ -85,8 +85,6 @@ struct SearchView: View {
             return "输入链接、分享口令或房间号..."
         case 1:
             return "输入关键词搜索..."
-        case 2:
-            return "输入 YouTube 链接或 Video ID..."
         default:
             return "搜索直播间..."
         }
@@ -116,14 +114,6 @@ struct SearchView: View {
                     Image(systemName: "2.circle.fill")
                         .foregroundStyle(.purple)
                     Text("关键词：搜索主播名或直播间标题（不推荐）")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-
-                HStack(spacing: 8) {
-                    Image(systemName: "3.circle.fill")
-                        .foregroundStyle(.red)
-                    Text("YouTube：搜索 YouTube 直播")
                         .font(.subheadline)
                         .foregroundStyle(.tertiary)
                 }
@@ -240,7 +230,7 @@ struct SearchView: View {
                         isSearching = false
                     }
                 } else {
-                    // 链接/口令 或 YouTube 搜索
+                    // 链接/口令搜索
                     let room = try await LiveService.searchRoomWithShareCode(shareCode: keyword)
                     await MainActor.run {
                         if let room {

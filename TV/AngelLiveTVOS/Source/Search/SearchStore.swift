@@ -11,7 +11,7 @@ import AngelLiveDependencies
 
 @Observable
 class SearchViewModel {
-    var searchTypeArray = ["关键词 🔍", "链接/口令 🔗", "Youtube"]
+    var searchTypeArray = ["关键词 🔍", "链接/口令 🔗"]
     var searchTypeIndex = 0
     var page = 0
     var searchText: String = ""

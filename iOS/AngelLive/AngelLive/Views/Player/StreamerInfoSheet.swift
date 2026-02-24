@@ -205,7 +205,6 @@ extension LiveType {
         case .cc: return "网易CC"
         case .ks: return "快手"
         case .yy: return "YY"
-        case .youtube: return "YouTube"
         }
     }
 
@@ -219,7 +218,6 @@ extension LiveType {
         case .cc: return Color(red: 0.98, green: 0.75, blue: 0.18) // 黄色
         case .ks: return Color(red: 1.0, green: 0.35, blue: 0.0) // 橙红
         case .yy: return Color(red: 1.0, green: 0.8, blue: 0.0) // 黄色
-        case .youtube: return Color(red: 1.0, green: 0.0, blue: 0.0) // 红色
         }
     }
 
@@ -241,8 +239,6 @@ extension LiveType {
             return "https://live.kuaishou.com/u/\(userId)"
         case .yy:
             return "https://www.yy.com/\(roomId)"
-        case .youtube:
-            return "https://www.youtube.com/watch?v=\(roomId)"
         }
     }
 }

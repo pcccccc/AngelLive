@@ -88,8 +88,6 @@ struct CategoryManagementView: View {
             return "mini_live_card_cc"
         case .ks:
             return "mini_live_card_ks"
-        case .youtube:
-            return "mini_live_card_youtube"
         }
     }
 }

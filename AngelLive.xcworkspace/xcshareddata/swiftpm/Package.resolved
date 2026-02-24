@@ -307,30 +307,12 @@
       }
     },
     {
-      "identity" : "tarskit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/TarsKit",
-      "state" : {
-        "revision" : "68e2afd78327f047fa32afb2c339f3e8af5b3294",
-        "version" : "1.3.0"
-      }
-    },
-    {
       "identity" : "udpbroadcastconnection",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/gunterhager/UDPBroadcastConnection",
       "state" : {
         "revision" : "3680f532c00d18a168bb8da7b9f8f82fcd89180d",
         "version" : "5.0.5"
-      }
-    },
-    {
-      "identity" : "youtubekit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/alexeichhorn/YouTubeKit",
-      "state" : {
-        "revision" : "068403f2b7523c7620eab257e64402f722821e05",
-        "version" : "0.4.3"
       }
     }
   ],

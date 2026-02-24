@@ -50,30 +50,14 @@ public actor FavoriteStateModel {
             platformFavoriteCounts[room.liveType, default: 0] += 1
         }
 
-        // 分离 YouTube 和非 YouTube 收藏
-        let youtubeRooms = roomList.filter { $0.liveType == .youtube }
-        let nonYoutubeRooms = roomList.filter { $0.liveType != .youtube }
-
         // 使用任务组并发获取房间状态
         var fetchedModels: [LiveModel] = []
         var platformStats: [LiveType: (count: Int, totalTime: Double, success: Int, failure: Int)] = [:]
         let statusSyncStart = CFAbsoluteTimeGetCurrent()
 
-        // YouTube 可达性检查与非 YouTube 同步并行进行
-        let youtubeCheckTask = Task<Bool, Never> {
-            guard !youtubeRooms.isEmpty else { return false }
-            let checkStart = CFAbsoluteTimeGetCurrent()
-            let result = await ApiManager.checkInternetConnection()
-            let duration = CFAbsoluteTimeGetCurrent() - checkStart
-            favoriteSyncLog("YouTube reachability check \(result ? "ok" : "blocked") in \(formatSeconds(duration))s (async)")
-            return result
-        }
-        
-        // 第一阶段：先同步非 YouTube 收藏（与 YouTube 检查并行）
         await withTaskGroup(of: (Int, LiveModel?, String, String, String, LiveType, Double).self) { group in
-            for (index, liveModel) in nonYoutubeRooms.enumerated() {
+            for (index, liveModel) in roomList.enumerated() {
                 group.addTask {
-                    // 不在任务中修改 actor 属性，而是返回状态信息
                     let taskStart = CFAbsoluteTimeGetCurrent()
                     do {
                         let dataReq = try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
@@ -98,10 +82,9 @@ public actor FavoriteStateModel {
                 }
             }
 
-            // 收集非 YouTube 结果
-            var resultModels = [LiveModel?](repeating: nil, count: nonYoutubeRooms.count)
+            var resultModels = [LiveModel?](repeating: nil, count: roomList.count)
             for await (index, model, userName, platformName, status, liveType, duration) in group {
-                self.currentProgress = (userName, platformName, status, index + 1, nonYoutubeRooms.count)
+                self.currentProgress = (userName, platformName, status, index + 1, roomList.count)
                 favoriteSyncLog("\(platformName) - \(userName) \(status) in \(formatSeconds(duration))s")
 
                 var stat = platformStats[liveType] ?? (0, 0, 0, 0)
@@ -119,50 +102,6 @@ public actor FavoriteStateModel {
                 }
             }
             fetchedModels = resultModels.compactMap { $0 }
-        }
-
-        // 第二阶段：等待 YouTube 检查结果，如果可达则同步 YouTube 收藏
-        let canLoadYoutube = await youtubeCheckTask.value
-        if canLoadYoutube && !youtubeRooms.isEmpty {
-            favoriteSyncLog("开始同步 YouTube 收藏，共 \(youtubeRooms.count) 个")
-            await withTaskGroup(of: (Int, LiveModel?, String, String, String, LiveType, Double).self) { group in
-                for (index, liveModel) in youtubeRooms.enumerated() {
-                    group.addTask {
-                        let taskStart = CFAbsoluteTimeGetCurrent()
-                        do {
-                            let dataReq = try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
-                            let duration = CFAbsoluteTimeGetCurrent() - taskStart
-                            return (index, dataReq, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功", liveModel.liveType, duration)
-                        } catch {
-                            let duration = CFAbsoluteTimeGetCurrent() - taskStart
-                            var errorModel = liveModel
-                            errorModel.liveState = LiveState.unknow.rawValue
-                            return (index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败", liveModel.liveType, duration)
-                        }
-                    }
-                }
-
-                for await (index, model, userName, platformName, status, liveType, duration) in group {
-                    self.currentProgress = (userName, platformName, status, nonYoutubeRooms.count + index + 1, roomList.count)
-                    favoriteSyncLog("\(platformName) - \(userName) \(status) in \(formatSeconds(duration))s")
-
-                    var stat = platformStats[liveType] ?? (0, 0, 0, 0)
-                    stat.count += 1
-                    stat.totalTime += duration
-                    if status == "成功" {
-                        stat.success += 1
-                    } else {
-                        stat.failure += 1
-                    }
-                    platformStats[liveType] = stat
-
-                    if let model = model {
-                        fetchedModels.append(model)
-                    }
-                }
-            }
-        } else if !youtubeRooms.isEmpty {
-            favoriteSyncLog("YouTube 不可达，跳过 \(youtubeRooms.count) 个 YouTube 收藏")
         }
 
         let statusSyncDuration = CFAbsoluteTimeGetCurrent() - statusSyncStart

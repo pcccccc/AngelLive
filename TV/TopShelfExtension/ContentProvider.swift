@@ -72,11 +72,6 @@ class ContentProvider: TVTopShelfContentProvider {
 
     /// 获取单个主播的直播状态
     private func fetchSingleLiveStatus(favorite: LiveModel) async -> LiveModel? {
-        // YouTube 需要特殊网络环境，在 Extension 中跳过
-        guard favorite.liveType != .youtube else {
-            return nil
-        }
-
         do {
             // 带单个请求超时
             return try await withThrowingTaskGroup(of: LiveModel.self) { group in

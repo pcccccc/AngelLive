@@ -302,8 +302,6 @@ final class RoomInfoViewModel {
                         playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     case .yy:
                         playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                    case .youtube:
-                        playArgs = try await YoutubeParse.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                 }
                 await updateCurrentRoomPlayArgs(playArgs)
             }catch {
@@ -327,7 +325,7 @@ final class RoomInfoViewModel {
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
         //开一个定时，检查主播是否已经下播
         if appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEnd == true {
-            if currentRoom.liveType != .youtube && currentRoom.liveType != .ks {
+            if currentRoom.liveType != .ks {
                 let roomId = currentRoom.roomId
                 let userId = currentRoom.userId
                 let liveType = currentRoom.liveType

@@ -25,14 +25,7 @@ struct PlatformView: View {
                     ForEach(platformViewModel.platformInfo.indices, id: \.self) { index in
                         Button {
                             selectedIndex = index
-                            let model = platformViewModel.platformInfo[selectedIndex]
-                            if model.liveType == .youtube {
-                                appViewModel.selection = 2
-                                appViewModel.searchViewModel.searchTypeIndex = 2
-                            }else {
-                                show = true
-                            }
-
+                            show = true
                         } label: {
                             ZStack {
                                 Image("platform-bg")
