@@ -31,6 +31,8 @@ public enum ApiManager {
                 return try await KuaiShou.getLiveState(roomId: roomId, userId: userId)
             case .yy:
                 return try await YY.getLiveState(roomId: roomId, userId: userId)
+            case .soop:
+                return try await LiveParseJSPlatformManager.getLiveState(platform: .soop, roomId: roomId, userId: userId)
             default:
                 return .unknow
         }
@@ -52,6 +54,8 @@ public enum ApiManager {
                 return try await KuaiShou.getRoomList(id: liveCategory.id, parentId: liveCategory.parentId, page: page)
             case .yy:
                 return try await YY.getRoomList(id: liveCategory.id, parentId: liveCategory.parentId, page: page)
+            case .soop:
+                return try await LiveParseJSPlatformManager.getRoomList(platform: .soop, id: liveCategory.id, parentId: liveCategory.parentId, page: page)
             default:
                 return []
         }
@@ -94,6 +98,8 @@ public enum ApiManager {
                 return try await KuaiShou.getCategoryList()
             case .yy:
                 return try await YY.getCategoryList()
+            case .soop:
+                return try await LiveParseJSPlatformManager.getCategoryList(platform: .soop)
             default:
                 return []
         }
@@ -115,6 +121,8 @@ public enum ApiManager {
                 return try await KuaiShou.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
             case .yy:
                 return try await YY.getLiveLastestInfo(roomId: liveModel.roomId, userId: liveModel.userId)
+            case .soop:
+                return try await LiveParseJSPlatformManager.getLiveLastestInfo(platform: .soop, roomId: liveModel.roomId, userId: liveModel.userId)
         }
     }
 
@@ -141,6 +149,7 @@ public enum ApiManager {
             if shareCode.contains("cc.163.com") { return .cc }
             if shareCode.contains("kuaishou.com") { return .ks }
             if shareCode.contains("yy.com") { return .yy }
+            if shareCode.contains("sooplive") || shareCode.contains("afreecatv") { return .soop }
             return nil
         }()
         
@@ -199,6 +208,8 @@ public enum ApiManager {
                             liveType: room.liveType, liveState: liveState,
                             userId: room.userId, roomId: room.roomId,
                             liveWatchedCount: room.liveWatchedCount)
+        case .soop:
+            return try await LiveParseJSPlatformManager.getRoomInfoFromShareCode(platform: .soop, shareCode: text)
         }
     }
 }

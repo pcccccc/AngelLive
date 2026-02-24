@@ -104,6 +104,8 @@ class CategoryGridViewController: UIViewController, JXSegmentedListContainerView
             return "live_card_cc"
         case .ks:
             return "live_card_ks"
+        case .soop:
+            return "live_card_soop"
         }
     }
 }

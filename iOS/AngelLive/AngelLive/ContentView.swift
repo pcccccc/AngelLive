@@ -289,6 +289,8 @@ struct ContentView: View {
                 return "pad_live_card_cc"
             case .ks:
                 return "pad_live_card_ks"
+            case .soop:
+                return "pad_live_card_soop"
         }
     }
 }

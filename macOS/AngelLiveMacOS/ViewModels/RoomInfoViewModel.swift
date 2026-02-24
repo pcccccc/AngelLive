@@ -97,6 +97,8 @@ final class RoomInfoViewModel {
                 playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
             case .yy:
                 playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+            case .soop:
+                playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .soop, roomId: currentRoom.roomId, userId: currentRoom.userId)
             }
             updateCurrentRoomPlayArgs(playArgs)
         } catch {
@@ -348,7 +350,7 @@ final class RoomInfoViewModel {
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
         switch currentRoom.liveType {
-        case .bilibili, .huya, .douyin, .douyu:
+        case .bilibili, .huya, .douyin, .douyu, .soop:
             return true
         case .cc, .ks, .yy:
             return false
@@ -404,6 +406,8 @@ final class RoomInfoViewModel {
                     danmuArgs = try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                 case .douyu:
                     danmuArgs = try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
+                case .soop:
+                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: .soop, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 default:
                     await MainActor.run {
                         danmuServerIsLoading = false

@@ -302,6 +302,8 @@ final class RoomInfoViewModel {
                         playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
                     case .yy:
                         playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
+                    case .soop:
+                        playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .soop, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 }
                 await updateCurrentRoomPlayArgs(playArgs)
             }catch {
@@ -395,6 +397,8 @@ final class RoomInfoViewModel {
                         danmuArgs = try await Douyin.getDanmukuArgs(roomId: roomId, userId: userId)
                     case .douyu:
                         danmuArgs = try await Douyu.getDanmukuArgs(roomId: roomId, userId: nil)
+                    case .soop:
+                        danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: .soop, roomId: roomId, userId: userId)
                     default:
                         await MainActor.run {
                             danmuServerIsLoading = false
