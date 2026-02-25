@@ -15,11 +15,42 @@ struct SettingView: View {
     @State private var danmuModel = DanmuSettingModel()
     @State private var showBilibiliLogin = false
     @State private var showOpenSourceList = false
+    @State private var selectedCookiePlatform: MacOSPlatformAccountItem?
+    @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
     var body: some View {
         Form {
             Section("账号管理") {
                 bilibiliAccountRow
+
+                ForEach(MacOSPlatformAccountItem.allCases) { platform in
+                    Button {
+                        selectedCookiePlatform = platform
+                    } label: {
+                        HStack {
+                            Image(systemName: platform.iconSystemName)
+                                .foregroundStyle(platform.iconTint.gradient)
+                                .frame(width: 24, height: 24)
+
+                            Text(platform.title)
+
+                            Spacer()
+
+                            if platformLoginStatus[platform.sessionID] == true {
+                                Text("已登录")
+                                    .foregroundStyle(AppConstants.Colors.success)
+                            } else {
+                                Text("未登录")
+                                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                            }
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(AppConstants.Colors.secondaryText)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             Section("弹幕设置") {
@@ -115,8 +146,16 @@ struct SettingView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("设置")
+        .task {
+            await refreshLoginStatus()
+        }
         .sheet(isPresented: $showBilibiliLogin) {
             BilibiliWebLoginView()
+        }
+        .sheet(item: $selectedCookiePlatform, onDismiss: {
+            Task { await refreshLoginStatus() }
+        }) { platform in
+            MacOSPlatformCookieWebLoginView(platform: platform)
         }
         .sheet(isPresented: $showOpenSourceList) {
             NavigationStack {
@@ -149,7 +188,7 @@ struct SettingView: View {
                 Text("哔哩哔哩")
 
                 Spacer()
-                
+
                 if syncService.isLoggedIn {
                     Text("已登录")
                         .foregroundStyle(AppConstants.Colors.success)
@@ -164,6 +203,15 @@ struct SettingView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func refreshLoginStatus() async {
+        for platform in MacOSPlatformAccountItem.allCases {
+            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
+            let loggedIn = session?.state == .authenticated
+                && session?.cookie?.isEmpty == false
+            platformLoginStatus[platform.sessionID] = loggedIn
+        }
     }
 }
 

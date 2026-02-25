@@ -10,43 +10,51 @@ import LiveParse
 
 public enum PlatformSessionLiveParseBridge {
     public static func syncSessionToLiveParse(_ session: PlatformSession) {
-        guard session.platformId == .douyin else { return }
         Task {
-            await syncDouyinCookie(session)
+            await syncCookie(session)
         }
     }
 
     public static func clearForPlatform(_ platformId: PlatformSessionID) {
-        guard platformId == .douyin else { return }
         Task {
-            await clearDouyinCookie()
+            await clearCookie(platformId: platformId)
         }
     }
 
     public static func syncFromPersistedSessionsOnLaunch() async {
-        if let session = await PlatformSessionManager.shared.getSession(platformId: .douyin) {
-            await syncDouyinCookie(session)
-        } else {
-            await clearDouyinCookie()
+        for platformId in PlatformSessionID.allCases {
+            if let session = await PlatformSessionManager.shared.getSession(platformId: platformId) {
+                await syncCookie(session)
+            } else {
+                await clearCookie(platformId: platformId)
+            }
         }
     }
 
-    private static func syncDouyinCookie(_ session: PlatformSession) async {
+    // MARK: - Internal
+
+    private static func syncCookie(_ session: PlatformSession) async {
         let normalized = session.cookie?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if session.state == .authenticated, !normalized.isEmpty {
-            _ = try? await LiveParsePlugins.shared.call(
-                pluginId: "douyin",
-                function: "setCookie",
-                payload: ["cookie": normalized]
-            )
-        } else {
-            await clearDouyinCookie()
+        guard session.state == .authenticated, !normalized.isEmpty else {
+            await clearCookie(platformId: session.platformId)
+            return
         }
+
+        var payload: [String: Any] = ["cookie": normalized]
+        if let uid = session.uid, !uid.isEmpty {
+            payload["uid"] = uid
+        }
+
+        _ = try? await LiveParsePlugins.shared.call(
+            pluginId: session.platformId.rawValue,
+            function: "setCookie",
+            payload: payload
+        )
     }
 
-    private static func clearDouyinCookie() async {
+    private static func clearCookie(platformId: PlatformSessionID) async {
         _ = try? await LiveParsePlugins.shared.call(
-            pluginId: "douyin",
+            pluginId: platformId.rawValue,
             function: "clearCookie",
             payload: [:]
         )
