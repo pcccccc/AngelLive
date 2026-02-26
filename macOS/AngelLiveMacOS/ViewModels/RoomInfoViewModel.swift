@@ -336,9 +336,9 @@ final class RoomInfoViewModel {
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
         switch currentRoom.liveType {
-        case .bilibili, .huya, .douyin, .douyu, .soop:
+        case .bilibili, .huya, .douyin, .douyu, .soop, .cc:
             return true
-        case .cc, .ks, .yy:
+        case .ks, .yy:
             return false
         }
     }
@@ -387,7 +387,7 @@ final class RoomInfoViewModel {
                 case .bilibili, .huya, .douyin, .douyu, .soop:
                     guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else { return }
                     danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
-                case .ks:  // 快手平台弹幕
+                case .ks, .cc:  // 快手、网易CC平台弹幕
                     guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else { return }
                     danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 default:
