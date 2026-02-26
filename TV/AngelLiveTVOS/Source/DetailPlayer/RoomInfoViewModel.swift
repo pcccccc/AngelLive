@@ -67,6 +67,7 @@ final class RoomInfoViewModel {
     var timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var socketConnection: WebSocketConnection?
+    var httpPollingConnection: HTTPPollingDanmakuConnection?  // HTTP 轮询连接
     var danmuCoordinator = DanmuView.Coordinator()
     
     var roomType: LiveRoomListType
@@ -232,7 +233,7 @@ final class RoomInfoViewModel {
             Task {
                 let currentCdn = currentRoomPlayArgs![cdnIndex]
                 let currentQuality = currentCdn.qualitys[urlIndex]
-                let playArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: currentQuality.qn, cdn: currentCdn.douyuCdnName)
+                let playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .douyu, roomId: currentRoom.roomId, userId: nil, quality: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
@@ -255,7 +256,7 @@ final class RoomInfoViewModel {
                       cdnIndex < playArgs.count else { return }
                 let currentCdn = playArgs[cdnIndex]
                 let currentQuality = currentCdn.qualitys[urlIndex]
-                playArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq:Int(currentCdn.yyLineSeq ?? "-1") ?? -1, gear: currentQuality.qn)
+                playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .yy, roomId: currentRoom.roomId, userId: nil, quality: ["lineSeq": Int(currentCdn.yyLineSeq ?? "-1") ?? -1, "gear": currentQuality.qn])
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
@@ -286,25 +287,10 @@ final class RoomInfoViewModel {
         isLoading = true
         Task {
             do {
-                var playArgs: [LiveQualityModel] = []
-                switch currentRoom.liveType {
-                    case .bilibili:
-                        playArgs = try await Bilibili.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-                    case .huya:
-                        playArgs =  try await Huya.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-                    case .douyin:
-                        playArgs =  try await Douyin.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                    case .douyu:
-                        playArgs =  try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-                    case .cc:
-                        playArgs = try await NeteaseCC.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                    case .ks:
-                        playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                    case .yy:
-                        playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                    case .soop:
-                        playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .soop, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                    throw LiveParseError.liveParseError("不支持的平台", "\(currentRoom.liveType)")
                 }
+                let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 await updateCurrentRoomPlayArgs(playArgs)
             }catch {
                 await MainActor.run {
@@ -389,16 +375,12 @@ final class RoomInfoViewModel {
             do {
                 let danmuArgs: ([String : String], [String : String]?)
                 switch liveType {
-                    case .bilibili:
-                        danmuArgs = try await Bilibili.getDanmukuArgs(roomId: roomId, userId: nil)
-                    case .huya:
-                        danmuArgs = try await Huya.getDanmukuArgs(roomId: roomId, userId: nil)
-                    case .douyin:
-                        danmuArgs = try await Douyin.getDanmukuArgs(roomId: roomId, userId: userId)
-                    case .douyu:
-                        danmuArgs = try await Douyu.getDanmukuArgs(roomId: roomId, userId: nil)
-                    case .soop:
-                        danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: .soop, roomId: roomId, userId: userId)
+                    case .bilibili, .huya, .douyin, .douyu, .soop:
+                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else { return }
+                        danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
+                    case .ks:  // 快手平台弹幕
+                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else { return }
+                        danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
                     default:
                         await MainActor.run {
                             danmuServerIsLoading = false
@@ -406,9 +388,28 @@ final class RoomInfoViewModel {
                         return
                 }
                 await MainActor.run {
-                    socketConnection = WebSocketConnection(parameters: danmuArgs.0, headers: danmuArgs.1, liveType: liveType)
-                    socketConnection?.delegate = self
-                    socketConnection?.connect()
+                    // 判断弹幕类型
+                    let danmuType = danmuArgs.0["_danmu_type"] ?? "websocket"
+
+                    if danmuType == "http_polling" {
+                        // 使用 HTTP 轮询连接
+                        httpPollingConnection = HTTPPollingDanmakuConnection(
+                            parameters: danmuArgs.0,
+                            headers: danmuArgs.1,
+                            liveType: liveType
+                        )
+                        httpPollingConnection?.delegate = self
+                        httpPollingConnection?.connect()
+                    } else {
+                        // 使用 WebSocket 连接
+                        socketConnection = WebSocketConnection(
+                            parameters: danmuArgs.0,
+                            headers: danmuArgs.1,
+                            liveType: liveType
+                        )
+                        socketConnection?.delegate = self
+                        socketConnection?.connect()
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -419,9 +420,16 @@ final class RoomInfoViewModel {
     }
     
     func disConnectSocket() {
+        // 断开 WebSocket
         socketConnection?.delegate = nil
-        self.socketConnection?.disconnect()
-        self.socketConnection = nil
+        socketConnection?.disconnect()
+        socketConnection = nil
+
+        // 断开 HTTP 轮询
+        httpPollingConnection?.delegate = nil
+        httpPollingConnection?.disconnect()
+        httpPollingConnection = nil
+
         danmuServerIsConnected = false
         danmuServerIsLoading = false
     }

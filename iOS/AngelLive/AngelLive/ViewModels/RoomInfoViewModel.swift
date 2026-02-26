@@ -68,6 +68,7 @@ final class RoomInfoViewModel {
 
     // 弹幕相关属性
     var socketConnection: WebSocketConnection?
+    var httpPollingConnection: HTTPPollingDanmakuConnection?  // HTTP 轮询连接
     var danmuMessages: [ChatMessage] = []
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
@@ -115,25 +116,10 @@ final class RoomInfoViewModel {
     func getPlayArgs() async {
         isLoading = true
         do {
-            var playArgs: [LiveQualityModel] = []
-            switch currentRoom.liveType {
-            case .bilibili:
-                playArgs = try await Bilibili.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-            case .huya:
-                playArgs = try await Huya.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-            case .douyin:
-                playArgs = try await Douyin.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-            case .douyu:
-                playArgs = try await Douyu.getPlayArgs(roomId: currentRoom.roomId, userId: nil)
-            case .cc:
-                playArgs = try await NeteaseCC.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-            case .ks:
-                playArgs = try await KuaiShou.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-            case .yy:
-                playArgs = try await YY.getPlayArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-            case .soop:
-                playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .soop, roomId: currentRoom.roomId, userId: currentRoom.userId)
+            guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                throw LiveParseError.liveParseError("不支持的平台", "\(currentRoom.liveType)")
             }
+            let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
             updateCurrentRoomPlayArgs(playArgs)
         } catch {
             await MainActor.run {
@@ -292,7 +278,7 @@ final class RoomInfoViewModel {
                     // 检查是否已取消
                     try Task.checkCancellation()
                     
-                    let newPlayArgs = try await Douyu.getRealPlayArgs(roomId: currentRoom.roomId, rate: quality.qn, cdn: cdn.douyuCdnName)
+                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .douyu, roomId: currentRoom.roomId, userId: nil, quality: ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""])
                     
                     // 再次检查是否已取消
                     try Task.checkCancellation()
@@ -344,7 +330,7 @@ final class RoomInfoViewModel {
                     // 检查是否已取消
                     try Task.checkCancellation()
                     
-                    let newPlayArgs = try await YY.getRealPlayArgs(roomId: currentRoom.roomId, lineSeq: Int(cdn.yyLineSeq ?? "-1") ?? -1, gear: quality.qn)
+                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .yy, roomId: currentRoom.roomId, userId: nil, quality: ["lineSeq": Int(cdn.yyLineSeq ?? "-1") ?? -1, "gear": quality.qn])
                     
                     // 再次检查是否已取消
                     try Task.checkCancellation()
@@ -436,16 +422,12 @@ final class RoomInfoViewModel {
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
             do {
                 switch currentRoom.liveType {
-                case .bilibili:
-                    danmuArgs = try await Bilibili.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
-                case .huya:
-                    danmuArgs = try await Huya.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
-                case .douyin:
-                    danmuArgs = try await Douyin.getDanmukuArgs(roomId: currentRoom.roomId, userId: currentRoom.userId)
-                case .douyu:
-                    danmuArgs = try await Douyu.getDanmukuArgs(roomId: currentRoom.roomId, userId: nil)
-                case .soop:
-                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: .soop, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                case .bilibili, .huya, .douyin, .douyu, .soop:
+                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else { return }
+                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                case .ks:  // 快手平台弹幕
+                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else { return }
+                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 default:
                     await MainActor.run {
                         danmuServerIsLoading = false
@@ -454,13 +436,28 @@ final class RoomInfoViewModel {
                 }
 
                 await MainActor.run {
-                    socketConnection = WebSocketConnection(
-                        parameters: danmuArgs.0,
-                        headers: danmuArgs.1,
-                        liveType: currentRoom.liveType
-                    )
-                    socketConnection?.delegate = self
-                    socketConnection?.connect()
+                    // 判断弹幕类型
+                    let danmuType = danmuArgs.0["_danmu_type"] ?? "websocket"
+
+                    if danmuType == "http_polling" {
+                        // 使用 HTTP 轮询连接
+                        httpPollingConnection = HTTPPollingDanmakuConnection(
+                            parameters: danmuArgs.0,
+                            headers: danmuArgs.1,
+                            liveType: currentRoom.liveType
+                        )
+                        httpPollingConnection?.delegate = self
+                        httpPollingConnection?.connect()
+                    } else {
+                        // 使用 WebSocket 连接
+                        socketConnection = WebSocketConnection(
+                            parameters: danmuArgs.0,
+                            headers: danmuArgs.1,
+                            liveType: currentRoom.liveType
+                        )
+                        socketConnection?.delegate = self
+                        socketConnection?.connect()
+                    }
                 }
             } catch {
                 Logger.error(error, message: "获取弹幕连接失败", category: .danmu)
@@ -475,9 +472,16 @@ final class RoomInfoViewModel {
     /// 断开弹幕连接
     @MainActor
     func disconnectSocket() {
+        // 断开 WebSocket
         socketConnection?.delegate = nil
         socketConnection?.disconnect()
         socketConnection = nil
+
+        // 断开 HTTP 轮询
+        httpPollingConnection?.delegate = nil
+        httpPollingConnection?.disconnect()
+        httpPollingConnection = nil
+
         danmuServerIsConnected = false
         danmuServerIsLoading = false
     }

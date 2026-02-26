@@ -114,7 +114,7 @@ public enum PlatformCapability {
                 (.roomDetail,   .available),
                 (.liveState,    .available),
                 (.shareResolve, .available),
-                (.danmaku,      .unavailable),
+                (.danmaku,      .available),
             ]
         case .yy:
             return [
