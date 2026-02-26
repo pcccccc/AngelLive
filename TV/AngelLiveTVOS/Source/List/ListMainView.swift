@@ -24,6 +24,7 @@ struct ListMainView: View {
     @State private var showEmptyState: Bool = false
     @State private var pendingEmptyState: DispatchWorkItem?
     @State private var isOpeningSidebar: Bool = false
+    @State private var showCapabilitySheet: Bool = false
     private static let topId = "topIdHere"
     private let gridColumnCount = 4
     private let gridSpacing: CGFloat = 50
@@ -115,9 +116,23 @@ struct ListMainView: View {
     }
 
     private var platformTitleView: some View {
-        Text(liveViewModel.livePlatformName)
-            .font(.largeTitle)
-            .bold()
+        HStack {
+            Spacer()
+            Text(liveViewModel.livePlatformName)
+                .font(.largeTitle)
+                .bold()
+            Spacer()
+        }
+        .overlay(alignment: .trailing) {
+            Button {
+                showCapabilitySheet = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 80)
+        }
     }
 
     private var shouldShowLoadingPlaceholder: Bool {
@@ -368,6 +383,9 @@ struct ListMainView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showCapabilitySheet) {
+            TVPlatformCapabilitySheet(liveType: liveType)
         }
     }
 }

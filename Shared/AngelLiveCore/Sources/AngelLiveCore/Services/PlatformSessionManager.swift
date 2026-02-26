@@ -8,10 +8,11 @@
 import Foundation
 import Security
 
-public enum PlatformSessionID: String, Codable, Sendable {
+public enum PlatformSessionID: String, Codable, Sendable, CaseIterable {
     case bilibili
     case douyin
     case kuaishou
+    case soop
 }
 
 public enum PlatformSessionState: String, Codable, Sendable {
@@ -192,6 +193,8 @@ public actor PlatformSessionManager {
             return validateDouyinSession(cookie: cookie)
         case .kuaishou:
             return validateKuaishouSession(cookie: cookie)
+        case .soop:
+            return validateSoopSession(cookie: cookie)
         }
     }
 
@@ -230,6 +233,13 @@ public actor PlatformSessionManager {
     private func validateKuaishouSession(cookie: String) -> PlatformSessionValidationResult {
         guard cookie.contains("=") else {
             return .invalid(reason: "快手 Cookie 格式无效")
+        }
+        return .valid
+    }
+
+    private func validateSoopSession(cookie: String) -> PlatformSessionValidationResult {
+        guard cookie.contains("AuthTicket=") else {
+            return .invalid(reason: "SOOP Cookie 缺少 AuthTicket")
         }
         return .valid
     }

@@ -13,6 +13,7 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
     case bilibili
     case douyin
     case kuaishou
+    case soop
 
     private static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -26,6 +27,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return "抖音"
         case .kuaishou:
             return "快手"
+        case .soop:
+            return "SOOP"
         }
     }
 
@@ -37,6 +40,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return "music.note.tv"
         case .kuaishou:
             return "bolt.circle.fill"
+        case .soop:
+            return "globe.asia.australia.fill"
         }
     }
 
@@ -48,6 +53,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return .orange
         case .kuaishou:
             return .blue
+        case .soop:
+            return .purple
         }
     }
 
@@ -59,6 +66,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return .douyin
         case .kuaishou:
             return .kuaishou
+        case .soop:
+            return .soop
         }
     }
 
@@ -70,6 +79,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return URL(string: "https://sso.douyin.com/login")!
         case .kuaishou:
             return URL(string: "https://passport.kuaishou.com/pc/account/login")!
+        case .soop:
+            return URL(string: "https://auth.m.sooplive.co.kr/login")!
         }
     }
 
@@ -77,7 +88,7 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
         switch self {
         case .bilibili:
             return nil
-        case .douyin, .kuaishou:
+        case .douyin, .kuaishou, .soop:
             return Self.desktopUserAgent
         }
     }
@@ -90,6 +101,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return ["douyin.com", "iesdouyin.com"]
         case .kuaishou:
             return ["kuaishou.com", "gifshow.com"]
+        case .soop:
+            return ["sooplive.co.kr"]
         }
     }
 
@@ -101,14 +114,15 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return ["ttwid", "__ac_nonce", "msToken", "sessionid", "sessionid_ss", "uid_tt"]
         case .kuaishou:
             return ["userId", "user_id", "kuaishou.server.web_st", "kuaishou.server.web_ph"]
+        case .soop:
+            return ["AuthTicket", "BbsTicket", "UserTicket"]
         }
     }
 }
 
 struct PlatformAccountLoginView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @State private var douyinLoggedIn = false
-    @State private var kuaishouLoggedIn = false
+    @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
     @State private var selectedPlatform: PlatformAccountItem?
 
     var body: some View {
@@ -161,18 +175,18 @@ struct PlatformAccountLoginView: View {
             switch platform {
             case .bilibili:
                 BilibiliWebLoginView()
-            case .douyin, .kuaishou:
+            case .douyin, .kuaishou, .soop:
                 PlatformCookieWebLoginSheet(platform: platform)
             }
         }
     }
 
     private func refreshLoginStatus() async {
-        let douyinSession = await PlatformSessionManager.shared.getSession(platformId: .douyin)
-        let kuaishouSession = await PlatformSessionManager.shared.getSession(platformId: .kuaishou)
-
-        douyinLoggedIn = isAuthenticated(session: douyinSession)
-        kuaishouLoggedIn = isAuthenticated(session: kuaishouSession)
+        for platform in PlatformAccountItem.allCases where platform != .bilibili {
+            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
+            let loggedIn = isAuthenticated(session: session)
+            platformLoginStatus[platform.sessionID] = loggedIn
+        }
     }
 
     private func isAuthenticated(session: PlatformSession?) -> Bool {
@@ -186,26 +200,20 @@ struct PlatformAccountLoginView: View {
 
     private func loginStatusText(for platform: PlatformAccountItem) -> String {
         let loggedIn: Bool
-        switch platform {
-        case .bilibili:
+        if platform == .bilibili {
             loggedIn = syncService.isLoggedIn
-        case .douyin:
-            loggedIn = douyinLoggedIn
-        case .kuaishou:
-            loggedIn = kuaishouLoggedIn
+        } else {
+            loggedIn = platformLoginStatus[platform.sessionID] ?? false
         }
         return loggedIn ? "已登录" : "未登录"
     }
 
     private func loginStatusColor(for platform: PlatformAccountItem) -> Color {
         let loggedIn: Bool
-        switch platform {
-        case .bilibili:
+        if platform == .bilibili {
             loggedIn = syncService.isLoggedIn
-        case .douyin:
-            loggedIn = douyinLoggedIn
-        case .kuaishou:
-            loggedIn = kuaishouLoggedIn
+        } else {
+            loggedIn = platformLoginStatus[platform.sessionID] ?? false
         }
         return loggedIn ? AppConstants.Colors.success : .secondary
     }
@@ -383,6 +391,8 @@ private struct PlatformCookieWebLoginSheet: View {
                 || names.contains("user_id")
                 || names.contains("kuaishou.server.web_st")
                 || names.contains("kuaishou.server.web_ph")
+        case .soop:
+            return names.contains("AuthTicket")
         }
     }
 
@@ -423,7 +433,7 @@ private struct PlatformCookieWebLoginSheet: View {
     }
 
     private func extractUID(from cookies: [HTTPCookie]) -> String? {
-        let uidCookieNames = ["DedeUserID", "sec_user_id", "userId", "user_id"]
+        let uidCookieNames = ["DedeUserID", "sec_user_id", "userId", "user_id", "UserTicket"]
         for name in uidCookieNames {
             if let value = cookies.first(where: { $0.name == name })?.value, !value.isEmpty {
                 return value

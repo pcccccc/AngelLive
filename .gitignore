@@ -97,3 +97,6 @@ iOSInjectionProject/
 
 # Local environment config
 scripts/.env.local
+
+# Project planning and roadmap (local only)
+LIVEPARSE_ROADMAP.md

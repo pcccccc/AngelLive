@@ -238,7 +238,7 @@ final class RoomInfoViewModel {
                 do {
                     let currentCdn = currentRoomPlayArgs![cdnIndex]
                     let currentQuality = currentCdn.qualitys[urlIndex]
-                    let playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .douyu, roomId: currentRoom.roomId, userId: nil, quality: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
+                    let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .douyu, roomId: currentRoom.roomId, userId: nil, context: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
                     await MainActor.run {
                         if let newQuality = playArgs.first?.qualitys.first,
                            let url = URL(string: newQuality.url) {
@@ -282,7 +282,7 @@ final class RoomInfoViewModel {
                     }
                     let currentCdn = playArgs[cdnIndex]
                     let currentQuality = currentCdn.qualitys[urlIndex]
-                    playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .yy, roomId: currentRoom.roomId, userId: nil, quality: ["lineSeq": Int(currentCdn.yyLineSeq ?? "-1") ?? -1, "gear": currentQuality.qn])
+                    playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .yy, roomId: currentRoom.roomId, userId: nil, context: ["lineSeq": Int(currentCdn.yyLineSeq ?? "-1") ?? -1, "gear": currentQuality.qn])
                     await MainActor.run {
                         if let newQuality = playArgs.first?.qualitys.first,
                            let url = URL(string: newQuality.url) {

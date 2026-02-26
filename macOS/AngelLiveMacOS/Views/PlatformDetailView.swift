@@ -19,6 +19,7 @@ struct PlatformDetailView: View {
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
     @State private var showBilibiliLogin = false
+    @State private var showCapabilityPopover = false
 
     /// 当前分类图标 URL（如果有）
     private var categoryIconURL: URL? {
@@ -120,6 +121,19 @@ struct PlatformDetailView: View {
             }
             
             ToolbarItemGroup() {
+                Button {
+                    showCapabilityPopover.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.body)
+                        .frame(width: 16, height: 16)
+                }
+                .popover(isPresented: $showCapabilityPopover) {
+                    PlatformCapabilityPopover(liveType: viewModel.platform.liveType)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 36, height: 36)
+
                 Button {
                     refreshContent()
                 } label: {

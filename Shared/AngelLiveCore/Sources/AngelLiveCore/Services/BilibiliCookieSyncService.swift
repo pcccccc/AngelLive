@@ -29,13 +29,15 @@ public struct SyncedCookieData: Codable {
     public let timestamp: Date
     public let source: CookieSyncSource
     public let deviceName: String?
+    public let platformId: String?
 
-    public init(cookie: String, uid: String?, timestamp: Date = Date(), source: CookieSyncSource, deviceName: String? = nil) {
+    public init(cookie: String, uid: String?, timestamp: Date = Date(), source: CookieSyncSource, deviceName: String? = nil, platformId: String? = nil) {
         self.cookie = cookie
         self.uid = uid
         self.timestamp = timestamp
         self.source = source
         self.deviceName = deviceName
+        self.platformId = platformId
     }
 }
 
@@ -299,7 +301,10 @@ public final class BilibiliCookieSyncService: ObservableObject {
     @objc nonisolated private func iCloudDidChange(_ notification: Notification) {
         Task { @MainActor in
             guard iCloudSyncEnabled else { return }
+            // 同步 Bilibili
             _ = await syncFromICloud()
+            // 同步其他平台
+            await syncAllPlatformsFromICloud()
         }
     }
 
@@ -481,15 +486,8 @@ public final class BilibiliCookieSyncService: ObservableObject {
     private func receiveData(from connection: NWConnection) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             if let data = data, !data.isEmpty {
-                if let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) {
-                    Task { @MainActor in
-                        // 验证并保存
-                        let result = await self?.validateCookie(syncedData.cookie)
-                        if case .valid = result {
-                            self?.setCookie(syncedData.cookie, uid: syncedData.uid, source: .bonjour)
-                            print("[BilibiliCookieSyncService] 局域网同步成功")
-                        }
-                    }
+                Task { @MainActor in
+                    await self?.handleMultiPlatformSyncData(data)
                 }
             }
 
@@ -590,6 +588,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
             applyRuntimeCache(cookie: cookie, uid: session.uid)
             saveSessionSnapshot(cookie: cookie, uid: session.uid)
             syncLegacyCache(cookie: cookie, uid: session.uid)
+            PlatformSessionLiveParseBridge.syncSessionToLiveParse(session)
             return
         }
 
@@ -663,6 +662,180 @@ public final class BilibiliCookieSyncService: ObservableObject {
         #else
         return "Unknown"
         #endif
+    }
+}
+
+// MARK: - 多平台同步
+
+public struct MultiPlatformSyncPayload: Codable {
+    public let sessions: [SyncedCookieData]
+    public let deviceName: String?
+    public let timestamp: Date
+
+    public init(sessions: [SyncedCookieData], deviceName: String? = nil) {
+        self.sessions = sessions
+        self.deviceName = deviceName
+        self.timestamp = Date()
+    }
+}
+
+extension BilibiliCookieSyncService {
+    /// 收集所有平台的 session 数据用于 Bonjour/iCloud 同步
+    public func collectAllPlatformSessions() async -> [SyncedCookieData] {
+        var sessions: [SyncedCookieData] = []
+
+        // Bilibili 从自身管理
+        let biliCookie = getCurrentCookie()
+        if !biliCookie.isEmpty {
+            sessions.append(SyncedCookieData(
+                cookie: biliCookie,
+                uid: getCurrentUid(),
+                source: .local,
+                deviceName: getDeviceName(),
+                platformId: PlatformSessionID.bilibili.rawValue
+            ))
+        }
+
+        // 其他平台从 PlatformSessionManager 获取
+        let otherPlatforms: [PlatformSessionID] = [.douyin, .kuaishou, .soop]
+        for platformId in otherPlatforms {
+            if let session = await PlatformSessionManager.shared.getSession(platformId: platformId),
+               session.state == .authenticated,
+               let cookie = session.cookie, !cookie.isEmpty {
+                sessions.append(SyncedCookieData(
+                    cookie: cookie,
+                    uid: session.uid,
+                    source: .local,
+                    deviceName: getDeviceName(),
+                    platformId: platformId.rawValue
+                ))
+            }
+        }
+
+        return sessions
+    }
+
+    /// 发送所有平台的 Cookie 到指定设备（iOS/macOS → tvOS）
+    public func sendAllPlatformCookiesToDevice(_ device: DiscoveredDevice) async -> Bool {
+        let sessions = await collectAllPlatformSessions()
+        guard !sessions.isEmpty else { return false }
+
+        let payload = MultiPlatformSyncPayload(
+            sessions: sessions,
+            deviceName: getDeviceName()
+        )
+
+        guard let encoded = try? JSONEncoder().encode(payload) else { return false }
+
+        let sessionCount = sessions.count
+        return await withCheckedContinuation { continuation in
+            let connection = NWConnection(to: device.endpoint, using: .tcp)
+            let state = SendState()
+
+            connection.stateUpdateHandler = { [state] connectionState in
+                switch connectionState {
+                case .ready:
+                    connection.send(content: encoded, completion: .contentProcessed { [state] error in
+                        guard !state.hasResumed else { return }
+                        state.hasResumed = true
+                        if let error = error {
+                            print("[CookieSyncService] 多平台发送失败: \(error)")
+                            continuation.resume(returning: false)
+                        } else {
+                            print("[CookieSyncService] 多平台发送成功 (\(sessionCount) 个平台)")
+                            continuation.resume(returning: true)
+                        }
+                        connection.cancel()
+                    })
+                case .failed(let error):
+                    guard !state.hasResumed else { return }
+                    state.hasResumed = true
+                    print("[CookieSyncService] 连接失败: \(error)")
+                    continuation.resume(returning: false)
+                case .cancelled:
+                    break
+                default:
+                    break
+                }
+            }
+
+            connection.start(queue: .main)
+        }
+    }
+
+    /// 同步所有平台到 iCloud
+    public func syncAllPlatformsToICloud() async {
+        let sessions = await collectAllPlatformSessions()
+        for session in sessions {
+            guard let platformId = session.platformId else { continue }
+            let key = "angellive_session_sync_\(platformId)"
+            if let encoded = try? JSONEncoder().encode(session) {
+                NSUbiquitousKeyValueStore.default.set(encoded, forKey: key)
+            }
+        }
+        NSUbiquitousKeyValueStore.default.synchronize()
+        print("[CookieSyncService] 已同步 \(sessions.count) 个平台到 iCloud")
+    }
+
+    /// 从 iCloud 同步所有平台
+    public func syncAllPlatformsFromICloud() async {
+        NSUbiquitousKeyValueStore.default.synchronize()
+
+        let platformIds: [PlatformSessionID] = [.douyin, .kuaishou, .soop]
+        for platformId in platformIds {
+            let key = "angellive_session_sync_\(platformId.rawValue)"
+            guard let data = NSUbiquitousKeyValueStore.default.data(forKey: key),
+                  let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data),
+                  !syncedData.cookie.isEmpty else {
+                continue
+            }
+
+            _ = await PlatformSessionManager.shared.loginWithCookie(
+                platformId: platformId,
+                cookie: syncedData.cookie,
+                uid: syncedData.uid,
+                source: .iCloud,
+                validateBeforeSave: true
+            )
+        }
+    }
+
+    /// 处理多平台 Bonjour 接收数据（tvOS 端调用）
+    public func handleMultiPlatformSyncData(_ data: Data) async {
+        // 先尝试解析为多平台格式
+        if let payload = try? JSONDecoder().decode(MultiPlatformSyncPayload.self, from: data) {
+            for session in payload.sessions {
+                if let platformIdStr = session.platformId,
+                   let platformId = PlatformSessionID(rawValue: platformIdStr) {
+                    if platformId == .bilibili {
+                        // Bilibili 走自身管理
+                        let result = await validateCookie(session.cookie)
+                        if case .valid = result {
+                            setCookie(session.cookie, uid: session.uid, source: .bonjour)
+                        }
+                    } else {
+                        // 其他平台走 PlatformSessionManager
+                        _ = await PlatformSessionManager.shared.loginWithCookie(
+                            platformId: platformId,
+                            cookie: session.cookie,
+                            uid: session.uid,
+                            source: .bonjour,
+                            validateBeforeSave: true
+                        )
+                    }
+                }
+            }
+            print("[CookieSyncService] 多平台局域网同步完成 (\(payload.sessions.count) 个平台)")
+            return
+        }
+
+        // 兼容旧格式：单个 SyncedCookieData（仅 Bilibili）
+        if let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) {
+            let result = await validateCookie(syncedData.cookie)
+            if case .valid = result {
+                setCookie(syncedData.cookie, uid: syncedData.uid, source: .bonjour)
+            }
+        }
     }
 }
 

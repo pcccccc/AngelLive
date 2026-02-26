@@ -125,6 +125,11 @@ struct AccountManagementView: View {
                 .buttonStyle(.card)
                 .padding(.horizontal, 50)
 
+                ForEach(TVOtherPlatformItem.allCases) { platform in
+                    TVOtherPlatformRow(platform: platform)
+                        .padding(.horizontal, 50)
+                }
+
                 Spacer()
             }
         }
@@ -657,6 +662,72 @@ struct StepRow: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - 其他平台模型与行视图
+
+enum TVOtherPlatformItem: String, CaseIterable, Identifiable {
+    case douyin
+    case kuaishou
+    case soop
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .douyin: return "抖音"
+        case .kuaishou: return "快手"
+        case .soop: return "SOOP"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .douyin: return "live_card_douyin"
+        case .kuaishou: return "live_card_ks"
+        case .soop: return "live_card_soop"
+        }
+    }
+
+    var sessionID: PlatformSessionID {
+        switch self {
+        case .douyin: return .douyin
+        case .kuaishou: return .kuaishou
+        case .soop: return .soop
+        }
+    }
+}
+
+struct TVOtherPlatformRow: View {
+    let platform: TVOtherPlatformItem
+    @State private var isLoggedIn = false
+
+    var body: some View {
+        HStack {
+            Image(platform.iconName)
+                .resizable()
+                .frame(width: 50, height: 50)
+                .cornerRadius(10)
+            Text(platform.title)
+                .font(.system(size: 32))
+            Spacer()
+            Text(isLoggedIn ? "已登录" : "未登录")
+                .font(.system(size: 28))
+                .foregroundStyle(isLoggedIn ? .green : .gray)
+        }
+        .padding(.horizontal, 25)
+        .padding(.vertical, 20)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(16)
+        .task {
+            await refreshLoginStatus()
+        }
+    }
+
+    private func refreshLoginStatus() async {
+        let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
+        isLoggedIn = session?.state == .authenticated
     }
 }
 

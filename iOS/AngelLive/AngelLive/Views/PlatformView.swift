@@ -8,11 +8,13 @@
 import SwiftUI
 import AngelLiveDependencies
 import AngelLiveCore
+import LiveParse
 
 struct PlatformView: View {
     @Environment(PlatformViewModel.self) private var viewModel
     @Environment(SearchViewModel.self) private var searchViewModel
     @State private var navigationPath: [Platformdescription] = []
+    @State private var showCapabilitySheet = false
     private let gridSpacing = AppConstants.Spacing.lg
 
     var body: some View {
@@ -49,6 +51,18 @@ struct PlatformView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationTitle(platform.title)
                     .toolbar(.hidden, for: .tabBar)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                showCapabilitySheet = true
+                            } label: {
+                                Image(systemName: "info.circle")
+                            }
+                        }
+                    }
+                    .sheet(isPresented: $showCapabilitySheet) {
+                        PlatformCapabilitySheet(liveType: platform.liveType)
+                    }
             }
         }
     }

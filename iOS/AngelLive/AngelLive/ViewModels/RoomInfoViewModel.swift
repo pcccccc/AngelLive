@@ -278,7 +278,7 @@ final class RoomInfoViewModel {
                     // 检查是否已取消
                     try Task.checkCancellation()
                     
-                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .douyu, roomId: currentRoom.roomId, userId: nil, quality: ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""])
+                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .douyu, roomId: currentRoom.roomId, userId: nil, context: ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""])
                     
                     // 再次检查是否已取消
                     try Task.checkCancellation()
@@ -330,7 +330,7 @@ final class RoomInfoViewModel {
                     // 检查是否已取消
                     try Task.checkCancellation()
                     
-                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .yy, roomId: currentRoom.roomId, userId: nil, quality: ["lineSeq": Int(cdn.yyLineSeq ?? "-1") ?? -1, "gear": quality.qn])
+                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .yy, roomId: currentRoom.roomId, userId: nil, context: ["lineSeq": Int(cdn.yyLineSeq ?? "-1") ?? -1, "gear": quality.qn])
                     
                     // 再次检查是否已取消
                     try Task.checkCancellation()
