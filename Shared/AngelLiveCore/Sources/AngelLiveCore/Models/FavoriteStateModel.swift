@@ -39,6 +39,7 @@ public actor FavoriteStateModel {
         do {
             let cloudStart = CFAbsoluteTimeGetCurrent()
             roomList = try await FavoriteService.searchRecord()
+            roomList = deduplicateFavoriteRooms(roomList)
             let cloudDuration = CFAbsoluteTimeGetCurrent() - cloudStart
             favoriteSyncLog("CloudKit fetched \(roomList.count) favorites in \(formatSeconds(cloudDuration))s")
         }catch {
@@ -104,6 +105,8 @@ public actor FavoriteStateModel {
             fetchedModels = resultModels.compactMap { $0 }
         }
 
+        fetchedModels = deduplicateFavoriteRooms(fetchedModels)
+
         let statusSyncDuration = CFAbsoluteTimeGetCurrent() - statusSyncStart
         let syncedCount = fetchedModels.count
         favoriteSyncLog("Live status sync finished \(syncedCount) rooms in \(formatSeconds(statusSyncDuration))s")
@@ -136,6 +139,36 @@ public actor FavoriteStateModel {
     public func getCurrentProgress() async -> (String, String, String, Int, Int) {
         return currentProgress
     }
+}
+
+private func deduplicateFavoriteRooms(_ rooms: [LiveModel]) -> [LiveModel] {
+    var seen = Set<String>()
+    var result: [LiveModel] = []
+    result.reserveCapacity(rooms.count)
+
+    for room in rooms {
+        let key = favoriteUniqueKey(for: room)
+        guard !seen.contains(key) else { continue }
+        seen.insert(key)
+        result.append(room)
+    }
+    return result
+}
+
+private func favoriteUniqueKey(for room: LiveModel) -> String {
+    let liveType = room.liveType.rawValue
+    let normalizedUserId = room.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !normalizedUserId.isEmpty {
+        return "\(liveType)_u_\(normalizedUserId)"
+    }
+
+    let normalizedRoomId = room.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !normalizedRoomId.isEmpty {
+        return "\(liveType)_r_\(normalizedRoomId)"
+    }
+
+    let normalizedName = room.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+    return "\(liveType)_n_\(normalizedName)"
 }
 
 private func favoriteSyncLog(_ message: String) {

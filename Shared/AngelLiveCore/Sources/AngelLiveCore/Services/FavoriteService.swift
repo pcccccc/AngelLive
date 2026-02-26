@@ -65,14 +65,21 @@ public final class FavoriteService: NSObject {
         // 使用新的 API
         let recordArray = try await database.records(matching: query, resultsLimit: 99999)
         var temp: Array<LiveModel> = []
-        var seenRoomIds: Set<String> = []  // 用于去重
+        var seenKeys: Set<String> = []  // 用于去重
         for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
             let roomId = record.value(forKey: CloudFavoriteFields.roomId) as? String ?? ""
             let liveType = LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") ?? .bilibili
-            // 使用 roomId + liveType 组合作为唯一标识，避免重复
-            let uniqueKey = "\(liveType.rawValue)_\(roomId)"
-            guard !seenRoomIds.contains(uniqueKey) else { continue }
-            seenRoomIds.insert(uniqueKey)
+            let userId = record.value(forKey: CloudFavoriteFields.userId) as? String ?? ""
+            let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedRoomId = roomId.trimmingCharacters(in: .whitespacesAndNewlines)
+            let uniqueKey: String
+            if !normalizedUserId.isEmpty {
+                uniqueKey = "\(liveType.rawValue)_u_\(normalizedUserId)"
+            } else {
+                uniqueKey = "\(liveType.rawValue)_r_\(normalizedRoomId)"
+            }
+            guard !seenKeys.contains(uniqueKey) else { continue }
+            seenKeys.insert(uniqueKey)
 
             temp.append(LiveModel(userName: record.value(forKey: CloudFavoriteFields.userName) as? String ?? "",
                                   roomTitle: record.value(forKey: CloudFavoriteFields.roomTitle) as? String ?? "",
@@ -80,7 +87,7 @@ public final class FavoriteService: NSObject {
                                   userHeadImg: record.value(forKey: CloudFavoriteFields.userHeadImage) as? String ?? "",
                                   liveType: liveType,
                                   liveState: record.value(forKey: CloudFavoriteFields.liveState) as? String ?? "",
-                                  userId: record.value(forKey: CloudFavoriteFields.userId) as? String ?? "",
+                                  userId: userId,
                                   roomId: roomId,
                                   liveWatchedCount: nil))
         }
@@ -90,11 +97,26 @@ public final class FavoriteService: NSObject {
     public static func deleteRecord(liveModel: LiveModel) async throws {
         let container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
         let database = container.privateCloudDatabase
-        let predicate = NSPredicate(format: " \(CloudFavoriteFields.roomId) = '\(liveModel.roomId)' ")
+        let trimmedUserId = liveModel.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRoomId = liveModel.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let predicate: NSPredicate
+        if !trimmedUserId.isEmpty {
+            predicate = NSPredicate(
+                format: "%K = %@ AND %K = %@",
+                CloudFavoriteFields.userId, trimmedUserId,
+                CloudFavoriteFields.liveType, liveModel.liveType.rawValue
+            )
+        } else {
+            predicate = NSPredicate(
+                format: "%K = %@ AND %K = %@",
+                CloudFavoriteFields.roomId, trimmedRoomId,
+                CloudFavoriteFields.liveType, liveModel.liveType.rawValue
+            )
+        }
         let query = CKQuery(recordType: "favorite_streamers", predicate: predicate)
         let recordArray = try await database.records(matching: query)
-        if let firstRecord = recordArray.matchResults.first,
-           let record = try? firstRecord.1.get() {
+        let recordsToDelete = recordArray.matchResults.compactMap { try? $0.1.get() }
+        for record in recordsToDelete {
             try await database.deleteRecord(withID: record.recordID)
         }
     }

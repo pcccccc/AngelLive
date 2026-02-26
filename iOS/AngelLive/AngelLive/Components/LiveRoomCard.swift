@@ -72,7 +72,12 @@ struct LiveRoomCard: View {
 
     // 判断是否已收藏
     private var isFavorited: Bool {
-        favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
+        favoriteModel.roomList.contains(where: { item in
+            if !room.userId.isEmpty, !item.userId.isEmpty {
+                return item.liveType == room.liveType && item.userId == room.userId
+            }
+            return item.liveType == room.liveType && item.roomId == room.roomId
+        })
     }
 
     // 判断是否正在直播

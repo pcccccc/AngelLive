@@ -154,6 +154,10 @@ public final class AppFavoriteModel {
 
     @MainActor
     public func addFavorite(room: LiveModel) async throws {
+        if roomList.contains(where: { AppFavoriteModel.favoriteUniqueKey(for: $0) == AppFavoriteModel.favoriteUniqueKey(for: room) }) {
+            return
+        }
+
         try await FavoriteService.saveRecord(liveModel: room)
         // 查找第一个非直播状态的房间位置
         var favIndex = -1
@@ -216,23 +220,15 @@ public final class AppFavoriteModel {
     @MainActor
     public func removeFavoriteRoom(room: LiveModel) async throws {
         try await FavoriteService.deleteRecord(liveModel: room)
+        let targetKey = AppFavoriteModel.favoriteUniqueKey(for: room)
         // 从 roomList 中删除
-        if let index = roomList.firstIndex(where: { $0.roomId == room.roomId }) {
-            roomList.remove(at: index)
-        }
+        roomList.removeAll(where: { AppFavoriteModel.favoriteUniqueKey(for: $0) == targetKey })
 
         // 从 groupedRoomList 中删除
-        for (sectionIndex, section) in groupedRoomList.enumerated() {
-            if let roomIndex = section.roomList.firstIndex(where: { $0.roomId == room.roomId }) {
-                groupedRoomList[sectionIndex].roomList.remove(at: roomIndex)
-
-                // 如果该分组已经空了，删除整个分组
-                if groupedRoomList[sectionIndex].roomList.isEmpty {
-                    groupedRoomList.remove(at: sectionIndex)
-                }
-                break
-            }
+        for index in groupedRoomList.indices {
+            groupedRoomList[index].roomList.removeAll(where: { AppFavoriteModel.favoriteUniqueKey(for: $0) == targetKey })
         }
+        groupedRoomList.removeAll(where: { $0.roomList.isEmpty })
         listVersion &+= 1
     }
 
@@ -246,5 +242,20 @@ public final class AppFavoriteModel {
         let style = AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) ?? .liveState
         self.groupedRoomList = roomList.groupedBySections(style: style)
         listVersion &+= 1
+    }
+}
+
+private extension AppFavoriteModel {
+    static func favoriteUniqueKey(for room: LiveModel) -> String {
+        let liveType = room.liveType.rawValue
+        let userId = room.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !userId.isEmpty {
+            return "\(liveType)_u_\(userId)"
+        }
+        let roomId = room.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !roomId.isEmpty {
+            return "\(liveType)_r_\(roomId)"
+        }
+        return "\(liveType)_n_\(room.userName.trimmingCharacters(in: .whitespacesAndNewlines))"
     }
 }

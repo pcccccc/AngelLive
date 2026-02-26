@@ -19,7 +19,12 @@ struct StreamerInfoView: View {
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
-        favoriteModel.roomList.contains(where: { $0.roomId == viewModel.currentRoom.roomId })
+        favoriteModel.roomList.contains(where: { room in
+            if !viewModel.currentRoom.userId.isEmpty, !room.userId.isEmpty {
+                return room.liveType == viewModel.currentRoom.liveType && room.userId == viewModel.currentRoom.userId
+            }
+            return room.liveType == viewModel.currentRoom.liveType && room.roomId == viewModel.currentRoom.roomId
+        })
     }
 
     var body: some View {
