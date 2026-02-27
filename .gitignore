@@ -100,3 +100,6 @@ scripts/.env.local
 
 # Project planning and roadmap (local only)
 LIVEPARSE_ROADMAP.md
+
+# macOS Finder metadata
+.DS_Store
