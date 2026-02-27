@@ -97,19 +97,19 @@ public enum PlatformCapability {
         case .douyin:
             return [
                 (.categories,   .available),
-                (.rooms,        .partial("需要 Cookie")),
-                (.playback,     .partial("需要 Cookie")),
-                (.search,       .partial("需要 Cookie")),
-                (.roomDetail,   .partial("需要 Cookie")),
-                (.liveState,    .partial("需要 Cookie")),
-                (.shareResolve, .partial("需要 Cookie")),
-                (.danmaku,      .partial("需要 Cookie")),
+                (.rooms,        .available),
+                (.playback,     .available),
+                (.search,       .available),
+                (.roomDetail,   .available),
+                (.liveState,    .available),
+                (.shareResolve, .available),
+                (.danmaku,      .available),
             ]
         case .ks:
             return [
                 (.categories,   .available),
                 (.rooms,        .available),
-                (.playback,     .available),
+                (.playback,     .partial("不稳定，报错请使用PC版本快手拖动滑块验证")),
                 (.search,       .available),
                 (.roomDetail,   .available),
                 (.liveState,    .available),
@@ -125,7 +125,7 @@ public enum PlatformCapability {
                 (.roomDetail,   .available),
                 (.liveState,    .available),
                 (.shareResolve, .available),
-                (.danmaku,      .unavailable),
+                (.danmaku,      .available),
             ]
         case .cc:
             return [

@@ -33,8 +33,6 @@ enum PlayerDisplayState {
 private enum PlayerConstants {
     /// 弹幕消息最大数量限制
     static let maxDanmuMessageCount = 100
-    /// 虎牙 User-Agent
-    static let huyaUserAgent = "HYSDK(Windows,30000002)_APP(pc_exe&7060000&officia)_SDK(trans&2.32.3.5646)"
     /// 默认 User-Agent
     static let defaultUserAgent = "libmpv"
 }
@@ -167,6 +165,50 @@ final class RoomInfoViewModel {
         currentRoomPlayArgs?.first?.qualitys.first
     }
 
+    /// 构建 YY 请求上下文，兼容新版 WebSocket 拉流（qn）和旧版参数（gear/lineSeq）
+    private func yyPlaybackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
+        let rawLineSeq = (cdn.yyLineSeq ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let lineSeq: Any = Int(rawLineSeq) ?? (rawLineSeq.isEmpty ? -1 : rawLineSeq)
+
+        return [
+            "lineSeq": lineSeq,
+            "gear": quality.qn,
+            "qn": quality.qn
+        ]
+    }
+
+    /// 从播放参数中提取首个可用 URL（YY WebSocket 返回通常只有一个清晰度）
+    private func firstPlayableURL(from playArgs: [LiveQualityModel]) -> URL? {
+        for cdn in playArgs {
+            for quality in cdn.qualitys {
+                if let url = URL(string: quality.url) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
+
+    /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
+    private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
+        let fallbackUA = PlayerConstants.defaultUserAgent
+        let customUA = quality.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userAgent = (customUA?.isEmpty == false) ? customUA! : fallbackUA
+
+        playerOption.userAgent = userAgent
+        // 先清理上一次流的头，避免跨平台/跨线路残留
+        playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
+        playerOption.formatContextOptions["headers"] = nil
+
+        var headers = quality.headers ?? [:]
+        if headers["User-Agent"] == nil && headers["user-agent"] == nil {
+            headers["user-agent"] = userAgent
+        }
+        if !headers.isEmpty {
+            playerOption.appendHeader(headers)
+        }
+    }
+
     // 切换清晰度
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
@@ -190,16 +232,7 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = currentQuality.qn
         self.currentCdnIndex = cdnIndex
 
-
-        // 虎牙特殊处理
-        if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = PlayerConstants.huyaUserAgent
-            self.playerOption.appendHeader([
-                "user-agent": PlayerConstants.huyaUserAgent
-            ])
-        } else {
-            self.playerOption.userAgent = PlayerConstants.defaultUserAgent
-        }
+        applyPlaybackRequestOptions(for: currentQuality)
 
         // B站/抖音优先使用 HLS（首次加载时）
         if (currentRoom.liveType == .bilibili || currentRoom.liveType == .douyin) && cdnIndex == 0 && urlIndex == 0 {
@@ -330,14 +363,18 @@ final class RoomInfoViewModel {
                     // 检查是否已取消
                     try Task.checkCancellation()
                     
-                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .yy, roomId: currentRoom.roomId, userId: nil, context: ["lineSeq": Int(cdn.yyLineSeq ?? "-1") ?? -1, "gear": quality.qn])
+                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(
+                        platform: .yy,
+                        roomId: currentRoom.roomId,
+                        userId: nil,
+                        context: yyPlaybackContext(cdn: cdn, quality: quality)
+                    )
                     
                     // 再次检查是否已取消
                     try Task.checkCancellation()
                     
                     await MainActor.run {
-                        if let newQuality = newPlayArgs.first?.qualitys.first,
-                           let url = URL(string: newQuality.url) {
+                        if let url = self.firstPlayableURL(from: newPlayArgs) {
                             self.currentPlayURL = url
                         }
                         self.isLoading = false
@@ -379,10 +416,8 @@ final class RoomInfoViewModel {
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
         switch currentRoom.liveType {
-        case .bilibili, .huya, .douyin, .douyu, .soop, .cc:
+        case .bilibili, .huya, .douyin, .douyu, .soop, .cc, .ks, .yy:
             return true
-        case .ks, .yy:
-            return false
         }
     }
 
@@ -423,16 +458,32 @@ final class RoomInfoViewModel {
             do {
                 switch currentRoom.liveType {
                 case .bilibili, .huya, .douyin, .douyu, .soop:
-                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else { return }
+                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                        throw NSError(
+                            domain: "danmu.platform",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
+                        )
+                    }
                     danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 case .ks, .cc:  // 快手、网易CC平台弹幕
-                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else { return }
-                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
-                default:
-                    await MainActor.run {
-                        danmuServerIsLoading = false
+                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                        throw NSError(
+                            domain: "danmu.platform",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
+                        )
                     }
-                    return
+                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                case .yy:
+                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                        throw NSError(
+                            domain: "danmu.platform",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
+                        )
+                    }
+                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 }
 
                 await MainActor.run {

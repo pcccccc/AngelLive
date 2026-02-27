@@ -158,16 +158,7 @@ final class RoomInfoViewModel {
         currentPlayQualityString = currentQuality.title
         currentPlayQualityQn = currentQuality.qn
         
-        if currentRoom.liveType == .huya {
-            self.playerOption.userAgent = "HYSDK(Windows,30000002)_APP(pc_exe&7060000&officia)_SDK(trans&2.32.3.5646)"
-            self.playerOption.appendHeader([
-                "user-agent": "HYSDK(Windows,30000002)_APP(pc_exe&7060000&officia)_SDK(trans&2.32.3.5646)"
-            ])
-        }else {
-            self.playerOption.userAgent = "libmpv"
-            self.playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
-            self.playerOption.formatContextOptions["headers"] = nil
-        }
+        applyPlaybackRequestOptions(for: currentQuality)
         
         
         if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 { // bilibili 优先 HLS 播放
@@ -256,11 +247,15 @@ final class RoomInfoViewModel {
                       cdnIndex < playArgs.count else { return }
                 let currentCdn = playArgs[cdnIndex]
                 let currentQuality = currentCdn.qualitys[urlIndex]
-                playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .yy, roomId: currentRoom.roomId, userId: nil, quality: ["lineSeq": Int(currentCdn.yyLineSeq ?? "-1") ?? -1, "gear": currentQuality.qn])
+                playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(
+                    platform: .yy,
+                    roomId: currentRoom.roomId,
+                    userId: nil,
+                    quality: yyPlaybackContext(cdn: currentCdn, quality: currentQuality)
+                )
                 DispatchQueue.main.async {
-                    let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
-                    if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
+                    if let urlString = self.firstPlayableURL(from: playArgs)?.absoluteString ?? lastCurrentPlayURL?.absoluteString,
                        let url = URL(string: urlString) {
                         self.setPlayURL(url)
                     }
@@ -362,6 +357,50 @@ final class RoomInfoViewModel {
             playerOption.playerTypes = [first]
         }
     }
+
+    /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
+    private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
+        let fallbackUA = "libmpv"
+        let customUA = quality.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let userAgent = (customUA?.isEmpty == false) ? customUA! : fallbackUA
+
+        playerOption.userAgent = userAgent
+        // 先清理上一次流的头，避免跨平台/跨线路残留
+        playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
+        playerOption.formatContextOptions["headers"] = nil
+
+        var headers = quality.headers ?? [:]
+        if headers["User-Agent"] == nil && headers["user-agent"] == nil {
+            headers["user-agent"] = userAgent
+        }
+        if !headers.isEmpty {
+            playerOption.appendHeader(headers)
+        }
+    }
+
+    /// 构建 YY 请求上下文，兼容新版 WebSocket 拉流（qn）和旧版参数（gear/lineSeq）
+    private func yyPlaybackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
+        let rawLineSeq = (cdn.yyLineSeq ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let lineSeq: Any = Int(rawLineSeq) ?? (rawLineSeq.isEmpty ? -1 : rawLineSeq)
+
+        return [
+            "lineSeq": lineSeq,
+            "gear": quality.qn,
+            "qn": quality.qn
+        ]
+    }
+
+    /// 从播放参数中提取首个可用 URL（YY WebSocket 返回通常只有一个清晰度）
+    private func firstPlayableURL(from playArgs: [LiveQualityModel]) -> URL? {
+        for cdn in playArgs {
+            for quality in cdn.qualitys {
+                if let url = URL(string: quality.url) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
     
     func getDanmuInfo() {
         if danmuServerIsConnected == true || danmuServerIsLoading == true {
@@ -376,10 +415,31 @@ final class RoomInfoViewModel {
                 let danmuArgs: ([String : String], [String : String]?)
                 switch liveType {
                     case .bilibili, .huya, .douyin, .douyu, .soop:
-                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else { return }
+                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+                            throw NSError(
+                                domain: "danmu.platform",
+                                code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(liveType.rawValue)"]
+                            )
+                        }
                         danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
-                    case .ks:  // 快手平台弹幕
-                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else { return }
+                    case .ks, .cc:  // 快手、网易CC平台弹幕
+                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+                            throw NSError(
+                                domain: "danmu.platform",
+                                code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(liveType.rawValue)"]
+                            )
+                        }
+                        danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
+                    case .yy:
+                        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+                            throw NSError(
+                                domain: "danmu.platform",
+                                code: -1,
+                                userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(liveType.rawValue)"]
+                            )
+                        }
                         danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
                     default:
                         await MainActor.run {
