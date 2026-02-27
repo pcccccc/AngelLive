@@ -268,7 +268,7 @@ final class RoomInfoViewModel {
                 KSOptions.firstPlayerType = KSMEPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
                 isHLSStream = false
-            } else if currentQuality.liveCodeType == .hls {
+            } else if currentQuality.liveCodeType == .hls && currentRoom.liveType != .youtube {
                 KSOptions.firstPlayerType = KSAVPlayer.self
                 KSOptions.secondPlayerType = KSMEPlayer.self
                 isHLSStream = true
@@ -416,7 +416,7 @@ final class RoomInfoViewModel {
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
         switch currentRoom.liveType {
-        case .bilibili, .huya, .douyin, .douyu, .soop, .cc, .ks, .yy:
+        case .bilibili, .huya, .douyin, .douyu, .soop, .cc, .ks, .yy, .youtube:
             return true
         }
     }
@@ -476,6 +476,15 @@ final class RoomInfoViewModel {
                     }
                     danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
                 case .yy:
+                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                        throw NSError(
+                            domain: "danmu.platform",
+                            code: -1,
+                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
+                        )
+                    }
+                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                case .youtube:
                     guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
                         throw NSError(
                             domain: "danmu.platform",

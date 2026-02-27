@@ -149,6 +149,17 @@ public enum PlatformCapability {
                 (.shareResolve, .available),
                 (.danmaku,      .available),
             ]
+        case .youtube:
+            return [
+                (.categories,   .available),
+                (.rooms,        .available),
+                (.playback,     .available),
+                (.search,       .available),
+                (.roomDetail,   .available),
+                (.liveState,    .available),
+                (.shareResolve, .available),
+                (.danmaku,      .available),
+            ]
         }
     }
 }

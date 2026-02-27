@@ -14,7 +14,7 @@ struct PlatformCapabilityPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(liveType.platformName)
+            Text(LiveParseTools.getLivePlatformName(liveType))
                 .font(.headline)
                 .padding(.horizontal, 16)
                 .padding(.top, 12)

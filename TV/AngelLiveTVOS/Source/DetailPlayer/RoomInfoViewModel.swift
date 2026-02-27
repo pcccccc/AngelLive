@@ -432,7 +432,7 @@ final class RoomInfoViewModel {
                             )
                         }
                         danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
-                    case .yy:
+                    case .yy, .youtube:
                         guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
                             throw NSError(
                                 domain: "danmu.platform",
@@ -441,11 +441,6 @@ final class RoomInfoViewModel {
                             )
                         }
                         danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: roomId, userId: userId)
-                    default:
-                        await MainActor.run {
-                            danmuServerIsLoading = false
-                        }
-                        return
                 }
                 await MainActor.run {
                     // 判断弹幕类型

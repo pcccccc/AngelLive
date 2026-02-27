@@ -95,7 +95,6 @@ struct SearchRoomView: View {
                     }
                 }
             }
-        }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
                 Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")

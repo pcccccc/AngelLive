@@ -33,7 +33,7 @@ struct TVPlatformCapabilitySheet: View {
                     .padding(.vertical, 4)
                 }
             }
-            .navigationTitle(liveType.platformName)
+            .navigationTitle(LiveParseTools.getLivePlatformName(liveType))
         }
     }
 

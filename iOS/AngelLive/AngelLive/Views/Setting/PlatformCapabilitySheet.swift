@@ -33,7 +33,7 @@ struct PlatformCapabilitySheet: View {
                     .padding(.vertical, 2)
                 }
             }
-            .navigationTitle(liveType.platformName)
+            .navigationTitle(LiveParseTools.getLivePlatformName(liveType))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

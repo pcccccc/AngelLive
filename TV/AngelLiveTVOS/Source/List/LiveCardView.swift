@@ -428,6 +428,8 @@ struct LiveCardView: View {
                 return "live_card_ks"
             case .soop:
                 return "live_card_soop"
+            case .youtube:
+                return "live_card_yy"
         }
     }
 }

@@ -206,6 +206,7 @@ extension LiveType {
         case .ks: return "快手"
         case .yy: return "YY"
         case .soop: return "SOOP"
+        case .youtube: return "YouTube"
         }
     }
 
@@ -220,6 +221,7 @@ extension LiveType {
         case .ks: return Color(red: 1.0, green: 0.35, blue: 0.0) // 橙红
         case .yy: return Color(red: 1.0, green: 0.8, blue: 0.0) // 黄色
         case .soop: return Color(red: 0.0, green: 0.47, blue: 0.95) // 蓝色
+        case .youtube: return Color(red: 1.0, green: 0.0, blue: 0.0) // 红色
         }
     }
 
@@ -243,6 +245,8 @@ extension LiveType {
             return "https://www.yy.com/\(roomId)"
         case .soop:
             return "https://play.sooplive.co.kr/\(userId)"
+        case .youtube:
+            return "https://www.youtube.com/watch?v=\(roomId)"
         }
     }
 }

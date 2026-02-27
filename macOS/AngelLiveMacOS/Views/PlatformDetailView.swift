@@ -46,6 +46,8 @@ struct PlatformDetailView: View {
             return "mini_live_card_ks"
         case .soop:
             return "mini_live_card_soop"
+        case .youtube:
+            return "mini_live_card_yy"
         }
     }
 
