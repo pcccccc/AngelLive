@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  KSCorePlayerView.swift
 //  AngelLive
@@ -102,3 +104,5 @@ extension KSCorePlayerView: Equatable {
         lhs.url == rhs.url
     }
 }
+
+#endif

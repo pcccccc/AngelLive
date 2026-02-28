@@ -79,6 +79,7 @@ struct PlayerContentView: View {
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var isVerticalLiveMode: Bool = false // 是否为竖屏直播模式
+    @State private var vlcState: VLCPlaybackBridgeState = .buffering
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -91,6 +92,10 @@ struct PlayerContentView: View {
     // 生成基于方向的唯一 key
     private var playerViewKey: String {
         "\(viewModel.currentPlayURL?.absoluteString ?? "")_\(isDeviceLandscape ? "landscape" : "portrait")"
+    }
+
+    private var useKSPlayer: Bool {
+        viewModel.selectedPlayerKernel == .ksplayer && PlayerKernelSupport.isKSPlayerAvailable
     }
 
     var body: some View {
@@ -113,6 +118,7 @@ struct PlayerContentView: View {
         }
         .edgesIgnoringSafeArea(isVerticalLiveMode ? .all : [])
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            guard useKSPlayer else { return }
             // 进入后台时自动开启画中画（每次读取最新设置值）
             if PlayerSettingModel().enableAutoPiPOnBackground {
                 if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
@@ -122,6 +128,7 @@ struct PlayerContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            guard useKSPlayer else { return }
             // 返回前台时自动关闭画中画
             if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
                playerLayer.isPictureInPictureActive {
@@ -145,104 +152,116 @@ struct PlayerContentView: View {
             // 如果有播放地址，显示播放器
             if let playURL = viewModel.currentPlayURL {
                 ZStack {
-                    KSVideoPlayerView(
-                        model: playerModel,
-                        subtitleDataSource: nil
-                    ) { coordinator, isDisappear in
-                        if !isDisappear {
-                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
-                    .clipped()
-
-                    // 缓冲加载指示器 - 视频播放中但在缓冲时显示
-                    if playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking {
-                        ProgressView()
-                            .scaleEffect(1.5)
-                            .tint(.white)
-                    }
-                }
-                .task(id: playURL.absoluteString) {
-                    configureModelIfNeeded(playURL: playURL)
-
-                    // iPad 直接使用默认 16:9，不做尺寸探测，避免频繁重建
-                    if AppConstants.Device.isIPad {
-                        await MainActor.run {
-                            applyVideoFillMode(isVerticalLive: false)
-                            videoAspectRatio = 16.0 / 9.0
-                            isVideoPortrait = false
-                            isVerticalLiveMode = false
-                            hasDetectedSize = true
-                        }
-                        return
-                    }
-
-                    // 使用异步任务定期检查视频尺寸
-                    var retryCount = 0
-                    let maxRetries = 40 // 最多重试 40 次（10 秒）
-
-                    print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
-
-                    while !Task.isCancelled && retryCount < maxRetries {
-                        if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
-                           naturalSize.width > 0, naturalSize.height > 0 {
-
-                            // 检查是否为有效尺寸（排除 1.0 x 1.0 等占位符）
-                            let isValidSize = naturalSize.width > 1.0 && naturalSize.height > 1.0
-
-                            if !isValidSize {
-                                print("⚠️ 检测到无效视频尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
-                            } else if !hasDetectedSize {
-                                let ratio = naturalSize.width / naturalSize.height
-                                let isPortrait = ratio < 1.0
-                                let isVerticalLive = isPortrait && naturalSize.height >= 1280
-
-                                print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
-                                print("📐 视频比例: \(ratio)")
-                                print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
-                                print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
-
-                                if isVerticalLive {
-                                    print("🎬 检测到竖屏直播模式！高度: \(naturalSize.height)")
-                                }
-
-                                await MainActor.run {
-                                    applyVideoFillMode(isVerticalLive: isVerticalLive)
-
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        videoAspectRatio = ratio
-                                        isVideoPortrait = isPortrait
-                                        isVerticalLiveMode = isVerticalLive
-                                        hasDetectedSize = true
-                                    }
-                                }
-
-                                // 打印应用的策略
-                                if isDeviceLandscape && isPortrait {
-                                    print("✅ 应用策略: 横屏设备+竖屏视频 → 限制宽度，居中显示")
-                                } else {
-                                    print("✅ 应用策略: 标准 aspect fit 显示")
-                                }
-
-                                break // 获取到后退出循环
-                            } else {
-                                // 已经检测过，直接退出
-                                print("✅ 已有视频尺寸信息，无需重复检测")
-                                break
+                    if useKSPlayer {
+                        #if canImport(KSPlayer)
+                        KSVideoPlayerView(
+                            model: playerModel,
+                            subtitleDataSource: nil
+                        ) { coordinator, isDisappear in
+                            if !isDisappear {
+                                viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                             }
                         }
+                        .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
+                        .clipped()
 
-                        retryCount += 1
-                        try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
+                        // 缓冲加载指示器 - 视频播放中但在缓冲时显示
+                        if playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking {
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                        }
+                        #else
+                        vlcPlayerView(playURL: playURL)
+                        #endif
+                    } else {
+                        vlcPlayerView(playURL: playURL)
                     }
+                }
+                .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") {
+                    if useKSPlayer {
+                        #if canImport(KSPlayer)
+                        configureModelIfNeeded(playURL: playURL)
 
-                    // 超时后仍未获取到有效尺寸，强制显示（使用默认 16:9 比例）
-                    if retryCount >= maxRetries && !hasDetectedSize {
-                        print("⚠️ 无法获取有效视频尺寸，强制显示（默认 16:9 比例）")
+                        // iPad 直接使用默认 16:9，不做尺寸探测，避免频繁重建
+                        if AppConstants.Device.isIPad {
+                            await MainActor.run {
+                                applyVideoFillMode(isVerticalLive: false)
+                                videoAspectRatio = 16.0 / 9.0
+                                isVideoPortrait = false
+                                isVerticalLiveMode = false
+                                hasDetectedSize = true
+                            }
+                            return
+                        }
+
+                        // 使用异步任务定期检查视频尺寸
+                        var retryCount = 0
+                        let maxRetries = 40 // 最多重试 40 次（10 秒）
+
+                        print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
+
+                        while !Task.isCancelled && retryCount < maxRetries {
+                            if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
+                               naturalSize.width > 0, naturalSize.height > 0 {
+
+                                // 检查是否为有效尺寸（排除 1.0 x 1.0 等占位符）
+                                let isValidSize = naturalSize.width > 1.0 && naturalSize.height > 1.0
+
+                                if !isValidSize {
+                                    print("⚠️ 检测到无效视频尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
+                                } else if !hasDetectedSize {
+                                    let ratio = naturalSize.width / naturalSize.height
+                                    let isPortrait = ratio < 1.0
+                                    let isVerticalLive = isPortrait && naturalSize.height >= 1280
+
+                                    print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
+                                    print("📐 视频比例: \(ratio)")
+                                    print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                                    print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
+
+                                    if isVerticalLive {
+                                        print("🎬 检测到竖屏直播模式！高度: \(naturalSize.height)")
+                                    }
+
+                                    await MainActor.run {
+                                        applyVideoFillMode(isVerticalLive: isVerticalLive)
+
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            videoAspectRatio = ratio
+                                            isVideoPortrait = isPortrait
+                                            isVerticalLiveMode = isVerticalLive
+                                            hasDetectedSize = true
+                                        }
+                                    }
+
+                                    break // 获取到后退出循环
+                                } else {
+                                    // 已经检测过，直接退出
+                                    break
+                                }
+                            }
+
+                            retryCount += 1
+                            try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
+                        }
+
+                        // 超时后仍未获取到有效尺寸，强制显示（使用默认 16:9 比例）
+                        if retryCount >= maxRetries && !hasDetectedSize {
+                            await MainActor.run {
+                                applyVideoFillMode(isVerticalLive: false)
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    hasDetectedSize = true
+                                }
+                            }
+                        }
+                        #endif
+                    } else {
                         await MainActor.run {
-                            applyVideoFillMode(isVerticalLive: false)
                             withAnimation(.easeInOut(duration: 0.2)) {
+                                videoAspectRatio = 16.0 / 9.0
+                                isVideoPortrait = false
+                                isVerticalLiveMode = false
                                 hasDetectedSize = true
                             }
                         }
@@ -250,12 +269,13 @@ struct PlayerContentView: View {
                 }
                 .onChange(of: playURL) { _ in
                     // 切换视频时重置为默认 16:9 比例并重新检测
-                    print("🔄 切换视频，重置为默认 16:9 比例")
                     videoAspectRatio = 16.0 / 9.0
                     isVideoPortrait = false
                     isVerticalLiveMode = false
                     hasDetectedSize = false
-                    applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
+                    if useKSPlayer {
+                        applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
+                    }
                     // task(id: playURL.absoluteString) 会自动触发重新检测
                 }
             } else {
@@ -278,6 +298,31 @@ struct PlayerContentView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func vlcPlayerView(playURL: URL) -> some View {
+        ZStack {
+            VLCVideoPlayerView(url: playURL, options: viewModel.playerOption) { state in
+                vlcState = state
+                switch state {
+                case .playing:
+                    viewModel.isPlaying = true
+                case .paused, .stopped, .error:
+                    viewModel.isPlaying = false
+                case .buffering:
+                    break
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
+            .clipped()
+
+            if vlcState.isBuffering {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
             }
         }
     }

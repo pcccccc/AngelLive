@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  PlayerGestureView.swift
 //  AngelLive
@@ -295,3 +297,5 @@ struct VolumeViewWrapper: UIViewRepresentable {
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {}
 }
+
+#endif

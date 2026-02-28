@@ -129,6 +129,28 @@ private struct PlayerSettingsSheet: View {
                     settingSection(title: "播放设置") {
                         VStack(spacing: 0) {
                             settingRow {
+                                HStack {
+                                    Text("播放器内核")
+                                    Spacer()
+                                    if PlayerKernelSupport.availableKernels.isEmpty {
+                                        Text("不可用")
+                                            .foregroundStyle(.secondary)
+                                    } else {
+                                        Picker("播放器内核", selection: $playerSettingModel.playerKernel) {
+                                            ForEach(PlayerKernelSupport.availableKernels, id: \.self) { kernel in
+                                                Text(kernel.title).tag(kernel)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .pickerStyle(.menu)
+                                    }
+                                }
+                            }
+
+                            Divider()
+                                .padding(.leading)
+
+                            settingRow {
                                 Toggle("后台播放", isOn: $playerSettingModel.enableBackgroundAudio)
                                     .tint(AppConstants.Colors.accent)
                                     .onChange(of: playerSettingModel.enableBackgroundAudio) { _, newValue in
@@ -174,6 +196,10 @@ private struct PlayerSettingsSheet: View {
         }
         .onAppear {
             KSOptions.canBackgroundPlay = playerSettingModel.enableBackgroundAudio
+            let resolvedKernel = PlayerKernelSupport.resolvedKernel(for: playerSettingModel.playerKernel)
+            if resolvedKernel != playerSettingModel.playerKernel {
+                playerSettingModel.playerKernel = resolvedKernel
+            }
         }
     }
 

@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  VideoControllerView.swift
 //  AngelLive
@@ -643,3 +645,5 @@ private extension View {
         }
     }
 }
+
+#endif

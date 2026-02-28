@@ -8,7 +8,14 @@
 @_exported import InjectionNext
 @_exported import Kingfisher
 @_exported import KingfisherWebP
+#if canImport(VLCKitSPM)
+@_exported import VLCKitSPM
+#elseif canImport(VLCKit)
+@_exported import VLCKit
+#endif
+#if canImport(KSPlayer)
 @_exported import KSPlayer
+#endif
 @_exported import LiveParse
 @_exported import NIO
 @_exported import NIOHTTP1

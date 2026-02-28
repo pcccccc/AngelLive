@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  ViewExtension.swift
 //  KSPlayer
@@ -279,3 +281,5 @@ extension View {
         }
     }
 }
+
+#endif

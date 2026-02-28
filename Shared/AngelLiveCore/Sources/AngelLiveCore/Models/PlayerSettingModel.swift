@@ -34,6 +34,19 @@ public enum VideoScaleMode: Int, CaseIterable, Sendable {
     }
 }
 
+/// 播放器内核
+public enum PlayerKernel: Int, CaseIterable, Sendable {
+    case ksplayer = 0
+    case vlc4 = 1
+
+    public var title: String {
+        switch self {
+        case .ksplayer: return "KSPlayer"
+        case .vlc4: return "VLC 4.0"
+        }
+    }
+}
+
 @Observable
 public final class PlayerSettingModel {
 
@@ -44,6 +57,7 @@ public final class PlayerSettingModel {
     public static let globalOpenExitPlayerViewWhenLiveEndSecondIndex = "SimpleLive.Setting.globalOpenExitPlayerViewWhenLiveEndSecondIndex"
     public static let globalEnableBackgroundAudio = "SimpleLive.Setting.EnableBackgroundAudio"
     public static let globalEnableAutoPiPOnBackground = "SimpleLive.Setting.EnableAutoPiPOnBackground"
+    public static let globalPlayerKernel = "SimpleLive.Setting.PlayerKernel"
 
     public init() {}
 
@@ -122,6 +136,20 @@ public final class PlayerSettingModel {
         set {
             withMutation(keyPath: \.enableAutoPiPOnBackground) {
                 UserDefaults.shared.set(newValue, forKey: PlayerSettingModel.globalEnableAutoPiPOnBackground, synchronize: true)
+            }
+        }
+    }
+
+    @ObservationIgnored
+    public var playerKernel: PlayerKernel {
+        get {
+            access(keyPath: \.playerKernel)
+            let rawValue = UserDefaults.shared.value(forKey: PlayerSettingModel.globalPlayerKernel, synchronize: true) as? Int ?? PlayerKernel.ksplayer.rawValue
+            return PlayerKernel(rawValue: rawValue) ?? .ksplayer
+        }
+        set {
+            withMutation(keyPath: \.playerKernel) {
+                UserDefaults.shared.set(newValue.rawValue, forKey: PlayerSettingModel.globalPlayerKernel, synchronize: true)
             }
         }
     }

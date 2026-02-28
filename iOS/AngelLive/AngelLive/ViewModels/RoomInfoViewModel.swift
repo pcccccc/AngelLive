@@ -15,7 +15,11 @@ import AngelLiveDependencies
 public class PlayerOptions: KSOptions, @unchecked Sendable {
     public var syncSystemRate: Bool = false
 
-    override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
+    nonisolated override public init() {
+        super.init()
+    }
+
+    nonisolated override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
         guard syncSystemRate else { return }
         super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
     }
@@ -60,6 +64,14 @@ final class RoomInfoViewModel {
     var isHLSStream = false  // 当前是否为 HLS 流（支持 AirPlay 投屏）
     var douyuFirstLoad = true
     var yyFirstLoad = true
+
+    var selectedPlayerKernel: PlayerKernel {
+        PlayerKernelSupport.resolvedKernel(for: PlayerSettingModel().playerKernel)
+    }
+
+    var usesVLCKernel: Bool {
+        selectedPlayerKernel == .vlc4
+    }
     
     /// 斗鱼/YY 清晰度切换任务，用于取消之前的请求
     private var qualitySwitchTask: Task<Void, Never>?
@@ -407,6 +419,7 @@ final class RoomInfoViewModel {
 
     @MainActor
     func setPlayerDelegate(playerCoordinator: KSVideoPlayer.Coordinator) {
+        guard !usesVLCKernel else { return }
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
     }

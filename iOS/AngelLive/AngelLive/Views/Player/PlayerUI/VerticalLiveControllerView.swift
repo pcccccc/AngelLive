@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  VerticalLiveControllerView.swift
 //  AngelLive
@@ -238,3 +240,5 @@ private enum GlassEffectShape {
     case circle
     case capsule
 }
+
+#endif

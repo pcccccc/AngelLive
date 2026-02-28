@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  KSVideoPlayerView.swift
 //  AngelLive
@@ -326,4 +328,6 @@ struct KSVideoPlayerView_Previews: PreviewProvider {
 //        playerVC.player = AVPlayer(url: URL(string: "https://bitmovin-a.akamaihd.net/content/dataset/multi-codec/hevc/stream_fmp4.m3u8")!)
 //    }
 // }
+#endif
+
 #endif

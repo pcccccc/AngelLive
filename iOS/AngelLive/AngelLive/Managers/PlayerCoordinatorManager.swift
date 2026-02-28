@@ -7,7 +7,7 @@
 
 import Foundation
 import SwiftUI
-import KSPlayer
+import AngelLiveDependencies
 
 /// 全局播放器协调器管理器
 /// 确保整个 APP 只有一个播放器实例，避免重复创建
@@ -38,17 +38,11 @@ final class PlayerCoordinatorManager {
         // 停止播放并完全重置 playerLayer
         if let playerLayer = coordinator.playerLayer {
             playerLayer.pause()
-            playerLayer.reset()
-
-            // 清理播放器资源
-            playerLayer.player.shutdown()
+            playerLayer.resetPlayer()
         }
 
         // 重置状态
-        coordinator.isMuted = false
-        coordinator.playbackRate = 1.0
         coordinator.isScaleAspectFill = false
-        coordinator.isRecord = false
         coordinator.isMaskShow = false
         hasDetectedSize = false
     }

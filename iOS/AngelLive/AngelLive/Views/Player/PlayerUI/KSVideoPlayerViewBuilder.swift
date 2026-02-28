@@ -1,3 +1,5 @@
+#if canImport(KSPlayer)
+
 //
 //  KSVideoPlayerViewBuilder.swift
 //  AngelLive
@@ -504,3 +506,4 @@ extension UIApplication {
     }
 }
 
+#endif
