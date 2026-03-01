@@ -17,7 +17,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(path: "../../../../Git_Mini/LiveParse"),
+        .package(path: "../../../../Git/LiveParse"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.10.2"),
         .package(url: "https://github.com/hyperoslo/Cache", from: "7.4.0"),
         .package(name: "SharedAssets", path: "../SharedAssets")

@@ -38,7 +38,7 @@ final class PlayerCoordinatorManager {
         // 停止播放并完全重置 playerLayer
         if let playerLayer = coordinator.playerLayer {
             playerLayer.pause()
-            playerLayer.resetPlayer()
+            playerLayer.reset()
         }
 
         // 重置状态

@@ -12,7 +12,7 @@ struct LiveRoomCardSkeleton: View {
     let width: CGFloat
 
     init(width: CGFloat = 280) {
-        self.width = width
+        self.width = max(width, 0)
     }
 
     var body: some View {

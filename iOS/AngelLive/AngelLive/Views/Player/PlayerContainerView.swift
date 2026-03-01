@@ -80,6 +80,11 @@ struct PlayerContentView: View {
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var isVerticalLiveMode: Bool = false // 是否为竖屏直播模式
     @State private var vlcState: VLCPlaybackBridgeState = .buffering
+    @State private var showVideoSetting = false
+    @State private var showDanmakuSettings = false
+    @State private var showVLCUnsupportedHint = false
+    @StateObject private var vlcPlaybackController = VLCPlaybackController()
+    @State private var hasVLCStartedPlayback = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -118,22 +123,78 @@ struct PlayerContentView: View {
         }
         .edgesIgnoringSafeArea(isVerticalLiveMode ? .all : [])
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-            guard useKSPlayer else { return }
-            // 进入后台时自动开启画中画（每次读取最新设置值）
-            if PlayerSettingModel().enableAutoPiPOnBackground {
-                if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
-                   !playerLayer.isPictureInPictureActive {
-                    playerLayer.pipStart()
+            Logger.debug(
+                "[PlayerFlow] willResignActive, kernel=\(viewModel.selectedPlayerKernel.rawValue), useKS=\(useKSPlayer), url=\(compactURL(viewModel.currentPlayURL))",
+                category: .player
+            )
+            if useKSPlayer {
+                // 进入后台时自动开启画中画（每次读取最新设置值）
+                if PlayerSettingModel().enableAutoPiPOnBackground {
+                    if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
+                       !playerLayer.isPictureInPictureActive {
+                        playerLayer.pipStart()
+                    }
                 }
+            } else {
+                vlcPlaybackController.enterBackground()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            guard useKSPlayer else { return }
-            // 返回前台时自动关闭画中画
-            if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
-               playerLayer.isPictureInPictureActive {
-                playerLayer.pipStop(restoreUserInterface: true)
+            Logger.debug(
+                "[PlayerFlow] didBecomeActive, kernel=\(viewModel.selectedPlayerKernel.rawValue), useKS=\(useKSPlayer), url=\(compactURL(viewModel.currentPlayURL))",
+                category: .player
+            )
+            if useKSPlayer {
+                // 返回前台时自动关闭画中画
+                if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
+                   playerLayer.isPictureInPictureActive {
+                    playerLayer.pipStop(restoreUserInterface: true)
+                }
+            } else {
+                vlcPlaybackController.becomeActive()
             }
+        }
+        .onChange(of: playerCoordinator.state) {
+            let state = playerCoordinator.state
+            guard useKSPlayer else { return }
+            Logger.debug("[PlayerFlow] KS state changed -> \(state)", category: .player)
+            switch state {
+            case .readyToPlay:
+                viewModel.isPlaying = true
+            case .paused, .playedToTheEnd, .error:
+                viewModel.isPlaying = false
+            case .initialized, .buffering:
+                break
+            default:
+                break
+            }
+        }
+        .onChange(of: showVideoSetting) { _, isPresented in
+            guard !useKSPlayer, isPresented else { return }
+            Logger.debug("[PlayerFlow] VLC setting tapped, show unsupported hint", category: .player)
+            showVideoSetting = false
+            showVLCUnsupportedHint = true
+        }
+        .sheet(isPresented: $showDanmakuSettings) {
+            DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert("提示", isPresented: $showVLCUnsupportedHint) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("VLC 内核暂不支持视频信息统计。")
+        }
+        .onDisappear {
+            guard !useKSPlayer else { return }
+            // 兜底关闭会话，真正停播在 VLC 视图 onDisappear 中处理，避免重复 stop。
+            Logger.debug(
+                "[PlayerFlow] PlayerContentView onDisappear, deactivate VLC session, url=\(compactURL(viewModel.currentPlayURL))",
+                category: .player
+            )
+            vlcPlaybackController.deactivateSession()
+            hasVLCStartedPlayback = false
+            vlcState = .stopped
         }
     }
 
@@ -152,33 +213,34 @@ struct PlayerContentView: View {
             // 如果有播放地址，显示播放器
             if let playURL = viewModel.currentPlayURL {
                 ZStack {
-                    if useKSPlayer {
-                        #if canImport(KSPlayer)
-                        KSVideoPlayerView(
-                            model: playerModel,
-                            subtitleDataSource: nil
-                        ) { coordinator, isDisappear in
-                            if !isDisappear {
-                                viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
-                        .clipped()
+                    compatiblePlayerSurface(playURL: playURL)
 
-                        // 缓冲加载指示器 - 视频播放中但在缓冲时显示
-                        if playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(.white)
-                        }
-                        #else
-                        vlcPlayerView(playURL: playURL)
-                        #endif
-                    } else {
-                        vlcPlayerView(playURL: playURL)
+                    if shouldShowBuffering {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
                     }
+
+                    UnifiedPlayerControlOverlay(
+                        bridge: controlBridge,
+                        showVideoSetting: $showVideoSetting,
+                        showDanmakuSettings: $showDanmakuSettings
+                    )
+
+                    #if canImport(KSPlayer)
+                    if useKSPlayer && showVideoSetting {
+                        VideoSettingHUDView(model: playerModel, isShowing: $showVideoSetting)
+                            .padding(.trailing, 0)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                    #endif
                 }
                 .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") {
+                    Logger.debug(
+                        "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",
+                        category: .player
+                    )
                     if useKSPlayer {
                         #if canImport(KSPlayer)
                         configureModelIfNeeded(playURL: playURL)
@@ -258,21 +320,25 @@ struct PlayerContentView: View {
                         #endif
                     } else {
                         await MainActor.run {
+                            Logger.debug("[PlayerFlow] task prepare VLC defaults", category: .player)
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 videoAspectRatio = 16.0 / 9.0
                                 isVideoPortrait = false
                                 isVerticalLiveMode = false
                                 hasDetectedSize = true
+                                hasVLCStartedPlayback = false
                             }
                         }
                     }
                 }
                 .onChange(of: playURL) { _ in
+                    Logger.debug("[PlayerFlow] playURL changed -> \(compactURL(playURL)), reset detect states", category: .player)
                     // 切换视频时重置为默认 16:9 比例并重新检测
                     videoAspectRatio = 16.0 / 9.0
                     isVideoPortrait = false
                     isVerticalLiveMode = false
                     hasDetectedSize = false
+                    hasVLCStartedPlayback = false
                     if useKSPlayer {
                         applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
                     }
@@ -303,28 +369,111 @@ struct PlayerContentView: View {
     }
 
     @ViewBuilder
-    private func vlcPlayerView(playURL: URL) -> some View {
-        ZStack {
-            VLCVideoPlayerView(url: playURL, options: viewModel.playerOption) { state in
-                vlcState = state
-                switch state {
-                case .playing:
-                    viewModel.isPlaying = true
-                case .paused, .stopped, .error:
-                    viewModel.isPlaying = false
-                case .buffering:
-                    break
-                }
-            }
+    private func compatiblePlayerSurface(playURL: URL) -> some View {
+        if useKSPlayer {
+            #if canImport(KSPlayer)
+            KSVideoPlayerView(
+                model: playerModel,
+                subtitleDataSource: nil,
+                liftCycleBlock: { coordinator, isDisappear in
+                    if !isDisappear {
+                        viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                    }
+                },
+                showsControlLayer: false
+            )
             .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
             .clipped()
+            #else
+            vlcPlayerView(playURL: playURL)
+            #endif
+        } else {
+            vlcPlayerView(playURL: playURL)
+        }
+    }
 
-            if vlcState.isBuffering {
-                ProgressView()
-                    .scaleEffect(1.5)
-                    .tint(.white)
+    private func vlcPlayerView(playURL: URL) -> some View {
+        VLCVideoPlayerView(url: playURL, options: viewModel.playerOption, controller: vlcPlaybackController) { state in
+            Logger.debug(
+                "[PlayerFlow] VLC bridge callback state=\(state), url=\(compactURL(playURL)), sessionActive=\(vlcPlaybackController.isSessionActive)",
+                category: .player
+            )
+            vlcState = state
+            switch state {
+            case .playing:
+                viewModel.isPlaying = true
+                hasVLCStartedPlayback = true
+            case .paused, .stopped, .error:
+                viewModel.isPlaying = false
+            case .buffering:
+                break
             }
         }
+        .onAppear {
+            Logger.debug("[PlayerFlow] VLC surface onAppear, activate session, url=\(compactURL(playURL))", category: .player)
+            vlcPlaybackController.activateSession()
+        }
+        .onDisappear {
+            Logger.debug("[PlayerFlow] VLC surface onDisappear, stop + deactivate, url=\(compactURL(playURL))", category: .player)
+            vlcPlaybackController.deactivateSession()
+            vlcPlaybackController.stop()
+            hasVLCStartedPlayback = false
+            vlcState = .stopped
+        }
+        .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
+        .clipped()
+    }
+
+    private var shouldShowBuffering: Bool {
+        if useKSPlayer {
+            return playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking
+        }
+        // VLC 直播流在播放后仍可能短暂回报 buffering，避免中间菊花常驻干扰观看。
+        return vlcState.isBuffering && !hasVLCStartedPlayback
+    }
+
+    private var controlBridge: PlayerControlBridge {
+        if useKSPlayer {
+            return PlayerControlBridge(
+                isPlaying: viewModel.isPlaying || playerCoordinator.state.isPlaying,
+                isBuffering: playerCoordinator.state == .buffering || playerCoordinator.playerLayer?.player.playbackState == .seeking,
+                supportsPictureInPicture: playerCoordinator.playerLayer is KSComplexPlayerLayer,
+                togglePlayPause: {
+                    if viewModel.isPlaying || playerCoordinator.state.isPlaying {
+                        playerCoordinator.playerLayer?.pause()
+                    } else {
+                        playerCoordinator.playerLayer?.play()
+                    }
+                },
+                refreshPlayback: {
+                    viewModel.refreshPlayback()
+                },
+                togglePictureInPicture: {
+                    if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer {
+                        if playerLayer.isPictureInPictureActive {
+                            playerLayer.pipStop(restoreUserInterface: true)
+                        } else {
+                            playerLayer.pipStart()
+                        }
+                    }
+                }
+            )
+        }
+
+        return PlayerControlBridge(
+            isPlaying: viewModel.isPlaying,
+            isBuffering: vlcState.isBuffering,
+            supportsPictureInPicture: vlcPlaybackController.isPictureInPictureSupported,
+            togglePlayPause: {
+                vlcPlaybackController.togglePlayPause()
+            },
+            refreshPlayback: {
+                viewModel.refreshPlayback()
+            },
+            togglePictureInPicture: {
+                vlcPlaybackController.togglePictureInPicture()
+            }
+        )
     }
 
     // 判断是否需要限制宽度（横屏设备 + 竖屏视频）
@@ -365,6 +514,12 @@ struct PlayerContentView: View {
         if playerModel.url != playURL {
             playerModel.url = playURL
         }
+    }
+
+    private func compactURL(_ url: URL?) -> String {
+        guard let url else { return "nil" }
+        let host = url.host ?? "unknown-host"
+        return "\(host)\(url.path)"
     }
 }
 

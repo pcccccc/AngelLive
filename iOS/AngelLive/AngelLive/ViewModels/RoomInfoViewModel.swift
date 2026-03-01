@@ -19,7 +19,7 @@ public class PlayerOptions: KSOptions, @unchecked Sendable {
         super.init()
     }
 
-    nonisolated override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
+    override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
         guard syncSystemRate else { return }
         super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
     }

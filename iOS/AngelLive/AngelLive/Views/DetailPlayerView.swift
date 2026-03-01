@@ -198,7 +198,7 @@ struct DetailPlayerView: View {
         .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(isIPhoneLandscape)
         .onChange(of: scenePhase) { _, newPhase in
-            print("📱 scenePhase changed to: \(newPhase)")
+            Logger.debug("[PlayerFlow] Detail scenePhase -> \(newPhase), roomId=\(viewModel.currentRoom.roomId)", category: .player)
             switch newPhase {
             case .active:
                 viewModel.resumeDanmuUpdatesIfNeeded()
@@ -216,6 +216,7 @@ struct DetailPlayerView: View {
             historyModel.addHistory(room: viewModel.currentRoom)
         }
         .onDisappear {
+            Logger.debug("[PlayerFlow] Detail onDisappear, roomId=\(viewModel.currentRoom.roomId), kernel=\(viewModel.selectedPlayerKernel.rawValue)", category: .player)
             viewModel.disconnectSocket()
             // iPhone 返回时强制竖屏
             if !AppConstants.Device.isIPad {
@@ -233,7 +234,7 @@ struct DetailPlayerView: View {
                 )
 
                 windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                    print("❌ 强制竖屏失败: \(error)")
+                    Logger.error("[PlayerFlow] 强制竖屏失败: \(error.localizedDescription)", category: .player)
                 }
 
                 if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {

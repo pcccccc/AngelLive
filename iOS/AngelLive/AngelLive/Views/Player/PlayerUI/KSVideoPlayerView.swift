@@ -22,6 +22,7 @@ public struct KSVideoPlayerView: View {
     private let providedURL: URL?
     private let subtitleDataSource: SubtitleDataSource?
     private let liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)?
+    private let showsControlLayer: Bool
     @Environment(\.dismiss)
     private var dismiss
     @Environment(RoomInfoViewModel.self) private var viewModel
@@ -43,11 +44,17 @@ public struct KSVideoPlayerView: View {
         }
     }
 
-    public init(model: KSVideoPlayerModel, subtitleDataSource: SubtitleDataSource? = nil, liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)? = nil) {
+    public init(
+        model: KSVideoPlayerModel,
+        subtitleDataSource: SubtitleDataSource? = nil,
+        liftCycleBlock: ((KSVideoPlayer.Coordinator, Bool) -> Void)? = nil,
+        showsControlLayer: Bool = true
+    ) {
         _model = StateObject(wrappedValue: model)
         self.providedURL = model.url
         self.subtitleDataSource = subtitleDataSource
         self.liftCycleBlock = liftCycleBlock
+        self.showsControlLayer = showsControlLayer
     }
 
     public var body: some View {
@@ -126,7 +133,9 @@ public struct KSVideoPlayerView: View {
                     model.config.isMaskShow.toggle()
                 }, isLocked: $model.isLocked)
 
-                controllerView
+                if showsControlLayer {
+                    controllerView
+                }
             }
             .tint(.white)
             .persistentSystemOverlays(.hidden)

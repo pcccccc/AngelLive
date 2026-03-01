@@ -59,12 +59,15 @@ class TimerManager {
 
     /// 取消定时器
     func cancelTimer() {
+        let wasActive = timer != nil || isTimerActive || remainingSeconds > 0
         timer?.invalidate()
         timer = nil
         isTimerActive = false
         remainingSeconds = 0
         onTimerEnd = nil
-        print("定时关闭已取消")
+        if wasActive {
+            print("定时关闭已取消")
+        }
     }
 
     /// 定时器完成

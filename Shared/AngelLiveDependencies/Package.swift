@@ -3,33 +3,17 @@
 import Foundation
 import PackageDescription
 
-private let ksPlayerPathCandidates: [String] = [
-    "../../../../Git/KSPlayer",
-    "../../../../Git_Mini/KSPlayer"
-]
+/// 通过环境变量 `USE_VLC=1` 切换播放器内核。
+/// 默认使用 KSPlayer；设置 USE_VLC=1 后改用 VLCKit。
+/// 两者不能同时引入，否则内嵌的 FFmpeg 符号会冲突。
+private let useVLC = ProcessInfo.processInfo.environment["USE_VLC"] == "1"
 
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
-    let env = ProcessInfo.processInfo.environment
-    // Default to "no KSPlayer" so the app can still build/run when KSPlayer or FFmpegKit is unavailable.
-    guard env["ANGELLIVE_ENABLE_KSPLAYER"] == "1" else {
-        return nil
-    }
-
-    if env["ANGELLIVE_KSPLAYER_REMOTE"] == "1" {
-        return (
-            .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.7.3"),
-            "KSPlayer"
-        )
-    }
-
-    for candidate in ksPlayerPathCandidates {
-        let manifestPath = URL(fileURLWithPath: candidate).appendingPathComponent("Package.swift").path
-        if FileManager.default.fileExists(atPath: manifestPath) {
-            return (.package(path: candidate), "KSPlayer")
-        }
-    }
-
-    return nil
+    guard !useVLC else { return nil }
+    return (
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.7.8"),
+        "KSPlayer"
+    )
 }
 
 var packageDependencies: [Package.Dependency] = [
@@ -43,7 +27,16 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/johnno1962/InjectionNext", from: "1.4.3"),
     .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
     .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
-    .package(url: "https://github.com/rursache/VLCKitSPM", revision: "94ca521c32a9c1cd76824a34ab82e9ddb3360e65"),
+]
+
+// VLCKitSPM 仅在 USE_VLC=1 时引入（与 KSPlayer 互斥，避免 FFmpeg 符号冲突）
+if useVLC {
+    packageDependencies.append(
+        .package(url: "https://github.com/rursache/VLCKitSPM", revision: "94ca521c32a9c1cd76824a34ab82e9ddb3360e65")
+    )
+}
+
+packageDependencies += [
     .package(path: "../../../../Git/LiveParse"),
     .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
     .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
@@ -83,7 +76,6 @@ var targetDependencies: [Target.Dependency] = [
     "Kingfisher",
     "KingfisherWebP",
     .product(name: "InjectionNext", package: "InjectionNext"),
-    .product(name: "VLCKitSPM", package: "VLCKitSPM"),
     // 只在 iOS 平台包含 WindowOverlay 和 Toasts
     .product(name: "WindowOverlay", package: "swiftui-window-overlay", condition: .when(platforms: [.iOS])),
     .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS])),
@@ -96,6 +88,10 @@ var targetDependencies: [Target.Dependency] = [
 if let ksPlayerDependency = resolveKSPlayerDependency() {
     packageDependencies.append(ksPlayerDependency.package)
     targetDependencies.append(ksPlayerDependency.target)
+}
+
+if useVLC {
+    targetDependencies.append(.product(name: "VLCKitSPM", package: "VLCKitSPM"))
 }
 
 let package = Package(

@@ -73,6 +73,15 @@
       }
     },
     {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
+      "state" : {
+        "revision" : "96874d4ffd5064122d25878e1f8611edffe445c5",
+        "version" : "8.0.2"
+      }
+    },
+    {
       "identity" : "gmobjc",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pcccccc/GMObjC",
@@ -124,6 +133,15 @@
       "state" : {
         "revision" : "dccea7e92e77b0aa9ae5955c0d8f78c88ac0a950",
         "version" : "1.7.0"
+      }
+    },
+    {
+      "identity" : "ksplayer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/TracyPlayer/KSPlayer",
+      "state" : {
+        "revision" : "e3206b8dc853af9e1c7a47d6014cc47b74cf3a25",
+        "version" : "2.7.8"
       }
     },
     {
@@ -295,14 +313,6 @@
       "state" : {
         "revision" : "3680f532c00d18a168bb8da7b9f8f82fcd89180d",
         "version" : "5.0.5"
-      }
-    },
-    {
-      "identity" : "vlckitspm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/rursache/VLCKitSPM",
-      "state" : {
-        "revision" : "94ca521c32a9c1cd76824a34ab82e9ddb3360e65"
       }
     }
   ],
