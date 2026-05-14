@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "4F76CB272FB1C4BF0019BDFF"
-               BuildableName = "AngelLiveMacOS-AppStore.app"
+               BuildableName = "Angel Live.app"
                BlueprintName = "AngelLiveMacOS-AppStore"
                ReferencedContainer = "container:AngelLiveMacOS.xcodeproj">
             </BuildableReference>
@@ -46,7 +46,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4F76CB272FB1C4BF0019BDFF"
-            BuildableName = "AngelLiveMacOS-AppStore.app"
+            BuildableName = "Angel Live.app"
             BlueprintName = "AngelLiveMacOS-AppStore"
             ReferencedContainer = "container:AngelLiveMacOS.xcodeproj">
          </BuildableReference>
@@ -63,7 +63,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "4F76CB272FB1C4BF0019BDFF"
-            BuildableName = "AngelLiveMacOS-AppStore.app"
+            BuildableName = "Angel Live.app"
             BlueprintName = "AngelLiveMacOS-AppStore"
             ReferencedContainer = "container:AngelLiveMacOS.xcodeproj">
          </BuildableReference>

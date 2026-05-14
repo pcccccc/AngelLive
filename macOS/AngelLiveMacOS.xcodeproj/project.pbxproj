@@ -19,7 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		4F76CB372FB1C4BF0019BDFF /* AngelLiveMacOS-AppStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AngelLiveMacOS-AppStore.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		4F76CB372FB1C4BF0019BDFF /* Angel Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Angel Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
 		FB7077CA2EA1D6820059AFD9 /* Angel Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Angel Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBE22D672EE027C300866D4B /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = ../AngelLive.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = SOURCE_ROOT; };
@@ -94,7 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				FB7077CA2EA1D6820059AFD9 /* Angel Live.app */,
-				4F76CB372FB1C4BF0019BDFF /* AngelLiveMacOS-AppStore.app */,
+				4F76CB372FB1C4BF0019BDFF /* Angel Live.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -130,7 +130,7 @@
 				4F76CB292FB1C4BF0019BDFF /* AngelLiveDependencies */,
 			);
 			productName = AngelLiveMacOS;
-			productReference = 4F76CB372FB1C4BF0019BDFF /* AngelLiveMacOS-AppStore.app */;
+			productReference = 4F76CB372FB1C4BF0019BDFF /* Angel Live.app */;
 			productType = "com.apple.product-type.application";
 		};
 		FB7077C92EA1D6820059AFD9 /* AngelLiveMacOS */ = {
@@ -248,7 +248,7 @@
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
@@ -274,7 +274,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLive;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Angel Live";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
@@ -305,7 +305,7 @@
 				DEVELOPMENT_TEAM = HZG263D38Y;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
@@ -331,7 +331,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLive;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Angel Live";
 				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
