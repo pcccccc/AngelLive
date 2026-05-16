@@ -10,6 +10,7 @@ public final class KSVideoPlayerModel: ObservableObject {
     public var config: KSVideoPlayer.Coordinator
     public var options: KSOptions
     @Published public var url: URL?
+    @Published var isLocked = false
 
     public init(title: String, config: KSVideoPlayer.Coordinator, options: KSOptions, url: URL? = nil) {
         self.title = title

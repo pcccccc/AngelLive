@@ -400,7 +400,7 @@ struct PlayerContentView: View {
                     }
                 } else {
                     // 封面图作为背景
-                    KFImage(URL(string: viewModel.currentRoom.roomCover))
+                    KFImage(URL(string: viewModel.currentRoom.displayRoomCover))
                         .placeholder {
                             Rectangle()
                                 .fill(AppConstants.Colors.placeholderGradient())

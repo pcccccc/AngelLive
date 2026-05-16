@@ -74,12 +74,12 @@ struct LiveRoomCard: View {
     }
 
     private var coverURL: URL? {
-        guard !room.roomCover.isEmpty, let url = URL(string: room.roomCover) else { return nil }
+        guard !room.displayRoomCover.isEmpty, let url = URL(string: room.displayRoomCover) else { return nil }
         return url
     }
 
     private var avatarURL: URL? {
-        guard !room.userHeadImg.isEmpty, let url = URL(string: room.userHeadImg) else { return nil }
+        guard !room.displayUserHeadImg.isEmpty, let url = URL(string: room.displayUserHeadImg) else { return nil }
         return url
     }
 

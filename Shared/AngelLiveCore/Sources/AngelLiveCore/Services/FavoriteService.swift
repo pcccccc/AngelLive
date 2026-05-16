@@ -21,8 +21,17 @@ private enum CloudFavoriteFields {
 }
 
 public final class FavoriteService: NSObject {
+    private static func cloudDatabase(purpose: String) -> CKDatabase? {
+        CloudKitContainerAccess.privateDatabase(
+            containerIdentifier: CloudFavoriteFields.containerIdentifier,
+            purpose: purpose,
+            category: .favorite
+        )
+    }
     
     public static func saveRecord(liveModel: LiveModel) async throws {
+        guard let database = cloudDatabase(purpose: "收藏 CloudKit 保存") else { return }
+
         let rec = CKRecord(recordType: "favorite_streamers")
         rec.setValue(liveModel.roomId, forKey: CloudFavoriteFields.roomId)
         rec.setValue(liveModel.userId, forKey: CloudFavoriteFields.userId)
@@ -32,12 +41,12 @@ public final class FavoriteService: NSObject {
         rec.setValue(liveModel.userHeadImg, forKey: CloudFavoriteFields.userHeadImage)
         rec.setValue(liveModel.liveType.rawValue, forKey: CloudFavoriteFields.liveType)
         rec.setValue(liveModel.liveState ?? "", forKey: CloudFavoriteFields.liveState)
-        try await CKContainer(identifier: CloudFavoriteFields.containerIdentifier).privateCloudDatabase.save(rec)
+        try await database.save(rec)
     }
     
     public static func searchRecord(roomId: String) async throws -> [LiveModel] {
-        let container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "收藏 CloudKit 查询") else { return [] }
+
         let predicate = NSPredicate(format: " \(CloudFavoriteFields.roomId) = '\(roomId)' ")
         let query = CKQuery(recordType: "favorite_streamers", predicate: predicate)
         // 使用新的 API
@@ -61,8 +70,8 @@ public final class FavoriteService: NSObject {
     }
     
     public static func searchRecord() async throws -> [LiveModel] {
-        let container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "收藏 CloudKit 列表查询") else { return [] }
+
         let query = CKQuery(recordType: "favorite_streamers", predicate: NSPredicate(value: true))
         // 使用新的 API
         let recordArray = try await database.records(matching: query, resultsLimit: 99999)
@@ -99,8 +108,8 @@ public final class FavoriteService: NSObject {
     }
     
     public static func deleteRecord(liveModel: LiveModel) async throws {
-        let container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "收藏 CloudKit 删除") else { return }
+
         let trimmedUserId = liveModel.userId.trimmingCharacters(in: .whitespacesAndNewlines)
         let predicate: NSPredicate
         if PlatformHostBehavior.favoriteIdentityKey(for: liveModel.liveType) == .userId, !trimmedUserId.isEmpty {
@@ -129,6 +138,9 @@ public final class FavoriteService: NSObject {
         guard !CloudFavoriteFields.containerIdentifier.isEmpty else {
             return "CloudKit 配置错误：容器标识符为空"
         }
+        guard CloudKitContainerAccess.hasICloudContainer(CloudFavoriteFields.containerIdentifier) else {
+            return "当前签名未包含 iCloud 权限，已跳过 iCloud 同步"
+        }
         
         // 2. 检查 CloudKit 可用性
         guard CKContainer.default().containerIdentifier != nil else {
@@ -141,7 +153,14 @@ public final class FavoriteService: NSObject {
             if CloudFavoriteFields.containerIdentifier == CKContainer.default().containerIdentifier {
                 container = CKContainer.default()
             } else {
-                container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
+                guard let guardedContainer = CloudKitContainerAccess.container(
+                    identifier: CloudFavoriteFields.containerIdentifier,
+                    purpose: "CloudKit 状态检查",
+                    category: .favorite
+                ) else {
+                    return "当前签名未包含 iCloud 权限，已跳过 iCloud 同步"
+                }
+                container = guardedContainer
             }
             
             // 4. 添加超时保护

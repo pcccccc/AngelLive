@@ -240,17 +240,19 @@ struct PlatformLoginWebSheet: View {
         let loginFlow = entry.loginFlow
 
         currentWebView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
-            let filteredCookies = cookies.filter { cookie in
-                loginFlow.cookieDomains.contains { hint in
-                    cookie.domain.contains(hint)
-                }
-            }
+            let filteredCookies = PlatformCookieCollector.filteredCookies(
+                from: cookies,
+                loginFlow: loginFlow
+            )
 
-            let cookieString = makeCookieString(from: filteredCookies)
+            let cookieString = PlatformCookieCollector.cookieHeader(from: filteredCookies)
             guard !cookieString.isEmpty else { return }
-            guard containsAuthenticatedCookie(in: filteredCookies, loginFlow: loginFlow) else { return }
+            guard PlatformCookieCollector.containsAuthenticatedCookie(
+                in: filteredCookies,
+                loginFlow: loginFlow
+            ) else { return }
 
-            let signature = makeCookieSignature(from: filteredCookies)
+            let signature = PlatformCookieCollector.signature(from: filteredCookies)
 
             Task { @MainActor in
                 guard !isSavingCookie else { return }
@@ -271,7 +273,7 @@ struct PlatformLoginWebSheet: View {
         errorMessage = nil
         statusText = "检测到登录状态，正在保存..."
 
-        let uid = extractUID(from: cookies, loginFlow: entry.loginFlow)
+        let uid = PlatformCookieCollector.extractUID(from: cookies, loginFlow: entry.loginFlow)
         let shouldValidate = entry.auth?.supportsValidation ?? false
 
         let result = await PlatformSessionManager.shared.loginWithCookie(
@@ -309,41 +311,6 @@ struct PlatformLoginWebSheet: View {
         isSavingCookie = false
     }
 
-    // MARK: - Cookie 工具
-
-    private func containsAuthenticatedCookie(in cookies: [HTTPCookie], loginFlow: ManifestLoginFlow) -> Bool {
-        let names = Set(cookies.map(\.name))
-        return loginFlow.authSignalCookies.contains { names.contains($0) }
-    }
-
-    private func makeCookieSignature(from cookies: [HTTPCookie]) -> String {
-        cookies
-            .sorted(by: { $0.name < $1.name })
-            .map { "\($0.name)=\($0.value)" }
-            .joined(separator: ";")
-    }
-
-    private func makeCookieString(from cookies: [HTTPCookie]) -> String {
-        var deduplicated = [String: String]()
-        for cookie in cookies {
-            deduplicated[cookie.name] = cookie.value
-        }
-        return deduplicated
-            .sorted(by: { $0.key < $1.key })
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: "; ")
-    }
-
-    private func extractUID(from cookies: [HTTPCookie], loginFlow: ManifestLoginFlow) -> String? {
-        let uidNames = loginFlow.uidCookieNames ?? ["DedeUserID", "uid", "user_id", "userId"]
-        for name in uidNames {
-            if let value = cookies.first(where: { $0.name == name })?.value, !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
     // MARK: - Actions
 
     private func prepareRelogin(entry: LoginPlatformEntry) async {
@@ -378,14 +345,14 @@ struct PlatformLoginWebSheet: View {
     @MainActor
     private func clearWebLoginData(for loginFlow: ManifestLoginFlow) async {
         let dataStore = WKWebsiteDataStore.default()
-        let domainHints = webDataDomainHints(for: loginFlow)
+        let domainHints = PlatformCookieCollector.domainHints(for: loginFlow)
         guard !domainHints.isEmpty else { return }
 
         await withCheckedContinuation { continuation in
             dataStore.httpCookieStore.getAllCookies { cookies in
                 let matchingCookies = cookies.filter { cookie in
                     domainHints.contains { hint in
-                        normalizedDomain(cookie.domain).contains(hint)
+                        PlatformCookieCollector.domainMatches(cookie.domain, hint: hint)
                     }
                 }
 
@@ -412,7 +379,7 @@ struct PlatformLoginWebSheet: View {
             dataStore.fetchDataRecords(ofTypes: dataTypes) { records in
                 let matchingRecords = records.filter { record in
                     domainHints.contains { hint in
-                        normalizedDomain(record.displayName).contains(hint)
+                        PlatformCookieCollector.domainMatches(record.displayName, hint: hint)
                     }
                 }
 
@@ -426,24 +393,6 @@ struct PlatformLoginWebSheet: View {
                 }
             }
         }
-    }
-
-    private func webDataDomainHints(for loginFlow: ManifestLoginFlow) -> [String] {
-        var hints = loginFlow.cookieDomains
-        if let host = URL(string: loginFlow.loginURL)?.host {
-            hints.append(host)
-        }
-        if let host = loginFlow.websiteHost {
-            hints.append(host)
-        }
-
-        return Array(Set(hints.map(normalizedDomain).filter { !$0.isEmpty }))
-    }
-
-    private func normalizedDomain(_ domain: String) -> String {
-        domain
-            .lowercased()
-            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
     }
 
     private func reloadLoginStatus() async {
@@ -481,13 +430,14 @@ private struct PlatformLoginWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
-        if let userAgent = loginFlow.userAgent {
-            webView.customUserAgent = userAgent
-        }
+        let userAgent = effectiveUserAgent
+        webView.customUserAgent = userAgent
 
         DispatchQueue.main.async {
             onWebViewCreated(webView)
@@ -495,9 +445,7 @@ private struct PlatformLoginWebView: UIViewRepresentable {
 
         if let url = URL(string: loginFlow.loginURL) {
             var request = URLRequest(url: url)
-            if let userAgent = loginFlow.userAgent {
-                request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-            }
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
             webView.load(request)
         }
         return webView
@@ -505,11 +453,45 @@ private struct PlatformLoginWebView: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    private var effectiveUserAgent: String {
+        let custom = loginFlow.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let custom, !custom.isEmpty {
+            return custom
+        }
+        // Twitch 会拒绝不完整的 WKWebView UA；默认伪装成同内核的移动 Safari。
+        return "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1"
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let onNavigationStateChange: (String?, URL?, Bool) -> Void
 
         init(onNavigationStateChange: @escaping (String?, URL?, Bool) -> Void) {
             self.onNavigationStateChange = onNavigationStateChange
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            // SOOP/Apple/Google 登录常用 window.open；在当前 WebView 内接管，避免按钮无响应。
+            guard navigationAction.targetFrame == nil else { return nil }
+            webView.load(navigationAction.request)
+            return nil
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {

@@ -245,6 +245,6 @@ extension LiveParsePluginManifest {
 
     /// 该插件是否需要用户登录平台账号(用于安装前的凭证泄露风险确认)。
     public var requiresLogin: Bool {
-        (auth?.required == true) || (loginFlow != nil)
+        PlatformLoginCompatibility.requiresLogin(self)
     }
 }

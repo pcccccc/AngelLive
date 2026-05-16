@@ -122,9 +122,7 @@ struct MacPlatformLoginWebSheet: View {
 
             Section {
                 Button("重新登录") {
-                    showWebView = true
-                    statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
-                    errorMessage = nil
+                    Task { await prepareRelogin(entry: entry) }
                 }
             } footer: {
                 Text("Cookie 过期或切换账号时点这里，会打开登录页重新抓取。")
@@ -230,6 +228,7 @@ struct MacPlatformLoginWebSheet: View {
 
     private func startCookiePolling(entry: LoginPlatformEntry) {
         cookiePollingTimer?.invalidate()
+        pollCookieOnce(entry: entry)
         cookiePollingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             pollCookieOnce(entry: entry)
         }
@@ -240,17 +239,19 @@ struct MacPlatformLoginWebSheet: View {
         let loginFlow = entry.loginFlow
 
         currentWebView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
-            let filteredCookies = cookies.filter { cookie in
-                loginFlow.cookieDomains.contains { hint in
-                    cookie.domain.contains(hint)
-                }
-            }
+            let filteredCookies = PlatformCookieCollector.filteredCookies(
+                from: cookies,
+                loginFlow: loginFlow
+            )
 
-            let cookieString = makeCookieString(from: filteredCookies)
+            let cookieString = PlatformCookieCollector.cookieHeader(from: filteredCookies)
             guard !cookieString.isEmpty else { return }
-            guard containsAuthenticatedCookie(in: filteredCookies, loginFlow: loginFlow) else { return }
+            guard PlatformCookieCollector.containsAuthenticatedCookie(
+                in: filteredCookies,
+                loginFlow: loginFlow
+            ) else { return }
 
-            let signature = makeCookieSignature(from: filteredCookies)
+            let signature = PlatformCookieCollector.signature(from: filteredCookies)
 
             Task { @MainActor in
                 guard !isSavingCookie else { return }
@@ -267,7 +268,7 @@ struct MacPlatformLoginWebSheet: View {
         errorMessage = nil
         statusText = "检测到登录状态，正在保存..."
 
-        let uid = extractUID(from: cookies, loginFlow: entry.loginFlow)
+        let uid = PlatformCookieCollector.extractUID(from: cookies, loginFlow: entry.loginFlow)
         let shouldValidate = entry.auth?.supportsValidation ?? false
 
         let result = await PlatformSessionManager.shared.loginWithCookie(
@@ -290,12 +291,15 @@ struct MacPlatformLoginWebSheet: View {
             }
             await reloadLoginStatus()
         case .expired:
+            isLoggedIn = false
             statusText = "登录信息已过期"
             errorMessage = "Cookie 已过期，请重新登录。"
         case .invalid(let reason):
+            isLoggedIn = false
             statusText = "登录信息无效"
             errorMessage = reason
         case .networkError(let message):
+            isLoggedIn = false
             statusText = "网络错误"
             errorMessage = message
         }
@@ -303,48 +307,26 @@ struct MacPlatformLoginWebSheet: View {
         isSavingCookie = false
     }
 
-    // MARK: - Cookie 工具
-
-    private func containsAuthenticatedCookie(in cookies: [HTTPCookie], loginFlow: ManifestLoginFlow) -> Bool {
-        let names = Set(cookies.map(\.name))
-        return loginFlow.authSignalCookies.contains { names.contains($0) }
-    }
-
-    private func makeCookieSignature(from cookies: [HTTPCookie]) -> String {
-        cookies
-            .sorted(by: { $0.name < $1.name })
-            .map { "\($0.name)=\($0.value)" }
-            .joined(separator: ";")
-    }
-
-    private func makeCookieString(from cookies: [HTTPCookie]) -> String {
-        var deduplicated = [String: String]()
-        for cookie in cookies {
-            deduplicated[cookie.name] = cookie.value
-        }
-        return deduplicated
-            .sorted(by: { $0.key < $1.key })
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: "; ")
-    }
-
-    private func extractUID(from cookies: [HTTPCookie], loginFlow: ManifestLoginFlow) -> String? {
-        let uidNames = loginFlow.uidCookieNames ?? ["DedeUserID", "uid", "user_id", "userId"]
-        for name in uidNames {
-            if let value = cookies.first(where: { $0.name == name })?.value, !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
     // MARK: - Actions
+
+    private func prepareRelogin(entry: LoginPlatformEntry) async {
+        statusText = "正在清理网页登录缓存..."
+        errorMessage = nil
+        lastSavedCookieSignature = nil
+        currentWebView = nil
+        await clearWebLoginData(for: entry.loginFlow)
+        showWebView = true
+        statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
+    }
 
     private func logout() {
         Task {
             await syncService.clearSession(pluginId: pluginId)
             if syncService.iCloudSyncEnabled {
                 await syncService.syncAllToICloud()
+            }
+            if let entry {
+                await clearWebLoginData(for: entry.loginFlow)
             }
             await MainActor.run {
                 isLoggedIn = false
@@ -354,6 +336,59 @@ struct MacPlatformLoginWebSheet: View {
                 showWebView = false
                 statusText = "已退出登录"
                 errorMessage = nil
+            }
+        }
+    }
+
+    @MainActor
+    private func clearWebLoginData(for loginFlow: ManifestLoginFlow) async {
+        let dataStore = WKWebsiteDataStore.default()
+        let domainHints = PlatformCookieCollector.domainHints(for: loginFlow)
+        guard !domainHints.isEmpty else { return }
+
+        await withCheckedContinuation { continuation in
+            dataStore.httpCookieStore.getAllCookies { cookies in
+                let matchingCookies = cookies.filter { cookie in
+                    domainHints.contains { hint in
+                        PlatformCookieCollector.domainMatches(cookie.domain, hint: hint)
+                    }
+                }
+
+                guard !matchingCookies.isEmpty else {
+                    continuation.resume()
+                    return
+                }
+
+                let group = DispatchGroup()
+                for cookie in matchingCookies {
+                    group.enter()
+                    dataStore.httpCookieStore.delete(cookie) {
+                        group.leave()
+                    }
+                }
+                group.notify(queue: .main) {
+                    continuation.resume()
+                }
+            }
+        }
+
+        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
+        await withCheckedContinuation { continuation in
+            dataStore.fetchDataRecords(ofTypes: dataTypes) { records in
+                let matchingRecords = records.filter { record in
+                    domainHints.contains { hint in
+                        PlatformCookieCollector.domainMatches(record.displayName, hint: hint)
+                    }
+                }
+
+                guard !matchingRecords.isEmpty else {
+                    continuation.resume()
+                    return
+                }
+
+                dataStore.removeData(ofTypes: dataTypes, for: matchingRecords) {
+                    continuation.resume()
+                }
             }
         }
     }
@@ -391,13 +426,14 @@ private struct MacPlatformLoginWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
-        if let userAgent = loginFlow.userAgent {
-            webView.customUserAgent = userAgent
-        }
+        let userAgent = effectiveUserAgent
+        webView.customUserAgent = userAgent
 
         DispatchQueue.main.async {
             onWebViewCreated(webView)
@@ -405,9 +441,7 @@ private struct MacPlatformLoginWebView: NSViewRepresentable {
 
         if let url = URL(string: loginFlow.loginURL) {
             var request = URLRequest(url: url)
-            if let userAgent = loginFlow.userAgent {
-                request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-            }
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
             webView.load(request)
         }
         return webView
@@ -415,11 +449,45 @@ private struct MacPlatformLoginWebView: NSViewRepresentable {
 
     func updateNSView(_ nsView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    private var effectiveUserAgent: String {
+        let custom = loginFlow.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let custom, !custom.isEmpty {
+            return custom
+        }
+        // 保持 UA 与 WebKit 能力一致，避免 Twitch 等站点把登录页判成异常浏览器。
+        return "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15"
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         let onNavigationStateChange: (String?, URL?, Bool) -> Void
 
         init(onNavigationStateChange: @escaping (String?, URL?, Bool) -> Void) {
             self.onNavigationStateChange = onNavigationStateChange
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+        ) {
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            // 第三方登录按钮经常开新窗口；复用当前 WebView，Cookie 仍留在同一 dataStore。
+            guard navigationAction.targetFrame == nil else { return nil }
+            webView.load(navigationAction.request)
+            return nil
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {

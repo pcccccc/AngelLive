@@ -385,7 +385,7 @@ struct PlayerControlView: View {
     private var streamerInfoCard: some View {
         HStack(spacing: 10) {
             // 主播头像
-            RemoteAvatarView(url: URL(string: room.userHeadImg), size: 36) {
+            RemoteAvatarView(url: URL(string: room.displayUserHeadImg), size: 36) {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
             }
