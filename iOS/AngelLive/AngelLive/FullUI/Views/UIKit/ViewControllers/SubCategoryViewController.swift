@@ -62,6 +62,32 @@ class SubCategoryViewController: UIViewController {
         return button
     }()
 
+    private lazy var adultFilterContainerView: UIView = {
+        let view = UIView()
+        view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+
+    private lazy var adultFilterControl: UISegmentedControl = {
+        let control = UISegmentedControl(items: SOOPAdultRoomFilter.allCases.map(\.title))
+        control.selectedSegmentIndex = viewModel?.soopAdultRoomFilter.rawValue ?? SOOPAdultRoomFilter.all.rawValue
+        control.selectedSegmentTintColor = UIColor(AppConstants.Colors.accent)
+        control.setTitleTextAttributes(
+            [.foregroundColor: UIColor(AppConstants.Colors.secondaryText)],
+            for: .normal
+        )
+        control.setTitleTextAttributes(
+            [.foregroundColor: UIColor.white],
+            for: .selected
+        )
+        control.addTarget(self, action: #selector(adultFilterChanged(_:)), for: .valueChanged)
+        control.translatesAutoresizingMaskIntoConstraints = false
+        return control
+    }()
+
+    private var adultFilterHeightConstraint: NSLayoutConstraint?
+
     // MARK: - Initialization
 
     init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
@@ -92,7 +118,12 @@ class SubCategoryViewController: UIViewController {
 
         view.addSubview(subCategorySegmentedView)
         view.addSubview(manageButton)
+        view.addSubview(adultFilterContainerView)
+        adultFilterContainerView.addSubview(adultFilterControl)
         view.addSubview(listContainerView)
+
+        let adultFilterHeightConstraint = adultFilterContainerView.heightAnchor.constraint(equalToConstant: 0)
+        self.adultFilterHeightConstraint = adultFilterHeightConstraint
 
         NSLayoutConstraint.activate([
             // 子分类 SegmentedView
@@ -107,8 +138,18 @@ class SubCategoryViewController: UIViewController {
             manageButton.widthAnchor.constraint(equalToConstant: 30),
             manageButton.heightAnchor.constraint(equalToConstant: 30),
 
+            adultFilterContainerView.topAnchor.constraint(equalTo: subCategorySegmentedView.bottomAnchor),
+            adultFilterContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            adultFilterContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            adultFilterHeightConstraint,
+
+            adultFilterControl.leadingAnchor.constraint(equalTo: adultFilterContainerView.leadingAnchor, constant: 20),
+            adultFilterControl.trailingAnchor.constraint(equalTo: adultFilterContainerView.trailingAnchor, constant: -20),
+            adultFilterControl.centerYAnchor.constraint(equalTo: adultFilterContainerView.centerYAnchor),
+            adultFilterControl.heightAnchor.constraint(equalToConstant: 32),
+
             // 房间列表容器
-            listContainerView.topAnchor.constraint(equalTo: subCategorySegmentedView.bottomAnchor),
+            listContainerView.topAnchor.constraint(equalTo: adultFilterContainerView.bottomAnchor),
             listContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             listContainerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             listContainerView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
@@ -116,6 +157,7 @@ class SubCategoryViewController: UIViewController {
 
         // 关联子分类 segmentedView 和容器
         subCategorySegmentedView.listContainer = listContainerView
+        updateAdultFilterVisibility()
     }
 
     func updateSubCategories() {
@@ -154,6 +196,7 @@ class SubCategoryViewController: UIViewController {
 
         subCategorySegmentedView.reloadData()
         listContainerView.reloadData()
+        updateAdultFilterVisibility()
 
         // 默认选中第一个
         if !subCategories.isEmpty {
@@ -218,6 +261,23 @@ class SubCategoryViewController: UIViewController {
         }
 
         navigationController?.pushViewController(managementVC, animated: true)
+    }
+
+    @objc private func adultFilterChanged(_ sender: UISegmentedControl) {
+        guard let viewModel,
+              let filter = SOOPAdultRoomFilter(rawValue: sender.selectedSegmentIndex) else { return }
+        viewModel.setSOOPAdultRoomFilter(filter)
+        viewModel.preloadInitialSOOPAdultPreviewSnapshots(
+            mainCategoryIndex: mainCategoryIndex,
+            subCategoryIndex: viewModel.selectedSubCategoryIndex
+        )
+    }
+
+    private func updateAdultFilterVisibility() {
+        let shouldShow = viewModel?.supportsSOOPAdultRoomFilter == true
+        adultFilterContainerView.isHidden = !shouldShow
+        adultFilterHeightConstraint?.constant = shouldShow ? 44 : 0
+        adultFilterControl.selectedSegmentIndex = viewModel?.soopAdultRoomFilter.rawValue ?? SOOPAdultRoomFilter.all.rawValue
     }
 
     // 查找指定类型的父控制器

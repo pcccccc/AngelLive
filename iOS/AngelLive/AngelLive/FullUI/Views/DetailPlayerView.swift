@@ -342,7 +342,7 @@ struct DetailPlayerView: View {
     // MARK: - Background
 
     private var backgroundView: some View {
-        BlurredBackgroundView(imageURL: viewModel.currentRoom.userHeadImg)
+        BlurredBackgroundView(imageURL: viewModel.currentRoom.displayUserHeadImg)
             .edgesIgnoringSafeArea(.all)
     }
 

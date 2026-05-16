@@ -175,8 +175,9 @@ public final class PlatformCredentialSyncService: ObservableObject {
             result[pluginId] = session
         }
 
-        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "平台登录态 CloudKit 同步") else {
+            return
+        }
 
         // 获取现有所有 cloudRecord 的 pluginId 列表
         let allPluginIds = Set(sessionsByPluginId.keys)
@@ -222,8 +223,9 @@ public final class PlatformCredentialSyncService: ObservableObject {
         isSyncing = true
         defer { isSyncing = false }
 
-        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "平台登录态 CloudKit 拉取") else {
+            return
+        }
 
         await migrateLegacyCloudRecords(database: database)
 
@@ -271,8 +273,9 @@ public final class PlatformCredentialSyncService: ObservableObject {
     }
 
     public func fetchCloudSyncPreview() async -> ICloudSyncPreview {
-        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "平台登录态 CloudKit 预览") else {
+            return ICloudSyncPreview(latestTime: nil, platformNames: [])
+        }
 
         var latestDate: Date?
         var platformNames: [String] = []
@@ -303,8 +306,9 @@ public final class PlatformCredentialSyncService: ObservableObject {
         isSyncing = true
         defer { isSyncing = false }
 
-        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = cloudDatabase(purpose: "平台登录态 CloudKit 清理") else {
+            return 0
+        }
         var recordIDsByName: [String: CKRecord.ID] = [:]
 
         let query = CKQuery(recordType: CloudCookieFields.recordType, predicate: NSPredicate(value: true))
@@ -567,8 +571,9 @@ public final class PlatformCredentialSyncService: ObservableObject {
         loggedInByPluginId[pluginId] = false
 
         if clearICloud {
-            let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
-            let database = container.privateCloudDatabase
+            guard let database = cloudDatabase(purpose: "平台登录态 CloudKit 删除") else {
+                return
+            }
             let recordName = CloudCookieFields.sessionRecordName(for: pluginId)
             let recordID = CKRecord.ID(recordName: recordName)
             do {
@@ -616,6 +621,14 @@ public final class PlatformCredentialSyncService: ObservableObject {
         let now = Date()
         lastICloudSyncTime = now
         UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Keys.lastICloudSyncTime)
+    }
+
+    private func cloudDatabase(purpose: String) -> CKDatabase? {
+        CloudKitContainerAccess.privateDatabase(
+            containerIdentifier: CloudCookieFields.containerIdentifier,
+            purpose: purpose,
+            category: .cloudKit
+        )
     }
 
     /// 辅助类用于跟踪 Bonjour 发送状态

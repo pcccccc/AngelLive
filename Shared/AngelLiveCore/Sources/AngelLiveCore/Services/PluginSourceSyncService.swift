@@ -49,8 +49,14 @@ public final class PluginSourceSyncService {
 
     /// 将插件源 URL 列表同步到 CloudKit
     public static func syncToCloudStatic(sourceURLs: [String]) async {
-        let container = CKContainer(identifier: CloudPluginSourceFields.containerIdentifier)
-        let database = container.privateCloudDatabase
+        guard let database = CloudKitContainerAccess.privateDatabase(
+            containerIdentifier: CloudPluginSourceFields.containerIdentifier,
+            purpose: "插件源 CloudKit 同步",
+            category: .plugin
+        ) else {
+            return
+        }
+
         let recordID = CKRecord.ID(recordName: CloudPluginSourceFields.fixedRecordName)
 
         if sourceURLs.isEmpty {
@@ -93,9 +99,16 @@ public final class PluginSourceSyncService {
             hasSyncedSources = false
             return
         }
+        guard let database = CloudKitContainerAccess.privateDatabase(
+            containerIdentifier: CloudPluginSourceFields.containerIdentifier,
+            purpose: "插件源 CloudKit 检查",
+            category: .plugin
+        ) else {
+            hasSyncedSources = false
+            syncedSourceURLs = []
+            return
+        }
 
-        let container = CKContainer(identifier: CloudPluginSourceFields.containerIdentifier)
-        let database = container.privateCloudDatabase
         let recordID = CKRecord.ID(recordName: CloudPluginSourceFields.fixedRecordName)
 
         do {

@@ -100,11 +100,13 @@ public final class StreamBookmarkService {
 
     /// 从 CloudKit 同步到本地
     public func syncFromCloud() async {
+        guard let database = cloudDatabase else { return }
+
         isLoading = true
         defer { isLoading = false }
 
         do {
-            let cloudBookmarks = try await fetchAllFromCloud()
+            let cloudBookmarks = try await fetchAllFromCloud(database: database)
             bookmarks = cloudBookmarks.sorted { $0.addedAt > $1.addedAt }
             saveToCache()
             syncError = nil
@@ -115,11 +117,17 @@ public final class StreamBookmarkService {
 
     // MARK: - CloudKit 操作
 
-    private var database: CKDatabase {
-        CKContainer(identifier: CloudStreamBookmarkFields.containerIdentifier).privateCloudDatabase
+    private var cloudDatabase: CKDatabase? {
+        CloudKitContainerAccess.privateDatabase(
+            containerIdentifier: CloudStreamBookmarkFields.containerIdentifier,
+            purpose: "网络链接收藏 CloudKit 同步",
+            category: .cloudKit
+        )
     }
 
     private func saveToCloud(_ bookmark: StreamBookmark) async throws {
+        guard let database = cloudDatabase else { return }
+
         let record = CKRecord(recordType: CloudStreamBookmarkFields.recordType)
         record.setValue(bookmark.id, forKey: CloudStreamBookmarkFields.bookmarkId)
         record.setValue(bookmark.title, forKey: CloudStreamBookmarkFields.title)
@@ -132,6 +140,8 @@ public final class StreamBookmarkService {
     }
 
     private func deleteFromCloud(_ bookmark: StreamBookmark) async throws {
+        guard let database = cloudDatabase else { return }
+
         let predicate = NSPredicate(format: "%K = %@", CloudStreamBookmarkFields.bookmarkId, bookmark.id)
         let query = CKQuery(recordType: CloudStreamBookmarkFields.recordType, predicate: predicate)
         let results = try await database.records(matching: query)
@@ -146,7 +156,7 @@ public final class StreamBookmarkService {
         try await saveToCloud(bookmark)
     }
 
-    private func fetchAllFromCloud() async throws -> [StreamBookmark] {
+    private func fetchAllFromCloud(database: CKDatabase) async throws -> [StreamBookmark] {
         let query = CKQuery(recordType: CloudStreamBookmarkFields.recordType, predicate: NSPredicate(value: true))
         let results = try await database.records(matching: query, resultsLimit: 99999)
 

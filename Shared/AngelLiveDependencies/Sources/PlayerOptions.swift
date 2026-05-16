@@ -4,7 +4,7 @@ import CoreMedia
 public class PlayerOptions: KSOptions, @unchecked Sendable {
     public var syncSystemRate: Bool = false
 
-    nonisolated required public init() {
+    nonisolated public required override init() {
         super.init()
     }
 

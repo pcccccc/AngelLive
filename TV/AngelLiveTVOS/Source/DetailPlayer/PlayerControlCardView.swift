@@ -27,7 +27,7 @@ struct PlayerControlCardView: View {
                 changeRoom(playControlCardViewModel.liveModel)
             } label: {
                 ZStack(alignment: .bottom) {
-                    KFImage(URL(string: playControlCardViewModel.liveModel.roomCover))
+                    KFImage(URL(string: playControlCardViewModel.liveModel.displayRoomCover))
                         .placeholder {
                             Image("placeholder")
                                 .resizable()
@@ -36,7 +36,7 @@ struct PlayerControlCardView: View {
                         .resizable()
                         .frame(width: 320, height: 210)
                         .blur(radius: 10)
-                    KFImage(URL(string: playControlCardViewModel.liveModel.roomCover))
+                    KFImage(URL(string: playControlCardViewModel.liveModel.displayRoomCover))
                         .placeholder {
                             Image("placeholder")
                                 .resizable()

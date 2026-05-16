@@ -26,9 +26,9 @@ struct PlatformDetailView: View {
         return "加载失败-请登录\(platformName)账号"
     }
 
-    /// 根据平台类型显示对应的登录视图
+    /// 平台登录注册表按 pluginId 建索引，不能用 liveType rawValue。
     private var platformLoginView: some View {
-        MacPlatformLoginWebSheet(pluginId: viewModel.platform.liveType.rawValue)
+        MacPlatformLoginWebSheet(pluginId: viewModel.platform.pluginId)
             .frame(minWidth: 800, minHeight: 600)
     }
 
@@ -407,7 +407,7 @@ struct LiveRoomCard: View {
 //    }
 
     private var coverURL: URL? {
-        guard !room.roomCover.isEmpty, let url = URL(string: room.roomCover) else { return nil }
+        guard !room.displayRoomCover.isEmpty, let url = URL(string: room.displayRoomCover) else { return nil }
         return url
     }
 
@@ -437,7 +437,7 @@ struct LiveRoomCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
 
             HStack(spacing: 8) {
-                RemoteAvatarView(url: URL(string: room.userHeadImg), size: 32) {
+                RemoteAvatarView(url: URL(string: room.displayUserHeadImg), size: 32) {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
                 }

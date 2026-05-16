@@ -162,6 +162,12 @@ open class KSOptions {
     public var userAgent: String = "libmpv"
     public var avOptions: [String: Any] = [:]
     public var formatContextOptions: [String: Any] = [:]
+    public var playerTypes: [MediaPlayerProtocol.Type] = [
+        KSOptions.firstPlayerType,
+        KSOptions.secondPlayerType
+    ].compactMap { $0 }
+    public var videoFilters: [Any] = []
+    public var audioFilters: [Any] = []
     public var decodeType: KSDecodeType = .software
     public var canStartPictureInPictureAutomaticallyFromInline: Bool = false
 
@@ -353,6 +359,10 @@ public class KSPlayerLayerBase: NSObject {
 
     public func resetPlayer() {
         stop()
+    }
+
+    public func reset() {
+        resetPlayer()
     }
 
     public func select(subtitleInfo info: MediaPlayerTrack?) {

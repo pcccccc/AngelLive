@@ -52,7 +52,7 @@ public actor PlatformLoginRegistry {
         let manifests = discoverAllManifests()
         var entries: [LoginPlatformEntry] = []
         for manifest in manifests {
-            guard let loginFlow = manifest.loginFlow else { continue }
+            guard let loginFlow = PlatformLoginCompatibility.loginFlow(for: manifest) else { continue }
             let liveType = manifest.liveTypes.first ?? manifest.pluginId
             let displayName = manifest.displayName ?? manifest.pluginId
             let entry = LoginPlatformEntry(
@@ -60,7 +60,7 @@ public actor PlatformLoginRegistry {
                 displayName: displayName,
                 liveType: liveType,
                 loginFlow: loginFlow,
-                auth: manifest.auth,
+                auth: PlatformLoginCompatibility.auth(for: manifest),
                 version: manifest.version
             )
             entries.append(entry)

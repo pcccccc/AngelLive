@@ -180,10 +180,10 @@ class ContentProvider: TVTopShelfContentProvider {
             item.title = streamer.roomTitle + " - " + streamer.userName
 
             // 设置封面图片
-            if let coverURL = URL(string: streamer.roomCover) {
+            if let coverURL = URL(string: streamer.displayRoomCover) {
                 item.setImageURL(coverURL, for: .screenScale1x)
                 item.setImageURL(coverURL, for: .screenScale2x)
-            } else if let headURL = URL(string: streamer.userHeadImg) {
+            } else if let headURL = URL(string: streamer.displayUserHeadImg) {
                 item.setImageURL(headURL, for: .screenScale1x)
                 item.setImageURL(headURL, for: .screenScale2x)
             }

@@ -400,7 +400,7 @@ struct PlayerContentView: View {
                     }
                 } else {
                     // 封面图作为背景
-                    KFImage(URL(string: viewModel.currentRoom.roomCover))
+                    KFImage(URL(string: viewModel.currentRoom.displayRoomCover))
                         .placeholder {
                             Rectangle()
                                 .fill(AppConstants.Colors.placeholderGradient())
@@ -464,11 +464,9 @@ struct PlayerContentView: View {
             hasVLCStartedPlayback = false
             vlcState = .stopped
         }
-        // VLC 模式下的单击手势，切换控制层显示/隐藏
-        .contentShape(Rectangle())
-        .onTapGesture {
-            vlcMaskShow.toggle()
-        }
+        // Tap handling belongs to the SwiftUI overlay. If the VLC drawable
+        // also owns taps, SOOP 19+ streams can flicker while the overlay never
+        // receives the first left click.
         .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
         .clipped()
     }

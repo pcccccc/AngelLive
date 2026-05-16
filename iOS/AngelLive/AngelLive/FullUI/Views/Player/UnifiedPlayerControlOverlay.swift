@@ -145,6 +145,8 @@ struct UnifiedPlayerControlOverlay: View {
 
     var body: some View {
         ZStack {
+            playerTapCatcher
+
             // 顶/底部渐变背景（锁定时隐藏）
             if !bridge.isLocked.wrappedValue {
                 topShadowGradient
@@ -221,6 +223,7 @@ struct UnifiedPlayerControlOverlay: View {
                         }
                     }
             )
+
             // 清晰度选择面板（右侧滑入）
             if showQualityPanel {
                 Color.black.opacity(0.001)
@@ -231,6 +234,7 @@ struct UnifiedPlayerControlOverlay: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         // 双向同步 bridge.isMaskShow ↔ isMaskVisible
         .onChange(of: bridge.isMaskShow.wrappedValue) { _, newValue in
@@ -282,6 +286,23 @@ struct UnifiedPlayerControlOverlay: View {
     }
 
     // MARK: - Lock Button
+
+    private var playerTapCatcher: some View {
+        // Native player views can consume the first left click/tap before
+        // SwiftUI sees it. Keep a full-size hit layer above the drawable and
+        // below real controls so empty-space taps only toggle the overlay.
+        Color.black.opacity(0.001)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .allowsHitTesting(!isPopupOpen)
+            .onTapGesture {
+                if isMaskVisible {
+                    isMaskVisible = false
+                } else {
+                    revealControls()
+                }
+            }
+    }
 
     private var lockButton: some View {
         VStack {
@@ -683,5 +704,13 @@ struct UnifiedPlayerControlOverlay: View {
     private func cancelAutoHideTimer() {
         autoHideTask?.cancel()
         autoHideTask = nil
+    }
+
+    private func revealControls() {
+        isMaskVisible = true
+        bridge.isMaskShow.wrappedValue = true
+        if !isPopupOpen {
+            startAutoHideTimer()
+        }
     }
 }

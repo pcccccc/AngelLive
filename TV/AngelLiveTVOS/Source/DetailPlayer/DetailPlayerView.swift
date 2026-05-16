@@ -58,7 +58,7 @@ struct DetailPlayerView: View {
             )
         } else if roomInfoViewModel.currentPlayURL == nil {
             ZStack {
-                KFImage(URL(string: roomInfoViewModel.currentRoom.roomCover))
+                KFImage(URL(string: roomInfoViewModel.currentRoom.displayRoomCover))
                     .resizable()
                     .scaledToFill()
                     .frame(width: 1920, height: 1080)

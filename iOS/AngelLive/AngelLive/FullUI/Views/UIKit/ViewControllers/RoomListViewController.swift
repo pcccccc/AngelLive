@@ -73,7 +73,23 @@ class RoomListViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSOOPPreviewSnapshotUpdate(_:)),
+            name: .soopPreviewSnapshotDidUpdate,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSOOPAdultRoomFilterUpdate(_:)),
+            name: .soopAdultRoomFilterDidUpdate,
+            object: nil
+        )
         loadData()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     override func viewDidLayoutSubviews() {
@@ -162,10 +178,14 @@ class RoomListViewController: UIViewController {
         guard let viewModel = viewModel else { return }
 
         let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
-        rooms = viewModel.roomListCache[cacheKey] ?? []
+        let cachedRooms = viewModel.roomListCache[cacheKey] ?? []
+        rooms = viewModel.filteredRoomList(
+            mainCategoryIndex: mainCategoryIndex,
+            subCategoryIndex: subCategoryIndex
+        )
 
         // 如果缓存中没有数据，则加载
-        if rooms.isEmpty {
+        if cachedRooms.isEmpty {
             Task { @MainActor in
                 // 临时保存当前选择的索引
                 let oldMainIndex = viewModel.selectedMainCategoryIndex
@@ -234,8 +254,10 @@ class RoomListViewController: UIViewController {
 
     func updateRooms() {
         guard let viewModel = viewModel else { return }
-        let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
-        rooms = viewModel.roomListCache[cacheKey] ?? []
+        rooms = viewModel.filteredRoomList(
+            mainCategoryIndex: mainCategoryIndex,
+            subCategoryIndex: subCategoryIndex
+        )
 
         // 检查是否有错误需要显示
         if let error = viewModel.roomError, rooms.isEmpty {
@@ -248,6 +270,28 @@ class RoomListViewController: UIViewController {
         // reloadData 后立刻 layoutIfNeeded,把 cells 注册进 visibleCells,
         // 否则 cv 在内容不足 + JX 嵌套场景下可能直到下次 layout pass 才注册,didSelectItemAt 失效。
         collectionView.layoutIfNeeded()
+    }
+
+    @objc private func handleSOOPPreviewSnapshotUpdate(_ notification: Notification) {
+        let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
+        guard notification.userInfo?["cacheKey"] as? String == cacheKey else { return }
+
+        let visibleIndexPaths = collectionView.indexPathsForVisibleItems
+        if visibleIndexPaths.isEmpty {
+            collectionView.reloadData()
+        } else {
+            collectionView.reloadItems(at: visibleIndexPaths)
+        }
+    }
+
+    @objc private func handleSOOPAdultRoomFilterUpdate(_ notification: Notification) {
+        guard let source = notification.object as? PlatformDetailViewModel,
+              source === viewModel else { return }
+        if let notificationCacheKey = notification.userInfo?["cacheKey"] as? String {
+            let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
+            guard notificationCacheKey == cacheKey else { return }
+        }
+        updateRooms()
     }
 
     // MARK: - Error Handling
@@ -349,6 +393,16 @@ extension RoomListViewController: UICollectionViewDataSource {
 
 extension RoomListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        // 只把滚动到的 SOOP 19+ 候选窗口交给 ViewModel 预加载;
+        // ViewModel 会记住已检测/已截图的 roomId,避免刷新列表时重复拉流截图。
+        if indexPath.item < rooms.count {
+            viewModel?.preloadSOOPAdultPreviewSnapshots(
+                around: rooms[indexPath.item],
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+        }
+
         // 加载更多逻辑
         let count = rooms.count
         if count > 0, indexPath.item == count - 1 {

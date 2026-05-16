@@ -395,6 +395,8 @@ private extension JSRuntime {
                 }
             }
 
+            var requestBody = envelope.body
+
             // 通用 cookieInject：从 cookie 取值注入到 header、query 或 body
             if !envelope.cookieInject.isEmpty {
                 var mutableURL = envelope.urlString
@@ -420,7 +422,7 @@ private extension JSRuntime {
                     case .body:
                         guard let bodyPath = rule.bodyPath else { continue }
                         if bodyJSON == nil {
-                            if let existing = request.httpBody,
+                            if let existing = requestBody,
                                let parsed = try? JSONSerialization.jsonObject(with: existing) as? [String: Any] {
                                 bodyJSON = parsed
                             } else {
@@ -436,7 +438,9 @@ private extension JSRuntime {
                     request.url = newURL
                 }
                 if let bodyJSON {
-                    request.httpBody = try? JSONSerialization.data(withJSONObject: bodyJSON)
+                    // Keep cookieInject body changes as the final request body.
+                    // Previously this was overwritten by envelope.body below.
+                    requestBody = try? JSONSerialization.data(withJSONObject: bodyJSON)
                 }
             }
 
@@ -444,7 +448,7 @@ private extension JSRuntime {
                 request.setValue(value, forHTTPHeaderField: key)
             }
 
-            request.httpBody = envelope.body
+            request.httpBody = requestBody
 
             // 开发者控制台：记录请求开始时间
             let httpStartTime = CFAbsoluteTimeGetCurrent()

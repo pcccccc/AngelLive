@@ -161,9 +161,8 @@ struct VLCVideoPlayerView: UIViewRepresentable {
 
         deinit {
             Logger.debug("[VLCBridge][\(traceID)] coordinator deinit", category: .player)
-            mediaPlayer.stop()
             mediaPlayer.drawable = nil
-            mediaPlayer.media = nil
+            stopPlayerOffMain(releaseMedia: true)
             notificationTokens.forEach(NotificationCenter.default.removeObserver)
         }
 
@@ -206,13 +205,15 @@ struct VLCVideoPlayerView: UIViewRepresentable {
                 return
             }
 
-            // Avoid repeatedly calling play() while opening/buffering, which can reset the stream.
+            // Avoid repeatedly calling play() during SwiftUI updates. User
+            // taps, state callbacks, and overlay changes all rebuild this
+            // representable; only a new media fingerprint should force play.
             switch mediaPlayer.state {
-            case .paused, .stopped, .stopping, .error:
+            case .stopped, .error:
                 notifyState(.buffering)
-                Logger.debug("[VLCBridge][\(traceID)] resume play from \(describe(mediaPlayer.state))", category: .player)
+                Logger.debug("[VLCBridge][\(traceID)] recover play from \(describe(mediaPlayer.state))", category: .player)
                 mediaPlayer.play()
-            case .opening, .buffering, .playing:
+            case .paused, .stopping, .opening, .buffering, .playing:
                 break
             @unknown default:
                 Logger.warning("[VLCBridge][\(traceID)] unknown player state in playIfNeeded", category: .player)
@@ -323,9 +324,9 @@ struct VLCVideoPlayerView: UIViewRepresentable {
                 guard let self else { return }
                 Logger.debug("[VLCBridge][\(traceID)] handler stop()", category: .player)
                 shouldResumeAfterForeground = false
-                mediaPlayer.stop()
-                mediaPlayer.media = nil
+                mediaPlayer.drawable = nil
                 currentRequestFingerprint = nil
+                stopPlayerOffMain(releaseMedia: true)
                 notifyState(.stopped)
             }
             controller?.enterBackgroundHandler = { [weak self] in
@@ -358,6 +359,19 @@ struct VLCVideoPlayerView: UIViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 self?.controller?.updateState(state)
                 self?.onStateChanged?(state)
+            }
+        }
+
+        private func stopPlayerOffMain(releaseMedia: Bool) {
+            let player = mediaPlayer
+            let traceID = traceID
+            DispatchQueue.global(qos: .userInitiated).async {
+                Logger.debug("[VLCBridge][\(traceID)] async stop begin", category: .player)
+                player.stop()
+                if releaseMedia {
+                    player.media = nil
+                }
+                Logger.debug("[VLCBridge][\(traceID)] async stop end", category: .player)
             }
         }
 

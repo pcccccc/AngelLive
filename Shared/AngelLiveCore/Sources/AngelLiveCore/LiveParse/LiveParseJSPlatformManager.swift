@@ -653,8 +653,12 @@ private struct PluginRoomDTO: Decodable {
         LiveModel(
             userName: userName,
             roomTitle: roomTitle,
-            roomCover: roomCover,
-            userHeadImg: userHeadImg,
+            roomCover: LiveImageURLResolver.roomCoverURLString(
+                rawValue: roomCover,
+                liveType: liveType,
+                roomId: roomId
+            ),
+            userHeadImg: LiveImageURLResolver.avatarURLString(rawValue: userHeadImg),
             liveType: liveType,
             liveState: liveState,
             userId: userId,

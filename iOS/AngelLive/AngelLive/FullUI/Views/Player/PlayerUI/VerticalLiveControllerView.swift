@@ -114,7 +114,7 @@ struct VerticalLiveControllerView: View {
                     Button {
                         showStreamerInfo = true
                     } label: {
-                        KFAnimatedImage(URL(string: viewModel.currentRoom.userHeadImg))
+                        KFAnimatedImage(URL(string: viewModel.currentRoom.displayUserHeadImg))
                             .configure { view in
                                 view.framePreloadCount = 2
                             }

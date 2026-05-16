@@ -161,7 +161,10 @@ final class RoomInfoViewModel {
                 tappedSelection: tappedSelection,
                 effectiveSelection: tappedSelection
             )
-            currentPlayQualityString = currentQuality.title
+            currentPlayQualityString = RoomPlaybackResolver.qualityDisplayTitle(
+                in: playArgs,
+                selection: tappedSelection
+            )
             currentPlayQualityQn = currentQuality.qn
             self.currentCdnIndex = cdnIndex
             self.currentQualityIndex = urlIndex
@@ -177,7 +180,10 @@ final class RoomInfoViewModel {
             effectiveSelection: effectiveSelection
         )
 
-        currentPlayQualityString = effectiveQuality.title
+        currentPlayQualityString = RoomPlaybackResolver.qualityDisplayTitle(
+            in: playArgs,
+            selection: effectiveSelection ?? tappedSelection
+        )
         currentPlayQualityQn = effectiveQuality.qn
         self.currentCdnIndex = effectiveSelection?.cdnIndex ?? cdnIndex
         self.currentQualityIndex = effectiveSelection?.qualityIndex ?? urlIndex
@@ -407,7 +413,11 @@ final class RoomInfoViewModel {
             showToast(false, title: "获取直播间信息失败")
             return
         }
-        self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+        let initialSelection = RoomPlaybackResolver.preferredInitialSelection(in: playArgs)
+        self.changePlayUrl(
+            cdnIndex: initialSelection?.cdnIndex ?? 0,
+            urlIndex: initialSelection?.qualityIndex ?? 0
+        )
         //开一个定时，检查主播是否已经下播
         if appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEnd == true {
             if PlatformHostBehavior.supportsLiveEndPolling(for: currentRoom.liveType) {

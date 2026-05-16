@@ -134,7 +134,11 @@ final class RoomInfoViewModel {
             self.playErrorMessage = "暂无可用的播放源"
             return
         }
-        self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+        let initialSelection = RoomPlaybackResolver.preferredInitialSelection(in: playArgs)
+        self.changePlayUrl(
+            cdnIndex: initialSelection?.cdnIndex ?? 0,
+            urlIndex: initialSelection?.qualityIndex ?? 0
+        )
 
         // 已成功获取到播放参数，标记已加载
         hasLoadedPlayURL = true

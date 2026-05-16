@@ -34,7 +34,7 @@ enum NowPlayingManager {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
         // 异步加载封面图
-        loadArtwork(from: room.roomCover) { artwork in
+        loadArtwork(from: room.displayRoomCover) { artwork in
             if let artwork {
                 MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
             }

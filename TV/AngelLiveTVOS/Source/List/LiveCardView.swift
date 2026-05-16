@@ -68,7 +68,7 @@ struct LiveCardView: View {
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .bottom) {
                     // 背景模糊层
-                    KFImage(URL(string: currentLiveModel.roomCover))
+                    KFImage(URL(string: currentLiveModel.displayRoomCover))
                         .placeholder {
                             placeholderImage
                         }
@@ -79,7 +79,7 @@ struct LiveCardView: View {
                         .clipped()
 
                     // 前景封面图
-                    KFImage(URL(string: currentLiveModel.roomCover))
+                    KFImage(URL(string: currentLiveModel.displayRoomCover))
                         .onFailure { error in
                             print("Image loading failed: \(error)")
                         }
@@ -140,7 +140,7 @@ struct LiveCardView: View {
     private func streamerInfoSection(currentLiveModel: LiveModel) -> some View {
         HStack(spacing: 12) {
             // 主播头像
-            KFImage(URL(string: currentLiveModel.userHeadImg))
+            KFImage(URL(string: currentLiveModel.displayUserHeadImg))
                 .placeholder {
                     Circle()
                         .fill(Color.gray.opacity(0.3))

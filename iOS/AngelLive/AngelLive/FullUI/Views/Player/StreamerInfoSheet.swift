@@ -56,7 +56,7 @@ struct StreamerInfoSheet: View {
     private var headerSection: some View {
         VStack(spacing: 12) {
             // 主播头像
-            if let avatarURL = URL(string: room.userHeadImg), !room.userHeadImg.isEmpty {
+            if let avatarURL = URL(string: room.displayUserHeadImg), !room.displayUserHeadImg.isEmpty {
                 KFAnimatedImage(avatarURL)
                     .configure { view in
                         view.framePreloadCount = 2

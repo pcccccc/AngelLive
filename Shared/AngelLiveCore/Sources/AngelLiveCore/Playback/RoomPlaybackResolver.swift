@@ -132,6 +132,32 @@ public enum RoomPlaybackResolver {
         return nil
     }
 
+    /// Selects the best initial playable item without trusting plugin order.
+    /// This protects platforms like CHZZK when a playlist contains `Auto` or
+    /// lower variants before the concrete 1080p/720p entries.
+    public static func preferredInitialSelection(in playArgs: [LiveQualityModel]?) -> RoomPlaybackSelection? {
+        guard let fallback = firstSelection(in: playArgs), let playArgs else { return nil }
+
+        var bestSelection: RoomPlaybackSelection?
+        var bestScore = Int.min
+
+        for (cdnIndex, cdn) in playArgs.enumerated() {
+            for (qualityIndex, quality) in cdn.qualitys.enumerated() {
+                guard isInitialPlaybackCandidate(quality) else { continue }
+                let score = initialQualityScore(quality)
+                guard score > bestScore else { continue }
+                bestScore = score
+                bestSelection = RoomPlaybackSelection(
+                    cdnIndex: cdnIndex,
+                    qualityIndex: qualityIndex,
+                    quality: quality
+                )
+            }
+        }
+
+        return bestSelection ?? fallback
+    }
+
     public static func firstSelection(
         in playArgs: [LiveQualityModel]?,
         where predicate: (LiveQualityDetail) -> Bool
@@ -421,5 +447,47 @@ public enum RoomPlaybackResolver {
         }
 
         return false
+    }
+
+    private static func initialQualityScore(_ quality: LiveQualityDetail) -> Int {
+        let title = quality.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if title.contains("audio") || title.contains("音频") {
+            return -1
+        }
+        if title.contains("auto") || title.contains("自适应") {
+            return 0
+        }
+        if title.contains("source") || title.contains("best") || title.contains("原画") {
+            return 10_000_000
+        }
+
+        let titleHeight = parsedHeight(from: title)
+        let qnScore = max(quality.qn, 0)
+        if titleHeight > 0 {
+            return titleHeight * 1_000 + min(qnScore, 999)
+        }
+        return qnScore
+    }
+
+    private static func isInitialPlaybackCandidate(_ quality: LiveQualityDetail) -> Bool {
+        let title = quality.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if title.contains("audio") || title.contains("音频") {
+            return false
+        }
+        return playableURL(for: quality) != nil || requiresRefreshOnSelect(quality)
+    }
+
+    private static func parsedHeight(from title: String) -> Int {
+        let pattern = #"(\d{3,4})\s*p"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return 0
+        }
+        let range = NSRange(title.startIndex..<title.endIndex, in: title)
+        guard let match = regex.firstMatch(in: title, options: [], range: range),
+              match.numberOfRanges >= 2,
+              let heightRange = Range(match.range(at: 1), in: title) else {
+            return 0
+        }
+        return Int(title[heightRange]) ?? 0
     }
 }
