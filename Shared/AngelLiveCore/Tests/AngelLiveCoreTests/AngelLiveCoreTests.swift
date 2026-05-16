@@ -271,6 +271,64 @@ struct PluginCompatibilityPatchTests {
 
         #expect(try await runtime.pluginAPIVersion() == 1)
     }
+
+    @Test("Twitch patch resolves Just Chatting slug to game id and filters rooms")
+    func twitchPatchResolvesJustChattingSlug() async throws {
+        let runtime = JSRuntime(pluginId: "twitch-test")
+        try await runtime.evaluate(script: """
+        globalThis.__capturedCategoryIds = [];
+        globalThis.LiveParsePlugin = {
+          apiVersion: 1,
+          getCategories: function () { return []; },
+          getRooms: function () { return []; }
+        };
+        function _tw_loadCategoryCache() {
+          return { fresh: true, categories: [{ id: "509658", title: "谈天说地", biz: "just-chatting", icon: "" }] };
+        }
+        function _tw_saveCategoryCache() {}
+        function _tw_fetchTopGames() {
+          return [{ id: "509658", title: "谈天说地", biz: "just-chatting", icon: "" }];
+        }
+        function _tw_fetchAllStreamsPage() {
+          return { items: [] };
+        }
+        function _tw_fetchCategoryStreamsPage(categoryId) {
+          globalThis.__capturedCategoryIds.push(categoryId);
+          return {
+            items: [
+              { roomId: "a", userName: "A", liveType: "9", liveState: "1", biz: "509658" },
+              { roomId: "b", userName: "B", liveType: "9", liveState: "1", biz: "21779" }
+            ]
+          };
+        }
+        function _tw_dedupeRooms(rooms) { return rooms || []; }
+        """)
+
+        let twitch = manifest(pluginId: "twitch", version: "1.0.31", liveType: "9")
+        try await LiveParsePluginCompatibilityPatch.apply(to: runtime, manifest: twitch)
+        let result = try await runtime.callPluginFunction(
+            name: "getRooms",
+            payload: [
+                "id": "just-chatting",
+                "category": [
+                    "id": "just-chatting",
+                    "parentId": "root",
+                    "title": "谈天说地",
+                    "biz": "just-chatting"
+                ],
+                "page": 1
+            ]
+        )
+        let rooms = try #require(result as? [[String: Any]])
+
+        #expect(rooms.count == 1)
+        #expect(rooms.first?["roomId"] as? String == "a")
+
+        try await runtime.evaluate(
+            script: "globalThis.LiveParsePlugin.apiVersion = globalThis.__capturedCategoryIds[0] === '509658' ? 1 : 0;"
+        )
+        #expect(try await runtime.pluginAPIVersion() == 1)
+    }
 }
 
 @Suite("Platform cookie collector")

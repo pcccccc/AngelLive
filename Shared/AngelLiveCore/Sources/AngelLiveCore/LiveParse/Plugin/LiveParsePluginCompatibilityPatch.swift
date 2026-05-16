@@ -46,6 +46,10 @@ enum LiveParsePluginCompatibilityPatch {
         return payload && typeof payload === "object" ? Object.assign({}, payload) : {};
       }
 
+      function normalizedKey(value) {
+        return stringValue(value).trim().toLowerCase();
+      }
+
       function roomPageSize(value) {
         if (typeof _tw_roomPageSize === "function") return _tw_roomPageSize(value);
         return Math.max(1, Math.min(100, intValue(value, 20)));
@@ -60,6 +64,82 @@ enum LiveParsePluginCompatibilityPatch {
           seen[key] = true;
           return true;
         });
+      }
+
+      function categoryPayload(runtime) {
+        return runtime && runtime.category && typeof runtime.category === "object" ? runtime.category : {};
+      }
+
+      function categorySelection(runtime) {
+        var category = categoryPayload(runtime);
+        var rawId = stringValue(runtime.id || category.id).trim();
+        var slug = normalizedKey(runtime.slug || runtime.biz || category.biz);
+
+        if (!slug && rawId && rawId !== "all" && rawId !== "root" && !/^\d+$/.test(rawId)) {
+          slug = normalizedKey(rawId);
+        }
+
+        if ((rawId === "all" || rawId === "root" || !rawId) && !slug) {
+          return { id: "all", slug: "", rawId: rawId };
+        }
+
+        return {
+          id: /^\d+$/.test(rawId) ? rawId : "",
+          slug: slug,
+          rawId: rawId
+        };
+      }
+
+      function matchingCategory(categories, selection) {
+        var list = Array.isArray(categories) ? categories : [];
+        for (var i = 0; i < list.length; i += 1) {
+          var item = list[i] || {};
+          if (selection.id && stringValue(item.id) === selection.id) return item;
+          if (selection.slug && normalizedKey(item.biz) === selection.slug) return item;
+        }
+        return null;
+      }
+
+      async function resolveCategorySelection(runtime) {
+        var selection = categorySelection(runtime);
+        if (selection.id === "all" || selection.id) return selection;
+        if (!selection.slug) return selection;
+
+        var cachedCategories = [];
+        if (typeof _tw_loadCategoryCache === "function") {
+          try {
+            var cached = await _tw_loadCategoryCache(120);
+            cachedCategories = Array.isArray(cached && cached.categories) ? cached.categories : [];
+          } catch (_) {
+            cachedCategories = [];
+          }
+        }
+
+        var match = matchingCategory(cachedCategories, selection);
+        if (!match && typeof _tw_fetchTopGames === "function") {
+          var freshCategories = await _tw_fetchTopGames(100, runtime);
+          match = matchingCategory(freshCategories, selection);
+          if (typeof _tw_saveCategoryCache === "function" && Array.isArray(freshCategories)) {
+            try {
+              await _tw_saveCategoryCache(freshCategories);
+            } catch (_) {}
+          }
+        }
+
+        if (match && stringValue(match.id)) {
+          selection.id = stringValue(match.id);
+        }
+        return selection;
+      }
+
+      function filterRoomsForCategory(rooms, selection) {
+        var list = dedupeRooms(rooms);
+        if (!selection || selection.id === "all" || !selection.id) return list;
+
+        var filtered = list.filter(function (room) {
+          return stringValue(room && room.biz) === selection.id;
+        });
+        return filtered.length > 0 || list.length === 0 ? filtered : list;
       }
 
       function buildCategoryTree(categories) {
@@ -132,7 +212,8 @@ enum LiveParsePluginCompatibilityPatch {
 
       plugin.getRooms = async function (payload) {
         var runtime = runtimePayload(payload);
-        var categoryId = stringValue(runtime.id) === "root" ? "all" : stringValue(runtime.id) || "all";
+        var selection = await resolveCategorySelection(runtime);
+        var categoryId = selection.id || selection.rawId || "all";
         var page = Math.max(1, intValue(runtime.page, 1));
         var pageSize = roomPageSize(runtime.pageSize);
         var pageData = null;
@@ -149,7 +230,7 @@ enum LiveParsePluginCompatibilityPatch {
           pageData = await _tw_fetchCategoryStreamsPage(categoryId, page, pageSize, runtime);
         }
 
-        return dedupeRooms(pageData && pageData.items);
+        return filterRoomsForCategory(pageData && pageData.items, selection);
       };
 
       Object.defineProperty(plugin, "__angelLiveTwitchGQLListPatch", {
