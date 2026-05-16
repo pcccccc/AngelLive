@@ -12,6 +12,7 @@
 - SOOP 19x 直播间返回灰色年龄占位图，登录后仍缺少真实实时封面。
 - SOOP 需要列表筛选能力：全部 / 只显示 19x / 只显示非 19x。
 - iOS 真机 SOOP 19x 播放页左键点击不弹控制层、画面闪烁或卡死。
+- Twitch 1.0.31 点击平台后分类列表加载失败，报 `missing clientId or accessToken in token server response`。
 - iOS 真机个人开发签名缺少 iCloud entitlement 时启动闪退。
 - 官方订阅密钥 `444222000` 未解析，误走普通视频收藏。
 
@@ -23,6 +24,7 @@
 - 真机回归后补修：所有 CloudKit 入口在初始化 `CKContainer(identifier:)` 前先判断签名是否包含目标 iCloud 容器，避免个人开发证书无 iCloud 能力时启动或同步入口崩溃；订阅密钥服务补齐官方 `keys.json` 地址和 `444222000` 内置兜底。
 - SOOP 19x 复测后补修：只对 19x 占位封面做一次实时截图缓存，非 19x 房间不再 force refresh；首次进入 SOOP 拉取前三页并预热 19x 截图，滚动时继续按窗口预加载未处理过的 19x 房间。
 - SOOP 19x 筛选补修：iOS SOOP 分类页新增“全部 / 19x / 非19x”三段筛选；筛选结果基于同一套 19x 占位图检测状态，不改插件协议和持久化模型。
+- Twitch 1.0.31 补修：宿主加载插件后对该版本精确注入兼容脚本，把分类和房间列表从 Helix token server 路径切回插件已内置的 Twitch website GQL helper。
 
 ## 核心改动
 
@@ -84,6 +86,16 @@
 - 修复 `cookieInject` 写入 body 后又被 `envelope.body` 覆盖的问题。
 - 现在 body 注入结果会保留到最终请求。
 - 影响场景：插件需要把 Cookie 中的字段注入请求 body 时，之前会丢失。
+
+### 3.1. Twitch 1.0.31 列表加载修复
+
+新增 `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/Plugin/LiveParsePluginCompatibilityPatch.swift`：
+
+- 宿主在插件入口脚本执行并通过 `apiVersion` 检查后，按 manifest 精确版本注入兼容脚本。
+- 当前只命中 `twitch@1.0.31`，不会影响后续上游插件版本。
+- Twitch 1.0.31 发布说明写的是 website GQL，但导出的 `getCategories` / `getRooms` 仍调用 Helix token server；当 token server 返回缺少 `clientId/accessToken` 时，平台页直接失败。
+- 兼容脚本复用插件包内已存在的 `_tw_fetchTopGames`、`_tw_fetchAllStreamsPage`、`_tw_fetchCategoryStreamsPage`，让分类、全部直播和分类直播列表都走 `https://gql.twitch.tv/gql`。
+- 保留原插件分类缓存和房间去重 helper；若上游 helper 不存在才回退到原方法，便于问题定位。
 
 ### 4. SOOP 直播间预览图修复
 
@@ -212,12 +224,14 @@ iOS SOOP 19x 播放控制补充：
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/Services/PlatformCookieCollector.swift`
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/Services/PlatformLoginCompatibility.swift`
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/Services/CloudKitContainerAccess.swift`
+- `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/Plugin/LiveParsePluginCompatibilityPatch.swift`
 - `docs/OPS4_7_REVIEW_CHANGES_2026-05-16.md`
 
 ### Shared / Core 修改
 
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/LiveParseJSPlatformManager.swift`
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/Plugin/JSRuntime.swift`
+- `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/Plugin/LiveParseLoadedPlugin.swift`
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/LiveParse/Plugin/LiveParsePluginManifest.swift`
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/Playback/RoomPlaybackResolver.swift`
 - `Shared/AngelLiveCore/Sources/AngelLiveCore/Services/PlatformLoginRegistry.swift`
@@ -290,6 +304,10 @@ iOS SOOP 19x 播放控制补充：
   - `refreshOnSelect` 的高画质项即使 URL 为空，仍允许作为初始候选。
 - `PlatformLoginCompatibilityTests`
   - manifest 显式声明 `auth.required=false` 时优先于宿主 fallback。
+- `PluginCompatibilityPatchTests`
+  - `twitch@1.0.31` 会生成 GQL 列表兼容脚本。
+  - `twitch@1.0.32` 等其它版本不被宿主覆盖。
+  - 兼容脚本可在宿主 `JSRuntime` / JavaScriptCore 中正常执行。
 
 ## 兼容性说明
 
@@ -300,6 +318,7 @@ iOS SOOP 19x 播放控制补充：
 - SOOP 19x 截图只作为 Kingfisher 内存缓存存在，App 重启后会重新按当前直播状态检测，不污染收藏、历史或 iCloud 数据。
 - UI 层保留原 `LiveModel.roomCover` / `userHeadImg` 字段，只新增展示用扩展，避免影响持久化模型结构。
 - 清晰度选择只改变初始默认项，用户手动切换清晰度流程未重写。
+- Twitch 列表兼容补丁只作用于 `twitch@1.0.31`，上游发布 1.0.32 或 manifest 版本变更后自动停止注入。
 
 ## 验证结果
 
@@ -316,7 +335,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 结果：
 
 - `git diff --check` 通过。
-- Xcode 工具链直接运行 Core 测试通过：`30 tests passed`。
+- Xcode 工具链直接运行 Core 测试通过：`33 tests passed`。
 - iOS 26.1 真机 Debug 构建通过：`** BUILD SUCCEEDED **`。
 - iOS 26.1 真机安装和 console 启动通过。
 
@@ -332,6 +351,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 - SOOP 19x 实时封面真机日志确认写入稳定 Kingfisher key：`https://liveimg.sooplive.com/m/{roomId}?320`，未再出现 `_al_preview` 时间戳缓存 key。
 - SOOP 播放控制真机复测：点击画面可弹出控制层，不再出现左键点击导致的持续闪烁和卡死。
 - SOOP 19x 筛选代码通过 iOS 26.1 真机 Debug 构建、安装和启动；本轮 iPhone Mirroring 被手机前台使用中断，未做最终截图确认。
+- Twitch 1.0.31 真机日志确认 `getCategories` / `getRooms` 均请求 `https://gql.twitch.tv/gql`，HTTP 200，并成功返回分类和直播间列表；未再出现 token server 的 `missing clientId/accessToken`。
 
 ## 审查建议
 
@@ -340,4 +360,5 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 - 重点审查 SOOP 兜底预览地址 `https://liveimg.sooplive.com/m/{roomId}` 在目标地区和网络环境下是否可访问。
 - 重点审查 iOS SOOP 19x 实时截图策略是否接受：只在内存缓存中替换稳定 `?320` key，App 重启后重新检测。
 - 重点审查 iOS SOOP 19x 筛选的产品语义：未知状态在检测完成前不进入 19x / 非19x结果，避免误显示。
+- 重点审查 Twitch 1.0.31 宿主侧兼容补丁的版本边界，确认后续上游插件修复后不会被覆盖。
 - 真机连接后建议验证 iOS 26.1 设备上的 WebKit 登录保存、播放器默认清晰度、SOOP 列表预览图和 SOOP 19x 播放控制四条主链路。

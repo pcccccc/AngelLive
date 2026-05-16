@@ -229,6 +229,50 @@ struct PlatformLoginCompatibilityTests {
     }
 }
 
+@Suite("Plugin compatibility patches")
+struct PluginCompatibilityPatchTests {
+
+    @Test("Twitch 1.0.31 category and room lists are redirected to website GQL")
+    func twitch1031UsesGQLListPatch() {
+        let twitch = manifest(pluginId: "twitch", version: "1.0.31", liveType: "9")
+        let script = LiveParsePluginCompatibilityPatch.script(for: twitch)
+
+        #expect(script?.contains("_tw_fetchTopGames") == true)
+        #expect(script?.contains("_tw_fetchAllStreamsPage") == true)
+        #expect(script?.contains("_tw_fetchCategoryStreamsPage") == true)
+    }
+
+    @Test("Other Twitch versions are left to the plugin")
+    func newerTwitchVersionsAreNotPatched() {
+        let twitch = manifest(pluginId: "twitch", version: "1.0.32", liveType: "9")
+
+        #expect(LiveParsePluginCompatibilityPatch.script(for: twitch) == nil)
+    }
+
+    @Test("Twitch patch evaluates inside JSRuntime")
+    func twitchPatchEvaluatesInsideJSRuntime() async throws {
+        let runtime = JSRuntime(pluginId: "twitch-test")
+        try await runtime.evaluate(script: """
+        globalThis.LiveParsePlugin = {
+          apiVersion: 1,
+          getCategories: function () { return []; },
+          getRooms: function () { return []; }
+        };
+        function _tw_fetchTopGames() {}
+        function _tw_fetchAllStreamsPage() {}
+        function _tw_fetchCategoryStreamsPage() {}
+        """)
+
+        let twitch = manifest(pluginId: "twitch", version: "1.0.31", liveType: "9")
+        try await LiveParsePluginCompatibilityPatch.apply(to: runtime, manifest: twitch)
+        try await runtime.evaluate(
+            script: "globalThis.LiveParsePlugin.apiVersion = globalThis.LiveParsePlugin.__angelLiveTwitchGQLListPatch === true ? 1 : 0;"
+        )
+
+        #expect(try await runtime.pluginAPIVersion() == 1)
+    }
+}
+
 @Suite("Platform cookie collector")
 struct PlatformCookieCollectorTests {
 
@@ -395,13 +439,14 @@ struct PlaybackInitialSelectionTests {
 
 private func manifest(
     pluginId: String,
+    version: String = "1.0.0",
     liveType: String,
     loginFlow: ManifestLoginFlow? = nil,
     auth: ManifestAuth? = nil
 ) -> LiveParsePluginManifest {
     LiveParsePluginManifest(
         pluginId: pluginId,
-        version: "1.0.0",
+        version: version,
         apiVersion: 1,
         displayName: pluginId,
         liveTypes: [liveType],

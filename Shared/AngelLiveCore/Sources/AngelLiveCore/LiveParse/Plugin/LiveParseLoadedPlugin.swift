@@ -49,6 +49,7 @@ public actor LiveParseLoadedPlugin {
         if actual != JSRuntime.supportedAPIVersion {
             throw LiveParsePluginError.incompatibleAPIVersion(expected: JSRuntime.supportedAPIVersion, actual: actual)
         }
+        try await LiveParsePluginCompatibilityPatch.apply(to: runtime, manifest: manifest)
         isLoaded = true
     }
 }
