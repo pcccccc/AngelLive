@@ -34,6 +34,7 @@
 - 新增 `LiveParsePluginCompatibilityPatch`，只对 `twitch@1.0.31` 注入兼容脚本。
 - 兼容脚本复用插件内已有的 `_tw_fetchTopGames`、`_tw_fetchAllStreamsPage`、`_tw_fetchCategoryStreamsPage`，把分类和直播间列表切回 `https://gql.twitch.tv/gql`。
 - 兼容 Twitch 分类 URL 的 slug，例如 `just-chatting` 会解析回游戏 ID `509658`，并按房间 `biz` 再做一次分类过滤。
+- 即使宿主路径传入 `id=root`，也会优先读取 `category.id/category.biz` 中的真实分类。
 - 补丁按精确版本命中，后续上游插件升级到 1.0.32 或其它版本时自动停止注入。
 
 ### 3. CHZZK 默认清晰度
@@ -108,6 +109,7 @@
 - CHZZK 类清晰度列表默认选择 1080p，跳过 Auto、空 URL 占位和 audio-only。
 - `twitch@1.0.31` 兼容脚本只命中该版本，并可在宿主 JavaScriptCore 中执行。
 - Twitch `just-chatting` slug 能解析到 `509658`，且只返回该分类房间。
+- Twitch 分类 URL 在 `id=root` 的兜底路径下也能解析到 `509658`。
 
 ## 兼容边界
 
@@ -133,7 +135,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun devicectl device 
 
 结果：
 
-- Core 测试通过：`34 tests passed`。
+- Core 测试通过：`35 tests passed`。
 - iOS 26.1 真机 Debug 构建、安装、启动通过。
 - 个人开发签名无 iCloud entitlement 时可正常进入 App。
 - 输入订阅密钥 `444222000` 后可安装官方插件。

@@ -274,6 +274,37 @@ struct PluginCompatibilityPatchTests {
 
     @Test("Twitch patch resolves Just Chatting slug to game id and filters rooms")
     func twitchPatchResolvesJustChattingSlug() async throws {
+        try await assertTwitchPatchResolvesJustChatting(
+            payload: [
+                "id": "just-chatting",
+                "category": [
+                    "id": "just-chatting",
+                    "parentId": "root",
+                    "title": "谈天说地",
+                    "biz": "just-chatting"
+                ],
+                "page": 1
+            ]
+        )
+    }
+
+    @Test("Twitch patch resolves category URL when id falls back to root")
+    func twitchPatchResolvesCategoryURL() async throws {
+        try await assertTwitchPatchResolvesJustChatting(
+            payload: [
+                "id": "root",
+                "category": [
+                    "id": "https://www.twitch.tv/directory/category/just-chatting",
+                    "parentId": "root",
+                    "title": "谈天说地",
+                    "biz": ""
+                ],
+                "page": 1
+            ]
+        )
+    }
+
+    private func assertTwitchPatchResolvesJustChatting(payload: [String: Any]) async throws {
         let runtime = JSRuntime(pluginId: "twitch-test")
         try await runtime.evaluate(script: """
         globalThis.__capturedCategoryIds = [];
@@ -306,19 +337,7 @@ struct PluginCompatibilityPatchTests {
 
         let twitch = manifest(pluginId: "twitch", version: "1.0.31", liveType: "9")
         try await LiveParsePluginCompatibilityPatch.apply(to: runtime, manifest: twitch)
-        let result = try await runtime.callPluginFunction(
-            name: "getRooms",
-            payload: [
-                "id": "just-chatting",
-                "category": [
-                    "id": "just-chatting",
-                    "parentId": "root",
-                    "title": "谈天说地",
-                    "biz": "just-chatting"
-                ],
-                "page": 1
-            ]
-        )
+        let result = try await runtime.callPluginFunction(name: "getRooms", payload: payload)
         let rooms = try #require(result as? [[String: Any]])
 
         #expect(rooms.count == 1)

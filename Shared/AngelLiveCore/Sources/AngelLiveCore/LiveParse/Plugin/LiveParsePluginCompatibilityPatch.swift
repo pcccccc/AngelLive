@@ -50,6 +50,16 @@ enum LiveParsePluginCompatibilityPatch {
         return stringValue(value).trim().toLowerCase();
       }
 
+      function categorySlug(value) {
+        var normalized = normalizedKey(value);
+        if (!normalized || normalized === "all" || normalized === "root" || /^\d+$/.test(normalized)) {
+          return "";
+        }
+        var match = normalized.match(/(?:^|\/)directory\/category\/([^/?#]+)/);
+        if (match && match[1]) return decodeURIComponent(match[1]);
+        return normalized.indexOf("/") >= 0 ? "" : normalized;
+      }
+
       function roomPageSize(value) {
         if (typeof _tw_roomPageSize === "function") return _tw_roomPageSize(value);
         return Math.max(1, Math.min(100, intValue(value, 20)));
@@ -72,11 +82,18 @@ enum LiveParsePluginCompatibilityPatch {
 
       function categorySelection(runtime) {
         var category = categoryPayload(runtime);
-        var rawId = stringValue(runtime.id || category.id).trim();
-        var slug = normalizedKey(runtime.slug || runtime.biz || category.biz);
+        var directId = stringValue(runtime.id).trim();
+        var categoryId = stringValue(category.id).trim();
+        var rawId =
+          directId && directId !== "all" && directId !== "root" ? directId : categoryId || directId;
+        var slug =
+          categorySlug(runtime.slug) ||
+          categorySlug(runtime.biz) ||
+          categorySlug(category.biz) ||
+          categorySlug(rawId);
 
         if (!slug && rawId && rawId !== "all" && rawId !== "root" && !/^\d+$/.test(rawId)) {
-          slug = normalizedKey(rawId);
+          slug = categorySlug(rawId);
         }
 
         if ((rawId === "all" || rawId === "root" || !rawId) && !slug) {
