@@ -56,13 +56,16 @@ class PlatformViewModel {
 }
 
 
-struct Platformdescription {
+struct Platformdescription: Identifiable {
     let title: String
     let pluginId: String
     let bigPic: String
     let smallPic: String
     let descripiton: String
     let liveType: LiveType
+
+    // pluginId 已在 refreshPlatforms 里 seenPluginIds 去重，保证唯一
+    var id: String { pluginId }
 }
 
 enum TVPlatformIconProvider {
