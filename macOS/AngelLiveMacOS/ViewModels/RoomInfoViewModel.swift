@@ -204,6 +204,14 @@ final class RoomInfoViewModel {
             currentPlayQualityQn = currentQuality.qn
             self.currentCdnIndex = cdnIndex
             self.currentQualityIndex = urlIndex
+
+            // 在 applyPlayURL 之前先决定播放内核，避免首次起播沿用 PlayerOptions 默认 [KSAVPlayer]
+            // 导致 FLV 流被 AVPlayer 收到后报 AVError -11850(serverIncorrectlyConfigured) 卡住。
+            let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
+            applyPlaybackRequestOptions(for: currentQuality)
+            playerOption.playerTypes = resolved.playerTypes
+            isHLSStream = resolved.isHLS
+
             applyPlayURL(
                 quality: currentQuality,
                 cdn: currentCdn,
