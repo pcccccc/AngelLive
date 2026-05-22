@@ -219,7 +219,7 @@ private extension RoomPlayerView {
                 Text("主播已下播")
                     .font(.title2)
                     .foregroundColor(.white)
-                Text(viewModel.currentRoom.userName)
+                Text(viewModel.currentRoom.userName.orDash)
                     .font(.subheadline)
                     .foregroundColor(.gray)
             }
@@ -272,6 +272,15 @@ private extension RoomPlayerView {
             ZStack {
                 Color.black
                 KFImage(URL(string: viewModel.currentRoom.roomCover))
+                    .placeholder {
+                        ZStack {
+                            Color.black
+                            Image("placeholder")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .opacity(0.5)
+                        }
+                    }
                     .resizable()
                     .scaledToFill()
                     .blur(radius: 24)

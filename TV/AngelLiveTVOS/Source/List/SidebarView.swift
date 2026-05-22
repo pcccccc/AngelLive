@@ -207,6 +207,15 @@ struct SidebarMenuItem: View {
                     // 图标
                     if icon.hasPrefix("http") {
                         KFImage(URL(string: icon))
+                            .placeholder {
+                                if let uiImage = liveViewModel.menuTitleIcon {
+                                    Image(uiImage: uiImage)
+                                        .resizable()
+                                } else {
+                                    Image("placeholder")
+                                        .resizable()
+                                }
+                            }
                             .resizable()
                             .frame(width: 40, height: 40)
                             .cornerRadius(20)
@@ -291,6 +300,15 @@ struct SidebarSubMenuItem: View {
                 // 图标
                 if icon.hasPrefix("http") {
                     KFImage(URL(string: icon))
+                        .placeholder {
+                            if let uiImage = liveViewModel.menuTitleIcon {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                            } else {
+                                Image("placeholder")
+                                    .resizable()
+                            }
+                        }
                         .resizable()
                         .frame(width: 32, height: 32)
                         .cornerRadius(16)

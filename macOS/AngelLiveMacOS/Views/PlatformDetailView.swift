@@ -89,6 +89,18 @@ struct PlatformDetailView: View {
                         Group {
                             if let iconURL = categoryIconURL {
                                 KFImage(iconURL)
+                                    .placeholder {
+                                        if let platformIcon {
+                                            Image(nsImage: platformIcon)
+                                                .resizable()
+                                                .scaledToFit()
+                                        } else {
+                                            Image(systemName: "puzzlepiece.extension")
+                                                .resizable()
+                                                .scaledToFit()
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
                                     .resizable()
                                     .scaledToFit()
                             } else if let platformIcon {
@@ -440,15 +452,22 @@ struct LiveRoomCard: View {
                 RemoteAvatarView(url: URL(string: room.userHeadImg), size: 32) {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundStyle(.white.opacity(0.8))
+                                .padding(4)
+                        )
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(room.roomTitle)
+                    Text(room.roomTitle.orDash)
                         .font(.subheadline.bold())
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
-                    Text(room.userName)
+                    Text(room.userName.orDash)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -505,10 +524,10 @@ struct LiveRoomCard: View {
         ZStack {
             Rectangle()
                 .fill(AppConstants.Colors.placeholderGradient())
-
-            Image(systemName: "photo")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.72))
+            Image("placeholder")
+                .resizable()
+                .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+                .opacity(0.7)
         }
         .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
     }

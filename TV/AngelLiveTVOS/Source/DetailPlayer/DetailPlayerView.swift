@@ -37,7 +37,7 @@ struct DetailPlayerView: View {
                 Text("主播已下播")
                     .font(.title)
                     .foregroundColor(.white)
-                Text(roomInfoViewModel.currentRoom.userName)
+                Text(roomInfoViewModel.currentRoom.userName.orDash)
                     .font(.headline)
                     .foregroundColor(.gray)
                 Button("返回") {
@@ -67,6 +67,15 @@ struct DetailPlayerView: View {
         } else if roomInfoViewModel.currentPlayURL == nil {
             ZStack {
                 KFImage(URL(string: roomInfoViewModel.currentRoom.roomCover))
+                    .placeholder {
+                        ZStack {
+                            Color.black
+                            Image("placeholder")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .opacity(0.5)
+                        }
+                    }
                     .resizable()
                     .scaledToFill()
                     .frame(width: 1920, height: 1080)

@@ -421,8 +421,14 @@ struct PlayerContentView: View {
                     // 封面图作为背景
                     KFImage(URL(string: viewModel.currentRoom.roomCover))
                         .placeholder {
-                            Rectangle()
-                                .fill(AppConstants.Colors.placeholderGradient())
+                            ZStack {
+                                Rectangle()
+                                    .fill(AppConstants.Colors.placeholderGradient())
+                                Image("placeholder")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .opacity(0.7)
+                            }
                         }
                         .resizable()
                         .aspectRatio(contentMode: .fit)

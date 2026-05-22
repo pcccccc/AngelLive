@@ -18,16 +18,22 @@ struct BlurredBackgroundView: View {
             // 主播头像模糊背景
             KFImage(URL(string: imageURL))
                 .placeholder {
-                    // 占位渐变色
-                    LinearGradient(
-                        colors: [
-                            Color.purple.opacity(0.3),
-                            Color.blue.opacity(0.3),
-                            Color.pink.opacity(0.3)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    // 加载失败兜底：placeholder 图叠加渐变色，避免黑屏
+                    ZStack {
+                        LinearGradient(
+                            colors: [
+                                Color.purple.opacity(0.3),
+                                Color.blue.opacity(0.3),
+                                Color.pink.opacity(0.3)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        Image("placeholder")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .opacity(0.5)
+                    }
                 }
                 .resizable()
                 .aspectRatio(contentMode: .fill)

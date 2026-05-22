@@ -140,29 +140,29 @@ struct LiveCardView: View {
     private func streamerInfoSection(currentLiveModel: LiveModel) -> some View {
         HStack(spacing: 12) {
             // 主播头像
-            KFImage(URL(string: currentLiveModel.userHeadImg))
-                .placeholder {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .foregroundColor(.white.opacity(0.5))
-                        )
+            Group {
+                if !currentLiveModel.userHeadImg.isEmpty,
+                   let avatarURL = URL(string: currentLiveModel.userHeadImg) {
+                    KFImage(avatarURL)
+                        .placeholder { avatarFallback }
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    avatarFallback
                 }
-                .resizable()
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(isFocused ? 0.3 : 0), lineWidth: 2)
-                )
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+            .overlay(
+                Circle()
+                    .stroke(Color.white.opacity(isFocused ? 0.3 : 0), lineWidth: 2)
+            )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(currentLiveModel.userName)
+                Text(currentLiveModel.userName.orDash)
                     .font(.system(size: 20, weight: .semibold))
                     .lineLimit(1)
-                Text(currentLiveModel.roomTitle)
+                Text(currentLiveModel.roomTitle.orDash)
                     .font(.system(size: 15))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -182,6 +182,19 @@ struct LiveCardView: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: cardWidth, height: coverHeight)
+    }
+
+    /// 头像兜底（URL 空 / 加载失败）
+    private var avatarFallback: some View {
+        Circle()
+            .fill(Color.gray.opacity(0.3))
+            .overlay(
+                Image(systemName: "person.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(6)
+            )
     }
 
     /// 观看人数标签

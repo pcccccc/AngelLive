@@ -389,17 +389,24 @@ struct PlayerControlView: View {
             RemoteAvatarView(url: URL(string: room.userHeadImg), size: 36) {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(5)
+                    )
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 // 主播名称
-                Text(String(room.userName.prefix(10)))
+                Text(String(room.userName.prefix(10)).orDash)
                     .foregroundStyle(.white)
                     .font(.subheadline.bold())
                     .lineLimit(1)
 
                 // 房间标题
-                Text(String(room.roomTitle.prefix(20)))
+                Text(String(room.roomTitle.prefix(20)).orDash)
                     .foregroundStyle(.white.opacity(0.8))
                     .font(.caption)
                     .lineLimit(1)

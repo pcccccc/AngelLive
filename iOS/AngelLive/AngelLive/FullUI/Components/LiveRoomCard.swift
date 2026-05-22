@@ -238,12 +238,12 @@ struct LiveRoomCard: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(room.roomTitle)
+                    Text(room.roomTitle.orDash)
                         .font(.subheadline.bold())
                         .foregroundStyle(AppConstants.Colors.primaryText)
                         .lineLimit(1)
 
-                    Text(room.userName)
+                    Text(room.userName.orDash)
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                         .lineLimit(1)
@@ -337,7 +337,7 @@ struct LiveRoomCard: View {
         Circle()
             .fill(Color.gray.opacity(0.2))
             .overlay(
-                Image(systemName: "person.crop.circle.fill")
+                Image(systemName: "person.fill")
                     .foregroundStyle(.white.opacity(0.8))
             )
     }

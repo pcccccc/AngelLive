@@ -89,7 +89,7 @@ struct StreamerInfoSheet: View {
             }
 
             // 主播名称
-            Text(room.userName)
+            Text(room.userName.orDash)
                 .font(.title2.bold())
                 .foregroundStyle(.primary)
 
@@ -112,7 +112,7 @@ struct StreamerInfoSheet: View {
     private var roomInfoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 直播间标题
-            infoRow(icon: "tv", title: "直播间标题", value: room.roomTitle)
+            infoRow(icon: "tv", title: "直播间标题", value: room.roomTitle.orDash)
 
             Divider()
 

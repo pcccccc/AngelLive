@@ -114,22 +114,26 @@ struct VerticalLiveControllerView: View {
                     Button {
                         showStreamerInfo = true
                     } label: {
-                        KFAnimatedImage(URL(string: viewModel.currentRoom.userHeadImg))
-                            .configure { view in
-                                view.framePreloadCount = 2
+                        Group {
+                            if !viewModel.currentRoom.userHeadImg.isEmpty,
+                               let avatarURL = URL(string: viewModel.currentRoom.userHeadImg) {
+                                KFAnimatedImage(avatarURL)
+                                    .configure { view in
+                                        view.framePreloadCount = 2
+                                    }
+                                    .placeholder { verticalAvatarFallback }
+                                    .aspectRatio(contentMode: .fill)
+                            } else {
+                                verticalAvatarFallback
                             }
-                            .placeholder {
-                                Circle()
-                                    .fill(Color.gray.opacity(0.3))
-                            }
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 36, height: 36)
-                            .clipShape(Circle())
+                        }
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(viewModel.currentRoom.userName.prefix(10)))
+                        Text(String(viewModel.currentRoom.userName.prefix(10)).orDash)
                             .foregroundStyle(.white)
                             .font(.subheadline.bold())
                             .lineLimit(1)
@@ -202,6 +206,19 @@ struct VerticalLiveControllerView: View {
     // MARK: - Helper Methods
 
     /// 格式化热度数值
+    /// 头像兜底（URL 空 / 加载失败）
+    private var verticalAvatarFallback: some View {
+        Circle()
+            .fill(Color.gray.opacity(0.3))
+            .overlay(
+                Image(systemName: "person.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(5)
+            )
+    }
+
     private func formatHeat(_ value: Int) -> String {
         if value >= 10000 {
             return String(format: "%.1f万", Double(value) / 10000.0)

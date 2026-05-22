@@ -27,7 +27,8 @@ private struct RoomTitleLabel: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UILabel, context: Context) {
-        uiView.text = text
+        // 空字符串兜底
+        uiView.text = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "-" : text
     }
  
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
@@ -76,27 +77,33 @@ struct StreamerInfoView: View {
                 Button {
                     showStreamerInfo = true
                 } label: {
-                    KFAnimatedImage(URL(string: viewModel.currentRoom.userHeadImg))
-                        .configure { view in
-                            view.framePreloadCount = 2
+                    Group {
+                        if !viewModel.currentRoom.userHeadImg.isEmpty,
+                           let avatarURL = URL(string: viewModel.currentRoom.userHeadImg) {
+                            KFAnimatedImage(avatarURL)
+                                .configure { view in
+                                    view.framePreloadCount = 2
+                                }
+                                .placeholder {
+                                    avatarFallback
+                                }
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            avatarFallback
                         }
-                        .placeholder {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
-                        }
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 48, height: 48)
-                        .clipShape(Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                        )
+                    }
+                    .frame(width: 48, height: 48)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                    )
                 }
                 .buttonStyle(.plain)
 
                 VStack(alignment: .leading, spacing: 4) {
                     // 主播名称
-                    Text(viewModel.currentRoom.userName)
+                    Text(viewModel.currentRoom.userName.orDash)
                         .font(.headline)
                         .foregroundStyle(Color(white: 0.9))
 
@@ -143,6 +150,19 @@ struct StreamerInfoView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+    }
+
+    /// 头像兜底（URL 为空 / 加载失败）
+    private var avatarFallback: some View {
+        Circle()
+            .fill(Color.gray.opacity(0.3))
+            .overlay(
+                Image(systemName: "person.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(6)
+            )
     }
 
     // MARK: - 收藏操作

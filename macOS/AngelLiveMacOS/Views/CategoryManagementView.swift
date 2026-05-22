@@ -93,6 +93,18 @@ struct CategoryCard: View {
             Group {
                 if let iconURL = categoryIconURL {
                     KFImage(iconURL)
+                        .placeholder {
+                            if let platformIcon {
+                                Image(nsImage: platformIcon)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                            } else {
+                                Image(systemName: "puzzlepiece.extension")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                 } else if let platformIcon {
