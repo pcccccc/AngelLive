@@ -127,6 +127,10 @@ struct AngelLiveMacOSApp: App {
                     .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))
             }
         }
+        // 仅作"首次打开"的提示尺寸 —— 真正强制每次新开都用 16:9 默认值
+        // 由 PlayerWindowChromeNSView.viewDidMoveToWindow 内的 setFrame 完成,
+        // 避免 macOS 状态恢复把上一次拖大/拖小的尺寸"记住"用到下一个房间。
+        .defaultSize(width: 1280, height: 720)
         // .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
@@ -178,6 +182,23 @@ private final class PlayerWindowChromeNSView: NSView {
         applyIfPossible()
     }
 
+    /// macOS WindowGroup 会持久化用户拖动后的窗口尺寸,导致下一次开新房间还沿用上次大小。
+    /// 这里在首次挂到 window 时把 contentSize 强制重置为 16:9 默认值,在屏幕内居中。
+    /// 用户后续拖动不影响当前窗口 —— 只有"新打开"的窗口才会被重置。
+    private static let defaultContentSize = NSSize(width: 1280, height: 720)
+    private func resetWindowFrameIfNeeded(_ window: NSWindow) {
+        guard let screen = window.screen ?? NSScreen.main else { return }
+        let target = Self.defaultContentSize
+        let contentRect = NSRect(origin: .zero, size: target)
+        let frameRect = window.frameRect(forContentRect: contentRect)
+        let visible = screen.visibleFrame
+        let origin = NSPoint(
+            x: visible.midX - frameRect.width / 2,
+            y: visible.midY - frameRect.height / 2
+        )
+        window.setFrame(NSRect(origin: origin, size: frameRect.size), display: true)
+    }
+
     func applyIfPossible() {
         guard let window = window else { return }
         if previousState == nil {
@@ -191,6 +212,8 @@ private final class PlayerWindowChromeNSView: NSView {
                 zoomHidden: zoomButton?.isHidden ?? false,
                 isMovableByWindowBackground: window.isMovableByWindowBackground
             )
+            // 仅首次挂载时重置 frame,避免每次 SwiftUI 触发 updateNSView 都重置覆盖用户拖动。
+            resetWindowFrameIfNeeded(window)
         }
         if let state = previousState {
             window.standardWindowButton(.closeButton)?.isHidden = hidesWindowButtons ? true : state.closeHidden

@@ -97,6 +97,13 @@ struct DetailPlayerView: View {
                         playerCoordinator.playerLayer?.play()
                         roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
                     }
+                    .onChange(of: roomInfoViewModel.currentPlayURL) { _, _ in
+                        // URL 变化(refresh / CDN failover)时 KSPlayer 会重建 playerLayer,
+                        // 必须重新挂 delegate,顺带重启 stall watchdog。和 macOS/iOS 三端行为对齐。
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
+                        }
+                    }
                     .safeAreaPadding(.all)
                     .zIndex(1)
 

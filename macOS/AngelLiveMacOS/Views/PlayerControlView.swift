@@ -27,6 +27,9 @@ struct PlayerControlView: View {
     @State private var isFullscreen = false
     @State private var isPinned = false
     @State private var showVolumeSlider = false
+    /// 静音前的音量,用于取消静音时恢复 slider 显示。
+    /// 取 nil 表示当前没有需要恢复的"静音前"值。
+    @State private var preMuteVolume: Float?
     @Binding var volume: Float  // 独立音量控制
     @Binding var isMuted: Bool      // 独立静音状态
     @Environment(\.dismiss) private var dismiss
@@ -199,8 +202,27 @@ struct PlayerControlView: View {
                             HStack(spacing: 12) {
                                 // 音量按钮（点击静音/取消静音）
                                 Button {
-                                    isMuted.toggle()
-                                    coordinator.playerLayer?.player.isMuted = isMuted
+                                    if isMuted {
+                                        // 取消静音:恢复 slider 显示到静音前的位置
+                                        isMuted = false
+                                        if let saved = preMuteVolume, saved > 0 {
+                                            volume = saved
+                                        } else if volume == 0 {
+                                            // 没有保存值且当前音量也是 0,给一个合理默认值,
+                                            // 否则用户取消静音后还是听不到声音。
+                                            volume = 1.0
+                                        }
+                                        preMuteVolume = nil
+                                        coordinator.playerLayer?.player.isMuted = false
+                                        coordinator.playerLayer?.player.playbackVolume = volume
+                                    } else {
+                                        // 静音:记下当前音量,slider 视觉归零
+                                        preMuteVolume = volume > 0 ? volume : nil
+                                        isMuted = true
+                                        volume = 0
+                                        coordinator.playerLayer?.player.isMuted = true
+                                        coordinator.playerLayer?.player.playbackVolume = 0
+                                    }
                                 } label: {
                                     Image(systemName: isMuted ? "speaker.slash.fill" : (volume > 0.5 ? "speaker.wave.2.fill" : (volume > 0 ? "speaker.wave.1.fill" : "speaker.fill")))
                                         .frame(width: 30, height: 30)
@@ -218,7 +240,9 @@ struct PlayerControlView: View {
                                             .frame(width: 80, height: 20)
                                             .onChange(of: volume) { _, newValue in
                                                 if isMuted, newValue > 0 {
+                                                    // 用户拖 slider 主动恢复声音,清掉静音前的备份值
                                                     isMuted = false
+                                                    preMuteVolume = nil
                                                     coordinator.playerLayer?.player.isMuted = false
                                                 }
                                                 coordinator.playerLayer?.player.playbackVolume = newValue
@@ -308,8 +332,12 @@ struct PlayerControlView: View {
                                         }
                                     }
                                 } label: {
+                                    // 水平 padding 让清晰度文本和左右的 30×30 图标按钮看起来一样匀称。
+                                    // 不加的话,当左侧的弹幕按钮被隐藏(supportsDanmu=false)时,
+                                    // 文本会紧贴 HStack/glass capsule 边缘,视觉上很挤。
                                     Text(viewModel.currentPlayQualityString)
                                         .frame(height: 30)
+                                        .padding(.horizontal, 8)
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundStyle(.white)
                                         .contentShape(Rectangle())
