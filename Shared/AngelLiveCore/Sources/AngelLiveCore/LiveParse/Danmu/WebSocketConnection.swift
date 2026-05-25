@@ -24,6 +24,10 @@ public final class WebSocketConnection {
     private var isClosingAfterDriverFailure = false
     private var reconnectAttempts = 0
     private var driverTimerReason: PluginJSDanmakuDriver.TickReason = .heartbeat
+    /// 当前活动 console entry id —— 让 connect/connected/disconnected 三个事件能挂到同一行日志上。
+    /// 仅在主队列回调链上读写,数据竞争可控。
+    private var consoleEntryId: UUID?
+    private var consoleConnectStart: Date?
 
     private var requestURL: URL? {
         if let raw = danmakuPlan?.transport?.url?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -86,16 +90,17 @@ public final class WebSocketConnection {
 
     public func connect() {
         shouldReconnect = true
+        consoleBeginConnectEntry(method: "connect")
 
         guard let pluginDriver else {
-            delegate?.webSocketDidDisconnect(
+            notifyDisconnected(
                 error: LiveParseError.danmuArgsParseError("弹幕驱动不受支持", "插件未声明 runtime.driver=plugin_js_v1：\(liveType.rawValue)")
             )
             return
         }
 
         guard let requestURL else {
-            delegate?.webSocketDidDisconnect(
+            notifyDisconnected(
                 error: LiveParseError.danmuArgsParseError("弹幕连接地址缺失", "插件未返回可用的 transport.url / ws_url")
             )
             return
@@ -130,6 +135,17 @@ public final class WebSocketConnection {
     }
 
     private func connectSocket(url: URL) {
+        // Starscream 的 TCPTransport 在 NWEndpoint.Port(rawValue: UInt16(port))! 上做了强解,
+        // 当 port==0(URL 显式带 :0,或非 ws/wss 协议下被默认为 0 的极端情况)会直接 trap。
+        // 这里在交给 Starscream 之前拦截非法端口,改为正常错误回调,避免崩溃。
+        guard WebSocketConnection.hasUsableEndpoint(url) else {
+            shouldReconnect = false
+            notifyDisconnected(
+                error: LiveParseError.danmuArgsParseError("弹幕连接地址非法", "URL 缺少有效 host/port:\(url.absoluteString)")
+            )
+            return
+        }
+
         var request = URLRequest(url: url)
 
         if let subprotocols = danmakuPlan?.transport?.subprotocols, !subprotocols.isEmpty {
@@ -146,6 +162,20 @@ public final class WebSocketConnection {
         socket.connect()
     }
 
+    /// 校验 URL 在 Starscream/Network.framework 下能否安全建连。
+    /// 必须满足:host 非空,且 NWEndpoint.Port 能用有效 port 构造(即 1..65535)。
+    private static func hasUsableEndpoint(_ url: URL) -> Bool {
+        guard let host = url.host, !host.isEmpty else { return false }
+        let port: Int
+        if let explicit = url.port {
+            port = explicit
+        } else {
+            let scheme = url.scheme?.lowercased() ?? ""
+            port = (scheme == "wss" || scheme == "https") ? 443 : 80
+        }
+        return port > 0 && port <= 65535
+    }
+
     private func scheduleReconnect() {
         guard shouldReconnect else { return }
 
@@ -154,11 +184,82 @@ public final class WebSocketConnection {
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
             guard let self, self.shouldReconnect, let url = self.requestURL else { return }
             self.reconnectAttempts += 1
+            self.consoleBeginConnectEntry(method: "reconnect#\(self.reconnectAttempts)")
             self.connectSocket(url: url)
         }
         if let reconnectTimer {
             RunLoop.current.add(reconnectTimer, forMode: .common)
         }
+    }
+
+    /// 包一层 delegate 调用,顺便把"连接成功"打到开发者控制台。
+    fileprivate func notifyConnected() {
+        consoleFinishEntry(status: .success, message: "WebSocket 连接已建立")
+        delegate?.webSocketDidConnect()
+    }
+
+    /// 包一层 delegate 调用,顺便把"连接断开/失败"打到开发者控制台。
+    fileprivate func notifyDisconnected(error: Error?) {
+        consoleFinishEntry(status: .error, message: consoleErrorDescription(for: error))
+        delegate?.webSocketDidDisconnect(error: error)
+    }
+}
+
+// MARK: - DevConsole 钩子
+
+private extension WebSocketConnection {
+    /// 开一行 console 日志记录本次连接尝试。后续 notifyConnected/notifyDisconnected 会把它结掉。
+    func consoleBeginConnectEntry(method: String) {
+        let liveTypeRaw = liveType.rawValue
+        let pluginIdSnapshot = pluginId ?? "-"
+        let urlSnapshot = requestURL?.absoluteString ?? "<missing>"
+        let driverSnapshot = pluginDriver
+        let start = Date()
+        consoleConnectStart = start
+        Task { @MainActor in
+            let id = PluginConsoleService.shared.log(tag: "Danmaku", method: method, status: .loading)
+            PluginConsoleService.shared.updateRequest(
+                id: id,
+                body: """
+                liveType: \(liveTypeRaw)
+                pluginId: \(pluginIdSnapshot)
+                roomId: \(driverSnapshot?.roomId ?? "-")
+                userId: \(driverSnapshot?.userId ?? "-")
+                url: \(urlSnapshot)
+                """
+            )
+            self.consoleEntryId = id
+        }
+    }
+
+    func consoleFinishEntry(status: PluginConsoleEntryStatus, message: String?) {
+        let start = consoleConnectStart
+        consoleConnectStart = nil
+        Task { @MainActor in
+            guard let id = self.consoleEntryId else { return }
+            self.consoleEntryId = nil
+            let duration: TimeInterval? = start.map { Date().timeIntervalSince($0) }
+            PluginConsoleService.shared.updateStatus(
+                id: id,
+                status: status,
+                duration: duration,
+                responseBody: status == .success ? message : nil,
+                errorMessage: status == .error ? message : nil
+            )
+        }
+    }
+
+    func consoleErrorDescription(for error: Error?) -> String {
+        guard let error else { return "未知错误" }
+        if let nsError = error as NSError? {
+            var lines: [String] = [nsError.localizedDescription]
+            lines.append("domain: \(nsError.domain) code: \(nsError.code)")
+            for (key, value) in nsError.userInfo where key != NSLocalizedDescriptionKey {
+                lines.append("\(key): \(value)")
+            }
+            return lines.joined(separator: "\n")
+        }
+        return error.localizedDescription
     }
 }
 
@@ -181,7 +282,7 @@ extension WebSocketConnection: WebSocketDelegate {
                 do {
                     let result = try await pluginDriver.onOpen()
                     applyDriverResult(result)
-                    delegate?.webSocketDidConnect()
+                    notifyConnected()
                 } catch {
                     handleDriverFailure(error)
                 }
@@ -206,7 +307,7 @@ extension WebSocketConnection: WebSocketDelegate {
                     NSLocalizedDescriptionKey: reason
                 ]
             )
-            delegate?.webSocketDidDisconnect(error: error)
+            notifyDisconnected(error: error)
             scheduleReconnect()
         case .text(let string):
             handleIncomingFrame(frameType: .text, text: string, data: nil)
@@ -380,7 +481,7 @@ private extension WebSocketConnection {
     func handleConnectionFailure(_ error: Error?) {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
-        delegate?.webSocketDidDisconnect(error: error)
+        notifyDisconnected(error: error)
         scheduleReconnect()
     }
 
@@ -388,7 +489,7 @@ private extension WebSocketConnection {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
         shouldReconnect = false
-        delegate?.webSocketDidDisconnect(error: error)
+        notifyDisconnected(error: error)
         isClosingAfterDriverFailure = true
         socket?.disconnect()
         socket?.forceDisconnect()

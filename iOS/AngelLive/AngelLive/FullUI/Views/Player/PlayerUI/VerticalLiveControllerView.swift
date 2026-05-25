@@ -22,6 +22,7 @@ struct VerticalLiveControllerView: View {
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentToast) private var presentToast
     @State private var backTapped = false
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
@@ -229,8 +230,9 @@ struct VerticalLiveControllerView: View {
 
     @MainActor
     private func toggleFavorite() async {
+        let wasFavorited = isFavorited
         do {
-            if isFavorited {
+            if wasFavorited {
                 try await favoriteModel.removeFavoriteRoom(room: viewModel.currentRoom)
             } else {
                 try await favoriteModel.addFavorite(room: viewModel.currentRoom)
@@ -238,6 +240,11 @@ struct VerticalLiveControllerView: View {
             // 成功后触发动画
             isFavoriteAnimating.toggle()
         } catch {
+            let errorMessage = FavoriteService.formatErrorCode(error: error)
+            presentToast(ToastValue(
+                icon: Image(systemName: "xmark.circle.fill"),
+                message: wasFavorited ? "取消收藏失败:\(errorMessage)" : "收藏失败:\(errorMessage)"
+            ))
             print("收藏操作失败: \(error)")
         }
     }

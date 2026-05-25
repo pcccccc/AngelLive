@@ -14,6 +14,7 @@ import AngelLiveDependencies
 struct PlatformDetailViewControllerWrapper: View {
     @Environment(PlatformDetailViewModel.self) var viewModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(\.presentToast) private var presentToast
 
     /// 共享导航状态 - 在 PiP 背景/前台切换时保持稳定
     @State private var navigationState = LiveRoomNavigationState()
@@ -29,7 +30,8 @@ struct PlatformDetailViewControllerWrapper: View {
             viewModel: viewModel,
             navigationState: navigationState,
             namespace: roomTransitionNamespace,
-            favoriteModel: favoriteModel
+            favoriteModel: favoriteModel,
+            presentToast: presentToast
         )
     }
 
@@ -71,17 +73,22 @@ private struct PlatformDetailViewControllerRepresentable: UIViewControllerRepres
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
     let favoriteModel: AppFavoriteModel
+    let presentToast: PresentToastAction
 
     func makeUIViewController(context: Context) -> PlatformDetailViewController {
-        return PlatformDetailViewController(
+        let vc = PlatformDetailViewController(
             viewModel: viewModel,
             navigationState: navigationState,
             namespace: namespace,
             favoriteModel: favoriteModel
         )
+        let presenter = presentToast
+        vc.toastPresenter = { presenter($0) }
+        return vc
     }
 
     func updateUIViewController(_ uiViewController: PlatformDetailViewController, context: Context) {
-        // 根据需要更新 UI
+        let presenter = presentToast
+        uiViewController.toastPresenter = { presenter($0) }
     }
 }

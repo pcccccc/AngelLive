@@ -21,6 +21,8 @@ class FavoriteListViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState
     /// 共享命名空间 - 用于 zoom 过渡动画
     private let namespace: Namespace.ID
+    /// 由 SwiftUI wrapper 注入,用来在 contextMenu 失败时弹 swiftui-toasts 的 toast。
+    var toastPresenter: ((ToastValue) -> Void)?
 
     private lazy var collectionView: UICollectionView = {
         let layout = createCompositionalLayout()
@@ -478,16 +480,26 @@ extension FavoriteListViewController: UICollectionViewDelegate {
         let room = rooms[indexPath.item]
         let viewModel = self.viewModel
 
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
             let unfavorite = UIAction(
                 title: "取消收藏",
                 image: UIImage(systemName: "heart.slash.fill"),
                 attributes: .destructive
-            ) { _ in
+            ) { [weak self] _ in
+                let toastPresenter = self?.toastPresenter
                 Task { @MainActor in
                     do {
                         try await viewModel.removeFavoriteRoom(room: room)
+                        toastPresenter?(ToastValue(
+                            icon: Image(systemName: "heart.slash.fill"),
+                            message: "已取消收藏"
+                        ))
                     } catch {
+                        let detail = FavoriteService.formatErrorCode(error: error)
+                        toastPresenter?(ToastValue(
+                            icon: Image(systemName: "xmark.circle.fill"),
+                            message: "取消收藏失败:\(detail)"
+                        ))
                         print("取消收藏失败: \(error)")
                     }
                 }

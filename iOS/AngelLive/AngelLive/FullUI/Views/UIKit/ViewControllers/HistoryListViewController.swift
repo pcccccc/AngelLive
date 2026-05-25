@@ -19,6 +19,8 @@ class HistoryListViewController: UIViewController {
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
     private var lastKnownCollectionWidth: CGFloat = 0
+    /// 由 SwiftUI wrapper 注入,用来弹 swiftui-toasts 的 toast。
+    var toastPresenter: ((ToastValue) -> Void)?
 
     private lazy var collectionView: UICollectionView = {
         let layout = createLayout()
@@ -197,6 +199,17 @@ class HistoryListViewController: UIViewController {
         hostingController.didMove(toParent: self)
         emptyHostingController = hostingController
     }
+
+    /// 收藏/取消收藏失败时通过 SwiftUI wrapper 注入的 toast 通道反馈,避免静默失败。
+    @MainActor
+    fileprivate func presentFavoriteFailureToast(title: String, error: Error) {
+        let detail = FavoriteService.formatErrorCode(error: error)
+        toastPresenter?(ToastValue(
+            icon: Image(systemName: "xmark.circle.fill"),
+            message: "\(title):\(detail)"
+        ))
+        print("\(title): \(error)")
+    }
 }
 
 // MARK: - UICollectionViewDataSource
@@ -284,18 +297,36 @@ extension HistoryListViewController: UICollectionViewDelegate {
                         title: "取消收藏",
                         image: UIImage(systemName: "heart.slash.fill"),
                         attributes: .destructive
-                    ) { _ in
+                    ) { [weak self] _ in
+                        let toastPresenter = self?.toastPresenter
                         Task { @MainActor in
-                            try? await favoriteModel.removeFavoriteRoom(room: room)
+                            do {
+                                try await favoriteModel.removeFavoriteRoom(room: room)
+                                toastPresenter?(ToastValue(
+                                    icon: Image(systemName: "heart.slash.fill"),
+                                    message: "已取消收藏"
+                                ))
+                            } catch {
+                                self?.presentFavoriteFailureToast(title: "取消收藏失败", error: error)
+                            }
                         }
                     })
                 } else {
                     actions.append(UIAction(
                         title: "收藏",
                         image: UIImage(systemName: "heart.fill")
-                    ) { _ in
+                    ) { [weak self] _ in
+                        let toastPresenter = self?.toastPresenter
                         Task { @MainActor in
-                            try? await favoriteModel.addFavorite(room: room)
+                            do {
+                                try await favoriteModel.addFavorite(room: room)
+                                toastPresenter?(ToastValue(
+                                    icon: Image(systemName: "heart.fill"),
+                                    message: "收藏成功"
+                                ))
+                            } catch {
+                                self?.presentFavoriteFailureToast(title: "收藏失败", error: error)
+                            }
                         }
                     })
                 }

@@ -19,6 +19,8 @@ class PlatformDetailViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
+    /// 透传给 SubCategoryViewController / RoomListViewController,用来弹收藏失败的 toast。
+    var toastPresenter: ((ToastValue) -> Void)?
 
     // 骨架屏容器
     private var skeletonHostingController: UIHostingController<PlatformDetailSkeletonView>?
@@ -306,6 +308,7 @@ extension PlatformDetailViewController: JXSegmentedListContainerViewDataSource {
             namespace: namespace,
             favoriteModel: favoriteModel
         )
+        vc.toastPresenter = toastPresenter
         return vc
     }
 }

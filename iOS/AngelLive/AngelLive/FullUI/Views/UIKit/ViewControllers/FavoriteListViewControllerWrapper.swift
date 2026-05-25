@@ -12,6 +12,7 @@ import AngelLiveDependencies
 struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(AppFavoriteModel.self) private var viewModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentToast) private var presentToast
     let searchText: String
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
@@ -31,10 +32,13 @@ struct FavoriteListViewControllerWrapper: UIViewControllerRepresentable {
             navigationState: navigationState,
             namespace: namespace
         )
+        vc.toastPresenter = { presentToast($0) }
         return vc
     }
 
     func updateUIViewController(_ uiViewController: FavoriteListViewController, context: Context) {
+        // presentToast 的 PresentToastAction 是值类型,刷新时同步最新引用
+        uiViewController.toastPresenter = { presentToast($0) }
         // 当应用在后台时跳过 UI 更新，避免 iOS 18 的 DiffableDataSource 崩溃
         guard scenePhase == .active else { return }
 

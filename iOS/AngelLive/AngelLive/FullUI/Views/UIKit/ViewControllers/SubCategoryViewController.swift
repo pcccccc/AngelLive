@@ -20,6 +20,8 @@ class SubCategoryViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
+    /// 透传给 RoomListViewController,用来弹收藏失败的 toast。
+    var toastPresenter: ((ToastValue) -> Void)?
 
     // 子分类 JXSegmentedView
     private lazy var subCategoryDataSource = JXSegmentedTitleDataSource()
@@ -285,6 +287,7 @@ extension SubCategoryViewController: JXSegmentedListContainerViewDataSource {
             namespace: namespace,
             favoriteModel: favoriteModel
         )
+        vc.toastPresenter = toastPresenter
         return vc
     }
 }

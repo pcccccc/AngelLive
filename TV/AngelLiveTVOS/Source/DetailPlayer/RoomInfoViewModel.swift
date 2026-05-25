@@ -56,6 +56,14 @@ final class RoomInfoViewModel {
     weak var playerCoordinator: KSVideoPlayer.Coordinator?
     private var qualitySwitchTask: Task<Void, Never>?
 
+    // MARK: - 受控播放重建状态
+    /// 1 分钟内最多自动重建 3 次,超过则停手交给 UI 错误页/下播判定
+    private static let maxPlaybackRetries = 3
+    private static let playbackRetryWindow: TimeInterval = 60
+    private var playbackRetryAttempts = 0
+    private var playbackRetryWindowStart: Date?
+    private var playbackRetryTask: Task<Void, Never>?
+
     var isLoading = false
     var rotationAngle = 0.0
     var hasError = false
@@ -127,6 +135,11 @@ final class RoomInfoViewModel {
         let option = PlayerOptions()
         option.userAgent = "libmpv"
         option.syncSystemRate = settingModel.syncSystemRate
+        // 强制按 VOD 路径处理 IO 失败/EOF,绕过 KSPlayer 的 MEPlayerItem.reconnect() ——
+        // 该路径在重开 AVFormatContext 时不会同步暂停解码线程,会导致解码线程拿到 NULL AVCodecContext
+        // 调用 avcodec_send_packet 时崩溃(EXC_BAD_ACCESS at 0x28)。
+        // isLive=false 后,所有 IO 异常都通过 .failed/.endOfStream 走到 finish 回调,由我们这层做受控重建。
+        option.isLive = false
         self.playerOption = option
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
@@ -644,22 +657,118 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
            state == .readyToPlay {
             layer.seek(time: TimeInterval(startPosition), autoPlay: true) { _ in }
         }
-    }
-    
-    func player(layer: KSPlayer.KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
-        
-    }
-    
-    func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-        if let error = error {
-            let errorMsg = error.localizedDescription
-            // 检测流断开相关错误，可能是主播下播
-            if errorMsg.contains("avformat can't open input") || errorMsg.contains("timed out") || errorMsg.contains("Operation timed out") {
-                checkLiveStatusOnError(error: error)
-            } else {
-                print("[KSPlayer] suppress finish error UI on tvOS: \(errorMsg)")
-            }
+        // 真正起播成功后清空重试预算
+        if state == .bufferFinished || state == .readyToPlay {
+            resetPlaybackRetryBudget()
         }
+    }
+
+    func player(layer: KSPlayer.KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
+
+    }
+
+    func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
+        guard let error else { return }
+        let errorMsg = error.localizedDescription
+        // 因 isLive=false,IO 失败/超时/EOF 都会从这里出来。先尝试受控重建播放器,
+        // 而不是依赖 KSPlayer 内部 reconnect(那条路径有解码线程 race,会 EXC_BAD_ACCESS)。
+        if isRetryablePlaybackError(errorMsg) {
+            if attemptManagedPlaybackRetry(triggeredBy: error) {
+                return
+            }
+            // 重试预算用尽,回落到原有的下播/错误判定
+            checkLiveStatusOnError(error: error)
+            return
+        }
+        print("[KSPlayer] suppress finish error UI on tvOS: \(errorMsg)")
+    }
+
+    // MARK: - 受控播放重建
+
+    private func isRetryablePlaybackError(_ message: String) -> Bool {
+        message.contains("avformat can't open input")
+            || message.contains("timed out")
+            || message.contains("Operation timed out")
+            || message.contains("End of file")
+            || message.contains("readFrame")
+            || message.contains("I/O error")
+    }
+
+    /// 返回 true 表示已安排了一次重建;false 表示预算已用完。
+    @MainActor
+    private func attemptManagedPlaybackRetry(triggeredBy error: Error) -> Bool {
+        let now = Date()
+        if let start = playbackRetryWindowStart,
+           now.timeIntervalSince(start) > Self.playbackRetryWindow {
+            playbackRetryAttempts = 0
+            playbackRetryWindowStart = nil
+        }
+        guard playbackRetryAttempts < Self.maxPlaybackRetries else {
+            logPlaybackRetryBudgetExhausted(triggeredBy: error)
+            return false
+        }
+
+        if playbackRetryWindowStart == nil {
+            playbackRetryWindowStart = now
+        }
+        playbackRetryAttempts += 1
+        let attempt = playbackRetryAttempts
+        // 指数退避:1s / 2s / 4s
+        let delay = pow(2.0, Double(attempt - 1))
+        print("[KSPlayer] managed retry \(attempt)/\(Self.maxPlaybackRetries) in \(delay)s")
+        logPlaybackRetryScheduled(attempt: attempt, delay: delay, triggeredBy: error)
+
+        playbackRetryTask?.cancel()
+        playbackRetryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            self.refreshPlayback()
+        }
+        return true
+    }
+
+    @MainActor
+    private func logPlaybackRetryScheduled(attempt: Int, delay: TimeInterval, triggeredBy error: Error) {
+        let id = PluginConsoleService.shared.log(tag: "Player", method: "managedRetry#\(attempt)", status: .loading)
+        PluginConsoleService.shared.updateRequest(
+            id: id,
+            body: """
+            triggeredBy: \(error.localizedDescription)
+            currentURL: \(currentPlayURL?.absoluteString ?? "-")
+            attempt: \(attempt) / \(Self.maxPlaybackRetries)
+            backoff: \(String(format: "%.1f", delay))s
+            """
+        )
+        PluginConsoleService.shared.updateStatus(
+            id: id,
+            status: .success,
+            responseBody: "已安排在 \(String(format: "%.1f", delay))s 后重建播放器"
+        )
+    }
+
+    @MainActor
+    private func logPlaybackRetryBudgetExhausted(triggeredBy error: Error) {
+        let id = PluginConsoleService.shared.log(tag: "Player", method: "managedRetry", status: .loading)
+        PluginConsoleService.shared.updateRequest(
+            id: id,
+            body: """
+            triggeredBy: \(error.localizedDescription)
+            currentURL: \(currentPlayURL?.absoluteString ?? "-")
+            """
+        )
+        PluginConsoleService.shared.updateStatus(
+            id: id,
+            status: .error,
+            errorMessage: "重试预算已用尽:\(Self.maxPlaybackRetries) 次 / \(Int(Self.playbackRetryWindow))s 窗口"
+        )
+    }
+
+    @MainActor
+    private func resetPlaybackRetryBudget() {
+        playbackRetryAttempts = 0
+        playbackRetryWindowStart = nil
+        playbackRetryTask?.cancel()
+        playbackRetryTask = nil
     }
 
     /// 播放器错误时检查直播状态

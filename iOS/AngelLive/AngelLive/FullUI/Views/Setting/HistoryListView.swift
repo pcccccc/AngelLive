@@ -87,19 +87,23 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(HistoryModel.self) private var historyModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.presentToast) private var presentToast
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
 
     func makeUIViewController(context: Context) -> HistoryListViewController {
-        return HistoryListViewController(
+        let vc = HistoryListViewController(
             historyModel: historyModel,
             navigationState: navigationState,
             namespace: namespace,
             favoriteModel: favoriteModel
         )
+        vc.toastPresenter = { presentToast($0) }
+        return vc
     }
 
     func updateUIViewController(_ uiViewController: HistoryListViewController, context: Context) {
+        uiViewController.toastPresenter = { presentToast($0) }
         // 避免后台状态触发 UICollectionView 更新导致 iOS 18 崩溃
         guard scenePhase == .active else { return }
         uiViewController.reloadData()
