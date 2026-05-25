@@ -21,6 +21,7 @@ struct PlayerControlView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var showSettings = false
     @State private var showDanmakuSettings = false
+    @State private var showStreamerInfo = false
     @State private var isFavoriteAnimating = false
     @State private var isFavoriteLoading = false
     @State private var isFullscreen = false
@@ -385,31 +386,44 @@ struct PlayerControlView: View {
     // MARK: - 主播信息卡片
     private var streamerInfoCard: some View {
         HStack(spacing: 10) {
-            // 主播头像
-            RemoteAvatarView(url: URL(string: room.userHeadImg), size: 36) {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .resizable()
-                            .scaledToFit()
+            // 主播头像 + 文本（可点击查看主播信息）
+            Button {
+                showStreamerInfo.toggle()
+            } label: {
+                HStack(spacing: 10) {
+                    RemoteAvatarView(url: URL(string: room.userHeadImg), size: 36) {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .padding(5)
+                            )
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        // 主播名称
+                        Text(String(room.userName.prefix(10)).orDash)
+                            .foregroundStyle(.white)
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+
+                        // 房间标题
+                        Text(String(room.roomTitle.prefix(20)).orDash)
                             .foregroundStyle(.white.opacity(0.8))
-                            .padding(5)
-                    )
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
+                }
+                .contentShape(Rectangle())
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                // 主播名称
-                Text(String(room.userName.prefix(10)).orDash)
-                    .foregroundStyle(.white)
-                    .font(.subheadline.bold())
-                    .lineLimit(1)
-
-                // 房间标题
-                Text(String(room.roomTitle.prefix(20)).orDash)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .font(.caption)
-                    .lineLimit(1)
+            .buttonStyle(.plain)
+            .help("查看主播信息")
+            .popover(isPresented: $showStreamerInfo, arrowEdge: .bottom) {
+                StreamerInfoPopover(room: room)
+                    .environment(\.colorScheme, .light)
             }
 
             // 收藏按钮
