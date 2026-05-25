@@ -19,6 +19,11 @@ enum TabSelection: Hashable {
     case search
 }
 
+// 平台错误页「去登录」→ 跳转到设置 Tab 的通知（与 iOS 端同名同语义）
+extension Notification.Name {
+    static let switchToSettings = Notification.Name("switchToSettings")
+}
+
 struct ContentView: View {
     @State private var selectedTab: TabSelection = .favorite
     // 首次启动管理器
@@ -111,6 +116,9 @@ struct ContentView: View {
                     .background(SidebarWidthEnforcer(min: 180, ideal: 200, max: 260))
                     .navigationDestination(for: LiveModel.self) { room in
                         RoomPlayerView(room: room)
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
+                        selectedTab = .settings
                     }
                     .sheet(isPresented: $manager.showWelcome) {
                         WelcomeView {

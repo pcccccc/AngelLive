@@ -17,19 +17,12 @@ struct PlatformDetailView: View {
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
-    @State private var showPlatformLogin = false
     @State private var showCapabilityPopover = false
 
     /// 根据平台类型生成登录相关的错误标题
     private var authErrorTitle: String {
         let platformName = LiveParseTools.getLivePlatformName(viewModel.platform.liveType)
         return "加载失败-请登录\(platformName)账号"
-    }
-
-    /// 根据平台类型显示对应的登录视图
-    private var platformLoginView: some View {
-        MacPlatformLoginWebSheet(pluginId: viewModel.platform.liveType.rawValue)
-            .frame(minWidth: 800, minHeight: 600)
     }
 
     /// 当前分类图标 URL（如果有）
@@ -61,7 +54,7 @@ struct PlatformDetailView: View {
                         }
                     },
                     onLogin: error.isAuthRequired ? {
-                        showPlatformLogin = true
+                        NotificationCenter.default.post(name: .switchToSettings, object: nil)
                     } : nil
                 )
             } else if viewModel.isLoadingCategories && viewModel.categories.isEmpty {
@@ -210,9 +203,6 @@ struct PlatformDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showCategorySheet)
-        .sheet(isPresented: $showPlatformLogin) {
-            platformLoginView
-        }
         .task {
             if viewModel.categories.isEmpty {
                 await viewModel.loadCategories()
@@ -317,7 +307,7 @@ struct PlatformDetailView: View {
                     }
                 },
                 onLogin: error.isAuthRequired ? {
-                    showPlatformLogin = true
+                    NotificationCenter.default.post(name: .switchToSettings, object: nil)
                 } : nil
             )
         } else if rooms.isEmpty {
