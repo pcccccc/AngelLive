@@ -10,6 +10,7 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 import AppKit
+import Kingfisher
 #if !APPSTORE
 import Sparkle
 #endif
@@ -53,12 +54,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KSOptions.logLevel = .error
         KSOptions.hudLog = false
 
+        configureImageCache()
+
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
             if PlatformCredentialSyncService.shared.iCloudSyncEnabled {
                 await PlatformCredentialSyncService.shared.syncAllFromICloud()
             }
         }
+    }
+
+    /// 限制 Kingfisher 磁盘缓存上限,避免直播封面图无限堆积。
+    private func configureImageCache() {
+        let cache = ImageCache.default
+        cache.diskStorage.config.sizeLimit = 200 * 1024 * 1024  // 200 MB
+        cache.diskStorage.config.expiration = .days(3)
+        cache.memoryStorage.config.totalCostLimit = 80 * 1024 * 1024  // 80 MB
+        cache.memoryStorage.config.expiration = .seconds(300)
+        cache.cleanExpiredDiskCache()
     }
 }
 

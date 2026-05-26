@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import Kingfisher
 
 struct SettingView: View {
     #if !APPSTORE
@@ -20,6 +21,9 @@ struct SettingView: View {
     @State private var showDanmuSetting = false
     @State private var showAccountManagement = false
     @State private var showSyncManagement = false
+    @State private var cacheSizeText: String = "计算中..."
+    @State private var isClearingCache = false
+    @State private var showClearCacheConfirm = false
 
     var body: some View {
         Form {
@@ -48,6 +52,10 @@ struct SettingView: View {
 
             Section("播放") {
                 danmuSettingRow
+            }
+
+            Section("存储") {
+                clearCacheRow
             }
 
             Section("关于与支持") {
@@ -132,6 +140,84 @@ struct SettingView: View {
             }
             .frame(minWidth: 640, minHeight: 560)
         }
+        .task {
+            await refreshCacheSize()
+        }
+        .confirmationDialog(
+            "确认清除所有缓存?",
+            isPresented: $showClearCacheConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("清除", role: .destructive) {
+                Task { await clearAllCaches() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将清理图片缓存、插件旧版本及网络临时文件,不影响收藏与登录状态。")
+        }
+    }
+
+    private var clearCacheRow: some View {
+        Button {
+            showClearCacheConfirm = true
+        } label: {
+            PanelNavigationRow(
+                title: "清除缓存",
+                subtitle: "清理图片缓存、插件旧版本及临时文件",
+                showsChevron: false
+            ) {
+                Image(systemName: "trash.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.red.gradient)
+            } trailing: {
+                if isClearingCache {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text(cacheSizeText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isClearingCache)
+    }
+
+    private func refreshCacheSize() async {
+        let sizes = await Task.detached(priority: .utility) {
+            CacheMaintenanceService.computeNonImageSizes()
+        }.value
+        let imageBytes = await imageDiskCacheSize()
+        let total = sizes.urlCache + sizes.tmp + sizes.pluginOldVersions + imageBytes
+        await MainActor.run {
+            cacheSizeText = CacheMaintenanceService.formatBytes(total)
+        }
+    }
+
+    private func imageDiskCacheSize() async -> Int64 {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Int64, Never>) in
+            ImageCache.default.calculateDiskStorageSize { result in
+                let bytes = (try? result.get()).map(Int64.init) ?? 0
+                continuation.resume(returning: bytes)
+            }
+        }
+    }
+
+    private func clearAllCaches() async {
+        await MainActor.run { isClearingCache = true }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            ImageCache.default.clearDiskCache {
+                continuation.resume()
+            }
+        }
+        ImageCache.default.clearMemoryCache()
+        CacheMaintenanceService.clearURLCacheAndTmp()
+        CacheMaintenanceService.prunePluginOldVersions()
+
+        await refreshCacheSize()
+        await MainActor.run { isClearingCache = false }
     }
 
     private var accountManagementRow: some View {

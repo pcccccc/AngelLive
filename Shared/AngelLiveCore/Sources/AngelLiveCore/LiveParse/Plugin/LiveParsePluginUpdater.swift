@@ -233,11 +233,17 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
             } else {
                 try persistLastGoodVersion(pluginId: manifest.pluginId, version: manifest.version)
             }
+
+            // 新版本激活成功后,清理同 pluginId 的旧版本目录(保留 pinned + lastGood + 最新版)
+            let prunedVersions = CacheMaintenanceService.prunePluginOldVersions(pluginId: manifest.pluginId)
+            let prunedDescription = prunedVersions.isEmpty
+                ? "lastGood 已写入"
+                : "lastGood 已写入,已清理旧版本: \(prunedVersions.joined(separator: ", "))"
             await Self.consoleFinish(
                 id: entryId,
                 start: start,
                 status: .success,
-                responseBody: "已激活 \(manifest.pluginId)@\(manifest.version) (lastGood 已写入)"
+                responseBody: "已激活 \(manifest.pluginId)@\(manifest.version) (\(prunedDescription))"
             )
         } catch {
             rollbackInstalled(manifest: manifest, manager: manager)

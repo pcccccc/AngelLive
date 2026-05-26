@@ -7,12 +7,16 @@
 
 import SwiftUI
 import AngelLiveCore
+import Kingfisher
 
 struct SettingView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var generalSetting = GeneralSettingModel()
     @State private var cloudKitReady = false
     @State private var cloudKitStateString = "检查中..."
+    @State private var cacheSizeText: String = "计算中..."
+    @State private var isClearingCache = false
+    @State private var showClearCacheConfirm = false
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
     var body: some View {
@@ -167,6 +171,41 @@ struct SettingView: View {
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
 
+                // 存储
+                Section {
+                    Button {
+                        showClearCacheConfirm = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.red.gradient)
+                                .frame(width: 32)
+
+                            Text("清除缓存")
+                                .foregroundStyle(AppConstants.Colors.primaryText)
+
+                            Spacer()
+
+                            if isClearingCache {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Text(cacheSizeText)
+                                    .font(.subheadline)
+                                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                            }
+                        }
+                    }
+                    .disabled(isClearingCache)
+                } header: {
+                    Text("存储")
+                } footer: {
+                    Text("清理图片缓存、插件旧版本及网络临时文件。保留收藏、登录与已激活的插件版本。")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                }
+
                 // 关于
                 Section {
                     NavigationLink {
@@ -205,6 +244,7 @@ struct SettingView: View {
                 if pluginAvailability.hasAvailablePlugins {
                     await checkCloudKitStatus()
                 }
+                await refreshCacheSize()
             }
             .onChange(of: pluginAvailability.hasAvailablePlugins) { _, hasPlugins in
                 guard hasPlugins else { return }
@@ -212,12 +252,60 @@ struct SettingView: View {
                     await checkCloudKitStatus()
                 }
             }
+            .confirmationDialog(
+                "确认清除所有缓存?",
+                isPresented: $showClearCacheConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("清除", role: .destructive) {
+                    Task { await clearAllCaches() }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("将清理图片缓存、插件旧版本及网络临时文件,不影响收藏与登录状态。")
+            }
         }
     }
 
     private func checkCloudKitStatus() async {
         cloudKitStateString = await FavoriteService.getCloudState()
         cloudKitReady = cloudKitStateString == "正常"
+    }
+
+    private func refreshCacheSize() async {
+        let sizes = await Task.detached(priority: .utility) {
+            CacheMaintenanceService.computeNonImageSizes()
+        }.value
+        let imageBytes = await imageDiskCacheSize()
+        let total = sizes.urlCache + sizes.tmp + sizes.pluginOldVersions + imageBytes
+        await MainActor.run {
+            cacheSizeText = CacheMaintenanceService.formatBytes(total)
+        }
+    }
+
+    private func imageDiskCacheSize() async -> Int64 {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Int64, Never>) in
+            ImageCache.default.calculateDiskStorageSize { result in
+                let bytes = (try? result.get()).map(Int64.init) ?? 0
+                continuation.resume(returning: bytes)
+            }
+        }
+    }
+
+    private func clearAllCaches() async {
+        await MainActor.run { isClearingCache = true }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            ImageCache.default.clearDiskCache {
+                continuation.resume()
+            }
+        }
+        ImageCache.default.clearMemoryCache()
+        CacheMaintenanceService.clearURLCacheAndTmp()
+        CacheMaintenanceService.prunePluginOldVersions()
+
+        await refreshCacheSize()
+        await MainActor.run { isClearingCache = false }
     }
 }
 

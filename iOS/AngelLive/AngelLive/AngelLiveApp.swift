@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import Kingfisher
 internal import AVFoundation
 
 @inline(__always)
@@ -59,6 +60,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // 仅预配置播放类别，避免应用启动时立刻打断其他 App 的音频。
         configureAudioSessionForPlayback()
+        configureImageCache()
         #if DEBUG
         logPluginInstallLocation()
         #endif
@@ -77,6 +79,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             KSOptions.supportedInterfaceOrientations = .portrait
         }
         return true
+    }
+
+    /// 限制 Kingfisher 磁盘缓存上限,避免直播封面图无限堆积导致 Documents & Data 膨胀。
+    private func configureImageCache() {
+        let cache = ImageCache.default
+        cache.diskStorage.config.sizeLimit = 200 * 1024 * 1024  // 200 MB
+        cache.diskStorage.config.expiration = .days(3)
+        cache.memoryStorage.config.totalCostLimit = 60 * 1024 * 1024  // 60 MB
+        cache.memoryStorage.config.expiration = .seconds(300)
+        // 启动后异步清理过期文件,不阻塞主线程
+        cache.cleanExpiredDiskCache()
     }
 
     /// 预配置音频会话类别，真正播放时再由系统激活会话。

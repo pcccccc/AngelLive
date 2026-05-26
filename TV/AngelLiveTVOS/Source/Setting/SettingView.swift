@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import Kingfisher
 
 extension Int: @retroactive Identifiable {
     public var id: Int { self }
@@ -14,13 +15,16 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于&问题反馈"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈"]
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @StateObject var settingStore = SettingStore()
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @Environment(AppState.self) var appViewModel
     @FocusState private var focusedIndex: Int?
+    @State private var cacheSizeText: String = "计算中..."
+    @State private var isClearingCache = false
+    @State private var showClearCacheConfirm = false
 
     // 需要在右侧半屏显示的页面索引
     private var halfScreenIndices: Set<Int> { [0, 2, 3] } // 账号管理、通用设置、弹幕设置
@@ -94,6 +98,21 @@ struct SettingView: View {
                 selectedIndex = nil
             }
         }
+        .task {
+            await refreshCacheSize()
+        }
+        .confirmationDialog(
+            "确认清除所有缓存?",
+            isPresented: $showClearCacheConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("清除", role: .destructive) {
+                Task { await clearAllCaches() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将清理图片缓存、插件旧版本及网络临时文件,不影响收藏与登录状态。")
+        }
     }
 
     // MARK: - 菜单列表
@@ -102,7 +121,9 @@ struct SettingView: View {
             ForEach(titles.indices, id: \.self) { index in
                 if shouldShowMenuItem(index) {
                     Button {
-                        if halfScreenIndices.contains(index) {
+                        if index == 7 {
+                            showClearCacheConfirm = true
+                        } else if halfScreenIndices.contains(index) {
                             selectedIndex = index
                         } else {
                             fullScreenIndex = index
@@ -120,12 +141,23 @@ struct SettingView: View {
                                 Text(appViewModel.favoriteViewModel.cloudKitReady ? "iCloud就绪" : "iCloud状态异常")
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
+                            } else if index == 7 {
+                                if isClearingCache {
+                                    ProgressView()
+                                } else {
+                                    Text(cacheSizeText)
+                                        .font(.system(size: 30))
+                                        .foregroundStyle(.gray)
+                                }
                             }
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.secondary)
+                            if index != 7 {
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                     .focused($focusedIndex, equals: index)
+                    .disabled(index == 7 && isClearingCache)
                 }
             }
         }
@@ -224,7 +256,7 @@ struct SettingView: View {
             .onExitCommand {
                 fullScreenIndex = nil
             }
-        case 7: // 关于
+        case 8: // 关于
             AboutUSView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
@@ -234,6 +266,45 @@ struct SettingView: View {
         default:
             EmptyView()
         }
+    }
+
+    // MARK: - 缓存维护
+    private func refreshCacheSize() async {
+        let sizes = await Task.detached(priority: .utility) {
+            CacheMaintenanceService.computeNonImageSizes()
+        }.value
+        let imageBytes = await imageDiskCacheSize()
+        let total = sizes.urlCache + sizes.tmp + sizes.pluginOldVersions + imageBytes
+        await MainActor.run {
+            cacheSizeText = CacheMaintenanceService.formatBytes(total)
+        }
+    }
+
+    private func imageDiskCacheSize() async -> Int64 {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Int64, Never>) in
+            ImageCache.default.calculateDiskStorageSize { result in
+                let bytes = (try? result.get()).map(Int64.init) ?? 0
+                continuation.resume(returning: bytes)
+            }
+        }
+    }
+
+    private func clearAllCaches() async {
+        await MainActor.run { isClearingCache = true }
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            ImageCache.default.clearDiskCache {
+                continuation.resume()
+            }
+        }
+        ImageCache.default.clearMemoryCache()
+        CacheMaintenanceService.clearURLCacheAndTmp()
+        CacheMaintenanceService.prunePluginOldVersions()
+        // tvOS 清理后立即同步到 App Group,让 TopShelf 看到的也是清理后的状态
+        PluginAppGroupSync.syncToAppGroup()
+
+        await refreshCacheSize()
+        await MainActor.run { isClearingCache = false }
     }
 }
 

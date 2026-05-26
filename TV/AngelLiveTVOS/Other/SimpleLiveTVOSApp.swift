@@ -34,6 +34,14 @@ struct SimpleLiveTVOSApp: App {
             .processor(WebPProcessor.default),
             .cacheSerializer(WebPSerializer.default)
         ]
+        // tvOS 设备存储更紧张,缓存上限更严格
+        let imageCache = ImageCache.default
+        imageCache.diskStorage.config.sizeLimit = 150 * 1024 * 1024  // 150 MB
+        imageCache.diskStorage.config.expiration = .days(3)
+        imageCache.memoryStorage.config.totalCostLimit = 80 * 1024 * 1024  // 80 MB
+        imageCache.memoryStorage.config.expiration = .seconds(300)
+        imageCache.cleanExpiredDiskCache()
+
         Bugsnag.start()
 
         // 配置 TipKit
