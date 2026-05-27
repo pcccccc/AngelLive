@@ -230,6 +230,16 @@ class LiveViewModel {
             } catch {
                 await MainActor.run {
                     self.isLoading = false
+                    // 插件抛 "返回结果为空" 不算错误:分页到底 / 当前分类无房间。
+                    // 不弹错误页,只置 hasMoreRooms=false,首页同时清空列表让空态接管。
+                    if let liveParseError = error as? LiveParseError,
+                       liveParseError.detail.contains("返回结果为空") {
+                        self.hasMoreRooms = false
+                        if self.roomPage == 1 {
+                            self.roomList = []
+                        }
+                        return
+                    }
                     self.handleError(error)
                 }
             }

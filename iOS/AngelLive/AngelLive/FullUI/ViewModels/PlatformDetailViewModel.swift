@@ -141,11 +141,20 @@ class PlatformDetailViewModel {
                 || error is CancellationError
                 || (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled
 
-            if !isCancelled {
-                // 只有非取消错误才设置到 roomError
-                print("获取房间列表失败: \(error)")
-                roomError = error
+            if isCancelled {
+                return
             }
+
+            // 插件抛 "返回结果为空" 不算错误:分页到底 / 当前分类无房间。
+            // 不挂 roomError,只置 hasMoreRooms=false;首页刷新场景 roomList 已在 refresh 入口清空。
+            if let liveParseError = error as? LiveParseError,
+               liveParseError.detail.contains("返回结果为空") {
+                hasMoreRooms = false
+                return
+            }
+
+            print("获取房间列表失败: \(error)")
+            roomError = error
         }
     }
 

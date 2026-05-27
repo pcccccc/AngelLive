@@ -101,15 +101,14 @@ struct SettingView: View {
         .task {
             await refreshCacheSize()
         }
-        .confirmationDialog(
+        .alert(
             "确认清除所有缓存?",
-            isPresented: $showClearCacheConfirm,
-            titleVisibility: .visible
+            isPresented: $showClearCacheConfirm
         ) {
+            Button("取消", role: .cancel) {}
             Button("清除", role: .destructive) {
                 Task { await clearAllCaches() }
             }
-            Button("取消", role: .cancel) {}
         } message: {
             Text("将清理图片缓存、插件旧版本及网络临时文件,不影响收藏与登录状态。")
         }

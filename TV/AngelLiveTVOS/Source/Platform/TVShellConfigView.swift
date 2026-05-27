@@ -183,6 +183,7 @@ struct TVPluginManagementView: View {
     @Environment(AppState.self) private var appViewModel
     @State private var pluginIdToUninstall: String?
     @State private var sourceToRemove: String?
+    @State private var showAddSource = false
 
     var body: some View {
         @Bindable var consent = consentService
@@ -266,6 +267,20 @@ struct TVPluginManagementView: View {
         } message: {
             Text(consent.alertMessage)
         }
+        .fullScreenCover(isPresented: $showAddSource) {
+            TVAddPluginSourceView()
+                .environment(appViewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
+        }
+        .onChange(of: showAddSource) { _, isShowing in
+            // cover 关闭后刷新 availability 和插件目录,让新订阅源带来的插件状态跟上。
+            guard !isShowing else { return }
+            Task {
+                await pluginAvailability.refresh()
+                await reloadPluginCatalog()
+            }
+        }
     }
 
     private var actionSection: some View {
@@ -280,6 +295,14 @@ struct TVPluginManagementView: View {
                 disabled: pluginSourceManager.sourceURLs.isEmpty || pluginSourceManager.isFetchingIndex
             ) {
                 Task { await reloadPluginCatalog() }
+            }
+
+            actionRow(
+                title: "添加订阅源",
+                subtitle: "输入 .json 订阅地址或兑换码",
+                iconName: "plus.circle.fill"
+            ) {
+                showAddSource = true
             }
 
             if pluginSourceManager.installTotalCount > 0 {
