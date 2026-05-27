@@ -364,6 +364,8 @@ final class RoomInfoViewModel {
         )
         let message = "[PlayerDebug][macOS][WillPlay] source=\(source), platform=\(currentRoom.liveType.rawValue), roomId=\(currentRoom.roomId), tapped=\(tappedSummary), effective=\(effectiveSummary), finalQuality=\(currentPlayQualityString)(qn=\(currentPlayQualityQn)), players=\(selectedPlayers), url=\(url.absoluteString)"
         Logger.debug(message, category: .player)
+        BugsnagBootstrap.setLiveContext(platform: currentRoom.liveType.rawValue, roomID: currentRoom.roomId)
+        BugsnagBootstrap.setPlayerKernel(selectedPlayers)
     }
 
     private func playerTypeName(for playerType: MediaPlayerProtocol.Type) -> String {

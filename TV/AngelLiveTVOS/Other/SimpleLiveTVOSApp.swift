@@ -42,7 +42,7 @@ struct SimpleLiveTVOSApp: App {
         imageCache.memoryStorage.config.expiration = .seconds(300)
         imageCache.cleanExpiredDiskCache()
 
-        Bugsnag.start()
+        BugsnagBootstrap.start(platform: .tvOS)
 
         // 配置 TipKit
         try? Tips.configure([

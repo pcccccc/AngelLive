@@ -22,10 +22,5 @@
 	<array>
 		<string>_angellive-cookie._tcp</string>
 	</array>
-	<key>bugsnag</key>
-	<dict>
-		<key>apiKey</key>
-		<string>YOUR_BUGSNAG_API_KEY_HERE</string>
-	</dict>
 </dict>
 </plist>
