@@ -31,13 +31,13 @@ struct CloudSyncTabIcon: View {
     private var iconName: String {
         switch syncStatus {
         case .syncing:
-            return "arrow.trianglehead.2.clockwise.rotate.90.icloud"
+            return "arrow.trianglehead.2.clockwise.rotate.90.icloud.fill"
         case .success:
-            return "checkmark.icloud"
+            return "checkmark.icloud.fill"
         case .error:
-            return "exclamationmark.icloud"
+            return "exclamationmark.icloud.fill"
         case .notLoggedIn:
-            return "xmark.icloud"
+            return "xmark.icloud.fill"
         }
     }
 }

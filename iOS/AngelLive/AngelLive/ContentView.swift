@@ -67,12 +67,14 @@ struct ContentView: View {
                     iPadTabView
                 } else {
                     iPhoneTabView
+                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteViewModel.syncStatus))
                 }
             } else {
                 if AppConstants.Device.isIPad {
                     iOS17iPadTabView
                 } else {
                     iOS17iPhoneTabView
+                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteViewModel.syncStatus))
                 }
             }
         }
@@ -342,7 +344,8 @@ struct ContentView: View {
                     Label {
                         Text("收藏")
                     } icon: {
-                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                        // iPhone：常量占位，动画交给 FavoriteTabSymbolAnimator
+                        Image(systemName: "checkmark.icloud.fill")
                     }
                 }
 
@@ -370,7 +373,8 @@ struct ContentView: View {
                     Label {
                         Text("收藏")
                     } icon: {
-                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                        // iPhone：常量占位，动画交给 FavoriteTabSymbolAnimator
+                        Image(systemName: "checkmark.icloud.fill")
                     }
                 }
 
@@ -439,7 +443,8 @@ struct ContentView: View {
                     Label {
                         Text("收藏")
                     } icon: {
-                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                        // iPhone：常量占位，动画交给 FavoriteTabSymbolAnimator
+                        Image(systemName: "checkmark.icloud.fill")
                     }
                 }
                 .tag(TabSelection.favorite)
