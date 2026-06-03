@@ -9,6 +9,31 @@
 
 ---
 
+## 实施进度(截至 2026-06-03)
+
+| Phase | 范围 | 状态 | Commit |
+|---|---|---|---|
+| ① 错误可见性层 | 收藏/凭证/订阅源 · iOS/macOS/tvOS | ✅ 已完成并验证(三端 build) | `58d2703` |
+| ② 本地存储 + iCloud 可选 | 收藏 · iOS/macOS | ✅ 已完成(本地优先/union/开关) | `40fb7ee` |
+| ③ CKSyncEngine | 收藏 · iOS/macOS | ⚠ **代码完成,待真机验证** | `6bcc409` 引擎核心 / `b8d9156` 接线 |
+| ② / ③ | TV 收藏(独立 AppFavoriteModel) | ⏳ 未做 | 任务 #6 |
+| ③ | 凭证/订阅源 手动+重试退避 | ⏳ 未做 | — |
+
+### ⚠ Phase③ 真机验证清单(同一 iCloud 账号、两台设备)
+
+1. A 加收藏 → B 是否出现;A 删除 → B 是否消失。
+2. 杀进程重启 → 未传完的增删是否续传(CKSyncEngine 落盘队列)。
+3. 首次更新 → 旧默认 Zone 收藏是否迁入(`FavoriteSyncEngine.migrateFromDefaultZoneIfNeeded`)。
+4. CloudKit 控制台确认自定义 Zone `FavoritesZone` 是否建出(**不确定点①**)。
+5. 反复增删同一主播 → 是否出现 `serverRecordChanged`(**不确定点②**,预计极少)。
+6. 关闭「收藏 iCloud 同步」开关 → 是否纯本地、完全不碰 CloudKit。
+
+两个不确定点在 `FavoriteSyncEngine.swift` 的 `start()` 与 `makeRecord` 处有注释标注,便于按验证结果调整。
+
+> 注意:Phase③ 把收藏的 iCloud 路径从默认 Zone 切到自定义 Zone(迁移即切换)。灰度期旧版本设备仍读写默认 Zone,与新版自定义 Zone 互不可见,各自更新后合并。
+
+---
+
 ## 0. 现状盘点
 
 ### 0.1 数据与传输
