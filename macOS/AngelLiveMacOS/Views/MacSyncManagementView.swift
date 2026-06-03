@@ -77,6 +77,43 @@ struct MacSyncManagementView: View {
                 Text("自动同步")
             }
 
+            Section {
+                Toggle(isOn: Binding(
+                    get: { favoriteModel.favoriteICloudSyncEnabled },
+                    set: { newValue in
+                        favoriteModel.favoriteICloudSyncEnabled = newValue
+                        if newValue { Task { await favoriteModel.syncWithActor() } }
+                    }
+                )) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.orange.gradient)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("收藏 iCloud 同步")
+                                .font(.body.weight(.medium))
+                            Text("关闭后收藏仅保存在本机")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .tint(AppConstants.Colors.accent)
+
+                if let syncError = favoriteModel.lastSyncError {
+                    HStack(spacing: 8) {
+                        Image(systemName: "icloud.slash")
+                            .foregroundStyle(.red)
+                        Text("收藏同步失败：\(syncError.displayText)")
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                        Spacer()
+                    }
+                }
+            } header: {
+                Text("收藏同步")
+            }
+
             favoriteBackupSection
 
             if syncService.iCloudSyncEnabled {

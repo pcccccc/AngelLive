@@ -43,6 +43,7 @@ struct SyncView: View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.lg) {
                 iCloudStatusCard
+                favoriteSyncToggleCard
                 syncStatsCard
                 syncProgressCard
                 loginInfoSyncCard
@@ -180,6 +181,43 @@ struct SyncView: View {
                 }
 
                 Spacer()
+            }
+        }
+        .padding()
+        .background(AppConstants.Colors.materialBackground)
+        .cornerRadius(AppConstants.CornerRadius.lg)
+    }
+
+    private var favoriteSyncToggleCard: some View {
+        VStack(spacing: AppConstants.Spacing.md) {
+            Toggle(isOn: Binding(
+                get: { favoriteModel.favoriteICloudSyncEnabled },
+                set: { newValue in
+                    favoriteModel.favoriteICloudSyncEnabled = newValue
+                    if newValue {
+                        Task { await favoriteModel.syncWithActor() }
+                    }
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("收藏 iCloud 同步")
+                        .font(.headline)
+                        .foregroundStyle(AppConstants.Colors.primaryText)
+                    Text("关闭后收藏仅保存在本机,不与 iCloud 同步")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                }
+            }
+
+            if favoriteModel.favoriteICloudSyncEnabled, let syncError = favoriteModel.lastSyncError {
+                HStack(spacing: 6) {
+                    Image(systemName: "icloud.slash")
+                        .foregroundStyle(AppConstants.Colors.error)
+                    Text("收藏同步失败：\(syncError.displayText)")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.error)
+                    Spacer()
+                }
             }
         }
         .padding()

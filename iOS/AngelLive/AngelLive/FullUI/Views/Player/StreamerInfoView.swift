@@ -178,10 +178,17 @@ struct StreamerInfoView: View {
             }
             // 成功后触发动画 + Toast(跟列表入口对齐)
             isFavoriteAnimating.toggle()
-            presentToast(ToastValue(
-                icon: Image(systemName: wasFavorited ? "heart.slash.fill" : "heart.fill"),
-                message: wasFavorited ? "已取消收藏" : "收藏成功"
-            ))
+            if favoriteModel.favoriteICloudSyncEnabled, let syncError = favoriteModel.lastSyncError {
+                presentToast(ToastValue(
+                    icon: Image(systemName: "icloud.slash"),
+                    message: (wasFavorited ? "已取消收藏" : "已收藏") + " · iCloud 同步失败：\(syncError.displayText)"
+                ))
+            } else {
+                presentToast(ToastValue(
+                    icon: Image(systemName: wasFavorited ? "heart.slash.fill" : "heart.fill"),
+                    message: wasFavorited ? "已取消收藏" : "收藏成功"
+                ))
+            }
         } catch {
             let errorMessage = FavoriteService.formatErrorCode(error: error)
             presentToast(ToastValue(

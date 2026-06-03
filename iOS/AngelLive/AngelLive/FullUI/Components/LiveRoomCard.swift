@@ -389,12 +389,15 @@ struct LiveRoomCard: View {
         do {
             try await favoriteModel.addFavorite(room: room)
 
-            // 显示成功提示
-            let toast = ToastValue(
-                icon: Image(systemName: "heart.fill"),
-                message: "收藏成功"
-            )
-            presentToast(toast)
+            // 本地优先:收藏已成功;若云端同步失败,非阻塞提示原因+码。
+            if favoriteModel.favoriteICloudSyncEnabled, let syncError = favoriteModel.lastSyncError {
+                presentToast(ToastValue(
+                    icon: Image(systemName: "icloud.slash"),
+                    message: "已收藏 · iCloud 同步失败：\(syncError.displayText)"
+                ))
+            } else {
+                presentToast(ToastValue(icon: Image(systemName: "heart.fill"), message: "收藏成功"))
+            }
         } catch {
             // 显示失败提示
             let errorMessage = FavoriteService.formatErrorCode(error: error)
@@ -412,12 +415,14 @@ struct LiveRoomCard: View {
         do {
             try await favoriteModel.removeFavoriteRoom(room: room)
 
-            // 显示成功提示
-            let toast = ToastValue(
-                icon: Image(systemName: "heart.slash.fill"),
-                message: "已取消收藏"
-            )
-            presentToast(toast)
+            if favoriteModel.favoriteICloudSyncEnabled, let syncError = favoriteModel.lastSyncError {
+                presentToast(ToastValue(
+                    icon: Image(systemName: "icloud.slash"),
+                    message: "已取消收藏 · iCloud 同步失败：\(syncError.displayText)"
+                ))
+            } else {
+                presentToast(ToastValue(icon: Image(systemName: "heart.slash.fill"), message: "已取消收藏"))
+            }
         } catch {
             // 显示失败提示
             let errorMessage = FavoriteService.formatErrorCode(error: error)
