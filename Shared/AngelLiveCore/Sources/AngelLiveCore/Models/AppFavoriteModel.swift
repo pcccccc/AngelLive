@@ -182,6 +182,8 @@ public final class AppFavoriteModel {
         // 导致 fetchChanges 被永久跳过 —— 对端的增/删永远拉不到。引擎自带退避与错误处理,
         // 账号真不可用时 fetch 会安全失败、不阻塞本地。cloudKitReady 仅用于下方 UI 状态展示。
         await FavoriteSyncEngine.shared.fetchChanges()
+        // 不依赖 token 的全量对账兜底:补回增量 token 漂掉的对端新增。
+        await FavoriteSyncEngine.shared.fullReconcile()
 
         // 用本地真相(引擎可能已更新)刷新直播状态并应用。
         let current = await FavoriteLocalStore.shared.load()
@@ -239,6 +241,8 @@ public final class AppFavoriteModel {
         // 导致 fetchChanges 被永久跳过 —— 对端的增/删永远拉不到。引擎自带退避与错误处理,
         // 账号真不可用时 fetch 会安全失败、不阻塞本地。cloudKitReady 仅用于下方 UI 状态展示。
         await FavoriteSyncEngine.shared.fetchChanges()
+        // 不依赖 token 的全量对账兜底:补回增量 token 漂掉的对端新增。
+        await FavoriteSyncEngine.shared.fullReconcile()
 
         let current = await FavoriteLocalStore.shared.load()
         await refreshStatesAndApply(members: current)
@@ -260,7 +264,8 @@ public final class AppFavoriteModel {
 
     @MainActor
     public func addFavorite(room: LiveModel) async throws {
-        if roomList.contains(where: { AppFavoriteModel.favoriteUniqueKey(for: $0) == AppFavoriteModel.favoriteUniqueKey(for: room) }) {
+        // 多维度冲突判断:同平台下 userId 或 roomId 任一有效维度命中已有收藏,即视为已收藏,不再重复添加。
+        if roomList.contains(where: { AppFavoriteModel.isSameStreamer($0, room) }) {
             return
         }
 
@@ -440,15 +445,56 @@ public final class AppFavoriteModel {
 }
 
 extension AppFavoriteModel {
+    /// 规整一个标识字段:非空、非 "0"、去空白后才算「有效维度」,否则返回 nil。
+    static func validIdentity(_ raw: String) -> String? {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (t.isEmpty || t == "0") ? nil : t
+    }
+
+    /// 多维度判断是否同一主播(平台无关)。同平台下,userId 或 roomId 任一**有效维度**
+    /// 相同即视为同一主播。这样不依赖平台适配也能罩住脏数据:
+    /// - userId 时有时无(空/0)的平台靠 roomId 命中;
+    /// - roomId 每场直播会变的平台靠 userId 命中。
+    static func isSameStreamer(_ a: LiveModel, _ b: LiveModel) -> Bool {
+        guard a.liveType.rawValue == b.liveType.rawValue else { return false }
+        if let au = validIdentity(a.userId), let bu = validIdentity(b.userId), au == bu { return true }
+        if let ar = validIdentity(a.roomId), let br = validIdentity(b.roomId), ar == br { return true }
+        return false
+    }
+
+    /// 按多维度身份去重(同平台 userId 或 roomId 任一有效维度相同即合并),保留先到的。
+    static func deduplicated(_ rooms: [LiveModel]) -> [LiveModel] {
+        var byUser: [String: Int] = [:]   // "liveType|userId" -> result 下标
+        var byRoom: [String: Int] = [:]   // "liveType|roomId" -> result 下标
+        var result: [LiveModel] = []
+        result.reserveCapacity(rooms.count)
+        for room in rooms {
+            let lt = room.liveType.rawValue
+            let uKey = validIdentity(room.userId).map { "\(lt)|\($0)" }
+            let rKey = validIdentity(room.roomId).map { "\(lt)|\($0)" }
+            if let uKey, byUser[uKey] != nil { continue }
+            if let rKey, byRoom[rKey] != nil { continue }
+            let idx = result.count
+            result.append(room)
+            if let uKey { byUser[uKey] = idx }
+            if let rKey { byRoom[rKey] = idx }
+        }
+        return result
+    }
+
+    /// 收藏同步主键(CKRecord recordName)。**roomId + 平台**为主键(稳定);userId 仅作兜底。
+    /// 历史教训:userId 来自各平台插件,经常为空或为字符串 "0"(不准),用它当主键会
+    /// 导致同一主播在不同时刻/设备生成不同 key → 跨端永远对不齐、服务器留多份。
+    /// 故 roomId 优先,且把 ""/"0"/纯空白统一视为"无效",避免 `_u_0` 这类碰撞桶。
     static func favoriteUniqueKey(for room: LiveModel) -> String {
         let liveType = room.liveType.rawValue
-        let userId = room.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !userId.isEmpty {
-            return "\(liveType)_u_\(userId)"
-        }
         let roomId = room.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !roomId.isEmpty {
+        if !roomId.isEmpty && roomId != "0" {
             return "\(liveType)_r_\(roomId)"
+        }
+        let userId = room.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !userId.isEmpty && userId != "0" {
+            return "\(liveType)_u_\(userId)"
         }
         return "\(liveType)_n_\(room.userName.trimmingCharacters(in: .whitespacesAndNewlines))"
     }

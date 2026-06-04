@@ -199,37 +199,12 @@ public actor FavoriteStateModel {
 }
 
 private func deduplicateFavoriteRooms(_ rooms: [LiveModel]) -> [LiveModel] {
-    var seen = Set<String>()
-    var result: [LiveModel] = []
-    result.reserveCapacity(rooms.count)
-
-    for room in rooms {
-        let key = favoriteUniqueKey(for: room)
-        if seen.contains(key) {
-            print("[FavoriteDedup] 碰撞! key=\(key) 被丢弃: \(room.userName) liveType=\(room.liveType.rawValue) userId=\(room.userId) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")")
-            continue
-        }
-        print("[FavoriteDedup] 保留: key=\(key) \(room.userName) liveType=\(room.liveType.rawValue) userId=\(room.userId) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")")
-        seen.insert(key)
-        result.append(room)
+    // 多维度去重(平台无关):同平台下 userId 或 roomId 任一有效维度相同即同一主播。
+    let result = AppFavoriteModel.deduplicated(rooms)
+    if result.count != rooms.count {
+        print("[FavoriteDedup] 多维度去重 \(rooms.count) → \(result.count)(合并 \(rooms.count - result.count) 条)")
     }
     return result
-}
-
-private func favoriteUniqueKey(for room: LiveModel) -> String {
-    let liveType = room.liveType.rawValue
-    let normalizedUserId = room.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !normalizedUserId.isEmpty {
-        return "\(liveType)_u_\(normalizedUserId)"
-    }
-
-    let normalizedRoomId = room.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
-    if !normalizedRoomId.isEmpty {
-        return "\(liveType)_r_\(normalizedRoomId)"
-    }
-
-    let normalizedName = room.userName.trimmingCharacters(in: .whitespacesAndNewlines)
-    return "\(liveType)_n_\(normalizedName)"
 }
 
 private func favoriteSyncLog(_ message: String) {

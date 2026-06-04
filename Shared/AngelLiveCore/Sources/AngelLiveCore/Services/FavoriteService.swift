@@ -74,18 +74,7 @@ public final class FavoriteService: NSObject {
                 continue
             }
             let userId = record.value(forKey: CloudFavoriteFields.userId) as? String ?? ""
-            let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
-            let normalizedRoomId = roomId.trimmingCharacters(in: .whitespacesAndNewlines)
-            let uniqueKey: String
-            if !normalizedUserId.isEmpty {
-                uniqueKey = "\(liveType.rawValue)_u_\(normalizedUserId)"
-            } else {
-                uniqueKey = "\(liveType.rawValue)_r_\(normalizedRoomId)"
-            }
-            guard !seenKeys.contains(uniqueKey) else { continue }
-            seenKeys.insert(uniqueKey)
-
-            temp.append(LiveModel(userName: record.value(forKey: CloudFavoriteFields.userName) as? String ?? "",
+            let model = LiveModel(userName: record.value(forKey: CloudFavoriteFields.userName) as? String ?? "",
                                   roomTitle: record.value(forKey: CloudFavoriteFields.roomTitle) as? String ?? "",
                                   roomCover: record.value(forKey: CloudFavoriteFields.roomCover) as? String ?? "",
                                   userHeadImg: record.value(forKey: CloudFavoriteFields.userHeadImage) as? String ?? "",
@@ -93,7 +82,13 @@ public final class FavoriteService: NSObject {
                                   liveState: record.value(forKey: CloudFavoriteFields.liveState) as? String ?? "",
                                   userId: userId,
                                   roomId: roomId,
-                                  liveWatchedCount: nil))
+                                  liveWatchedCount: nil)
+            // 统一用 AppFavoriteModel.favoriteUniqueKey(roomId 主键、视 "0"/空为无效),
+            // 避免 userId="0" 的记录挤进 `4_u_0` 碰撞桶被丢。
+            let uniqueKey = AppFavoriteModel.favoriteUniqueKey(for: model)
+            guard !seenKeys.contains(uniqueKey) else { continue }
+            seenKeys.insert(uniqueKey)
+            temp.append(model)
         }
         return temp
     }

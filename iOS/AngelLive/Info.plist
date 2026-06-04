@@ -2,21 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
-	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>用于在局域网内与 Apple TV 同步登录信息</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_angellive-cookie._tcp</string>
-	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -29,6 +14,22 @@
 				<string>angellive</string>
 			</array>
 		</dict>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_angellive-cookie._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于在局域网内与 Apple TV 同步登录信息</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
 </dict>
 </plist>
