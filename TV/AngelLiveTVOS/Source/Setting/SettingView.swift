@@ -132,28 +132,7 @@ struct SettingView: View {
                             Text(titles[index])
                                 .foregroundColor(.primary)
                             Spacer()
-                            if index == 0 {
-                                Text(syncService.loggedInByPluginId.values.contains(true) ? "已登录" : "未登录")
-                                    .font(.system(size: 30))
-                                    .foregroundStyle(.gray)
-                            } else if index == 4 {
-                                Text(appViewModel.favoriteViewModel.cloudKitReady ? "iCloud就绪" : "iCloud状态异常")
-                                    .font(.system(size: 30))
-                                    .foregroundStyle(.gray)
-                            } else if index == 7 {
-                                if isClearingCache {
-                                    HStack(spacing: 8) {
-                                        ProgressView()
-                                        Text("清理中...")
-                                            .font(.system(size: 30))
-                                            .foregroundStyle(.gray)
-                                    }
-                                } else {
-                                    Text(cacheSizeText)
-                                        .font(.system(size: 30))
-                                        .foregroundStyle(.gray)
-                                }
-                            }
+                            menuTrailingStatus(for: index)
                             if index != 7 {
                                 Image(systemName: "chevron.right")
                                     .foregroundStyle(.secondary)
@@ -163,6 +142,34 @@ struct SettingView: View {
                     .focused($focusedIndex, equals: index)
                     .disabled(index == 7 && isClearingCache)
                 }
+            }
+        }
+    }
+
+    /// 菜单行尾部状态文案。抽成独立 @ViewBuilder,避免 menuListView 整体表达式过大导致编译器 type-check 超时。
+    @ViewBuilder
+    private func menuTrailingStatus(for index: Int) -> some View {
+        if index == 0 {
+            Text(syncService.loggedInByPluginId.values.contains(true) ? "已登录" : "未登录")
+                .font(.system(size: 30))
+                .foregroundStyle(.gray)
+        } else if index == 4 {
+            // 三端统一文案,见 AppFavoriteModel.syncStatusDisplayText。
+            Text(appViewModel.favoriteViewModel.syncStatusDisplayText)
+                .font(.system(size: 30))
+                .foregroundStyle(.gray)
+        } else if index == 7 {
+            if isClearingCache {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("清理中...")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.gray)
+                }
+            } else {
+                Text(cacheSizeText)
+                    .font(.system(size: 30))
+                    .foregroundStyle(.gray)
             }
         }
     }
@@ -226,24 +233,14 @@ struct SettingView: View {
                     fullScreenIndex = nil
                 }
         case 4: // 数据同步
-            if appViewModel.favoriteViewModel.cloudKitReady {
-                SyncView()
-                    .environment(appViewModel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.ultraThinMaterial)
-                    .onExitCommand {
-                        fullScreenIndex = nil
-                    }
-            } else {
-                VStack {
-                    Text("请通过收藏页面检查iCloud状态是否正常")
-                }
+            // 本地优先(Core 模型):同步设置面板始终可进,不再用 cloudKitReady 把关。
+            SyncView()
+                .environment(appViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
                 .onExitCommand {
                     fullScreenIndex = nil
                 }
-            }
         case 5: // 历史记录
             HistoryListView(appViewModel: appViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

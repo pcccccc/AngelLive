@@ -40,7 +40,7 @@ struct ContentView: View {
                 if appViewModel.pluginAvailability.hasAvailablePlugins {
                     FavoriteMainView()
                         .tabItem {
-                            if appViewModel.favoriteViewModel.isLoading == true || appViewModel.favoriteViewModel.cloudKitReady == false {
+                            if appViewModel.favoriteViewModel.isLoading == true || appViewModel.favoriteViewModel.cloudReturnError == true {
                                 Label(
                                     title: {  },
                                     icon: {

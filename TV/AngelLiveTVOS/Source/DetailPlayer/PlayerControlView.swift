@@ -80,7 +80,7 @@ struct PlayerControlView: View {
                         HStack {
                             Spacer()
                             HStack(spacing: 12) {
-                                if appViewModel.favoriteViewModel.cloudKitReady {
+                                if showsFavoriteTopTab {
                                     Button(action: {}) {
                                         topTabLabel("收藏")
                                     }
@@ -709,11 +709,17 @@ struct PlayerControlView: View {
         }
     }
 
+    /// 顶部面板是否显示「收藏」Tab。本地优先(Core 模型):有本地收藏就显示,不依赖 iCloud 是否就绪。
+    private var showsFavoriteTopTab: Bool {
+        !appViewModel.favoriteViewModel.roomList.isEmpty
+    }
+
     private func preferredTopSectionIndex() -> Int {
         if roomInfoViewModel.roomType == .live {
             return 2
         }
-        return appViewModel.favoriteViewModel.cloudKitReady ? 0 : 1
+        // 收藏 Tab 渲染了才默认聚焦它,否则退到「历史」(section 1),避免聚焦未渲染的 Tab。
+        return showsFavoriteTopTab ? 0 : 1
     }
 
     private func resolvedVisibleControlFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {

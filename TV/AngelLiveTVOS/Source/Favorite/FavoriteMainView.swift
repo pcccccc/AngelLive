@@ -20,11 +20,11 @@ struct FavoriteMainView: View {
     @State var firstLoad = true
     
     var body: some View {
-        
-        @Bindable var appModel = appViewModel
-        
+
         VStack {
-            if appViewModel.favoriteViewModel.cloudKitReady {
+            // 本地优先(已迁到 Core 模型):有本地收藏、或非真错误时都展示内容(空/列表由内部分支处理)。
+            // 仅「真 iCloud 错误且本地无数据」才整页报错;cloudKitReady=false 在纯本地/未就绪时仍应显示本地收藏。
+            if !appViewModel.favoriteViewModel.cloudReturnError || !appViewModel.favoriteViewModel.roomList.isEmpty {
                 if appViewModel.favoriteViewModel.groupedRoomList.isEmpty && appViewModel.favoriteViewModel.isLoading == false {
                     if appViewModel.favoriteViewModel.roomList.isEmpty {
                         if appViewModel.favoriteViewModel.cloudReturnError {
@@ -136,7 +136,7 @@ struct FavoriteMainView: View {
             }
         }
         .overlay {
-            if appViewModel.favoriteViewModel.roomList.count > 0 && appViewModel.favoriteViewModel.cloudKitReady {
+            if appViewModel.favoriteViewModel.roomList.count > 0 {
                 VStack {
                     Spacer()
                     HStack {
@@ -155,17 +155,6 @@ struct FavoriteMainView: View {
                     }
                 }
             }
-        }
-        .simpleToast(isPresented: $appModel.favoriteViewModel.showToast, options: appViewModel.favoriteViewModel.toastOptions) {
-            VStack(alignment: .leading) {
-                Label("提示", systemImage: appModel.favoriteViewModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
-                    .font(.headline.bold())
-                Text(appModel.favoriteViewModel.toastTitle)
-            }
-            .padding()
-            .background(.black.opacity(0.6))
-            .foregroundColor(Color.white)
-            .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
             getViewStateAndFavoriteList()
@@ -201,7 +190,7 @@ struct FavoriteMainView: View {
                 firstLoad = false
             }
             appViewModel.favoriteViewModel.refreshView()
-            if appViewModel.favoriteViewModel.cloudKitReady == true && appViewModel.favoriteViewModel.roomList.count > 0 {
+            if appViewModel.favoriteViewModel.roomList.count > 0 {
                 liveViewModel.roomList = appViewModel.favoriteViewModel.roomList
             }
         }
