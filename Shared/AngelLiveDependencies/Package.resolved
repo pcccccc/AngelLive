@@ -83,15 +83,6 @@
       }
     },
     {
-      "identity" : "injectionnext",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/johnno1962/InjectionNext",
-      "state" : {
-        "revision" : "7bae3044bc643460d1f83389446694a7444709cf",
-        "version" : "1.6.0"
-      }
-    },
-    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",

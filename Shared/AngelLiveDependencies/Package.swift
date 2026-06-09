@@ -31,7 +31,6 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/Lakr233/ColorfulX", from: "5.2.8"),
     .package(url: "https://github.com/robbiehanson/CocoaAsyncSocket", from: "7.6.5"),
     .package(url: "https://github.com/1024jp/GzipSwift", from: "6.1.0"),
-    .package(url: "https://github.com/johnno1962/InjectionNext", from: "1.4.3"),
     .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
     .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
 ]
@@ -73,7 +72,6 @@ var targetDependencies: [Target.Dependency] = [
     "ColorfulX",
     "Kingfisher",
     "KingfisherWebP",
-    .product(name: "InjectionNext", package: "InjectionNext"),
     // 只在 iOS 平台包含 WindowOverlay 和 Toasts
     .product(name: "WindowOverlay", package: "swiftui-window-overlay", condition: .when(platforms: [.iOS])),
     .product(name: "Toasts", package: "swiftui-toasts", condition: .when(platforms: [.iOS])),

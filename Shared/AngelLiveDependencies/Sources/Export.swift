@@ -5,7 +5,6 @@
 @_exported import CocoaAsyncSocket
 @_exported import ColorfulX
 @_exported import Gzip
-@_exported import InjectionNext
 @_exported import Kingfisher
 @_exported import KingfisherWebP
 #if canImport(VLCKitSPM)

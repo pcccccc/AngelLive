@@ -91,15 +91,6 @@
       }
     },
     {
-      "identity" : "injectionnext",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/johnno1962/InjectionNext",
-      "state" : {
-        "revision" : "c7da054b15d2337f6d49ecdc25e495e31e27b77f",
-        "version" : "1.4.3"
-      }
-    },
-    {
       "identity" : "jxsegmentedview",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pujiaxin33/JXSegmentedView.git",
