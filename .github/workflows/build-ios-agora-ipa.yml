@@ -49,14 +49,32 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$PP_PATH")")
           cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
-
           echo "Installed profile UUID: $UUID"
+
+      - name: Patch app signing only
+        run: |
+          ruby <<'RUBY'
+          path = "iOS/AngelLive.xcodeproj/project.pbxproj"
+          text = File.read(path)
+
+          text.gsub!(/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/, "PRODUCT_BUNDLE_IDENTIFIER = app.cabbage6876.seaweed9280;")
+          text.gsub!(/DEVELOPMENT_TEAM = [^;]+;/, "DEVELOPMENT_TEAM = 9W5PQNS587;")
+          text.gsub!(/CODE_SIGN_STYLE = [^;]+;/, "CODE_SIGN_STYLE = Manual;")
+          text.gsub!(/CODE_SIGN_IDENTITY = [^;]+;/, 'CODE_SIGN_IDENTITY = "Apple Distribution";')
+          text.gsub!(/"CODE_SIGN_IDENTITY\\[sdk=iphoneos\\*\\]" = [^;]+;/, '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";')
+          text.gsub!(/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/, "PROVISIONING_PROFILE_SPECIFIER = 00008130-000A74EC26F2001C93M8UP;")
+
+          unless text.include?("PROVISIONING_PROFILE_SPECIFIER = 00008130-000A74EC26F2001C93M8UP;")
+            text.gsub!(/(PRODUCT_BUNDLE_IDENTIFIER = app\.cabbage6876\.seaweed9280;)/, "\\1\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = 00008130-000A74EC26F2001C93M8UP;")
+          end
+
+          File.write(path, text)
+          RUBY
 
       - name: Disable iCloud entitlements
         run: |
@@ -68,6 +86,13 @@ jobs:
           </dict>
           </plist>
           PLIST
+
+          ruby <<'RUBY'
+          path = "iOS/AngelLive.xcodeproj/project.pbxproj"
+          text = File.read(path)
+          text.gsub!(/CODE_SIGN_ENTITLEMENTS = AngelLive\/AngelLive\.entitlements;/, "CODE_SIGN_ENTITLEMENTS = /Users/runner/work/_temp/AngelLive-NoCloud.entitlements;")
+          File.write(path, text)
+          RUBY
 
       - name: Resolve Swift packages
         run: |
@@ -82,13 +107,7 @@ jobs:
             -scheme AngelLive \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/AngelLive.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM=9W5PQNS587 \
-            PRODUCT_BUNDLE_IDENTIFIER=app.cabbage6876.seaweed9280 \
-            PROVISIONING_PROFILE_SPECIFIER=00008130-000A74EC26F2001C93M8UP \
-            CODE_SIGN_ENTITLEMENTS="$RUNNER_TEMP/AngelLive-NoCloud.entitlements"
+            -archivePath "$RUNNER_TEMP/AngelLive.xcarchive"
 
       - name: Export IPA
         run: |
