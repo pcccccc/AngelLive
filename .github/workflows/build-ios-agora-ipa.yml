@@ -109,7 +109,7 @@ jobs:
 
       - name: Disable iCloud entitlements
         run: |
-          cat > "iOS/AngelLive/AngelLive/AngelLive-NoCloud.entitlements" <<'PLIST'
+          cat > "iOS/AngelLive/AngelLive-NoCloud.entitlements" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -118,12 +118,21 @@ jobs:
           </plist>
           PLIST
 
+          mkdir -p "iOS/AngelLive/AngelLive"
+          cp "iOS/AngelLive/AngelLive-NoCloud.entitlements" "iOS/AngelLive/AngelLive/AngelLive-NoCloud.entitlements"
+
           ruby <<'RUBY'
           path = "iOS/AngelLive.xcodeproj/project.pbxproj"
           text = File.read(path)
-          text.gsub!(/CODE_SIGN_ENTITLEMENTS = AngelLive\/AngelLive\.entitlements;/, "CODE_SIGN_ENTITLEMENTS = AngelLive/AngelLive-NoCloud.entitlements;")
+
+          text.gsub!(/CODE_SIGN_ENTITLEMENTS = AngelLive\/AngelLive\.entitlements;/, "CODE_SIGN_ENTITLEMENTS = AngelLive-NoCloud.entitlements;")
+          text.gsub!(/CODE_SIGN_ENTITLEMENTS = AngelLive\/AngelLive-NoCloud\.entitlements;/, "CODE_SIGN_ENTITLEMENTS = AngelLive-NoCloud.entitlements;")
+
           File.write(path, text)
           RUBY
+
+          ls -la "iOS/AngelLive"
+          ls -la "iOS/AngelLive/AngelLive"
 
       - name: Debug signing settings
         run: |
