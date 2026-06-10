@@ -49,6 +49,7 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security default-keychain -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
@@ -62,18 +63,45 @@ jobs:
           path = "iOS/AngelLive.xcodeproj/project.pbxproj"
           text = File.read(path)
 
-          text.gsub!(/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/, "PRODUCT_BUNDLE_IDENTIFIER = app.cabbage6876.seaweed9280;")
-          text.gsub!(/DEVELOPMENT_TEAM = [^;]+;/, "DEVELOPMENT_TEAM = 9W5PQNS587;")
-          text.gsub!(/CODE_SIGN_STYLE = [^;]+;/, "CODE_SIGN_STYLE = Manual;")
+          profile = "00008130-000A74EC26F2001C93M8UP"
+          bundle = "app.cabbage6876.seaweed9280"
+          team = "9W5PQNS587"
 
-          text.gsub!(/CODE_SIGN_IDENTITY = [^;]+;/, 'CODE_SIGN_IDENTITY = "Apple Distribution";')
-          text.gsub!(/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]+;/, '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";')
-          text.gsub!(/CODE_SIGN_IDENTITY\[sdk=iphoneos\*\] = [^;]+;/, 'CODE_SIGN_IDENTITY[sdk=iphoneos*] = "Apple Distribution";')
+          text.gsub!(/buildSettings = \{.*?\n\t\t\t\};/m) do |block|
+            unless block.include?("PRODUCT_BUNDLE_IDENTIFIER")
+              block
+            else
+              b = block.dup
 
-          text.gsub!(/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/, "PROVISIONING_PROFILE_SPECIFIER = 00008130-000A74EC26F2001C93M8UP;")
+              b.gsub!(/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/, "PRODUCT_BUNDLE_IDENTIFIER = #{bundle};")
+              b.gsub!(/DEVELOPMENT_TEAM = [^;]+;/, "DEVELOPMENT_TEAM = #{team};")
+              b.gsub!(/CODE_SIGN_STYLE = [^;]+;/, "CODE_SIGN_STYLE = Manual;")
+              b.gsub!(/CODE_SIGN_IDENTITY = [^;]+;/, 'CODE_SIGN_IDENTITY = "Apple Distribution";')
+              b.gsub!(/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]+;/, '"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";')
+              b.gsub!(/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/, "PROVISIONING_PROFILE_SPECIFIER = #{profile};")
 
-          unless text.include?("PROVISIONING_PROFILE_SPECIFIER = 00008130-000A74EC26F2001C93M8UP;")
-            text.gsub!(/(PRODUCT_BUNDLE_IDENTIFIER = app\.cabbage6876\.seaweed9280;)/, "\\1\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = 00008130-000A74EC26F2001C93M8UP;")
+              unless b.include?("DEVELOPMENT_TEAM = #{team};")
+                b.sub!(/buildSettings = \{/, "buildSettings = {\n\t\t\t\tDEVELOPMENT_TEAM = #{team};")
+              end
+
+              unless b.include?("CODE_SIGN_STYLE = Manual;")
+                b.sub!(/buildSettings = \{/, "buildSettings = {\n\t\t\t\tCODE_SIGN_STYLE = Manual;")
+              end
+
+              unless b.include?('CODE_SIGN_IDENTITY = "Apple Distribution";')
+                b.sub!(/buildSettings = \{/, "buildSettings = {\n\t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution\";")
+              end
+
+              unless b.include?('"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";')
+                b.sub!(/buildSettings = \{/, "buildSettings = {\n\t\t\t\t\"CODE_SIGN_IDENTITY[sdk=iphoneos*]\" = \"Apple Distribution\";")
+              end
+
+              unless b.include?("PROVISIONING_PROFILE_SPECIFIER = #{profile};")
+                b.sub!(/buildSettings = \{/, "buildSettings = {\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = #{profile};")
+              end
+
+              b
+            end
           end
 
           File.write(path, text)
@@ -81,7 +109,7 @@ jobs:
 
       - name: Disable iCloud entitlements
         run: |
-          cat > "$RUNNER_TEMP/AngelLive-NoCloud.entitlements" <<'PLIST'
+          cat > "iOS/AngelLive/AngelLive/AngelLive-NoCloud.entitlements" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -93,9 +121,13 @@ jobs:
           ruby <<'RUBY'
           path = "iOS/AngelLive.xcodeproj/project.pbxproj"
           text = File.read(path)
-          text.gsub!(/CODE_SIGN_ENTITLEMENTS = AngelLive\/AngelLive\.entitlements;/, "CODE_SIGN_ENTITLEMENTS = /Users/runner/work/_temp/AngelLive-NoCloud.entitlements;")
+          text.gsub!(/CODE_SIGN_ENTITLEMENTS = AngelLive\/AngelLive\.entitlements;/, "CODE_SIGN_ENTITLEMENTS = AngelLive/AngelLive-NoCloud.entitlements;")
           File.write(path, text)
           RUBY
+
+      - name: Debug signing settings
+        run: |
+          grep -n "CODE_SIGN_IDENTITY\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|PRODUCT_BUNDLE_IDENTIFIER\|PROVISIONING_PROFILE_SPECIFIER\|CODE_SIGN_ENTITLEMENTS" iOS/AngelLive.xcodeproj/project.pbxproj || true
 
       - name: Resolve Swift packages
         run: |
@@ -110,10 +142,7 @@ jobs:
             -scheme AngelLive \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/AngelLive.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            "CODE_SIGN_IDENTITY[sdk=iphoneos*]=Apple Distribution"
+            -archivePath "$RUNNER_TEMP/AngelLive.xcarchive"
 
       - name: Export IPA
         run: |
