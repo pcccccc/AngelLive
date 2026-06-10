@@ -53,6 +53,8 @@ jobs:
           UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin <<< "$(security cms -D -i "$PP_PATH")")
           cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
 
+          echo "Installed profile UUID: $UUID"
+
       - name: Resolve Swift packages
         run: |
           USE_VLC=1 xcodebuild -resolvePackageDependencies \
@@ -67,8 +69,10 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/AngelLive.xcarchive" \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=9W5PQNS587
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=9W5PQNS587 \
+            PRODUCT_BUNDLE_IDENTIFIER=app.cabbage6876.seaweed9280 \
+            PROVISIONING_PROFILE_SPECIFIER=00008130-000A74EC26F2001C93M8UP
 
       - name: Export IPA
         run: |
@@ -80,9 +84,14 @@ jobs:
             <key>method</key>
             <string>development</string>
             <key>signingStyle</key>
-            <string>automatic</string>
+            <string>manual</string>
             <key>teamID</key>
             <string>9W5PQNS587</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>app.cabbage6876.seaweed9280</key>
+              <string>00008130-000A74EC26F2001C93M8UP</string>
+            </dict>
             <key>stripSwiftSymbols</key>
             <true/>
             <key>compileBitcode</key>
