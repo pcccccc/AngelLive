@@ -111,6 +111,24 @@ struct PlayerContentView: View {
         "\(viewModel.currentPlayURL?.absoluteString ?? "")_\(isDeviceLandscape ? "landscape" : "portrait")"
     }
 
+    private var currentQuality: LiveQualityDetail? {
+        guard let playArgs = viewModel.currentRoomPlayArgs,
+              viewModel.currentCdnIndex < playArgs.count else {
+            return nil
+        }
+        let cdn = playArgs[viewModel.currentCdnIndex]
+        guard viewModel.currentQualityIndex < cdn.qualitys.count else {
+            return nil
+        }
+        return cdn.qualitys[viewModel.currentQualityIndex]
+    }
+
+    private var isAgoraRTCPlayback: Bool {
+        guard let quality = currentQuality else { return false }
+        return quality.headers?["X-Playback-Type"] == "agoraRtc"
+            || viewModel.currentPlayURL?.scheme?.lowercased() == "agora"
+    }
+
     private var useKSPlayer: Bool {
         viewModel.selectedPlayerKernel == .ksplayer && PlayerKernelSupport.isKSPlayerAvailable
     }
@@ -309,6 +327,22 @@ struct PlayerContentView: View {
                         "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",
                         category: .player
                     )
+                    if isAgoraRTCPlayback {
+                        await MainActor.run {
+                            Logger.debug("[PlayerFlow] Agora RTC playback branch", category: .player)
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                videoAspectRatio = 9.0 / 16.0
+                                isVideoPortrait = true
+                                isVerticalLiveMode = true
+                                hasDetectedSize = true
+                                hasKSStartedPlayback = true
+                                hasVLCStartedPlayback = true
+                                vlcState = .playing
+                                viewModel.isPlaying = true
+                            }
+                        }
+                        return
+                    }
                     if useKSPlayer {
                         #if canImport(KSPlayer)
                         configureModelIfNeeded(playURL: playURL)
@@ -439,7 +473,23 @@ struct PlayerContentView: View {
 
     @ViewBuilder
     private func compatiblePlayerSurface(playURL: URL) -> some View {
-        if useKSPlayer {
+        if isAgoraRTCPlayback, let quality = currentQuality {
+            AgoraRTCPlayerView(quality: quality)
+                .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
+                .clipped()
+                .onAppear {
+                    viewModel.isPlaying = true
+                    hasKSStartedPlayback = true
+                    hasVLCStartedPlayback = true
+                    vlcState = .playing
+                }
+                .onDisappear {
+                    viewModel.isPlaying = false
+                    hasKSStartedPlayback = false
+                    hasVLCStartedPlayback = false
+                    vlcState = .stopped
+                }
+        } else if useKSPlayer {
             #if canImport(KSPlayer)
             KSVideoPlayerView(
                 model: playerModel,
@@ -543,6 +593,29 @@ struct PlayerContentView: View {
     }
 
     private var controlBridge: PlayerControlBridge {
+        if isAgoraRTCPlayback {
+            return PlayerControlBridge(
+                isPlaying: viewModel.isPlaying,
+                isBuffering: false,
+                isInitialLoading: false,
+                supportsPictureInPicture: false,
+                togglePlayPause: {},
+                refreshPlayback: {
+                    viewModel.refreshPlayback()
+                },
+                togglePictureInPicture: {},
+                applyScaleMode: nil,
+                isMaskShow: Binding(
+                    get: { playerModel.config.isMaskShow },
+                    set: { playerModel.config.isMaskShow = $0 }
+                ),
+                isLocked: Binding(
+                    get: { playerModel.isLocked },
+                    set: { playerModel.isLocked = $0 }
+                )
+            )
+        }
+
         if useKSPlayer {
             return PlayerControlBridge(
                 isPlaying: viewModel.isPlaying || playerCoordinator.state.isPlaying,
