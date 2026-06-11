@@ -23,8 +23,12 @@ public struct LiveModel: Identifiable, Codable, Equatable, Hashable, Sendable {
     public let userId: String
     public let roomId: String
     public let liveWatchedCount: String?
+    /// 收藏身份元数据(roomId/userId/昵称/头像/标题)的最后更新时间。仅用于收藏同步的
+    /// 多设备身份合并(远端新于本地→取远端身份),**不参与** `liveState` 同步,也不参与
+    /// `==`/`hash`(身份相等口径仍是 liveType+roomId)。旧 JSON / 非收藏来源缺该字段时解码为 nil。
+    public var identityUpdatedAt: Date?
 
-    public init(userName: String, roomTitle: String, roomCover: String, userHeadImg: String, liveType: LiveType, liveState: String?, userId: String, roomId: String, liveWatchedCount: String?) {
+    public init(userName: String, roomTitle: String, roomCover: String, userHeadImg: String, liveType: LiveType, liveState: String?, userId: String, roomId: String, liveWatchedCount: String?, identityUpdatedAt: Date? = nil) {
         self.userName = userName
         self.roomTitle = roomTitle
         self.roomCover = roomCover
@@ -34,6 +38,7 @@ public struct LiveModel: Identifiable, Codable, Equatable, Hashable, Sendable {
         self.userId = userId
         self.roomId = roomId
         self.liveWatchedCount = liveWatchedCount
+        self.identityUpdatedAt = identityUpdatedAt
     }
 
     public var description: String {

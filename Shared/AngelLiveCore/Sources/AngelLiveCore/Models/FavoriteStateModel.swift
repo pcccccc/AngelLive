@@ -7,6 +7,21 @@
 
 import Foundation
 
+/// 刷新发现的一条身份元数据变化,供上层落本地后回写 CloudKit。
+/// `oldKey` 是刷新前(本地真相)的稳定主键,`newRoom` 带最新身份 + 新 `identityUpdatedAt`。
+/// 不含 `liveState`(状态不上云)。身份相等口径走稳定 key,不用 `LiveModel.==`。
+public struct FavoriteIdentityChange: Sendable {
+    public let oldKey: String
+    public let newRoom: LiveModel
+}
+
+/// 收藏刷新结果:UI 用的排序列表 + 分组,外加本次刷新探测到的身份变化(供回写)。
+public struct FavoriteSyncResult: Sendable {
+    public let rooms: [LiveModel]
+    public let grouped: [FavoriteLiveSectionModel]
+    public let identityChanges: [FavoriteIdentityChange]
+}
+
 public struct FavoriteLiveSectionModel: Identifiable, Sendable {
     /// 稳定身份:title 即逻辑分组键(平台名 / 直播状态名),在两种分组样式下都唯一且稳定。
     /// 不用随机 UUID——否则每次同步重建分组都被 SwiftUI 当成全新 section,导致焦点重置、整段重排动画。
@@ -29,7 +44,7 @@ public actor FavoriteStateModel {
     /// 刷新收藏的直播状态。
     /// - Parameter members: 成员列表来源。Phase③ 由上层传入本地真相(CKSyncEngine 已同步);
     ///   传 nil 时回退到旧行为(从默认 Zone 拉取),保留向后兼容。
-    public func syncStreamerLiveStates(members: [LiveModel]? = nil) async throws -> ([LiveModel], [FavoriteLiveSectionModel]) {
+    public func syncStreamerLiveStates(members: [LiveModel]? = nil) async throws -> FavoriteSyncResult {
         let overallStart = CFAbsoluteTimeGetCurrent()
         let consoleEntryId = await MainActor.run {
             PluginConsoleService.shared.log(tag: "FavoriteSync", method: "syncAll", status: .loading)
@@ -90,6 +105,8 @@ public actor FavoriteStateModel {
 
         // 使用任务组并发获取房间状态
         var fetchedModels: [LiveModel] = []
+        // 本次刷新探测到的身份变化(供上层落本地后回写 CloudKit)。
+        var identityChanges: [FavoriteIdentityChange] = []
         var platformStats: [LiveType: (count: Int, totalTime: Double, success: Int, failure: Int)] = [:]
         let statusSyncStart = CFAbsoluteTimeGetCurrent()
 
@@ -139,6 +156,21 @@ public actor FavoriteStateModel {
                 }
             }
             fetchedModels = resultModels.compactMap { $0 }
+
+            // 身份 diff:在 dedup/排序之前按 index 配对 旧(本地真相)↔ 新(刷新结果)。
+            // 仅非 preserve 平台、且身份字段(非 liveState)有"非降级"变化时产出回写事件。
+            // preserve 平台身份不刷新、失败项身份未变,均自然不产出。
+            for (index, old) in roomList.enumerated() {
+                guard let new = resultModels[index] else { continue }
+                if PlatformHostBehavior.shouldPreserveFavoriteRoomInfoOnRefresh(for: old.liveType) { continue }
+                guard AppFavoriteModel.favoriteIdentityChanged(old: old, new: new) else { continue }
+                var stamped = new
+                stamped.identityUpdatedAt = Date()
+                identityChanges.append(FavoriteIdentityChange(
+                    oldKey: AppFavoriteModel.favoriteUniqueKey(for: old),
+                    newRoom: stamped
+                ))
+            }
         }
 
         fetchedModels = deduplicateFavoriteRooms(fetchedModels)
@@ -186,8 +218,11 @@ public actor FavoriteStateModel {
         let sortedModels = fetchedModels.sortedByLiveState()
         let style = AngelLiveFavoriteStyle(rawValue: GeneralSettingModel().globalGeneralSettingFavoriteStyle) ?? .liveState
         let groupedRoomList = sortedModels.groupedBySections(style: style)
-        
-        return (sortedModels, groupedRoomList)
+
+        if !identityChanges.isEmpty {
+            favoriteSyncLog("身份回写候选 \(identityChanges.count) 条")
+        }
+        return FavoriteSyncResult(rooms: sortedModels, grouped: groupedRoomList, identityChanges: identityChanges)
     }
 
 

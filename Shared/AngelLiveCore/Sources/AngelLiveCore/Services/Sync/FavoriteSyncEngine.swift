@@ -118,6 +118,25 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         kickSend()
     }
 
+    /// 刷新后发现身份元数据(roomId/userId/昵称/头像/标题)变化时的**窄回写入口**。
+    /// 与 `enqueueSave` 不同:它显式处理 re-key(主键随身份从旧 key 迁到新 key)——
+    /// 主键变了就「删旧 + 存新」,没变就只存新。绝不携带 `liveState`(makeRecord 已不写)。
+    /// 调用前提:调用方已先把 `room`(含新 identityUpdatedAt)落入本地真相,
+    /// 这样 `nextRecordZoneChangeBatch` 的 recordProvider 能按新 key 找到它(见 §步骤4)。
+    /// 身份比较只用稳定 key,不用 `LiveModel.==`(== 仅看 liveType+roomId,会误判)。
+    public func enqueueIdentityMetadataRefresh(oldKey: String, room: LiveModel) {
+        guard let engine else { return }
+        let newKey = AppFavoriteModel.favoriteUniqueKey(for: room)
+        var changes: [CKSyncEngine.PendingRecordZoneChange] = []
+        if oldKey != newKey {
+            changes.append(.deleteRecord(recordID(forKey: oldKey)))
+        }
+        changes.append(.saveRecord(recordID(forKey: newKey)))
+        engine.state.add(pendingRecordZoneChanges: changes)
+        Logger.info("⏱️ enqueueIdentityMetadataRefresh oldKey=\(oldKey) newKey=\(newKey) → 催 sendChanges", category: .general)
+        kickSend()
+    }
+
     /// 批量入队保存(用于全量对账把本地独有记录补推上云)。交给引擎自动同步发送。
     private func enqueueSaves(_ rooms: [LiveModel]) {
         guard let engine, !rooms.isEmpty else { return }
@@ -221,7 +240,10 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         rec["room_cover"] = room.roomCover as CKRecordValue
         rec["user_head_img"] = room.userHeadImg as CKRecordValue
         rec["live_type"] = room.liveType.rawValue as CKRecordValue
-        rec["live_state"] = (room.liveState ?? "") as CKRecordValue
+        // live_state 是高频、时效强、跨设备易乱序的本地状态,**不再上云**(见 docs/FavoriteIdentityWriteback.md §2.2)。
+        // 历史记录里残留的 live_state 字段保留不动,拉取时也不会用它覆盖本地状态(见 applyFetched)。
+        // 身份元数据更新时间:多设备同时刷新不同 roomId 时按它做"新者胜"合并。
+        rec["identity_updated_at"] = (room.identityUpdatedAt ?? Date()) as CKRecordValue
         return rec
     }
 
@@ -236,7 +258,8 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
             liveState: record["live_state"] as? String ?? "",
             userId: record["user_id"] as? String ?? "",
             roomId: record["room_id"] as? String ?? "",
-            liveWatchedCount: nil
+            liveWatchedCount: nil,
+            identityUpdatedAt: record["identity_updated_at"] as? Date
         )
     }
 
@@ -248,12 +271,20 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         for (i, r) in rooms.enumerated() { byKey[AppFavoriteModel.favoriteUniqueKey(for: r)] = i }
 
         for record in modifications {
-            guard let model = liveModel(from: record) else { continue }
-            let key = AppFavoriteModel.favoriteUniqueKey(for: model)
+            guard let remote = liveModel(from: record) else { continue }
+            let key = AppFavoriteModel.favoriteUniqueKey(for: remote)
             if let idx = byKey[key] {
-                rooms[idx] = model
+                let local = rooms[idx]
+                // 身份合并按 identity_updated_at「新者胜」:远端更新时间不晚于本地 → 保留本地身份
+                //(本地刚回写、远端是旧值的常见情况),否则取远端身份。无论哪边,
+                // liveState 永远保留本地(远端 live_state 不再用于覆盖,见 §2.2)。
+                let remoteWins = (remote.identityUpdatedAt ?? .distantPast) > (local.identityUpdatedAt ?? .distantPast)
+                var merged = remoteWins ? remote : local
+                merged.liveState = local.liveState
+                rooms[idx] = merged
             } else {
-                rooms.append(model)
+                // 新收藏:首次落地,远端身份直接采用;liveState 作为首帧快照(可空)。
+                rooms.append(remote)
                 byKey[key] = rooms.count - 1
             }
         }
