@@ -61,29 +61,88 @@ final class RoomInfoViewModel {
     /// 需要重新取流的清晰度切换任务，用于取消之前的请求
     private var qualitySwitchTask: Task<Void, Never>?
 
-    // MARK: - 受控播放重建状态
-    /// 1 分钟内最多自动重建 3 次,超过则停手交给 UI 错误页/下播判定
-    private static let maxPlaybackRetries = 3
-    private static let playbackRetryWindow: TimeInterval = 60
-    private var playbackRetryAttempts = 0
-    private var playbackRetryWindowStart: Date?
-    private var playbackRetryTask: Task<Void, Never>?
-
-    // MARK: - 零吞吐看门狗
-    /// 连续 N 秒 bytesRead 和 currentPlaybackTime 都不推进才视为 stall。
-    /// 两者并用是为了过滤 KSPlayer 的合法 IO 暂停:loadedTime > maxBufferDuration 时
-    /// MEPlayerItem 会 send(.pause) → av_read_pause(),此时 bytesRead 不动但
-    /// playhead 仍在消耗缓冲推进,不应误判。直播流缓冲打满也会触发,不限于点播。
-    private static let stallThresholdSeconds = 8
-    /// 1Hz 采样
-    private static let stallWatchdogTick: UInt64 = 1_000_000_000
-    /// playhead 推进容差(秒) —— 1Hz 采样下正常播放每秒至少推进 0.5s 才算"在播"
-    private static let stallPlayheadProgressTolerance: TimeInterval = 0.5
+    // MARK: - 统一播放恢复协调器
+    /// 卡顿检测 + 自动恢复的单一状态机,替换原 stall watchdog + managed retry(修 Bug A/B)。
+    /// 状态机本体在 AngelLiveCore(可单测);这里只做事件发射、动作映射与采样。
+    /// 当前监视的 playerLayer,供 sample provider 读取 KSPlayer dynamicInfo。
     private weak var watchedPlayerLayer: KSPlayerLayer?
-    private var stallWatchdogTask: Task<Void, Never>?
-    private var stallLastBytesRead: Int64 = -1
-    private var stallLastPlaybackTime: TimeInterval = -1
-    private var stallNoChangeTicks = 0
+    @ObservationIgnored private var _recoveryCoordinator: PlaybackRecoveryCoordinator?
+
+    /// 懒构造(协调器 init 为 @MainActor;@Observable 不支持 lazy 存储属性,故手写)。
+    @MainActor
+    var recoveryCoordinator: PlaybackRecoveryCoordinator {
+        if let c = _recoveryCoordinator { return c }
+        let c = makeRecoveryCoordinator()
+        _recoveryCoordinator = c
+        return c
+    }
+
+    @MainActor
+    private func makeRecoveryCoordinator() -> PlaybackRecoveryCoordinator {
+        // KSAVPlayer / VLC 路径有清晰 .failed 走 fallback,关 stall 监控避免误判;
+        // 起播超时仍由协调器按会话记次。
+        let config = RecoveryConfig.phone(stallMonitoringEnabled: !usesVLCKernel)
+        let actions = RecoveryActions(
+            refreshSameURL: { [weak self] in
+                guard let self else { return }
+                self.changePlayUrl(cdnIndex: self.currentCdnIndex, urlIndex: self.currentQualityIndex)
+            },
+            switchCDN: { [weak self] in
+                guard let self else { return }
+                if let next = self.nextCdnIndex() {
+                    self.changePlayUrl(cdnIndex: next, urlIndex: 0)
+                } else {
+                    self.refreshPlayback()   // 单 CDN 无可切,回退同源刷新
+                }
+            },
+            reloadPlayArgs: { [weak self] in
+                self?.refreshPlayback()
+            },
+            reportFailed: { [weak self] reason in
+                guard let self else { return }
+                let error = NSError(
+                    domain: "AngelLive.Player.Recovery",
+                    code: -1001,
+                    userInfo: [NSLocalizedDescriptionKey: reason]
+                )
+                self.checkLiveStatusOnError(error: error)
+            }
+        )
+        return PlaybackRecoveryCoordinator(
+            config: config,
+            actions: actions,
+            sample: { [weak self] in self?.currentPlaybackSample() }
+        )
+    }
+
+    /// 协调器 1Hz 采样源。KSAVPlayer 返回 nil(bytesRead 仅 segment 边界跳变会误判,
+    /// 且出错有清晰 .failed 走 fallback),与旧 watchdog 的 KSAV 豁免一致。
+    @MainActor
+    private func currentPlaybackSample() -> PlaybackSample? {
+        guard let player = watchedPlayerLayer?.player else { return nil }
+        if player is KSAVPlayer { return nil }
+        let playhead = player.currentPlaybackTime
+        return PlaybackSample(
+            bytesRead: player.dynamicInfo.bytesRead,
+            playhead: playhead,
+            buffered: max(0, player.playableTime - playhead),
+            isPlaying: player.isPlaying
+        )
+    }
+
+    /// KSPlayerState(8 case)→ 协调器抽象状态。
+    private func mapEngineState(_ state: KSPlayerState) -> PlaybackEngineState {
+        switch state {
+        case .initialized: .initialized
+        case .preparing: .preparing
+        case .readyToPlay: .readyToPlay
+        case .buffering: .buffering
+        case .bufferFinished: .bufferFinished
+        case .paused: .paused
+        case .playedToTheEnd: .ended
+        case .error: .error
+        }
+    }
 
     // 弹幕相关属性
     var socketConnection: WebSocketConnection?
@@ -215,6 +274,11 @@ final class RoomInfoViewModel {
         let currentCdn = playArgs[cdnIndex]
         guard urlIndex < currentCdn.qualitys.count else { return }
 
+        // 逻辑会话 = 本次进房(roomId)。同 key 时 applyEpisode 早退,
+        // 故协调器自身的 switchCDN/refreshSameURL/reloadPlayArgs 不会重置熔断预算;
+        // 仅首次进房真正复位,重进房间为新 VM+新协调器。
+        recoveryCoordinator.episodeChanged(streamKey: currentRoom.roomId)
+
         let tappedSelection = RoomPlaybackResolver.selection(
             in: playArgs,
             cdnIndex: cdnIndex,
@@ -343,6 +407,8 @@ final class RoomInfoViewModel {
         }
 
         currentPlayURL = url
+        // token 滚动等 URL 变化:仅更新协调器记录,不重置起播计时/熔断(修 Bug A)。
+        recoveryCoordinator.urlChanged(url)
     }
 
     @MainActor
@@ -488,10 +554,9 @@ final class RoomInfoViewModel {
         guard !usesVLCKernel else { return }
         playerCoordinator.playerLayer?.delegate = nil
         playerCoordinator.playerLayer?.delegate = self
-        // URL 变化时 PlayerContainerView 的 .onChange 会重新调到这里,正好用于重启 stall watchdog,
-        // 保证 watchedPlayerLayer 始终指向当前活跃的 layer。VLC 内核时 dynamicInfo 不归 KSPlayer 管,跳过。
+        // 始终让 watchedPlayerLayer 指向当前活跃 layer,供协调器 sample provider 采样。
+        // VLC 内核时 dynamicInfo 不归 KSPlayer 管,上面 guard 已跳过。
         watchedPlayerLayer = playerCoordinator.playerLayer
-        restartStallWatchdog()
     }
 
     // MARK: - 弹幕相关方法
@@ -740,15 +805,8 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
 extension RoomInfoViewModel: KSPlayerLayerDelegate {
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying
-        // 真正起播成功后清空重试预算
-        if state == .bufferFinished || state == .readyToPlay {
-            resetPlaybackRetryBudget()
-        }
-        // 终态时停掉 watchdog;finish/error 路径由现有 managed retry 接管。
-        // .paused 不停,因为用户可能马上恢复,而 tick 内部已通过 shouldWatch 短路了。
-        if state == .error || state == .playedToTheEnd {
-            stopStallWatchdog()
-        }
+        // 状态变化喂给协调器:起播成功/抖动/终态的判定与熔断预算全在状态机内。
+        recoveryCoordinator.stateChanged(mapEngineState(state))
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
@@ -756,19 +814,17 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-        guard let error else { return }
-        // 进入 finish 路径意味着 KSPlayer 已经决定终结当前 session,
-        // watchdog 必须先停,避免与 managed retry 在同一窗口内重复触发动作。
-        stopStallWatchdog()
+        guard let error else {
+            // 正常结束:通知协调器停止监控。
+            recoveryCoordinator.finished(error: nil)
+            return
+        }
         let errorMsg = error.localizedDescription
-        // 因 isLive=false,IO 失败/超时/EOF 都会从这里出来。先尝试受控重建播放器,
-        // 而不是依赖 KSPlayer 内部 reconnect(那条路径有解码线程 race,会 EXC_BAD_ACCESS)。
+        // 因 isLive=false,IO 失败/超时/EOF 都会从这里出来。可重试错误交给协调器阶梯
+        // 受控重建,而不是依赖 KSPlayer 内部 reconnect(那条路径有解码线程 race,会 EXC_BAD_ACCESS)。
+        // 预算用尽时协调器会经 reportFailed 回落到下播/错误判定。
         if isRetryablePlaybackError(errorMsg) {
-            if attemptManagedPlaybackRetry(triggeredBy: error) {
-                return
-            }
-            // 重试预算用尽,回落到原有的下播/错误判定
-            checkLiveStatusOnError(error: error)
+            recoveryCoordinator.finished(error: error)
             return
         }
         print("[KSPlayer] suppress finish error UI on iOS: \(errorMsg)")
@@ -787,83 +843,6 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
             || message.contains("End of file")
             || message.contains("readFrame")
             || message.contains("I/O error")
-    }
-
-    /// 返回 true 表示已安排了一次重建;false 表示预算已用完。
-    @MainActor
-    private func attemptManagedPlaybackRetry(triggeredBy error: Error) -> Bool {
-        let now = Date()
-        if let start = playbackRetryWindowStart,
-           now.timeIntervalSince(start) > Self.playbackRetryWindow {
-            playbackRetryAttempts = 0
-            playbackRetryWindowStart = nil
-        }
-        guard playbackRetryAttempts < Self.maxPlaybackRetries else {
-            logPlaybackRetryBudgetExhausted(triggeredBy: error)
-            return false
-        }
-
-        if playbackRetryWindowStart == nil {
-            playbackRetryWindowStart = now
-        }
-        playbackRetryAttempts += 1
-        let attempt = playbackRetryAttempts
-        // 指数退避:1s / 2s / 4s
-        let delay = pow(2.0, Double(attempt - 1))
-        print("[KSPlayer] managed retry \(attempt)/\(Self.maxPlaybackRetries) in \(delay)s")
-        logPlaybackRetryScheduled(attempt: attempt, delay: delay, triggeredBy: error)
-
-        playbackRetryTask?.cancel()
-        playbackRetryTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard let self, !Task.isCancelled else { return }
-            self.refreshPlayback()
-        }
-        return true
-    }
-
-    @MainActor
-    private func logPlaybackRetryScheduled(attempt: Int, delay: TimeInterval, triggeredBy error: Error) {
-        let id = PluginConsoleService.shared.log(tag: "Player", method: "managedRetry#\(attempt)", status: .loading)
-        PluginConsoleService.shared.updateRequest(
-            id: id,
-            body: """
-            triggeredBy: \(error.localizedDescription)
-            currentURL: \(currentPlayURL?.absoluteString ?? "-")
-            attempt: \(attempt) / \(Self.maxPlaybackRetries)
-            backoff: \(String(format: "%.1f", delay))s
-            """
-        )
-        PluginConsoleService.shared.updateStatus(
-            id: id,
-            status: .success,
-            responseBody: "已安排在 \(String(format: "%.1f", delay))s 后重建播放器"
-        )
-    }
-
-    @MainActor
-    private func logPlaybackRetryBudgetExhausted(triggeredBy error: Error) {
-        let id = PluginConsoleService.shared.log(tag: "Player", method: "managedRetry", status: .loading)
-        PluginConsoleService.shared.updateRequest(
-            id: id,
-            body: """
-            triggeredBy: \(error.localizedDescription)
-            currentURL: \(currentPlayURL?.absoluteString ?? "-")
-            """
-        )
-        PluginConsoleService.shared.updateStatus(
-            id: id,
-            status: .error,
-            errorMessage: "重试预算已用尽:\(Self.maxPlaybackRetries) 次 / \(Int(Self.playbackRetryWindow))s 窗口"
-        )
-    }
-
-    @MainActor
-    private func resetPlaybackRetryBudget() {
-        playbackRetryAttempts = 0
-        playbackRetryWindowStart = nil
-        playbackRetryTask?.cancel()
-        playbackRetryTask = nil
     }
 
     /// 播放器错误时检查直播状态
@@ -894,201 +873,10 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         }
     }
 
-    // MARK: - 零吞吐看门狗
-
-    /// 弱网/CDN 边缘"鬼连接"时,KSPlayer 不会冒泡 error,UI 表现为 networkSpeed=0
-    /// 但 state 仍停在 .buffering/.readyToPlay。watchdog 每秒采样 bytesRead 和
-    /// currentPlaybackTime,两者都不推进 stallThresholdSeconds 秒就触发恢复:
-    /// 优先切下一条 CDN,无可切则刷新。
-    @MainActor
-    private func restartStallWatchdog() {
-        stallWatchdogTask?.cancel()
-        stallLastBytesRead = -1
-        stallLastPlaybackTime = -1
-        stallNoChangeTicks = 0
-        stallWatchdogTask = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: Self.stallWatchdogTick)
-                guard let self, !Task.isCancelled else { return }
-                self.tickStallWatchdog()
-            }
-        }
-    }
-
-    @MainActor
-    private func stopStallWatchdog() {
-        stallWatchdogTask?.cancel()
-        stallWatchdogTask = nil
-        stallLastBytesRead = -1
-        stallLastPlaybackTime = -1
-        stallNoChangeTicks = 0
-    }
-
-    @MainActor
-    private func tickStallWatchdog() {
-        guard let layer = watchedPlayerLayer else { return }
-        // KSAVPlayer 路径:bytesRead 来自 HLS access log 累加(`numberOfBytesTransferred`),
-        // 仅在 segment 边界(4-10s)跳变;currentPlaybackTime 在部分直播流上推进不稳。
-        // 任一信号都不可靠,会把"正常播放"误判成 stall 触发 CDN failover 死循环。
-        // watchdog 原本为 KSMEPlayer 路径"FFmpeg 静默卡死不冒泡 error"设计,AV 路径
-        // 出错有清晰的 .failed,由 KSPlayerLayer.finish 走 playerTypes fallback 链
-        // 自动切到 KSMEPlayer 兜底,watchdog 不必插手。fallback 到 ME 后 layer.player
-        // 会换成 KSMEPlayer 实例,这里的 guard 自然失效,watchdog 恢复工作。
-        if layer.player is KSAVPlayer {
-            return
-        }
-        let state = layer.state
-        // 不监控 .preparing —— FFmpeg avformat_open_input 期间 pbArray 还未填充,
-        // bytesRead 恒为 0,会被误判。真正的 open 卡死由 KSOptions.rw_timeout(默认 9s)
-        // 兜底 → 走 finish error → managed retry。
-        let shouldWatch: Bool
-        switch state {
-        case .buffering, .readyToPlay, .bufferFinished:
-            shouldWatch = true
-        default:
-            shouldWatch = false
-        }
-        let currentBytes = layer.player.dynamicInfo.bytesRead
-        let currentTime = layer.player.currentPlaybackTime
-        guard shouldWatch else {
-            stallNoChangeTicks = 0
-            stallLastBytesRead = currentBytes
-            stallLastPlaybackTime = currentTime
-            return
-        }
-        if stallLastBytesRead < 0 || stallLastPlaybackTime < 0 {
-            // 首次采样,只记录基线
-            stallLastBytesRead = currentBytes
-            stallLastPlaybackTime = currentTime
-            return
-        }
-        // 任一信号推进都视为"在播":bytes 在流(IO 没死) OR playhead 在跑(在消耗缓冲)。
-        // 两者都死才算真 stall。
-        let bytesAdvanced = currentBytes > stallLastBytesRead
-        let playheadAdvanced = currentTime > stallLastPlaybackTime + Self.stallPlayheadProgressTolerance
-        if bytesAdvanced || playheadAdvanced {
-            stallNoChangeTicks = 0
-            stallLastBytesRead = currentBytes
-            stallLastPlaybackTime = currentTime
-        } else {
-            stallNoChangeTicks += 1
-            if stallNoChangeTicks >= Self.stallThresholdSeconds {
-                stallNoChangeTicks = 0
-                attemptStallRecovery(state: state, bytesRead: currentBytes)
-            }
-            // 不更新基线,继续对照同一基准。避免被 1-byte 抖动重置计数。
-        }
-    }
-
-    /// stall 时的恢复升级链:切 CDN → 重拉 playArgs → 错误页
-    /// 与 attemptManagedPlaybackRetry 共享重试预算,避免同一窗口内双重重试。
-    @MainActor
-    private func attemptStallRecovery(state: KSPlayerState, bytesRead: Int64) {
-        let now = Date()
-        if let start = playbackRetryWindowStart,
-           now.timeIntervalSince(start) > Self.playbackRetryWindow {
-            playbackRetryAttempts = 0
-            playbackRetryWindowStart = nil
-        }
-        guard playbackRetryAttempts < Self.maxPlaybackRetries else {
-            logStallBudgetExhausted(state: state, bytesRead: bytesRead)
-            let stallError = NSError(
-                domain: "AngelLive.Player.Stall",
-                code: -1001,
-                userInfo: [NSLocalizedDescriptionKey: "零吞吐持续 \(Self.stallThresholdSeconds)s"]
-            )
-            checkLiveStatusOnError(error: stallError)
-            stopStallWatchdog()
-            return
-        }
-        if playbackRetryWindowStart == nil {
-            playbackRetryWindowStart = now
-        }
-        playbackRetryAttempts += 1
-        let attempt = playbackRetryAttempts
-
-        // 取消可能已排队的 managed retry,避免叠加。
-        playbackRetryTask?.cancel()
-        playbackRetryTask = nil
-
-        if let next = nextCdnIndex() {
-            logStallRecovery(
-                attempt: attempt,
-                action: "cdnFailover \(currentCdnIndex)->\(next)",
-                state: state,
-                bytesRead: bytesRead
-            )
-            changePlayUrl(cdnIndex: next, urlIndex: 0)
-        } else {
-            logStallRecovery(
-                attempt: attempt,
-                action: "refreshPlayback",
-                state: state,
-                bytesRead: bytesRead
-            )
-            refreshPlayback()
-        }
-    }
-
     /// 选择下一条可用 CDN。仅有 1 条时返回 nil,让上层走 refresh 分支。
     private func nextCdnIndex() -> Int? {
         guard let args = currentRoomPlayArgs, args.count > 1 else { return nil }
         return (currentCdnIndex + 1) % args.count
     }
 
-    @MainActor
-    private func logStallRecovery(
-        attempt: Int,
-        action: String,
-        state: KSPlayerState,
-        bytesRead: Int64
-    ) {
-        let id = PluginConsoleService.shared.log(
-            tag: "Player",
-            method: "stallWatchdog#\(attempt)",
-            status: .loading
-        )
-        let host = currentPlayURL?.host ?? "-"
-        PluginConsoleService.shared.updateRequest(
-            id: id,
-            body: """
-            roomId: \(currentRoom.roomId)
-            cdnIndex: \(currentCdnIndex)
-            host: \(host)
-            state: \(state)
-            bytesRead: \(bytesRead)
-            stallSeconds: \(Self.stallThresholdSeconds)
-            attempt: \(attempt) / \(Self.maxPlaybackRetries)
-            """
-        )
-        PluginConsoleService.shared.updateStatus(
-            id: id,
-            status: .success,
-            responseBody: "action=\(action)"
-        )
-    }
-
-    @MainActor
-    private func logStallBudgetExhausted(state: KSPlayerState, bytesRead: Int64) {
-        let id = PluginConsoleService.shared.log(
-            tag: "Player",
-            method: "stallWatchdog",
-            status: .loading
-        )
-        PluginConsoleService.shared.updateRequest(
-            id: id,
-            body: """
-            roomId: \(currentRoom.roomId)
-            cdnIndex: \(currentCdnIndex)
-            host: \(currentPlayURL?.host ?? "-")
-            state: \(state)
-            bytesRead: \(bytesRead)
-            """
-        )
-        PluginConsoleService.shared.updateStatus(
-            id: id,
-            status: .error,
-            errorMessage: "stall watchdog 预算用尽:\(Self.maxPlaybackRetries) 次 / \(Int(Self.playbackRetryWindow))s 窗口"
-        )
-    }
 }

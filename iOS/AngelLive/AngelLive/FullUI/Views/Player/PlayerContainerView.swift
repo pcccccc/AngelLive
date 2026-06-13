@@ -89,10 +89,6 @@ struct PlayerContentView: View {
     /// 直播流 state 在 KSPlayer 内可能长期停留在 .buffering(KSPlayer 视为 isPlaying),
     /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
     @State private var hasKSStartedPlayback = false
-    /// 首次起播 watchdog:URL 已设但 8s 内未起播自动 refreshPlayback,每条 URL 最多重试 1 次,
-    /// 兜底 KSPlayer prepareToPlay 卡住(createPlayerItem hang / HLS 握手阻塞 等)。
-    @State private var watchdogLastURL: URL?
-    @State private var watchdogRetried = false
     /// VLC 模式下的控制层显示/隐藏状态
     @State private var vlcMaskShow: Bool = true
     /// VLC 模式下的锁定状态
@@ -176,8 +172,14 @@ struct PlayerContentView: View {
                 hasKSStartedPlayback = true
             }
         }
-        .task(id: viewModel.currentPlayURL) {
-            await runStartupWatchdog()
+        .onAppear {
+            // KSPlayer 路径启动统一恢复协调器的 1Hz 采样;起播超时/stall/finish 全由它接管。
+            guard useKSPlayer else { return }
+            viewModel.recoveryCoordinator.start()
+        }
+        .onDisappear {
+            // 停掉协调器采样(stop 幂等,未启动也安全)。
+            viewModel.recoveryCoordinator.stop()
         }
         .onChange(of: playerCoordinator.state) {
             let state = playerCoordinator.state
@@ -668,62 +670,6 @@ struct PlayerContentView: View {
             playerModel.url = playURL
         }
     }
-
-    /// 起播超时兜底:URL 已设但长时间没起播,且网络也没在动,才 refreshPlayback 一次。
-    /// .task(id:) 在 currentPlayURL 变化时自动 cancel 旧 task 重起。
-    ///
-    /// 关键判定:除了 isPlaying,还要看 bytesRead 这段时间是否推进 —— 弱网时 player 正在缓冲、
-    /// bytes 在流,只是没翻 isPlaying,此时 refresh 会 kill 现有连接重来,体验比等更糟。
-    @MainActor
-    private func runStartupWatchdog() async {
-        guard let url = viewModel.currentPlayURL else { return }
-
-        if watchdogLastURL != url {
-            watchdogLastURL = url
-            watchdogRetried = false
-        }
-
-        guard !watchdogRetried else { return }
-        if viewModel.isPlaying { return }
-
-        // sleep 前采样 bytesRead 作为"网络是否在动"的基线。
-        let startBytes = playerCoordinator.playerLayer?.player.dynamicInfo.bytesRead ?? 0
-
-        // 起播超时阈值 20s:国外 CDN / 慢起播流给足首帧时间,避免探测/缓冲途中被误杀,
-        // 触发 refresh→重启同 kernel→再探的死循环。
-        do {
-            try await Task.sleep(nanoseconds: 20_000_000_000)
-        } catch {
-            return
-        }
-
-        guard !Task.isCancelled,
-              viewModel.currentPlayURL == url,
-              !viewModel.isPlaying else { return }
-
-        // 弱网保护:bytes 在推进就说明 IO 还活着,把后续判定交给 stall watchdog
-        // (它有 bytes+playhead 双信号,粒度更细)。这里直接标记 retried 收工,
-        // 避免后续 URL token 滚动时被同一个 watchdog 再次误触发。
-        let endBytes = playerCoordinator.playerLayer?.player.dynamicInfo.bytesRead ?? 0
-        if endBytes > startBytes + Self.watchdogBytesProgressThreshold {
-            watchdogRetried = true
-            Logger.debug(
-                "[PlayerFlow] watchdog: iOS 20s 内 bytes 推进 \(endBytes - startBytes)B,跳过 refresh url=\(compactURL(url))",
-                category: .player
-            )
-            return
-        }
-
-        watchdogRetried = true
-        Logger.debug(
-            "[PlayerFlow] watchdog: iOS 起播 20s 超时(bytesRead 无推进),refreshPlayback url=\(compactURL(url))",
-            category: .player
-        )
-        viewModel.refreshPlayback()
-    }
-
-    /// bytesRead 推进阈值:大于 16KB 才算"在动",过滤握手期的小包/重定向。
-    private static let watchdogBytesProgressThreshold: Int64 = 16 * 1024
 
     private func compactURL(_ url: URL?) -> String {
         guard let url else { return "nil" }

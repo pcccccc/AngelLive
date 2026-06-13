@@ -71,7 +71,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         // 初始化屏幕方向设置
-        KSOptions.logLevel = .error
+        // 将 KSPlayer 日志同时打印到 Xcode 控制台和 App 内开发者控制台
+        KSOptions.logger = KSPlayerConsoleBridge()
+        KSOptions.logLevel = .debug
         KSOptions.hudLog = false
         if AppConstants.Device.isIPad {
             KSOptions.supportedInterfaceOrientations = .all
