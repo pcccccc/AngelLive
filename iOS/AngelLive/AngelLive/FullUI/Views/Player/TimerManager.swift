@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import AngelLiveCore
 
 /// 定时关闭管理器
 @Observable
@@ -54,7 +55,7 @@ class TimerManager {
             }
         }
 
-        print("定时关闭已启动: \(minutes) 分钟")
+        Logger.debug("定时关闭已启动: \(minutes) 分钟", category: .ui)
     }
 
     /// 取消定时器
@@ -66,13 +67,13 @@ class TimerManager {
         remainingSeconds = 0
         onTimerEnd = nil
         if wasActive {
-            print("定时关闭已取消")
+            Logger.debug("定时关闭已取消", category: .ui)
         }
     }
 
     /// 定时器完成
     private func timerCompleted() {
-        print("定时关闭时间到")
+        Logger.debug("定时关闭时间到", category: .ui)
         let callback = onTimerEnd
         cancelTimer()
         callback?()

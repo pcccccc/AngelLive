@@ -278,7 +278,7 @@ struct PlayerGestureView: View {
                     interfaceOrientations: targetOrientation
                 )
                 windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                    print("❌ 切换屏幕方向失败: \(error)")
+                    Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
                 }
                 // 旋转完成后恢复自由旋转，允许后续横屏自动全屏
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

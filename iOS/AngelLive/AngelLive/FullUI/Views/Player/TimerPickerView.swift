@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 
 /// 定时关闭选择器
 struct TimerPickerView: View {
@@ -165,6 +166,6 @@ private struct CustomTimerPickerView: View {
 
 #Preview {
     TimerPickerView { minutes in
-        print("选择了 \(minutes) 分钟")
+        Logger.debug("选择了 \(minutes) 分钟", category: .ui)
     }
 }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 
 /// 支持跟手动画的分段控制器
 struct InteractiveSegmentedControl: View {
@@ -53,12 +54,12 @@ struct InteractiveSegmentedControl: View {
         let animationProgress = calculateAnimationProgress(for: index)
 
         Button(action: {
-            print("🔘 点击了分类按钮，index: \(index), 当前 selectedIndex: \(selectedIndex)")
+            Logger.debug("🔘 点击了分类按钮，index: \(index), 当前 selectedIndex: \(selectedIndex)", category: .ui)
             withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
                 selectedIndex = index
                 dragProgress = CGFloat(index)  // 同步更新 dragProgress
             }
-            print("🔘 设置后 selectedIndex: \(selectedIndex), dragProgress: \(dragProgress)")
+            Logger.debug("🔘 设置后 selectedIndex: \(selectedIndex), dragProgress: \(dragProgress)", category: .ui)
         }) {
             VStack(spacing: 6) {
                 Text(items[index])

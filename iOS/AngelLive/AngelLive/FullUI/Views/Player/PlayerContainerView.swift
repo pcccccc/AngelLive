@@ -184,7 +184,7 @@ struct PlayerContentView: View {
         .onChange(of: playerCoordinator.state) {
             let state = playerCoordinator.state
             // [StateProbe] KSVideoPlayer.Coordinator 自己的 state —— 验证它是否被抢 delegate 后冻结。
-            print("[StateProbe][Coordinator.state] -> \(state) state.isPlaying=\(state.isPlaying)")
+            Logger.debug("[StateProbe][Coordinator.state] -> \(state) state.isPlaying=\(state.isPlaying)", category: .player)
             guard useKSPlayer else { return }
             Logger.debug("[PlayerFlow] KS state changed -> \(state)", category: .player)
             switch state {
@@ -197,9 +197,9 @@ struct PlayerContentView: View {
                     let ratio = naturalSize.width / naturalSize.height
                     let isPortrait = ratio < 1.0
                     let isVerticalLive = isPortrait
-                    print("📺 [readyToPlay] 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
-                    print("📐 [readyToPlay] 视频比例: \(ratio)")
-                    print("📱 [readyToPlay] 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                    Logger.debug("📺 [readyToPlay] 视频尺寸: \(naturalSize.width) x \(naturalSize.height)", category: .player)
+                    Logger.debug("📐 [readyToPlay] 视频比例: \(ratio)", category: .player)
+                    Logger.debug("📱 [readyToPlay] 视频方向: \(isPortrait ? "竖屏" : "横屏")", category: .player)
                     applyVideoFillMode(isVerticalLive: isVerticalLive)
                     withAnimation(.easeInOut(duration: 0.2)) {
                         videoAspectRatio = ratio
@@ -334,7 +334,7 @@ struct PlayerContentView: View {
                         let maxRetries = 40 // 最多重试 40 次（10 秒）
                         let screenSize = await MainActor.run { UIScreen.main.bounds.size }
 
-                        print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
+                        Logger.debug("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)", category: .player)
 
                         while !Task.isCancelled && retryCount < maxRetries {
                             // 已被 readyToPlay 回调提前设置，直接退出
@@ -350,15 +350,15 @@ struct PlayerContentView: View {
                                     (naturalSize.width == screenSize.height && naturalSize.height == screenSize.width)
 
                                 if isScreenSize {
-                                    print("⚠️ 视频尺寸为屏幕尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
+                                    Logger.warning("视频尺寸为屏幕尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))", category: .player)
                                 } else if !hasDetectedSize {
                                     let ratio = naturalSize.width / naturalSize.height
                                     let isPortrait = ratio < 1.0
                                     let isVerticalLive = isPortrait
 
-                                    print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
-                                    print("📐 视频比例: \(ratio)")
-                                    print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                                    Logger.debug("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)", category: .player)
+                                    Logger.debug("📐 视频比例: \(ratio)", category: .player)
+                                    Logger.debug("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")", category: .player)
 
                                     await MainActor.run {
                                         applyVideoFillMode(isVerticalLive: isVerticalLive)

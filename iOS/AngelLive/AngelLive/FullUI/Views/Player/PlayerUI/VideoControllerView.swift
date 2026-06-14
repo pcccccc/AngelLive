@@ -231,7 +231,7 @@ struct VideoControllerView: View {
                 // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
                 DispatchQueue.main.async {
                     windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                        print("❌ 退出全屏失败: \(error)")
+                        Logger.warning("退出全屏失败: \(error)", category: .ui)
                     }
                     // 旋转完成后恢复自由旋转
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

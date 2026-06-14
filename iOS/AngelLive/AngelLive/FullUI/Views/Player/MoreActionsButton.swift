@@ -103,7 +103,7 @@ struct MoreActionsButton: View {
         MoreActionsButton(
             room: room,
             onClearChat: {
-                print("清屏")
+                Logger.debug("清屏", category: .ui)
             }
         )
     }

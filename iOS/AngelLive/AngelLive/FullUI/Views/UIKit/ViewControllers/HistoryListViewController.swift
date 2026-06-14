@@ -208,7 +208,7 @@ class HistoryListViewController: UIViewController {
             icon: Image(systemName: "xmark.circle.fill"),
             message: "\(title):\(detail)"
         ))
-        print("\(title): \(error)")
+        Logger.warning("\(title): \(error)", category: .general)
     }
 }
 

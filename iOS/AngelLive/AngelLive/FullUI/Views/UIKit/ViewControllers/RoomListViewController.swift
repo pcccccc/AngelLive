@@ -402,7 +402,7 @@ extension RoomListViewController: UICollectionViewDelegate {
                                 icon: Image(systemName: "xmark.circle.fill"),
                                 message: "取消收藏失败:\(detail)"
                             ))
-                            print("取消收藏失败: \(error)")
+                            Logger.warning("取消收藏失败: \(error)", category: .favorite)
                         }
                     }
                 }
@@ -425,7 +425,7 @@ extension RoomListViewController: UICollectionViewDelegate {
                                 icon: Image(systemName: "xmark.circle.fill"),
                                 message: "收藏失败:\(detail)"
                             ))
-                            print("收藏失败: \(error)")
+                            Logger.warning("收藏失败: \(error)", category: .favorite)
                         }
                     }
                 }

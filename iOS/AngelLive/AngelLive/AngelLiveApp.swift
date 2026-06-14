@@ -101,14 +101,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
         } catch {
-            print("配置音频会话失败: \(error)")
+            Logger.warning("配置音频会话失败: \(error)", category: .app)
         }
     }
 
     private func logPluginInstallLocation() {
         let storage = LiveParsePlugins.shared.storage
-        print("[iOS] 插件根目录: \(storage.pluginsRootDirectory.path)")
-        print("[iOS] 插件状态文件: \(storage.stateFileURL.path)")
+        Logger.debug("[iOS] 插件根目录: \(storage.pluginsRootDirectory.path)", category: .app)
+        Logger.debug("[iOS] 插件状态文件: \(storage.stateFileURL.path)", category: .app)
     }
 
     // MARK: - Orientation Support

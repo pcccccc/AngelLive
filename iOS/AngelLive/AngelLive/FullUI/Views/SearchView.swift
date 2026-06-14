@@ -265,12 +265,12 @@ struct SearchView: View {
                     if let liveParseError = error as? LiveParseError,
                        liveParseError.detail.contains("返回结果为空") {
                         // 空结果不是错误，只是没有搜索到内容
-                        print("🔍 搜索无结果: \(liveParseError.liveParseMessage)")
+                        Logger.info("搜索无结果: \(liveParseError.liveParseMessage)", category: .network)
                         searchResults = []
                         searchError = nil
                     } else {
                         // 真正的错误才显示
-                        print("❌ 搜索错误: \(error)")
+                        Logger.warning("搜索错误: \(error)", category: .network)
                         searchResults = []
                         searchError = error
                     }

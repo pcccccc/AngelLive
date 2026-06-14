@@ -327,7 +327,7 @@ public enum KSVideoPlayerViewBuilder {
         guard let windowScene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first else {
-            print("⚠️ 无法获取 WindowScene")
+            Logger.warning("无法获取 WindowScene", category: .ui)
             return
         }
         
@@ -344,7 +344,7 @@ public enum KSVideoPlayerViewBuilder {
                 interfaceOrientations: targetOrientation
             )
             windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                print("❌ 方向更新失败: \(error)")
+                Logger.warning("方向更新失败: \(error)", category: .ui)
             }
             // 旋转完成后恢复自由旋转
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -377,7 +377,7 @@ public enum KSVideoPlayerViewBuilder {
             guard let windowScene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .first else {
-                print("⚠️ 无法获取 WindowScene")
+                Logger.warning("无法获取 WindowScene", category: .ui)
                 return
             }
 
@@ -394,7 +394,7 @@ public enum KSVideoPlayerViewBuilder {
                     interfaceOrientations: .portrait
                 )
                 windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                    print("❌ 方向更新失败: \(error)")
+                    Logger.warning("方向更新失败: \(error)", category: .ui)
                 }
                 // 旋转完成后恢复自由旋转
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

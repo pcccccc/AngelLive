@@ -195,7 +195,7 @@ struct StreamerInfoView: View {
                 icon: Image(systemName: "xmark.circle.fill"),
                 message: wasFavorited ? "取消收藏失败：\(errorMessage)" : "收藏失败：\(errorMessage)"
             ))
-            print("收藏操作失败: \(error)")
+            Logger.warning("收藏操作失败: \(error)", category: .favorite)
         }
     }
 }

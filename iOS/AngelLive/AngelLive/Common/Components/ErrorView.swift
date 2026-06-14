@@ -624,7 +624,7 @@ extension ErrorView {
 
 #Preview("新版网络错误") {
     ErrorView.network {
-        print("Retry network")
+        Logger.debug("Retry network", category: .ui)
     }
     .preferredColorScheme(.light)
 }

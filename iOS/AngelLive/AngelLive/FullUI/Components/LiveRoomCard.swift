@@ -406,7 +406,7 @@ struct LiveRoomCard: View {
                 message: "收藏失败：\(errorMessage)"
             )
             presentToast(toast)
-            print("收藏失败: \(error)")
+            Logger.warning("收藏失败: \(error)", category: .favorite)
         }
     }
 
@@ -431,7 +431,7 @@ struct LiveRoomCard: View {
                 message: "取消收藏失败：\(errorMessage)"
             )
             presentToast(toast)
-            print("取消收藏失败: \(error)")
+            Logger.warning("取消收藏失败: \(error)", category: .favorite)
         }
     }
 }

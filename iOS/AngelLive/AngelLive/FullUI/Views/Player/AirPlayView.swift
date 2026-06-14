@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVKit
+import AngelLiveCore
 
 /// AirPlay 投屏选择器
 struct AirPlayView: UIViewRepresentable {
@@ -30,11 +31,11 @@ struct AirPlayView: UIViewRepresentable {
 
     class Coordinator: NSObject, AVRoutePickerViewDelegate {
         func routePickerViewWillBeginPresentingRoutes(_ routePickerView: AVRoutePickerView) {
-            print("AirPlay: 开始展示可用设备")
+            Logger.debug("AirPlay: 开始展示可用设备", category: .player)
         }
 
         func routePickerViewDidEndPresentingRoutes(_ routePickerView: AVRoutePickerView) {
-            print("AirPlay: 关闭设备选择")
+            Logger.debug("AirPlay: 关闭设备选择", category: .player)
         }
     }
 }

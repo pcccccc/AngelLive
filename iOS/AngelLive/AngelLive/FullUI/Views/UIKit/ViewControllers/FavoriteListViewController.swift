@@ -504,7 +504,7 @@ extension FavoriteListViewController: UICollectionViewDelegate {
                             icon: Image(systemName: "xmark.circle.fill"),
                             message: "取消收藏失败:\(detail)"
                         ))
-                        print("取消收藏失败: \(error)")
+                        Logger.warning("取消收藏失败: \(error)", category: .favorite)
                     }
                 }
             }
