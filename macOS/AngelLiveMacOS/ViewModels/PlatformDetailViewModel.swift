@@ -99,7 +99,7 @@ class PlatformDetailViewModel {
                 }
             }
         } catch {
-            print("获取分类列表失败: \(error)")
+            Logger.warning("获取分类列表失败: \(error)", category: .network)
             categoryError = error
         }
     }
@@ -160,7 +160,7 @@ class PlatformDetailViewModel {
                 return
             }
 
-            print("获取房间列表失败: \(error)")
+            Logger.warning("获取房间列表失败: \(error)", category: .network)
             roomError = error
         }
     }

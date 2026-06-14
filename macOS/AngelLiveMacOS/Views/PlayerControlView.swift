@@ -517,7 +517,7 @@ struct PlayerControlView: View {
                 message: wasFavorited ? "取消收藏失败：\(errorMessage)" : "收藏失败：\(errorMessage)",
                 type: .error
             )
-            print("收藏操作失败: \(error)")
+            Logger.warning("收藏操作失败: \(error)", category: .favorite)
         }
     }
 

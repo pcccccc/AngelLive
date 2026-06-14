@@ -192,12 +192,12 @@ struct RoomPlayerView: View {
         let endBytes = coordinator.playerLayer?.player.dynamicInfo.bytesRead ?? 0
         if endBytes > startBytes + Self.watchdogBytesProgressThreshold {
             watchdogRetried = true
-            print("[PlayerFlow] watchdog: macOS 12s 内 bytes 推进 \(endBytes - startBytes)B,跳过 refresh(url=\(url.absoluteString))")
+            Logger.debug("[PlayerFlow] watchdog: macOS 12s 内 bytes 推进 \(endBytes - startBytes)B,跳过 refresh(url=\(url.absoluteString))", category: .player)
             return
         }
 
         watchdogRetried = true
-        print("[PlayerFlow] watchdog: macOS 起播 12s 超时(bytesRead 无推进),refreshPlayback (url=\(url.absoluteString))")
+        Logger.warning("[PlayerFlow] watchdog: macOS 起播 12s 超时(bytesRead 无推进),refreshPlayback (url=\(url.absoluteString))", category: .player)
         viewModel.refreshPlayback()
     }
 

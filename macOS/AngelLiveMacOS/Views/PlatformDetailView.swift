@@ -596,7 +596,7 @@ struct LiveRoomCard: View {
         } catch {
             let errorMessage = FavoriteService.formatErrorCode(error: error)
             toastManager.show(icon: "xmark.circle.fill", message: "收藏失败：\(errorMessage)", type: .error)
-            print("收藏失败: \(error)")
+            Logger.warning("收藏失败: \(error)", category: .favorite)
         }
     }
 
@@ -613,7 +613,7 @@ struct LiveRoomCard: View {
         } catch {
             let errorMessage = FavoriteService.formatErrorCode(error: error)
             toastManager.show(icon: "xmark.circle.fill", message: "取消收藏失败：\(errorMessage)", type: .error)
-            print("取消收藏失败: \(error)")
+            Logger.warning("取消收藏失败: \(error)", category: .favorite)
         }
     }
 }

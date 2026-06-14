@@ -750,7 +750,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
             checkLiveStatusOnError(error: error)
             return
         }
-        print("[KSPlayer] suppress finish error UI on macOS: \(errorMsg)")
+        Logger.warning("[KSPlayer] suppress finish error UI on macOS: \(errorMsg)", category: .player)
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {
@@ -789,7 +789,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         let attempt = playbackRetryAttempts
         // 指数退避:1s / 2s / 4s
         let delay = pow(2.0, Double(attempt - 1))
-        print("[KSPlayer] managed retry \(attempt)/\(Self.maxPlaybackRetries) in \(delay)s")
+        Logger.debug("[KSPlayer] managed retry \(attempt)/\(Self.maxPlaybackRetries) in \(delay)s", category: .player)
         logPlaybackRetryScheduled(attempt: attempt, delay: delay, triggeredBy: error)
 
         playbackRetryTask?.cancel()
