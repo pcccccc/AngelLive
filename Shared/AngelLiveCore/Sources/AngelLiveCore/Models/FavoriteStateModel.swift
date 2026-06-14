@@ -51,7 +51,7 @@ public actor FavoriteStateModel {
         }
         // 防止并发执行
         guard !isSyncing else {
-            print("Actor 正在同步中，拒绝重复调用")
+            Logger.debug("Actor 正在同步中，拒绝重复调用", category: .favorite)
             await MainActor.run {
                 PluginConsoleService.shared.updateStatus(
                     id: consoleEntryId,
@@ -240,13 +240,13 @@ private func deduplicateFavoriteRooms(_ rooms: [LiveModel]) -> [LiveModel] {
     // 多维度去重(平台无关):同平台下 userId 或 roomId 任一有效维度相同即同一主播。
     let result = AppFavoriteModel.deduplicated(rooms)
     if result.count != rooms.count {
-        print("[FavoriteDedup] 多维度去重 \(rooms.count) → \(result.count)(合并 \(rooms.count - result.count) 条)")
+        Logger.debug("[FavoriteDedup] 多维度去重 \(rooms.count) → \(result.count)(合并 \(rooms.count - result.count) 条)", category: .favorite)
     }
     return result
 }
 
 private func favoriteSyncLog(_ message: String) {
-    print("[FavoriteSync] \(message)")
+    Logger.debug("[FavoriteSync] \(message)", category: .favorite)
 }
 
 private func formatSeconds(_ seconds: Double) -> String {

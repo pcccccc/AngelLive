@@ -85,7 +85,7 @@ public final class JSRuntime: @unchecked Sendable {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
-                    print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 进入队列")
+                    Logger.debug("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 进入队列", category: .plugin)
                     guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
                         throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
                     }
@@ -102,15 +102,15 @@ public final class JSRuntime: @unchecked Sendable {
                     }
 
                     if Self.isPromise(result) {
-                        print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 返回 Promise，等待解析")
+                        Logger.debug("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 返回 Promise，等待解析", category: .plugin)
                         self.awaitPromise(result, functionName: name, continuation: continuation)
                         return
                     }
 
-                    print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 同步返回")
+                    Logger.debug("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 同步返回", category: .plugin)
                     continuation.resume(returning: try Self.convertToJSONObject(result, in: self.context))
                 } catch {
-                    print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)")
+                    Logger.warning("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)", category: .plugin)
                     continuation.resume(throwing: error)
                 }
             }
@@ -501,7 +501,7 @@ private extension JSRuntime {
                     let bodyBase64 = data?.base64EncodedString()
                     let responseURL = http.url?.absoluteString ?? envelope.urlString
                     let rawBodyLog = debugHTTPResponseBody(bodyText: bodyText, bodyBase64: bodyBase64)
-                    print("[JSRuntime][HTTP] pluginId=\(pluginId) method=\(envelope.method) status=\(http.statusCode) url=\(responseURL) headers=\(headersDict) rawBody=\(rawBodyLog)")
+                    Logger.debug("[JSRuntime][HTTP] pluginId=\(pluginId) method=\(envelope.method) status=\(http.statusCode) url=\(responseURL) headers=\(headersDict) rawBody=\(rawBodyLog)", category: .plugin)
 
                     // 开发者控制台：记录成功的 HTTP 请求
                     Self.logHTTPRecord(
@@ -804,7 +804,7 @@ private extension JSRuntime {
         let key = "_lp_await_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
 
         let resolve: @convention(block) (JSValue) -> Void = { [weak context] value in
-            print("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) resolve 回调触发")
+            Logger.debug("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) resolve 回调触发", category: .plugin)
             // 清理全局变量
             context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
             do {
@@ -815,7 +815,7 @@ private extension JSRuntime {
             }
         }
         let reject: @convention(block) (JSValue) -> Void = { [weak context] value in
-            print("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) reject 回调触发: \(value.toString() ?? "")")
+            Logger.debug("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) reject 回调触发: \(value.toString() ?? "")", category: .plugin)
             context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
             continuation.resume(throwing: LiveParsePluginError.fromJSException(value.toString() ?? "<unknown>"))
         }

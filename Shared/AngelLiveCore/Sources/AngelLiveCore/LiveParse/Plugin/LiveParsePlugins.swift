@@ -15,13 +15,13 @@ public enum LiveParsePlugins {
         let session = URLSession(configuration: config)
 
         let logHandler: LiveParsePluginManager.LogHandler = { msg in
-            print("[LiveParse:JS] \(msg)")
+            Logger.debug("[LiveParse:JS] \(msg)", category: .plugin)
         }
 
         do {
             return try LiveParsePluginManager(session: session, logHandler: logHandler)
         } catch {
-            print("[LiveParse] Failed to init plugin manager with default storage: \(error). Falling back to caches directory.")
+            Logger.warning("[LiveParse] Failed to init plugin manager with default storage: \(error). Falling back to caches directory.", category: .plugin)
             // 回退到 Caches 目录（tvOS 等平台对 Application Support 目录权限可能受限）
             let fallbackDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
                 .appendingPathComponent("LiveParse", isDirectory: true)

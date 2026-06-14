@@ -114,7 +114,7 @@ final class PluginJSDanmakuDriver {
                 ]
             )
         } catch {
-            print("[PluginJSDanmakuDriver] destroy failed pluginId=\(pluginId) connectionId=\(connectionId) error=\(error)")
+            Logger.warning("[PluginJSDanmakuDriver] destroy failed pluginId=\(pluginId) connectionId=\(connectionId) error=\(error)", category: .danmu)
         }
     }
 

@@ -443,69 +443,29 @@ extension LiveParseError {
 }
 
 // MARK: - 日志系统
-
-/// 日志记录协议
-public protocol LiveParseLogger {
-    func log(_ level: LogLevel, message: String, file: String, function: String, line: Int)
-}
-
-/// 默认日志实现
-public class DefaultLiveParseLogger: LiveParseLogger {
-    public init() {}
-
-    public func log(_ level: LogLevel, message: String, file: String, function: String, line: Int) {
-        let fileName = (file as NSString).lastPathComponent
-        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-        print("\(level.emoji) [\(timestamp)] [\(fileName):\(line)] \(function) - \(message)")
-    }
-}
-
-/// 全局日志配置
-public class LiveParseConfig {
-    /// 日志记录器
-    nonisolated(unsafe) public static var logger: LiveParseLogger = DefaultLiveParseLogger()
-
-    /// 最小日志级别，低于此级别的日志不会被记录
-    nonisolated(unsafe) public static var logLevel: LogLevel = .debug
-
-    /// 是否在错误日志中包含详细的请求/响应信息
-    nonisolated(unsafe) public static var includeDetailedNetworkInfo: Bool = true
-
-    /// 是否在控制台打印日志
-    nonisolated(unsafe) public static var enableConsoleLog: Bool = true
-
-    /// 自定义日志处理器（例如写入文件）
-    nonisolated(unsafe) public static var customLogHandler: ((LogLevel, String) -> Void)?
-}
-
-// MARK: - 日志辅助函数
+//
+// LiveParse 的日志统一走 AngelLiveCore 的 `Logger`(分类 .network),不再维护第二套 logger。
+// 保留这 4 个全局辅助函数是因为:① 它们能自动捕获 #function;② NetworkRequestHelper 已大量使用。
+// 过滤/静音通过 `Logger.setLevel(_:for: .network)` / `Logger.mute(.network)` 统一控制。
 
 /// 记录调试日志
 func logDebug(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-    guard LiveParseConfig.logLevel <= .debug else { return }
-    LiveParseConfig.logger.log(.debug, message: message, file: file, function: function, line: line)
-    LiveParseConfig.customLogHandler?(.debug, message)
+    Logger.debug("\(function) - \(message)", category: .network, file: file, line: line)
 }
 
 /// 记录信息日志
 func logInfo(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-    guard LiveParseConfig.logLevel <= .info else { return }
-    LiveParseConfig.logger.log(.info, message: message, file: file, function: function, line: line)
-    LiveParseConfig.customLogHandler?(.info, message)
+    Logger.info("\(function) - \(message)", category: .network, file: file, line: line)
 }
 
 /// 记录警告日志
 func logWarning(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-    guard LiveParseConfig.logLevel <= .warning else { return }
-    LiveParseConfig.logger.log(.warning, message: message, file: file, function: function, line: line)
-    LiveParseConfig.customLogHandler?(.warning, message)
+    Logger.warning("\(function) - \(message)", category: .network, file: file, line: line)
 }
 
 /// 记录错误日志
 func logError(_ message: String, file: String = #file, function: String = #function, line: Int = #line) {
-    guard LiveParseConfig.logLevel <= .error else { return }
-    LiveParseConfig.logger.log(.error, message: message, file: file, function: function, line: line)
-    LiveParseConfig.customLogHandler?(.error, message)
+    Logger.error("\(function) - \(message)", category: .network, file: file, line: line)
 }
 
 // MARK: - 辅助函数

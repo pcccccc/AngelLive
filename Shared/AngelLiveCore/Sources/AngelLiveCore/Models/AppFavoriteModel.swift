@@ -160,7 +160,7 @@ public final class AppFavoriteModel {
     public func syncWithActor() async {
         // 防止并发刷新：如果正在同步中，直接返回
         guard !isSyncing else {
-            print("正在同步中，忽略此次刷新请求")
+            Logger.debug("正在同步中，忽略此次刷新请求", category: .favorite)
             return
         }
 
@@ -233,7 +233,7 @@ public final class AppFavoriteModel {
     public func pullToRefresh() async {
         // 防止并发刷新
         guard !isSyncing else {
-            print("正在同步中，忽略此次刷新请求")
+            Logger.debug("正在同步中，忽略此次刷新请求", category: .favorite)
             return
         }
 

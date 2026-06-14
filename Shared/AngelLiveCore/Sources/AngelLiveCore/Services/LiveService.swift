@@ -64,7 +64,7 @@ public enum LiveService {
                     do {
                         return try await LiveParseJSPlatformManager.searchRooms(platform: platform, keyword: keyword, page: page)
                     } catch {
-                        print("⚠️ \(platform.displayName) 搜索失败: \(error)")
+                        Logger.warning("\(platform.displayName) 搜索失败: \(error)", category: .network)
                         return []
                     }
                 }

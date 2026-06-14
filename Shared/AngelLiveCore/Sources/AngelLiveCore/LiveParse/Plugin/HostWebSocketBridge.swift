@@ -175,7 +175,7 @@ extension JSRuntime {
             }
             HostWebSocketRegistry.add(session)
             session.connect()
-            print("[Host.ws] open pluginId=\(pluginId) sessionId=\(sessionId) url=\(urlString)")
+            Logger.debug("[Host.ws] open pluginId=\(pluginId) sessionId=\(sessionId) url=\(urlString)", category: .plugin)
             return sessionId
         }
 

@@ -85,12 +85,8 @@ public class DanmakuTextCellModel: DanmakuCellModel, Equatable {
             height: bounds.height + verticalPadding
         )
 
-        // 调试输出
-        print("📊 弹幕尺寸计算:")
-        print("  文本: \(text)")
-        print("  字体大小: \(font.pointSize)")
-        print("  CTLine bounds: width=\(bounds.width), height=\(bounds.height)")
-        print("  最终尺寸: width=\(size.width), height=\(size.height)")
+        // 调试输出(尺寸计算)
+        Logger.debug("弹幕尺寸: 文本=\(text) 字号=\(font.pointSize) CTLine=\(bounds.width)x\(bounds.height) 最终=\(size.width)x\(size.height)", category: .danmu)
 #else
         // iOS/tvOS: 使用 NSString.size
         let attributes: [NSAttributedString.Key: Any] = [.font: font]

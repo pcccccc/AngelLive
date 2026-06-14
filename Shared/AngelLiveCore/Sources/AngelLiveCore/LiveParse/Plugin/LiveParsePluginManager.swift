@@ -161,7 +161,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             let value = try await call(pluginId: pluginId, function: function, payload: payload)
             let data = try JSONSerialization.data(withJSONObject: value)
             if let jsonStr = String(data: data, encoding: .utf8) {
-                print("[PluginManager] callDecodable: pluginId=\(pluginId) function=\(function) rawJSON=\(jsonStr.prefix(1000))")
+                Logger.debug("[PluginManager] callDecodable: pluginId=\(pluginId) function=\(function) rawJSON=\(jsonStr.prefix(1000))", category: .plugin)
             }
             return try decoder.decode(T.self, from: data)
         } catch let error as LiveParsePluginError {

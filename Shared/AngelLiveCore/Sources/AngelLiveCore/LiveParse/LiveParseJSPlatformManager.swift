@@ -237,7 +237,7 @@ public enum LiveParseJSPlatformManager {
         userId: String?,
         context: [String: Any] = [:]
     ) async throws -> LiveModel {
-        print("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) 准备调用 callWithFallback")
+        Logger.debug("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) 准备调用 callWithFallback", category: .plugin)
         let room: PluginRoomDTO = try await callWithFallback(
             platform: platform,
             function: "getRoomDetail",
@@ -247,8 +247,8 @@ public enum LiveParseJSPlatformManager {
                 "userId": userId
             ])
         )
-        print("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) callWithFallback 返回成功")
-        print("[JSPlatformManager] getLiveLastestInfo: DTO -> userName=\(room.userName) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")")
+        Logger.debug("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) callWithFallback 返回成功", category: .plugin)
+        Logger.debug("[JSPlatformManager] getLiveLastestInfo: DTO -> userName=\(room.userName) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")", category: .plugin)
         return room.toLiveModel(liveType: platform.liveType)
     }
 
@@ -351,13 +351,13 @@ public enum LiveParseJSPlatformManager {
         payload: [String: Any] = [:]
     ) async throws -> ResultType {
         do {
-            print("[JSPlatformManager] callWithFallback: pluginId=\(platform.pluginId) function=\(function) 准备调用 callDecodable")
+            Logger.debug("[JSPlatformManager] callWithFallback: pluginId=\(platform.pluginId) function=\(function) 准备调用 callDecodable", category: .plugin)
             let result: ResultType = try await LiveParsePlugins.shared.callDecodable(
                 pluginId: platform.pluginId,
                 function: function,
                 payload: payload
             )
-            print("[JSPlatformManager] callWithFallback: pluginId=\(platform.pluginId) function=\(function) callDecodable 返回成功")
+            Logger.debug("[JSPlatformManager] callWithFallback: pluginId=\(platform.pluginId) function=\(function) callDecodable 返回成功", category: .plugin)
             return result
         } catch let error as LiveParsePluginError {
             // 仅当函数不存在时回退，其他错误直接抛出
