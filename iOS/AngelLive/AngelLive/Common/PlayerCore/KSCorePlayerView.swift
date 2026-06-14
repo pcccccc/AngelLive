@@ -33,8 +33,6 @@ public struct KSCorePlayerView: View {
     public var body: some View {
         KSVideoPlayer(coordinator: config, url: url, options: options)
             .onStateChanged { playerLayer, state in
-                // [StateProbe] KSVideoPlayer 内建 onStateChanged 回调 —— 看它和被抢的 delegate 谁在 fire。
-                Logger.debug("[StateProbe][KSCore.onStateChanged] state=\(state) player=\(type(of: playerLayer.player))", category: .player)
                 if state == .readyToPlay {
                     if let subtitleDataSource {
                         config.playerLayer?.subtitleModel.addSubtitle(dataSource: subtitleDataSource)

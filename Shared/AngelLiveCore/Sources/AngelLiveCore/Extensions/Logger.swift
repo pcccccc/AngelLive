@@ -5,7 +5,7 @@
 //  统一的日志系统，替代散落的 print 语句。
 //
 //  用法:
-//      Logger.debug("[StateProbe] ...", category: .player)
+//      Logger.debug("[PlayerFlow] ...", category: .player)
 //      Logger.error(err, message: "拉取失败", category: .network)
 //
 //  按分类过滤(运行时可改,不必重编译):
@@ -59,7 +59,7 @@ public enum LogLevel: Int, Comparable {
 
 /// 日志分类。每条日志都归属一个分类,可按分类独立调级别或静音。
 public enum LogCategory: String, CaseIterable, Sendable {
-    case player = "Player"        // 播放内核/状态/探针: KSPlayer / PlayerFlow / StateProbe
+    case player = "Player"        // 播放内核/状态: KSPlayer / PlayerFlow
     case danmu = "Danmu"          // 弹幕
     case network = "Network"      // 网络请求: ApiManager 等
     case favorite = "Favorite"    // 收藏: FavoriteSync / FavoriteDedup

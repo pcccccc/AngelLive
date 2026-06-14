@@ -123,14 +123,8 @@ final class RoomInfoViewModel {
     /// 且出错有清晰 .failed 走 fallback),与旧 watchdog 的 KSAV 豁免一致。
     @MainActor
     private func currentPlaybackSample() -> PlaybackSample? {
-        guard let player = watchedPlayerLayer?.player else {
-            Logger.debug("[StateProbe][sample] no watchedPlayerLayer", category: .player)
-            return nil
-        }
-        if player is KSAVPlayer {
-            Logger.debug("[StateProbe][sample] KSAV 路径跳过采样 player=\(type(of: player))", category: .player)
-            return nil
-        }
+        guard let player = watchedPlayerLayer?.player else { return nil }
+        if player is KSAVPlayer { return nil }
         let playhead = player.currentPlaybackTime
         let sample = PlaybackSample(
             bytesRead: player.dynamicInfo.bytesRead,
@@ -138,8 +132,6 @@ final class RoomInfoViewModel {
             buffered: max(0, player.playableTime - playhead),
             isPlaying: player.isPlaying
         )
-        // [StateProbe] 1Hz 真值快照:看卡顿瞬间 bytes/playhead 是否推进、isPlaying 真假、协调器 phase。
-        Logger.debug("[StateProbe][sample 1Hz] bytes=\(sample.bytesRead) playhead=\(String(format: "%.2f", sample.playhead)) buffered=\(String(format: "%.2f", sample.buffered)) isPlaying=\(sample.isPlaying) phase=\(recoveryCoordinator.phase)", category: .player)
         return sample
     }
 
@@ -820,8 +812,6 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         isPlaying = layer.player.isPlaying
         let engine = mapEngineState(state)
         engineState = engine   // 发布真实状态供 UI 判缓冲/加载(取代冻结的 playerCoordinator.state)
-        // [StateProbe] 被 RoomInfoViewModel 抢走的「真实」delegate —— KSPlayer 实际状态从这里来。
-        Logger.debug("[StateProbe][VM.delegate(真实)] state=\(state) layer.player.isPlaying=\(layer.player.isPlaying) player=\(type(of: layer.player))", category: .player)
         // 状态变化喂给协调器:起播成功/抖动/终态的判定与熔断预算全在状态机内。
         recoveryCoordinator.stateChanged(engine)
     }

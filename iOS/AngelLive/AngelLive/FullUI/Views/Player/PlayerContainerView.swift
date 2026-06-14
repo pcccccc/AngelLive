@@ -183,8 +183,6 @@ struct PlayerContentView: View {
         }
         .onChange(of: playerCoordinator.state) {
             let state = playerCoordinator.state
-            // [StateProbe] KSVideoPlayer.Coordinator 自己的 state —— 验证它是否被抢 delegate 后冻结。
-            Logger.debug("[StateProbe][Coordinator.state] -> \(state) state.isPlaying=\(state.isPlaying)", category: .player)
             guard useKSPlayer else { return }
             Logger.debug("[PlayerFlow] KS state changed -> \(state)", category: .player)
             switch state {
