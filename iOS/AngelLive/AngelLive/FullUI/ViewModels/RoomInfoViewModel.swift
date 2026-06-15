@@ -69,7 +69,7 @@ final class RoomInfoViewModel {
     /// 卡顿检测 + 自动恢复的单一状态机,替换原 stall watchdog + managed retry(修 Bug A/B)。
     /// 状态机本体在 AngelLiveCore(可单测);这里只做事件发射、动作映射与采样。
     /// 当前监视的 playerLayer,供 sample provider 读取 KSPlayer dynamicInfo。
-    private weak var watchedPlayerLayer: KSPlayerLayer?
+    weak var watchedPlayerLayer: KSPlayerLayer?
     @ObservationIgnored private var _recoveryCoordinator: PlaybackRecoveryCoordinator?
 
     /// 懒构造(协调器 init 为 @MainActor;@Observable 不支持 lazy 存储属性,故手写)。
@@ -84,69 +84,14 @@ final class RoomInfoViewModel {
     @MainActor
     private func makeRecoveryCoordinator() -> PlaybackRecoveryCoordinator {
         // KSAVPlayer / VLC 路径有清晰 .failed 走 fallback,关 stall 监控避免误判;
-        // 起播超时仍由协调器按会话记次。
+        // 起播超时仍由协调器按会话记次。动作映射与采样统一在 AngelLiveDependencies 的共享工厂。
         let config = RecoveryConfig.phone(stallMonitoringEnabled: !usesVLCKernel)
-        let actions = RecoveryActions(
-            refreshSameURL: { [weak self] in
-                guard let self else { return }
-                self.changePlayUrl(cdnIndex: self.currentCdnIndex, urlIndex: self.currentQualityIndex)
-            },
-            switchCDN: { [weak self] in
-                guard let self else { return }
-                if let next = self.nextCdnIndex() {
-                    self.changePlayUrl(cdnIndex: next, urlIndex: 0)
-                } else {
-                    self.refreshPlayback()   // 单 CDN 无可切,回退同源刷新
-                }
-            },
-            reloadPlayArgs: { [weak self] in
-                self?.refreshPlayback()
-            },
-            reportFailed: { [weak self] reason in
-                guard let self else { return }
-                let error = NSError(
-                    domain: "AngelLive.Player.Recovery",
-                    code: -1001,
-                    userInfo: [NSLocalizedDescriptionKey: reason]
-                )
-                self.checkLiveStatusOnError(error: error)
-            }
-        )
-        return PlaybackRecoveryCoordinator(
-            config: config,
-            actions: actions,
-            sample: { [weak self] in self?.currentPlaybackSample() }
-        )
+        return PlaybackRecoveryFactory.make(host: self, config: config)
     }
 
-    /// 协调器 1Hz 采样源。KSAVPlayer 返回 nil(bytesRead 仅 segment 边界跳变会误判,
-    /// 且出错有清晰 .failed 走 fallback),与旧 watchdog 的 KSAV 豁免一致。
-    @MainActor
-    private func currentPlaybackSample() -> PlaybackSample? {
-        guard let player = watchedPlayerLayer?.player else { return nil }
-        if player is KSAVPlayer { return nil }
-        let playhead = player.currentPlaybackTime
-        let sample = PlaybackSample(
-            bytesRead: player.dynamicInfo.bytesRead,
-            playhead: playhead,
-            buffered: max(0, player.playableTime - playhead),
-            isPlaying: player.isPlaying
-        )
-        return sample
-    }
-
-    /// KSPlayerState(8 case)→ 协调器抽象状态。
+    /// KSPlayerState(8 case)→ 协调器抽象状态(转发共享映射,保留旧调用点命名)。
     private func mapEngineState(_ state: KSPlayerState) -> PlaybackEngineState {
-        switch state {
-        case .initialized: .initialized
-        case .preparing: .preparing
-        case .readyToPlay: .readyToPlay
-        case .buffering: .buffering
-        case .bufferFinished: .bufferFinished
-        case .paused: .paused
-        case .playedToTheEnd: .ended
-        case .error: .error
-        }
+        mapKSPlayerEngineState(state)
     }
 
     // 弹幕相关属性
@@ -881,9 +826,14 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     /// 选择下一条可用 CDN。仅有 1 条时返回 nil,让上层走 refresh 分支。
-    private func nextCdnIndex() -> Int? {
+    func nextCdnIndex() -> Int? {
         guard let args = currentRoomPlayArgs, args.count > 1 else { return nil }
         return (currentCdnIndex + 1) % args.count
     }
 
 }
+
+// MARK: - PlaybackRecoveryHost
+// watchedPlayerLayer / currentCdnIndex / currentQualityIndex / changePlayUrl /
+// refreshPlayback / nextCdnIndex / checkLiveStatusOnError 均已具备,直接 conform。
+extension RoomInfoViewModel: PlaybackRecoveryHost {}

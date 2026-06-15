@@ -1,5 +1,5 @@
 {
-  "originHash" : "fe51e04eba6387e5b471c154b425466e725052b6eefd02e68669bced903d6e04",
+  "originHash" : "14e5cf0bea97ce0827f638305680b90e286c775cb7d6640f6bf590ce73a93916",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "e938f8c66708e7352fc7e3512647fa54255b267a",
         "version" : "5.11.2"
+      }
+    },
+    {
+      "identity" : "bitbytedata",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tsolomko/BitByteData",
+      "state" : {
+        "revision" : "e1a5443be67daf0833cbb5f4fa3a06a265ca3105",
+        "version" : "2.1.0"
       }
     },
     {
@@ -155,6 +164,24 @@
       }
     },
     {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/daltoniam/Starscream",
+      "state" : {
+        "revision" : "c6bfd1af48efcc9a9ad203665db12375ba6b145a",
+        "version" : "4.0.8"
+      }
+    },
+    {
+      "identity" : "swcompression",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tsolomko/SWCompression",
+      "state" : {
+        "revision" : "03a68e67991815a267e28174a0a01fbe0cff937b",
+        "version" : "4.9.1"
+      }
+    },
+    {
       "identity" : "swift-atomics",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-atomics.git",
@@ -179,6 +206,15 @@
       "state" : {
         "revision" : "f71c8d2a5e74a2c6d11a0fbe324774b5d6084237",
         "version" : "2.99.0"
+      }
+    },
+    {
+      "identity" : "swift-protobuf",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-protobuf",
+      "state" : {
+        "revision" : "f6506eaa86ed2e01cb0ae14a75035b7fdbf0918f",
+        "version" : "1.38.0"
       }
     },
     {

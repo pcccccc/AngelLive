@@ -24,6 +24,8 @@ private func resolveKSPlayerDependency() -> (package: Package.Dependency, target
 }
 
 var packageDependencies: [Package.Dependency] = [
+    // 同仓共享内核包。单向依赖(Core 不反向依赖本包),用于复用播放恢复协调器(PlaybackRecoveryCoordinator)。
+    .package(name: "AngelLiveCore", path: "../AngelLiveCore"),
     .package(url: "https://github.com/vtourraine/AcknowList", from: "3.4.0"),
     .package(url: "https://github.com/Alamofire/Alamofire.git", from: "5.10.2"),
     .package(url: "https://github.com/bugsnag/bugsnag-cocoa", from: "6.34.0"),
@@ -58,6 +60,7 @@ packageDependencies += [
 ]
 
 var targetDependencies: [Target.Dependency] = [
+    "AngelLiveCore",
     "Alamofire",
     .product(name: "Cache", package: "Cache"),
     .product(name: "Gzip", package: "GzipSwift"),
