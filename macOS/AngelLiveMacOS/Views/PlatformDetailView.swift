@@ -376,7 +376,7 @@ struct PlatformDetailView: View {
 
         Task {
             isRefreshing = true
-            await viewModel.loadRoomList()
+            await viewModel.refreshAll()
             isRefreshing = false
         }
     }

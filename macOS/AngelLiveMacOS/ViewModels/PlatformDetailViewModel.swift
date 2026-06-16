@@ -104,6 +104,52 @@ class PlatformDetailViewModel {
         }
     }
 
+    // MARK: - 全量刷新(分类 + 房间)
+
+    /// 重新拉取分类列表并刷新当前分类下的房间。
+    /// 尽量按标题保留用户当前选中的主/子分类,匹配不到再回退到第一个。
+    @MainActor
+    func refreshAll() async {
+        // 记录当前选中分类的标题,用于刷新后恢复
+        let previousMainTitle = currentMainCategory?.title
+        let previousSubTitle = currentSubCategory?.title
+
+        isLoadingCategories = true
+        categoryError = nil
+        defer { isLoadingCategories = false }
+
+        do {
+            let fetchedCategories = try await LiveService.fetchCategoryList(liveType: platform.liveType)
+            categories = fetchedCategories
+
+            guard !categories.isEmpty else { return }
+
+            // 恢复主分类选择
+            if let previousMainTitle,
+               let mainIndex = categories.firstIndex(where: { $0.title == previousMainTitle }) {
+                selectedMainCategoryIndex = mainIndex
+            } else {
+                selectedMainCategoryIndex = 0
+            }
+
+            // 恢复子分类选择
+            let subList = currentSubCategories
+            if let previousSubTitle,
+               let subIndex = subList.firstIndex(where: { $0.title == previousSubTitle }) {
+                selectedSubCategoryIndex = subIndex
+            } else {
+                selectedSubCategoryIndex = 0
+            }
+
+            if currentSubCategory != nil {
+                await loadRoomList()
+            }
+        } catch {
+            Logger.warning("刷新分类列表失败: \(error)", category: .network)
+            categoryError = error
+        }
+    }
+
     // MARK: - 获取房间列表
 
     @MainActor
