@@ -83,7 +83,9 @@ struct AccountManagementView: View {
         // scrollClipDisabled: tvOS Button 聚焦时会放大,默认 ScrollView 会裁掉左右溢出部分,关掉裁剪让放大动画完整显示。
         ScrollView {
             VStack(spacing: 15) {
-                // 同步区域
+                sectionHeader("登录同步")
+
+                // 局域网同步
                 Button {
                     currentPage = .lanSync
                 } label: {
@@ -115,33 +117,32 @@ struct AccountManagementView: View {
                     .padding(.vertical, 5)
                 }
 
-                Button {
-                    Task { await prepareUploadConfirm() }
-                } label: {
-                    HStack(spacing: 15) {
-                        Text("同步到 iCloud")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if isFetchingPreview {
-                            ProgressView()
+                // 上传 / 下载并排,减少半屏内的纵向高度
+                HStack(spacing: 20) {
+                    Button {
+                        Task { await prepareUploadConfirm() }
+                    } label: {
+                        HStack(spacing: 12) {
+                            if isFetchingPreview { ProgressView() }
+                            Text("同步到 iCloud")
+                                .foregroundColor(.primary)
                         }
+                        .frame(maxWidth: .infinity)
                     }
-                }
-                .disabled(isFetchingPreview)
+                    .disabled(isFetchingPreview)
 
-                Button {
-                    Task { await prepareDownloadConfirm() }
-                } label: {
-                    HStack(spacing: 15) {
-                        Text("从 iCloud 同步到本地")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if isFetchingPreview {
-                            ProgressView()
+                    Button {
+                        Task { await prepareDownloadConfirm() }
+                    } label: {
+                        HStack(spacing: 12) {
+                            if isFetchingPreview { ProgressView() }
+                            Text("从 iCloud 下载")
+                                .foregroundColor(.primary)
                         }
+                        .frame(maxWidth: .infinity)
                     }
+                    .disabled(isFetchingPreview)
                 }
-                .disabled(isFetchingPreview)
 
                 if let syncResult = iCloudSyncResultMessage {
                     HStack(spacing: 15) {
@@ -179,6 +180,8 @@ struct AccountManagementView: View {
                     .padding(.vertical, 5)
                 }
             }
+
+            sectionHeader("平台账号")
 
             // 平台列表
             ForEach(platforms) { entry in
@@ -275,6 +278,19 @@ struct AccountManagementView: View {
 
     private func loginStatusColor(for entry: LoginPlatformEntry) -> Color {
         syncService.isLoggedIn(pluginId: entry.pluginId) ? .green : .gray
+    }
+
+    // MARK: - 分组标题
+
+    /// 半屏列表里的分组标题,用层次替代一堵平铺的按钮墙。
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.top, 10)
     }
 
     // MARK: - iCloud 确认逻辑
