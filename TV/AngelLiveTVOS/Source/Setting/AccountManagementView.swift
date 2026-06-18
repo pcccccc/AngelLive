@@ -16,30 +16,18 @@ struct AccountManagementView: View {
 
     @State private var platforms: [LoginPlatformEntry] = []
     @State private var currentPage: AccountPage = .main
-
-    // iCloud 确认弹窗
-    @State private var showUploadConfirm = false
-    @State private var showDownloadConfirm = false
-    @State private var showClearCloudConfirm = false
-    @State private var iCloudConfirmMessage = ""
-    @State private var isFetchingPreview = false
-    @State private var isClearingCloudLoginInfo = false
-    @State private var clearResultMessage: String?
-    @State private var iCloudSyncResultMessage: String?
-    @State private var iCloudSyncResultSuccess = false
+    /// 手动输入 Cookie 走全屏 cover,盖住 SettingView 半屏容器外侧的平台 logo,
+    /// 让获取 Cookie 的步骤说明能完整铺开。
+    @State private var manualInputEntry: LoginPlatformEntry?
 
     enum AccountPage: Equatable {
         case main
         case platformDetail(LoginPlatformEntry)
-        case lanSync
-        case manualInput(LoginPlatformEntry)
 
         static func == (lhs: AccountPage, rhs: AccountPage) -> Bool {
             switch (lhs, rhs) {
             case (.main, .main): return true
-            case (.lanSync, .lanSync): return true
             case (.platformDetail(let a), .platformDetail(let b)): return a.pluginId == b.pluginId
-            case (.manualInput(let a), .manualInput(let b)): return a.pluginId == b.pluginId
             default: return false
             }
         }
@@ -58,148 +46,47 @@ struct AccountManagementView: View {
                         currentPage = .main
                     },
                     onManualInput: { e in
-                        currentPage = .manualInput(e)
+                        manualInputEntry = e
                     }
-                )
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            case .lanSync:
-                LANSyncPageView(onBack: { currentPage = .main })
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            case .manualInput(let entry):
-                PlatformManualInputPageView(
-                    entry: entry,
-                    onBack: { currentPage = .platformDetail(entry) }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.25), value: currentPage)
+        .fullScreenCover(item: $manualInputEntry) { entry in
+            PlatformManualInputPageView(
+                entry: entry,
+                onBack: { manualInputEntry = nil }
+            )
+        }
     }
 
     // MARK: - 主页面
 
     private var accountMainView: some View {
-        // 平台列表 + iCloud 同步控件加起来在半屏容器里会溢出,套 ScrollView 让 tvOS 焦点引擎自动滚动。
+        // 平台列表在半屏容器里可能溢出,套 ScrollView 让 tvOS 焦点引擎自动滚动。
         // scrollClipDisabled: tvOS Button 聚焦时会放大,默认 ScrollView 会裁掉左右溢出部分,关掉裁剪让放大动画完整显示。
         ScrollView {
             VStack(spacing: 15) {
-                sectionHeader("登录同步")
+                sectionHeader("平台账号")
 
-                // 局域网同步
-                Button {
-                    currentPage = .lanSync
-                } label: {
-                    HStack(spacing: 15) {
-                        Text("局域网同步")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text("推荐")
-                            .font(.system(size: 30))
-                            .foregroundStyle(.green)
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-            Toggle(isOn: $syncService.iCloudSyncEnabled) {
-                Text("iCloud 自动同步")
-            }
-
-            if syncService.iCloudSyncEnabled {
-                // 上次同步时间
-                if let lastSync = syncService.lastICloudSyncTime {
-                    HStack(spacing: 15) {
-                        Text("上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))")
-                            .font(.system(size: 28))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 5)
-                }
-
-                // 上传 / 下载并排,减少半屏内的纵向高度
-                HStack(spacing: 20) {
+                // 平台列表
+                ForEach(platforms) { entry in
                     Button {
-                        Task { await prepareUploadConfirm() }
+                        currentPage = .platformDetail(entry)
                     } label: {
-                        HStack(spacing: 12) {
-                            if isFetchingPreview { ProgressView() }
-                            Text("同步到 iCloud")
+                        HStack(spacing: 15) {
+                            Text(entry.displayName)
                                 .foregroundColor(.primary)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .disabled(isFetchingPreview)
-
-                    Button {
-                        Task { await prepareDownloadConfirm() }
-                    } label: {
-                        HStack(spacing: 12) {
-                            if isFetchingPreview { ProgressView() }
-                            Text("从 iCloud 下载")
-                                .foregroundColor(.primary)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .disabled(isFetchingPreview)
-                }
-
-                if let syncResult = iCloudSyncResultMessage {
-                    HStack(spacing: 15) {
-                        Image(systemName: iCloudSyncResultSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(iCloudSyncResultSuccess ? .green : .red)
-                        Text(syncResult)
-                            .font(.system(size: 28))
-                            .foregroundStyle(iCloudSyncResultSuccess ? .green : .red)
-                        Spacer()
-                    }
-                    .padding(.vertical, 5)
-                }
-
-                Button(role: .destructive) {
-                    showClearCloudConfirm = true
-                } label: {
-                    HStack(spacing: 15) {
-                        Text(isClearingCloudLoginInfo ? "正在清理..." : "清理云端登录信息")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if isClearingCloudLoginInfo {
-                            ProgressView()
+                            Spacer()
+                            Text(loginStatusText(for: entry))
+                                .font(.system(size: 30))
+                                .foregroundStyle(loginStatusColor(for: entry))
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
-                .disabled(isClearingCloudLoginInfo)
-
-                if let result = clearResultMessage {
-                    HStack(spacing: 15) {
-                        Text(result)
-                            .font(.system(size: 28))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.vertical, 5)
-                }
-            }
-
-            sectionHeader("平台账号")
-
-            // 平台列表
-            ForEach(platforms) { entry in
-                Button {
-                    currentPage = .platformDetail(entry)
-                } label: {
-                    HStack(spacing: 15) {
-                        Text(entry.displayName)
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text(loginStatusText(for: entry))
-                            .font(.system(size: 30))
-                            .foregroundStyle(loginStatusColor(for: entry))
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
 
                 Spacer(minLength: 200)
             }
@@ -208,65 +95,6 @@ struct AccountManagementView: View {
         .task {
             platforms = await PlatformLoginRegistry.shared.availablePlatforms()
             await syncService.refreshAllLoginStatus()
-        }
-        .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确定上传") {
-                Task {
-                    let outcome = await syncService.syncAllToICloud()
-                    await MainActor.run {
-                        applySyncOutcome(outcome, successMessage: "已同步到 iCloud")
-                    }
-                }
-            }
-        } message: {
-            Text(iCloudConfirmMessage)
-        }
-        .alert("从 iCloud 同步", isPresented: $showDownloadConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确定下载") {
-                Task {
-                    let outcome = await syncService.syncAllFromICloud()
-                    await MainActor.run {
-                        applySyncOutcome(outcome, successMessage: "已从 iCloud 同步到本地")
-                    }
-                }
-            }
-        } message: {
-            Text(iCloudConfirmMessage)
-        }
-        .alert("清理云端登录信息", isPresented: $showClearCloudConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确定清理", role: .destructive) {
-                Task { await clearCloudLoginInfo() }
-            }
-        } message: {
-            Text("确定要清理 iCloud 中保存的所有平台登录信息吗？此操作不会退出本机账号，但其他设备将无法再从 iCloud 下载这些登录信息。")
-        }
-    }
-
-    /// 按同步结果展示明确反馈:成功 / 部分失败 / 失败(原因 + 错误码)。
-    private func applySyncOutcome(_ outcome: OperationOutcome, successMessage: String) {
-        switch outcome {
-        case .success:
-            iCloudSyncResultMessage = successMessage
-            iCloudSyncResultSuccess = true
-        case .partial(let error):
-            iCloudSyncResultMessage = "部分同步失败：\(error.displayText)"
-            iCloudSyncResultSuccess = false
-        case .failure(let error):
-            iCloudSyncResultMessage = "同步失败：\(error.displayText)"
-            iCloudSyncResultSuccess = false
-        }
-    }
-
-    private func clearCloudLoginInfo() async {
-        isClearingCloudLoginInfo = true
-        clearResultMessage = nil
-        let deletedCount = await syncService.clearAllICloudSessions()
-        await MainActor.run {
-            clearResultMessage = deletedCount > 0 ? "已清理云端登录信息" : "云端没有可清理的登录信息"
-            isClearingCloudLoginInfo = false
         }
     }
 
@@ -291,70 +119,6 @@ struct AccountManagementView: View {
             Spacer()
         }
         .padding(.top, 10)
-    }
-
-    // MARK: - iCloud 确认逻辑
-
-    private func prepareUploadConfirm() async {
-        isFetchingPreview = true
-        defer { isFetchingPreview = false }
-
-        let preview = await syncService.fetchCloudSyncPreview()
-        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
-
-        var msg = ""
-        if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
-        }
-        if !localNames.isEmpty {
-            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
-        } else {
-            msg += "本地无已登录平台\n"
-        }
-        msg += "\n"
-        if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
-            msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
-            msg += "\n上传后云端数据将被覆盖"
-        } else {
-            msg += "云端暂无数据"
-        }
-
-        iCloudConfirmMessage = msg
-        showUploadConfirm = true
-    }
-
-    private func prepareDownloadConfirm() async {
-        isFetchingPreview = true
-        defer { isFetchingPreview = false }
-
-        let preview = await syncService.fetchCloudSyncPreview()
-
-        guard preview.latestTime != nil else {
-            // 无云端数据，不弹确认
-            return
-        }
-
-        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
-
-        var msg = ""
-        if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
-        }
-        if !localNames.isEmpty {
-            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
-        }
-        msg += "\n"
-        if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
-        }
-        if !preview.platformNames.isEmpty {
-            msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
-        }
-        msg += "\n下载后本地数据将被覆盖"
-
-        iCloudConfirmMessage = msg
-        showDownloadConfirm = true
     }
 }
 
@@ -600,6 +364,12 @@ struct PlatformManualInputPageView: View {
                         Text("如何获取 Cookie")
                             .font(.headline)
 
+                        // 引导用户去 iOS/macOS 端走更顺畅的同步路径,Cookie 手输只是兜底。
+                        Text("使用AngelLive iOS/macOS版本同步更方便！支持WI-FI&iCloud同步")
+                            .font(.system(size: 30, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .padding(.bottom, 4)
+
                         Text("1. 在电脑浏览器中登录 \(websiteHost)")
                             .font(.callout)
                             .foregroundColor(.secondary)
@@ -631,6 +401,9 @@ struct PlatformManualInputPageView: View {
         }
         .padding(80)
         .safeAreaPadding()
+        // 撑满整个 cover 再贴材质,否则 HStack 只会包到内容自身的宽度,两侧会漏出底层视图。
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.thinMaterial)
         .onExitCommand {
             onBack()
         }

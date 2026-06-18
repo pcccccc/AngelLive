@@ -27,7 +27,7 @@ struct SettingView: View {
     @State private var showClearCacheConfirm = false
 
     // 需要在右侧半屏显示的页面索引
-    private var halfScreenIndices: Set<Int> { [0, 2, 3] } // 账号管理、通用设置、弹幕设置
+    private var halfScreenIndices: Set<Int> { [0, 2, 3, 4] } // 账号管理、通用设置、弹幕设置、数据同步
 
     private var canEnterPluginManagement: Bool {
         appViewModel.pluginAvailability.hasAvailablePlugins ||
@@ -88,8 +88,9 @@ struct SettingView: View {
             if fullScreenIndex == 1 && !canEnterPluginManagement {
                 fullScreenIndex = nil
             }
-            if fullScreenIndex == 4 {
-                fullScreenIndex = nil
+            // 数据同步现在走半屏(selectedIndex),失去插件后跟着关闭
+            if selectedIndex == 4 {
+                selectedIndex = nil
             }
         }
         .onChange(of: appViewModel.pluginAvailability.loginRequiredInstalledPluginIds.isEmpty) { _, isEmpty in
@@ -213,12 +214,19 @@ struct SettingView: View {
                 .onExitCommand {
                     selectedIndex = nil
                 }
+        case 4: // 数据同步
+            // 三端对齐:聚合 iCloud 同步 / 局域网同步 / Simple Live 老扫码同步入口。
+            SyncManagementView()
+                .environment(appViewModel)
+                .onExitCommand {
+                    selectedIndex = nil
+                }
         default:
             EmptyView()
         }
     }
 
-    // MARK: - 全屏内容视图（插件管理、数据同步、历史记录、开源许可、关于）
+    // MARK: - 全屏内容视图（插件管理、历史记录、开源许可、关于）
     @ViewBuilder
     private func fullScreenContentView(for index: Int) -> some View {
         switch index {
@@ -227,15 +235,6 @@ struct SettingView: View {
                 pluginSourceManager: appViewModel.pluginSourceManager,
                 pluginAvailability: appViewModel.pluginAvailability
             )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.ultraThinMaterial)
-                .onExitCommand {
-                    fullScreenIndex = nil
-                }
-        case 4: // 数据同步
-            // 本地优先(Core 模型):同步设置面板始终可进,不再用 cloudKitReady 把关。
-            SyncView()
-                .environment(appViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
                 .onExitCommand {
