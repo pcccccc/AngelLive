@@ -12,13 +12,13 @@ private func resolveFFmpegKitDependency() -> Package.Dependency? {
     guard !useVLC else { return nil }
     // Force KSPlayer/KSMEPlayer onto the LGPL FFmpegKit line.
     // 8.1.1 标签当前指向 lgpl 分支 HEAD,固定 exact 避免分支漂移。
-    return .package(url: "https://github.com/TracyPlayer/FFmpegKit", exact: "8.1.1")
+    return .package(url: "https://github.com/TracyPlayer/FFmpegKit", branch: "lgpl")
 }
 
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "3.1.0"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
         "KSPlayer"
     )
 }
