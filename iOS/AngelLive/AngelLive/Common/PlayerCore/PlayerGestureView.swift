@@ -106,6 +106,11 @@ struct PlayerGestureView: View {
     /// 是否正在滑动
     @State private var isDragging: Bool = false
 
+    /// 硬件音量键监听器（KVO 观察 outputVolume）
+    @State private var volumeObserver = VolumeButtonObserver()
+    /// 硬件音量键触发后自动隐藏 HUD 的延迟任务
+    @State private var hideIndicatorWorkItem: DispatchWorkItem?
+
     /// 左边缘让出区域宽度，此区域内触摸穿透给系统手势（zoom transition dismiss）
     private static let edgePassthroughWidth: CGFloat = 20
 
@@ -202,10 +207,22 @@ struct PlayerGestureView: View {
             // 返回前台时重置手势状态
             resetGestureState()
         }
+        .onAppear {
+            // 监听硬件音量键，按下时复用滑动调节的同款 HUD
+            volumeObserver.onChange = { newVolume in
+                handleHardwareVolumeChange(newVolume)
+            }
+            volumeObserver.start()
+        }
+        .onDisappear {
+            volumeObserver.stop()
+        }
     }
 
     /// 重置手势状态
     private func resetGestureState() {
+        hideIndicatorWorkItem?.cancel()
+        hideIndicatorWorkItem = nil
         showIndicator = false
         adjustType = .none
         isDragging = false
@@ -305,6 +322,10 @@ struct PlayerGestureView: View {
 
         isDragging = true
 
+        // 滑动开始，取消硬件音量键的自动隐藏任务，避免拖动途中被隐藏
+        hideIndicatorWorkItem?.cancel()
+        hideIndicatorWorkItem = nil
+
         // 确定调节类型
         if adjustType == .none {
             if startX < size.width / 2 {
@@ -351,6 +372,36 @@ struct PlayerGestureView: View {
         }
     }
 
+    // MARK: - 硬件音量键
+
+    /// 处理硬件音量键变化：复用滑动调节的同款音量 HUD
+    private func handleHardwareVolumeChange(_ volume: Float) {
+        // 正在通过滑动调节音量时，HUD 已由拖动逻辑显示，避免重复处理
+        guard !isDragging else { return }
+        // 锁定时不弹出
+        guard !isLocked else { return }
+
+        adjustType = .volume
+        adjustValue = CGFloat(max(0, min(1, volume)))
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showIndicator = true
+        }
+        scheduleHardwareIndicatorHide()
+    }
+
+    /// 硬件音量键 HUD 自动隐藏（约 1 秒后淡出）
+    private func scheduleHardwareIndicatorHide() {
+        hideIndicatorWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showIndicator = false
+            }
+            adjustType = .none
+        }
+        hideIndicatorWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+    }
+
     // MARK: - 音量控制
 
     /// 获取系统音量
@@ -380,6 +431,40 @@ struct VolumeViewWrapper: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+}
+
+// MARK: - 硬件音量键监听
+
+/// 通过 KVO 观察 `AVAudioSession.outputVolume`，硬件音量键按下导致系统音量变化时回调。
+///
+/// 不主动激活/配置 AudioSession——播放器在播放期间已激活会话，本视图也只在播放界面出现，
+/// 因此直接观察即可，避免干扰播放器的音频路由配置。
+final class VolumeButtonObserver: NSObject {
+    /// 音量变化回调（已切回主线程，参数为新的系统音量 0...1）
+    var onChange: ((Float) -> Void)?
+
+    private var observation: NSKeyValueObservation?
+
+    func start() {
+        guard observation == nil else { return }
+        let session = AVAudioSession.sharedInstance()
+        // 仅观察 .new，不带 .initial，避免注册时收到一次初始值误触发 HUD
+        observation = session.observe(\.outputVolume, options: [.new]) { [weak self] _, change in
+            guard let newVolume = change.newValue else { return }
+            DispatchQueue.main.async {
+                self?.onChange?(newVolume)
+            }
+        }
+    }
+
+    func stop() {
+        observation?.invalidate()
+        observation = nil
+    }
+
+    deinit {
+        observation?.invalidate()
+    }
 }
 
 #endif
