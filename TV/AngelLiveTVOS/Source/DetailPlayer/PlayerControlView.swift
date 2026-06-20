@@ -260,6 +260,24 @@ struct PlayerControlView: View {
                     .zIndex(6)
                 }
 
+                if let hint = roomInfoViewModel.danmuStatusHint {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            danmuHintBubble(text: hint)
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                            Spacer()
+                        }
+                    }
+                    // 左下角,抬到底部控制带(高 150)之上;左边距与播放控制胶囊左缘对齐
+                    // (HStack 起点 0 + 隐藏聚焦按钮 40 + spacing 15 ≈ 55)
+                    .padding(.leading, 55)
+                    .padding(.bottom, 170)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .zIndex(7)
+                }
+
                 if roomInfoViewModel.showControl {
                     VStack {
                         ZStack {
@@ -904,6 +922,17 @@ struct PlayerControlView: View {
         .padding(.horizontal, 22)
         .padding(.vertical, 14)
         .adaptiveGlassEffectCapsule()
+    }
+
+    /// 弹幕状态气泡:黑色半透明胶囊 + 白字
+    private func danmuHintBubble(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 24, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 14)
+            .background(.black.opacity(0.6), in: Capsule())
     }
 
     @ViewBuilder

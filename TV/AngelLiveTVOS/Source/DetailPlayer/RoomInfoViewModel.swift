@@ -136,6 +136,12 @@ final class RoomInfoViewModel {
     var liveFlagTimer: Timer? = nil
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
+    /// 弹幕状态气泡文案;非空即显示,几秒后自动清空
+    var danmuStatusHint: String? = nil
+    /// 自动隐藏气泡的延迟任务
+    private var danmuHintHideTask: Task<Void, Never>? = nil
+    /// 是否经历过断开(用于区分"首次连上"与"重连恢复",避免正常进房弹气泡)
+    private var danmuHadDisconnected = false
     var supportsDanmu: Bool {
         PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
     }
@@ -636,13 +642,47 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     }
     
     func webSocketDidConnect() {
-        danmuServerIsConnected = true
-        danmuServerIsLoading = false
+        Task { @MainActor in
+            danmuServerIsConnected = true
+            danmuServerIsLoading = false
+            // 首次连上提示"已连接",重连成功提示"已恢复"
+            showDanmuHint(danmuHadDisconnected ? "弹幕已恢复" : "弹幕已连接")
+            danmuHadDisconnected = false
+        }
     }
-    
+
     func webSocketDidDisconnect(error: Error?) {
-        danmuServerIsConnected = false
-        danmuServerIsLoading = false
+        Task { @MainActor in
+            danmuServerIsConnected = false
+            danmuServerIsLoading = false
+            danmuHadDisconnected = true
+            if let error {
+                showDanmuHint("弹幕连接已断开:\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func webSocketIsReconnecting(attempt: Int, maxAttempts: Int) {
+        Task { @MainActor in
+            danmuHadDisconnected = true
+            showDanmuHint("弹幕断开,正在重连… (\(attempt)/\(maxAttempts))")
+        }
+    }
+
+    /// 显示左下角气泡并安排自动隐藏(默认 3 秒)。重复调用会重置计时。
+    @MainActor
+    private func showDanmuHint(_ text: String, autoHideAfter seconds: Double = 3.0) {
+        danmuHintHideTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.25)) {
+            danmuStatusHint = text
+        }
+        danmuHintHideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                danmuStatusHint = nil
+            }
+        }
     }
     
     @MainActor func reloadRoom(liveModel: LiveModel) {

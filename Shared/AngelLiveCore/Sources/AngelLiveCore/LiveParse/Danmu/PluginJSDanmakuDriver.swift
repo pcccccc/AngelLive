@@ -11,6 +11,7 @@ final class PluginJSDanmakuDriver {
         case fallback
         case deinitialized = "deinit"
         case error
+        case reconnect
     }
 
     enum IncomingFrameType: String {

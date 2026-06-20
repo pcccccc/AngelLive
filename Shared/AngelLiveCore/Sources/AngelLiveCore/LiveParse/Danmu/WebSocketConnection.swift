@@ -5,6 +5,13 @@ public protocol WebSocketConnectionDelegate: AnyObject {
     func webSocketDidConnect()
     func webSocketDidDisconnect(error: Error?)
     func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32)
+    /// 一次重连尝试开始时回调(attempt 为第几次,从 1 起;maxAttempts 为上限)。
+    /// 提供默认空实现,既有实现方可不改;需要"正在重连"提示的平台再覆写。
+    func webSocketIsReconnecting(attempt: Int, maxAttempts: Int)
+}
+
+public extension WebSocketConnectionDelegate {
+    func webSocketIsReconnecting(attempt: Int, maxAttempts: Int) {}
 }
 
 public final class WebSocketConnection {
@@ -17,12 +24,19 @@ public final class WebSocketConnection {
 
     private let pluginId: String?
     private let danmakuPlan: LiveParseDanmakuPlan?
+    /// 重连时需要重建 PluginJSDanmakuDriver,故把房间/用户信息持有下来
+    private let roomId: String?
+    private let userId: String?
     private var pluginDriver: PluginJSDanmakuDriver?
     private var heartbeatTimer: Timer?
     private var reconnectTimer: Timer?
     private var shouldReconnect = true
     private var isClosingAfterDriverFailure = false
     private var reconnectAttempts = 0
+    /// 重连次数上限,达到后放弃并通知 UI
+    private let maxReconnectAttempts = 8
+    /// 去重断开通知:重连期间只首次回调 delegate,避免刷屏
+    private var hasNotifiedDisconnect = false
     private var driverTimerReason: PluginJSDanmakuDriver.TickReason = .heartbeat
     /// 当前活动 console entry id —— 让 connect/connected/disconnected 三个事件能挂到同一行日志上。
     /// 仅在主队列回调链上读写,数据竞争可控。
@@ -54,6 +68,8 @@ public final class WebSocketConnection {
         self.liveType = liveType
         self.pluginId = nil
         self.danmakuPlan = nil
+        self.roomId = nil
+        self.userId = nil
     }
 
     public init(
@@ -70,6 +86,8 @@ public final class WebSocketConnection {
         self.liveType = liveType
         self.pluginId = pluginId
         self.danmakuPlan = danmakuPlan
+        self.roomId = roomId
+        self.userId = userId
 
         if danmakuPlan.usesPluginRuntimeDriver {
             self.pluginDriver = PluginJSDanmakuDriver(
@@ -90,6 +108,8 @@ public final class WebSocketConnection {
 
     public func connect() {
         shouldReconnect = true
+        reconnectAttempts = 0
+        hasNotifiedDisconnect = false
         consoleBeginConnectEntry(method: "connect")
 
         guard let pluginDriver else {
@@ -114,7 +134,7 @@ public final class WebSocketConnection {
                     self.connectSocket(url: requestURL)
                 }
             } catch {
-                handleDriverFailure(error)
+                handleRecoverableDriverFailure(error)
             }
         }
     }
@@ -176,31 +196,136 @@ public final class WebSocketConnection {
         return port > 0 && port <= 65535
     }
 
+    /// 安排下一次重连:指数退避 + 抖动 + 次数上限。到达上限则放弃并通知 UI。
+    /// 可能从后台 Task(驱动回调)调入,Timer 必须落到主 runloop 才会触发,故统一切主线程。
     private func scheduleReconnect() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.scheduleReconnect() }
+            return
+        }
         guard shouldReconnect else { return }
 
+        guard reconnectAttempts < maxReconnectAttempts else {
+            // 连续重连仍失败:停止并给 UI 一条最终"已停止"通知
+            shouldReconnect = false
+            reconnectTimer?.invalidate()
+            reconnectTimer = nil
+            Logger.error("[DanmuWS] reconnect gave up after \(maxReconnectAttempts) attempts", category: .danmu)
+            notifyDisconnected(
+                error: LiveParseError.danmuArgsParseError(
+                    "弹幕已断开",
+                    "连续重连 \(maxReconnectAttempts) 次仍未成功,已停止重试"
+                )
+            )
+            return
+        }
+
         reconnectTimer?.invalidate()
-        let interval: TimeInterval = 10
+        // 指数退避:2,4,8,16,30,30…(秒)+ 0~1s 抖动,避免雪崩式同步重连
+        let backoff = min(2.0 * pow(2.0, Double(reconnectAttempts)), 30.0)
+        let interval = backoff + Double.random(in: 0...1)
         reconnectTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            guard let self, self.shouldReconnect, let url = self.requestURL else { return }
+            guard let self, self.shouldReconnect else { return }
             self.reconnectAttempts += 1
-            self.consoleBeginConnectEntry(method: "reconnect#\(self.reconnectAttempts)")
-            self.connectSocket(url: url)
+            self.reconnectWithFreshSession()
         }
         if let reconnectTimer {
             RunLoop.current.add(reconnectTimer, forMode: .common)
         }
     }
 
-    /// 包一层 delegate 调用,顺便把"连接成功"打到开发者控制台。
+    /// 重连:销毁旧 driver,用新的 connectionId 重建并重跑 createSession(刷新握手/token),再连 socket。
+    private func reconnectWithFreshSession() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.reconnectWithFreshSession() }
+            return
+        }
+        guard shouldReconnect else { return }
+
+        // 通知 UI 本次重连已开始(attempt 已在调度时自增)
+        delegate?.webSocketIsReconnecting(attempt: reconnectAttempts, maxAttempts: maxReconnectAttempts)
+
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+
+        // 销毁旧 driver(归因 .reconnect);连接层路径并未销毁,这里统一兜底
+        if let old = pluginDriver {
+            Task { await old.destroy(reason: .reconnect) }
+        }
+
+        // 重建 driver 所需要素;缺任一则视为致命,停止重连
+        guard let pluginId,
+              let danmakuPlan,
+              danmakuPlan.usesPluginRuntimeDriver,
+              let roomId else {
+            shouldReconnect = false
+            notifyDisconnected(
+                error: LiveParseError.danmuArgsParseError("弹幕重连失败", "缺少重建会话所需信息")
+            )
+            return
+        }
+
+        let driver = PluginJSDanmakuDriver(
+            pluginId: pluginId,
+            roomId: roomId,
+            userId: userId,
+            plan: danmakuPlan
+        )
+        pluginDriver = driver
+
+        guard let requestURL else {
+            shouldReconnect = false
+            notifyDisconnected(
+                error: LiveParseError.danmuArgsParseError("弹幕重连失败", "重连时连接地址缺失")
+            )
+            return
+        }
+
+        consoleBeginConnectEntry(method: "reconnect#\(reconnectAttempts)")
+
+        Task {
+            do {
+                let result = try await driver.createSession()
+                applyDriverResult(result)
+                await MainActor.run {
+                    guard self.shouldReconnect else { return }
+                    self.connectSocket(url: requestURL)
+                }
+            } catch {
+                await MainActor.run {
+                    self.handleReconnectAttemptFailure(error)
+                }
+            }
+        }
+    }
+
+    /// 一次重连尝试自身失败(如 createSession 抛错):记一次,继续退避重连。
+    private func handleReconnectAttemptFailure(_ error: Error) {
+        consoleFinishEntry(status: .error, message: consoleErrorDescription(for: error))
+        Logger.error("[DanmuWS] reconnect attempt #\(reconnectAttempts) failed: \(error.localizedDescription)", category: .danmu)
+        scheduleReconnect()
+    }
+
+    /// 包一层 delegate 调用,顺便把"连接成功"打到开发者控制台。连上即复位重连计数与断开通知闸。
     fileprivate func notifyConnected() {
+        reconnectAttempts = 0
+        hasNotifiedDisconnect = false
         consoleFinishEntry(status: .success, message: "WebSocket 连接已建立")
         delegate?.webSocketDidConnect()
     }
 
-    /// 包一层 delegate 调用,顺便把"连接断开/失败"打到开发者控制台。
+    /// 强制把"断开/失败"回调给 delegate(致命错误 / 最终放弃):总是通知。
     fileprivate func notifyDisconnected(error: Error?) {
         consoleFinishEntry(status: .error, message: consoleErrorDescription(for: error))
+        hasNotifiedDisconnect = true
+        delegate?.webSocketDidDisconnect(error: error)
+    }
+
+    /// 去重版断开回调:重连期间只首次通知 UI,后续失败仅记日志,避免刷屏。
+    fileprivate func notifyDisconnectedOnce(error: Error?) {
+        consoleFinishEntry(status: .error, message: consoleErrorDescription(for: error))
+        guard !hasNotifiedDisconnect else { return }
+        hasNotifiedDisconnect = true
         delegate?.webSocketDidDisconnect(error: error)
     }
 }
@@ -267,12 +392,11 @@ extension WebSocketConnection: WebSocketDelegate {
     public func didReceive(event: Starscream.WebSocketEvent, client: Starscream.WebSocketClient) {
         switch event {
         case .connected:
-            reconnectAttempts = 0
             reconnectTimer?.invalidate()
             reconnectTimer = nil
 
             guard let pluginDriver else {
-                handleDriverFailure(
+                handleFatalDriverError(
                     LiveParseError.danmuArgsParseError("弹幕驱动不受支持", "插件驱动在连接建立后丢失")
                 )
                 return
@@ -284,7 +408,7 @@ extension WebSocketConnection: WebSocketDelegate {
                     applyDriverResult(result)
                     notifyConnected()
                 } catch {
-                    handleDriverFailure(error)
+                    handleRecoverableDriverFailure(error)
                 }
             }
         case .disconnected(let reason, let code):
@@ -307,7 +431,7 @@ extension WebSocketConnection: WebSocketDelegate {
                     NSLocalizedDescriptionKey: reason
                 ]
             )
-            notifyDisconnected(error: error)
+            notifyDisconnectedOnce(error: error)
             scheduleReconnect()
         case .text(let string):
             handleIncomingFrame(frameType: .text, text: string, data: nil)
@@ -363,7 +487,7 @@ private extension WebSocketConnection {
         data: Data?
     ) {
         guard let pluginDriver else {
-            handleDriverFailure(
+            handleFatalDriverError(
                 LiveParseError.danmuArgsParseError("弹幕驱动不受支持", "插件驱动在收包时丢失")
             )
             return
@@ -378,7 +502,7 @@ private extension WebSocketConnection {
                 )
                 applyDriverResult(result)
             } catch {
-                handleDriverFailure(error)
+                handleRecoverableDriverFailure(error)
             }
         }
     }
@@ -473,7 +597,7 @@ private extension WebSocketConnection {
                 let result = try await pluginDriver.onTick(reason: driverTimerReason)
                 applyDriverResult(result)
             } catch {
-                handleDriverFailure(error)
+                handleRecoverableDriverFailure(error)
             }
         }
     }
@@ -481,22 +605,47 @@ private extension WebSocketConnection {
     func handleConnectionFailure(_ error: Error?) {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
-        notifyDisconnected(error: error)
+        notifyDisconnectedOnce(error: error)
         scheduleReconnect()
     }
 
-    func handleDriverFailure(_ error: Error) {
+    /// 致命驱动错误(插件未声明 driver / 驱动丢失):不重连,彻底关闭。
+    func handleFatalDriverError(_ error: Error) {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
         shouldReconnect = false
+        reconnectTimer?.invalidate()
+        reconnectTimer = nil
         notifyDisconnected(error: error)
-        isClosingAfterDriverFailure = true
-        socket?.disconnect()
-        socket?.forceDisconnect()
-        socket = nil
+        if socket != nil {
+            isClosingAfterDriverFailure = true
+            socket?.disconnect()
+            socket?.forceDisconnect()
+            socket = nil
+        }
 
         Task { [pluginDriver] in
             await pluginDriver?.destroy(reason: .error)
         }
+    }
+
+    /// 可恢复驱动错误(createSession/onOpen/onFrame/onTick 抛错):清理后走有限退避重连(重建 session)。
+    /// 可能从后台 Task(驱动回调)调入,统一切主线程,保证 socket/timer/delegate 操作安全。
+    func handleRecoverableDriverFailure(_ error: Error) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.handleRecoverableDriverFailure(error) }
+            return
+        }
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+        notifyDisconnectedOnce(error: error)
+        if socket != nil {
+            // 主动关闭当前 socket;.disconnected 回调会消费此标记并销毁旧 driver,不再二次处理
+            isClosingAfterDriverFailure = true
+            socket?.disconnect()
+            socket?.forceDisconnect()
+            socket = nil
+        }
+        scheduleReconnect()
     }
 }

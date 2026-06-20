@@ -695,6 +695,14 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         }
     }
 
+    func webSocketIsReconnecting(attempt: Int, maxAttempts: Int) {
+        Task { @MainActor in
+            // 仅首次重连提示一次，避免聊天区被多次重试刷屏
+            guard attempt == 1 else { return }
+            addSystemMessage("弹幕连接断开，正在尝试重连…")
+        }
+    }
+
     func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) { // 新版本
         Task { @MainActor in
             // 将弹幕消息添加到聊天列表（底部气泡）
