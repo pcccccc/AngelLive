@@ -35,6 +35,9 @@ struct DetailPlayerView: View {
     /// 当前是否 iPhone 横屏（用于禁用下滑手势）
     @State private var isIPhoneLandscape: Bool = false
 
+    /// 进入后台前是否处于 iPhone 横屏全屏（用于回前台时保留用户主动触发的横屏）
+    @State private var wasLandscapeBeforeBackground: Bool = false
+
     /// 用户离开底部时显示“查看最新评论”按钮
     @State private var showJumpToLatest: Bool = false
     /// 触发跳到底部的请求
@@ -261,13 +264,24 @@ struct DetailPlayerView: View {
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
         .interactiveDismissDisabled(isIPhoneLandscape)
-        .onChange(of: scenePhase) { _, newPhase in
+        .onChange(of: scenePhase) { oldPhase, newPhase in
             Logger.debug("[PlayerFlow] Detail scenePhase -> \(newPhase), roomId=\(viewModel.currentRoom.roomId)", category: .player)
             switch newPhase {
             case .active:
                 viewModel.resumeDanmuUpdatesIfNeeded()
+                // iPhone：进后台前是横屏全屏（用户主动触发），回前台时保留横屏，
+                // 否则会被设备姿态/系统重新查询 supportedInterfaceOrientations 扳回竖屏。
+                if !AppConstants.Device.isIPad && wasLandscapeBeforeBackground {
+                    wasLandscapeBeforeBackground = false
+                    reassertLandscapeOrientation()
+                }
             case .inactive, .background:
                 viewModel.pauseDanmuUpdatesForBackground()
+                // 只在「从活跃态离开」时记录:回前台路径是 background→inactive→active,
+                // 若在 inactive 也记录会被回程的 inactive 用已翻回竖屏的值覆盖,导致保留失效。
+                if oldPhase == .active && !AppConstants.Device.isIPad {
+                    wasLandscapeBeforeBackground = isIPhoneLandscape
+                }
             @unknown default:
                 break
             }
@@ -334,6 +348,38 @@ struct DetailPlayerView: View {
                     windowScene.requestGeometryUpdate(geometryPreferences) { error in
                         Logger.error("[PlayerFlow] 强制竖屏失败: \(error.localizedDescription)", category: .player)
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: - Orientation
+
+    /// iPhone 回前台后保留横屏全屏:临时锁定横屏发起几何更新,完成后恢复自由旋转,
+    /// 这样既保留用户主动横屏,又允许之后旋转/双击切回竖屏。
+    private func reassertLandscapeOrientation() {
+        guard !AppConstants.Device.isIPad else { return }
+        KSOptions.supportedInterfaceOrientations = .landscape
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first else { return }
+        // 先通知 ViewController 刷新支持的方向
+        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
+        // 延迟到下一个 run loop,确保 VC 已刷新支持的方向
+        DispatchQueue.main.async {
+            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                interfaceOrientations: .landscape
+            )
+            windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                Logger.warning("[PlayerFlow] 回前台保留横屏失败: \(error.localizedDescription)", category: .player)
+            }
+            // 旋转完成后恢复自由旋转,允许用户后续旋转/双击切回竖屏
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
             }
         }
