@@ -93,6 +93,10 @@ struct PlayerContentView: View {
     @State private var vlcMaskShow: Bool = true
     /// VLC 模式下的锁定状态
     @State private var vlcIsLocked: Bool = false
+    /// Bug2 现场抓取:回前台诊断 watchdog 任务(纯只读采样 + 打日志,不改播放)。
+    @State private var foregroundDiagnosticTask: Task<Void, Never>?
+    /// 进后台时刻,回前台时据此算后台时长(卡死多与后台停留长短相关)。
+    @State private var lastResignActiveAt: Date?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -135,6 +139,8 @@ struct PlayerContentView: View {
                 "[PlayerFlow] willResignActive, kernel=\(viewModel.selectedPlayerKernel.rawValue), useKS=\(useKSPlayer), url=\(compactURL(viewModel.currentPlayURL))",
                 category: .player
             )
+            // 记录进后台时刻,供回前台 watchdog 算后台时长。
+            lastResignActiveAt = Date()
             if useKSPlayer {
                 // 进入后台时自动开启画中画（每次读取最新设置值）
                 if PlayerSettingModel().enableAutoPiPOnBackground {
@@ -158,6 +164,10 @@ struct PlayerContentView: View {
                    playerLayer.isPictureInPictureActive {
                     playerLayer.pipStop(restoreUserInterface: true)
                 }
+                #if canImport(KSPlayer)
+                // Bug2 现场抓取:回前台后做一段有界采样,自动判 A/B/C(画中画恢复另算,这里仍采更稳妥)。
+                startForegroundDiagnosticWatch()
+                #endif
             } else {
                 vlcPlaybackController.becomeActive()
             }
@@ -180,6 +190,9 @@ struct PlayerContentView: View {
         .onDisappear {
             // 停掉协调器采样(stop 幂等,未启动也安全)。
             viewModel.recoveryCoordinator.stop()
+            // 退出播放页时取消回前台 watchdog,避免悬挂任务持有 player。
+            foregroundDiagnosticTask?.cancel()
+            foregroundDiagnosticTask = nil
         }
         .onChange(of: playerCoordinator.state) {
             let state = playerCoordinator.state
@@ -675,6 +688,105 @@ struct PlayerContentView: View {
         let host = url.host ?? "unknown-host"
         return "\(host)\(url.path)"
     }
+
+    #if canImport(KSPlayer)
+    // MARK: - Bug2 回前台诊断 watchdog(纯只读现场抓取)
+
+    /// 回前台后做一段有界采样(1/2/3/5s),把 §3 观察矩阵需要的信号
+    /// (引擎态 / 是否在播 / playhead 是否推进 / 吞吐是否归零 / 显示帧率)结构化打到
+    /// `[PlayerFlow] FG-watch`,末尾自动给一条 A/B/C 判定。真机复现 Bug2 时据此锁方向,
+    /// 不必盯 Console 逐条人肉判读。**纯只读,不触碰播放;** 退页/再次进后台会取消。
+    ///
+    /// 信号全部直接读 player 实例(`dynamicInfo` / `currentPlaybackTime` / `isPlaying`),
+    /// 不依赖被 VM 抢走 delegate 而冻结的 `playerCoordinator.state`(见本文件起播判定注释);
+    /// 引擎态读 VM 发布的真实 `engineState`。HLS(KSAVPlayer)是协调器无 stall 采样的盲区(F6),
+    /// 这里照采,kernel 经类型名识别免去额外 import。
+    @MainActor
+    private func startForegroundDiagnosticWatch() {
+        foregroundDiagnosticTask?.cancel()
+        guard let player = playerCoordinator.playerLayer?.player else {
+            Logger.debug("[PlayerFlow] FG-watch skip: player nil", category: .player)
+            return
+        }
+        let isHLS = String(describing: type(of: player)).contains("KSAVPlayer")
+        let bgDuration = lastResignActiveAt.map { Date().timeIntervalSince($0) } ?? -1
+        let basePlayhead = player.currentPlaybackTime
+        let baseBytes = player.dynamicInfo.bytesRead
+        let baseBuffered = max(0, player.playableTime - basePlayhead)
+        Logger.info(
+            "[PlayerFlow] FG-watch start bg=\(String(format: "%.0f", bgDuration))s " +
+            "kernel=\(isHLS ? "KSAV/HLS" : "FFmpeg") state=\(viewModel.engineState) " +
+            "playing=\(player.isPlaying) playhead=\(String(format: "%.2f", basePlayhead)) " +
+            "buffered=\(String(format: "%.2f", baseBuffered))s " +
+            "fps=\(String(format: "%.1f", Double(player.dynamicInfo.displayFPS)))",
+            category: .player
+        )
+
+        foregroundDiagnosticTask = Task { @MainActor in
+            let gaps: [UInt64] = [1, 1, 1, 2]   // 回前台后 1/2/3/5s 各采一次
+            var elapsed = 0
+            var lastPlayhead = basePlayhead
+            var lastBytes = baseBytes
+            // 末样信号(取最后一次采样,避开回前台瞬间 fps 抖动);verdict 全据此判。
+            var lastFps = Double(player.dynamicInfo.displayFPS)
+            var lastBuffered = baseBuffered
+            var lastIsPlaying = player.isPlaying
+            for gap in gaps {
+                try? await Task.sleep(nanoseconds: gap * 1_000_000_000)
+                if Task.isCancelled { return }
+                guard let p = playerCoordinator.playerLayer?.player else { return }
+                elapsed += Int(gap)
+                let info = p.dynamicInfo
+                let head = p.currentPlaybackTime
+                let bytes = info.bytesRead
+                let fps = Double(info.displayFPS)
+                let buffered = max(0, p.playableTime - head)
+                Logger.info(
+                    "[PlayerFlow] FG-watch +\(elapsed)s state=\(viewModel.engineState) " +
+                    "playing=\(p.isPlaying) Δplayhead=\(String(format: "%+.2f", head - lastPlayhead))s " +
+                    "Δbytes=\(bytes - lastBytes) net=\(Int64(info.networkSpeed))B/s " +
+                    "fps=\(String(format: "%.1f", fps)) " +
+                    "drop=\(info.droppedVideoFrameCount + info.droppedVideoPacketCount) " +
+                    "buffered=\(String(format: "%.2f", buffered))s",
+                    category: .player
+                )
+                lastPlayhead = head
+                lastBytes = bytes
+                lastFps = fps
+                lastBuffered = buffered
+                lastIsPlaying = p.isPlaying
+            }
+
+            // 整窗判定:映射 Bug2 文档 §3。注意 bytesRead/networkSpeed 在 FFmpeg 内核恒为 0
+            // (实测健康播放也是 0),故 verdict **不依赖吞吐**,改用 playhead 推进 + 出帧 + 缓冲走势。
+            let advanced = (lastPlayhead - basePlayhead) > 0.3   // 音频/时钟推进(playhead 走)
+            let fpsLive = lastFps > 0.5                          // 仍在出帧(视频没定格)
+            let bufferDrained = lastBuffered < 1.0               // 缓冲耗尽 → 解复用/网络断供
+            let state = viewModel.engineState
+            let paused: Bool = { if case .paused = state { return true }; return false }()
+            let ctx = "playhead\(advanced ? "进" : "停") fps=\(String(format: "%.1f", lastFps)) " +
+                "buffered=\(String(format: "%.2f", lastBuffered))s state=\(state)"
+
+            let verdict: String
+            if advanced && fpsLive {
+                verdict = "OK 已自行恢复(playhead 推进 + 出帧) | \(ctx)"
+            } else if advanced && !fpsLive {
+                // A 的典型形态:声音在走(playhead 推进)但画面定格(fps→0)。
+                verdict = "A 渲染层 wedged:音频在播但视频定格(playhead 进 / fps≈0)" +
+                    " → 补 GPU Frame Capture 查 currentDrawable | \(ctx)"
+            } else if paused && !lastIsPlaying {
+                verdict = "C 纯暂停未恢复(回前台没补 play(),hardReload 或手动播放可救) | \(ctx)"
+            } else if bufferDrained {
+                verdict = "B 管线饿死:playhead 卡 + 缓冲耗尽(网络/解复用断供,需 hardReload 重建) | \(ctx)"
+            } else {
+                // playhead 卡死但缓冲仍在 → demuxer 填了缓冲却出不来帧,渲染/时钟 wedge。
+                verdict = "A 渲染/时钟 wedged:playhead 卡但缓冲仍在(\(String(format: "%.1f", lastBuffered))s)" +
+                    " → 补 GPU Frame Capture 确认 drawable | \(ctx)"
+            }
+            Logger.warning("[PlayerFlow] FG-watch verdict => \(verdict)", category: .player)
+        }
+    }
+    #endif
 }
 
 // MARK: - Video Aspect Ratio Modifier
