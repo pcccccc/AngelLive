@@ -650,6 +650,36 @@ final class RoomInfoViewModel {
         }
     }
 
+    /// 「自动画中画」开关切换时,同步武装/拆除 PiP 控制器。
+    ///
+    /// 根因:`KSComplexPlayerLayer` 只在 `readyToPlay` 且当时选项已 true 时预建 `pipController`。
+    /// 在播放中(readyToPlay 已过)才打开开关 → `pipController` 仍为 nil → 首次进后台 `pipStart()` 走
+    /// else 分支:新建控制器后**延迟 0.3s 再 start**,而此刻 App 已进后台、start 失败;控制器虽建好,
+    /// 要等第二次进后台才走即时 start 分支 →「推出进来推出进来才生效」。
+    ///
+    /// 开:提前把控制器建好(与 readyToPlay 完全一致的 configPIP + delegate),首次进后台即即时 start。
+    /// 关:若 PiP 未在进行,拆掉控制器,避免残留武装态(防「关不掉」)。幂等。
+    @MainActor
+    func setAutoPiPArmed(_ armed: Bool) {
+        #if canImport(KSPlayer)
+        guard let layer = watchedPlayerLayer as? KSComplexPlayerLayer else {
+            Logger.debug("[PlayerFlow] PiP arm skip: no KSComplexPlayerLayer (armed=\(armed))", category: .player)
+            return
+        }
+        if armed {
+            guard layer.player.pipController == nil else { return }   // 已就绪,幂等
+            layer.player.configPIP()
+            // delegate 便捷属性跨模块不可见,用公开的 setValue(等价 KSPlayer 内部 `delegate = self`)。
+            layer.player.pipController?.setValue(layer, forKey: "delegate")
+            Logger.debug("[PlayerFlow] PiP controller armed (toggle on)", category: .player)
+        } else {
+            guard !layer.isPictureInPictureActive else { return }     // 正在 PiP 不拆,交给 enterForeground
+            layer.player.pipController = nil
+            Logger.debug("[PlayerFlow] PiP controller torn down (toggle off)", category: .player)
+        }
+        #endif
+    }
+
     /// 切换弹幕显示状态
     @MainActor
     func toggleDanmuDisplay() {

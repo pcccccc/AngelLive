@@ -115,6 +115,9 @@ struct SettingsButton: View {
                     // 把开关同步到当前直播间的 PlayerOptions，
                     // 否则只有下次重开直播间才生效
                     viewModel.playerOption.canStartPictureInPictureAutomaticallyFromInline = newValue
+                    // 关键:开关当下就武装/拆除 PiP 控制器，否则首次进后台只新建、要第二次进后台才启动
+                    //（「推出进来推出进来才生效」根因）。
+                    viewModel.setAutoPiPArmed(newValue)
                 }
             )
             .presentationDetents([.medium, .large])
