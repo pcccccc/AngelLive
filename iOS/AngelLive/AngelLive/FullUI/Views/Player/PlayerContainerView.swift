@@ -731,6 +731,9 @@ struct PlayerContentView: View {
             var lastFps = Double(player.dynamicInfo.displayFPS)
             var lastBuffered = baseBuffered
             var lastIsPlaying = player.isPlaying
+            // 渲染卡死(A 类)早检 + 自动恢复:fps≈0 但 playhead 仍推进 = Metal display link 卡死。
+            var wedgeStreak = 0
+            var didKick = false
             for gap in gaps {
                 try? await Task.sleep(nanoseconds: gap * 1_000_000_000)
                 if Task.isCancelled { return }
@@ -741,6 +744,7 @@ struct PlayerContentView: View {
                 let bytes = info.bytesRead
                 let fps = Double(info.displayFPS)
                 let buffered = max(0, p.playableTime - head)
+                let advancingNow = (head - lastPlayhead) > 0.3   // 音频/时钟仍推进
                 Logger.info(
                     "[PlayerFlow] FG-watch +\(elapsed)s state=\(viewModel.engineState) " +
                     "playing=\(p.isPlaying) Δplayhead=\(String(format: "%+.2f", head - lastPlayhead))s " +
@@ -750,6 +754,20 @@ struct PlayerContentView: View {
                     "buffered=\(String(format: "%.2f", buffered))s",
                     category: .player
                 )
+
+                // A 类渲染卡死自动恢复:连续 2 拍 fps≈0 且 playhead 仍推进 → Metal display link 卡死,
+                // 做一次 play→pause→play 翻转 isPaused(true→false),强制 CADisplayLink 重新触发踢活渲染。
+                // 一个回前台周期最多踢一次;不动网络/解码,仅渲染层。
+                if fps < 0.5 && advancingNow { wedgeStreak += 1 } else { wedgeStreak = 0 }
+                if wedgeStreak >= 2 && !didKick {
+                    didKick = true
+                    Logger.warning("[PlayerFlow] FG-watch 检测到渲染卡死(fps≈0 + playhead 进)→ play-pause-play 踢活", category: .player)
+                    playerCoordinator.playerLayer?.pause()
+                    try? await Task.sleep(nanoseconds: 120_000_000)
+                    if Task.isCancelled { return }
+                    playerCoordinator.playerLayer?.play()
+                }
+
                 lastPlayhead = head
                 lastBytes = bytes
                 lastFps = fps
@@ -765,7 +783,7 @@ struct PlayerContentView: View {
             let state = viewModel.engineState
             let paused: Bool = { if case .paused = state { return true }; return false }()
             let ctx = "playhead\(advanced ? "进" : "停") fps=\(String(format: "%.1f", lastFps)) " +
-                "buffered=\(String(format: "%.2f", lastBuffered))s state=\(state)"
+                "buffered=\(String(format: "%.2f", lastBuffered))s state=\(state) kicked=\(didKick)"
 
             let verdict: String
             if advanced && fpsLive {
