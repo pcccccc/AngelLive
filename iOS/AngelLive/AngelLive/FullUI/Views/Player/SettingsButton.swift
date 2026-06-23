@@ -110,7 +110,7 @@ struct SettingsButton: View {
         }
         .sheet(isPresented: $showPlayerSettings) {
             PlayerSettingsSheet(
-                playerSettingModel: $playerSettingModel,
+                playerSettingModel: playerSettingModel,
                 onAutoPiPChanged: { newValue in
                     // 把开关同步到当前直播间的 PlayerOptions，
                     // 否则只有下次重开直播间才生效
@@ -130,7 +130,9 @@ struct SettingsButton: View {
 
 /// 播放设置弹窗
 private struct PlayerSettingsSheet: View {
-    @Binding var playerSettingModel: PlayerSettingModel
+    // @Observable 引用类型用 @Bindable 取属性绑定;早前误用 @Binding(绑定到类引用)
+    // 不会对内部属性建立观察,导致首次点开关 onChange 不触发——「要操作两次才生效」的根因。
+    @Bindable var playerSettingModel: PlayerSettingModel
     var onAutoPiPChanged: (Bool) -> Void
     @Environment(\.dismiss) private var dismiss
 
