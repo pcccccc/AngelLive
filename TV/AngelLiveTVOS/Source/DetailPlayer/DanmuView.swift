@@ -22,12 +22,16 @@ struct DanmuView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: DanmakuView, context: Context) {
-        uiView.frame = .init(x: 0, y: 0, width: 1920, height: height)
+        // §6.1 切字号:仅当 frame 真变化时才重算轨道;paddingTop/trackHeight/displayArea 各自 didSet 已在真变化时重算
+        let newFrame = CGRect(x: 0, y: 0, width: 1920, height: height)
+        if uiView.frame != newFrame {
+            uiView.frame = newFrame
+            uiView.recalculateTracks()
+        }
         uiView.paddingTop = 5
         uiView.trackHeight = CGFloat(Double(appViewModel.danmuSettingsViewModel.danmuFontSize) * 1.35)
         uiView.playingSpeed = Float(appViewModel.danmuSettingsViewModel.danmuSpeed)
         uiView.displayArea = 1
-        uiView.recalculateTracks()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -43,6 +47,8 @@ struct DanmuView: UIViewRepresentable {
 
         func shoot(text: String, showColorDanmu: Bool, color: UInt32, alpha: CGFloat, font: CGFloat) {
             let model = DanmakuTextCellModel(str: text, strFont: .systemFont(ofSize: font))
+            // §6.2 错落感:displayTime ±15% 微抖动,同 tick 发出的弹幕速度自然拉开
+            model.displayTime = model.displayTime * Double.random(in: 0.85...1.15)
             if text.contains("醒目留言") || text.contains("SC") {
                 model.backgroundColor = .orange
                 model.color = .white

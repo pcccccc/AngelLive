@@ -454,11 +454,11 @@ private extension DanmakuView {
                 floatingTracks.append(DanmakuFloatingTrack(view: self))
             }
         } else if diffFloatingTrackCount < 0 {
-            for i in max(0, floatingTracks.count + diffFloatingTrackCount)..<floatingTracks.count {
-                floatingTracks[i].stop()
-            }
-            if Int(abs(diffFloatingTrackCount)) < floatingTracks.count {
-                floatingTracks.removeLast(Int(abs(diffFloatingTrackCount)))
+            // §6.1 切字号:只从尾部移除空轨道,非空轨道(有在飞弹幕)保留待自然飞完后于后续重算淘汰;不再 stop 在飞弹幕
+            var removable = -diffFloatingTrackCount
+            while removable > 0, let last = floatingTracks.last, last.danmakuCount == 0 {
+                floatingTracks.removeLast()
+                removable -= 1
             }
         }
         for i in 0..<floatingTracks.count {
@@ -468,10 +468,13 @@ private extension DanmakuView {
                 strongSelf.cellPlayingStop(cell)
             }
             track.index = UInt(i)
-            track.positionY = CGFloat(i) * trackHeight + trackHeight / 2.0 + paddingTop + offsetY
+            // §6.1 切字号:只重排空轨道且不挪出新可视范围;在飞弹幕保持原 Y 飞完,只有新弹幕用新字号几何
+            if track.danmakuCount == 0 && i < trackCount {
+                track.positionY = CGFloat(i) * trackHeight + trackHeight / 2.0 + paddingTop + offsetY
+            }
         }
     }
-    
+
     func recalculateTopTracks() {
         let trackCount = Int(floorf(Float((viewHeight - paddingTop - paddingBottom) / trackHeight)))
         let offsetY = max(0, (viewHeight - CGFloat(trackCount) * trackHeight) / 2.0)
@@ -481,11 +484,11 @@ private extension DanmakuView {
                 topTracks.append(DanmakuVerticalTrack(view: self))
             }
         } else if diffFloatingTrackCount < 0 {
-            for i in max(0, topTracks.count + diffFloatingTrackCount)..<topTracks.count {
-                topTracks[i].stop()
-            }
-            if Int(abs(diffFloatingTrackCount)) < topTracks.count {
-                topTracks.removeLast(Int(abs(diffFloatingTrackCount)))
+            // §6.1 切字号:只从尾部移除空轨道,非空轨道保留待自然飞完;不再 stop 在飞弹幕
+            var removable = -diffFloatingTrackCount
+            while removable > 0, let last = topTracks.last, last.danmakuCount == 0 {
+                topTracks.removeLast()
+                removable -= 1
             }
         }
         for i in 0..<topTracks.count {
@@ -495,7 +498,9 @@ private extension DanmakuView {
                 strongSelf.cellPlayingStop(cell)
             }
             track.index = UInt(i)
-            track.positionY = CGFloat(i) * trackHeight + trackHeight / 2.0 + paddingTop + offsetY
+            if track.danmakuCount == 0 && i < trackCount {
+                track.positionY = CGFloat(i) * trackHeight + trackHeight / 2.0 + paddingTop + offsetY
+            }
         }
     }
     
@@ -508,11 +513,11 @@ private extension DanmakuView {
                 bottomTracks.insert(DanmakuVerticalTrack(view: self), at: 0)
             }
         } else if diffFloatingTrackCount < 0 {
-            for i in 0..<min(bottomTracks.count, abs(diffFloatingTrackCount)) {
-                bottomTracks[i].stop()
-            }
-            if Int(abs(diffFloatingTrackCount)) < bottomTracks.count {
-                bottomTracks.removeFirst(Int(abs(diffFloatingTrackCount)))
+            // §6.1 切字号:只从头部移除空轨道,非空轨道保留待自然飞完;不再 stop 在飞弹幕
+            var removable = -diffFloatingTrackCount
+            while removable > 0, let first = bottomTracks.first, first.danmakuCount == 0 {
+                bottomTracks.removeFirst()
+                removable -= 1
             }
         }
         for i in (0..<bottomTracks.count).reversed() {
@@ -523,7 +528,9 @@ private extension DanmakuView {
             }
             let index = bottomTracks.count - i - 1
             track.index = UInt(index)
-            track.positionY = bounds.height - CGFloat(index) * trackHeight - trackHeight / 2.0 - paddingTop - offsetY
+            if track.danmakuCount == 0 && index < trackCount {
+                track.positionY = bounds.height - CGFloat(index) * trackHeight - trackHeight / 2.0 - paddingTop - offsetY
+            }
         }
     }
     
@@ -554,12 +561,11 @@ private extension DanmakuView {
     func findSuitableTrack(for danmaku: DanmakuCellModel) -> DanmakuTrack? {
         switch danmaku.type {
         case .floating:
-            guard let track = floatingTracks.first(where: { (t) -> Bool in
-                return t.canShoot(danmaku: danmaku)
-            }) else {
-                return nil
-            }
-            return track
+            // §6.2 错落感:收集所有可发轨道,在弹幕最少的轨道中随机挑一条,打散「从上往下顺序堆叠」
+            let candidates = floatingTracks.filter { $0.canShoot(danmaku: danmaku) }
+            guard !candidates.isEmpty else { return nil }
+            let minCount = candidates.map { $0.danmakuCount }.min()!
+            return candidates.filter { $0.danmakuCount == minCount }.randomElement()
         case .top:
             guard let track = topTracks.first(where: { (t) -> Bool in
                 return t.canShoot(danmaku: danmaku)

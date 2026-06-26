@@ -42,15 +42,16 @@ struct DanmuView: UIViewRepresentable {
         // 根据设备和方向动态调整尺寸
         let screenWidth = UIScreen.main.bounds.width
 
-        // 更新 frame（使用实际显示高度）
-        uiView.frame = CGRect(x: 0, y: 0, width: screenWidth, height: displayHeight)
+        // §6.1 切字号:仅当 frame 真变化(旋转/尺寸变)时才重算轨道,避免无关刷新扰动在飞弹幕
+        let newFrame = CGRect(x: 0, y: 0, width: screenWidth, height: displayHeight)
+        if uiView.frame != newFrame {
+            uiView.frame = newFrame
+            uiView.recalculateTracks()
+        }
 
-        // 更新配置
+        // 更新配置(trackHeight didSet 仅在字号真变化时重算,且只影响新发弹幕)
         uiView.trackHeight = fontSize * 1.35
         uiView.playingSpeed = Float(speed)
-
-        // 重新计算轨道
-        uiView.recalculateTracks()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -67,6 +68,8 @@ struct DanmuView: UIViewRepresentable {
         /// 发射弹幕
         func shoot(text: String, showColorDanmu: Bool = true, color: UInt32 = 0xFFFFFF, alpha: CGFloat = 1.0, font: CGFloat = 16) {
             let model = DanmakuTextCellModel(str: text, strFont: UIFont.systemFont(ofSize: font))
+            // §6.2 错落感:displayTime ±15% 微抖动,同 tick 发出的弹幕速度自然拉开
+            model.displayTime = model.displayTime * Double.random(in: 0.85...1.15)
 
             // 特殊消息处理（醒目留言等）
             if text.contains("醒目留言") || text.contains("SC") {
