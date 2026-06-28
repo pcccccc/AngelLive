@@ -138,16 +138,16 @@ struct TVAddPluginSourceView: View {
         localErrorMessage = nil
         isProcessing = true
         Task {
+            // 乐观添加:即使源当前拉取失败也会把它存下来并返回(标记为异常),所以这里拿到非空就算添加成功。
             let addedURLs = await appViewModel.pluginSourceManager.addSourceFromInput(url)
             isProcessing = false
             if !addedURLs.isEmpty {
                 inputURL = ""
-                // 同步刷新插件目录,让上层管理页 mount 时已是新状态。
-                await appViewModel.pluginSourceManager.fetchAllSourceIndexes()
-                await appViewModel.pluginSourceManager.refreshAvailableUpdates()
+                // 不在这里阻塞式重新拉全量目录(失效源会让 dismiss 等满超时);
+                // 上层管理页在 cover 关闭后会自行 reloadPluginCatalog,失败源的行会显示"检查中→异常"。
                 dismiss()
             } else if appViewModel.pluginSourceManager.errorMessage == nil {
-                // addSourceFromInput 返回空但没写 errorMessage:多数是输入既不是 key 也不是合法订阅地址。
+                // 返回空且没写 errorMessage:输入既不是 key,也不是合法 URL。
                 localErrorMessage = "无法解析为订阅源,请确认地址是 .json 订阅或有效兑换码。"
             }
         }

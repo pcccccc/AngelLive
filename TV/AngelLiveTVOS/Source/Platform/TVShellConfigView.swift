@@ -409,36 +409,88 @@ struct TVPluginManagementView: View {
     }
 
     private func sourceRow(_ url: String) -> some View {
-        Button {
+        let health = pluginSourceManager.health(for: url)
+        return Button {
+            // 选中失败的源即重试 —— tvOS 上 contextMenu 需要长按,选中重试更顺手。
+            if health.isFailed {
+                Task { await pluginSourceManager.refreshSource(url) }
+            }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "link.circle.fill")
+                Image(systemName: sourceIconName(for: health))
                     .font(.system(size: 28))
                     .frame(width: 40)
+                    .foregroundStyle(sourceTint(for: health))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(url)
                         .font(.system(size: 24))
                         .lineLimit(1)
                         .foregroundColor(.primary)
-                    Text("长按可删除订阅源")
+                    Text(sourceSubtitle(for: health))
                         .font(.system(size: 20))
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
 
                 Spacer()
 
-                Text("已添加")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.secondary)
+                sourceTrailing(for: health)
             }
             .padding(.vertical, 20)
         }
         .padding(.horizontal, 50)
         .contextMenu {
+            if health.isFailed {
+                Button("重试") {
+                    Task { await pluginSourceManager.refreshSource(url) }
+                }
+            }
             Button("删除订阅源", role: .destructive) {
                 sourceToRemove = url
             }
+        }
+    }
+
+    // MARK: - 订阅源健康状态展示
+
+    private func sourceIconName(for health: PluginSourceHealth) -> String {
+        health.isFailed ? "exclamationmark.triangle.fill" : "link.circle.fill"
+    }
+
+    private func sourceTint(for health: PluginSourceHealth) -> Color {
+        switch health {
+        case .failed: return .orange
+        case .healthy: return .green
+        case .checking, .unknown: return .secondary
+        }
+    }
+
+    private func sourceSubtitle(for health: PluginSourceHealth) -> String {
+        switch health {
+        case .unknown, .healthy: return "长按可删除订阅源"
+        case .checking: return "正在检查..."
+        case .failed(let reason): return reason
+        }
+    }
+
+    @ViewBuilder
+    private func sourceTrailing(for health: PluginSourceHealth) -> some View {
+        switch health {
+        case .unknown:
+            Text("已添加")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+        case .checking:
+            ProgressView()
+        case .healthy(let count):
+            Text("\(count) 个插件")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+        case .failed:
+            Text("异常 · 选中重试")
+                .font(.system(size: 26))
+                .foregroundStyle(.orange)
         }
     }
 

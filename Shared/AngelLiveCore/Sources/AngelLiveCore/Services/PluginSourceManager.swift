@@ -16,6 +16,23 @@ public enum PluginInstallState: Equatable, Sendable {
     case failed(String)
 }
 
+/// 单个订阅源的健康状态
+public enum PluginSourceHealth: Equatable, Sendable {
+    /// 刚添加,还没拉取过索引
+    case unknown
+    /// 正在拉取索引
+    case checking
+    /// 拉取成功,带插件数量
+    case healthy(pluginCount: Int)
+    /// 拉取失败,带原因(可重试)
+    case failed(String)
+
+    public var isFailed: Bool {
+        if case .failed = self { return true }
+        return false
+    }
+}
+
 /// 带安装状态的远程插件条目
 @Observable
 public final class RemotePluginDisplayItem: Identifiable, @unchecked Sendable {
@@ -35,6 +52,9 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     /// 用户保存的插件源 URL 列表
     public private(set) var sourceURLs: [String] = []
+
+    /// 各订阅源的健康状态(按 URL 索引,仅内存,启动后由拉取索引重新填充)
+    public private(set) var sourceHealth: [String: PluginSourceHealth] = [:]
 
     /// 当前拉取的远程插件列表
     public private(set) var remotePlugins: [RemotePluginDisplayItem] = []
@@ -125,6 +145,11 @@ public final class PluginSourceManager: @unchecked Sendable {
         persistSourceIfNeeded(urlString)
     }
 
+    /// 读取某个订阅源的健康状态(未知时返回 .unknown)
+    public func health(for urlString: String) -> PluginSourceHealth {
+        sourceHealth[urlString.trimmingCharacters(in: .whitespacesAndNewlines)] ?? .unknown
+    }
+
     /// 添加用户输入的订阅源：支持 key 解析和直接 URL，只有校验成功后才会持久化并同步到 CloudKit。
     /// 返回实际添加或重新加载成功的 URL 列表。
     public func addSourceFromInput(_ input: String) async -> [String] {
@@ -137,6 +162,10 @@ public final class PluginSourceManager: @unchecked Sendable {
         await validateAndLoadSource(input, allowDirectInput: false)
     }
 
+    /// 乐观添加订阅源:
+    /// - key / 显式 .json 订阅一旦确定为订阅意图,就先把源持久化下来(即使当前拉取失败),
+    ///   失败时把该源标记为 `.failed`,用户可在列表里重试或删除 —— 临时不可达的源也能先存上。
+    /// - 当 `allowDirectInput == false` 且输入不是 key 时仍返回空,保留"普通视频链接走书签兜底"的判定。
     private func validateAndLoadSource(_ input: String, allowDirectInput: Bool) async -> [String] {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -145,27 +174,29 @@ public final class PluginSourceManager: @unchecked Sendable {
         await PluginSourceKeyService.shared.fetchKeys()
 
         let resolvedCandidates = await PluginSourceKeyService.shared.resolveKey(trimmed)
+        // 非 key 且不允许直接输入(用于区分订阅源 vs 视频书签):交回调用方按视频处理。
         if resolvedCandidates == nil, !allowDirectInput {
             return []
         }
 
-        let candidates = resolvedCandidates ?? [trimmed]
-        var lastError: Error?
+        // key 解析出的多个候选是同一索引的镜像源,只持久化其中一个;直接输入则就是这一个 URL。
+        let candidates = (resolvedCandidates ?? [trimmed]).filter { URL(string: $0) != nil }
+        guard let primary = candidates.first else {
+            errorMessage = "无效的 URL"
+            return []
+        }
 
         isFetchingIndex = true
         defer { isFetchingIndex = false }
 
+        // 依次尝试候选(镜像),第一个成功的成为持久化的源。
+        // 添加订阅源本身不下载 JS、不触发安装,无需 consent;
+        // 凭证泄露风险的批量确认下沉到 installAll Phase 1,届时列出具体登录平台一次性拍板。
+        var lastError: Error?
         for candidate in candidates {
-            guard let url = URL(string: candidate) else {
-                lastError = URLError(.badURL)
-                continue
-            }
-
+            guard let url = URL(string: candidate) else { continue }
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
-
-                // 添加订阅源本身不下载 JS、不触发安装,无需 consent;
-                // 凭证泄露风险的批量确认下沉到 installAll Phase 1,届时列出具体登录平台一次性拍板。
                 persistSourceIfNeeded(candidate)
                 applyFetchedIndex(index, sourceURL: candidate)
                 return [candidate]
@@ -175,14 +206,14 @@ public final class PluginSourceManager: @unchecked Sendable {
             }
         }
 
+        // 所有候选都拉取失败:乐观地把主候选存下来并标记异常,源不丢,用户可重试/删除。
+        persistSourceIfNeeded(primary)
         if let lastError {
-            errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(lastError))"
-        } else if resolvedCandidates != nil {
-            errorMessage = "所有候选源地址均不可用"
-        } else if allowDirectInput {
-            errorMessage = "无效的 URL"
+            sourceHealth[primary] = .failed(Self.detailedErrorDescription(lastError))
+        } else {
+            sourceHealth[primary] = .failed("暂时无法拉取插件索引")
         }
-        return []
+        return [primary]
     }
 
     private func persistSourceIfNeeded(_ urlString: String) {
@@ -190,6 +221,9 @@ public final class PluginSourceManager: @unchecked Sendable {
         guard !trimmed.isEmpty, !sourceURLs.contains(trimmed) else { return }
         sourceURLs.append(trimmed)
         sourcePluginIds[trimmed] = sourcePluginIds[trimmed] ?? Set<String>()
+        if sourceHealth[trimmed] == nil {
+            sourceHealth[trimmed] = .unknown
+        }
         saveSourceURLs()
         saveSourcePluginIds()
     }
@@ -198,6 +232,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         let trimmed = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
         sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
         saveSourcePluginIds()
+        sourceHealth[trimmed] = .healthy(pluginCount: index.plugins.count)
         remotePlugins = index.plugins.map(makeRemoteDisplayItem)
         mergeLatestRemoteItems(index.plugins)
     }
@@ -214,48 +249,41 @@ public final class PluginSourceManager: @unchecked Sendable {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         sourceURLs.removeAll { $0 == trimmed }
         sourcePluginIds.removeValue(forKey: trimmed)
+        sourceHealth.removeValue(forKey: trimmed)
         saveSourceURLs()
         saveSourcePluginIds()
     }
 
-    /// 删除订阅源并移除该源对应的已安装插件
+    /// 删除订阅源并移除该源对应的已安装插件。
+    ///
+    /// 删除永远即时:先同步把 URL 从列表里摘掉(UI 立刻更新),再用本地缓存 + 孤儿兜底
+    /// 决定卸载哪些插件 —— 全程不发任何网络请求。这样失效/不可达的源也能秒删,
+    /// 不会再被 30s 的索引拉取超时卡住(这正是之前"删不掉"的根因)。
     public func removeSourceAndAssociatedPlugins(_ urlString: String) async {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        // 仅用本地缓存解析该源声明过的插件;缓存为空时走下面的孤儿兜底,不再做远程拉取。
         var pluginIds = sourcePluginIds[trimmed] ?? Set<String>()
-        var resolvedFromCacheOrRemote = !pluginIds.isEmpty
+        let resolvedFromCache = !pluginIds.isEmpty
 
-        if pluginIds.isEmpty, let url = URL(string: trimmed) {
-            do {
-                let index = try await fetchIndexWithTimeout(url: url)
-                pluginIds = Set(index.plugins.map(\.pluginId))
-                resolvedFromCacheOrRemote = true
-            } catch {
-                // 源不可达且缓存为空(常见于:CloudKit 同步后只占位未拉过索引、
-                // 老版本升级上来没写过 sourcePluginIds、首次 fetch 即失败而 URL 已过期),
-                // 走下面的孤儿兜底:沙盒里实际安装、且没有其它源声明的插件视为该源的孤儿。
-                Logger.warning(
-                    "Source unreachable while removing, fallback to cached mapping: \(trimmed)",
-                    category: .plugin
-                )
-            }
-        }
+        // 先摘除 URL,UI 立即去掉这一行。removeSource 已把本源从 sourcePluginIds 移除,
+        // 所以下面的 coveredByOtherSources 天然只剩"其它源"。
+        removeSource(trimmed)
 
         // 其它源也声明过同一个 pluginId 时,这些插件不应被卸载。
         let coveredByOtherSources = sourcePluginIds
-            .filter { $0.key != trimmed }
             .values
             .reduce(into: Set<String>()) { $0.formUnion($1) }
 
-        // 第三级兜底:缓存空 + 远程拉取失败时,认为"沙盒里实际安装、又没有任何其它源
-        // 声明"的插件来源就是这个被删的源,一并卸载。builtIn 插件不落地到 pluginsRootDirectory,
-        // 不会被这个集合包含,所以不会被误删。
-        if !resolvedFromCacheOrRemote {
+        // 缓存空(常见于:CloudKit 同步后只占位未拉过索引、老版本升级没写过 sourcePluginIds、
+        // 添加即失败的失效源)时的兜底:沙盒里实际安装、又没有任何其它源声明的插件,
+        // 视为该源的孤儿一并卸载。builtIn 插件不落地到 pluginsRootDirectory,不会被误删。
+        if !resolvedFromCache {
             let orphans = installedSandboxPluginIds().subtracting(coveredByOtherSources)
             if !orphans.isEmpty {
                 Logger.info(
-                    "Removing orphan plugins for unreachable source \(trimmed): \(orphans.sorted())",
+                    "Removing orphan plugins for source \(trimmed): \(orphans.sorted())",
                     category: .plugin
                 )
                 pluginIds = orphans
@@ -263,9 +291,6 @@ public final class PluginSourceManager: @unchecked Sendable {
         }
 
         let pluginsToUninstall = pluginIds.subtracting(coveredByOtherSources)
-
-        removeSource(trimmed)
-
         for pluginId in pluginsToUninstall {
             _ = uninstallPlugin(pluginId: pluginId)
         }
@@ -316,6 +341,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         guard !sourceURLs.isEmpty else {
             latestRemoteItemsByPluginId = [:]
             sourcePluginIds = [:]
+            sourceHealth = [:]
             saveSourcePluginIds()
             return
         }
@@ -328,10 +354,14 @@ public final class PluginSourceManager: @unchecked Sendable {
         var pluginIdsBySource = sourcePluginIds.filter { sourceURLs.contains($0.key) }
 
         for source in sourceURLs {
-            guard let url = URL(string: source) else { continue }
+            guard let url = URL(string: source) else {
+                sourceHealth[source] = .failed("无效的 URL")
+                continue
+            }
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
                 pluginIdsBySource[source] = Set(index.plugins.map(\.pluginId))
+                sourceHealth[source] = .healthy(pluginCount: index.plugins.count)
                 for item in index.plugins {
                     guard let existing = latest[item.pluginId] else {
                         latest[item.pluginId] = item
@@ -342,8 +372,9 @@ public final class PluginSourceManager: @unchecked Sendable {
                     }
                 }
             } catch {
-                // 单个源失败不影响其它源；保留最后一次错误用于页面提示
-                errorMessage = "检查更新失败: \(Self.detailedErrorDescription(error))"
+                // 单个源失败不影响其它源,失败状态记到该源的 health 上(列表行显示并可重试),
+                // 不再写全局 errorMessage,避免一个失效源把整页都罩上红色异常卡片。
+                sourceHealth[source] = .failed(Self.detailedErrorDescription(error))
             }
         }
 
@@ -364,10 +395,15 @@ public final class PluginSourceManager: @unchecked Sendable {
         var seenPluginIds = Set<String>()
 
         for source in sourceURLs {
-            guard let url = URL(string: source) else { continue }
+            guard let url = URL(string: source) else {
+                sourceHealth[source] = .failed("无效的 URL")
+                continue
+            }
+            sourceHealth[source] = .checking
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
                 sourcePluginIds[source] = Set(index.plugins.map(\.pluginId))
+                sourceHealth[source] = .healthy(pluginCount: index.plugins.count)
                 for item in index.plugins {
                     if !seenPluginIds.contains(item.pluginId) {
                         seenPluginIds.insert(item.pluginId)
@@ -376,12 +412,45 @@ public final class PluginSourceManager: @unchecked Sendable {
                 }
                 mergeLatestRemoteItems(index.plugins)
             } catch {
-                errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(error))"
+                // 失败状态记到该源的 health(列表行可重试),不再写全局 errorMessage。
+                sourceHealth[source] = .failed(Self.detailedErrorDescription(error))
             }
         }
 
         saveSourcePluginIds()
         remotePlugins = allItems.map(makeRemoteDisplayItem)
+    }
+
+    /// 重新拉取单个订阅源(列表行"重试"用)。
+    /// 成功后更新该源 health 与缓存,并把它的插件并入 remotePlugins(已存在的按 pluginId 跳过);
+    /// 失败只更新该源 health,不影响其它源已加载的内容。
+    @discardableResult
+    public func refreshSource(_ urlString: String) async -> Bool {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard sourceURLs.contains(trimmed) else { return false }
+        guard let url = URL(string: trimmed) else {
+            sourceHealth[trimmed] = .failed("无效的 URL")
+            return false
+        }
+
+        sourceHealth[trimmed] = .checking
+        do {
+            let index = try await fetchIndexWithTimeout(url: url)
+            sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
+            saveSourcePluginIds()
+            sourceHealth[trimmed] = .healthy(pluginCount: index.plugins.count)
+            mergeLatestRemoteItems(index.plugins)
+
+            let existingIds = Set(remotePlugins.map(\.id))
+            let newItems = index.plugins.filter { !existingIds.contains($0.pluginId) }
+            if !newItems.isEmpty {
+                remotePlugins.append(contentsOf: newItems.map(makeRemoteDisplayItem))
+            }
+            return true
+        } catch {
+            sourceHealth[trimmed] = .failed(Self.detailedErrorDescription(error))
+            return false
+        }
     }
 
     public func installPlugin(_ displayItem: RemotePluginDisplayItem) async -> Bool {

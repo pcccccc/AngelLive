@@ -171,31 +171,81 @@ struct MacPluginManagementView: View {
     private var subscriptionSourcesSection: some View {
         Section {
             ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
+                let health = pluginSourceManager.health(for: url)
                 PanelNavigationRow(
                     title: "订阅源",
                     subtitle: url,
                     showsChevron: false
                 ) {
-                    Image(systemName: "dot.radiowaves.left.and.right")
+                    Image(systemName: health.isFailed ? "exclamationmark.triangle.fill" : "dot.radiowaves.left.and.right")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.blue.gradient)
+                        .foregroundStyle(macSourceTint(health))
+                        .help(macSourceReason(health))
                 } trailing: {
-                    Button(role: .destructive) {
-                        Task {
-                            await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
-                            await pluginAvailability.refresh()
-                            await pluginSourceManager.fetchAllSourceIndexes()
-                            await pluginSourceManager.refreshAvailableUpdates()
+                    HStack(spacing: 12) {
+                        macSourceBadge(health)
+
+                        if health.isFailed {
+                            Button {
+                                Task { await pluginSourceManager.refreshSource(url) }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .foregroundStyle(.orange)
+                            }
+                            .buttonStyle(.plain)
+                            .help("重试")
                         }
-                    } label: {
-                        Image(systemName: "trash")
-                            .foregroundStyle(.red)
+
+                        Button(role: .destructive) {
+                            Task {
+                                await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
+                                await pluginAvailability.refresh()
+                                await pluginSourceManager.fetchAllSourceIndexes()
+                                await pluginSourceManager.refreshAvailableUpdates()
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         } header: {
             Text("已添加的订阅源")
+        }
+    }
+
+    // MARK: - 订阅源健康状态展示
+
+    private func macSourceTint(_ health: PluginSourceHealth) -> Color {
+        switch health {
+        case .failed: return .orange
+        case .healthy: return .green
+        case .checking, .unknown: return .blue
+        }
+    }
+
+    private func macSourceReason(_ health: PluginSourceHealth) -> String {
+        if case .failed(let reason) = health { return reason }
+        return ""
+    }
+
+    @ViewBuilder
+    private func macSourceBadge(_ health: PluginSourceHealth) -> some View {
+        switch health {
+        case .unknown:
+            EmptyView()
+        case .checking:
+            ProgressView().controlSize(.small)
+        case .healthy(let count):
+            Text("\(count) 个插件")
+                .font(.caption)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
+        case .failed:
+            Text("异常")
+                .font(.caption)
+                .foregroundStyle(.orange)
         }
     }
 
