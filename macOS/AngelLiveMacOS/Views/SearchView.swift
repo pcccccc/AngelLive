@@ -38,7 +38,7 @@ struct SearchView: View {
                 // 搜索结果
                 Group {
                     if isSearching {
-                        searchSkeletonGrid(geometry: geometry)
+                        searchSkeletonGrid()
                     } else if let searchError {
                         searchErrorState(error: searchError)
                     } else if searchResults.isEmpty {
@@ -130,26 +130,10 @@ struct SearchView: View {
     }
 
     @ViewBuilder
-    private func searchSkeletonGrid(geometry: GeometryProxy) -> some View {
-        let horizontalSpacing: CGFloat = 15
-        let verticalSpacing: CGFloat = 24
-        let horizontalPadding: CGFloat = 20
-        let screenWidth = geometry.size.width
-        let columns = 3
-        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
-        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
-
+    private func searchSkeletonGrid() -> some View {
         ScrollView {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
-                spacing: verticalSpacing
-            ) {
-                ForEach(0..<columns * 2, id: \.self) { _ in
-                    LiveRoomCardSkeleton(width: cardWidth)
-                }
-            }
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, 16)
+            LiveRoomSkeletonGrid(count: 12)
+                .padding(.vertical, 16)
         }
         .shimmering()
     }

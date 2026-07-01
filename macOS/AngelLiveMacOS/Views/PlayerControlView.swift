@@ -629,6 +629,8 @@ struct VideoSettingsPanel: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
+            PanelCloseButton { isShowing = false }
+
             VStack(alignment: .leading, spacing: 6) {
                 Text("视频信息统计")
                     .font(.system(size: 24, weight: .bold))
@@ -640,17 +642,6 @@ struct VideoSettingsPanel: View {
             }
 
             Spacer(minLength: 12)
-
-            Button {
-                isShowing = false
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.plain)
-            .adaptiveGlassEffect(in: .circle)
         }
     }
 

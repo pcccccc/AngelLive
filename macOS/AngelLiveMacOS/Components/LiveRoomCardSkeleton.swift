@@ -10,20 +10,18 @@ import SwiftUI
 import AngelLiveDependencies
 import AngelLiveCore
 
+/// 单个房间卡片骨架。填满所在网格单元格,轮廓与真实 `LiveRoomCard` 一致
+/// (封面 16:9 + 头像/两行文字,无外层面板背景),切换到真实内容时不跳动。
+/// shimmer 由外层容器统一施加,卡片自身不做,避免嵌套闪烁。
 struct LiveRoomCardSkeleton: View {
-    let width: CGFloat
-
-    init(width: CGFloat = 280) {
-        self.width = width
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // 封面图骨架
             Rectangle()
                 .fill(Color.gray.opacity(0.3))
-                .aspectRatio(16/9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
 
             // 主播信息骨架
             HStack(spacing: 8) {
@@ -34,31 +32,49 @@ struct LiveRoomCardSkeleton: View {
                 VStack(alignment: .leading, spacing: 4) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.gray.opacity(0.3))
-                        .frame(width: min(width * 0.6, 180), height: 14)
+                        .frame(maxWidth: 160)
+                        .frame(height: 14)
 
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.gray.opacity(0.3))
-                        .frame(width: min(width * 0.4, 120), height: 12)
+                        .frame(maxWidth: 110)
+                        .frame(height: 12)
                 }
-                Spacer()
+
+                Spacer(minLength: 0)
             }
         }
-        .frame(width: width)
-        .padding(AppConstants.Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
-                .fill(AppConstants.Colors.materialBackground)
-                .shadow(
-                    color: AppConstants.Shadow.md.color,
-                    radius: AppConstants.Shadow.md.radius,
-                    x: AppConstants.Shadow.md.x,
-                    y: AppConstants.Shadow.md.y
-                )
-        )
-        .shimmering()  // 只在整个卡片上应用一次 shimmer
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// 房间列表加载骨架网格。列宽/间距与真实列表的自适应网格完全一致,
+/// 因此每行卡片数量会随窗口宽度动态变化,和加载完成后的真实列表保持同步。
+struct LiveRoomSkeletonGrid: View {
+    var count: Int = 12
+    var minCardWidth: CGFloat = 180
+    var maxCardWidth: CGFloat = 260
+    var horizontalSpacing: CGFloat = 15
+    var verticalSpacing: CGFloat = 24
+    var horizontalPadding: CGFloat = 20
+
+    var body: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.adaptive(minimum: minCardWidth, maximum: maxCardWidth), spacing: horizontalSpacing)
+            ],
+            spacing: verticalSpacing
+        ) {
+            ForEach(0..<count, id: \.self) { _ in
+                LiveRoomCardSkeleton()
+            }
+        }
+        .padding(.horizontal, horizontalPadding)
     }
 }
 
 #Preview {
-    LiveRoomCardSkeleton()
+    LiveRoomSkeletonGrid()
+        .shimmering()
+        .frame(width: 900)
 }

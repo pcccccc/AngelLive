@@ -140,6 +140,8 @@ struct MacPlatformLoginWebSheet: View {
         switch currentSession?.state {
         case .some(.authenticated): return "已登录"
         case .some(.anonymous): return "匿名"
+        case .some(.expired): return "已过期"
+        case .some(.invalid): return "无效"
         case .none: return "未登录"
         @unknown default: return "未知"
         }

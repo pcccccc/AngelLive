@@ -245,4 +245,23 @@ class PlatformDetailViewModel {
             await loadRoomList()
         }
     }
+
+    // MARK: - 一次性切换主/子分类
+
+    /// 同时切换主分类与子分类,只在缓存缺失时发一次房间请求。
+    /// 供分类筛选面板使用:面板先关闭,再在后台完成切换,避免「等两次网络请求才关窗」的卡顿。
+    @MainActor
+    func selectCategory(mainIndex: Int, subIndex: Int) async {
+        guard categories.indices.contains(mainIndex) else { return }
+        selectedMainCategoryIndex = mainIndex
+
+        let subList = currentSubCategories
+        guard subList.indices.contains(subIndex) else { return }
+        selectedSubCategoryIndex = subIndex
+
+        // 命中缓存则不再请求,直接沿用已有房间列表。
+        if roomList.isEmpty {
+            await loadRoomList()
+        }
+    }
 }

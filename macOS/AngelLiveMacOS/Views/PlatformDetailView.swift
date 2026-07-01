@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 import Kingfisher
 import Pow
 
@@ -166,37 +167,19 @@ struct PlatformDetailView: View {
                             }
                         }
 
-                    VStack(spacing: 12) {
-                        HStack {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    showCategorySheet = false
-                                }
-                            } label: {
-                                Image(systemName: "xmark.circle")
-                                    .font(.title2)
-                            }
-                            .buttonStyle(.plain)
-                            .keyboardShortcut(.escape, modifiers: [])
-                            .foregroundColor(.secondary)
-
-                            Spacer()
+                    CategoryManagementView(onDismiss: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showCategorySheet = false
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-
-                        CategoryManagementView(onDismiss: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showCategorySheet = false
-                            }
-                        })
-                            .environment(viewModel)
-                            .padding(.horizontal, 12)
-                            .padding(.bottom, 12)
-                    }
-                    .frame(width: 560, height: 460)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(16)
+                    })
+                    .environment(viewModel)
+                    .frame(width: 620, height: 480)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                    )
                     .shadow(radius: 20)
                     .transition(.scale(scale: 0.95).combined(with: .opacity))
                 }
@@ -293,8 +276,15 @@ struct PlatformDetailView: View {
         let rooms = viewModel.roomListCache[cacheKey] ?? []
 
         if viewModel.isLoadingRooms && rooms.isEmpty {
-            ProgressView("加载直播间...")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView {
+                LiveRoomSkeletonGrid(
+                    horizontalSpacing: 16,
+                    verticalSpacing: 16,
+                    horizontalPadding: 16
+                )
+                .padding(.vertical, 16)
+            }
+            .shimmering()
         } else if let error = viewModel.roomError, rooms.isEmpty {
             ErrorView(
                 title: error.isAuthRequired ? authErrorTitle : "加载失败",

@@ -19,9 +19,32 @@ struct FavoriteMainView: View {
     @State var second = 0
     @State var firstLoad = true
     
+    /// 顶部「正在同步收藏…」提示条。tvOS 无导航栏,放在页面顶部,非阻塞。
+    private var syncBanner: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+            Text("正在同步收藏…")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(Capsule().fill(.thinMaterial))
+    }
+
     var body: some View {
 
         VStack {
+            if appViewModel.favoriteViewModel.isCloudSyncing {
+                HStack {
+                    syncBanner
+                    Spacer()
+                }
+                .padding(.leading, 50)
+                .padding(.top, 20)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             // 本地优先(已迁到 Core 模型):有本地收藏、或非真错误时都展示内容(空/列表由内部分支处理)。
             // 仅「真 iCloud 错误且本地无数据」才整页报错;cloudKitReady=false 在纯本地/未就绪时仍应显示本地收藏。
             if !appViewModel.favoriteViewModel.cloudReturnError || !appViewModel.favoriteViewModel.roomList.isEmpty {
@@ -135,6 +158,7 @@ struct FavoriteMainView: View {
                 )
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: appViewModel.favoriteViewModel.isCloudSyncing)
         .overlay {
             if appViewModel.favoriteViewModel.roomList.count > 0 {
                 VStack {

@@ -22,14 +22,7 @@ struct DanmakuSettingsPanel: View {
 
                 // 关闭按钮在左边
                 HStack {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
+                    PanelCloseButton { dismiss() }
                     Spacer()
                 }
             }

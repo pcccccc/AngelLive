@@ -1,5 +1,41 @@
 import SwiftUI
 
+/// 弹窗/面板统一的关闭按钮:小圆底 `xmark`,放在标题栏左侧。
+/// 所有弹窗共用此组件,避免样式各自漂移。
+struct PanelCloseButton: View {
+    let action: () -> Void
+    /// 是否绑定 Esc 快捷键关闭(自带 dismiss 的 sheet/popover 无需开启)。
+    var closesOnEscape: Bool = false
+
+    init(closesOnEscape: Bool = false, action: @escaping () -> Void) {
+        self.closesOnEscape = closesOnEscape
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .background(Color.primary.opacity(0.06), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .modifier(EscapeShortcut(enabled: closesOnEscape))
+    }
+
+    private struct EscapeShortcut: ViewModifier {
+        let enabled: Bool
+        func body(content: Content) -> some View {
+            if enabled {
+                content.keyboardShortcut(.escape, modifiers: [])
+            } else {
+                content
+            }
+        }
+    }
+}
+
 struct PanelIconTile<Content: View>: View {
     let content: Content
 

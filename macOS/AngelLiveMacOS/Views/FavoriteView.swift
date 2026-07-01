@@ -45,7 +45,7 @@ struct FavoriteView: View {
         GeometryReader { geometry in
             ScrollView {
                 if viewModel.isLoading {
-                    skeletonView(geometry: geometry)
+                    skeletonView()
                 } else if viewModel.cloudReturnError {
                     // 仅真错误(未登录/拉取失败)显示同步不可用。关同步时 cloudKitReady 也为 false,
                     // 但那是正常的纯本地态,应继续展示本地收藏(与 iOS 一致)。
@@ -65,6 +65,16 @@ struct FavoriteView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if viewModel.isCloudSyncing {
+                syncBanner
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isCloudSyncing)
         .navigationTitle("收藏")
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
@@ -204,10 +214,27 @@ struct FavoriteView: View {
         }
     }
 
+    /// 顶部「正在同步收藏…」提示条。非阻塞,同步进行中展示,完成后自动隐藏。
+    private var syncBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text("正在同步收藏…")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule().fill(.quaternary.opacity(0.5))
+        )
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
     @ViewBuilder
-    private func skeletonView(geometry: GeometryProxy) -> some View {
+    private func skeletonView() -> some View {
         LazyVStack(spacing: 20) {
-            skeletonLiveSection(geometry: geometry)
+            skeletonLiveSection()
         }
         .padding(.top)
         .padding(.bottom, 80)
@@ -215,31 +242,14 @@ struct FavoriteView: View {
     }
 
     @ViewBuilder
-    private func skeletonLiveSection(geometry: GeometryProxy) -> some View {
-        let columns = 3
-        let horizontalSpacing: CGFloat = 15
-        let verticalSpacing: CGFloat = 24
-        let horizontalPadding: CGFloat = 20
-        let screenWidth = geometry.size.width
-
-        let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
-        let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
-
+    private func skeletonLiveSection() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             RoundedRectangle(cornerRadius: 4)
                 .fill(Color.gray.opacity(0.3))
                 .frame(width: 120, height: 24)
-                .padding(.horizontal)
+                .padding(.horizontal, 20)
 
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
-                spacing: verticalSpacing
-            ) {
-                ForEach(0..<columns, id: \.self) { _ in
-                    LiveRoomCardSkeleton(width: cardWidth)
-                }
-            }
-            .padding(.horizontal, horizontalPadding)
+            LiveRoomSkeletonGrid(count: 8)
         }
     }
 

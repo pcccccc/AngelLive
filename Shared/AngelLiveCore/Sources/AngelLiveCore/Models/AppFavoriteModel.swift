@@ -11,7 +11,7 @@ import CloudKit
 import Observation
 
 /// iCloud同步状态
-public enum CloudSyncStatus {
+public enum CloudSyncStatus: Equatable {
     case syncing      // 正在同步
     case success      // 同步成功
     case error        // 同步错误
@@ -51,6 +51,10 @@ public final class AppFavoriteModel {
             return cloudKitStateString
         }
     }
+
+    /// 收藏页顶部「正在同步收藏…」提示条是否展示:同步进行中即展示,完成/失败后自动隐藏。
+    /// 非阻塞提示,与是否有本地缓存无关——本地收藏照常可交互。
+    public var isCloudSyncing: Bool { syncStatus == .syncing }
 
     private var isSyncing: Bool = false  // 添加同步状态标记
 

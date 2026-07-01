@@ -414,7 +414,6 @@ private struct SidebarWidthEnforcer: NSViewRepresentable {
             guard let window = self.window ?? observedWindow else { return }
             // 关掉 titlebar 下方分隔线(NSContainerConcentricGlassEffectView 的边缘高光治不了,接受它)
             window.titlebarSeparatorStyle = .none
-            window.toolbar?.showsBaselineSeparator = false
 
             // 1) 优先尝试通过 NSSplitViewController 配置
             if let svc = findSplitVC(in: window),
