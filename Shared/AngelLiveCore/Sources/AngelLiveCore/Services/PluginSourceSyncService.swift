@@ -81,7 +81,7 @@ public final class PluginSourceSyncService {
         record[CloudPluginSourceFields.updatedAtField] = Date() as NSDate
 
         do {
-            try await database.save(record)
+            _ = try await database.save(record)
             Logger.info("已同步 \(sourceURLs.count) 个插件源 URL 到 CloudKit", category: .plugin)
             return .success
         } catch {

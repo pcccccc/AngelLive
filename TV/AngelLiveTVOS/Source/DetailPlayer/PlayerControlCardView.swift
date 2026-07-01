@@ -128,20 +128,19 @@ struct PlayerControlCardView: View {
                 .animation(.easeInOut(duration: 0.25), value: topState == .list(playControlCardViewModel.cardIndex))
 //                                .focused($state, equals: .listContent(i))
         }
-        .onChange(of: topState) { oldValue, newValue in
-            switch newValue {
-            case .list(_):
-                    if playControlCardViewModel.liveModel.liveState == nil || playControlCardViewModel.liveModel.liveState == LiveState.unknow.rawValue || playControlCardViewModel.liveModel.liveState == "" {
-                        playControlCardViewModel.liveStateLoading = true
-                        Task {
-                            let resp = try await ApiManager.fetchLastestLiveInfo(liveModel: playControlCardViewModel.liveModel)
-                            playControlCardViewModel.liveModel.liveState = resp.liveState
-                            playControlCardViewModel.liveStateLoading = false
-                        }
-                    }
-                default:
-                    break
+        .task(id: topState) {
+            guard case .list = topState else { return }
+            guard playControlCardViewModel.liveModel.liveState == nil
+                || playControlCardViewModel.liveModel.liveState == LiveState.unknow.rawValue
+                || playControlCardViewModel.liveModel.liveState == "" else { return }
+            playControlCardViewModel.liveStateLoading = true
+            do {
+                let resp = try await ApiManager.fetchLastestLiveInfo(liveModel: playControlCardViewModel.liveModel)
+                playControlCardViewModel.liveModel.liveState = resp.liveState
+            } catch {
+                print("获取最新直播状态失败:\(error)")
             }
+            playControlCardViewModel.liveStateLoading = false
         }
         
     }

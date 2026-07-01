@@ -74,7 +74,7 @@ class LiveViewModel {
     var favoriteRoomList: [LiveModel] = []
     var currentRoom: LiveModel? {
          didSet {
-             currentRoomIsFavorited = (appViewModel.favoriteViewModel.roomList ?? []).contains { $0.roomId == currentRoom!.roomId }
+             currentRoomIsFavorited = appViewModel.favoriteViewModel.roomList.contains { $0.roomId == currentRoom?.roomId }
          }
      }
     
@@ -198,16 +198,20 @@ class LiveViewModel {
     private func fetchLiveRooms(index: Int) {
         Task {
             do {
-                var newRooms: [LiveModel] = []
+                let newRooms: [LiveModel]
                 if index == -1 {
                     if let subListCategory = self.categories.first?.subList.first {
                         let parentBiz = self.categories.first?.biz
                         newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
+                    } else {
+                        newRooms = []
                     }
                 } else {
                     if let subListCategory = self.selectedMainListCategory?.subList[index] {
                         let parentBiz = self.selectedMainListCategory?.biz
                         newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
+                    } else {
+                        newRooms = []
                     }
                 }
 

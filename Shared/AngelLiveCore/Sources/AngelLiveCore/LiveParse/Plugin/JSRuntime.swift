@@ -450,9 +450,7 @@ private extension JSRuntime {
             let httpStartTime = CFAbsoluteTimeGetCurrent()
 
             let task = session.dataTask(with: request) { data, response, error in
-                queue.async { [weak context] in
-                    guard let context else { return }
-
+                queue.async {
                     let httpElapsed = CFAbsoluteTimeGetCurrent() - httpStartTime
 
                     if let error {

@@ -6,22 +6,22 @@
 //
 
 import UIKit
+import os
 
 class Sentinel {
-    
-    private var value: Int32 = 0
-    
+
+    // 用 OSAllocatedUnfairLock 保护计数,替代已弃用的 OSAtomicIncrement32;
+    // 同时修正旧实现只自增临时指针、从未写回 value 导致取消检测失效的问题。
+    private let value = OSAllocatedUnfairLock<Int32>(initialState: 0)
+
     public func getValue() -> Int32 {
-        return value
+        return value.withLock { $0 }
     }
-    
+
     public func increase() {
-        let p = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
-        p.pointee = value
-        OSAtomicIncrement32(p)
-        p.deallocate()
+        value.withLock { $0 &+= 1 }
     }
-    
+
 }
 
 public class DanmakuAsyncLayer: CALayer {

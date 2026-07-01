@@ -32,7 +32,7 @@ public final class FavoriteService: NSObject {
         rec.setValue(liveModel.userHeadImg, forKey: CloudFavoriteFields.userHeadImage)
         rec.setValue(liveModel.liveType.rawValue, forKey: CloudFavoriteFields.liveType)
         rec.setValue(liveModel.liveState ?? "", forKey: CloudFavoriteFields.liveState)
-        try await CKContainer(identifier: CloudFavoriteFields.containerIdentifier).privateCloudDatabase.save(rec)
+        _ = try await CKContainer(identifier: CloudFavoriteFields.containerIdentifier).privateCloudDatabase.save(rec)
     }
     
     public static func searchRecord(roomId: String) async throws -> [LiveModel] {

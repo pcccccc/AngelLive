@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import zlib
+import AngelLiveDependencies
 
 extension Data {
     func _4BytesToInt() -> Int {
@@ -26,49 +26,9 @@ extension Data {
     }
     
     static func decompressGzipData(data: Data) -> Data? {
-        let bufferSize = 1024
-        var buffer = [UInt8](repeating: 0, count: bufferSize)
-        var decompressedData = Data()
-        
-        let source = UnsafeMutablePointer<Bytef>(mutating: (data as NSData).bytes.bindMemory(to: Bytef.self, capacity: data.count))
-        let destination = UnsafeMutablePointer<Bytef>(mutating: &buffer)
-        
-        var zStream = z_stream()
-        zStream.next_in = source
-        zStream.avail_in = UInt32(data.count)
-        zStream.next_out = destination
-        zStream.avail_out = UInt32(bufferSize)
-        
-        let result = inflateInit2_(&zStream, MAX_WBITS + 32, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
-        if result != Z_OK {
-            return nil
-        }
-        
-        while true {
-            let inflateResult = inflate(&zStream, Z_SYNC_FLUSH)
-            if inflateResult == Z_STREAM_END {
-                break
-            }
-            
-            if inflateResult != Z_OK {
-                inflateEnd(&zStream)
-                return nil
-            }
-            
-            if zStream.avail_out == 0 {
-                decompressedData.append(buffer, count: bufferSize)
-                zStream.next_out = destination
-                zStream.avail_out = UInt32(bufferSize)
-            }
-        }
-        
-        inflateEnd(&zStream)
-        
-        if zStream.avail_out < bufferSize {
-            decompressedData.append(buffer, count: bufferSize - Int(zStream.avail_out))
-        }
-        
-        return decompressedData
+        // 改用 GzipSwift(经 AngelLiveDependencies 转出)解压,替代手写 zlib 里
+        // 用 &buffer / 临时 NSData 取指针导致的悬垂指针写法。
+        return try? data.gunzipped()
     }
 
 }

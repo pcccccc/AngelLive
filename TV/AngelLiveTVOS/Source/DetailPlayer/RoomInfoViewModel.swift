@@ -468,12 +468,16 @@ final class RoomInfoViewModel {
                 liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { timer in
                     let timerHandle = LiveFlagTimerHandle(timer: timer)
                     Task {
-                        let state = try await ApiManager.getCurrentRoomLiveState(roomId: roomId, userId: userId, liveType: liveType)
-                        guard state == .close || state == .unknow else { return }
-                        await MainActor.run {
-                            NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
+                        do {
+                            let state = try await ApiManager.getCurrentRoomLiveState(roomId: roomId, userId: userId, liveType: liveType)
+                            guard state == .close || state == .unknow else { return }
+                            await MainActor.run {
+                                NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
+                            }
+                            await timerHandle.invalidate()
+                        } catch {
+                            print("检查直播状态失败:\(error)")
                         }
-                        await timerHandle.invalidate()
                     }
                 }
             }

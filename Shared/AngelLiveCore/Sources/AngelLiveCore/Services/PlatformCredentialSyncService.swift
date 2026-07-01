@@ -207,7 +207,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
                 record[CloudCookieFields.platformIdField] = pluginId as NSString
                 record[CloudCookieFields.updatedAtField] = Date() as NSDate
                 do {
-                    try await database.save(record)
+                    _ = try await database.save(record)
                 } catch {
                     let syncError = SyncError.from(error)
                     failures.append(syncError)
@@ -849,7 +849,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
                 newRecord[CloudCookieFields.cookieDataField] = data as NSData
                 newRecord[CloudCookieFields.platformIdField] = pluginId as NSString
                 newRecord[CloudCookieFields.updatedAtField] = legacyRecord[CloudCookieFields.updatedAtField]
-                try await database.save(newRecord)
+                _ = try await database.save(newRecord)
             }
 
             // 删除旧记录

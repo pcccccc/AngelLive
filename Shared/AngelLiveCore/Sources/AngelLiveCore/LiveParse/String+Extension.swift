@@ -6,17 +6,13 @@
 //
 
 import Foundation
-import CommonCrypto
+import CryptoKit
 
 extension String {
     var md5: String {
-        let data = Data(self.utf8)
-        let hash = data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) -> [UInt8] in
-            var hash = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-            CC_MD5(bytes.baseAddress, CC_LONG(data.count), &hash)
-            return hash
-        }
-        return hash.map { String(format: "%02x", $0) }.joined()
+        // 保留 MD5 算法以兼容既有接口签名,改用 CryptoKit 的 Insecure.MD5 消除 CC_MD5 弃用警告。
+        let digest = Insecure.MD5.hash(data: Data(self.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
     
     static func stripHTML(from input: String) -> String {
@@ -72,6 +68,5 @@ extension String {
         } catch {
             return string
         }
-        return string
     }
 }
