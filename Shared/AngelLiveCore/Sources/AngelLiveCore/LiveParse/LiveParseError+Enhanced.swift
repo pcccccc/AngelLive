@@ -68,7 +68,7 @@ public struct NetworkRequestDetail {
 
     /// 格式化的请求详情字符串，用于日志输出
     public var formattedString: String {
-        var result = """
+        let result = """
 
         ==================== 请求详情 ====================
         CURL 命令（可直接复制使用）:
