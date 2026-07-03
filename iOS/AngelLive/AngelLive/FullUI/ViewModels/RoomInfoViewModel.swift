@@ -797,6 +797,18 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         engineState = engine   // 发布真实状态供 UI 判缓冲/加载(取代冻结的 playerCoordinator.state)
         // 状态变化喂给协调器:起播成功/抖动/终态的判定与熔断预算全在状态机内。
         recoveryCoordinator.stateChanged(engine)
+
+        // 播放器就绪后重设一次系统媒体中心(Now Playing)信息。
+        // NowPlayingManager.update 是媒体中心内容的唯一来源(房间标题/主播/平台/封面);
+        // 而 KSComplexPlayerLayer 只会清空它:set(resource) 置 nil(VideoPlayerView:80)、
+        // .initialized 置 nil(KSPlayerLayer:656)。这些清空与 DetailPlayerView.onAppear 里同步执行的
+        // update 抢同一个全局字典,而清空多发生在异步起播链路(loadPlayURL→resource→init)之后,
+        // 会把 onAppear 写的信息抹掉 → 媒体中心有概率变空。
+        // readyToPlay 是所有清空动作之后的稳定时点(此后至下次重建不再清空),在此补写一次即可确保
+        // 我们的信息最后落地;恢复协调器每次重建也会重新走到 readyToPlay,自动补回被清空的信息。
+        if state == .readyToPlay {
+            NowPlayingManager.update(room: currentRoom, isPlaying: layer.player.isPlaying)
+        }
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, currentTime: TimeInterval, totalTime: TimeInterval) {
