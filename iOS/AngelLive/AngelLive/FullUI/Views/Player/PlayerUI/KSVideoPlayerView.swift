@@ -156,8 +156,18 @@ public struct KSVideoPlayerView: View {
                 }
             }
             // iOS: 要放在最上面的view。这样才不会被controllerView盖住
-            .onHover { new in
-                model.config.isMaskShow = new
+            .onHover { hovering in
+                #if os(macOS)
+                model.config.isMaskShow = hovering
+                #else
+                // iPad 接鼠标:hover 只负责"唤出"控制层,隐藏交给自动隐藏定时器。
+                // 若像 macOS 那样用 leave 事件强制置 false,指针在视频层与控制子层之间穿梭时
+                // 会反复触发 enter/leave → isMaskShow 快速 true/false 翻转 → 控制层闪烁。
+                // 已 show 时再置 true 会被 isMaskShow 的 didSet(oldValue 判等)拦掉,不会重复触发。
+                if hovering {
+                    model.config.isMaskShow = true
+                }
+                #endif
             }
             // 父层传入的新 URL 时，复用同一个模型，只更新 URL，避免重复创建播放器
             .onChange(of: providedURL) { newValue in
