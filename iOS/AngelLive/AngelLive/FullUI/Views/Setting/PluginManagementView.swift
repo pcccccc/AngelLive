@@ -149,30 +149,91 @@ struct PluginManagementView: View {
         if !pluginSourceManager.sourceURLs.isEmpty {
             Section {
                 ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
-                    HStack {
-                        Text(url)
-                            .font(.caption)
-                            .foregroundStyle(AppConstants.Colors.primaryText)
-                            .lineLimit(1)
-
-                        Spacer()
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            Task {
-                                await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
-                                await pluginAvailability.refresh()
-                                await pluginSourceManager.fetchAllSourceIndexes()
-                                await pluginSourceManager.refreshAvailableUpdates()
-                            }
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
-                    }
+                    sourceRow(url)
                 }
             } header: {
                 Text("已添加的订阅源")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func sourceRow(_ url: String) -> some View {
+        let health = pluginSourceManager.health(for: url)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: sourceHealthIcon(health))
+                    .font(.caption)
+                    .foregroundStyle(sourceHealthTint(health))
+
+                Text(url)
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.primaryText)
+                    .lineLimit(1)
+
+                Spacer()
+
+                sourceHealthBadge(health)
+            }
+
+            if case .failed(let reason) = health {
+                Text(reason)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
+        }
+        .swipeActions(edge: .leading) {
+            if health.isFailed {
+                Button {
+                    Task { await pluginSourceManager.refreshSource(url) }
+                } label: {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
+                .tint(.orange)
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                Task {
+                    await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
+                    await pluginAvailability.refresh()
+                    await pluginSourceManager.fetchAllSourceIndexes()
+                    await pluginSourceManager.refreshAvailableUpdates()
+                }
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+
+    private func sourceHealthIcon(_ health: PluginSourceHealth) -> String {
+        health.isFailed ? "exclamationmark.triangle.fill" : "link"
+    }
+
+    private func sourceHealthTint(_ health: PluginSourceHealth) -> Color {
+        switch health {
+        case .failed: return .orange
+        case .healthy: return .green
+        case .checking, .unknown: return AppConstants.Colors.secondaryText
+        }
+    }
+
+    @ViewBuilder
+    private func sourceHealthBadge(_ health: PluginSourceHealth) -> some View {
+        switch health {
+        case .unknown:
+            EmptyView()
+        case .checking:
+            ProgressView().controlSize(.mini)
+        case .healthy(let count):
+            Text("\(count) 个插件")
+                .font(.caption2)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
+        case .failed:
+            Text("异常")
+                .font(.caption2)
+                .foregroundStyle(.orange)
         }
     }
 
