@@ -101,6 +101,7 @@ final class RoomInfoViewModel {
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
+    let danmuShootScheduler = DanmakuShootScheduler() // §6.2 去突发:把批量弹幕摊开逐条发射
     var danmuSettings = DanmuSettingModel() // 弹幕设置模型
     private var shouldReconnectDanmuOnActive = false
     var supportsDanmu: Bool {
@@ -618,6 +619,9 @@ final class RoomInfoViewModel {
         httpPollingConnection?.disconnect()
         httpPollingConnection = nil
 
+        // §6.2 清空去突发缓冲,避免陈旧弹幕在切房/断流后继续飞出
+        danmuShootScheduler.reset()
+
         danmuServerIsConnected = false
         danmuServerIsLoading = false
     }
@@ -729,19 +733,18 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             // 将弹幕消息添加到聊天列表（底部气泡）
             addDanmuMessage(text: text, userName: "")
             
-            // 发射到屏幕弹幕（飞过效果）
+            // 发射到屏幕弹幕（飞过效果）— §6.2 经去突发调度器摊开发射
             if danmuSettings.showDanmu {
-                danmuCoordinator.shoot(
-                    text: text,
-                    showColorDanmu: danmuSettings.showColorDanmu,
-                    color: color,
-                    alpha: danmuSettings.danmuAlpha,
-                    font: CGFloat(danmuSettings.danmuFontSize)
-                )
+                let showColorDanmu = danmuSettings.showColorDanmu
+                let alpha = danmuSettings.danmuAlpha
+                let font = CGFloat(danmuSettings.danmuFontSize)
+                danmuShootScheduler.enqueue { [danmuCoordinator] in
+                    danmuCoordinator.shoot(text: text, showColorDanmu: showColorDanmu, color: color, alpha: alpha, font: font)
+                }
             }
         }
     }
-    
+
     func webSocketDidConnect() {
         Task { @MainActor in
             danmuServerIsConnected = true
@@ -775,15 +778,14 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             // 将弹幕消息添加到聊天列表（底部气泡）
             addDanmuMessage(text: text, userName: nickname)
 
-            // 发射到屏幕弹幕（飞过效果）
+            // 发射到屏幕弹幕（飞过效果）— §6.2 经去突发调度器摊开发射
             if danmuSettings.showDanmu {
-                danmuCoordinator.shoot(
-                    text: text,
-                    showColorDanmu: danmuSettings.showColorDanmu,
-                    color: color,
-                    alpha: danmuSettings.danmuAlpha,
-                    font: CGFloat(danmuSettings.danmuFontSize)
-                )
+                let showColorDanmu = danmuSettings.showColorDanmu
+                let alpha = danmuSettings.danmuAlpha
+                let font = CGFloat(danmuSettings.danmuFontSize)
+                danmuShootScheduler.enqueue { [danmuCoordinator] in
+                    danmuCoordinator.shoot(text: text, showColorDanmu: showColorDanmu, color: color, alpha: alpha, font: font)
+                }
             }
         }
     }

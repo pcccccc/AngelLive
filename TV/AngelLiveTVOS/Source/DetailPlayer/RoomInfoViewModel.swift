@@ -92,6 +92,7 @@ final class RoomInfoViewModel {
     var socketConnection: WebSocketConnection?
     var httpPollingConnection: HTTPPollingDanmakuConnection?  // HTTP 轮询连接
     var danmuCoordinator = DanmuView.Coordinator()
+    let danmuShootScheduler = DanmakuShootScheduler() // §6.2 去突发:把批量弹幕摊开逐条发射
     
     var roomType: LiveRoomListType
     var historyList: [LiveModel]?
@@ -613,6 +614,9 @@ final class RoomInfoViewModel {
         httpPollingConnection?.disconnect()
         httpPollingConnection = nil
 
+        // §6.2 清空去突发缓冲,避免陈旧弹幕在切房/断流后继续飞出
+        Task { @MainActor in danmuShootScheduler.reset() }
+
         danmuServerIsConnected = false
         danmuServerIsLoading = false
     }
@@ -642,7 +646,16 @@ final class RoomInfoViewModel {
 
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidReceiveMessage(text: String, nickname: String, color: UInt32) {
-        danmuCoordinator.shoot(text: text, showColorDanmu: appViewModel.danmuSettingsViewModel.showColorDanmu, color: color, alpha: appViewModel.danmuSettingsViewModel.danmuAlpha, font: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize))
+        // §6.2 经去突发调度器摊开发射(调度器 @MainActor,故包一层 Task)
+        Task { @MainActor in
+            let settings = appViewModel.danmuSettingsViewModel
+            let showColorDanmu = settings.showColorDanmu
+            let alpha = settings.danmuAlpha
+            let font = CGFloat(settings.danmuFontSize)
+            danmuShootScheduler.enqueue { [danmuCoordinator] in
+                danmuCoordinator.shoot(text: text, showColorDanmu: showColorDanmu, color: color, alpha: alpha, font: font)
+            }
+        }
     }
     
     func webSocketDidConnect() {
