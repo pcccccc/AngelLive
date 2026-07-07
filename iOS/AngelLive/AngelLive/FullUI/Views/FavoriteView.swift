@@ -73,12 +73,20 @@ struct FavoriteView: View {
         .navigationBarTitleDisplayMode(.large)
     }
 
-    /// 两件互不相关的事叠在灵动岛下方,均不拦截触摸:
-    /// B — 常驻美化胶囊(一直显示,和同步无关);A — 同步液态动画(仅同步时落下,待机隐藏)。
+    /// 同步提示条,不拦截触摸。按顶部形态分流:
+    /// - 灵动岛:A — 金属球「有丝分裂」液态动画(几何锚在岛上,只对灵动岛成立)。
+    /// - 刘海 / Home 键 / iPad:降级为普通同步胶囊,从安全区顶部下滑(不写死岛坐标)。
+    /// 形态由 DeviceTopSensor 依顶部安全区高度判定,新机型自动通吃,无需机型白名单。
+    @ViewBuilder
     private var syncBannerOverlay: some View {
-        // 先只做同步动画(A);装饰胶囊(IslandDecorPill)暂时隐藏,等 A 确认好了再加回来。
-        IslandSyncBanner(active: viewModel.isCloudSyncing)
-            .allowsHitTesting(false)
+        switch DeviceTopSensor.current {
+        case .dynamicIsland:
+            IslandSyncBanner(active: viewModel.isCloudSyncing)
+                .allowsHitTesting(false)
+        case .notch, .none:
+            PlainSyncBanner(active: viewModel.isCloudSyncing)
+                .allowsHitTesting(false)
+        }
     }
 
     private var playerPresentedBinding: Binding<Bool> {
@@ -166,6 +174,55 @@ struct IslandSyncBanner: View {
             ? .bouncy(duration: 0.6, extraBounce: 0.22)
             : .smooth(duration: 0.4)
         withAnimation(anim) { drop = value }
+    }
+}
+
+// MARK: - A':非灵动岛机型的降级同步胶囊(刘海 / Home 键 / iPad)
+
+/// 金属球「从岛里长出」的几何只对灵动岛成立;其余机型改用普通胶囊,从安全区顶部下滑。
+/// 视觉沿用金属球版(深色渐变 + 旋转图标 + 文案),不写死任何岛/刘海坐标。
+struct PlainSyncBanner: View {
+    let active: Bool
+
+    @State private var spin = false
+
+    var body: some View {
+        Group {
+            if active {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .bold))
+                        .rotationEffect(.degrees(spin ? 360 : 0))
+                    Text("正在同步收藏")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(white: 0.17), Color(white: 0.03)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
+                        )
+                )
+                .shadow(color: .black.opacity(0.28), radius: 10, y: 5)
+                .padding(.top, 8)   // 落在安全区顶部下方一点(状态栏/导航栏之下)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .onAppear {
+                    withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+                        spin = true
+                    }
+                }
+            }
+        }
     }
 }
 

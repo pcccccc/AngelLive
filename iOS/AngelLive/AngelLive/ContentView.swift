@@ -58,6 +58,23 @@ struct ContentView: View {
         return "配置"
     }
 
+    /// 收藏 tab 图标用的「有效同步状态」——没有任何内容时不转 loading。
+    /// - 完整 UI(有插件):看收藏房间列表;为空且正在同步 → 降为静态,不再旋转。
+    ///   (AppFavoriteModel.syncStatus 默认即为 .syncing,壳 UI 下它永不落地,会一直转。)
+    /// - 壳 UI(无插件):AppFavoriteModel 不参与,改看书签服务;无书签恒为静态。
+    /// 仅抑制「旋转(.syncing)」;错误 / 未登录状态照常透出,便于用户判断为何为空。
+    private var favoriteTabSyncStatus: CloudSyncStatus {
+        if pluginAvailability.hasAvailablePlugins {
+            if favoriteViewModel.roomList.isEmpty, favoriteViewModel.syncStatus == .syncing {
+                return .success
+            }
+            return favoriteViewModel.syncStatus
+        } else {
+            guard !bookmarkService.bookmarks.isEmpty else { return .success }
+            return bookmarkService.isLoading ? .syncing : .success
+        }
+    }
+
     var body: some View {
         @Bindable var manager = welcomeManager
 
@@ -67,14 +84,14 @@ struct ContentView: View {
                     iPadTabView
                 } else {
                     iPhoneTabView
-                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteViewModel.syncStatus))
+                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteTabSyncStatus))
                 }
             } else {
                 if AppConstants.Device.isIPad {
                     iOS17iPadTabView
                 } else {
                     iOS17iPhoneTabView
-                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteViewModel.syncStatus))
+                        .background(FavoriteTabSymbolAnimator(syncStatus: favoriteTabSyncStatus))
                 }
             }
         }
@@ -269,7 +286,7 @@ struct ContentView: View {
                 Label {
                     Text("收藏")
                 } icon: {
-                    CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                    CloudSyncTabIcon(syncStatus: favoriteTabSyncStatus)
                 }
             }
 
@@ -408,7 +425,7 @@ struct ContentView: View {
                     Label {
                         Text("收藏")
                     } icon: {
-                        CloudSyncTabIcon(syncStatus: favoriteViewModel.syncStatus)
+                        CloudSyncTabIcon(syncStatus: favoriteTabSyncStatus)
                     }
                 }
                 .tag(TabSelection.favorite)
