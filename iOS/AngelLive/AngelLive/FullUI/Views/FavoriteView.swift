@@ -260,23 +260,50 @@ private struct MetaballBanner: View, Animatable {
         let base = anchorHeight + (pillHeight - anchorHeight) * fall
         return max(anchorHeight, base * (1 + 0.34 * stretch - 1.7 * over))
     }
-    private var headOpacity: Double { Double(min(1, max(0, (fall - 0.12) / 0.32))) }
     private var contentOpacity: Double { Double(min(1, max(0, (fall - 0.6) / 0.32))) }
 
     @State private var spin = false
 
     var body: some View {
-        ZStack(alignment: .top) {
+        GeometryReader { geo in
+            let h = max(1, geo.size.height)
+            let cx = geo.size.width / 2
+            ZStack(alignment: .top) {
+                liquidBody(height: h, centerX: cx)
+                content
+            }
+        }
+    }
+
+    /// 融球本体:整块深色渐变被「岛内锚点 + 下落胶囊」的融球剪影裁出。
+    /// 于是脖子拉丝、有丝分裂、落地压扁全程都带真实渐变色;顶部渐变收黑,
+    /// 贴着灵动岛那截与岛无缝融为一体(不再是盖在黑剪影上的纯色胶囊)。
+    private func liquidBody(height h: CGFloat, centerX cx: CGFloat) -> some View {
+        let topY = islandCenterY - anchorHeight / 2
+        let botY = pillCenterY + pillH / 2
+        let span = max(1, botY - topY)
+        // 胶囊顶在整段融球里的纵向占比 → 渐变提亮点随下落逐帧上移,拉丝段自然由黑转亮。
+        let pillTopFrac = min(0.92, max(0.06, (pillCenterY - pillH / 2 - topY) / span))
+        return LinearGradient(
+            stops: [
+                .init(color: Color(white: 0.0), location: 0),            // 岛内:纯黑,与灵动岛融合
+                .init(color: Color(white: 0.17), location: pillTopFrac), // 胶囊顶:提亮
+                .init(color: Color(white: 0.03), location: 1)            // 胶囊底:收深
+            ],
+            startPoint: UnitPoint(x: 0.5, y: topY / h),
+            endPoint: UnitPoint(x: 0.5, y: botY / h)
+        )
+        .mask {
             Canvas(renderer: { ctx, size in
-                ctx.addFilter(.alphaThreshold(min: 0.5, color: .black))
+                ctx.addFilter(.alphaThreshold(min: 0.5, color: .white))
                 ctx.addFilter(.blur(radius: 8))
                 ctx.drawLayer { layer in
-                    let cx = size.width / 2
+                    let mx = size.width / 2
                     if let anchor = layer.resolveSymbol(id: 0) {
-                        layer.draw(anchor, at: CGPoint(x: cx, y: islandCenterY))
+                        layer.draw(anchor, at: CGPoint(x: mx, y: islandCenterY))
                     }
                     if let pill = layer.resolveSymbol(id: 1) {
-                        layer.draw(pill, at: CGPoint(x: cx, y: pillCenterY))
+                        layer.draw(pill, at: CGPoint(x: mx, y: pillCenterY))
                     }
                 }
             }, symbols: {
@@ -287,41 +314,26 @@ private struct MetaballBanner: View, Animatable {
                     .frame(width: pillW, height: pillH)
                     .tag(1)
             })
+        }
+        .shadow(color: .black.opacity(0.28), radius: 10, y: 5)
+    }
 
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(white: 0.17), Color(white: 0.03)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(.white.opacity(0.16), lineWidth: 0.5)
-                )
-                .frame(width: pillW, height: pillH)
-                .frame(maxWidth: .infinity)
-                .offset(y: pillCenterY - pillH / 2)
-                .shadow(color: .black.opacity(0.28), radius: 10, y: 5)
-                .opacity(headOpacity)
-
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 13, weight: .bold))
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                Text("正在同步收藏")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .frame(width: pillWidth, height: pillHeight)
-            .frame(maxWidth: .infinity)
-            .offset(y: pillCenterY - pillHeight / 2)
-            .opacity(contentOpacity)
-            .onAppear {
-                withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-                    spin = true
-                }
+    private var content: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 13, weight: .bold))
+                .rotationEffect(.degrees(spin ? 360 : 0))
+            Text("正在同步收藏")
+                .font(.subheadline.weight(.semibold))
+        }
+        .foregroundStyle(.white)
+        .frame(width: pillWidth, height: pillHeight)
+        .frame(maxWidth: .infinity)
+        .offset(y: pillCenterY - pillHeight / 2)
+        .opacity(contentOpacity)
+        .onAppear {
+            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+                spin = true
             }
         }
     }
