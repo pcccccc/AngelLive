@@ -20,11 +20,11 @@ private enum CloudStreamBookmarkFields {
     static let containerIdentifier = "iCloud.icloud.dev.igod.simplelive"
 }
 
-/// 网页链接书签服务。视图模型:所有 @Observable 状态(bookmarks/isLoading/syncError)
-/// 必须在主线程变更 —— 否则后台线程改状态会经 SwiftUI 观察驱动 UIKit 在非主线程更新,
-/// 触发 libdispatch 主队列断言崩溃。故类级 @MainActor;CloudKit I/O 标 nonisolated,
-/// 让网络与 CKContainer 创建留在主线程外。
-@MainActor
+/// 网页链接书签服务(视图模型)。@Observable 状态(bookmarks/isLoading/syncError)必须在
+/// 主线程变更 —— 否则后台线程改状态会经 SwiftUI 观察驱动 UIKit 在非主线程更新,触发
+/// libdispatch 主队列断言崩溃。做法与 AppFavoriteModel 一致:类不加 @MainActor(保持可在
+/// 任意上下文构造,如 tvOS AppState 的存储属性),改在**会改状态的方法**上标 @MainActor;
+/// CloudKit I/O 为普通 async,由 @MainActor 方法 await,自然运行在主线程外。
 @Observable
 public final class StreamBookmarkService {
 
@@ -57,6 +57,7 @@ public final class StreamBookmarkService {
 
     // MARK: - CRUD 操作
 
+    @MainActor
     public func add(title: String, url: String) async {
         let bookmark = StreamBookmark(title: title, url: url)
         bookmarks.insert(bookmark, at: 0)
@@ -71,6 +72,7 @@ public final class StreamBookmarkService {
         }
     }
 
+    @MainActor
     public func remove(_ bookmark: StreamBookmark) async {
         bookmarks.removeAll { $0.id == bookmark.id }
         saveToCache()
@@ -83,6 +85,7 @@ public final class StreamBookmarkService {
         }
     }
 
+    @MainActor
     public func update(_ bookmark: StreamBookmark) async {
         if let index = bookmarks.firstIndex(where: { $0.id == bookmark.id }) {
             bookmarks[index] = bookmark
@@ -97,6 +100,7 @@ public final class StreamBookmarkService {
         }
     }
 
+    @MainActor
     public func updateLastPlayed(_ bookmark: StreamBookmark) async {
         var updated = bookmark
         updated.lastPlayedAt = Date()
@@ -104,6 +108,7 @@ public final class StreamBookmarkService {
     }
 
     /// 从 CloudKit 同步到本地
+    @MainActor
     public func syncFromCloud() async {
         isLoading = true
         defer { isLoading = false }
@@ -120,11 +125,11 @@ public final class StreamBookmarkService {
 
     // MARK: - CloudKit 操作
 
-    nonisolated private var database: CKDatabase {
+    private var database: CKDatabase {
         CKContainer(identifier: CloudStreamBookmarkFields.containerIdentifier).privateCloudDatabase
     }
 
-    nonisolated private func saveToCloud(_ bookmark: StreamBookmark) async throws {
+    private func saveToCloud(_ bookmark: StreamBookmark) async throws {
         let record = CKRecord(recordType: CloudStreamBookmarkFields.recordType)
         record.setValue(bookmark.id, forKey: CloudStreamBookmarkFields.bookmarkId)
         record.setValue(bookmark.title, forKey: CloudStreamBookmarkFields.title)
@@ -136,7 +141,7 @@ public final class StreamBookmarkService {
         _ = try await database.save(record)
     }
 
-    nonisolated private func deleteFromCloud(_ bookmark: StreamBookmark) async throws {
+    private func deleteFromCloud(_ bookmark: StreamBookmark) async throws {
         let predicate = NSPredicate(format: "%K = %@", CloudStreamBookmarkFields.bookmarkId, bookmark.id)
         let query = CKQuery(recordType: CloudStreamBookmarkFields.recordType, predicate: predicate)
         let results = try await database.records(matching: query)
@@ -145,13 +150,13 @@ public final class StreamBookmarkService {
         }
     }
 
-    nonisolated private func updateInCloud(_ bookmark: StreamBookmark) async throws {
+    private func updateInCloud(_ bookmark: StreamBookmark) async throws {
         // 先删除旧记录，再保存新记录
         try await deleteFromCloud(bookmark)
         try await saveToCloud(bookmark)
     }
 
-    nonisolated private func fetchAllFromCloud() async throws -> [StreamBookmark] {
+    private func fetchAllFromCloud() async throws -> [StreamBookmark] {
         let query = CKQuery(recordType: CloudStreamBookmarkFields.recordType, predicate: NSPredicate(value: true))
         let results = try await database.records(matching: query, resultsLimit: 99999)
 
