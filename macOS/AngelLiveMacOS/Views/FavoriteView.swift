@@ -320,7 +320,7 @@ struct FavoriteView: View {
             ],
             spacing: verticalSpacing
         ) {
-            ForEach(roomList, id: \.roomId) { room in
+            ForEach(roomList, id: \.id) { room in
                 LiveRoomCardButton(room: room) {
                     LiveRoomCard(room: room, showsCoverBadge: true)
                 }

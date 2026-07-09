@@ -73,6 +73,7 @@ public final class AppFavoriteModel {
     // MARK: - Phase② 本地存储(本地优先)
 
     /// 把当前 roomList 落本地(fire-and-forget)。
+    @MainActor
     private func persistLocal() {
         let snapshot = roomList
         Task { await FavoriteLocalStore.shared.save(snapshot) }
@@ -101,18 +102,42 @@ public final class AppFavoriteModel {
 
     // MARK: - Phase③ CKSyncEngine 接入
 
-    private var cloudSyncStarted = false
+    /// 收藏同步引擎的一次性预热任务(建 CKContainer + start 引擎)。
+    /// 缓存 Task 而非 bool:所有调用方都 await 同一个,保证返回时 engine 必已就绪
+    /// (调用方随后立即 fetch/enqueue 依赖它),同时天然幂等。
+    private var cloudSyncBootstrap: Task<Void, Never>?
 
     /// 启动收藏同步引擎(幂等):设回调 + 启动 + 首次默认 Zone 迁移。仅在 iCloud 开启时调用。
+    ///
+    /// 建 CKContainer + start 引擎不需要主线程,且冷启动时创建 CKContainer 会争 CloudKit
+    /// 内部的 os_unfair_lock —— 放主线程会把启动关键路径卡死并被系统判为无响应(App Hang)。
+    /// 故:首次触碰 `.shared`(触发 static let 的 dispatch_once → CKContainer 创建)放到
+    /// 后台线程,再 await 其完成。既不阻塞主线程,又保证返回时 engine 已就绪。
     @MainActor
-    private func startCloudSyncIfNeeded() {
-        guard !cloudSyncStarted else { return }
-        cloudSyncStarted = true
+    private func startCloudSyncIfNeeded() async {
+        if let bootstrap = cloudSyncBootstrap {
+            await bootstrap.value
+            return
+        }
+        let bootstrap = Task { @MainActor [weak self] in
+            // .shared 的首次访问必须在后台线程,否则主线程会同步卡在 CKContainer 内部锁上。
+            await Task.detached(priority: .userInitiated) {
+                FavoriteSyncEngine.shared.start()
+            }.value
+            guard let self else { return }
+            self.wireRemoteChange()
+            Task { await FavoriteSyncEngine.shared.migrateFromDefaultZoneIfNeeded() }
+        }
+        cloudSyncBootstrap = bootstrap
+        await bootstrap.value
+    }
+
+    /// 引擎拉到远端变更后回调上层刷新(独立 helper,避免在预热 Task 里嵌套捕获 self)。
+    @MainActor
+    private func wireRemoteChange() {
         FavoriteSyncEngine.shared.onRemoteChange = { [weak self] in
             await self?.reloadFromLocalAfterRemoteChange()
         }
-        FavoriteSyncEngine.shared.start()
-        Task { await FavoriteSyncEngine.shared.migrateFromDefaultZoneIfNeeded() }
     }
 
     /// 引擎拉到远端成员变更后:用本地真相刷新列表(直播状态下次刷新时更新)。
@@ -136,7 +161,7 @@ public final class AppFavoriteModel {
         await FavoriteLocalStore.shared.save(result.rooms)
         // §10.7:关闭 iCloud 同步 = 纯本地,绝不触发任何身份回写。
         guard favoriteICloudSyncEnabled, !result.identityChanges.isEmpty else { return }
-        startCloudSyncIfNeeded()
+        await startCloudSyncIfNeeded()
         for change in result.identityChanges {
             FavoriteSyncEngine.shared.enqueueIdentityMetadataRefresh(oldKey: change.oldKey, room: change.newRoom)
         }
@@ -200,7 +225,7 @@ public final class AppFavoriteModel {
         }
 
         // 启动引擎(幂等)+ 拉一次云端变更进本地真相(CKSyncEngine 负责跨设备成员合并)。
-        startCloudSyncIfNeeded()
+        await startCloudSyncIfNeeded()
         let state = await actor.getState()
         self.cloudKitReady = state.0
         self.cloudKitStateString = state.1
@@ -259,7 +284,7 @@ public final class AppFavoriteModel {
             return
         }
 
-        startCloudSyncIfNeeded()
+        await startCloudSyncIfNeeded()
         let state = await actor.getState()
         self.cloudKitReady = state.0
         self.cloudKitStateString = state.1
@@ -360,7 +385,7 @@ public final class AppFavoriteModel {
 
         // 云端同步(非阻塞):交给 CKSyncEngine 入队,引擎自带退避/续传。
         if favoriteICloudSyncEnabled {
-            startCloudSyncIfNeeded()
+            await startCloudSyncIfNeeded()
             FavoriteSyncEngine.shared.enqueueSave(room)
             lastSyncError = nil
         }
@@ -394,7 +419,7 @@ public final class AppFavoriteModel {
 
         // 云端删除(非阻塞):交给 CKSyncEngine 入队。
         if favoriteICloudSyncEnabled {
-            startCloudSyncIfNeeded()
+            await startCloudSyncIfNeeded()
             FavoriteSyncEngine.shared.enqueueDelete(room)
             lastSyncError = nil
         }
@@ -457,6 +482,7 @@ public final class AppFavoriteModel {
         """
     }
 
+    @MainActor
     public func refreshView() {
         // 触发 Observation 更新
         let theRoomList = roomList

@@ -60,7 +60,7 @@ struct MacHistoryView: View {
             ],
             spacing: verticalSpacing
         ) {
-            ForEach(historyModel.watchList, id: \.roomId) { room in
+            ForEach(historyModel.watchList, id: \.id) { room in
                 HistoryRoomCardButton(room: room) {
                     LiveRoomCard(room: room, showsCoverBadge: true)
                 }

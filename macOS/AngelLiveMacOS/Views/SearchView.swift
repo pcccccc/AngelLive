@@ -117,7 +117,7 @@ struct SearchView: View {
                 ],
                 spacing: verticalSpacing
             ) {
-                ForEach(searchResults, id: \.roomId) { room in
+                ForEach(searchResults, id: \.id) { room in
                     LiveRoomCardButton(room: room) {
                         LiveRoomCard(room: room, showsCoverBadge: true)
                     }

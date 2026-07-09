@@ -170,7 +170,7 @@ struct SearchView: View {
                 columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
                 spacing: verticalSpacing
             ) {
-                ForEach(searchResults, id: \.roomId) { room in
+                ForEach(searchResults, id: \.id) { room in
                     LiveRoomCard(room: room, showsCoverBadge: true)
                         .environment(\.liveRoomNavigationState, navigationState)
                         .environment(\.roomTransitionNamespace, roomTransitionNamespace)

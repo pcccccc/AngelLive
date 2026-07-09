@@ -255,7 +255,7 @@ struct PlatformDetailView: View {
                 columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
                 spacing: verticalSpacing
             ) {
-                ForEach(rooms, id: \.roomId) { room in
+                ForEach(rooms, id: \.id) { room in
                     LiveRoomCard(room: room, liveCheckMode: .none)
                         .frame(width: cardWidth, height: cardHeight)
                         .onAppear {
