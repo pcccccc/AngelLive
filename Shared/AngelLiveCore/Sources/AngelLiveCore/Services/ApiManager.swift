@@ -17,7 +17,12 @@ public enum ApiManager {
         guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return .unknow
         }
-        return try await LiveParseJSPlatformManager.getLiveState(platform: platform, roomId: roomId, userId: userId)
+        // 冷启动后用户立即点历史卡片时,插件 runtime 可能尚未 warm,getLiveState 首拍会
+        // 间歇性假阴性(误判下播)。轻量重试 1 次:退避后 runtime 多半已 ready。
+        // 用户点击场景不宜多重试,故 maxRetries=2(1 次原 + 1 次重试)。
+        return try await withRetry(maxRetries: 2, delayNanoseconds: 400_000_000) {
+            try await LiveParseJSPlatformManager.getLiveState(platform: platform, roomId: roomId, userId: userId)
+        }
     }
 
     public static func fetchRoomList(
@@ -79,14 +84,20 @@ public enum ApiManager {
         }
         Logger.debug("[ApiManager] fetchLastestLiveInfo: 找到平台 pluginId=\(platform.pluginId), 准备调用 getLiveLastestInfo", category: .network)
         do {
-            let result = try await LiveParseJSPlatformManager.getLiveLastestInfo(platform: platform, roomId: liveModel.roomId, userId: liveModel.userId)
+            // 冷启动全量并发刷新收藏状态时,插件 JS runtime / 内部签名缓存尚未 warm,
+            // 个别房间(如小红书 userId 查询)首拍会间歇性抛 NOT_FOUND 等假阴性错误,
+            // 但下拉刷新(整体重跑)又能成功。有限重试:退避后插件已 warm,成功率与
+            // 下拉刷新一致。与 fetchRoomList 同样的 withRetry 模式。
+            let result = try await withRetry(maxRetries: 3, delayNanoseconds: 500_000_000) {
+                try await LiveParseJSPlatformManager.getLiveLastestInfo(platform: platform, roomId: liveModel.roomId, userId: liveModel.userId)
+            }
             Logger.debug("[ApiManager] fetchLastestLiveInfo: getLiveLastestInfo 返回成功 \(liveModel.userName)", category: .network)
             return result
-        }catch {
+        } catch {
             Logger.warning("[ApiManager] fetchLastestLiveInfo: getLiveLastestInfo 返回失败 \(liveModel.userName)：\(error)", category: .network)
             throw error
         }
-        
+
     }
 
     /// 轻量版房间信息获取，用于收藏同步场景
