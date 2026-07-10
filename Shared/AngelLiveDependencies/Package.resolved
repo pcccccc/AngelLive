@@ -1,12 +1,13 @@
 {
+  "originHash" : "171d5ef9c9d56c8cc14687ccf442a658d06cb70dbb9e243b85f7cd21dcac7a9c",
   "pins" : [
     {
       "identity" : "acknowlist",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vtourraine/AcknowList",
       "state" : {
-        "revision" : "2b8be7841af2eefa0e75640d0c1a2312a1ba75be",
-        "version" : "3.4.0"
+        "revision" : "b4bcba19d38e196c3004f3f067ac10e3d4bf62c0",
+        "version" : "3.4.2"
       }
     },
     {
@@ -14,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Alamofire/Alamofire.git",
       "state" : {
-        "revision" : "7595cbcf59809f9977c5f6378500de2ad73b7ddb",
-        "version" : "5.12.0"
+        "revision" : "e938f8c66708e7352fc7e3512647fa54255b267a",
+        "version" : "5.11.2"
       }
     },
     {
@@ -23,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tsolomko/BitByteData",
       "state" : {
-        "revision" : "cdcdc5177ad536cfb11b95c620f926a81014b7fe",
-        "version" : "2.0.4"
+        "revision" : "e1a5443be67daf0833cbb5f4fa3a06a265ca3105",
+        "version" : "2.1.0"
       }
     },
     {
@@ -32,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/bugsnag/bugsnag-cocoa",
       "state" : {
-        "revision" : "f4348c29cc881ce80e4e22a46f29d7f5a18e924b",
-        "version" : "6.34.1"
+        "revision" : "7f57276b282dde418e602a8cc02a6a1e22993aae",
+        "version" : "6.36.0"
       }
     },
     {
@@ -68,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/ColorVector.git",
       "state" : {
-        "revision" : "6da8726bf38d68eb943d0f2139ac2a1fac70e65b",
-        "version" : "1.0.4"
+        "revision" : "0cd0169f1487d7371ee3fd7fe93f1e918fd93d00",
+        "version" : "1.0.5"
       }
     },
     {
@@ -78,7 +79,7 @@
       "location" : "https://github.com/TracyPlayer/FFmpegKit",
       "state" : {
         "branch" : "lgpl",
-        "revision" : "fe1d1853870f1202a6839a14d4c45a4c2819070e"
+        "revision" : "e1a68023157949916412904a1af811774975e4fa"
       }
     },
     {
@@ -91,21 +92,12 @@
       }
     },
     {
-      "identity" : "jxsegmentedview",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pujiaxin33/JXSegmentedView.git",
-      "state" : {
-        "revision" : "fbbf965d7396bd99ac1ce88a80b6c950b85313f6",
-        "version" : "1.4.1"
-      }
-    },
-    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "dd3c422ec3088404d6f7e8c905a8318b3de12d6f",
-        "version" : "8.6.0"
+        "revision" : "c152c1915f60c51e4afa0752656993ee5b3c63db",
+        "version" : "8.8.1"
       }
     },
     {
@@ -113,8 +105,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/yeatse/KingfisherWebP.git",
       "state" : {
-        "revision" : "dccea7e92e77b0aa9ae5955c0d8f78c88ac0a950",
-        "version" : "1.7.0"
+        "revision" : "6939874df4417cc37a05893ac2f27332e6668460",
+        "version" : "1.7.3"
       }
     },
     {
@@ -129,7 +121,7 @@
     {
       "identity" : "libwebp-xcode",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SDWebImage/libwebp-Xcode",
+      "location" : "https://github.com/SDWebImage/libwebp-Xcode.git",
       "state" : {
         "revision" : "0d60654eeefd5d7d2bef3835804892c40225e8b2",
         "version" : "1.5.0"
@@ -140,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/MSDisplayLink.git",
       "state" : {
-        "revision" : "ebf5823cb5fc1326639d9a05bc06d16bbe82989f",
-        "version" : "2.0.8"
+        "revision" : "1ba3e769b734e456317fa7e45321fa7f53eefb67",
+        "version" : "2.1.0"
       }
     },
     {
@@ -158,17 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sanzaru/SimpleToast",
       "state" : {
-        "revision" : "8d49c8c16d218b03c3428a0d1c8fe79f4e2707a6",
-        "version" : "0.11.0"
-      }
-    },
-    {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "5581748cef2bae787496fe6d61139aebe0a451f6",
-        "version" : "2.8.1"
+        "revision" : "4ce5fa4a3412642e15aa09d4b5f3a58a5516cd44",
+        "version" : "0.12.0"
       }
     },
     {
@@ -176,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Lakr233/SpringInterpolation.git",
       "state" : {
-        "revision" : "f9ae95ece5d6b7cdceafd4381f1d5f0f9494e5d2",
-        "version" : "1.3.1"
+        "revision" : "cdb556516daa9b43c16aae9436dd39e19ff930fd",
+        "version" : "1.4.0"
       }
     },
     {
@@ -194,8 +177,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tsolomko/SWCompression",
       "state" : {
-        "revision" : "390e0b0af8dd19a600005a242a89e570ff482e09",
-        "version" : "4.8.6"
+        "revision" : "03a68e67991815a267e28174a0a01fbe0cff937b",
+        "version" : "4.9.1"
       }
     },
     {
@@ -212,8 +195,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
       "state" : {
-        "revision" : "7b847a3b7008b2dc2f47ca3110d8c782fb2e5c7e",
-        "version" : "1.3.0"
+        "revision" : "6675bc0ff86e61436e615df6fc5174e043e57924",
+        "version" : "1.4.1"
       }
     },
     {
@@ -221,17 +204,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-nio.git",
       "state" : {
-        "revision" : "4e8f4b1c9adaa59315c523540c1ff2b38adc20a9",
-        "version" : "2.87.0"
+        "revision" : "f71c8d2a5e74a2c6d11a0fbe324774b5d6084237",
+        "version" : "2.99.0"
       }
     },
     {
       "identity" : "swift-protobuf",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-protobuf.git",
+      "location" : "https://github.com/apple/swift-protobuf",
       "state" : {
-        "revision" : "c6fe6442e6a64250495669325044052e113e990c",
-        "version" : "1.32.0"
+        "revision" : "55d7a1cc5666b85c13464aea1c4b4a90feccb4c8",
+        "version" : "1.38.1"
       }
     },
     {
@@ -239,8 +222,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system.git",
       "state" : {
-        "revision" : "395a77f0aa927f0ff73941d7ac35f2b46d47c9db",
-        "version" : "1.6.3"
+        "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
+        "version" : "1.6.4"
       }
     },
     {
@@ -266,8 +249,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sunghyun-k/swiftui-toasts",
       "state" : {
-        "revision" : "9412602c30dff5cba211a984df12976250daf495",
-        "version" : "1.1.1"
+        "revision" : "2b3b062f4d485de6ddc03797e5dbb81c261bf78b",
+        "version" : "1.1.2"
       }
     },
     {
@@ -289,5 +272,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

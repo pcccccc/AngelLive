@@ -18,7 +18,9 @@ private func resolveFFmpegKitDependency() -> Package.Dependency? {
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
+        // exact 锁定 3.6.0:lgpl 分支后续为无信息 commit,版本点比 HEAD 更稳;
+        // FFmpegKit 仍走 lgpl 分支(8.0.3 在该线上,满足 3.6.0 的 from: 8.0.3 下限)。
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "3.6.0"),
         "KSPlayer"
     )
 }

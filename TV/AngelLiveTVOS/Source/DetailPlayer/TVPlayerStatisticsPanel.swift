@@ -120,7 +120,7 @@ struct TVPlayerStatisticsPanel: View {
     private func videoInfoSection(playerLayer: KSPlayerLayer) -> some View {
         let videoTrack = playerLayer.player.tracks(mediaType: .video).first { $0.isEnabled }
         let videoType = (videoTrack?.dynamicRange ?? .sdr).description
-        let decodeType = playerLayer.options.decodeType.rawValue
+        let decodeType = playerLayer.options.videoDecodeType.rawValue
         let naturalSize = playerLayer.player.naturalSize
         let sizeText: String? = naturalSize.width > 0 && naturalSize.height > 0
             ? "\(Int(naturalSize.width)) x \(Int(naturalSize.height))"
