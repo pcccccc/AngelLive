@@ -539,7 +539,14 @@ private extension WebSocketConnection {
         }
     }
 
+    /// 可能从后台 Task(驱动回调 onFrame/onTick)调入,统一切主线程:
+    /// heartbeatTimer 的 invalidate/schedule 必须在固定 RunLoop 上,否则跨 RunLoop
+    /// 调 CFRunLoopTimerInvalidate 会崩(EXC_BREAKPOINT/EXC_BAD_ACCESS)。
     func updateTimer(_ timer: LiveParseDanmakuTimerPlan?) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.updateTimer(timer) }
+            return
+        }
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
 
@@ -602,7 +609,12 @@ private extension WebSocketConnection {
         }
     }
 
+    /// 可能从后台(socket 回调)调入,统一切主线程,保证 timer 操作安全。
     func handleConnectionFailure(_ error: Error?) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.handleConnectionFailure(error) }
+            return
+        }
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
         notifyDisconnectedOnce(error: error)
@@ -610,7 +622,12 @@ private extension WebSocketConnection {
     }
 
     /// 致命驱动错误(插件未声明 driver / 驱动丢失):不重连,彻底关闭。
+    /// 可能从后台(socket/驱动回调)调入,统一切主线程,保证 timer/socket 操作安全。
     func handleFatalDriverError(_ error: Error) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.handleFatalDriverError(error) }
+            return
+        }
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
         shouldReconnect = false

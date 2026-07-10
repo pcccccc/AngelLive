@@ -141,6 +141,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         UserDefaults.standard.set(serialized, forKey: sourcePluginIdsKey)
     }
 
+    @MainActor
     public func addSource(_ urlString: String) {
         persistSourceIfNeeded(urlString)
     }
@@ -152,12 +153,14 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     /// 添加用户输入的订阅源：支持 key 解析和直接 URL，只有校验成功后才会持久化并同步到 CloudKit。
     /// 返回实际添加或重新加载成功的 URL 列表。
+    @MainActor
     public func addSourceFromInput(_ input: String) async -> [String] {
         await validateAndLoadSource(input, allowDirectInput: true)
     }
 
     /// 仅处理 key 形式的订阅源输入。
     /// 若输入不是 key，则返回空数组，交由调用方按普通视频链接处理。
+    @MainActor
     public func addSourceWithKeyResolution(_ input: String) async -> [String] {
         await validateAndLoadSource(input, allowDirectInput: false)
     }
@@ -166,6 +169,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// - key / 显式 .json 订阅一旦确定为订阅意图,就先把源持久化下来(即使当前拉取失败),
     ///   失败时把该源标记为 `.failed`,用户可在列表里重试或删除 —— 临时不可达的源也能先存上。
     /// - 当 `allowDirectInput == false` 且输入不是 key 时仍返回空,保留"普通视频链接走书签兜底"的判定。
+    @MainActor
     private func validateAndLoadSource(_ input: String, allowDirectInput: Bool) async -> [String] {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
@@ -245,6 +249,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         return displayItem
     }
 
+    @MainActor
     public func removeSource(_ urlString: String) {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         sourceURLs.removeAll { $0 == trimmed }
@@ -259,6 +264,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// 删除永远即时:先同步把 URL 从列表里摘掉(UI 立刻更新),再用本地缓存 + 孤儿兜底
     /// 决定卸载哪些插件 —— 全程不发任何网络请求。这样失效/不可达的源也能秒删,
     /// 不会再被 30s 的索引拉取超时卡住(这正是之前"删不掉"的根因)。
+    @MainActor
     public func removeSourceAndAssociatedPlugins(_ urlString: String) async {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -317,6 +323,7 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     // MARK: - 拉取远程索引
 
+    @MainActor
     public func fetchIndex(from urlString: String) async {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed) else {
@@ -337,6 +344,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     }
 
     /// 从所有订阅源检查可更新版本
+    @MainActor
     public func refreshAvailableUpdates() async {
         guard !sourceURLs.isEmpty else {
             latestRemoteItemsByPluginId = [:]
@@ -386,6 +394,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     // MARK: - 安装插件
 
     /// 从所有已添加的订阅源拉取索引并合并到 remotePlugins（不覆盖，按 pluginId 去重）
+    @MainActor
     public func fetchAllSourceIndexes() async {
         isFetchingIndex = true
         errorMessage = nil
@@ -424,6 +433,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// 重新拉取单个订阅源(列表行"重试"用)。
     /// 成功后更新该源 health 与缓存,并把它的插件并入 remotePlugins(已存在的按 pluginId 跳过);
     /// 失败只更新该源 health,不影响其它源已加载的内容。
+    @MainActor
     @discardableResult
     public func refreshSource(_ urlString: String) async -> Bool {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -453,6 +463,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         }
     }
 
+    @MainActor
     public func installPlugin(_ displayItem: RemotePluginDisplayItem) async -> Bool {
         displayItem.installState = .installing
 
@@ -506,6 +517,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     ///
     /// 这样把原来"安装完全部再弹登录确认"的体验前置到点击"全部安装"瞬间,
     /// 避免用户白等下载时间后才发现需要登录。
+    @MainActor
     public func installAll() async -> Int {
         let toInstall = remotePlugins.filter { $0.installState == .notInstalled }
         installTotalCount = toInstall.count
@@ -611,6 +623,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         latestRemoteItemsByPluginId[pluginId]?.version
     }
 
+    @MainActor
     @discardableResult
     public func updatePlugin(pluginId: String) async -> Bool {
         guard let item = latestRemoteItemsByPluginId[pluginId] else { return false }
@@ -646,6 +659,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         latestRemoteItemsByPluginId = merged
     }
 
+    @MainActor
     @discardableResult
     public func uninstallPlugin(pluginId: String) -> Bool {
         let storage = LiveParsePlugins.shared.storage
@@ -798,7 +812,9 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     // MARK: - Timeout Helper
 
-    private func fetchIndexWithTimeout(url: URL) async throws -> LiveParseRemotePluginIndex {
+    /// 纯网络拉取(不触碰 @Observable 状态),标 nonisolated 让 @MainActor 调用方 await 时
+    /// 挂起到后台执行,不阻塞主线程;resume 后状态写回在主线程完成。
+    nonisolated private func fetchIndexWithTimeout(url: URL) async throws -> LiveParseRemotePluginIndex {
         let timeout = fetchTimeoutSeconds
         let localUpdater = updater
         return try await withThrowingTaskGroup(of: LiveParseRemotePluginIndex.self) { group in

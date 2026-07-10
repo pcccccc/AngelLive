@@ -206,6 +206,16 @@ struct ContentView: View {
                 selectedTab = .favorite
             }
         }
+        .onChange(of: platformViewModel.platformInfo) { _, newPlatforms in
+            // 平台列表刷新后,选中平台可能已不存在(被移除,或元数据变更致
+            // Platformdescription 合成 Hashable 不匹配旧值)。此时 sidebarAdaptable
+            // TabView 的 selection 指向无效 tab,iPad resize/snapshot 时会 fatal error
+            // "Tried to update with invalid selection value"。按稳定身份 pluginId 兜底。
+            if case .platform(let selected) = selectedTab,
+               !newPlatforms.contains(where: { $0.pluginId == selected.pluginId }) {
+                selectedTab = .favorite
+            }
+        }
     }
 
     // MARK: - Deep Link Handling
