@@ -61,24 +61,27 @@ public extension Array where Element == LiveModel {
     
     /// 按直播状态排序（正在直播 > 回放/轮播 > 已下播 > 未知）
     func sortedByLiveState() -> [LiveModel] {
-        sorted { firstModel, secondModel in
-            switch (firstModel.liveState, secondModel.liveState) {
-            case ("1", "1"):
-                return true // 两个都是直播中，保持原有顺序
-            case ("1", _):
-                return true // 第一个是直播中，排在前面
-            case (_, "1"):
-                return false // 第二个是直播中，排在前面
-            case ("2", "2"):
-                return true // 两个都是回放，保持原有顺序
-            case ("2", _):
-                return true // 第一个是回放，排在非直播的前面
-            case (_, "2"):
-                return false // 第二个是回放，排在非直播的前面
+        func rank(_ state: String?) -> Int {
+            switch state {
+            case LiveState.live.rawValue:
+                return 0
+            case LiveState.video.rawValue:
+                return 1
+            case LiveState.close.rawValue:
+                return 2
             default:
-                return true // 其他情况保持原有顺序
+                return 3
             }
         }
+
+        return enumerated()
+            .sorted { lhs, rhs in
+                let lhsRank = rank(lhs.element.liveState)
+                let rhsRank = rank(rhs.element.liveState)
+                if lhsRank != rhsRank { return lhsRank < rhsRank }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
     
     // MARK: - 分组方法
