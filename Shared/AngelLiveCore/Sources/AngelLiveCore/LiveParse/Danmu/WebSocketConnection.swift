@@ -28,7 +28,9 @@ public final class WebSocketConnection {
     private let roomId: String?
     private let userId: String?
     private var pluginDriver: PluginJSDanmakuDriver?
-    private var heartbeatTimer: Timer?
+    /// 心跳/轮询定时器。用 DispatchSourceTimer(而非 Timer)以摆脱 RunLoop 依赖:
+    /// 驱动结果在并发续体线程上应用,那种线程 RunLoop 永不转,Timer 会静默失效。
+    private var heartbeatTimer: DispatchSourceTimer?
     private var reconnectTimer: Timer?
     private var shouldReconnect = true
     private var isClosingAfterDriverFailure = false
@@ -143,7 +145,7 @@ public final class WebSocketConnection {
         shouldReconnect = false
         reconnectTimer?.invalidate()
         reconnectTimer = nil
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
         socket?.disconnect()
         socket?.forceDisconnect()
@@ -245,7 +247,7 @@ public final class WebSocketConnection {
         // 通知 UI 本次重连已开始(attempt 已在调度时自增)
         delegate?.webSocketIsReconnecting(attempt: reconnectAttempts, maxAttempts: maxReconnectAttempts)
 
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
 
         // 销毁旧 driver(归因 .reconnect);连接层路径并未销毁,这里统一兜底
@@ -412,7 +414,7 @@ extension WebSocketConnection: WebSocketDelegate {
                 }
             }
         case .disconnected(let reason, let code):
-            heartbeatTimer?.invalidate()
+            heartbeatTimer?.cancel()
             heartbeatTimer = nil
 
             if isClosingAfterDriverFailure {
@@ -507,7 +509,15 @@ private extension WebSocketConnection {
         }
     }
 
+    /// 驱动结果应用:必须在主线程执行。
+    /// 调用点均在 `Task { await pluginDriver.xxx() ... applyDriverResult }` 里,续体会恢复在
+    /// Swift 并发协作线程池的后台线程上。心跳定时器、delegate 回调(UI)、socket 写入都要求主线程,
+    /// 故整体切主线程,顺带消除 heartbeatTimer 属性的跨线程读写竞争。
     func applyDriverResult(_ result: LiveParseDanmakuDriverResult) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.applyDriverResult(result) }
+            return
+        }
         deliverMessages(result.messages)
         sendWrites(result.writes)
         updateTimer(result.timer)
@@ -539,15 +549,10 @@ private extension WebSocketConnection {
         }
     }
 
-    /// 可能从后台 Task(驱动回调 onFrame/onTick)调入,统一切主线程:
-    /// heartbeatTimer 的 invalidate/schedule 必须在固定 RunLoop 上,否则跨 RunLoop
-    /// 调 CFRunLoopTimerInvalidate 会崩(EXC_BREAKPOINT/EXC_BAD_ACCESS)。
+    /// 只在主线程调用(经 applyDriverResult 收口)。DispatchSourceTimer 不依赖 RunLoop,
+    /// 明确落在主队列触发;驱动每次返回新的 timer plan,故取消旧源、按需新建。
     func updateTimer(_ timer: LiveParseDanmakuTimerPlan?) {
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.updateTimer(timer) }
-            return
-        }
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
 
         guard let timer else { return }
@@ -561,12 +566,12 @@ private extension WebSocketConnection {
         }
 
         let interval = max(Double(timer.intervalMs ?? 0) / 1000.0, 1.0)
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            self?.runDriverTick()
-        }
-        if let heartbeatTimer {
-            RunLoop.current.add(heartbeatTimer, forMode: .common)
-        }
+        // 心跳允许抖动,给 leeway 省电。
+        let source = DispatchSource.makeTimerSource(queue: .main)
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(200))
+        source.setEventHandler { [weak self] in self?.runDriverTick() }
+        heartbeatTimer = source
+        source.resume()
     }
 
     func effectiveWebSocketHeaders() -> [String: String] {
@@ -615,7 +620,7 @@ private extension WebSocketConnection {
             DispatchQueue.main.async { [weak self] in self?.handleConnectionFailure(error) }
             return
         }
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
         notifyDisconnectedOnce(error: error)
         scheduleReconnect()
@@ -628,7 +633,7 @@ private extension WebSocketConnection {
             DispatchQueue.main.async { [weak self] in self?.handleFatalDriverError(error) }
             return
         }
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
         shouldReconnect = false
         reconnectTimer?.invalidate()
@@ -653,7 +658,7 @@ private extension WebSocketConnection {
             DispatchQueue.main.async { [weak self] in self?.handleRecoverableDriverFailure(error) }
             return
         }
-        heartbeatTimer?.invalidate()
+        heartbeatTimer?.cancel()
         heartbeatTimer = nil
         notifyDisconnectedOnce(error: error)
         if socket != nil {
