@@ -130,6 +130,21 @@ public enum RoomPlaybackResolver {
         )
     }
 
+    /// 将偏好的线路/清晰度索引夹到可用范围内。
+    /// 用于重新拉取播放参数后尽量保持用户当前选择,避免无感续播时跳回默认档。
+    public static func clampedSelection(
+        in playArgs: [LiveQualityModel],
+        preferredCdnIndex: Int,
+        preferredQualityIndex: Int
+    ) -> (cdnIndex: Int, qualityIndex: Int) {
+        guard !playArgs.isEmpty else { return (0, 0) }
+        let cdnIndex = min(max(0, preferredCdnIndex), playArgs.count - 1)
+        let qualities = playArgs[cdnIndex].qualitys
+        guard !qualities.isEmpty else { return (cdnIndex, 0) }
+        let qualityIndex = min(max(0, preferredQualityIndex), qualities.count - 1)
+        return (cdnIndex, qualityIndex)
+    }
+
     public static func firstSelection(in playArgs: [LiveQualityModel]?) -> RoomPlaybackSelection? {
         guard let playArgs else { return nil }
         for (cdnIndex, cdn) in playArgs.enumerated() {

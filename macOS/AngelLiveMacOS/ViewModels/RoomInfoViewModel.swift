@@ -106,6 +106,13 @@ final class RoomInfoViewModel {
         self.playerOption = option
     }
 
+    /// 恢复协调器是否正在自动续播(重新取参/切源)。用于静默刷新,避免全屏错误页打断。
+    @MainActor
+    private var isPlaybackRecovering: Bool {
+        if case .recovering = recoveryCoordinator.phase { return true }
+        return false
+    }
+
     // 加载播放地址
     @MainActor
     func loadPlayURL(force: Bool = false) async {
@@ -117,24 +124,37 @@ final class RoomInfoViewModel {
         isFetchingPlayURL = true
         defer { isFetchingPlayURL = false }
 
-        isLoading = true
-        playError = nil
-        playErrorMessage = nil
-        await getPlayArgs()
+        // 已在播时的强制刷新(含恢复阶梯 reloadPlayArgs):静默取新 URL,不全屏 loading/清错误态抢 UI
+        let silentRefresh = force && hasLoadedPlayURL && currentPlayURL != nil
+        if !silentRefresh {
+            isLoading = true
+            playError = nil
+            playErrorMessage = nil
+        }
+        await getPlayArgs(silent: silentRefresh)
     }
 
     // 获取播放参数
-    func getPlayArgs() async {
-        isLoading = true
+    func getPlayArgs(silent: Bool = false) async {
+        if !silent {
+            isLoading = true
+        }
         do {
             guard let platform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
                 throw LiveParseError.liveParseError("不支持的平台", "\(currentRoom.liveType)")
             }
             let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
-            updateCurrentRoomPlayArgs(playArgs)
+            await MainActor.run {
+                self.updateCurrentRoomPlayArgs(playArgs)
+            }
         } catch {
             await MainActor.run {
                 self.isLoading = false
+                // 恢复过程中取参失败:交给协调器继续阶梯,不立刻进错误页
+                if silent || self.isPlaybackRecovering {
+                    Logger.warning("[PlayerFlow] silent getPlayArgs failed: \(error.localizedDescription)", category: .player)
+                    return
+                }
                 self.playError = error
                 self.playErrorMessage = "获取播放地址失败"
             }
@@ -146,16 +166,28 @@ final class RoomInfoViewModel {
         self.currentRoomPlayArgs = playArgs
         if playArgs.count == 0 {
             self.isLoading = false
-            self.playErrorMessage = "暂无可用的播放源"
+            if !isPlaybackRecovering {
+                self.playErrorMessage = "暂无可用的播放源"
+            }
             return
         }
-        self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
+
+        // 重新取参后尽量保持当前线路/清晰度,避免无感续播跳回默认档
+        let clamped = RoomPlaybackResolver.clampedSelection(
+            in: playArgs,
+            preferredCdnIndex: currentCdnIndex,
+            preferredQualityIndex: currentQualityIndex
+        )
+        let firstLoad = !hasLoadedPlayURL
+        self.changePlayUrl(cdnIndex: clamped.cdnIndex, urlIndex: clamped.qualityIndex)
 
         // 已成功获取到播放参数，标记已加载
         hasLoadedPlayURL = true
 
-        // 始终启动弹幕连接（聊天区域需要），showDanmu 仅控制浮动弹幕显示
-        getDanmuInfo()
+        // 仅首次进房拉弹幕;续播重取参数不重连弹幕,避免聊天区闪断
+        if firstLoad {
+            getDanmuInfo()
+        }
     }
 
     /// 手动应用当前弹幕设置到正在展示的弹幕层（避免等待下一轮消息）
@@ -741,15 +773,17 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
+        // isLive=false 时直播 CDN 会话结束常走 endOfStream → finish(nil)/playedToTheEnd。
+        // 直播没有「播完」语义,已起播后的结束一律交给协调器判定恢复(见 Coordinator startedPlaying)。
         guard let error else {
-            // 正常结束:通知协调器停止监控。
+            Logger.warning("========== 🔴 [EOF-RECOVER] 检测到直播流结束(EOF)→ 无感续签重取地址续播 · host=\(currentPlayURL?.host ?? "-") ==========", category: .player)
             recoveryCoordinator.finished(error: nil)
             return
         }
         let errorMsg = error.localizedDescription
-        // 因 isLive=false,IO 失败/超时/EOF 都会从这里出来。可重试错误交给协调器阶梯
-        // 受控重建;预算用尽时协调器经 reportFailed 回落到下播/错误判定。
+        // 可重试错误交给协调器阶梯受控重建;预算用尽时协调器经 reportFailed 回落到下播/错误判定。
         if isRetryablePlaybackError(errorMsg) {
+            Logger.warning("========== 🔴 [EOF-RECOVER] 播放中断(可重试)→ 无感续签重取地址续播 · reason=\(errorMsg) ==========", category: .player)
             recoveryCoordinator.finished(error: error)
             return
         }
@@ -774,6 +808,8 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     /// 播放器错误时检查直播状态
     @MainActor
     func checkLiveStatusOnError(error: Error) {
+        // 恢复阶梯未结束时不进错误页,避免无感续播被打断
+        if isPlaybackRecovering { return }
         Task {
             do {
                 let state = try await ApiManager.getCurrentRoomLiveState(

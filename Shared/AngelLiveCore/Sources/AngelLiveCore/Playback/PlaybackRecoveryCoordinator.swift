@@ -112,6 +112,7 @@ public final class PlaybackRecoveryCoordinator {
     @ObservationIgnored private var monitoring = false
     @ObservationIgnored private var attempts = 0                 // 当前会话已发起的恢复次数(熔断计数)
     @ObservationIgnored private var startedPlaying = false       // 是否已起播成功过
+    @ObservationIgnored private var enginePlaying = false         // 引擎当前是否在播(供无字节采样内核判健康)
     @ObservationIgnored private var startupElapsed: TimeInterval = 0
     @ObservationIgnored private var startupBaselineBytes: Int64 = -1
     @ObservationIgnored private var stallAccum: TimeInterval = 0
@@ -128,13 +129,13 @@ public final class PlaybackRecoveryCoordinator {
         self.config = config
         self.actions = actions
         self.sampleProvider = sample
-        // CDN 优先:stall 多因坏 CDN 边缘站,先切线路命中率最高。
-        // 单 CDN 时 switchCDN 动作由 VM 内部回退 refresh(见 RoomInfoViewModel)。
+        // 优先重新拉取播放参数:短时效签名 URL 同源重连几乎必失败;
+        // 再切线路;最后同源重连兜底。单 CDN 时 switchCDN 由 VM 回退 refresh。
         var l: [RecoveryActionKind] = []
         if config.hasKickPipeline { l.append(.kickPipeline) }
+        l.append(.reloadPlayArgs)
         l.append(.switchCDN)
         l.append(.refreshSameURL)
-        l.append(.reloadPlayArgs)
         self.ladder = l
     }
 
@@ -198,6 +199,7 @@ public final class PlaybackRecoveryCoordinator {
         streamKey = key
         attempts = 0
         startedPlaying = false
+        enginePlaying = false
         startupElapsed = 0
         startupBaselineBytes = -1
         stallAccum = 0
@@ -214,29 +216,69 @@ public final class PlaybackRecoveryCoordinator {
             // ★ 修 Bug B:起播成功只标记 startedPlaying,绝不在此清零熔断预算。
             // 预算清零只靠「连续健康 N 秒」(见 handleTick)。
             startedPlaying = true
+            enginePlaying = true
             startupElapsed = 0
             stallAccum = 0
             if attempts == 0 { phase = .healthy }
         case .ended:
-            monitoring = false
-            phase = .idle
+            // 直播 isLive=false 时 CDN 会话结束常表现为 playedToTheEnd,不能当点播终局。
+            enginePlaying = false
+            handleStreamEnd()
         case .error, .initialized, .preparing, .buffering, .paused:
+            enginePlaying = false
             break   // error 走 finished(error:) 路径,避免重复触发
         }
     }
 
     private func handleFinished(_ error: Error?) {
         guard monitoring else { return }
+        // error == nil: 直播流 endOfStream 常走这条,与 .ended 收口到同一处理。
         guard let error else {
-            monitoring = false
-            phase = .idle
+            handleStreamEnd()
             return
         }
         triggerRecovery(reason: error.localizedDescription)
     }
 
+    /// 直播意外结束(endOfStream 的 finished(nil) 与 playedToTheEnd 的 .ended)。
+    /// 两者常成对到达:首个事件已进入恢复阶梯(并把 startedPlaying 复位),尾随事件在 .recovering
+    /// 下忽略——既避免连烧两档,也避免被误判为「从未起播」而错误地关掉监控。
+    private func handleStreamEnd() {
+        guard monitoring else { return }
+        if startedPlaying {
+            triggerRecovery(reason: "stream ended")
+        } else if !isRecovering {
+            // 从未起播就结束:真终局。
+            monitoring = false
+            phase = .idle
+        }
+    }
+
+    private var isRecovering: Bool {
+        if case .recovering = phase { return true }
+        return false
+    }
+
     private func handleTick(sample: PlaybackSample?, delta: TimeInterval) {
-        guard monitoring, let sample else { return }
+        guard monitoring else { return }
+        guard let sample else {
+            // 无字节采样内核(HLS/KSAVPlayer):卡顿由 EOF/error 经 finish 反馈,这里不判 stall。
+            // 但恢复后仍需「持续在播 N 秒」清零熔断预算,否则反复 EOF(官方房每 ~2 分钟断一次)
+            // 会逐档烧满阶梯后永久 failed —— HLS 就再也续不上。
+            if attempts > 0 {
+                if enginePlaying {
+                    healthyAccum += delta
+                    if healthyAccum >= config.healthyConfirmSeconds {
+                        attempts = 0
+                        healthyAccum = 0
+                        phase = .healthy
+                    }
+                } else {
+                    healthyAccum = 0
+                }
+            }
+            return
+        }
 
         if isHealthy(sample) {
             stallAccum = 0
@@ -313,6 +355,7 @@ public final class PlaybackRecoveryCoordinator {
         startupElapsed = 0
         startupBaselineBytes = -1
         startedPlaying = false
+        enginePlaying = false
         lastPlayhead = -1
 
         log(action: action, attempt: attempts, reason: reason)
