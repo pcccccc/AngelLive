@@ -4,6 +4,7 @@
 // tvOS 壳 UI 直链播放器 - 适配 Siri Remote 交互
 
 import SwiftUI
+import AngelLiveCore
 import AngelLiveDependencies
 
 struct TVDirectURLPlayerView: View {
@@ -12,13 +13,29 @@ struct TVDirectURLPlayerView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var playerCoordinator = KSVideoPlayer.Coordinator()
-    @State private var playerOptions = KSOptions()
+    @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator
+    private let playerOptions: KSOptions
     @State private var showControls = true
-    @State private var isPlaying = false
-    @State private var isBuffering = false
+    @State private var playbackMachine = PlaybackStatusMachine()
+    @State private var playbackStatus: PlaybackStatus = .loading
     @State private var showStatisticsPanel = false
     @State private var autoHideTask: Task<Void, Never>?
+
+    init(url: URL, title: String) {
+        self.url = url
+        self.title = title
+
+        let options = KSOptions()
+        options.userAgent = "libmpv"
+        options.isAutoPlay = true
+        let lowercasedURL = url.absoluteString.lowercased()
+        options.playerTypes = lowercasedURL.contains(".m3u8")
+            ? [KSAVPlayer.self, KSMEPlayer.self]
+            : [KSMEPlayer.self]
+
+        self.playerOptions = options
+        _playerCoordinator = StateObject(wrappedValue: KSVideoPlayer.Coordinator())
+    }
 
     var body: some View {
         ZStack {
@@ -29,7 +46,7 @@ struct TVDirectURLPlayerView: View {
                 .ignoresSafeArea()
 
             // 缓冲指示
-            if isBuffering {
+            if playbackStatus.isLoading {
                 ProgressView()
                     .scaleEffect(2.0)
                     .tint(.white)
@@ -58,7 +75,7 @@ struct TVDirectURLPlayerView: View {
             }
         }
         .onAppear {
-            configurePlayer()
+            transition(.loadRequested)
             scheduleAutoHide()
         }
         .onDisappear {
@@ -85,18 +102,10 @@ struct TVDirectURLPlayerView: View {
         }
         .onChange(of: playerCoordinator.state) {
             let state = playerCoordinator.state
-            switch state {
-            case .readyToPlay, .bufferFinished:
-                isPlaying = true
-                isBuffering = false
-            case .paused, .playedToTheEnd, .error:
-                isPlaying = false
-                isBuffering = false
-            case .buffering:
-                isBuffering = true
-            default:
-                break
-            }
+            transition(.engineStateChanged(
+                mapKSPlayerEngineState(state),
+                isPlaying: playerCoordinator.playerLayer?.player.isPlaying == true
+            ))
         }
     }
 
@@ -138,7 +147,7 @@ struct TVDirectURLPlayerView: View {
             Button {
                 togglePlayPause()
             } label: {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                Image(systemName: canPause ? "pause.fill" : "play.fill")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 60, height: 60)
@@ -174,37 +183,30 @@ struct TVDirectURLPlayerView: View {
         )
     }
 
-    // MARK: - 播放器配置
-
-    private func configurePlayer() {
-        playerOptions.userAgent = "libmpv"
-        KSOptions.isAutoPlay = true
-
-        let urlString = url.absoluteString.lowercased()
-        if urlString.contains(".m3u8") {
-            KSOptions.firstPlayerType = KSAVPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
-        } else {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
-        }
-    }
-
     // MARK: - 控制操作
 
+    private var canPause: Bool {
+        playbackStatus == .playing || playbackStatus == .buffering
+    }
+
+    private func transition(_ event: PlaybackStatusEvent) {
+        playbackMachine.send(event)
+        playbackStatus = playbackMachine.status
+    }
+
     private func togglePlayPause() {
-        if isPlaying {
+        if canPause {
             playerCoordinator.playerLayer?.pause()
-            isPlaying = false
         } else {
             playerCoordinator.playerLayer?.play()
-            isPlaying = true
         }
         resetAutoHide()
     }
 
     private func refreshPlayback() {
-        playerCoordinator.playerLayer?.seek(time: .zero, autoPlay: true)
+        transition(.loadRequested)
+        playerCoordinator.playerLayer?.reset()
+        playerCoordinator.playerLayer?.prepareToPlay()
         resetAutoHide()
     }
 

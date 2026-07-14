@@ -8,19 +8,22 @@ import PackageDescription
 /// 两者不能同时引入，否则内嵌的 FFmpeg 符号会冲突。
 private let useVLC = ProcessInfo.processInfo.environment["USE_VLC"] == "1"
 
-private func resolveFFmpegKitDependency() -> Package.Dependency? {
-    guard !useVLC else { return nil }
-    // Force KSPlayer/KSMEPlayer onto the LGPL FFmpegKit line.
-    // 8.1.1 标签当前指向 lgpl 分支 HEAD,固定 exact 避免分支漂移。
-    return .package(url: "https://github.com/TracyPlayer/FFmpegKit", branch: "lgpl")
-}
-
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
+
+    let packageDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    let localKSPlayer = packageDirectory
+        .appendingPathComponent("../../../KSPlayer")
+        .standardizedFileURL
+
+    if FileManager.default.fileExists(atPath: localKSPlayer.appendingPathComponent("Package.swift").path) {
+        // KSPlayer resolves its adjacent FFmpegKit fork itself. Declaring FFmpegKit
+        // here as well creates two dependency chains with the same package identity.
+        return (.package(path: localKSPlayer.path), "KSPlayer")
+    }
+
     return (
-        // exact 锁定 3.6.0:lgpl 分支后续为无信息 commit,版本点比 HEAD 更稳;
-        // FFmpegKit 仍走 lgpl 分支(8.0.3 在该线上,满足 3.6.0 的 from: 8.0.3 下限)。
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "3.6.0"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
         "KSPlayer"
     )
 }
@@ -38,10 +41,6 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
     .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
 ]
-
-if let ffmpegKitDependency = resolveFFmpegKitDependency() {
-    packageDependencies.append(ffmpegKitDependency)
-}
 
 // VLCKitSPM 仅在 USE_VLC=1 时引入（与 KSPlayer 互斥，避免 FFmpeg 符号冲突）
 if useVLC {

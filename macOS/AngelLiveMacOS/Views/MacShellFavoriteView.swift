@@ -184,8 +184,21 @@ private struct MacDirectURLPlayerView: View {
     let title: String
 
     @Environment(\.dismiss) private var dismiss
-    @State private var playerCoordinator = KSVideoPlayer.Coordinator()
-    @State private var playerOptions = KSOptions()
+    @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator
+    private let playerOptions: KSOptions
+
+    init(url: URL, title: String) {
+        self.url = url
+        self.title = title
+
+        let options = KSOptions()
+        options.userAgent = "libmpv"
+        options.playerTypes = url.absoluteString.lowercased().contains(".m3u8")
+            ? [KSAVPlayer.self, KSMEPlayer.self]
+            : [KSMEPlayer.self]
+        self.playerOptions = options
+        _playerCoordinator = StateObject(wrappedValue: KSVideoPlayer.Coordinator())
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -208,11 +221,6 @@ private struct MacDirectURLPlayerView: View {
                 Spacer()
             }
             .padding(16)
-        }
-        .onAppear {
-            playerOptions.userAgent = "libmpv"
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
         }
     }
 }

@@ -32,6 +32,8 @@ struct DirectURLPlayerView: View {
     @State private var isMaskShow = true
     @State private var isLocked = false
     @State private var isPlaying = false
+    @State private var playbackMachine = PlaybackStatusMachine()
+    @State private var playbackStatus: PlaybackStatus = .loading
 
     private var useKSPlayer: Bool {
         let kernel = PlayerKernelSupport.resolvedKernel(for: PlayerSettingModel().playerKernel)
@@ -54,15 +56,15 @@ struct DirectURLPlayerView: View {
 
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = false
-        KSOptions.firstPlayerType = KSMEPlayer.self
-        KSOptions.secondPlayerType = KSMEPlayer.self
         KSOptions.canBackgroundPlay = PlayerSettingModel().enableBackgroundAudio
 
-        // 根据 URL 扩展名判断是否使用 HLS
+        // Direct URLs have no plugin hints, so URL inference is the final fallback.
+        // Configure this options instance; KSOptions already copied static defaults in init.
         let urlString = url.absoluteString.lowercased()
         if urlString.contains(".m3u8") || urlString.contains("m3u8") {
-            KSOptions.firstPlayerType = KSAVPlayer.self
-            KSOptions.secondPlayerType = nil
+            options.playerTypes = [KSAVPlayer.self, KSMEPlayer.self]
+        } else {
+            options.playerTypes = [KSMEPlayer.self]
         }
 
         let coordinator = KSVideoPlayer.Coordinator()
@@ -117,6 +119,7 @@ struct DirectURLPlayerView: View {
         .statusBar(hidden: true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
+            transition(.loadRequested)
             // iPhone 支持横屏旋转
             if !AppConstants.Device.isIPad {
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
@@ -142,14 +145,11 @@ struct DirectURLPlayerView: View {
         }
         .onChange(of: playerCoordinator.state) {
             guard useKSPlayer else { return }
-            switch playerCoordinator.state {
-            case .readyToPlay:
-                isPlaying = true
-            case .paused, .playedToTheEnd, .error:
-                isPlaying = false
-            default:
-                break
-            }
+            transition(.engineStateChanged(
+                mapKSPlayerEngineState(playerCoordinator.state),
+                isPlaying: playerCoordinator.playerLayer?.player.isPlaying == true
+            ))
+            isPlaying = playbackStatus.isPlaying
         }
         // 后台自动 PiP
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
@@ -231,7 +231,7 @@ struct DirectURLPlayerView: View {
 
     private var shouldShowBuffering: Bool {
         if useKSPlayer {
-            return playerCoordinator.state == .buffering
+            return playbackStatus.isLoading
         }
         return vlcState.isBuffering && !hasVLCStartedPlayback
     }
@@ -241,11 +241,11 @@ struct DirectURLPlayerView: View {
     private var controlBridge: PlayerControlBridge {
         if useKSPlayer {
             return PlayerControlBridge(
-                isPlaying: isPlaying || playerCoordinator.state.isPlaying,
-                isBuffering: playerCoordinator.state == .buffering,
+                isPlaying: canPauseKSPlayback,
+                isBuffering: playbackStatus == .buffering,
                 supportsPictureInPicture: playerCoordinator.playerLayer is KSComplexPlayerLayer,
                 togglePlayPause: {
-                    if isPlaying || playerCoordinator.state.isPlaying {
+                    if canPauseKSPlayback {
                         playerCoordinator.playerLayer?.pause()
                     } else {
                         playerCoordinator.playerLayer?.play()
@@ -290,10 +290,25 @@ struct DirectURLPlayerView: View {
 
     // MARK: - Actions
 
+    private var canPauseKSPlayback: Bool {
+        playbackStatus == .playing || playbackStatus == .buffering
+    }
+
+    private func transition(_ event: PlaybackStatusEvent) {
+        playbackMachine.send(event)
+        playbackStatus = playbackMachine.status
+    }
+
     private func refreshPlayback() {
         // 重新设置 URL 触发播放器重载
         if useKSPlayer {
-            playerModel.url = url
+            transition(.loadRequested)
+            if let layer = playerCoordinator.playerLayer {
+                layer.reset()
+                layer.prepareToPlay()
+            } else {
+                playerModel.url = url
+            }
         } else {
             // VLC: 停止后重新激活
             vlcPlaybackController.stop()

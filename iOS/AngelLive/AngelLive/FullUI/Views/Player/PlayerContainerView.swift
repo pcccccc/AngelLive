@@ -172,10 +172,8 @@ struct PlayerContentView: View {
                 vlcPlaybackController.becomeActive()
             }
         }
-        // 关键背景:RoomInfoViewModel.setPlayerDelegate 把 playerLayer.delegate 抢成 self,
-        // 因此 KSVideoPlayer.Coordinator.state 永远停在 .initialized,不能用它做起播判定。
-        // RoomInfoViewModel.player(layer:state:) 已经把 layer.player.isPlaying 写到 viewModel.isPlaying,
-        // 直接订阅它作为 sticky 起播信号。one-way sticky:置 true 后不再因暂停翻回。
+        // VM observes the Coordinator callbacks without replacing its layer delegate.
+        // Keep a sticky first-play signal so later buffering does not look like startup.
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
             guard useKSPlayer else { return }
             if isPlaying {
@@ -200,7 +198,6 @@ struct PlayerContentView: View {
             Logger.debug("[PlayerFlow] KS state changed -> \(state)", category: .player)
             switch state {
             case .readyToPlay:
-                viewModel.isPlaying = true
                 // readyToPlay 是读取真实 naturalSize 的最可靠时机
                 if !hasDetectedSize,
                    let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
@@ -515,8 +512,8 @@ struct PlayerContentView: View {
 
     private var shouldShowBuffering: Bool {
         if useKSPlayer {
-            // 用 VM 抢到的真实状态判缓冲:engineState == .buffering 且未在播 = 真卡顿,显示 loading。
-            // playerCoordinator.state 因 delegate 被 RoomInfoViewModel 抢走已冻结,不能再用。
+            // Coordinator and VM receive the same KSPlayer callback; engineState is the
+            // shared Core form used by recovery and the platform control layer.
             // 加 !isPlaying 门:KSPlayer 边播边缓冲(isPlaying=true)时不显示菊花,避免常驻。
             let seeking = playerCoordinator.playerLayer?.player.playbackState == .seeking
             return (viewModel.engineState == .buffering && !viewModel.isPlaying) || seeking
@@ -698,8 +695,7 @@ struct PlayerContentView: View {
     /// 不必盯 Console 逐条人肉判读。**纯只读,不触碰播放;** 退页/再次进后台会取消。
     ///
     /// 信号全部直接读 player 实例(`dynamicInfo` / `currentPlaybackTime` / `isPlaying`),
-    /// 不依赖被 VM 抢走 delegate 而冻结的 `playerCoordinator.state`(见本文件起播判定注释);
-    /// 引擎态读 VM 发布的真实 `engineState`。HLS(KSAVPlayer)是协调器无 stall 采样的盲区(F6),
+    /// 引擎态读 VM 发布的共享 `engineState`。HLS(KSAVPlayer)是协调器无 stall 采样的盲区(F6),
     /// 这里照采,kernel 经类型名识别免去额外 import。
     @MainActor
     private func startForegroundDiagnosticWatch() {

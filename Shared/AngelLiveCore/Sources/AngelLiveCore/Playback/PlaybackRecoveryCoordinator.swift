@@ -7,7 +7,7 @@ import Observation
 ///
 /// AngelLiveCore 不依赖 KSPlayer/VLCKit,所以协调器用本枚举而非 `KSPlayerState`,
 /// 应用层在 delegate 回调里做一次映射。这样协调器可单测、可三端共享、并能同时容纳两套内核。
-public enum PlaybackEngineState: Sendable {
+public enum PlaybackEngineState: Sendable, Equatable {
     case initialized
     case preparing
     case readyToPlay
@@ -221,7 +221,7 @@ public final class PlaybackRecoveryCoordinator {
             stallAccum = 0
             if attempts == 0 { phase = .healthy }
         case .ended:
-            // 直播 isLive=false 时 CDN 会话结束常表现为 playedToTheEnd,不能当点播终局。
+            // Room 会话没有正常播完语义，内核未恢复的 EOF 仍需整会话重建。
             enginePlaying = false
             handleStreamEnd()
         case .error, .initialized, .preparing, .buffering, .paused:

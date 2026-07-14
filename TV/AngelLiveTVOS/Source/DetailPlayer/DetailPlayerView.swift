@@ -96,8 +96,8 @@ struct DetailPlayerView: View {
                         roomInfoViewModel.recoveryCoordinator.start()
                     }
                     .onChange(of: roomInfoViewModel.currentPlayURL) { _, _ in
-                        // URL 变化(refresh / CDN failover)时 KSPlayer 会重建 playerLayer,
-                        // 必须重新挂 delegate,顺带重启 stall watchdog。和 macOS/iOS 三端行为对齐。
+                        // URL 变化(refresh / CDN failover)时 KSPlayer 可能重建 playerLayer，
+                        // 重新绑定业务回调与采样 layer，保持三端一致。
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
                         }
@@ -145,10 +145,8 @@ struct DetailPlayerView: View {
             .onPlayPauseCommand {
                 roomInfoViewModel.togglePlayPause()
             }
-            // 关键背景:RoomInfoViewModel.setPlayerDelegate 把 playerLayer.delegate 抢成 self,
-            // 因此 KSVideoPlayer.Coordinator.state 永远停在 .initialized,不能用它做起播判定。
-            // RoomInfoViewModel.player(layer:state:) 已经把 layer.player.isPlaying 写到 isPlaying,
-            // 直接订阅它作为 sticky 起播信号。one-way sticky:置 true 后不再因暂停翻回。
+            // Coordinator remains the sole layer delegate; the VM receives its forwarded callbacks.
+            // Keep first playback sticky so a later pause or rebuffer does not look like startup.
             .onChange(of: roomInfoViewModel.isPlaying) { _, isPlaying in
                 if isPlaying {
                     hasStartedStreamPlayback = true

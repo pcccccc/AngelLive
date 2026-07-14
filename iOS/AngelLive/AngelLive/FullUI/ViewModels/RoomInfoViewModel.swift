@@ -48,9 +48,7 @@ final class RoomInfoViewModel {
     var currentCdnIndex = 0  // 当前选中的线路索引
     var currentQualityIndex = 0  // 当前选中的清晰度索引
     var isPlaying = false
-    /// KSPlayer 真实播放状态(来自 VM 抢到的 delegate)。
-    /// PlayerContainerView 的 `playerCoordinator.state` 因 delegate 被抢已冻结不可信,
-    /// UI 的缓冲/加载判定应读这里。
+    /// KSPlayer state normalized for shared recovery and presentation logic.
     private(set) var engineState: PlaybackEngineState = .initialized
     var isHLSStream = false  // 当前是否为 HLS 流（支持 AirPlay 投屏）
 
@@ -122,11 +120,6 @@ final class RoomInfoViewModel {
 //        option.allowsExternalPlayback = true  //启用 AirPlay 和外部播放
         // 根据用户设置控制自动画中画行为
         option.canStartPictureInPictureAutomaticallyFromInline = PlayerSettingModel().enableAutoPiPOnBackground
-        // 强制按 VOD 路径处理 IO 失败/EOF,绕过 KSPlayer 的 MEPlayerItem.reconnect() ——
-        // 该路径在重开 AVFormatContext 时不会同步暂停解码线程,会导致解码线程拿到 NULL AVCodecContext
-        // 调用 avcodec_send_packet 时崩溃(EXC_BAD_ACCESS at 0x28)。
-        // isLive=false 后,所有 IO 异常都通过 .failed/.endOfStream 走到 finish 回调,由我们这层做受控重建。
-        option.isLive = false
         self.playerOption = option
     }
 
@@ -228,23 +221,6 @@ final class RoomInfoViewModel {
         RoomPlaybackResolver.findFirstQuality(in: currentRoomPlayArgs)
     }
 
-    /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
-    private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
-        let requestOptions = RoomPlaybackResolver.requestOptions(
-            for: quality,
-            fallbackUserAgent: PlayerConstants.defaultUserAgent
-        )
-
-        playerOption.userAgent = requestOptions.userAgent
-        // 先清理上一次流的头，避免跨平台/跨线路残留
-        playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
-        playerOption.formatContextOptions["headers"] = nil
-
-        if !requestOptions.headers.isEmpty {
-            playerOption.appendHeader(requestOptions.headers)
-        }
-    }
-
     // 切换清晰度
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
@@ -284,7 +260,6 @@ final class RoomInfoViewModel {
             // 在 applyPlayURL 之前先决定播放内核，避免首次起播沿用 PlayerOptions 默认 [KSAVPlayer]
             // 导致 FLV 流被 AVPlayer 收到后报 AVError -11850(serverIncorrectlyConfigured) 卡住。
             let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
-            applyPlaybackRequestOptions(for: currentQuality)
             playerOption.playerTypes = resolved.playerTypes
             isHLSStream = resolved.isHLS
 
@@ -314,8 +289,6 @@ final class RoomInfoViewModel {
         currentPlayQualityQn = effectiveQuality.qn
         self.currentCdnIndex = effectiveSelection?.cdnIndex ?? cdnIndex
         self.currentQualityIndex = effectiveSelection?.qualityIndex ?? urlIndex
-
-        applyPlaybackRequestOptions(for: effectiveQuality)
 
         // 1. 决定播放器类型
         playerOption.playerTypes = resolved.playerTypes
@@ -351,25 +324,23 @@ final class RoomInfoViewModel {
         var resolvedSelection: RoomPlaybackSelection?
     }
 
+    @MainActor
     private func resolvePlayerTypes(quality: LiveQualityDetail, cdnIndex: Int, urlIndex: Int) -> PlayerTypeResult {
-        let plan = RoomPlaybackResolver.resolvePlan(selectedQuality: quality)
+        let applied = KSPlayerSessionConfigurator.apply(
+            quality: quality,
+            to: playerOption,
+            fallbackUserAgent: PlayerConstants.defaultUserAgent,
+            liveReconnectPolicy: .playerManaged
+        )
+        let plan = applied.plan
 
         return PlayerTypeResult(
-            playerTypes: plan.playerKinds.map(playerType(for:)),
+            playerTypes: applied.playerTypes,
             isHLS: plan.isHLS,
             overrideURL: plan.overrideURL,
             overrideTitle: plan.overrideTitle,
             resolvedSelection: plan.resolvedSelection
         )
-    }
-
-    private func playerType(for kind: RoomPlaybackPlayerKind) -> MediaPlayerProtocol.Type {
-        switch kind {
-        case .avPlayer:
-            KSAVPlayer.self
-        case .mePlayer:
-            KSMEPlayer.self
-        }
     }
 
     @MainActor
@@ -520,7 +491,6 @@ final class RoomInfoViewModel {
 
         currentPlayQualityString = resolved.overrideTitle ?? displayTitle
         currentPlayQualityQn = quality.qn
-        applyPlaybackRequestOptions(for: quality)
         playerOption.playerTypes = resolved.playerTypes
         isHLSStream = resolved.isHLS
 
@@ -535,8 +505,14 @@ final class RoomInfoViewModel {
     @MainActor
     func setPlayerDelegate(playerCoordinator: KSVideoPlayer.Coordinator) {
         guard !usesVLCKernel else { return }
-        playerCoordinator.playerLayer?.delegate = nil
-        playerCoordinator.playerLayer?.delegate = self
+        // Keep KSVideoPlayer.Coordinator as the layer delegate. Its callbacks are
+        // KSPlayer's supported fan-out points for business observers.
+        playerCoordinator.onStateChanged = { [weak self] layer, state in
+            self?.player(layer: layer, state: state)
+        }
+        playerCoordinator.onFinish = { [weak self] layer, error in
+            self?.player(layer: layer, finish: error)
+        }
         // 始终让 watchedPlayerLayer 指向当前活跃 layer,供协调器 sample provider 采样。
         // VLC 内核时 dynamicInfo 不归 KSPlayer 管,上面 guard 已跳过。
         watchedPlayerLayer = playerCoordinator.playerLayer
@@ -828,7 +804,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
         isPlaying = layer.player.isPlaying
         let engine = mapEngineState(state)
-        engineState = engine   // 发布真实状态供 UI 判缓冲/加载(取代冻结的 playerCoordinator.state)
+        engineState = engine
         // 状态变化喂给协调器:起播成功/抖动/终态的判定与熔断预算全在状态机内。
         recoveryCoordinator.stateChanged(engine)
 
@@ -850,22 +826,21 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-        // isLive=false 时直播 CDN 会话结束常走 endOfStream → finish(nil)/playedToTheEnd。
-        // 直播没有「播完」语义,已起播后的结束一律交给协调器判定恢复(见 Coordinator startedPlaying)。
+        // KSPlayer 内部无法恢复的 EOF 继续由应用层协调器重取播放地址托底。
         guard let error else {
             Logger.warning("========== 🔴 [EOF-RECOVER] 检测到直播流结束(EOF)→ 无感续签重取地址续播 · host=\(currentPlayURL?.host ?? "-") ==========", category: .player)
             recoveryCoordinator.finished(error: nil)
             return
         }
         let errorMsg = error.localizedDescription
-        // 可重试错误交给协调器阶梯受控重建,而不是依赖 KSPlayer 内部 reconnect(那条路径有解码线程
-        // race,会 EXC_BAD_ACCESS)。预算用尽时协调器会经 reportFailed 回落到下播/错误判定。
+        // KSPlayer 内部重连最终失败后，可重试错误交给协调器做整会话阶梯重建。
         if isRetryablePlaybackError(errorMsg) {
             Logger.warning("========== 🔴 [EOF-RECOVER] 播放中断(可重试)→ 无感续签重取地址续播 · reason=\(errorMsg) ==========", category: .player)
             recoveryCoordinator.finished(error: error)
             return
         }
-        Logger.warning("[KSPlayer] suppress finish error UI on iOS: \(errorMsg)", category: .player)
+        Logger.error("[KSPlayer] non-retryable playback error on iOS: \(errorMsg)", category: .player)
+        checkLiveStatusOnError(error: error)
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, bufferedCount: Int, consumeTime: TimeInterval) {

@@ -102,9 +102,32 @@ public enum LivePlaybackSelectionBehavior: String, Codable, Sendable {
     case refreshOnSelect
 }
 
+public enum LivePlaybackLatencyMode: String, Codable, Sendable {
+    case standard
+    case lowLatency
+}
+
+/// KSPlayer engine preference exposed to plugins without leaking concrete Swift types.
+public enum LivePlaybackEngine: String, Codable, Sendable, Hashable {
+    case mePlayer
+    case avPlayer
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        self = Self(rawValue: value) ?? .unknown
+    }
+}
+
 public struct LivePlaybackHints: Codable, Sendable {
     /// 描述流本身的格式/语义，资源侧不需要知道宿主有哪些播放器。
     public var streamFormat: LivePlaybackStreamFormat?
+    /// 标准或低延迟播放语义。未提供时宿主才允许按 URL 特征推断。
+    public var latencyMode: LivePlaybackLatencyMode?
+    /// 插件建议的 KSPlayer 内核顺序；宿主会过滤与流格式不兼容的项。
+    public var preferredEngines: [LivePlaybackEngine]?
+    /// 插件明确声明直播/点播语义；未提供时由 streamFormat 推断。
+    public var isLive: Bool?
     /// 流需要自定义分片/加载管线时置 true，由宿主映射到合适的播放器能力。
     public var requiresCustomSegmentLoader: Bool?
     /// 用户选中该项时是否需要重新请求真实播放地址。
@@ -114,14 +137,43 @@ public struct LivePlaybackHints: Codable, Sendable {
 
     public init(
         streamFormat: LivePlaybackStreamFormat? = nil,
+        latencyMode: LivePlaybackLatencyMode? = nil,
+        preferredEngines: [LivePlaybackEngine]? = nil,
+        isLive: Bool? = nil,
         requiresCustomSegmentLoader: Bool? = nil,
         selectionBehavior: LivePlaybackSelectionBehavior? = nil,
         startPositionSeconds: Double? = nil
     ) {
         self.streamFormat = streamFormat
+        self.latencyMode = latencyMode
+        self.preferredEngines = preferredEngines
+        self.isLive = isLive
         self.requiresCustomSegmentLoader = requiresCustomSegmentLoader
         self.selectionBehavior = selectionBehavior
         self.startPositionSeconds = startPositionSeconds
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case streamFormat
+        case latencyMode
+        case preferredEngines
+        case isLive
+        case requiresCustomSegmentLoader
+        case selectionBehavior
+        case startPositionSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Plugin hints are advisory. Unknown future values must not reject the
+        // entire playback response; the resolver will infer any missing field.
+        streamFormat = try? container.decode(LivePlaybackStreamFormat.self, forKey: .streamFormat)
+        latencyMode = try? container.decode(LivePlaybackLatencyMode.self, forKey: .latencyMode)
+        preferredEngines = try? container.decode([LivePlaybackEngine].self, forKey: .preferredEngines)
+        isLive = try? container.decode(Bool.self, forKey: .isLive)
+        requiresCustomSegmentLoader = try? container.decode(Bool.self, forKey: .requiresCustomSegmentLoader)
+        selectionBehavior = try? container.decode(LivePlaybackSelectionBehavior.self, forKey: .selectionBehavior)
+        startPositionSeconds = try? container.decode(Double.self, forKey: .startPositionSeconds)
     }
 }
 

@@ -103,6 +103,13 @@ struct RoomPlayerView: View {
                 applyAudioSettings()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            guard let keyWindow = notification.object as? NSWindow,
+                  keyWindow == playerWindow,
+                  let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer
+            else { return }
+            playerLayer.registerRemoteControllEvent()
+        }
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
             if isPlaying {
                 preventSleep()
@@ -114,10 +121,8 @@ struct RoomPlayerView: View {
         .onChange(of: coordinator.state) { _, _ in
             disableWindowBackgroundDrag()
         }
-        // 关键背景:RoomInfoViewModel.setPlayerDelegate 把 playerLayer.delegate 抢成 self,
-        // 因此 KSVideoPlayer.Coordinator.state 永远停在 .initialized,不能用它做起播判定。
-        // RoomInfoViewModel.player(layer:state:) 已经把 layer.player.isPlaying 写到 viewModel.isPlaying,
-        // 直接订阅它作为 sticky 起播信号。one-way sticky:置 true 后不再因暂停翻回。
+        // VM observes Coordinator callbacks without replacing its layer delegate.
+        // Keep a sticky first-play signal so later buffering does not look like startup.
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
             if isPlaying {
                 hasKSStartedPlayback = true
@@ -221,7 +226,7 @@ private extension RoomPlayerView {
                         applyAudioSettings()
                     }
                     .onChange(of: viewModel.currentPlayURL) { _, _ in
-                        // URL 变化时重新设置 delegate
+                        // URL 变化时重新绑定业务回调和采样 layer。
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                             applyAudioSettings()

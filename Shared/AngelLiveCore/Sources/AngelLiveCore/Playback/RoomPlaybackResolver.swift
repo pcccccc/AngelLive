@@ -1,6 +1,6 @@
 import Foundation
 
-public enum RoomPlaybackPlayerKind: Sendable {
+public enum RoomPlaybackPlayerKind: Sendable, Equatable, Hashable {
     case avPlayer
     case mePlayer
 }
@@ -20,6 +20,8 @@ public struct RoomPlaybackSelection: Sendable {
 public struct RoomPlaybackPlan: Sendable {
     public let playerKinds: [RoomPlaybackPlayerKind]
     public let isHLS: Bool
+    public let isLive: Bool
+    public let streamFormat: LivePlaybackStreamFormat
     public let overrideURL: URL?
     public let overrideTitle: String?
     public let resolvedSelection: RoomPlaybackSelection?
@@ -27,12 +29,16 @@ public struct RoomPlaybackPlan: Sendable {
     public init(
         playerKinds: [RoomPlaybackPlayerKind],
         isHLS: Bool,
+        isLive: Bool,
+        streamFormat: LivePlaybackStreamFormat,
         overrideURL: URL? = nil,
         overrideTitle: String? = nil,
         resolvedSelection: RoomPlaybackSelection? = nil
     ) {
         self.playerKinds = playerKinds
         self.isHLS = isHLS
+        self.isLive = isLive
+        self.streamFormat = streamFormat
         self.overrideURL = overrideURL
         self.overrideTitle = overrideTitle
         self.resolvedSelection = resolvedSelection
@@ -67,12 +73,20 @@ public enum RoomPlaybackResolver {
         quality.liveCodeType == .hls || quality.url.lowercased().contains(".m3u8")
     }
 
-    /// 低延迟 HLS(LL-HLS)特征判定:URL 含 `llhls.m3u8` 标记。
+    /// 插件显式 latencyMode 优先；仅缺失时才用 URL 中 `llhls.m3u8` 托底。
     /// 这类 master 通常暴露多路 video/audio rendition,FFmpeg(KSMEPlayer)会对每路串行跑
     /// find_stream_info,起播 ~16s 且可能拖过短时效 token 导致 403;故应优先走原生 AVPlayer。
     /// 用 URL 特征判定,不绑任何平台名。
     public static func isLowLatencyHLS(_ quality: LiveQualityDetail) -> Bool {
-        isHLSQuality(quality) && quality.url.lowercased().contains("llhls.m3u8")
+        guard streamFormat(for: quality) == .hlsLive else { return false }
+        switch quality.playbackHints?.latencyMode {
+        case .lowLatency:
+            return true
+        case .standard:
+            return false
+        case nil:
+            return isHLSQuality(quality) && quality.url.lowercased().contains("llhls.m3u8")
+        }
     }
 
     public static func streamFormat(for quality: LiveQualityDetail) -> LivePlaybackStreamFormat {
@@ -408,11 +422,25 @@ public enum RoomPlaybackResolver {
         let hints = selectedQuality.playbackHints
         let format = streamFormat(for: selectedQuality)
         let requiresCustomSegmentLoader = hints?.requiresCustomSegmentLoader == true
+        let isHLS = format == .hlsLive || format == .hlsVod
+        let isLive = hints?.isLive ?? (format != .hlsVod)
 
         if requiresCustomSegmentLoader {
             return RoomPlaybackPlan(
                 playerKinds: [.mePlayer],
-                isHLS: format == .hlsLive
+                isHLS: isHLS,
+                isLive: isLive,
+                streamFormat: format
+            )
+        }
+
+        if let preferredKinds = compatiblePreferredPlayerKinds(hints?.preferredEngines, format: format),
+           !preferredKinds.isEmpty {
+            return RoomPlaybackPlan(
+                playerKinds: preferredKinds,
+                isHLS: isHLS,
+                isLive: isLive,
+                streamFormat: format
             )
         }
 
@@ -422,18 +450,61 @@ public enum RoomPlaybackResolver {
             // 短时效 token 导致 403。AVPlayer 原生单档起播 + 吃 EXT-X-PART,秒级起播,
             // 故此类主路走 AVPlayer,KSMEPlayer 兜底。
             if isLowLatencyHLS(selectedQuality) {
-                return RoomPlaybackPlan(playerKinds: [.avPlayer, .mePlayer], isHLS: true)
+                return RoomPlaybackPlan(
+                    playerKinds: [.avPlayer, .mePlayer],
+                    isHLS: true,
+                    isLive: isLive,
+                    streamFormat: format
+                )
             }
             // 普通 HLS live 主路走 KSMEPlayer:统计面板 byteRate/networkSpeed 可读、
             // rw_timeout 可控,国外 CDN 卡第一帧场景下零吞吐 watchdog 才能生效。
             // AV 作为兜底:KSPlayerLayer.finish 在 ME 报错时会自动按 playerTypes
             // 顺序起下一个(KSPlayerLayer.swift:683),无需打开 isSecondOpen(那是"预开"开关)。
-            return RoomPlaybackPlan(playerKinds: [.mePlayer, .avPlayer], isHLS: true)
+            return RoomPlaybackPlan(
+                playerKinds: [.mePlayer, .avPlayer],
+                isHLS: true,
+                isLive: isLive,
+                streamFormat: format
+            )
         case .hlsVod:
-            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
+            return RoomPlaybackPlan(
+                playerKinds: [.mePlayer],
+                isHLS: true,
+                isLive: isLive,
+                streamFormat: format
+            )
         case .flv, .dash, .unknown:
             // FLV/DASH/未知 协议 AV 不能直接解,固定走 KSMEPlayer。
-            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
+            return RoomPlaybackPlan(
+                playerKinds: [.mePlayer],
+                isHLS: false,
+                isLive: isLive,
+                streamFormat: format
+            )
+        }
+    }
+
+    private static func compatiblePreferredPlayerKinds(
+        _ engines: [LivePlaybackEngine]?,
+        format: LivePlaybackStreamFormat
+    ) -> [RoomPlaybackPlayerKind]? {
+        guard let engines, !engines.isEmpty else { return nil }
+
+        let allowsAVPlayer = format == .hlsLive || format == .hlsVod
+        var seen = Set<RoomPlaybackPlayerKind>()
+        return engines.compactMap { engine in
+            let kind: RoomPlaybackPlayerKind
+            switch engine {
+            case .mePlayer:
+                kind = .mePlayer
+            case .avPlayer:
+                guard allowsAVPlayer else { return nil }
+                kind = .avPlayer
+            case .unknown:
+                return nil
+            }
+            return seen.insert(kind).inserted ? kind : nil
         }
     }
 
