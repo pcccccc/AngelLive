@@ -33,7 +33,8 @@ enum NowPlayingManager {
     /// - Parameters:
     ///   - room: 当前直播间信息
     ///   - isPlaying: 是否正在播放
-    static func update(room: LiveModel, isPlaying: Bool) {
+    static func update(room: LiveModel, isPlaying: Bool, surfaceID: PlaybackSurfaceID) {
+        guard PlaybackSessionRegistry.shared.isOwner(surfaceID, of: .nowPlaying) else { return }
         let cover = room.roomCover
         currentCoverURL = cover
 
@@ -56,19 +57,23 @@ enum NowPlayingManager {
             guard let artwork else { return }
             artworkCache.setObject(artwork, forKey: cover as NSString)
             // 下载期间房间可能已切换，仅当仍是当前封面才落地
-            guard currentCoverURL == cover else { return }
+            guard currentCoverURL == cover,
+                  PlaybackSessionRegistry.shared.isOwner(surfaceID, of: .nowPlaying)
+            else { return }
             MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
         }
     }
 
     /// 清除 Now Playing 信息
-    static func clear() {
+    static func clear(surfaceID: PlaybackSurfaceID) {
+        guard PlaybackSessionRegistry.shared.isOwner(surfaceID, of: .nowPlaying) else { return }
         currentCoverURL = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     /// 更新播放状态（不改变其他信息）
-    static func updatePlaybackState(isPlaying: Bool) {
+    static func updatePlaybackState(isPlaying: Bool, surfaceID: PlaybackSurfaceID) {
+        guard PlaybackSessionRegistry.shared.isOwner(surfaceID, of: .nowPlaying) else { return }
         MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
     }
 

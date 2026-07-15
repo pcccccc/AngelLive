@@ -153,6 +153,7 @@ final class RoomInfoViewModel {
         KSOptions.isSecondOpen = true
         let option = PlayerOptions()
         option.userAgent = "libmpv"
+        option.registerRemoteControll = false
         option.syncSystemRate = settingModel.syncSystemRate
         self.playerOption = option
         self.currentRoom = currentRoom

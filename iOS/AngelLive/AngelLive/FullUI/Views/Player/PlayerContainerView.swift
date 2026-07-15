@@ -143,7 +143,8 @@ struct PlayerContentView: View {
             lastResignActiveAt = Date()
             if useKSPlayer {
                 // 进入后台时自动开启画中画（每次读取最新设置值）
-                if PlayerSettingModel().enableAutoPiPOnBackground {
+                if PlayerSettingModel().enableAutoPiPOnBackground,
+                   ownsGlobalCapability(.pictureInPicture) {
                     if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
                        !playerLayer.isPictureInPictureActive {
                         playerLayer.pipStart()
@@ -553,6 +554,16 @@ struct PlayerContentView: View {
         shouldShowBuffering || isInitialStreamLoading
     }
 
+    private func activatePlaybackSurface() -> Bool {
+        guard let surfaceID = viewModel.playbackSurfaceID else { return false }
+        return PlaybackSessionRegistry.shared.activate(surfaceID)
+    }
+
+    private func ownsGlobalCapability(_ capability: PlaybackGlobalCapability) -> Bool {
+        guard let surfaceID = viewModel.playbackSurfaceID else { return false }
+        return PlaybackSessionRegistry.shared.isOwner(surfaceID, of: capability)
+    }
+
     private var controlBridge: PlayerControlBridge {
         if useKSPlayer {
             return PlayerControlBridge(
@@ -561,6 +572,7 @@ struct PlayerContentView: View {
                 isInitialLoading: isInitialStreamLoading,
                 supportsPictureInPicture: playerCoordinator.playerLayer is KSComplexPlayerLayer,
                 togglePlayPause: {
+                    guard activatePlaybackSurface() else { return }
                     if viewModel.isPlaying || playerCoordinator.state.isPlaying {
                         playerCoordinator.playerLayer?.pause()
                     } else {
@@ -568,9 +580,11 @@ struct PlayerContentView: View {
                     }
                 },
                 refreshPlayback: {
+                    guard activatePlaybackSurface() else { return }
                     viewModel.refreshPlayback()
                 },
                 togglePictureInPicture: {
+                    guard activatePlaybackSurface() else { return }
                     if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer {
                         if playerLayer.isPictureInPictureActive {
                             playerLayer.pipStop(restoreUserInterface: true)

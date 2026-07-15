@@ -185,6 +185,8 @@ private struct MacDirectURLPlayerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator
+    @StateObject private var playbackSession: KSPlayerPlaybackSession
+    @State private var playerWindow: NSWindow?
     private let playerOptions: KSOptions
 
     init(url: URL, title: String) {
@@ -193,11 +195,16 @@ private struct MacDirectURLPlayerView: View {
 
         let options = KSOptions()
         options.userAgent = "libmpv"
+        options.registerRemoteControll = false
         options.playerTypes = url.absoluteString.lowercased().contains(".m3u8")
             ? [KSAVPlayer.self, KSMEPlayer.self]
             : [KSMEPlayer.self]
         self.playerOptions = options
         _playerCoordinator = StateObject(wrappedValue: KSVideoPlayer.Coordinator())
+        _playbackSession = StateObject(wrappedValue: KSPlayerPlaybackSession(
+            role: .primary,
+            supportedGlobalCapabilities: [.audioFocus, .nowPlaying, .remoteCommands]
+        ))
     }
 
     var body: some View {
@@ -221,6 +228,24 @@ private struct MacDirectURLPlayerView: View {
                 Spacer()
             }
             .padding(16)
+        }
+        .background(PlayerWindowReferenceView(window: $playerWindow))
+        .onAppear {
+            playbackSession.activate()
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
+        }
+        .onDisappear {
+            playbackSession.invalidate()
+        }
+        .onChange(of: playerCoordinator.state) { _, _ in
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            guard let keyWindow = notification.object as? NSWindow,
+                  keyWindow == playerWindow
+            else { return }
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
+            playbackSession.activate()
         }
     }
 }

@@ -21,6 +21,10 @@ struct DetailPlayerView: View {
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
     /// 稳定的播放器模型，避免随视图重建
     @StateObject private var playerModel = KSVideoPlayerModel(title: "", config: KSVideoPlayer.Coordinator(), options: KSOptions(), url: nil)
+    @StateObject private var playbackSession = KSPlayerPlaybackSession(
+        role: .primary,
+        supportedGlobalCapabilities: [.audioFocus, .nowPlaying, .pictureInPicture, .remoteCommands]
+    )
 
     /// iPad 是否处于全屏模式
     @State private var isIPadFullscreen: Bool = false
@@ -297,17 +301,30 @@ struct DetailPlayerView: View {
             }
         }
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
-            NowPlayingManager.updatePlaybackState(isPlaying: isPlaying)
+            NowPlayingManager.updatePlaybackState(
+                isPlaying: isPlaying,
+                surfaceID: playbackSession.surfaceID
+            )
+        }
+        .onChange(of: playerCoordinator.state) { _, _ in
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
         }
         .task {
             await viewModel.loadPlayURL()
         }
         .onAppear {
+            playbackSession.activate()
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
+            viewModel.playbackSurfaceID = playbackSession.surfaceID
             // 添加观看历史记录
             historyModel.addHistory(room: viewModel.currentRoom)
             // 设置 Now Playing 信息(占位;真正稳定的写入在 RoomInfoViewModel 的 readyToPlay 回调里补写)。
             // 远程控制命令(播放/暂停等)由 KSPlayer 的 registerRemoteControll 统一注册,此处不再重复注册。
-            NowPlayingManager.update(room: viewModel.currentRoom, isPlaying: false)
+            NowPlayingManager.update(
+                room: viewModel.currentRoom,
+                isPlaying: false,
+                surfaceID: playbackSession.surfaceID
+            )
             // iPhone 进入播放页时允许自由旋转，横屏时自动全屏
             if !AppConstants.Device.isIPad {
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
@@ -322,7 +339,9 @@ struct DetailPlayerView: View {
             Logger.debug("[PlayerFlow] Detail onDisappear, roomId=\(viewModel.currentRoom.roomId), kernel=\(viewModel.selectedPlayerKernel.rawValue)", category: .player)
             viewModel.disconnectSocket()
             // 清除 Now Playing 信息(远程控制命令由 KSPlayer 在 stop() 时自行注销)
-            NowPlayingManager.clear()
+            NowPlayingManager.clear(surfaceID: playbackSession.surfaceID)
+            playbackSession.invalidate()
+            viewModel.playbackSurfaceID = nil
             // iPhone 返回时强制竖屏
             if !AppConstants.Device.isIPad {
                 // 设置支持的方向为竖屏

@@ -42,6 +42,7 @@ final class RoomInfoViewModel {
 
     // 播放器相关属性
     var playerOption: PlayerOptions
+    var playbackSurfaceID: PlaybackSurfaceID?
     var currentRoomPlayArgs: [LiveQualityModel]?
     var currentPlayQualityString = "清晰度"
     var currentPlayQualityQn = 0
@@ -117,6 +118,7 @@ final class RoomInfoViewModel {
         KSOptions.canBackgroundPlay = PlayerSettingModel().enableBackgroundAudio
         let option = PlayerOptions()
         option.userAgent = "libmpv"
+        option.registerRemoteControll = false
 //        option.allowsExternalPlayback = true  //启用 AirPlay 和外部播放
         // 根据用户设置控制自动画中画行为
         option.canStartPictureInPictureAutomaticallyFromInline = PlayerSettingModel().enableAutoPiPOnBackground
@@ -679,6 +681,9 @@ final class RoomInfoViewModel {
             return
         }
         if armed {
+            guard let playbackSurfaceID,
+                  PlaybackSessionRegistry.shared.isOwner(playbackSurfaceID, of: .pictureInPicture)
+            else { return }
             guard layer.player.pipController == nil else { return }   // 已就绪,幂等
             layer.player.configPIP()
             // delegate 便捷属性跨模块不可见,用公开的 setValue(等价 KSPlayer 内部 `delegate = self`)。
@@ -816,8 +821,12 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         // 会把 onAppear 写的信息抹掉 → 媒体中心有概率变空。
         // readyToPlay 是所有清空动作之后的稳定时点(此后至下次重建不再清空),在此补写一次即可确保
         // 我们的信息最后落地;恢复协调器每次重建也会重新走到 readyToPlay,自动补回被清空的信息。
-        if state == .readyToPlay {
-            NowPlayingManager.update(room: currentRoom, isPlaying: layer.player.isPlaying)
+        if state == .readyToPlay, let playbackSurfaceID {
+            NowPlayingManager.update(
+                room: currentRoom,
+                isPlaying: layer.player.isPlaying,
+                surfaceID: playbackSurfaceID
+            )
         }
     }
 

@@ -98,6 +98,7 @@ final class RoomInfoViewModel {
         KSOptions.isSecondOpen = false
         let option = PlayerOptions()
         option.userAgent = PlayerConstants.defaultUserAgent
+        option.registerRemoteControll = false
         self.playerOption = option
     }
 

@@ -16,6 +16,7 @@ struct SyncView: View {
     var playerOption = {
         let option = KSOptions()
         option.isLoopPlay = true
+        option.registerRemoteControll = false
         return option
     }()
 

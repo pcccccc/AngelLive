@@ -18,6 +18,10 @@ struct RoomPlayerView: View {
     @Environment(HistoryModel.self) private var historyModel
     @State private var viewModel: RoomInfoViewModel
     @StateObject private var coordinator = KSVideoPlayer.Coordinator()
+    @StateObject private var playbackSession = KSPlayerPlaybackSession(
+        role: .primary,
+        supportedGlobalCapabilities: [.audioFocus, .nowPlaying, .remoteCommands]
+    )
     @State private var sleepActivity: NSObjectProtocol?
     @State private var playerWindow: NSWindow?
     @State private var volume: Float = 1.0
@@ -53,6 +57,11 @@ struct RoomPlayerView: View {
         .focusEffectDisabled()
         .background(PlayerWindowReferenceView(window: $playerWindow))
         .onAppear {
+            playbackSession.register()
+            playbackSession.attach(playerLayer: coordinator.playerLayer)
+            if playerWindow?.isKeyWindow == true {
+                playbackSession.activate()
+            }
             disableWindowBackgroundDrag()
             historyModel.addHistory(room: viewModel.currentRoom)
         }
@@ -93,6 +102,7 @@ struct RoomPlayerView: View {
             await viewModel.loadPlayURL()
         }
         .onDisappear {
+            playbackSession.invalidate()
             cleanupPlayer()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
@@ -105,10 +115,10 @@ struct RoomPlayerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             guard let keyWindow = notification.object as? NSWindow,
-                  keyWindow == playerWindow,
-                  let playerLayer = coordinator.playerLayer as? KSComplexPlayerLayer
+                  keyWindow == playerWindow
             else { return }
-            playerLayer.registerRemoteControllEvent()
+            playbackSession.attach(playerLayer: coordinator.playerLayer)
+            playbackSession.activate()
         }
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
             if isPlaying {
@@ -119,6 +129,7 @@ struct RoomPlayerView: View {
             disableWindowBackgroundDrag()
         }
         .onChange(of: coordinator.state) { _, _ in
+            playbackSession.attach(playerLayer: coordinator.playerLayer)
             disableWindowBackgroundDrag()
         }
         // VM observes Coordinator callbacks without replacing its layer delegate.
@@ -399,7 +410,7 @@ private struct MacStreamPlaceholder: View {
     }
 }
 
-private struct PlayerWindowReferenceView: NSViewRepresentable {
+struct PlayerWindowReferenceView: NSViewRepresentable {
     @Binding var window: NSWindow?
 
     func makeNSView(context: Context) -> WindowReferenceView {
@@ -409,7 +420,7 @@ private struct PlayerWindowReferenceView: NSViewRepresentable {
     func updateNSView(_ nsView: WindowReferenceView, context: Context) {}
 }
 
-private final class WindowReferenceView: NSView {
+final class WindowReferenceView: NSView {
     @Binding var windowBinding: NSWindow?
 
     init(window: Binding<NSWindow?>) {

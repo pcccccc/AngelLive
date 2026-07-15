@@ -22,6 +22,7 @@ struct DirectURLPlayerView: View {
     // KS 播放器
     @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator
     @StateObject private var playerModel: KSVideoPlayerModel
+    @StateObject private var playbackSession: KSPlayerPlaybackSession
 
     // VLC 播放器
     @StateObject private var vlcPlaybackController = VLCPlaybackController()
@@ -52,6 +53,7 @@ struct DirectURLPlayerView: View {
         // 初始化 KSPlayer 选项
         let options = PlayerOptions()
         options.userAgent = "libmpv"
+        options.registerRemoteControll = false
         options.canStartPictureInPictureAutomaticallyFromInline = PlayerSettingModel().enableAutoPiPOnBackground
 
         KSOptions.isAutoPlay = true
@@ -76,6 +78,10 @@ struct DirectURLPlayerView: View {
         )
         _playerCoordinator = StateObject(wrappedValue: coordinator)
         _playerModel = StateObject(wrappedValue: model)
+        _playbackSession = StateObject(wrappedValue: KSPlayerPlaybackSession(
+            role: .primary,
+            supportedGlobalCapabilities: [.audioFocus, .pictureInPicture, .remoteCommands]
+        ))
     }
 
     var body: some View {
@@ -120,12 +126,15 @@ struct DirectURLPlayerView: View {
         .persistentSystemOverlays(.hidden)
         .onAppear {
             transition(.loadRequested)
+            playbackSession.activate()
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
             // iPhone 支持横屏旋转
             if !AppConstants.Device.isIPad {
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
             }
         }
         .onDisappear {
+            playbackSession.invalidate()
             // iPhone 返回时强制竖屏
             if !AppConstants.Device.isIPad {
                 KSOptions.supportedInterfaceOrientations = .portrait
@@ -145,6 +154,7 @@ struct DirectURLPlayerView: View {
         }
         .onChange(of: playerCoordinator.state) {
             guard useKSPlayer else { return }
+            playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
             transition(.engineStateChanged(
                 mapKSPlayerEngineState(playerCoordinator.state),
                 isPlaying: playerCoordinator.playerLayer?.player.isPlaying == true
@@ -154,7 +164,8 @@ struct DirectURLPlayerView: View {
         // 后台自动 PiP
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             if useKSPlayer {
-                if PlayerSettingModel().enableAutoPiPOnBackground {
+                if PlayerSettingModel().enableAutoPiPOnBackground,
+                   playbackSession.owns(.pictureInPicture) {
                     #if canImport(KSPlayer)
                     if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
                        !playerLayer.isPictureInPictureActive {
@@ -245,6 +256,7 @@ struct DirectURLPlayerView: View {
                 isBuffering: playbackStatus == .buffering,
                 supportsPictureInPicture: playerCoordinator.playerLayer is KSComplexPlayerLayer,
                 togglePlayPause: {
+                    guard playbackSession.activate() else { return }
                     if canPauseKSPlayback {
                         playerCoordinator.playerLayer?.pause()
                     } else {
@@ -252,9 +264,11 @@ struct DirectURLPlayerView: View {
                     }
                 },
                 refreshPlayback: {
+                    guard playbackSession.activate() else { return }
                     refreshPlayback()
                 },
                 togglePictureInPicture: {
+                    guard playbackSession.activate() else { return }
                     #if canImport(KSPlayer)
                     if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer {
                         if playerLayer.isPictureInPictureActive {

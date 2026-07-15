@@ -28,6 +28,7 @@ struct TVDirectURLPlayerView: View {
         let options = KSOptions()
         options.userAgent = "libmpv"
         options.isAutoPlay = true
+        options.registerRemoteControll = false
         let lowercasedURL = url.absoluteString.lowercased()
         options.playerTypes = lowercasedURL.contains(".m3u8")
             ? [KSAVPlayer.self, KSMEPlayer.self]
