@@ -11,10 +11,12 @@ import AngelLiveDependencies
 
 struct DetailPlayerView: View {
     @State var viewModel: RoomInfoViewModel
+    let categoryRooms: [LiveModel]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(HistoryModel.self) private var historyModel
+    @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
@@ -45,6 +47,21 @@ struct DetailPlayerView: View {
     @State private var showJumpToLatest: Bool = false
     /// 触发跳到底部的请求
     @State private var scrollToBottomRequest: Bool = false
+
+    @State private var isRoomSwitcherPresented = false
+    @State private var selectedRoomSourceIndex: Int
+    @State private var switchingRoomID: String?
+    @State private var failedRoomID: String?
+    @State private var roomSwitchFailureMessage: String?
+    @State private var roomSwitchTask: Task<Void, Never>?
+
+    init(viewModel: RoomInfoViewModel, categoryRooms: [LiveModel] = []) {
+        _viewModel = State(initialValue: viewModel)
+        self.categoryRooms = categoryRooms
+        let hasCategoryRooms = categoryRooms.contains(viewModel.currentRoom)
+            && categoryRooms.contains { $0 != viewModel.currentRoom }
+        _selectedRoomSourceIndex = State(initialValue: hasCategoryRooms ? 2 : 0)
+    }
 
     private var currentPlaybackError: Error? {
         viewModel.playError
@@ -217,21 +234,13 @@ struct DetailPlayerView: View {
                     if showInfoPanel {
                         if AppConstants.Device.isIPad && isLandscape {
                             // iPad 横屏：右侧面板
-                            VStack(spacing: 0) {
-                                StreamerInfoView()
-                                    .environment(viewModel)
-                                chatAreaWithMoreButton
-                            }
+                            informationArea
                             .frame(width: 400)
                             .frame(maxHeight: .infinity, alignment: .topLeading)
                             .offset(x: geometry.size.width - 400, y: 0)
                         } else {
                             // 竖屏：底部面板
-                            VStack(spacing: 0) {
-                                StreamerInfoView()
-                                    .environment(viewModel)
-                                chatAreaWithMoreButton
-                            }
+                            informationArea
                             .frame(maxWidth: .infinity)
                             .frame(height: geometry.size.height - playerHeight)
                             .offset(x: 0, y: playerHeight)
@@ -336,6 +345,7 @@ struct DetailPlayerView: View {
             }
         }
         .onDisappear {
+            roomSwitchTask?.cancel()
             Logger.debug("[PlayerFlow] Detail onDisappear, roomId=\(viewModel.currentRoom.roomId), kernel=\(viewModel.selectedPlayerKernel.rawValue)", category: .player)
             viewModel.disconnectSocket()
             // 清除 Now Playing 信息(远程控制命令由 KSPlayer 在 stop() 时自行注销)
@@ -429,17 +439,8 @@ struct DetailPlayerView: View {
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)
 
-            // 右侧：主播信息 + 聊天
-            VStack(spacing: 0) {
-                StreamerInfoView()
-                    .environment(viewModel)
-
-                Divider()
-                    .background(Color.white.opacity(0.2))
-
-                chatAreaWithMoreButton
-            }
-            .frame(width: 400)
+            informationArea
+                .frame(width: 400)
         }
     }
 
@@ -452,21 +453,19 @@ struct DetailPlayerView: View {
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)
 
-            // 主播信息
-            StreamerInfoView()
-                .environment(viewModel)
-
-            // 聊天区域
-            chatAreaWithMoreButton
+            informationArea
         }
     }
 
-    // MARK: - 聊天区域（带更多按钮）
+    // MARK: - 播放器下方信息区
 
-    private var chatAreaWithMoreButton: some View {
+    private var informationArea: some View {
         ZStack(alignment: .bottomTrailing) {
-            // 聊天消息列表
-            chatListView
+            VStack(spacing: 0) {
+                StreamerInfoView()
+                    .environment(viewModel)
+                chatListView
+            }
 
             if showJumpToLatest {
                 jumpToLatestButton
@@ -475,14 +474,30 @@ struct DetailPlayerView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            // 更多功能按钮（右下角）
-            MoreActionsButton(
+            RoomActionDock(
+                isSwitcherPresented: isRoomSwitcherPresented,
                 room: viewModel.currentRoom,
+                onToggleSwitcher: toggleRoomSwitcher,
                 onClearChat: clearChat
             )
             .environment(viewModel)
             .padding(.trailing, 16)
             .padding(.bottom, 16)
+        }
+        .sheet(isPresented: $isRoomSwitcherPresented) {
+            RoomSwitcherPanel(
+                currentRoom: viewModel.currentRoom,
+                favorites: favoriteModel.roomList,
+                history: historyModel.watchList,
+                category: categoryRooms,
+                selectedSourceIndex: $selectedRoomSourceIndex,
+                switchingRoomID: switchingRoomID,
+                failedRoomID: failedRoomID,
+                failureMessage: roomSwitchFailureMessage,
+                onSelect: switchRoom
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -524,6 +539,43 @@ struct DetailPlayerView: View {
         withAnimation {
             viewModel.danmuMessages.removeAll()
             showJumpToLatest = false
+        }
+    }
+
+    private func toggleRoomSwitcher() {
+        isRoomSwitcherPresented.toggle()
+    }
+
+    private func switchRoom(_ room: LiveModel) {
+        roomSwitchTask?.cancel()
+        switchingRoomID = room.id
+        failedRoomID = nil
+        roomSwitchFailureMessage = nil
+        let requestRoomID = room.id
+
+        roomSwitchTask = Task { @MainActor in
+            do {
+                try await viewModel.switchRoom(to: room)
+                try Task.checkCancellation()
+
+                historyModel.addHistory(room: room)
+                NowPlayingManager.update(
+                    room: room,
+                    isPlaying: false,
+                    surfaceID: playbackSession.surfaceID
+                )
+
+                if switchingRoomID == requestRoomID {
+                    switchingRoomID = nil
+                }
+            } catch is CancellationError {
+                // A newer room selection owns the visible switching state.
+            } catch {
+                guard switchingRoomID == requestRoomID else { return }
+                switchingRoomID = nil
+                failedRoomID = requestRoomID
+                roomSwitchFailureMessage = error.localizedDescription
+            }
         }
     }
 }

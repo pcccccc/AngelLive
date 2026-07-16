@@ -16,6 +16,7 @@ struct MoreActionsButton: View {
     var onClearChat: () -> Void
     var showQualityOption: Bool = false
     var onShowQualityPanel: (() -> Void)? = nil
+    var embeddedInDock: Bool = false
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var showStreamerInfo = false
@@ -61,22 +62,23 @@ struct MoreActionsButton: View {
                 onClearChat()
             }
         } label: {
-            Image(systemName: "ellipsis.circle.fill")
+            Image(systemName: embeddedInDock ? "ellipsis" : "ellipsis.circle.fill")
                 .font(.title2)
-                .foregroundStyle(.white)
+                .foregroundStyle(embeddedInDock ? Color.primary : Color.white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(embeddedInDock ? AnyShapeStyle(.clear) : AnyShapeStyle(.ultraThinMaterial))
                 )
                 .shadow(
-                    color: .black.opacity(0.2),
+                    color: .black.opacity(embeddedInDock ? 0 : 0.2),
                     radius: 4,
                     x: 0,
                     y: 2
                 )
         }
         .menuIndicator(.hidden)
+        .accessibilityLabel("更多直播间操作")
         .sheet(isPresented: $showStreamerInfo) {
             StreamerInfoSheet(room: room)
                 .presentationDetents([.medium, .large])

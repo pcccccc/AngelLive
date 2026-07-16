@@ -34,6 +34,18 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
         applyRootView(AnyView(roomCard), interactive: true)
     }
 
+    /// 仅复用房间卡片外观，点击统一交给 UICollectionViewDelegate。
+    func configureForSelection(
+        with room: LiveModel,
+        favoriteModel: AppFavoriteModel,
+        liveCheckMode: LiveCheckMode = .local,
+        showsCoverBadge: Bool = false
+    ) {
+        var roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
+        roomCard.disableTapGesture = true
+        applyRootView(AnyView(roomCard.environment(favoriteModel)), interactive: false)
+    }
+
     /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
     /// cell-based 场景:SwiftUI 只渲染视觉,tap 由 UICollectionView.didSelectItemAt 接管
     func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, liveCheckMode: LiveCheckMode = .local, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {

@@ -19,6 +19,20 @@ enum PlayerDisplayState {
     case streamerOffline  // 主播已下播
 }
 
+enum RoomSwitchError: LocalizedError {
+    case unsupportedPlatform
+    case noPlayableSource
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedPlatform:
+            return "暂不支持该直播平台"
+        case .noPlayableSource:
+            return "这个直播间暂无可用播放源"
+        }
+    }
+}
+
 // MARK: - 播放器常量配置
 private enum PlayerConstants {
     /// 弹幕消息最大数量限制
@@ -63,6 +77,7 @@ final class RoomInfoViewModel {
     
     /// 需要重新取流的清晰度切换任务，用于取消之前的请求
     private var qualitySwitchTask: Task<Void, Never>?
+    private var danmuConnectionTask: Task<Void, Never>?
 
     // MARK: - 统一播放恢复协调器
     /// 卡顿检测 + 自动恢复的单一状态机,替换原 stall watchdog + managed retry(修 Bug A/B)。
@@ -151,6 +166,67 @@ final class RoomInfoViewModel {
             playErrorMessage = nil
         }
         await getPlayArgs(silent: silentRefresh)
+    }
+
+    /// 先完整准备目标房间的播放参数，成功后再提交，切换失败时保留当前直播。
+    @MainActor
+    func switchRoom(to room: LiveModel) async throws {
+        guard room != currentRoom else { return }
+        guard let platform = SandboxPluginCatalog.platform(for: room.liveType) else {
+            throw RoomSwitchError.unsupportedPlatform
+        }
+
+        let fetchedArgs = try await LiveParseJSPlatformManager.getPlayArgs(
+            platform: platform,
+            roomId: room.roomId,
+            userId: room.userId
+        )
+        try Task.checkCancellation()
+
+        guard let selection = RoomPlaybackResolver.firstSelection(in: fetchedArgs) else {
+            throw RoomSwitchError.noPlayableSource
+        }
+
+        var stagedArgs = fetchedArgs
+        if RoomPlaybackResolver.requiresRefreshOnSelect(selection.quality) {
+            var preparedQuality = try await RoomPlaybackPreparer.prepare(
+                roomId: room.roomId,
+                cdn: stagedArgs[selection.cdnIndex],
+                quality: selection.quality,
+                plugin: platform
+            )
+            try Task.checkCancellation()
+
+            var hints = preparedQuality.playbackHints ?? LivePlaybackHints()
+            hints.selectionBehavior = .direct
+            preparedQuality.playbackHints = hints
+            stagedArgs[selection.cdnIndex].qualitys[selection.qualityIndex] = preparedQuality
+        }
+
+        guard RoomPlaybackResolver.firstPlayableURL(from: stagedArgs) != nil else {
+            throw RoomSwitchError.noPlayableSource
+        }
+        try Task.checkCancellation()
+
+        qualitySwitchTask?.cancel()
+        disconnectSocket()
+        danmuMessages.removeAll(keepingCapacity: true)
+        danmuCoordinator.clear()
+
+        currentRoom = room
+        currentRoomPlayArgs = nil
+        currentCdnIndex = 0
+        currentQualityIndex = 0
+        currentPlayQualityString = "清晰度"
+        currentPlayQualityQn = 0
+        playError = nil
+        playErrorMessage = nil
+        displayState = .playing
+        isFetchingPlayURL = false
+        hasLoadedPlayURL = false
+        isLoading = true
+
+        updateCurrentRoomPlayArgs(stagedArgs)
     }
 
     // 获取播放参数
@@ -539,6 +615,7 @@ final class RoomInfoViewModel {
     }
 
     /// 获取弹幕连接信息并连接
+    @MainActor
     func getDanmuInfo() {
         // 检查平台是否支持弹幕
         if !platformSupportsDanmu() {
@@ -552,66 +629,69 @@ final class RoomInfoViewModel {
             return
         }
 
-        Task {
-            danmuServerIsLoading = true
+        danmuConnectionTask?.cancel()
+        let room = currentRoom
+        danmuConnectionTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.danmuServerIsLoading = true
 
             // 添加连接中消息
-            await MainActor.run {
-                addSystemMessage("正在连接弹幕服务器...")
-            }
+            self.addSystemMessage("正在连接弹幕服务器...")
 
             var danmakuPlan = LiveParseDanmakuPlan(args: [:], headers: [:])
             do {
-                guard let platform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
+                guard let platform = SandboxPluginCatalog.platform(for: room.liveType) else {
                     throw NSError(
                         domain: "danmu.platform",
                         code: -1,
-                        userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
+                        userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(room.liveType.rawValue)"]
                     )
                 }
                 danmakuPlan = try await LiveParseJSPlatformManager.getDanmakuPlan(
                     platform: platform,
-                    roomId: currentRoom.roomId,
-                    userId: currentRoom.userId
+                    roomId: room.roomId,
+                    userId: room.userId
                 )
 
-                await MainActor.run {
-                    let parameters = danmakuPlan.legacyParameters
+                try Task.checkCancellation()
+                guard self.currentRoom == room else { return }
 
-                    if danmakuPlan.prefersHTTPPolling {
-                        // 使用 HTTP 轮询连接
-                        httpPollingConnection = HTTPPollingDanmakuConnection(
-                            parameters: parameters,
-                            headers: danmakuPlan.headers,
-                            liveType: currentRoom.liveType,
-                            pluginId: platform.pluginId,
-                            roomId: currentRoom.roomId,
-                            userId: currentRoom.userId,
-                            danmakuPlan: danmakuPlan
-                        )
-                        httpPollingConnection?.delegate = self
-                        httpPollingConnection?.connect()
-                    } else {
-                        // 使用 WebSocket 连接
-                        socketConnection = WebSocketConnection(
-                            parameters: parameters,
-                            headers: danmakuPlan.headers,
-                            liveType: currentRoom.liveType,
-                            pluginId: platform.pluginId,
-                            roomId: currentRoom.roomId,
-                            userId: currentRoom.userId,
-                            danmakuPlan: danmakuPlan
-                        )
-                        socketConnection?.delegate = self
-                        socketConnection?.connect()
-                    }
+                let parameters = danmakuPlan.legacyParameters
+
+                if danmakuPlan.prefersHTTPPolling {
+                    // 使用 HTTP 轮询连接
+                    self.httpPollingConnection = HTTPPollingDanmakuConnection(
+                        parameters: parameters,
+                        headers: danmakuPlan.headers,
+                        liveType: room.liveType,
+                        pluginId: platform.pluginId,
+                        roomId: room.roomId,
+                        userId: room.userId,
+                        danmakuPlan: danmakuPlan
+                    )
+                    self.httpPollingConnection?.delegate = self
+                    self.httpPollingConnection?.connect()
+                } else {
+                    // 使用 WebSocket 连接
+                    self.socketConnection = WebSocketConnection(
+                        parameters: parameters,
+                        headers: danmakuPlan.headers,
+                        liveType: room.liveType,
+                        pluginId: platform.pluginId,
+                        roomId: room.roomId,
+                        userId: room.userId,
+                        danmakuPlan: danmakuPlan
+                    )
+                    self.socketConnection?.delegate = self
+                    self.socketConnection?.connect()
                 }
+            } catch is CancellationError {
+                return
             } catch {
+                guard self.currentRoom == room else { return }
                 Logger.error(error, message: "获取弹幕连接失败", category: .danmu)
-                await MainActor.run {
-                    danmuServerIsLoading = false
-                    addSystemMessage("连接弹幕服务器失败：\(error.localizedDescription)")
-                }
+                self.danmuServerIsLoading = false
+                self.addSystemMessage("连接弹幕服务器失败：\(error.localizedDescription)")
             }
         }
     }
@@ -619,6 +699,8 @@ final class RoomInfoViewModel {
     /// 断开弹幕连接
     @MainActor
     func disconnectSocket() {
+        danmuConnectionTask?.cancel()
+        danmuConnectionTask = nil
         // 断开 WebSocket
         socketConnection?.delegate = nil
         socketConnection?.disconnect()

@@ -22,17 +22,22 @@ class RoomListViewController: UIViewController {
     private let namespace: Namespace.ID?
     private weak var favoriteModel: AppFavoriteModel?
     private var rooms: [LiveModel] = []
+    private let usesStaticRooms: Bool
+    private var onSelectRoom: ((LiveModel) -> Void)?
+    private let emptyTitle: String
+    private let emptyMessage: String
+    private let emptySymbolName: String
     /// 由 SwiftUI wrapper(经 PlatformDetailVC / SubCategoryVC)透传过来,用来弹 swiftui-toasts 的 toast。
     var toastPresenter: ((ToastValue) -> Void)?
 
     private lazy var collectionView: UICollectionView = {
         let layout = createLayout()
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        cv.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        cv.backgroundColor = usesStaticRooms ? .clear : UIColor(AppConstants.Colors.primaryBackground)
         cv.delegate = self
         cv.dataSource = self
         cv.register(LiveRoomCollectionViewCell.self, forCellWithReuseIdentifier: LiveRoomCollectionViewCell.reuseIdentifier)
-        cv.refreshControl = refreshControl
+        cv.refreshControl = usesStaticRooms ? nil : refreshControl
         cv.translatesAutoresizingMaskIntoConstraints = false
         // iOS UIScrollView 默认 delaysContentTouches=true 会让 SwiftUI Button 的 gesture 卡 150ms,
         // 在 UIHostingController-in-cell 这种场景下会导致 tap 经常被吞。macOS Catalyst 不存在这个机制,所以那边都正常。
@@ -51,6 +56,7 @@ class RoomListViewController: UIViewController {
     }()
 
     private var errorHostingController: UIHostingController<ErrorView>?
+    private var emptyHostingController: UIHostingController<AnyView>?
     private var isLoadingMore = false
     private var lastKnownCollectionWidth: CGFloat = 0
 
@@ -63,6 +69,33 @@ class RoomListViewController: UIViewController {
         self.navigationState = navigationState
         self.namespace = namespace
         self.favoriteModel = favoriteModel
+        self.usesStaticRooms = false
+        self.emptyTitle = "暂无直播间"
+        self.emptyMessage = "当前分区暂时没有可显示的直播间。"
+        self.emptySymbolName = "rectangle.stack.badge.questionmark"
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    init(
+        rooms: [LiveModel],
+        emptyTitle: String,
+        emptyMessage: String,
+        emptySymbolName: String,
+        favoriteModel: AppFavoriteModel?,
+        onSelectRoom: @escaping (LiveModel) -> Void
+    ) {
+        self.viewModel = nil
+        self.mainCategoryIndex = 0
+        self.subCategoryIndex = 0
+        self.navigationState = nil
+        self.namespace = nil
+        self.favoriteModel = favoriteModel
+        self.rooms = rooms
+        self.usesStaticRooms = true
+        self.onSelectRoom = onSelectRoom
+        self.emptyTitle = emptyTitle
+        self.emptyMessage = emptyMessage
+        self.emptySymbolName = emptySymbolName
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -102,7 +135,7 @@ class RoomListViewController: UIViewController {
     // MARK: - Setup
 
     private func setupUI() {
-        view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        view.backgroundColor = usesStaticRooms ? .clear : UIColor(AppConstants.Colors.primaryBackground)
         view.addSubview(collectionView)
 
         NSLayoutConstraint.activate([
@@ -161,6 +194,11 @@ class RoomListViewController: UIViewController {
     // MARK: - Data Loading
 
     private func loadData() {
+        if usesStaticRooms {
+            updateStaticViewState()
+            return
+        }
+
         guard let viewModel = viewModel else { return }
 
         let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
@@ -213,7 +251,7 @@ class RoomListViewController: UIViewController {
     }
 
     private func loadMore() {
-        guard !isLoadingMore, let viewModel = viewModel else { return }
+        guard !usesStaticRooms, !isLoadingMore, let viewModel = viewModel else { return }
 
         isLoadingMore = true
 
@@ -235,6 +273,7 @@ class RoomListViewController: UIViewController {
     }
 
     func updateRooms() {
+        guard !usesStaticRooms else { return }
         guard let viewModel = viewModel else { return }
         let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
         rooms = viewModel.roomListCache[cacheKey] ?? []
@@ -250,6 +289,56 @@ class RoomListViewController: UIViewController {
         // reloadData 后立刻 layoutIfNeeded,把 cells 注册进 visibleCells,
         // 否则 cv 在内容不足 + JX 嵌套场景下可能直到下次 layout pass 才注册,didSelectItemAt 失效。
         collectionView.layoutIfNeeded()
+    }
+
+    func updateStaticRooms(_ rooms: [LiveModel]) {
+        guard usesStaticRooms else { return }
+        guard self.rooms != rooms else { return }
+        self.rooms = rooms
+        updateStaticViewState()
+    }
+
+    private func updateStaticViewState() {
+        hideErrorView()
+        hideEmptyView()
+
+        guard rooms.isEmpty else {
+            collectionView.isHidden = false
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+            return
+        }
+
+        collectionView.isHidden = true
+        let emptyView = AnyView(
+            ContentUnavailableView(
+                emptyTitle,
+                systemImage: emptySymbolName,
+                description: Text(emptyMessage)
+            )
+        )
+        let hostingController = UIHostingController(rootView: emptyView)
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        hostingController.didMove(toParent: self)
+        emptyHostingController = hostingController
+    }
+
+    private func hideEmptyView() {
+        guard let emptyHostingController else { return }
+        emptyHostingController.willMove(toParent: nil)
+        emptyHostingController.view.removeFromSuperview()
+        emptyHostingController.removeFromParent()
+        self.emptyHostingController = nil
     }
 
     // MARK: - Error Handling
@@ -336,7 +425,10 @@ extension RoomListViewController: UICollectionViewDataSource {
             return cell
         }
         let room = currentRooms[indexPath.item]
-        if let navigationState, let namespace {
+        if usesStaticRooms {
+            guard let favoriteModel else { return cell }
+            cell.configureForSelection(with: room, favoriteModel: favoriteModel, liveCheckMode: .none)
+        } else if let navigationState, let namespace {
             cell.configure(with: room, navigationState: navigationState, namespace: namespace, liveCheckMode: .none)
         } else {
             cell.configure(with: room, liveCheckMode: .none)
@@ -353,7 +445,7 @@ extension RoomListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         // 加载更多逻辑
         let count = rooms.count
-        if count > 0, indexPath.item == count - 1 {
+        if !usesStaticRooms, count > 0, indexPath.item == count - 1 {
             loadMore()
         }
     }
@@ -363,8 +455,12 @@ extension RoomListViewController: UICollectionViewDelegate {
         let currentRooms = rooms
         guard indexPath.item < currentRooms.count else { return }
         let room = currentRooms[indexPath.item]
+        if let onSelectRoom {
+            onSelectRoom(room)
+            return
+        }
         // mode = .none(房间列表):直接进入,不判断在播状态
-        navigationState?.navigate(to: room)
+        navigationState?.navigate(to: room, categoryRooms: currentRooms)
     }
 
     /// 长按弹"收藏 / 取消收藏"菜单(UICollectionView 接管,因为 cell-based 路径下

@@ -19,9 +19,13 @@ class LiveRoomNavigationState {
     /// 当前选中的房间
     var currentRoom: LiveModel?
 
+    /// 从分区列表进入时保留当时的房间快照，供播放页连续换台。
+    var categoryRooms: [LiveModel] = []
+
     /// 导航到指定房间
-    func navigate(to room: LiveModel) {
+    func navigate(to room: LiveModel, categoryRooms: [LiveModel] = []) {
         currentRoom = room
+        self.categoryRooms = categoryRooms
         showPlayer = true
     }
 
@@ -29,6 +33,7 @@ class LiveRoomNavigationState {
     func dismiss() {
         showPlayer = false
         currentRoom = nil
+        categoryRooms = []
     }
 }
 

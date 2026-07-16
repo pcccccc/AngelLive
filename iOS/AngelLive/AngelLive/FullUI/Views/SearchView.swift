@@ -37,7 +37,10 @@ struct SearchView: View {
     @ViewBuilder
     private var playerDestination: some View {
         if let room = navigationState.currentRoom {
-            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+            DetailPlayerView(
+                viewModel: RoomInfoViewModel(room: room),
+                categoryRooms: navigationState.categoryRooms
+            )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
                 .toolbar(.hidden, for: .tabBar)
         }
