@@ -12,6 +12,8 @@ import AngelLiveDependencies
 struct DetailPlayerView: View {
     @State var viewModel: RoomInfoViewModel
     let categoryRooms: [LiveModel]
+    let canLoadMoreCategoryRooms: () -> Bool
+    let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -54,13 +56,23 @@ struct DetailPlayerView: View {
     @State private var failedRoomID: String?
     @State private var roomSwitchFailureMessage: String?
     @State private var roomSwitchTask: Task<Void, Never>?
+    @State private var switcherCategoryRooms: [LiveModel]
+    @State private var isLoadingMoreCategoryRooms = false
 
-    init(viewModel: RoomInfoViewModel, categoryRooms: [LiveModel] = []) {
+    init(
+        viewModel: RoomInfoViewModel,
+        categoryRooms: [LiveModel] = [],
+        canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
+        onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil
+    ) {
         _viewModel = State(initialValue: viewModel)
         self.categoryRooms = categoryRooms
+        self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
+        self.onLoadMoreCategoryRooms = onLoadMoreCategoryRooms
         let hasCategoryRooms = categoryRooms.contains(viewModel.currentRoom)
             && categoryRooms.contains { $0 != viewModel.currentRoom }
         _selectedRoomSourceIndex = State(initialValue: hasCategoryRooms ? 2 : 0)
+        _switcherCategoryRooms = State(initialValue: categoryRooms)
     }
 
     private var currentPlaybackError: Error? {
@@ -489,15 +501,21 @@ struct DetailPlayerView: View {
                 currentRoom: viewModel.currentRoom,
                 favorites: favoriteModel.roomList,
                 history: historyModel.watchList,
-                category: categoryRooms,
+                category: switcherCategoryRooms,
                 selectedSourceIndex: $selectedRoomSourceIndex,
                 switchingRoomID: switchingRoomID,
                 failedRoomID: failedRoomID,
                 failureMessage: roomSwitchFailureMessage,
+                canLoadMoreCategory: canLoadMoreCategoryRooms,
+                isLoadingMoreCategory: isLoadingMoreCategoryRooms,
+                onLoadMoreCategory: loadMoreSwitcherCategoryRooms,
                 onSelect: switchRoom
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .onChange(of: categoryRooms) { _, newValue in
+            switcherCategoryRooms = newValue
         }
     }
 
@@ -577,6 +595,21 @@ struct DetailPlayerView: View {
                 roomSwitchFailureMessage = error.localizedDescription
             }
         }
+    }
+
+    @MainActor
+    private func loadMoreSwitcherCategoryRooms() async -> [LiveModel] {
+        guard !isLoadingMoreCategoryRooms,
+              let onLoadMoreCategoryRooms else {
+            return switcherCategoryRooms
+        }
+
+        isLoadingMoreCategoryRooms = true
+        defer { isLoadingMoreCategoryRooms = false }
+
+        let rooms = await onLoadMoreCategoryRooms()
+        switcherCategoryRooms = rooms
+        return rooms
     }
 }
 

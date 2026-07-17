@@ -23,6 +23,8 @@ class RoomListViewController: UIViewController {
     private weak var favoriteModel: AppFavoriteModel?
     private var rooms: [LiveModel] = []
     private let usesStaticRooms: Bool
+    private let canLoadMoreStaticRooms: (() -> Bool)?
+    private let onLoadMoreStaticRooms: (() async -> [LiveModel])?
     private var onSelectRoom: ((LiveModel) -> Void)?
     private let emptyTitle: String
     private let emptyMessage: String
@@ -58,6 +60,7 @@ class RoomListViewController: UIViewController {
     private var errorHostingController: UIHostingController<ErrorView>?
     private var emptyHostingController: UIHostingController<AnyView>?
     private var isLoadingMore = false
+    private var isLoadingMoreStaticRooms = false
     private var lastKnownCollectionWidth: CGFloat = 0
 
     // MARK: - Initialization
@@ -70,6 +73,8 @@ class RoomListViewController: UIViewController {
         self.namespace = namespace
         self.favoriteModel = favoriteModel
         self.usesStaticRooms = false
+        self.canLoadMoreStaticRooms = nil
+        self.onLoadMoreStaticRooms = nil
         self.emptyTitle = "暂无直播间"
         self.emptyMessage = "当前分区暂时没有可显示的直播间。"
         self.emptySymbolName = "rectangle.stack.badge.questionmark"
@@ -82,6 +87,8 @@ class RoomListViewController: UIViewController {
         emptyMessage: String,
         emptySymbolName: String,
         favoriteModel: AppFavoriteModel?,
+        canLoadMore: (() -> Bool)? = nil,
+        onLoadMore: (() async -> [LiveModel])? = nil,
         onSelectRoom: @escaping (LiveModel) -> Void
     ) {
         self.viewModel = nil
@@ -92,6 +99,8 @@ class RoomListViewController: UIViewController {
         self.favoriteModel = favoriteModel
         self.rooms = rooms
         self.usesStaticRooms = true
+        self.canLoadMoreStaticRooms = canLoadMore
+        self.onLoadMoreStaticRooms = onLoadMore
         self.onSelectRoom = onSelectRoom
         self.emptyTitle = emptyTitle
         self.emptyMessage = emptyMessage
@@ -202,24 +211,15 @@ class RoomListViewController: UIViewController {
         guard let viewModel = viewModel else { return }
 
         let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
-        rooms = viewModel.roomListCache[cacheKey] ?? []
+        rooms = viewModel.rooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
 
         // 如果缓存中没有数据，则加载
         if rooms.isEmpty {
             Task { @MainActor in
-                // 临时保存当前选择的索引
-                let oldMainIndex = viewModel.selectedMainCategoryIndex
-                let oldSubIndex = viewModel.selectedSubCategoryIndex
-
-                // 设置索引以便 ViewModel 加载正确的数据
-                viewModel.selectedMainCategoryIndex = mainCategoryIndex
-                viewModel.selectedSubCategoryIndex = subCategoryIndex
-
-                await viewModel.loadRoomList()
-
-                // 恢复原来的索引
-                viewModel.selectedMainCategoryIndex = oldMainIndex
-                viewModel.selectedSubCategoryIndex = oldSubIndex
+                await viewModel.loadRoomList(
+                    mainCategoryIndex: mainCategoryIndex,
+                    subCategoryIndex: subCategoryIndex
+                )
 
                 // 更新数据
                 updateRooms()
@@ -234,16 +234,10 @@ class RoomListViewController: UIViewController {
         }
 
         Task { @MainActor in
-            let oldMainIndex = viewModel.selectedMainCategoryIndex
-            let oldSubIndex = viewModel.selectedSubCategoryIndex
-
-            viewModel.selectedMainCategoryIndex = mainCategoryIndex
-            viewModel.selectedSubCategoryIndex = subCategoryIndex
-
-            await viewModel.loadRoomList()
-
-            viewModel.selectedMainCategoryIndex = oldMainIndex
-            viewModel.selectedSubCategoryIndex = oldSubIndex
+            await viewModel.loadRoomList(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
 
             updateRooms()
             refreshControl.endRefreshing()
@@ -252,34 +246,43 @@ class RoomListViewController: UIViewController {
 
     private func loadMore() {
         guard !usesStaticRooms, !isLoadingMore, let viewModel = viewModel else { return }
+        guard viewModel.canLoadMoreRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) else { return }
 
         isLoadingMore = true
 
         Task { @MainActor in
-            let oldMainIndex = viewModel.selectedMainCategoryIndex
-            let oldSubIndex = viewModel.selectedSubCategoryIndex
-
-            viewModel.selectedMainCategoryIndex = mainCategoryIndex
-            viewModel.selectedSubCategoryIndex = subCategoryIndex
-
-            await viewModel.loadMore()
-
-            viewModel.selectedMainCategoryIndex = oldMainIndex
-            viewModel.selectedSubCategoryIndex = oldSubIndex
+            await viewModel.loadMoreRooms(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
 
             updateRooms()
             isLoadingMore = false
         }
     }
 
+    private func loadMoreStaticRooms() {
+        guard usesStaticRooms,
+              !isLoadingMoreStaticRooms,
+              canLoadMoreStaticRooms?() == true,
+              let onLoadMoreStaticRooms else { return }
+
+        isLoadingMoreStaticRooms = true
+
+        Task { @MainActor in
+            let updatedRooms = await onLoadMoreStaticRooms()
+            updateStaticRooms(updatedRooms)
+            isLoadingMoreStaticRooms = false
+        }
+    }
+
     func updateRooms() {
         guard !usesStaticRooms else { return }
         guard let viewModel = viewModel else { return }
-        let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
-        rooms = viewModel.roomListCache[cacheKey] ?? []
+        rooms = viewModel.rooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
 
         // 检查是否有错误需要显示
-        if let error = viewModel.roomError, rooms.isEmpty {
+        if let error = viewModel.roomError(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex), rooms.isEmpty {
             showErrorView(error: error)
         } else {
             hideErrorView()
@@ -445,8 +448,12 @@ extension RoomListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         // 加载更多逻辑
         let count = rooms.count
-        if !usesStaticRooms, count > 0, indexPath.item == count - 1 {
-            loadMore()
+        if count > 0, indexPath.item == count - 1 {
+            if usesStaticRooms {
+                loadMoreStaticRooms()
+            } else {
+                loadMore()
+            }
         }
     }
 
@@ -460,7 +467,14 @@ extension RoomListViewController: UICollectionViewDelegate {
             return
         }
         // mode = .none(房间列表):直接进入,不判断在播状态
-        navigationState?.navigate(to: room, categoryRooms: currentRooms)
+        navigationState?.navigate(
+            to: room,
+            categoryRooms: currentRooms,
+            categoryContext: LiveRoomCategoryContext(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+        )
     }
 
     /// 长按弹"收藏 / 取消收藏"菜单(UICollectionView 接管,因为 cell-based 路径下

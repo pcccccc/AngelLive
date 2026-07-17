@@ -11,6 +11,9 @@ struct RoomSwitcherPanel: View {
     let switchingRoomID: String?
     let failedRoomID: String?
     let failureMessage: String?
+    let canLoadMoreCategory: () -> Bool
+    let isLoadingMoreCategory: Bool
+    let onLoadMoreCategory: (() async -> [LiveModel])?
     let onSelect: (LiveModel) -> Void
     @Environment(AppFavoriteModel.self) private var favoriteModel
 
@@ -43,7 +46,9 @@ struct RoomSwitcherPanel: View {
                 rooms: candidates(for: source),
                 emptyTitle: "暂无可切换直播间",
                 emptyMessage: emptyDescription(for: source),
-                emptySymbolName: source.systemImage
+                emptySymbolName: source.systemImage,
+                canLoadMore: source == .category ? { !isLoadingMoreCategory && canLoadMoreCategory() } : { false },
+                onLoadMore: loadMoreAction(for: source)
             )
         }
     }
@@ -138,6 +143,20 @@ struct RoomSwitcherPanel: View {
         }
     }
 
+    private func loadMoreAction(for source: RoomSwitchSource) -> (() async -> [LiveModel])? {
+        guard source == .category, let onLoadMoreCategory else { return nil }
+        return {
+            let rooms = await onLoadMoreCategory()
+            return RoomSwitchCandidates.rooms(
+                for: .category,
+                currentRoom: currentRoom,
+                favorites: favorites,
+                history: history,
+                category: rooms
+            )
+        }
+    }
+
     private func normalizeSelectedSource() {
         let safeIndex = min(max(selectedSourceIndex, 0), max(availableSources.count - 1, 0))
         selectedSourceIndex = safeIndex
@@ -150,6 +169,8 @@ private struct RoomSwitchPage {
     let emptyTitle: String
     let emptyMessage: String
     let emptySymbolName: String
+    let canLoadMore: () -> Bool
+    let onLoadMore: (() async -> [LiveModel])?
 }
 
 private struct JXRoomSourcePager: UIViewControllerRepresentable {
@@ -325,6 +346,8 @@ extension JXRoomSourcePagerViewController: JXSegmentedListContainerViewDataSourc
                 emptyMessage: "当前没有可显示的直播间。",
                 emptySymbolName: "rectangle.stack.badge.questionmark",
                 favoriteModel: favoriteModel,
+                canLoadMore: nil,
+                onLoadMore: nil,
                 onSelectRoom: { _ in }
             )
         }
@@ -335,6 +358,8 @@ extension JXRoomSourcePagerViewController: JXSegmentedListContainerViewDataSourc
             emptyMessage: page.emptyMessage,
             emptySymbolName: page.emptySymbolName,
             favoriteModel: favoriteModel,
+            canLoadMore: page.canLoadMore,
+            onLoadMore: page.onLoadMore,
             onSelectRoom: { [weak self] room in
                 self?.onSelectRoom(room)
             }

@@ -51,21 +51,73 @@ class PlatformDetailViewModel {
     }
 
     private var cacheKey: String {
-        "\(selectedMainCategoryIndex)-\(selectedSubCategoryIndex)"
+        cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
+    }
+
+    private func cacheKey(mainCategoryIndex: Int, subCategoryIndex: Int) -> String {
+        "\(mainCategoryIndex)-\(subCategoryIndex)"
+    }
+
+    func rooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> [LiveModel] {
+        roomListCache[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)] ?? []
     }
 
     // 加载状态
     var isLoadingCategories = false
-    var isLoadingRooms = false
+    private var loadingRoomKeys: Set<String> = []
+
+    var isLoadingRooms: Bool {
+        isLoadingRooms(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
+    }
 
     // 错误状态
     var categoryError: Error?
-    var roomError: Error?
+    private var roomErrors: [String: Error] = [:]
+
+    var roomError: Error? {
+        get { roomError(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex) }
+        set {
+            let key = cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
+            roomErrors[key] = newValue
+        }
+    }
 
     // 分页
-    var currentPage = 1
+    private var currentPages: [String: Int] = [:]
     private let pageSize = 20
-    var hasMoreRooms = true
+    private var hasMoreRoomsByKey: [String: Bool] = [:]
+
+    var currentPage: Int {
+        get { currentPage(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex) }
+        set {
+            let key = cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
+            currentPages[key] = newValue
+        }
+    }
+
+    var hasMoreRooms: Bool {
+        get { canLoadMoreRooms(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex) }
+        set {
+            let key = cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
+            hasMoreRoomsByKey[key] = newValue
+        }
+    }
+
+    func currentPage(mainCategoryIndex: Int, subCategoryIndex: Int) -> Int {
+        currentPages[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)] ?? 1
+    }
+
+    func canLoadMoreRooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> Bool {
+        hasMoreRoomsByKey[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)] ?? true
+    }
+
+    func isLoadingRooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> Bool {
+        loadingRoomKeys.contains(cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex))
+    }
+
+    func roomError(mainCategoryIndex: Int, subCategoryIndex: Int) -> Error? {
+        roomErrors[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]
+    }
 
     init(platform: Platformdescription) {
         self.platform = platform
@@ -101,41 +153,60 @@ class PlatformDetailViewModel {
 
     @MainActor
     func loadRoomList(refresh: Bool = true) async {
-        guard let subCategory = currentSubCategory else { return }
+        await loadRoomList(
+            mainCategoryIndex: selectedMainCategoryIndex,
+            subCategoryIndex: selectedSubCategoryIndex,
+            refresh: refresh
+        )
+    }
+
+    @MainActor
+    func loadRoomList(mainCategoryIndex: Int, subCategoryIndex: Int, refresh: Bool = true) async {
+        guard categories.indices.contains(mainCategoryIndex) else { return }
+        let mainCategory = categories[mainCategoryIndex]
+        guard mainCategory.subList.indices.contains(subCategoryIndex) else { return }
+
+        let subCategory = mainCategory.subList[subCategoryIndex]
+        let requestKey = cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        guard !loadingRoomKeys.contains(requestKey) else { return }
 
         if refresh {
-            currentPage = 1
-            hasMoreRooms = true
-            roomList.removeAll()
-            roomError = nil
+            currentPages[requestKey] = 1
+            hasMoreRoomsByKey[requestKey] = true
+            roomListCache[requestKey] = []
+            roomErrors[requestKey] = nil
         }
 
-        isLoadingRooms = true
-        defer { isLoadingRooms = false }
+        let requestPage = currentPages[requestKey] ?? 1
+        loadingRoomKeys.insert(requestKey)
+        defer { loadingRoomKeys.remove(requestKey) }
 
         do {
             // 获取 parentBiz (对于 YY 平台可能需要)
-            let parentBiz = currentMainCategory?.biz
+            let parentBiz = mainCategory.biz
 
             let fetchedRooms = try await LiveService.fetchRoomList(
                 liveType: platform.liveType,
                 category: subCategory,
                 parentBiz: parentBiz,
-                page: currentPage
+                page: requestPage
             )
 
-            if fetchedRooms.isEmpty {
-                hasMoreRooms = false
-            }
+            hasMoreRoomsByKey[requestKey] = !fetchedRooms.isEmpty
 
             if refresh {
-                roomList = fetchedRooms.removingDuplicates()
+                roomListCache[requestKey] = fetchedRooms.removingDuplicates()
             } else {
-                roomList = roomList.appendingUnique(contentsOf: fetchedRooms)
+                let currentRooms = roomListCache[requestKey] ?? []
+                roomListCache[requestKey] = currentRooms.appendingUnique(contentsOf: fetchedRooms)
             }
             // 清除错误状态（加载成功）
-            roomError = nil
+            roomErrors[requestKey] = nil
         } catch {
+            if !refresh {
+                currentPages[requestKey] = max(1, requestPage - 1)
+            }
+
             // 检查是否是取消错误
             let isCancelled = (error as? AFError)?.isExplicitlyCancelledError ?? false
                 || error is CancellationError
@@ -149,12 +220,12 @@ class PlatformDetailViewModel {
             // 不挂 roomError,只置 hasMoreRooms=false;首页刷新场景 roomList 已在 refresh 入口清空。
             if let liveParseError = error as? LiveParseError,
                liveParseError.detail.contains("返回结果为空") {
-                hasMoreRooms = false
+                hasMoreRoomsByKey[requestKey] = false
                 return
             }
 
             Logger.warning("获取房间列表失败: \(error)", category: .network)
-            roomError = error
+            roomErrors[requestKey] = error
         }
     }
 
@@ -162,9 +233,24 @@ class PlatformDetailViewModel {
 
     @MainActor
     func loadMore() async {
-        guard !isLoadingRooms, hasMoreRooms else { return }
-        currentPage += 1
-        await loadRoomList(refresh: false)
+        _ = await loadMoreRooms(
+            mainCategoryIndex: selectedMainCategoryIndex,
+            subCategoryIndex: selectedSubCategoryIndex
+        )
+    }
+
+    @MainActor
+    @discardableResult
+    func loadMoreRooms(mainCategoryIndex: Int, subCategoryIndex: Int) async -> [LiveModel] {
+        let requestKey = cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        guard !loadingRoomKeys.contains(requestKey),
+              canLoadMoreRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) else {
+            return roomListCache[requestKey] ?? []
+        }
+
+        currentPages[requestKey] = (currentPages[requestKey] ?? 1) + 1
+        await loadRoomList(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex, refresh: false)
+        return roomListCache[requestKey] ?? []
     }
 
     // MARK: - 切换主分类

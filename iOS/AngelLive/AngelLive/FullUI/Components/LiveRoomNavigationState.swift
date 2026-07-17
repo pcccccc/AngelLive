@@ -9,6 +9,11 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 
+struct LiveRoomCategoryContext: Equatable {
+    let mainCategoryIndex: Int
+    let subCategoryIndex: Int
+}
+
 /// 直播间导航状态管理器
 /// 将导航状态从视图的 @State 移到外部可观察对象，确保在 PiP 背景/前台切换时不会丢失
 @Observable
@@ -22,10 +27,18 @@ class LiveRoomNavigationState {
     /// 从分区列表进入时保留当时的房间快照，供播放页连续换台。
     var categoryRooms: [LiveModel] = []
 
+    /// 房间快照对应的分区位置，用于播放页换台面板继续上拉分页。
+    var categoryContext: LiveRoomCategoryContext?
+
     /// 导航到指定房间
-    func navigate(to room: LiveModel, categoryRooms: [LiveModel] = []) {
+    func navigate(
+        to room: LiveModel,
+        categoryRooms: [LiveModel] = [],
+        categoryContext: LiveRoomCategoryContext? = nil
+    ) {
         currentRoom = room
         self.categoryRooms = categoryRooms
+        self.categoryContext = categoryContext
         showPlayer = true
     }
 
@@ -34,6 +47,7 @@ class LiveRoomNavigationState {
         showPlayer = false
         currentRoom = nil
         categoryRooms = []
+        categoryContext = nil
     }
 }
 

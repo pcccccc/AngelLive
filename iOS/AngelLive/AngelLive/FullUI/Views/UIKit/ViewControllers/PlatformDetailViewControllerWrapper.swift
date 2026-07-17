@@ -47,11 +47,35 @@ struct PlatformDetailViewControllerWrapper: View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
+                categoryRooms: navigationState.categoryRooms,
+                canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
+                onLoadMoreCategoryRooms: loadMoreCategoryRooms
             )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
                 .toolbar(.hidden, for: .tabBar)
         }
+    }
+
+    private func canLoadMoreCategoryRooms() -> Bool {
+        guard let context = navigationState.categoryContext else { return false }
+        return viewModel.canLoadMoreRooms(
+            mainCategoryIndex: context.mainCategoryIndex,
+            subCategoryIndex: context.subCategoryIndex
+        )
+    }
+
+    @MainActor
+    private func loadMoreCategoryRooms() async -> [LiveModel] {
+        guard let context = navigationState.categoryContext else {
+            return navigationState.categoryRooms
+        }
+
+        let rooms = await viewModel.loadMoreRooms(
+            mainCategoryIndex: context.mainCategoryIndex,
+            subCategoryIndex: context.subCategoryIndex
+        )
+        navigationState.categoryRooms = rooms
+        return rooms
     }
 
     @ViewBuilder

@@ -175,17 +175,10 @@ class SubCategoryViewController: UIViewController {
         let key = "\(mainCategoryIndex)-\(index)"
         if viewModel.roomListCache[key]?.isEmpty ?? true {
             Task { @MainActor in
-                // 临时保存并恢复索引
-                let oldMainIndex = viewModel.selectedMainCategoryIndex
-                let oldSubIndex = viewModel.selectedSubCategoryIndex
-
-                viewModel.selectedMainCategoryIndex = mainCategoryIndex
-                viewModel.selectedSubCategoryIndex = index
-
-                await viewModel.loadRoomList()
-
-                viewModel.selectedMainCategoryIndex = oldMainIndex
-                viewModel.selectedSubCategoryIndex = oldSubIndex
+                await viewModel.loadRoomList(
+                    mainCategoryIndex: mainCategoryIndex,
+                    subCategoryIndex: index
+                )
 
                 // 通知当前显示的 ViewController 更新数据
                 if let currentVC = listContainerView.validListDict[index] as? RoomListViewController {
@@ -247,17 +240,10 @@ extension SubCategoryViewController: JXSegmentedViewDelegate {
         let key = "\(mainCategoryIndex)-\(index)"
         if viewModel.roomListCache[key]?.isEmpty ?? true {
             Task { @MainActor in
-                // 临时保存并恢复索引
-                let oldMainIndex = viewModel.selectedMainCategoryIndex
-                let oldSubIndex = viewModel.selectedSubCategoryIndex
-
-                viewModel.selectedMainCategoryIndex = mainCategoryIndex
-                viewModel.selectedSubCategoryIndex = index
-
-                await viewModel.loadRoomList()
-
-                viewModel.selectedMainCategoryIndex = oldMainIndex
-                viewModel.selectedSubCategoryIndex = oldSubIndex
+                await viewModel.loadRoomList(
+                    mainCategoryIndex: mainCategoryIndex,
+                    subCategoryIndex: index
+                )
 
                 // 通知当前显示的 ViewController 更新数据
                 if let currentVC = listContainerView.validListDict[index] as? RoomListViewController {
