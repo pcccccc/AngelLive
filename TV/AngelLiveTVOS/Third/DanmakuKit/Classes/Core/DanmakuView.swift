@@ -187,6 +187,8 @@ public class DanmakuView: UIView {
     private var danmakuPool: [String: [DanmakuCell]] = [:]
     
     private var floatingTracks: [DanmakuTrack] = []
+
+    private var visibleFloatingTrackCount = 0
     
     private var topTracks: [DanmakuTrack] = []
     
@@ -447,6 +449,7 @@ private extension DanmakuView {
             trackCount = Int(floorf(Float(availableHeight / trackHeight)))
         }
         trackCount = Int(floorf(Float((viewHeight - paddingTop - paddingBottom) / trackHeight)))
+        visibleFloatingTrackCount = max(0, trackCount)
         let offsetY = max(0, (viewHeight - CGFloat(trackCount) * trackHeight) / 2.0)
         let diffFloatingTrackCount = trackCount - floatingTracks.count
         if diffFloatingTrackCount > 0 {
@@ -561,11 +564,9 @@ private extension DanmakuView {
     func findSuitableTrack(for danmaku: DanmakuCellModel) -> DanmakuTrack? {
         switch danmaku.type {
         case .floating:
-            // §6.2 错落感:收集所有可发轨道,在弹幕最少的轨道中随机挑一条,打散「从上往下顺序堆叠」
-            let candidates = floatingTracks.filter { $0.canShoot(danmaku: danmaku) }
-            guard !candidates.isEmpty else { return nil }
-            let minCount = candidates.map { $0.danmakuCount }.min()!
-            return candidates.filter { $0.danmakuCount == minCount }.randomElement()
+            let visibleTracks = floatingTracks.prefix(min(visibleFloatingTrackCount, floatingTracks.count))
+            // tvOS 低密度弹幕从顶部开始;只有上方轨道忙时才向下扩展。
+            return visibleTracks.first { $0.canShoot(danmaku: danmaku) }
         case .top:
             guard let track = topTracks.first(where: { (t) -> Bool in
                 return t.canShoot(danmaku: danmaku)
