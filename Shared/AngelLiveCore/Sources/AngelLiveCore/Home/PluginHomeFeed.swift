@@ -278,7 +278,7 @@ private extension KeyedDecodingContainer {
 
 // MARK: - Validated host model
 
-public struct PluginHomeFeed: Sendable {
+public struct PluginHomeFeed: Codable, Sendable {
     public let pluginId: String
     public let pluginDisplayName: String
     public let schemaVersion: Int
@@ -290,7 +290,7 @@ public struct PluginHomeFeed: Sendable {
     public let diagnostics: PluginHomeFeedDiagnostics
 }
 
-public struct PluginHomeBanner: Identifiable, Sendable {
+public struct PluginHomeBanner: Identifiable, Codable, Sendable {
     public let id: String
     public let imageURL: URL?
     public let title: String
@@ -299,12 +299,45 @@ public struct PluginHomeBanner: Identifiable, Sendable {
     public let target: PluginHomeTarget
 }
 
-public enum PluginHomeTarget: Sendable {
+public enum PluginHomeTarget: Codable, Sendable {
     case room(LiveModel)
     case category(LiveCategoryModel)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case room
+        case category
+    }
+
+    private enum Kind: String, Codable {
+        case room
+        case category
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .type) {
+        case .room:
+            self = .room(try container.decode(LiveModel.self, forKey: .room))
+        case .category:
+            self = .category(try container.decode(LiveCategoryModel.self, forKey: .category))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .room(let room):
+            try container.encode(Kind.room, forKey: .type)
+            try container.encode(room, forKey: .room)
+        case .category(let category):
+            try container.encode(Kind.category, forKey: .type)
+            try container.encode(category, forKey: .category)
+        }
+    }
 }
 
-public struct PluginHomeSection: Identifiable, Sendable {
+public struct PluginHomeSection: Identifiable, Codable, Sendable {
     public let id: String
     public let title: String
     public let subtitle: String?
@@ -313,13 +346,13 @@ public struct PluginHomeSection: Identifiable, Sendable {
     public let seeAllTarget: LiveCategoryModel?
 }
 
-public struct PluginHomeRoomItem: Identifiable, Sendable {
+public struct PluginHomeRoomItem: Identifiable, Codable, Sendable {
     public let id: String
     public let room: LiveModel
     public let reason: String?
 }
 
-public struct PluginHomeFeedDiagnostics: Equatable, Sendable {
+public struct PluginHomeFeedDiagnostics: Codable, Equatable, Sendable {
     public let droppedBanners: Int
     public let droppedSections: Int
     public let droppedItems: Int

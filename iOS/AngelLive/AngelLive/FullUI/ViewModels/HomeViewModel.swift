@@ -27,46 +27,100 @@ struct HomeSectionEntry: Identifiable, Sendable {
     var id: String { section.id }
 }
 
+struct HomePlatformOption: Identifiable, Hashable, Sendable {
+    let pluginId: String
+    let displayName: String
+    let liveType: LiveType
+
+    var id: String { pluginId }
+}
+
 @MainActor
 @Observable
 final class HomeViewModel {
     private(set) var bannerEntries: [HomeBannerEntry] = []
     private(set) var sectionEntries: [HomeSectionEntry] = []
     private(set) var failedPluginNames: [String] = []
+    private(set) var platformOptions: [HomePlatformOption] = []
+    private(set) var selectedPluginId: String?
     private(set) var isRefreshing = false
     private(set) var hasLoaded = false
+    private(set) var hasRestoredCache = false
 
     @ObservationIgnored
     private let service: PluginHomeFeedService
+    @ObservationIgnored
+    private let cacheStore: PluginHomeFeedCacheStore
     @ObservationIgnored
     private var feedsByPluginId: [String: PluginHomeFeed] = [:]
     @ObservationIgnored
     private var platformOrder: [String] = []
     @ObservationIgnored
     private var sectionOrder: [String] = []
-
-    init(service: PluginHomeFeedService = PluginHomeFeedService()) {
+    init(
+        service: PluginHomeFeedService = PluginHomeFeedService(),
+        cacheStore: PluginHomeFeedCacheStore = .shared
+    ) {
         self.service = service
+        self.cacheStore = cacheStore
     }
 
-    func refresh(installedPluginIds: [String]) async {
+    func refresh(
+        installedPluginIds: [String],
+        availabilityConfirmed: Bool = true
+    ) async {
         guard !isRefreshing else { return }
+
+        if !hasRestoredCache {
+            let cachedFeeds = await cacheStore.load()
+            for feed in cachedFeeds {
+                feedsByPluginId[feed.pluginId] = feed
+            }
+            platformOrder = cachedFeeds.map(\.pluginId)
+            platformOptions = cachedFeeds.map {
+                HomePlatformOption(
+                    pluginId: $0.pluginId,
+                    displayName: $0.pluginDisplayName,
+                    liveType: LiveParseJSPlatformManager.platform(forPluginId: $0.pluginId)?.liveType
+                        ?? LiveType(rawValue: $0.pluginId)
+                        ?? .placeholder
+                )
+            }
+            hasRestoredCache = true
+            rebuildEntries()
+        }
+
+        // App 启动时 installedPluginIds 会先短暂为空。此时只展示缓存，不能把它
+        // 当成“用户没有插件”并清掉快照；等待 PluginAvailabilityService 明确确认。
+        guard availabilityConfirmed else {
+            return
+        }
 
         let platforms = SandboxPluginCatalog
             .availablePlatforms(installedPluginIds: installedPluginIds)
             .filter { PlatformCapability.supports(.homeFeed, for: $0.liveType) }
 
         let activePluginIds = Set(platforms.map(\.pluginId))
-        feedsByPluginId = feedsByPluginId.filter { activePluginIds.contains($0.key) }
+        platformOptions = platforms.map {
+            HomePlatformOption(
+                pluginId: $0.pluginId,
+                displayName: $0.displayName,
+                liveType: $0.liveType
+            )
+        }
+        normalizePlatformSelection()
         platformOrder = stableOrder(
             previous: platformOrder,
             current: platforms.map(\.pluginId)
         )
+
+        feedsByPluginId = feedsByPluginId.filter { activePluginIds.contains($0.key) }
         failedPluginNames.removeAll()
         rebuildEntries()
 
         guard !platforms.isEmpty else {
             hasLoaded = true
+            await cacheStore.save([])
             return
         }
 
@@ -110,10 +164,29 @@ final class HomeViewModel {
                 rebuildEntries()
             }
         }
+
+        let activeFeeds = platformOrder.compactMap { feedsByPluginId[$0] }
+        await cacheStore.save(activeFeeds)
+    }
+
+    func selectPlatform(pluginId: String?) {
+        guard pluginId == nil || platformOptions.contains(where: { $0.pluginId == pluginId }) else {
+            return
+        }
+        guard selectedPluginId != pluginId else { return }
+        selectedPluginId = pluginId
+        rebuildEntries()
     }
 }
 
 private extension HomeViewModel {
+    func normalizePlatformSelection() {
+        guard let selectedPluginId else { return }
+        if !platformOptions.contains(where: { $0.pluginId == selectedPluginId }) {
+            self.selectedPluginId = nil
+        }
+    }
+
     func stableOrder(previous: [String], current: [String]) -> [String] {
         let currentSet = Set(current)
         let retained = previous.filter(currentSet.contains)
@@ -122,7 +195,10 @@ private extension HomeViewModel {
     }
 
     func rebuildEntries() {
-        let feeds = platformOrder.compactMap { feedsByPluginId[$0] }
+        let allFeeds = platformOrder.compactMap { feedsByPluginId[$0] }
+        let feeds = selectedPluginId.map { pluginId in
+            allFeeds.filter { $0.pluginId == pluginId }
+        } ?? allFeeds
         bannerEntries = fairBannerEntries(from: feeds)
 
         let availableSections: [HomeSectionEntry] = feeds.flatMap { feed -> [HomeSectionEntry] in

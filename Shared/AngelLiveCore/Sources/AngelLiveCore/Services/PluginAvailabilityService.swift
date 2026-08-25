@@ -25,13 +25,19 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// 当前正在检测中
     public private(set) var isChecking: Bool = false
 
+    /// 是否至少完成过一次本地插件检测。用于区分“尚未检测”和“确认没有插件”。
+    public private(set) var hasCheckedAvailability: Bool = false
+
     public init() {}
 
     /// 检测 sandbox 目录下是否有任何已安装的插件
     @MainActor
     public func checkAvailability() async {
         isChecking = true
-        defer { isChecking = false }
+        defer {
+            isChecking = false
+            hasCheckedAvailability = true
+        }
 
         // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
         let pluginMap = SandboxPluginCatalog.installedPluginMap()
