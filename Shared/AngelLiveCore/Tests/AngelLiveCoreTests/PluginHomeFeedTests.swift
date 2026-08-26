@@ -192,10 +192,10 @@ struct PluginHomeFeedTests {
         }
     }
 
-    @Test("per-plugin banner, section, and room limits are enforced")
+    @Test("all valid banners are preserved while section and room limits are enforced")
     func collectionLimits() async throws {
         let room = #"{"userName":"User","roomTitle":"Room","roomId":"room","userId":"user"}"#
-        let banners = (0..<6).map { index in
+        let banners = (0..<12).map { index in
             #"{"id":"banner-\#(index)","imageURL":"","title":"Banner","target":{"type":"room","room":\#(room)}}"#
         }.joined(separator: ",")
         let items = (0..<21).map { index in
@@ -211,10 +211,10 @@ struct PluginHomeFeedTests {
 
         let feed = try await service.fetch(platform: platform)
 
-        #expect(feed.banners.count == 5)
+        #expect(feed.banners.count == 12)
         #expect(feed.sections.count == 8)
         #expect(feed.sections.allSatisfy { $0.items.count == 20 })
-        #expect(feed.diagnostics.droppedBanners == 1)
+        #expect(feed.diagnostics.droppedBanners == 0)
         #expect(feed.diagnostics.droppedSections == 1)
         #expect(feed.diagnostics.droppedItems == 29)
     }

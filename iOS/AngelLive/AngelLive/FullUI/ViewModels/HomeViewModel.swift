@@ -24,7 +24,7 @@ struct HomeSectionEntry: Identifiable, Sendable {
     let pluginDisplayName: String
     let liveType: LiveType
 
-    var id: String { section.id }
+    var id: String { "\(pluginId)::\(section.id)" }
 }
 
 struct HomePlatformOption: Identifiable, Hashable, Sendable {
@@ -55,8 +55,6 @@ final class HomeViewModel {
     private var feedsByPluginId: [String: PluginHomeFeed] = [:]
     @ObservationIgnored
     private var platformOrder: [String] = []
-    @ObservationIgnored
-    private var sectionOrder: [String] = []
     init(
         service: PluginHomeFeedService = PluginHomeFeedService(),
         cacheStore: PluginHomeFeedCacheStore = .shared
@@ -201,35 +199,38 @@ private extension HomeViewModel {
         } ?? allFeeds
         bannerEntries = fairBannerEntries(from: feeds)
 
-        let availableSections: [HomeSectionEntry] = feeds.flatMap { feed -> [HomeSectionEntry] in
+        let availableSections: [HomeSectionEntry] = feeds.compactMap { feed -> HomeSectionEntry? in
             let liveType = LiveParseJSPlatformManager.platform(forPluginId: feed.pluginId)?.liveType
                 ?? LiveType(rawValue: feed.pluginId)
                 ?? .placeholder
-            return feed.sections.compactMap { section -> HomeSectionEntry? in
-                guard !section.items.isEmpty else { return nil }
-                return HomeSectionEntry(
-                    section: section,
-                    pluginId: feed.pluginId,
-                    pluginDisplayName: feed.pluginDisplayName,
-                    liveType: section.items.first?.room.liveType ?? liveType
-                )
+
+            // A plugin's first section is its primary recommendation rail;
+            // later sections are category-specific rails. Prefer an explicitly
+            // personalized rail when present, otherwise keep only that first
+            // primary rail so the host does not expose concrete categories on
+            // the home page.
+            let section: PluginHomeSection?
+            if let personalizedSection = feed.sections.first(where: {
+                $0.personalized && !$0.items.isEmpty
+            }) {
+                section = personalizedSection
+            } else {
+                section = feed.sections.first
             }
+            guard let section, !section.items.isEmpty else { return nil }
+
+            return HomeSectionEntry(
+                section: section,
+                pluginId: feed.pluginId,
+                pluginDisplayName: feed.pluginDisplayName,
+                liveType: section.items.first?.room.liveType ?? liveType
+            )
         }
 
-        let availableSectionIds = Set(availableSections.map(\.id))
-        sectionOrder = stableOrder(
-            previous: sectionOrder.filter(availableSectionIds.contains),
-            current: availableSections.map(\.id)
-        )
-        let entryById = Dictionary(
-            availableSections.map { ($0.id, $0) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        sectionEntries = sectionOrder.compactMap { entryById[$0] }
+        sectionEntries = availableSections
     }
 
     func fairBannerEntries(from feeds: [PluginHomeFeed]) -> [HomeBannerEntry] {
-        let maximumBannerCount = 5
         let maximumSourceCount = feeds.map(\.banners.count).max() ?? 0
         var result: [HomeBannerEntry] = []
 
@@ -253,9 +254,6 @@ private extension HomeViewModel {
                         liveType: liveType
                     )
                 )
-                if result.count == maximumBannerCount {
-                    return result
-                }
             }
         }
         return result

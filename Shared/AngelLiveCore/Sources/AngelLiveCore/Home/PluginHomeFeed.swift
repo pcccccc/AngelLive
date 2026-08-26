@@ -404,7 +404,6 @@ private extension PluginHomeFeedService {
         static let defaultTTLSeconds = 15 * 60
         static let minimumTTLSeconds = 60
         static let maximumTTLSeconds = 24 * 60 * 60
-        static let bannersPerPlugin = 5
         static let sectionsPerPlugin = 8
         static let roomsPerSection = 20
         static let idLength = 128
@@ -428,10 +427,6 @@ private extension PluginHomeFeedService {
         var banners: [PluginHomeBanner] = []
 
         for banner in response.banners {
-            guard banners.count < Limits.bannersPerPlugin else {
-                droppedBanners += 1
-                continue
-            }
             let rawID = normalized(banner.id, maximumLength: Limits.idLength)
             let namespacedID = namespace(pluginId: platform.pluginId, kind: "banner", id: rawID)
             guard !rawID.isEmpty,
