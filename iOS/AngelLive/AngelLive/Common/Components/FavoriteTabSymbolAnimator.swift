@@ -49,6 +49,10 @@ struct FavoriteTabSymbolAnimator: UIViewRepresentable {
         return view
     }
 
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        coordinator.deactivate()
+    }
+
     func updateUIView(_ uiView: UIView, context: Context) {
         let coordinator = context.coordinator
         let status = syncStatus
@@ -81,10 +85,13 @@ struct FavoriteTabSymbolAnimator: UIViewRepresentable {
     // MARK: - Coordinator：对账式应用（对图标被重建鲁棒）
 
     final class Coordinator {
+        private var isActive = true
         private var appliedStatus: CloudSyncStatus?
         private weak var appliedTarget: UIImageView?
 
         func apply(status: CloudSyncStatus, target: UIImageView, allIcloudViews: [UIImageView]) {
+            guard isActive else { return }
+
             // 状态和目标都没变 → 保持现状，不要重启动画（否则会卡顿）
             if appliedStatus == status, appliedTarget === target { return }
 
@@ -95,17 +102,32 @@ struct FavoriteTabSymbolAnimator: UIViewRepresentable {
                 for iv in allIcloudViews { iv.removeAllSymbolEffects(animated: false) }
             }
 
-            // 带过渡地换符号
             let image = UIImage(systemName: status.tabSymbolName) ?? UIImage()
-            target.setSymbolImage(image, contentTransition: .replace)
+            if status == .syncing {
+                // 进入 loading 时必须先同步换图，再启动旋转。setSymbolImage 的
+                // replace 是异步视觉过渡；若紧接着添加 rotate，效果会先附着到
+                // 尚未被替换掉的普通云图标上，出现「云先转、loading 后出现」。
+                target.image = image
 
-            // 只有 syncing 才在当前可见图标上不间断旋转
-            if #available(iOS 18.0, *), status == .syncing {
-                target.addSymbolEffect(.rotate, options: .repeat(.continuous))
+                if #available(iOS 18.0, *) {
+                    target.addSymbolEffect(.rotate, options: .repeat(.continuous))
+                }
+            } else {
+                // 离开 loading 时旋转已在上方清除，可以安全播放状态替换动画。
+                target.setSymbolImage(image, contentTransition: .replace)
             }
 
             appliedStatus = status
             appliedTarget = target
+        }
+
+        func deactivate() {
+            isActive = false
+            if #available(iOS 18.0, *) {
+                appliedTarget?.removeAllSymbolEffects(animated: false)
+            }
+            appliedStatus = nil
+            appliedTarget = nil
         }
     }
 

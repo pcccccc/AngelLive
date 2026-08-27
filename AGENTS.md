@@ -30,6 +30,12 @@
 
 可跨端复用的协议、解析、缓存、状态机和业务规则放入 `AngelLiveCore`；播放器第三方库适配放入 `AngelLiveDependencies`；平台导航、窗口、焦点、UIKit/AppKit 桥接留在各自宿主。
 
+### ShellUI 修改边界
+
+- 用户未明确指定 `ShellUI` 时，所有改动默认仅作用于 `FullUI`，禁止修改 `ShellUI` 目录下的代码。
+- 共享入口、共享组件或共享状态的改动如果会间接影响 `ShellUI`，必须在 `FullUI` 分支内隔离；不得以跨模式一致为由自动扩大修改范围。
+- 只有用户明确点名 `ShellUI` 时，才能修改或调整 `ShellUI` 行为；如无法确定共享修改是否会影响 `ShellUI`，先检查调用链并进行隔离，不能默认授权。
+
 ## 3. 插件系统是核心架构，不等同于首页
 
 插件通过 JavaScriptCore 运行，统一入口为 `LiveParsePlugins.shared`。不要在每次调用时新建 `LiveParsePluginManager`，否则会丢失已加载插件和 JSContext 缓存。

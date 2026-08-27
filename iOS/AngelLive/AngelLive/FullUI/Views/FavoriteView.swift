@@ -88,11 +88,9 @@ struct FavoriteView: View {
         .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 0) }
         .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 0) }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
-        // Preserve the original large-title collapse behavior. The shared
-        // capsule is an independent leading toolbar control.
+        // Preserve the original large-title collapse behavior.
         .navigationTitle("收藏")
         .navigationBarTitleDisplayMode(.large)
-        .homeContentPickerToolbar()
     }
 
     /// 同步提示条,不拦截触摸。按顶部形态分流:

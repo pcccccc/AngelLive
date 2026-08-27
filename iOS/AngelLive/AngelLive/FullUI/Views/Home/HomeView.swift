@@ -11,6 +11,8 @@ import SwiftUI
 import UIKit
 
 struct HomeView: View {
+    private let usesPersistedPlatformSelection: Bool
+
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(\.presentToast) private var presentToast
@@ -21,6 +23,10 @@ struct HomeView: View {
     @State private var navigationState = LiveRoomNavigationState()
     @State private var homeNavigationModel = HomeNavigationModel()
     @Namespace private var roomTransitionNamespace
+
+    init(usesPersistedPlatformSelection: Bool = true) {
+        self.usesPersistedPlatformSelection = usesPersistedPlatformSelection
+    }
 
     var body: some View {
         playerPresentation
@@ -37,20 +43,25 @@ struct HomeView: View {
                 _ = await (feedRefresh, favoriteRefresh)
                 viewModel.selectPlatform(pluginId: persistedPluginId)
 
-                let normalizedPluginId = viewModel.selectedPluginId ?? ""
-                if normalizedPluginId != selectedPluginId {
-                    selectedPluginId = normalizedPluginId
+                if usesPersistedPlatformSelection {
+                    let normalizedPluginId = viewModel.selectedPluginId ?? ""
+                    if normalizedPluginId != selectedPluginId {
+                        selectedPluginId = normalizedPluginId
+                    }
                 }
             }
             .onChange(of: selectedPluginId) { _, _ in
-                viewModel.selectPlatform(pluginId: persistedPluginId)
+                if usesPersistedPlatformSelection {
+                    viewModel.selectPlatform(pluginId: persistedPluginId)
+                }
             }
     }
 }
 
 private extension HomeView {
     var persistedPluginId: String? {
-        selectedPluginId.isEmpty ? nil : selectedPluginId
+        guard usesPersistedPlatformSelection else { return nil }
+        return selectedPluginId.isEmpty ? nil : selectedPluginId
     }
 
     @ViewBuilder
@@ -83,11 +94,9 @@ private extension HomeView {
                     )
 
                     HomeNavigationOverlay(
-                        platformOptions: viewModel.platformOptions,
                         visibleSectionIDs: visibleSectionIDs,
                         topSafeAreaInset: geometry.safeAreaInsets.top,
-                        model: homeNavigationModel,
-                        onSelectPlatform: viewModel.selectPlatform
+                        model: homeNavigationModel
                     )
                 }
             }
@@ -772,6 +781,8 @@ private struct HomeHeroCarousel: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedPageID: String?
     @State private var loopCorrectionTask: Task<Void, Never>?
+    @State private var layoutCorrectionTask: Task<Void, Never>?
+    @State private var layoutGeneration = 0
     @State private var autoplayProgress: CGFloat = 1
 
     private let pageInset: CGFloat = 0
@@ -788,6 +799,10 @@ private struct HomeHeroCarousel: View {
 
     private var cardHeight: CGFloat {
         min(max(viewportWidth * 0.9, 336), 500)
+    }
+
+    private var viewportSize: CGSize {
+        CGSize(width: viewportWidth, height: cardHeight)
     }
 
     private var loopPages: [HomeHeroLoopPage] {
@@ -815,13 +830,18 @@ private struct HomeHeroCarousel: View {
                 LazyHStack(spacing: cardSpacing) {
                     ForEach(loopPages) { page in
                         heroPage(for: page.entry)
-                            .frame(width: cardWidth, height: cardHeight)
+                            // Bind every page to the horizontal scroll
+                            // viewport. Explicit widths can leave the content
+                            // offset expressed in the pre-rotation page size,
+                            // which strands iPad between two pages.
+                            .containerRelativeFrame(.horizontal)
+                            .frame(height: cardHeight)
                             .id(page.id)
                     }
                 }
                 .scrollTargetLayout()
             }
-            .scrollPosition(id: $selectedPageID)
+            .scrollPosition(id: $selectedPageID, anchor: .center)
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .frame(width: viewportWidth, height: cardHeight)
@@ -854,8 +874,15 @@ private struct HomeHeroCarousel: View {
         .onChange(of: selectedPageID) { _, newValue in
             scheduleLoopCorrection(for: newValue)
         }
+        .onChange(of: viewportSize) { oldSize, newSize in
+            guard abs(oldSize.width - newSize.width) > 0.5
+                    || abs(oldSize.height - newSize.height) > 0.5
+            else { return }
+            scheduleLayoutCorrection()
+        }
         .onDisappear {
             loopCorrectionTask?.cancel()
+            layoutCorrectionTask?.cancel()
         }
         .task(id: autoplayTaskID) {
             await runAutoplayIfNeeded()
@@ -863,7 +890,7 @@ private struct HomeHeroCarousel: View {
     }
 
     private var autoplayTaskID: String {
-        "\(entries.map(\.id).joined(separator: "|"))::\(selectedBannerID ?? "")::\(scenePhase)::\(reduceMotion)"
+        "\(entries.map(\.id).joined(separator: "|"))::\(selectedBannerID ?? "")::\(scenePhase)::\(reduceMotion)::\(layoutGeneration)"
     }
 
     private func normalizeSelection() {
@@ -906,6 +933,45 @@ private struct HomeHeroCarousel: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 selectedPageID = destinationID
+            }
+        }
+    }
+
+    private func scheduleLayoutCorrection() {
+        layoutCorrectionTask?.cancel()
+        loopCorrectionTask?.cancel()
+
+        layoutCorrectionTask = Task { @MainActor in
+            // Rotation and Stage Manager resizing can publish a short series
+            // of intermediate sizes. Re-anchor only after that burst settles.
+            do {
+                try await Task.sleep(for: .milliseconds(120))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, !entries.isEmpty else { return }
+
+            let bannerID = selectedBannerID.flatMap { selectedID in
+                entries.contains(where: { $0.id == selectedID }) ? selectedID : nil
+            } ?? entries[0].id
+            let destinationID = HomeHeroLoopPage.realID(for: bannerID)
+
+            // Clearing and restoring the scroll-position binding forces
+            // SwiftUI to resolve the target using the new viewport width.
+            // Both writes are non-animated so rotation never exposes a
+            // corrective horizontal slide.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                selectedPageID = nil
+            }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            var restoreTransaction = Transaction()
+            restoreTransaction.disablesAnimations = true
+            withTransaction(restoreTransaction) {
+                selectedPageID = destinationID
+                layoutGeneration &+= 1
             }
         }
     }
@@ -1178,11 +1244,9 @@ private struct HomeHeroContent: View {
 }
 
 private struct HomeNavigationOverlay: View {
-    let platformOptions: [HomePlatformOption]
     let visibleSectionIDs: Set<String>
     let topSafeAreaInset: CGFloat
     let model: HomeNavigationModel
-    let onSelectPlatform: (String?) -> Void
 
     var body: some View {
         let progress = model.progress
@@ -1192,42 +1256,27 @@ private struct HomeNavigationOverlay: View {
         )
 
         // No manual top inset: the bar is laid out inside the safe area by its
-        // container, so the picker and the title share the navigation bar's
-        // own row. Only the background reaches up behind the status bar.
-        ZStack {
-            Text(title)
-                .font(.headline)
-                .lineLimit(1)
-                .opacity(progress)
-                .contentTransition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: title)
-                .accessibilityHidden(progress < 0.5)
-
-            HStack {
-                HomeContentPicker(
-                    options: platformOptions,
-                    glassOpacity: 1 - progress,
-                    onSelectPlatform: onSelectPlatform,
-                    onNavigateToRecommendations: nil
-                )
-                .fixedSize()
-                Spacer(minLength: 0)
+        // container. Only its background reaches behind the status bar.
+        Text(title)
+            .font(.headline)
+            .lineLimit(1)
+            .opacity(progress)
+            .contentTransition(.opacity)
+            .animation(.easeInOut(duration: 0.2), value: title)
+            .accessibilityHidden(progress < 0.5)
+            .frame(maxWidth: .infinity)
+            .frame(height: HomeNavigationMetrics.barHeight)
+            // Liquid Glass rather than a solid slab: the feed stays visible through
+            // the bar, and the glass is what keeps the title legible over whatever
+            // scrolls underneath it. Fading the layer with `progress` keeps the
+            // resting state genuinely full-bleed.
+            .background(alignment: .top) {
+                Color.clear
+                    .homeNavigationBarGlass()
+                    .opacity(progress)
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
             }
-            .padding(.horizontal, AppConstants.Spacing.xl)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: HomeNavigationMetrics.barHeight)
-        // Liquid Glass rather than a solid slab: the feed stays visible through
-        // the bar, and the glass is what keeps the title legible over whatever
-        // scrolls underneath it. Fading the layer with `progress` keeps the
-        // resting state genuinely full-bleed.
-        .background(alignment: .top) {
-            Color.clear
-                .homeNavigationBarGlass()
-                .opacity(progress)
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
-        }
     }
 }
 

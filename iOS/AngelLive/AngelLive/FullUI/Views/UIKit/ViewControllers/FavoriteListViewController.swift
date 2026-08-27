@@ -43,6 +43,8 @@ class FavoriteListViewController: UIViewController {
 
     private lazy var refreshControl: UIRefreshControl = {
         let rc = UIRefreshControl()
+        // 保留系统下拉刷新手势与状态机，只隐藏默认菊花；同步进度由页面自定义提示条展示。
+        rc.tintColor = .clear
         rc.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
         return rc
     }()
