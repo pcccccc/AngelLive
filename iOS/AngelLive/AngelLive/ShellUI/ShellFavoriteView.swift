@@ -28,6 +28,7 @@ struct ShellFavoriteView: View {
             }
             .navigationTitle("收藏")
             .navigationBarTitleDisplayMode(.large)
+            .homeContentPickerToolbar()
             .task {
                 await bookmarkService.syncFromCloud()
             }

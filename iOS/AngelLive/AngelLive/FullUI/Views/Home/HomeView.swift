@@ -14,6 +14,8 @@ struct HomeView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(\.presentToast) private var presentToast
+    @AppStorage(HomePagePreference.selectedPluginStorageKey, store: .shared)
+    private var selectedPluginId = ""
 
     @State private var viewModel = HomeViewModel()
     @State private var navigationState = LiveRoomNavigationState()
@@ -26,17 +28,31 @@ struct HomeView: View {
                 installedPluginIds: pluginAvailability.installedPluginIds,
                 availabilityConfirmed: pluginAvailability.hasCheckedAvailability
             )) {
+                viewModel.selectPlatform(pluginId: persistedPluginId)
                 async let feedRefresh: Void = viewModel.refresh(
                     installedPluginIds: pluginAvailability.installedPluginIds,
                     availabilityConfirmed: pluginAvailability.hasCheckedAvailability
                 )
                 async let favoriteRefresh: Void = refreshFavoritesIfNeeded()
                 _ = await (feedRefresh, favoriteRefresh)
+                viewModel.selectPlatform(pluginId: persistedPluginId)
+
+                let normalizedPluginId = viewModel.selectedPluginId ?? ""
+                if normalizedPluginId != selectedPluginId {
+                    selectedPluginId = normalizedPluginId
+                }
+            }
+            .onChange(of: selectedPluginId) { _, _ in
+                viewModel.selectPlatform(pluginId: persistedPluginId)
             }
     }
 }
 
 private extension HomeView {
+    var persistedPluginId: String? {
+        selectedPluginId.isEmpty ? nil : selectedPluginId
+    }
+
     @ViewBuilder
     var playerPresentation: some View {
         if #available(iOS 18.0, *) {
@@ -68,7 +84,6 @@ private extension HomeView {
 
                     HomeNavigationOverlay(
                         platformOptions: viewModel.platformOptions,
-                        selectedPluginId: viewModel.selectedPluginId,
                         visibleSectionIDs: visibleSectionIDs,
                         topSafeAreaInset: geometry.safeAreaInsets.top,
                         model: homeNavigationModel,
@@ -118,7 +133,6 @@ private extension HomeView {
                     )
                 } else {
                     HomeCompactHeader(
-                        platformOptions: viewModel.platformOptions,
                         topSafeAreaInset: topSafeAreaInset
                     )
                 }
@@ -1165,7 +1179,6 @@ private struct HomeHeroContent: View {
 
 private struct HomeNavigationOverlay: View {
     let platformOptions: [HomePlatformOption]
-    let selectedPluginId: String?
     let visibleSectionIDs: Set<String>
     let topSafeAreaInset: CGFloat
     let model: HomeNavigationModel
@@ -1191,15 +1204,13 @@ private struct HomeNavigationOverlay: View {
                 .accessibilityHidden(progress < 0.5)
 
             HStack {
-                if !platformOptions.isEmpty {
-                    HomePlatformPicker(
-                        options: platformOptions,
-                        selectedPluginId: selectedPluginId,
-                        glassOpacity: 1 - progress,
-                        onSelect: onSelectPlatform
-                    )
-                    .fixedSize()
-                }
+                HomeContentPicker(
+                    options: platformOptions,
+                    glassOpacity: 1 - progress,
+                    onSelectPlatform: onSelectPlatform,
+                    onNavigateToRecommendations: nil
+                )
+                .fixedSize()
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, AppConstants.Spacing.xl)
@@ -1217,130 +1228,6 @@ private struct HomeNavigationOverlay: View {
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
         }
-    }
-}
-
-private struct HomePlatformPicker: View {
-    let options: [HomePlatformOption]
-    let selectedPluginId: String?
-    /// Fades out as the navigation bar's own glass fades in, so the capsule
-    /// never sits as a second glass layer on top of the bar's.
-    let glassOpacity: CGFloat
-    let onSelect: (String?) -> Void
-
-    private var selectedOption: HomePlatformOption? {
-        guard let selectedPluginId else { return nil }
-        return options.first { $0.pluginId == selectedPluginId }
-    }
-
-    private var selectedName: String {
-        selectedOption?.displayName ?? "推荐"
-    }
-
-    var body: some View {
-        platformMenu
-            // Keep this utility control neutral over changing banner artwork.
-            // The app-wide accent is intentionally reserved for primary actions.
-            .tint(AppConstants.Colors.primaryText)
-            .menuOrder(.fixed)
-            .accessibilityLabel("切换直播平台，当前为\(selectedName)")
-            .accessibilityHint("显示所有支持首页的平台")
-    }
-
-    private var platformMenu: some View {
-        Menu {
-            if options.count > 1 {
-                Button { onSelect(nil) } label: {
-                    Label {
-                        Text("推荐")
-                    } icon: {
-                        HomePlatformIconStack(options: options, iconSize: 18)
-                    }
-                }
-                .accessibilityLabel("推荐")
-                Divider()
-            }
-
-            ForEach(options) { option in
-                Button { onSelect(option.pluginId) } label: {
-                    Label {
-                        Text(option.displayName)
-                    } icon: {
-                        HomePlatformIcon(option: option, size: 18)
-                    }
-                }
-                .accessibilityLabel(option.displayName)
-            }
-        } label: {
-            HStack(spacing: 8) {
-                if let selectedOption {
-                    HomePlatformIcon(option: selectedOption, size: 24)
-                } else {
-                    HomePlatformIconStack(options: options, iconSize: 22)
-                }
-
-                Text(selectedName)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(AppConstants.Colors.primaryText)
-            }
-            .padding(.leading, 7)
-            .padding(.trailing, 12)
-            .padding(.vertical, 7)
-            .frame(minHeight: 44)
-            .contentShape(Capsule())
-            .homePlatformPickerLabelBackground(opacity: glassOpacity)
-        }
-    }
-}
-
-private struct HomePlatformIcon: View {
-    let option: HomePlatformOption
-    let size: CGFloat
-
-    var body: some View {
-        Group {
-            if let image = PlatformIconProvider.tabImage(for: option.liveType) {
-                Image(uiImage: image)
-                    .resizable()
-                    .renderingMode(.original)
-                    .scaledToFit()
-            } else {
-                Circle()
-                    .fill(.secondary.opacity(0.16))
-                    .overlay {
-                        Text(String(option.displayName.prefix(1)))
-                            .font(.system(size: size * 0.46, weight: .bold))
-                            .foregroundStyle(.primary)
-                    }
-            }
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct HomePlatformIconStack: View {
-    let options: [HomePlatformOption]
-    let iconSize: CGFloat
-
-    private var visibleOptions: [HomePlatformOption] {
-        Array(options.prefix(3))
-    }
-
-    var body: some View {
-        HStack(spacing: -iconSize * 0.42) {
-            ForEach(visibleOptions) { option in
-                HomePlatformIcon(option: option, size: iconSize)
-                    .background(.background, in: Circle())
-                    .overlay {
-                        Circle()
-                            .stroke(.white.opacity(0.58), lineWidth: 0.75)
-                    }
-            }
-        }
-        .frame(minWidth: iconSize)
-        .accessibilityHidden(true)
     }
 }
 
@@ -1476,29 +1363,6 @@ private struct HomeHeroPageProgressCapsule: View {
 
 private extension View {
     @ViewBuilder
-    func homePlatformPickerLabelBackground(opacity: CGFloat) -> some View {
-        // Rendered behind the label instead of wrapping it, so the glass can
-        // cross-fade on its own without taking the icons and title with it.
-        if #available(iOS 26.0, *) {
-            self.background {
-                Color.clear
-                    .glassEffect(.regular, in: .capsule)
-                    .opacity(opacity)
-            }
-        } else {
-            self.background {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        Capsule()
-                            .stroke(.white.opacity(0.18), lineWidth: 0.5)
-                    }
-                    .opacity(opacity)
-            }
-        }
-    }
-
-    @ViewBuilder
     func homeNavigationBarGlass() -> some View {
         if #available(iOS 26.0, *) {
             self.glassEffect(.regular, in: .rect)
@@ -1607,27 +1471,15 @@ private struct HomeHeroLoadingCard: View {
 }
 
 private struct HomeCompactHeader: View {
-    let platformOptions: [HomePlatformOption]
     let topSafeAreaInset: CGFloat
 
     var body: some View {
         HStack {
-            if platformOptions.isEmpty {
-                VStack(alignment: .leading, spacing: AppConstants.Spacing.xs) {
-                    Text("首页")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-                    Text("你的直播与播放入口")
-                        .font(.subheadline)
-                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                }
-            } else {
-                // The platform picker lives in the persistent home overlay.
-                // Preserve the header's vertical rhythm without maintaining a
-                // second Menu that can reset while feeds are switching.
-                Color.clear
-                    .frame(height: HomeNavigationMetrics.barHeight)
-            }
+            // The picker lives in the persistent home overlay even when there
+            // are no installed home-feed plugins. Preserve its vertical rhythm
+            // without maintaining a second control that can drift out of sync.
+            Color.clear
+                .frame(height: HomeNavigationMetrics.barHeight)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

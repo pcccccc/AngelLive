@@ -20,6 +20,8 @@ enum TabSelection: Hashable {
 
 struct ContentView: View {
     @State private var selectedTab: TabSelection = .home
+    @AppStorage(HomePagePreference.storageKey, store: .shared)
+    private var homePagePreference = HomePagePreference.recommendations
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.presentToast) private var presentToast
 
@@ -56,6 +58,16 @@ struct ContentView: View {
             return platform.title
         }
         return "配置"
+    }
+
+    @ViewBuilder
+    private var preferredHomePage: some View {
+        switch homePagePreference {
+        case .recommendations:
+            HomeView()
+        case .favorites:
+            AdaptiveFavoriteView()
+        }
     }
 
     var body: some View {
@@ -272,7 +284,7 @@ struct ContentView: View {
     private var iPadTabView: some View {
         TabView(selection: $selectedTab) {
             Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
-                HomeView()
+                preferredHomePage
             }
 
             TabSection(platformSectionTitle) {
@@ -341,7 +353,7 @@ struct ContentView: View {
         if #available(iOS 26.0, *) {
             return TabView(selection: $selectedTab) {
                 Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
-                    HomeView()
+                    preferredHomePage
                 }
 
                 Tab("配置", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
@@ -363,7 +375,7 @@ struct ContentView: View {
         } else {
            return TabView(selection: $selectedTab) {
                 Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
-                    HomeView()
+                    preferredHomePage
                 }
 
                 Tab("配置", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
@@ -391,7 +403,7 @@ struct ContentView: View {
     // iPad iOS 17 TabView
     private var iOS17iPadTabView: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
+            preferredHomePage
                 .tabItem {
                     Label("首页", systemImage: "house.fill")
                 }
@@ -422,7 +434,7 @@ struct ContentView: View {
     // iPhone iOS 17 TabView
     private var iOS17iPhoneTabView: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
+            preferredHomePage
                 .tabItem {
                     Label("首页", systemImage: "house.fill")
                 }

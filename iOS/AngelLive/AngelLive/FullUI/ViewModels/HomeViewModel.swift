@@ -84,6 +84,7 @@ final class HomeViewModel {
                         ?? .placeholder
                 )
             }
+            normalizePlatformSelection()
             hasRestoredCache = true
             rebuildEntries()
         }
@@ -168,9 +169,6 @@ final class HomeViewModel {
     }
 
     func selectPlatform(pluginId: String?) {
-        guard pluginId == nil || platformOptions.contains(where: { $0.pluginId == pluginId }) else {
-            return
-        }
         guard selectedPluginId != pluginId else { return }
         selectedPluginId = pluginId
         rebuildEntries()

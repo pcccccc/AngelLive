@@ -11,9 +11,29 @@ import AngelLiveCore
 struct GeneralSettingView: View {
     @State private var generalSettingModel = GeneralSettingModel()
     @StateObject private var settingStore = SettingStore()
+    @AppStorage(HomePagePreference.storageKey, store: .shared)
+    private var homePagePreference = HomePagePreference.recommendations
+    @AppStorage(HomePagePreference.selectedPluginStorageKey, store: .shared)
+    private var selectedHomePluginId = ""
 
     var body: some View {
         List {
+            Section {
+                Picker("首页内容", selection: $homePagePreference) {
+                    ForEach(HomePagePreference.allCases, id: \.self) { preference in
+                        Text(preference.displayName)
+                            .tag(preference)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+            } header: {
+                Text("首页")
+            } footer: {
+                Text("选择首页展示插件提供的推荐内容，或直接展示原来的收藏页面。")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
+
             // 通用设置
             Section {
                 Toggle("匹配系统帧率", isOn: $settingStore.syncSystemRate)
@@ -35,5 +55,10 @@ struct GeneralSettingView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("通用")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: homePagePreference) { _, preference in
+            if preference == .recommendations {
+                selectedHomePluginId = ""
+            }
+        }
     }
 }
