@@ -1,5 +1,7 @@
 # Angel Live
 
+[![CI](https://github.com/pcccccc/AngelLive/actions/workflows/ci.yml/badge.svg)](https://github.com/pcccccc/AngelLive/actions/workflows/ci.yml)
+
 <p align="center">
   <img src="./ScreenShot/logo.png" alt="Angel Live Logo" width="120" />
 </p>

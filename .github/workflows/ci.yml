@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  core-tests:
+    name: Package tests (AngelLiveCore)
+    runs-on: xcode-27
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # This cache is intentionally limited to the public Core dependency graph.
+      # Never cache a checkout or repository cache containing private FFmpegKit sources.
+      - name: Cache public Swift package repositories
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/.cache/org.swift.swiftpm
+          key: swiftpm-core-${{ runner.os }}-${{ runner.arch }}-xcode-27-${{ hashFiles('Shared/AngelLiveCore/Package.swift', 'Shared/AngelLiveCore/Package.resolved', 'Shared/SharedAssets/Package.swift') }}
+          restore-keys: |
+            swiftpm-core-${{ runner.os }}-${{ runner.arch }}-xcode-27-
+
+      - name: Verify Xcode 27 toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+
+      - name: Test AngelLiveCore
+        run: |
+          swift test \
+            --package-path Shared/AngelLiveCore \
+            --disable-automatic-resolution
+
+  dependency-tests:
+    name: Package tests (AngelLiveDependencies)
+    # Secrets are unavailable to fork pull requests. Do not use pull_request_target
+    # to build untrusted code with a private-repository access token.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure FFmpegKit access token
+        env:
+          FFMPEGKIT_TOKEN: ${{ secrets.FFMPEGKIT_TOKEN }}
+        run: |
+          if [[ -z "${FFMPEGKIT_TOKEN}" ]]; then
+            echo "::error::Missing Actions secret FFMPEGKIT_TOKEN"
+            exit 1
+          fi
+
+          credentials_path="${RUNNER_TEMP}/ffmpegkit_git_credentials"
+          umask 077
+          printf 'https://x-access-token:%s@github.com\n' \
+            "${FFMPEGKIT_TOKEN}" > "${credentials_path}"
+          git config --global credential.helper \
+            "store --file=${credentials_path}"
+          git config --global url."https://github.com/".insteadOf \
+            "git@github.com:"
+
+      - name: Verify Xcode 27 toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+
+      - name: Test AngelLiveDependencies
+        run: |
+          swift test \
+            --package-path Shared/AngelLiveDependencies \
+            --disable-automatic-resolution
+
+  platform-builds:
+    name: Build (${{ matrix.name }})
+    # All host builds resolve private FFmpegKit and therefore only run for trusted refs.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: xcode-27
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: iOS
+            scheme: AngelLive
+            destination: generic/platform=iOS Simulator
+            derived_data: ios
+          - name: macOS
+            scheme: AngelLiveMacOS
+            destination: generic/platform=macOS
+            derived_data: macos
+          - name: macOS App Store
+            scheme: AngelLiveMacOS-AppStore
+            destination: generic/platform=macOS
+            derived_data: macos-app-store
+          - name: tvOS
+            scheme: AngelLiveTVOS
+            destination: generic/platform=tvOS Simulator
+            derived_data: tvos
+          - name: tvOS SimpleLive
+            scheme: AngelLiveTVOS-SimpleLive
+            destination: generic/platform=tvOS Simulator
+            derived_data: tvos-simple-live
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure FFmpegKit access token
+        env:
+          FFMPEGKIT_TOKEN: ${{ secrets.FFMPEGKIT_TOKEN }}
+        run: |
+          if [[ -z "${FFMPEGKIT_TOKEN}" ]]; then
+            echo "::error::Missing Actions secret FFMPEGKIT_TOKEN"
+            exit 1
+          fi
+
+          credentials_path="${RUNNER_TEMP}/ffmpegkit_git_credentials"
+          umask 077
+          printf 'https://x-access-token:%s@github.com\n' \
+            "${FFMPEGKIT_TOKEN}" > "${credentials_path}"
+          git config --global credential.helper \
+            "store --file=${credentials_path}"
+          git config --global url."https://github.com/".insteadOf \
+            "git@github.com:"
+
+      - name: Verify Xcode 27 toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+
+      - name: Build ${{ matrix.scheme }}
+        run: |
+          xcodebuild \
+            -workspace AngelLive.xcworkspace \
+            -scheme "${{ matrix.scheme }}" \
+            -configuration Debug \
+            -destination "${{ matrix.destination }}" \
+            -clonedSourcePackagesDirPath "${{ runner.temp }}/SourcePackages" \
+            -derivedDataPath "${{ runner.temp }}/DerivedData/${{ matrix.derived_data }}" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
