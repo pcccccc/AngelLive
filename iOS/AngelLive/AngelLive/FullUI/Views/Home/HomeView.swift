@@ -149,7 +149,7 @@ private extension HomeView {
                 if !favoriteModel.roomList.isEmpty {
                     HomeFavoriteSection(
                         rooms: Array(favoriteModel.roomList.prefix(10)),
-                        isRefreshing: favoriteModel.isCloudSyncing,
+                        isRefreshing: favoriteModel.isFavoriteStatusRefreshing,
                         cardWidth: featuredCardWidth,
                         namespace: roomTransitionNamespace,
                         onSelect: { room, rooms in

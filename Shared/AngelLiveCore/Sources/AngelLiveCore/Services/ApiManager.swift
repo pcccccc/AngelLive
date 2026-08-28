@@ -101,8 +101,35 @@ public enum ApiManager {
     }
 
     /// 轻量版房间信息获取，用于收藏同步场景
-    public static func fetchLastestLiveInfoFast(liveModel: LiveModel) async throws -> LiveModel {
-        return try await fetchLastestLiveInfo(liveModel: liveModel)
+    public static func fetchLastestLiveInfoFast(
+        liveModel: LiveModel,
+        resolvedPluginId: String? = nil,
+        allowNotFoundRetry: Bool = true
+    ) async throws -> LiveModel {
+        let platform: LiveParseJSPlatform
+        if let resolvedPluginId, !resolvedPluginId.hasPrefix("unknown:") {
+            // 收藏刷新会话已经用一次性目录快照确认过插件；这里直接构造调用上下文，
+            // 禁止每个房间再次同步扫描插件目录和解码 manifest。
+            platform = LiveParseJSPlatform(
+                pluginId: resolvedPluginId,
+                liveTypes: [liveModel.liveType]
+            )
+        } else {
+            guard let resolved = SandboxPluginCatalog.platform(for: liveModel.liveType) else {
+                throw LiveParseError.liveParseError("不支持的平台", "\(liveModel.liveType)")
+            }
+            platform = resolved
+        }
+        let executor = FavoriteLiveInfoRequestExecutor(
+            fetcher: PluginFavoriteLiveInfoFetcher(),
+            timing: ContinuousFavoriteRefreshTiming(),
+            policy: .default
+        )
+        return try await executor.fetch(
+            liveModel: liveModel,
+            pluginId: platform.pluginId,
+            allowNotFoundRetry: allowNotFoundRetry
+        )
     }
 
     public static func fetchSearchWithShareCode(shareCode: String) async throws -> LiveModel? {

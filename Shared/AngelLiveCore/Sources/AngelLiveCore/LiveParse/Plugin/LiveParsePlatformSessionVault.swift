@@ -16,15 +16,12 @@ enum LiveParsePlatformSessionVault {
 
         let normalizedCookie = cookie.trimmingCharacters(in: .whitespacesAndNewlines)
         lock.lock()
-        if normalizedCookie.isEmpty {
-            sessions.removeValue(forKey: normalizedId)
-        } else {
-            sessions[normalizedId] = LiveParsePlatformSession(
-                cookie: normalizedCookie,
-                uid: uid?.trimmingCharacters(in: .whitespacesAndNewlines),
-                updatedAt: Date()
-            )
-        }
+        // 空值保留为带时间戳的 tombstone，使登录→退出后不会复用旧匿名 session 缓存。
+        sessions[normalizedId] = LiveParsePlatformSession(
+            cookie: normalizedCookie,
+            uid: uid?.trimmingCharacters(in: .whitespacesAndNewlines),
+            updatedAt: .now
+        )
         lock.unlock()
     }
 
@@ -32,7 +29,7 @@ enum LiveParsePlatformSessionVault {
         let normalizedId = canonicalPlatformId(platformId)
         guard !normalizedId.isEmpty else { return }
         lock.lock()
-        sessions.removeValue(forKey: normalizedId)
+        sessions[normalizedId] = LiveParsePlatformSession(cookie: "", uid: nil, updatedAt: .now)
         lock.unlock()
     }
 
@@ -58,6 +55,13 @@ enum LiveParsePlatformSessionVault {
             .map { "\($0.0)=\($0.1)" }
             .joined(separator: "; ")
         return merged.isEmpty ? nil : merged
+    }
+
+    static func revision(for platformId: String) -> String {
+        let normalizedId = canonicalPlatformId(platformId)
+        guard !normalizedId.isEmpty else { return "anonymous" }
+        guard let updatedAt = session(for: normalizedId)?.updatedAt else { return "anonymous" }
+        return String(updatedAt.timeIntervalSinceReferenceDate.bitPattern, radix: 16)
     }
 
     private static func parseCookiePairs(_ cookie: String) -> [(String, String)] {

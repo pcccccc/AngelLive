@@ -66,7 +66,7 @@ struct FavoriteView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            if viewModel.isCloudSyncing {
+            if viewModel.isFavoriteStatusRefreshing {
                 syncBanner
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
@@ -74,7 +74,7 @@ struct FavoriteView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.isCloudSyncing)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isFavoriteStatusRefreshing)
         .navigationTitle("收藏")
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
@@ -214,7 +214,7 @@ struct FavoriteView: View {
         }
     }
 
-    /// 顶部「正在同步收藏…」提示条。非阻塞,同步进行中展示,完成后自动隐藏。
+    /// 顶部 loading 只跟随收藏状态刷新的前台阶段，完成后自动隐藏。
     private var syncBanner: some View {
         HStack(spacing: 8) {
             ProgressView()

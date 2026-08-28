@@ -34,6 +34,14 @@ private struct PluginPayloadTransferBox: @unchecked Sendable {
 public final class JSRuntime: @unchecked Sendable {
     public typealias LogHandler = @Sendable (String) -> Void
 
+    private struct HostHTTPCallback {
+        let resolve: JSValue
+        let reject: JSValue
+        let envelope: HostHTTPRequestEnvelope
+        let requestHeaders: [String: String]
+        let startedAt: CFAbsoluteTime
+    }
+
     public static let supportedAPIVersion = 1
 
     private let queue: DispatchQueue
@@ -41,6 +49,9 @@ public final class JSRuntime: @unchecked Sendable {
     private let pluginId: String
     private let session: URLSession
     private let nativeStream: ManifestNativeStream?
+    private let httpFlightCoordinator: PluginHTTPFlightCoordinator
+    /// 只允许在 `queue` 上读写；JSValue 永不跨出 JavaScriptCore 串行队列。
+    private var hostHTTPCallbacks: [UUID: HostHTTPCallback] = [:]
 
     public init(
         pluginId: String,
@@ -52,6 +63,7 @@ public final class JSRuntime: @unchecked Sendable {
         self.pluginId = pluginId
         self.session = session
         self.nativeStream = nativeStream
+        self.httpFlightCoordinator = PluginHTTPFlightCoordinator()
 
         var createdContext: JSContext?
         queue.sync {
@@ -62,7 +74,7 @@ public final class JSRuntime: @unchecked Sendable {
         queue.sync {
             Self.configureConsole(in: context, logHandler: logHandler)
             Self.configureExceptionHandler(in: context)
-            Self.configureHostHTTP(in: context, queue: queue, session: session, pluginId: pluginId)
+            self.configureHostHTTP(in: context)
             Self.configureHostCrypto(in: context)
             Self.configureHostSession(in: context)
             Self.configureHostRuntime(in: context)
@@ -118,7 +130,6 @@ public final class JSRuntime: @unchecked Sendable {
         return try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
-                    Logger.debug("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 进入队列", category: .plugin)
                     guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
                         throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
                     }
@@ -135,12 +146,10 @@ public final class JSRuntime: @unchecked Sendable {
                     }
 
                     if Self.isPromise(result) {
-                        Logger.debug("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 返回 Promise，等待解析", category: .plugin)
-                        self.awaitPromise(result, functionName: name, continuation: continuation)
+                        self.awaitPromise(result, continuation: continuation)
                         return
                     }
 
-                    Logger.debug("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 同步返回", category: .plugin)
                     continuation.resume(returning: try Self.convertToJSONObject(result, in: self.context))
                 } catch {
                     Logger.warning("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)", category: .plugin)
@@ -148,6 +157,10 @@ public final class JSRuntime: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    public func invalidateHTTPFailureCache() async {
+        await httpFlightCoordinator.invalidateFailures()
     }
 }
 
@@ -257,18 +270,19 @@ private extension JSRuntime {
 
           Host.http = Host.http || {};
           Host.http.request = function (options) {
-            var url = (options && options.url) || (options && options.request && options.request.url) || "";
-            console.log("[Host.http.request] 发起请求: " + url);
             return new Promise(function (resolve, reject) {
               __lp_host_http_request(
                 JSON.stringify(options || {}),
                 function (resultJSON) {
-                  console.log("[Host.http.request] resolve 回调触发: " + url);
                   resolve(JSON.parse(resultJSON));
                 },
                 function (err) {
-                  console.log("[Host.http.request] reject 回调触发: " + url + " err=" + err);
-                  reject(Host.makeError("NETWORK", String(err || "host http request failed"), { url: url }));
+                  var message = String(err || "host http request failed");
+                  if (message.indexOf("LP_PLUGIN_ERROR:") !== -1) {
+                    reject(new Error(message));
+                  } else {
+                    reject(Host.makeError("NETWORK", message, {}));
+                  }
                 }
               );
             });
@@ -406,12 +420,16 @@ private extension JSRuntime {
         context.setObject(loadBuiltinScript, forKeyedSubscript: "__lp_host_load_builtin_script" as NSString)
     }
 
-    static func configureHostHTTP(in context: JSContext, queue: DispatchQueue, session: URLSession, pluginId: String) {
-        let requestBlock: @convention(block) (String, JSValue, JSValue) -> Void = { optionsJSON, resolve, reject in
+    func configureHostHTTP(in context: JSContext) {
+        let requestBlock: @convention(block) (String, JSValue, JSValue) -> Void = { [weak self] optionsJSON, resolve, reject in
+            guard let self else {
+                reject.call(withArguments: ["Host HTTP runtime released"])
+                return
+            }
             let optionsData = optionsJSON.data(using: .utf8) ?? Data()
             let options = (try? JSONSerialization.jsonObject(with: optionsData) as? [String: Any]) ?? [:]
 
-            guard let envelope = makeHostHTTPRequestEnvelope(options: options, pluginId: pluginId) else {
+            guard let envelope = Self.makeHostHTTPRequestEnvelope(options: options, pluginId: self.pluginId) else {
                 reject.call(withArguments: ["Invalid url"]) // already on JS thread
                 return
             }
@@ -419,10 +437,11 @@ private extension JSRuntime {
             var request = URLRequest(url: envelope.url)
             request.httpMethod = envelope.method
             request.timeoutInterval = envelope.timeout
+            request.httpBody = envelope.body
 
             var requestHeaders = envelope.headers
             if envelope.authMode == .platformCookie {
-                requestHeaders = removeProtectedHeaders(requestHeaders)
+                requestHeaders = Self.removeProtectedHeaders(requestHeaders)
                 if let cookieHeader = LiveParsePlatformSessionVault.mergedCookieHeader(for: envelope.platformId) {
                     requestHeaders["Cookie"] = cookieHeader
                 }
@@ -461,7 +480,7 @@ private extension JSRuntime {
                             }
                         }
                         let keyPath = bodyPath.split(separator: ".").map(String.init)
-                        bodyJSON = Self.setNestedValue(in: bodyJSON ?? [:], keyPath: keyPath, value: injectedValue)
+                            bodyJSON = Self.setNestedValue(in: bodyJSON ?? [:], keyPath: keyPath, value: injectedValue)
                     }
                 }
 
@@ -477,8 +496,6 @@ private extension JSRuntime {
                 request.setValue(value, forHTTPHeaderField: key)
             }
 
-            request.httpBody = envelope.body
-
             // 至此 requestHeaders 不再变更。下面的响应闭包只用它做日志记录,
             // 捕获可变 var 会被判为「并发执行代码中引用捕获的 var」,
             // 故在此固化成不可变快照([String: String] 本身 Sendable)。
@@ -487,82 +504,45 @@ private extension JSRuntime {
             // 开发者控制台：记录请求开始时间
             let httpStartTime = CFAbsoluteTimeGetCurrent()
 
-            let task = session.dataTask(with: request) { data, response, error in
-                queue.async {
-                    let httpElapsed = CFAbsoluteTimeGetCurrent() - httpStartTime
+            let callbackID = UUID()
+            self.hostHTTPCallbacks[callbackID] = HostHTTPCallback(
+                resolve: resolve,
+                reject: reject,
+                envelope: envelope,
+                requestHeaders: loggedRequestHeaders,
+                startedAt: httpStartTime
+            )
 
-                    if let error {
-                        // 开发者控制台：记录失败的 HTTP 请求
-                        Self.logHTTPRecord(
-                            pluginId: pluginId, envelope: envelope,
-                            requestHeaders: loggedRequestHeaders,
-                            statusCode: nil, responseHeaders: nil,
-                            responseBody: nil, error: error.localizedDescription,
-                            duration: httpElapsed
-                        )
-                        reject.call(withArguments: [error.localizedDescription])
-                        context.evaluateScript("void(0)")
-                        return
+            let flightKey = PluginHTTPFlightKey(
+                pluginId: self.pluginId,
+                sessionRevision: envelope.sessionRevision,
+                method: envelope.method,
+                singleFlightKey: envelope.singleFlightKey ?? "request:\(callbackID.uuidString)"
+            )
+            let coordinator = self.httpFlightCoordinator
+            let session = self.session
+            let finalRequest = request
+            Task { [weak self] in
+                do {
+                    let snapshot = try await coordinator.execute(
+                        key: flightKey,
+                        successTTL: envelope.singleFlightKey == nil ? 0 : envelope.successCacheTTL,
+                        failureTTL: envelope.singleFlightKey == nil ? 0 : envelope.failureCacheTTL,
+                        bypassCache: envelope.bypassSingleFlightCache
+                    ) {
+                        try await Self.performHostHTTPRequest(session: session, request: finalRequest)
                     }
-                    guard let http = response as? HTTPURLResponse else {
-                        Self.logHTTPRecord(
-                            pluginId: pluginId, envelope: envelope,
-                            requestHeaders: loggedRequestHeaders,
-                            statusCode: nil, responseHeaders: nil,
-                            responseBody: nil, error: "Invalid response",
-                            duration: httpElapsed
-                        )
-                        reject.call(withArguments: ["Invalid response"])
-                        context.evaluateScript("void(0)")
-                        return
+                    self?.queue.async { [weak self] in
+                        self?.finishHostHTTPRequest(callbackID: callbackID, result: .success(snapshot))
                     }
-
-                    var headersDict: [String: String] = http.allHeaderFields.reduce(into: [:]) { acc, item in
-                        if let k = item.key as? String {
-                            acc[k] = String(describing: item.value)
-                        }
+                } catch {
+                    let failure = (error as? PluginHTTPFlightFailure)
+                        ?? PluginHTTPFlightFailure(error: error)
+                    self?.queue.async { [weak self] in
+                        self?.finishHostHTTPRequest(callbackID: callbackID, result: .failure(failure))
                     }
-                    // httpCookieAcceptPolicy=.never 会导致 allHeaderFields 过滤 Set-Cookie，
-                    // 但部分 JS 插件需要读取它，因此单独补回。
-                    if envelope.authMode != .platformCookie,
-                       headersDict["Set-Cookie"] == nil,
-                       let setCookie = http.value(forHTTPHeaderField: "Set-Cookie") {
-                        headersDict["Set-Cookie"] = setCookie
-                    }
-                    if envelope.authMode == .platformCookie {
-                        headersDict = removeSetCookieHeaders(headersDict)
-                    }
-
-                    let bodyText = data.flatMap { String(data: $0, encoding: .utf8) }
-                    let bodyBase64 = data?.base64EncodedString()
-                    let responseURL = http.url?.absoluteString ?? envelope.urlString
-                    let rawBodyLog = debugHTTPResponseBody(bodyText: bodyText, bodyBase64: bodyBase64)
-                    Logger.debug("[JSRuntime][HTTP] pluginId=\(pluginId) method=\(envelope.method) status=\(http.statusCode) url=\(responseURL) headers=\(headersDict) rawBody=\(rawBodyLog)", category: .plugin)
-
-                    // 开发者控制台：记录成功的 HTTP 请求
-                    Self.logHTTPRecord(
-                        pluginId: pluginId, envelope: envelope,
-                        requestHeaders: loggedRequestHeaders,
-                        statusCode: http.statusCode, responseHeaders: headersDict,
-                        responseBody: bodyText.map { String($0.prefix(2000)) },
-                        error: nil, duration: httpElapsed
-                    )
-
-                    let result: [String: Any] = [
-                        "status": http.statusCode,
-                        "headers": headersDict,
-                        "url": responseURL,
-                        "bodyText": bodyText ?? NSNull(),
-                        "bodyBase64": bodyBase64 ?? NSNull()
-                    ]
-
-                    let jsonData = (try? JSONSerialization.data(withJSONObject: result)) ?? Data("{}".utf8)
-                    let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
-                    resolve.call(withArguments: [jsonString])
-                    context.evaluateScript("void(0)")
                 }
             }
-            task.resume()
         }
 
         context.setObject(requestBlock, forKeyedSubscript: "__lp_host_http_request" as NSString)
@@ -598,6 +578,11 @@ private extension JSRuntime {
         let authMode: HostHTTPAuthMode
         let platformId: String
         let cookieInject: [CookieInjectRule]
+        let singleFlightKey: String?
+        let successCacheTTL: TimeInterval
+        let failureCacheTTL: TimeInterval
+        let bypassSingleFlightCache: Bool
+        let sessionRevision: String
     }
 
     private static func makeHostHTTPRequestEnvelope(options: [String: Any], pluginId: String) -> HostHTTPRequestEnvelope? {
@@ -619,6 +604,16 @@ private extension JSRuntime {
         let platformId = LiveParsePlatformSessionVault.canonicalPlatformId(
             ((options["platformId"] as? String) ?? pluginId)
         )
+        let requestedSingleFlightKey = (options["singleFlightKey"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let singleFlightKey: String?
+        if method == "GET" || method == "HEAD" {
+            singleFlightKey = requestedSingleFlightKey?.isEmpty == false
+                ? requestedSingleFlightKey
+                : nil
+        } else {
+            singleFlightKey = nil
+        }
 
         if authMode == .platformCookie {
             headers = removeProtectedHeaders(headers)
@@ -633,8 +628,19 @@ private extension JSRuntime {
             timeout: timeout,
             authMode: authMode,
             platformId: platformId,
-            cookieInject: resolveCookieInject(options: options)
+            cookieInject: resolveCookieInject(options: options),
+            singleFlightKey: singleFlightKey,
+            successCacheTTL: millisecondsOption(options["successCacheTTLms"]) / 1_000,
+            failureCacheTTL: millisecondsOption(options["failureCacheTTLms"]) / 1_000,
+            bypassSingleFlightCache: (options["bypassSingleFlightCache"] as? Bool) == true,
+            sessionRevision: LiveParsePlatformSessionVault.revision(for: platformId)
         )
+    }
+
+    private static func millisecondsOption(_ value: Any?) -> TimeInterval {
+        if let number = value as? NSNumber { return max(0, number.doubleValue) }
+        if let string = value as? String, let number = Double(string) { return max(0, number) }
+        return 0
     }
 
     private static func resolveCookieInject(options: [String: Any]) -> [CookieInjectRule] {
@@ -708,21 +714,106 @@ private extension JSRuntime {
         return nil
     }
 
-    private static func debugHTTPResponseBody(bodyText: String?, bodyBase64: String?) -> String {
-        let limit = 4_000
-        if let bodyText, !bodyText.isEmpty {
-            if bodyText.count > limit {
-                return String(bodyText.prefix(limit)) + "...(truncated)"
+    private static func performHostHTTPRequest(
+        session: URLSession,
+        request: URLRequest
+    ) async throws -> PluginHTTPFlightSnapshot {
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw PluginHTTPFlightFailure(
+                    domain: "AngelLive.HostHTTP",
+                    code: 1,
+                    receivedHTTPResponse: false,
+                    message: "Host HTTP response was not HTTP"
+                )
             }
-            return bodyText
-        }
-        if let bodyBase64, !bodyBase64.isEmpty {
-            if bodyBase64.count > limit {
-                return "<base64> " + String(bodyBase64.prefix(limit)) + "...(truncated)"
+            var headers = http.allHeaderFields.reduce(into: [String: String]()) { result, item in
+                if let key = item.key as? String {
+                    result[key] = String(describing: item.value)
+                }
             }
-            return "<base64> \(bodyBase64)"
+            if headers["Set-Cookie"] == nil,
+               let setCookie = http.value(forHTTPHeaderField: "Set-Cookie") {
+                headers["Set-Cookie"] = setCookie
+            }
+            return PluginHTTPFlightSnapshot(
+                data: data,
+                statusCode: http.statusCode,
+                headers: headers,
+                responseURL: http.url?.absoluteString ?? request.url?.absoluteString ?? ""
+            )
+        } catch let failure as PluginHTTPFlightFailure {
+            throw failure
+        } catch {
+            throw PluginHTTPFlightFailure(error: error)
         }
-        return "<empty>"
+    }
+
+    /// 必须在 JavaScriptCore 串行队列调用。
+    private func finishHostHTTPRequest(
+        callbackID: UUID,
+        result: Result<PluginHTTPFlightSnapshot, PluginHTTPFlightFailure>
+    ) {
+        guard let callback = hostHTTPCallbacks.removeValue(forKey: callbackID) else { return }
+        let elapsed = CFAbsoluteTimeGetCurrent() - callback.startedAt
+
+        switch result {
+        case .success(let snapshot):
+            var headers = snapshot.headers
+            if callback.envelope.authMode == .platformCookie {
+                headers = Self.removeSetCookieHeaders(headers)
+            }
+            let bodyText = String(data: snapshot.data, encoding: .utf8)
+            let bodyBase64 = snapshot.data.base64EncodedString()
+            Logger.debug(
+                "[JSRuntime][HTTP] pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) bytes=\(snapshot.data.count) duration=\(String(format: "%.3f", elapsed))s",
+                category: .plugin
+            )
+            if PluginConsoleService.shared.isEnabled {
+                Self.logHTTPRecord(
+                    pluginId: pluginId,
+                    envelope: callback.envelope,
+                    requestHeaders: callback.requestHeaders,
+                    statusCode: snapshot.statusCode,
+                    responseHeaders: headers,
+                    responseBody: bodyText.map { String($0.prefix(2_000)) },
+                    error: nil,
+                    duration: elapsed
+                )
+            }
+            let payload: [String: Any] = [
+                "status": snapshot.statusCode,
+                "headers": headers,
+                "url": snapshot.responseURL,
+                "bodyText": bodyText ?? NSNull(),
+                "bodyBase64": bodyBase64
+            ]
+            let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{}".utf8)
+            callback.resolve.call(withArguments: [String(data: data, encoding: .utf8) ?? "{}"])
+
+        case .failure(let failure):
+            if PluginConsoleService.shared.isEnabled {
+                Self.logHTTPRecord(
+                    pluginId: pluginId,
+                    envelope: callback.envelope,
+                    requestHeaders: callback.requestHeaders,
+                    statusCode: nil,
+                    responseHeaders: nil,
+                    responseBody: nil,
+                    error: failure.message,
+                    duration: elapsed
+                )
+            }
+            if failure.domain == "AngelLive.HostHTTP", failure.code == 1 {
+                callback.reject.call(withArguments: [Self.hostHTTPInvalidResponseMessage()])
+            } else {
+                callback.reject.call(withArguments: [
+                    Self.hostHTTPFailureMessage(failure)
+                ])
+            }
+        }
+        context.evaluateScript("void(0)")
     }
 
     private static func normalizedHeaders(_ raw: Any?) -> [String: String] {
@@ -736,6 +827,68 @@ private extension JSRuntime {
             }
         }
         return result
+    }
+
+    /// Host HTTP 失败通过插件标准错误信封回到 Swift，保留底层 domain/code，
+    /// 避免收藏策略退化为解析 localizedDescription。信封不包含请求 URL 或凭证。
+    private static func hostHTTPFailureMessage(
+        _ failure: PluginHTTPFlightFailure
+    ) -> String {
+        let code: LiveParsePluginStandardErrorCode =
+            failure.domain == NSURLErrorDomain
+            && failure.code == URLError.Code.timedOut.rawValue
+            ? .timeout
+            : .network
+        return standardErrorMessage(
+            code: code,
+            message: code == .timeout ? "Host HTTP request timed out" : "Host HTTP request failed",
+            context: [
+                "underlyingDomain": failure.domain,
+                "underlyingCode": String(failure.code),
+                "receivedHTTPResponse": failure.receivedHTTPResponse ? "true" : "false"
+            ]
+        )
+    }
+
+    private static func hostHTTPFailureMessage(
+        _ error: Error,
+        receivedHTTPResponse: Bool
+    ) -> String {
+        let nsError = error as NSError
+        let code: LiveParsePluginStandardErrorCode =
+            nsError.domain == NSURLErrorDomain && nsError.code == URLError.Code.timedOut.rawValue
+            ? .timeout
+            : .network
+        return standardErrorMessage(
+            code: code,
+            message: code == .timeout ? "Host HTTP request timed out" : "Host HTTP request failed",
+            context: [
+                "underlyingDomain": nsError.domain,
+                "underlyingCode": String(nsError.code),
+                "receivedHTTPResponse": receivedHTTPResponse ? "true" : "false"
+            ]
+        )
+    }
+
+    private static func hostHTTPInvalidResponseMessage() -> String {
+        standardErrorMessage(
+            code: .invalidResponse,
+            message: "Host HTTP response was not HTTP",
+            context: ["receivedHTTPResponse": "false"]
+        )
+    }
+
+    private static func standardErrorMessage(
+        code: LiveParsePluginStandardErrorCode,
+        message: String,
+        context: [String: String]
+    ) -> String {
+        let payload = LiveParsePluginStandardError(code: code, message: message, context: context)
+        guard let data = try? JSONEncoder().encode(payload),
+              let json = String(data: data, encoding: .utf8) else {
+            return "LP_PLUGIN_ERROR:{\"code\":\"\(code.rawValue)\",\"message\":\"Host HTTP request failed\",\"context\":{}}"
+        }
+        return "LP_PLUGIN_ERROR:\(json)"
     }
 
     /// 将 HTTP 请求/响应记录到开发者控制台
@@ -831,8 +984,7 @@ private extension JSRuntime {
         return then?.isObject == true
     }
 
-    func awaitPromise(_ promise: JSValue, functionName: String = "", continuation: CheckedContinuation<Any, Error>) {
-        let pluginId = self.pluginId
+    func awaitPromise(_ promise: JSValue, continuation: CheckedContinuation<Any, Error>) {
         let context = self.context
 
         // 用唯一 key 将 promise 和回调注册到 JS 全局空间，
@@ -840,7 +992,6 @@ private extension JSRuntime {
         let key = "_lp_await_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
 
         let resolve: @convention(block) (JSValue) -> Void = { [weak context] value in
-            Logger.debug("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) resolve 回调触发", category: .plugin)
             // 清理全局变量
             context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
             do {
@@ -851,7 +1002,6 @@ private extension JSRuntime {
             }
         }
         let reject: @convention(block) (JSValue) -> Void = { [weak context] value in
-            Logger.debug("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) reject 回调触发: \(value.toString() ?? "")", category: .plugin)
             context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
             continuation.resume(throwing: LiveParsePluginError.fromJSException(value.toString() ?? "<unknown>"))
         }

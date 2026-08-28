@@ -61,6 +61,13 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         lock.unlock()
     }
 
+    public func invalidateHTTPFailureCaches() async {
+        let plugins = lock.withLock { Array(loadedPlugins.values) }
+        for plugin in plugins {
+            await plugin.runtime.invalidateHTTPFailureCache()
+        }
+    }
+
     public func resolve(pluginId: String) throws -> LiveParseLoadedPlugin {
         lock.lock()
         if let existing = loadedPlugins[pluginId] {
@@ -122,14 +129,19 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             // 同上，继续 forward。
         }
 
-        // 开发者控制台日志 —— 跟宿主域(Favorite/Danmaku/Player 等)对齐,无条件写入。
-        // 缓冲区有 500 条上限,代价可忽略;运行时 UI 是否显示由 GeneralSettingModel.developerModeEnabled 控制。
+        // 开发者控制台关闭时完全跳过记录。收藏批量刷新会并发调用上百次，
+        // 即使 UI 不展示，无条件写 @Observable entries 仍会造成主 actor 压力。
         let console = PluginConsoleService.shared
-        let payloadStr = (try? String(data: JSONSerialization.data(withJSONObject: payload), encoding: .utf8)) ?? "{}"
-        let entryId = await console.log(tag: pluginId, method: function)
-        await console.updateRequest(id: entryId, body: payloadStr)
-        // 标记活跃调用，让 Host.http 能关联 HTTP 子请求
-        console.setActiveCall(pluginId: pluginId, entryId: entryId)
+        let consoleEntryId: UUID?
+        if console.isEnabled {
+            let payloadStr = (try? String(data: JSONSerialization.data(withJSONObject: payload), encoding: .utf8)) ?? "{}"
+            let entryId = await console.log(tag: pluginId, method: function)
+            await console.updateRequest(id: entryId, body: payloadStr)
+            console.setActiveCall(pluginId: pluginId, entryId: entryId)
+            consoleEntryId = entryId
+        } else {
+            consoleEntryId = nil
+        }
         let startTime = CFAbsoluteTimeGetCurrent()
 
         do {
@@ -137,16 +149,34 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             try await plugin.load()
             let result = try await plugin.runtime.callPluginFunction(name: function, payload: payload)
 
-            console.clearActiveCall(pluginId: pluginId)
+            if consoleEntryId != nil {
+                console.clearActiveCall(pluginId: pluginId)
+            }
             let elapsed = CFAbsoluteTimeGetCurrent() - startTime
-            let responseStr = (try? String(data: JSONSerialization.data(withJSONObject: result), encoding: .utf8))
-                .map { String($0.prefix(2000)) }
-            await console.updateStatus(id: entryId, status: .success, duration: elapsed, responseBody: responseStr)
+            if let consoleEntryId {
+                let responseStr = (try? String(data: JSONSerialization.data(withJSONObject: result), encoding: .utf8))
+                    .map { String($0.prefix(2_000)) }
+                await console.updateStatus(
+                    id: consoleEntryId,
+                    status: .success,
+                    duration: elapsed,
+                    responseBody: responseStr
+                )
+            }
             return result
         } catch {
-            console.clearActiveCall(pluginId: pluginId)
+            if consoleEntryId != nil {
+                console.clearActiveCall(pluginId: pluginId)
+            }
             let elapsed = CFAbsoluteTimeGetCurrent() - startTime
-            await console.updateStatus(id: entryId, status: .error, duration: elapsed, errorMessage: error.localizedDescription)
+            if let consoleEntryId {
+                await console.updateStatus(
+                    id: consoleEntryId,
+                    status: .error,
+                    duration: elapsed,
+                    errorMessage: error.localizedDescription
+                )
+            }
             throw error
         }
     }
@@ -160,9 +190,6 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         do {
             let value = try await call(pluginId: pluginId, function: function, payload: payload)
             let data = try JSONSerialization.data(withJSONObject: value)
-            if let jsonStr = String(data: data, encoding: .utf8) {
-                Logger.debug("[PluginManager] callDecodable: pluginId=\(pluginId) function=\(function) rawJSON=\(jsonStr.prefix(1000))", category: .plugin)
-            }
             return try decoder.decode(T.self, from: data)
         } catch let error as LiveParsePluginError {
             throw error

@@ -14,7 +14,7 @@ public enum LiveParsePluginStandardErrorCode: String, Codable, Sendable {
     case upstream = "UPSTREAM"
 }
 
-public struct LiveParsePluginStandardError: Sendable, Codable {
+public struct LiveParsePluginStandardError: Sendable, Codable, Equatable {
     public let code: LiveParsePluginStandardErrorCode
     public let message: String
     public let context: [String: String]
@@ -26,7 +26,7 @@ public struct LiveParsePluginStandardError: Sendable, Codable {
     }
 }
 
-public enum LiveParsePluginError: Error, LocalizedError, CustomStringConvertible {
+public enum LiveParsePluginError: Error, LocalizedError, CustomStringConvertible, Sendable {
     case invalidManifest(String)
     case incompatibleAPIVersion(expected: Int, actual: Int)
     case missingEntryFile(String)

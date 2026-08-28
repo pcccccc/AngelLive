@@ -19,7 +19,7 @@ struct FavoriteMainView: View {
     @State var second = 0
     @State var firstLoad = true
     
-    /// 顶部「正在同步收藏…」提示条。tvOS 无导航栏,放在页面顶部,非阻塞。
+    /// 顶部 loading 只跟随收藏状态刷新的前台阶段，完成后自动隐藏。
     private var syncBanner: some View {
         HStack(spacing: 12) {
             ProgressView()
@@ -35,7 +35,7 @@ struct FavoriteMainView: View {
     var body: some View {
 
         VStack {
-            if appViewModel.favoriteViewModel.isCloudSyncing {
+            if appViewModel.favoriteViewModel.isFavoriteStatusRefreshing {
                 HStack {
                     syncBanner
                     Spacer()
@@ -158,7 +158,7 @@ struct FavoriteMainView: View {
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: appViewModel.favoriteViewModel.isCloudSyncing)
+        .animation(.easeInOut(duration: 0.25), value: appViewModel.favoriteViewModel.isFavoriteStatusRefreshing)
         .overlay {
             if appViewModel.favoriteViewModel.roomList.count > 0 {
                 VStack {

@@ -31,6 +31,14 @@ public final class AppFavoriteModel {
     public var syncStatus: CloudSyncStatus = .syncing
     public var lastSyncTime: Date?
     public var listVersion: Int = 0
+    public private(set) var favoriteForegroundPhase: FavoriteForegroundPhase = .idle
+    public private(set) var pluginRefreshPhases: [String: FavoritePluginRefreshPhase] = [:]
+    /// 逐房间 freshness 是刷新内部 sidecar，不直接驱动整页 Observation。
+    /// 页面若要展示单卡 freshness，应由卡片级模型订阅，不能让 100+ 条回写重算整页。
+    @ObservationIgnored public private(set) var favoriteStatusFreshness: [String: FavoriteStatusFreshness] = [:]
+    public private(set) var lastFavoriteRefreshSummary: FavoriteRefreshSummary?
+    public private(set) var lastFavoriteRefreshTime: Date?
+    public private(set) var currentFavoriteGenerationID: UUID?
     /// 收藏是否启用 iCloud 同步。关闭 = 纯本地(服务「只有一台设备」的用户)。默认开启,保留既有行为。
     public var favoriteICloudSyncEnabled: Bool {
         didSet { UserDefaults.standard.set(favoriteICloudSyncEnabled, forKey: Keys.favoriteICloudSyncEnabled) }
@@ -56,21 +64,63 @@ public final class AppFavoriteModel {
     /// 非阻塞提示,与是否有本地缓存无关——本地收藏照常可交互。
     public var isCloudSyncing: Bool { syncStatus == .syncing }
 
+    /// 直播状态刷新与 CloudKit 成员同步分别拥有状态；页面菊花只跟随前台预算。
+    public var isFavoriteStatusRefreshing: Bool {
+        if case .refreshing = favoriteForegroundPhase { return true }
+        return false
+    }
+
+    public var pendingPluginIds: Set<String> {
+        switch favoriteForegroundPhase {
+        case .finished(_, let pending): pending
+        case .refreshing:
+            Set(pluginRefreshPhases.compactMap { pluginId, phase in
+                if case .pending = phase { return pluginId }
+                return nil
+            })
+        case .idle: []
+        }
+    }
+
     /// 云同步不可用时仅在本地也没有收藏可展示的情况下使用整页错误态。
     public var shouldShowBlockingCloudError: Bool { cloudReturnError && roomList.isEmpty }
 
-    private var isSyncing: Bool = false  // 添加同步状态标记
+    @ObservationIgnored private let refreshSession: FavoriteRefreshSession
+    @ObservationIgnored private var refreshEventTask: Task<Void, Never>?
+    @ObservationIgnored private var activeFavoriteRefreshGenerationID: UUID?
+    @ObservationIgnored private var activeFavoriteForegroundCompletion: Task<Void, Never>?
+    @ObservationIgnored private var patchFlushTask: Task<Void, Never>?
+    @ObservationIgnored private var patchPersistenceTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingRoomPatches: [String: LiveModel] = [:]
+    @ObservationIgnored private var hasFlushedFirstRoomPatch = false
+    @ObservationIgnored private var favoriteLastConfirmedAt: [String: Date] = [:]
+    @ObservationIgnored private var activePluginIDsByRoomKey: [String: String] = [:]
+    @ObservationIgnored private var favoriteIdentityKeysByLiveType: [String: FavoriteIdentityKey] = [:]
+    @ObservationIgnored private var latestPluginRefreshPhases: [String: FavoritePluginRefreshPhase] = [:]
+    @ObservationIgnored private var cloudMembershipTask: Task<Void, Never>?
+    @ObservationIgnored private var cloudMembershipGeneration: UUID?
 
     private enum Keys {
         static let favoriteICloudSyncEnabled = "AppFavoriteModel.favoriteICloudSyncEnabled"
     }
 
-    public init() {
+    public init(refreshSession: FavoriteRefreshSession = FavoriteRefreshSession()) {
+        self.refreshSession = refreshSession
         if UserDefaults.standard.object(forKey: Keys.favoriteICloudSyncEnabled) == nil {
             self.favoriteICloudSyncEnabled = true   // 默认开启,保留旧行为
         } else {
             self.favoriteICloudSyncEnabled = UserDefaults.standard.bool(forKey: Keys.favoriteICloudSyncEnabled)
         }
+    }
+
+    public func freshness(for room: LiveModel) -> FavoriteStatusFreshness? {
+        favoriteStatusFreshness[favoriteKey(for: room)]
+    }
+
+    private func favoriteKey(for room: LiveModel) -> String {
+        let identityKey = favoriteIdentityKeysByLiveType[room.liveType.rawValue]
+            ?? PlatformHostBehavior.favoriteIdentityKey(for: room.liveType)
+        return AppFavoriteModel.favoriteUniqueKey(for: room, identityKey: identityKey)
     }
 
     // MARK: - Phase② 本地存储(本地优先)
@@ -163,26 +213,280 @@ public final class AppFavoriteModel {
     @MainActor
     private func reloadFromLocalAfterRemoteChange() async {
         let local = await FavoriteLocalStore.shared.load()
-        applyRoomList(local)
+        applyMembershipSnapshot(local)
     }
 
-    /// 对给定成员刷新直播状态并应用 + 回写本地;若探测到身份变化且开启同步,回写身份元数据。
+    /// 成员同步只决定哪些收藏存在；已在内存中刷新的直播状态不被较旧成员快照覆盖。
     @MainActor
-    private func refreshStatesAndApply(members: [LiveModel]) async {
+    private func applyMembershipSnapshot(_ members: [LiveModel]) {
+        let current = roomList
+        let merged = members.map { member in
+            current.first(where: {
+                favoriteKey(for: $0) == favoriteKey(for: member)
+                    || AppFavoriteModel.isSameStreamer($0, member)
+            }) ?? member
+        }
+        applyRoomList(merged)
+    }
+
+    /// 启动新代际并只等待页面前台预算；事件消费任务继续持有慢请求的增量结果。
+    @MainActor
+    func refreshStatesAndApply(
+        members: [LiveModel],
+        trigger: FavoriteRefreshTrigger
+    ) async {
+        if trigger == .automatic,
+           let generationID = activeFavoriteRefreshGenerationID,
+           let foregroundCompletion = activeFavoriteForegroundCompletion {
+            Logger.debug(
+                "[FavoriteRefresh] coalesced automatic refresh into generation=\(generationID)",
+                category: .favorite
+            )
+            await foregroundCompletion.value
+            return
+        }
+
         guard !members.isEmpty else {
+            refreshEventTask?.cancel()
+            await refreshSession.cancel()
+            activeFavoriteRefreshGenerationID = nil
+            activeFavoriteForegroundCompletion = nil
+            currentFavoriteGenerationID = nil
+            favoriteForegroundPhase = .idle
+            pluginRefreshPhases = [:]
             applyRoomList([])
             return
         }
-        guard let result = try? await actor.syncStreamerLiveStates(members: members) else { return }
-        applyRoomList(result.rooms)
-        // 步骤4(修 R4):身份回写依赖 nextRecordZoneChangeBatch 从本地真相取新 key 对应的 room,
-        // 因此必须**先等本地保存完成**,再入队,否则 recordProvider 找不到新 key。
-        await FavoriteLocalStore.shared.save(result.rooms)
-        // §10.7:关闭 iCloud 同步 = 纯本地,绝不触发任何身份回写。
-        guard favoriteICloudSyncEnabled, !result.identityChanges.isEmpty else { return }
+
+        refreshEventTask?.cancel()
+        patchFlushTask?.cancel()
+        pendingRoomPatches.removeAll(keepingCapacity: true)
+        hasFlushedFirstRoomPatch = false
+
+        let handle = await refreshSession.start(members: members, trigger: trigger)
+        activeFavoriteRefreshGenerationID = handle.generationID
+        activeFavoriteForegroundCompletion = handle.foregroundCompletion
+        currentFavoriteGenerationID = handle.generationID
+        favoriteForegroundPhase = .refreshing(generationID: handle.generationID)
+        lastFavoriteRefreshSummary = nil
+        activePluginIDsByRoomKey = handle.pluginIDsByRoomKey
+        favoriteIdentityKeysByLiveType = handle.identityKeysByLiveType
+
+        var nextFreshness = favoriteStatusFreshness
+        for key in handle.roomKeys {
+            switch nextFreshness[key] {
+            case .fresh(let date): favoriteLastConfirmedAt[key] = date
+            case .stale(_, let date): favoriteLastConfirmedAt[key] = date
+            case .refreshing, .none: break
+            }
+            nextFreshness[key] = .refreshing
+        }
+        favoriteStatusFreshness = nextFreshness
+        latestPluginRefreshPhases = handle.pluginTotals.mapValues { .pending(completed: 0, total: $0) }
+        // 一次发布初始插件状态，禁止逐房间初始化触发 Observation 风暴。
+        pluginRefreshPhases = latestPluginRefreshPhases
+
+        let events = handle.events
+        let generationID = handle.generationID
+        refreshEventTask = Task { @MainActor [weak self] in
+            for await event in events {
+                guard let self else { return }
+                await self.consumeFavoriteRefreshEvent(event)
+            }
+            guard let self,
+                  self.activeFavoriteRefreshGenerationID == generationID else { return }
+            self.activeFavoriteRefreshGenerationID = nil
+            self.activeFavoriteForegroundCompletion = nil
+        }
+        await handle.foregroundCompletion.value
+    }
+
+    @MainActor
+    private func consumeFavoriteRefreshEvent(_ event: FavoriteRefreshEvent) async {
+        guard event.generationID == currentFavoriteGenerationID else {
+            Logger.debug(
+                "[FavoriteRefresh] dropped stale generation=\(event.generationID)",
+                category: .favorite
+            )
+            return
+        }
+
+        switch event {
+        case .started:
+            break
+
+        case .roomUpdated(_, let oldKey, let room):
+            pendingRoomPatches[oldKey] = room
+            let updatedAt = Date()
+            favoriteLastConfirmedAt[oldKey] = updatedAt
+            favoriteStatusFreshness[oldKey] = .fresh(updatedAt: updatedAt)
+            if let pluginId = activePluginIDsByRoomKey[oldKey],
+               case .pending(let completed, let total) = latestPluginRefreshPhases[pluginId] {
+                latestPluginRefreshPhases[pluginId] = .reachable(completed: completed, total: total)
+            }
+            schedulePatchFlush(generationID: event.generationID)
+
+        case .roomStale(_, let key, let reason):
+            let lastUpdatedAt = favoriteLastConfirmedAt[key]
+            favoriteStatusFreshness[key] = .stale(reason: reason, lastUpdatedAt: lastUpdatedAt)
+
+        case .pluginProgress(_, let pluginId, let completed, let total):
+            if case .unavailable = latestPluginRefreshPhases[pluginId] { break }
+            if case .reachable = latestPluginRefreshPhases[pluginId] {
+                latestPluginRefreshPhases[pluginId] = .reachable(completed: completed, total: total)
+            } else {
+                latestPluginRefreshPhases[pluginId] = .pending(completed: completed, total: total)
+            }
+
+        case .pluginUnavailable(_, let pluginId, let skipped):
+            let total = pluginTotal(pluginId: pluginId)
+            latestPluginRefreshPhases[pluginId] = .unavailable(skipped: skipped, total: total)
+            // 保留结构化状态供诊断与测试；宿主只展示前台 loading，不产生失败提示。
+            pluginRefreshPhases[pluginId] = latestPluginRefreshPhases[pluginId]
+
+        case .foregroundFinished(_, let pendingPluginIds):
+            // 页面预算结束时才发布一次精确插件进度。
+            pluginRefreshPhases = latestPluginRefreshPhases
+            favoriteForegroundPhase = .finished(
+                generationID: event.generationID,
+                pendingPluginIds: pendingPluginIds
+            )
+            lastFavoriteRefreshTime = Date()
+
+        case .completed(_, let summary):
+            patchFlushTask?.cancel()
+            patchFlushTask = nil
+            await flushRoomPatches(generationID: event.generationID)
+            for plugin in summary.plugins {
+                if case .unavailable = latestPluginRefreshPhases[plugin.pluginId] {
+                    latestPluginRefreshPhases[plugin.pluginId] = .unavailable(
+                        skipped: plugin.skipped,
+                        total: plugin.total
+                    )
+                } else {
+                    latestPluginRefreshPhases[plugin.pluginId] = .completed(
+                        success: plugin.success,
+                        failure: plugin.failure,
+                        skipped: plugin.skipped
+                    )
+                }
+            }
+            pluginRefreshPhases = latestPluginRefreshPhases
+            favoriteForegroundPhase = .finished(
+                generationID: event.generationID,
+                pendingPluginIds: []
+            )
+            lastFavoriteRefreshSummary = summary
+            lastFavoriteRefreshTime = Date()
+        }
+    }
+
+    @MainActor
+    private func schedulePatchFlush(generationID: UUID) {
+        guard patchFlushTask == nil else { return }
+        let delay: Duration = hasFlushedFirstRoomPatch ? .milliseconds(750) : .milliseconds(150)
+        patchFlushTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            self.patchFlushTask = nil
+            await self.flushRoomPatches(generationID: generationID)
+        }
+    }
+
+    @MainActor
+    private func flushRoomPatches(generationID: UUID) async {
+        guard generationID == currentFavoriteGenerationID,
+              !pendingRoomPatches.isEmpty else { return }
+        let patches = pendingRoomPatches
+        pendingRoomPatches.removeAll(keepingCapacity: true)
+        var updated = roomList
+        var identityChanges: [FavoriteIdentityChange] = []
+        var indexByKey = Dictionary(
+            updated.indices.map { (favoriteKey(for: updated[$0]), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var didApplyPatch = false
+
+        for (oldKey, incoming) in patches {
+            guard let index = indexByKey[oldKey] else { continue }
+            let old = updated[index]
+            var replacement = incoming
+            let identityKey = favoriteIdentityKeysByLiveType[old.liveType.rawValue]
+                ?? .roomId
+            if AppFavoriteModel.favoriteIdentityChanged(
+                old: old,
+                new: incoming,
+                identityKey: identityKey
+            ) {
+                replacement.identityUpdatedAt = Date()
+                identityChanges.append(FavoriteIdentityChange(oldKey: oldKey, newRoom: replacement))
+            }
+            updated[index] = replacement
+            didApplyPatch = true
+
+            let newKey = AppFavoriteModel.favoriteUniqueKey(
+                for: replacement,
+                identityKey: identityKey
+            )
+            indexByKey[oldKey] = nil
+            indexByKey[newKey] = index
+            let freshness = favoriteStatusFreshness.removeValue(forKey: oldKey)
+                ?? .fresh(updatedAt: Date())
+            favoriteStatusFreshness[newKey] = freshness
+            if let lastConfirmed = favoriteLastConfirmedAt.removeValue(forKey: oldKey) {
+                favoriteLastConfirmedAt[newKey] = lastConfirmed
+            }
+            if let pluginId = activePluginIDsByRoomKey.removeValue(forKey: oldKey) {
+                activePluginIDsByRoomKey[newKey] = pluginId
+            }
+        }
+
+        guard didApplyPatch else { return }
+        hasFlushedFirstRoomPatch = true
+        applyRoomList(AppFavoriteModel.deduplicated(updated))
+
+        guard favoriteICloudSyncEnabled, !identityChanges.isEmpty else {
+            schedulePatchPersistence()
+            return
+        }
+        // 身份回写必须先把新 key 落入本地真相；普通直播状态则走下方防抖持久化。
+        patchPersistenceTask?.cancel()
+        patchPersistenceTask = nil
+        await FavoriteLocalStore.shared.save(roomList)
         await startCloudSyncIfNeeded()
-        for change in result.identityChanges {
-            FavoriteSyncEngine.shared.enqueueIdentityMetadataRefresh(oldKey: change.oldKey, room: change.newRoom)
+        for change in identityChanges {
+            FavoriteSyncEngine.shared.enqueueIdentityMetadataRefresh(
+                oldKey: change.oldKey,
+                room: change.newRoom
+            )
+        }
+    }
+
+    @MainActor
+    private func schedulePatchPersistence() {
+        patchPersistenceTask?.cancel()
+        patchPersistenceTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+            guard let self else { return }
+            let snapshot = self.roomList
+            self.patchPersistenceTask = nil
+            await FavoriteLocalStore.shared.save(snapshot)
+        }
+    }
+
+    private func pluginTotal(pluginId: String) -> Int {
+        switch latestPluginRefreshPhases[pluginId] {
+        case .pending(_, let total), .reachable(_, let total), .unavailable(_, let total): total
+        case .completed(let success, let failure, let skipped): success + failure + skipped
+        case .none: 0
         }
     }
 
@@ -195,7 +499,7 @@ public final class AppFavoriteModel {
         }
 
         // 如果从未同步过，需要同步
-        guard let lastSync = lastSyncTime else {
+        guard let lastSync = lastFavoriteRefreshTime else {
             return true
         }
 
@@ -206,15 +510,6 @@ public final class AppFavoriteModel {
 
     @MainActor
     public func syncWithActor() async {
-        // 防止并发刷新：如果正在同步中，直接返回
-        guard !isSyncing else {
-            Logger.debug("正在同步中，忽略此次刷新请求", category: .favorite)
-            return
-        }
-
-        isSyncing = true
-        defer { isSyncing = false }  // 确保无论成功或失败都重置状态
-
         // 本地优先:先用本地数据秒显(仅当内存为空,避免整页重建导致滚动卡顿)。
         let local = await FavoriteLocalStore.shared.load()
         let hasExistingData = !roomList.isEmpty
@@ -230,11 +525,10 @@ public final class AppFavoriteModel {
         syncProgressInfo = ("", "", "", 0, 0)
         // 有(本地或旧)数据时不显示 loading 骨架屏，保持列表可滚动
         self.isLoading = roomList.isEmpty
-        self.syncStatus = .syncing
 
         // iCloud 关闭:纯本地,只刷新直播状态。
         guard favoriteICloudSyncEnabled else {
-            await refreshStatesAndApply(members: local)
+            await refreshStatesAndApply(members: roomList.isEmpty ? local : roomList, trigger: .automatic)
             isLoading = false
             cloudKitReady = false
             syncStatus = .success
@@ -243,47 +537,20 @@ public final class AppFavoriteModel {
             return
         }
 
-        // 启动引擎(幂等)+ 拉一次云端变更进本地真相(CKSyncEngine 负责跨设备成员合并)。
-        await startCloudSyncIfNeeded()
-        let state = await actor.getState()
-        self.cloudKitReady = state.0
-        self.cloudKitStateString = state.1
-        // 拉取不依赖 cloudKitReady 预检:该账号预检在分流/代理环境下会瞬时假阴性,
-        // 导致 fetchChanges 被永久跳过 —— 对端的增/删永远拉不到。引擎自带退避与错误处理,
-        // 账号真不可用时 fetch 会安全失败、不阻塞本地。cloudKitReady 仅用于下方 UI 状态展示。
-        await FavoriteSyncEngine.shared.fetchChanges()
-        // 不依赖 token 的全量对账兜底:补回增量 token 漂掉的对端新增。
-        await FavoriteSyncEngine.shared.fullReconcile()
-
-        // 用本地真相(引擎可能已更新)刷新直播状态并应用。
-        let current = await FavoriteLocalStore.shared.load()
-        await refreshStatesAndApply(members: current)
-        syncProgressInfo = ("", "", "", 0, 0)
+        beginCloudMembershipSync()
+        await refreshStatesAndApply(members: roomList.isEmpty ? local : roomList, trigger: .automatic)
         isLoading = false
-        let finalState = await actor.getState()
-        applyCloudState(isReady: finalState.0, message: finalState.1)
     }
 
     /// 下拉刷新专用方法 - 不清空数据，保持 List 结构稳定
     @MainActor
     public func pullToRefresh() async {
-        // 防止并发刷新
-        guard !isSyncing else {
-            Logger.debug("正在同步中，忽略此次刷新请求", category: .favorite)
-            return
-        }
-
-        isSyncing = true
-        defer { isSyncing = false }
-
-        // 不清空数据，不改变 isLoading 状态
-        self.syncStatus = .syncing
-
         let local = await FavoriteLocalStore.shared.load()
+        let members = roomList.isEmpty ? local : roomList
 
         // iCloud 关闭:纯本地刷新直播状态。
         guard favoriteICloudSyncEnabled else {
-            await refreshStatesAndApply(members: local)
+            await refreshStatesAndApply(members: members, trigger: .manual)
             cloudKitReady = false
             syncStatus = .success
             cloudKitStateString = "iCloud 同步已关闭(仅本地)"
@@ -291,21 +558,44 @@ public final class AppFavoriteModel {
             return
         }
 
-        await startCloudSyncIfNeeded()
-        let state = await actor.getState()
-        self.cloudKitReady = state.0
-        self.cloudKitStateString = state.1
-        // 拉取不依赖 cloudKitReady 预检:该账号预检在分流/代理环境下会瞬时假阴性,
-        // 导致 fetchChanges 被永久跳过 —— 对端的增/删永远拉不到。引擎自带退避与错误处理,
-        // 账号真不可用时 fetch 会安全失败、不阻塞本地。cloudKitReady 仅用于下方 UI 状态展示。
-        await FavoriteSyncEngine.shared.fetchChanges()
-        // 不依赖 token 的全量对账兜底:补回增量 token 漂掉的对端新增。
-        await FavoriteSyncEngine.shared.fullReconcile()
+        beginCloudMembershipSync(force: true)
+        await refreshStatesAndApply(members: members, trigger: .manual)
+    }
 
-        let current = await FavoriteLocalStore.shared.load()
-        await refreshStatesAndApply(members: current)
-        let finalState = await actor.getState()
-        applyCloudState(isReady: finalState.0, message: finalState.1)
+    /// CloudKit 成员同步独立运行，不占用直播状态刷新前台预算。
+    @MainActor
+    private func beginCloudMembershipSync(force: Bool = false) {
+        if cloudMembershipTask != nil, !force { return }
+        cloudMembershipTask?.cancel()
+
+        let generation = UUID()
+        cloudMembershipGeneration = generation
+        syncStatus = .syncing
+        cloudReturnError = false
+        cloudMembershipTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.startCloudSyncIfNeeded()
+            guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
+
+            let state = await self.actor.getState()
+            guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
+            self.cloudKitReady = state.0
+            self.cloudKitStateString = state.1
+
+            await FavoriteSyncEngine.shared.fetchChanges()
+            guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
+            await FavoriteSyncEngine.shared.fullReconcile()
+            guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
+
+            let membership = await FavoriteLocalStore.shared.load()
+            guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
+            self.applyMembershipSnapshot(membership)
+            self.syncProgressInfo = ("", "", "", 0, 0)
+            let finalState = await self.actor.getState()
+            guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
+            self.applyCloudState(isReady: finalState.0, message: finalState.1)
+            self.cloudMembershipTask = nil
+        }
     }
 
     @MainActor
@@ -400,13 +690,13 @@ public final class AppFavoriteModel {
         let consoleStart = Date()
 
         // 本地优先:先从内存与本地删除(立即成功),云端删除放最后且非阻塞。
-        let targetKey = AppFavoriteModel.favoriteUniqueKey(for: room)
+        let targetKey = favoriteKey(for: room)
         // 从 roomList 中删除
-        roomList.removeAll(where: { AppFavoriteModel.favoriteUniqueKey(for: $0) == targetKey })
+        roomList.removeAll(where: { favoriteKey(for: $0) == targetKey })
 
         // 从 groupedRoomList 中删除
         for index in groupedRoomList.indices {
-            groupedRoomList[index].roomList.removeAll(where: { AppFavoriteModel.favoriteUniqueKey(for: $0) == targetKey })
+            groupedRoomList[index].roomList.removeAll(where: { favoriteKey(for: $0) == targetKey })
         }
         groupedRoomList.removeAll(where: { $0.roomList.isEmpty })
         listVersion &+= 1

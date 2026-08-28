@@ -99,7 +99,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     private func configureAudioSessionForPlayback() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
+            // `.playback` 本身支持 AirPlay；`.allowAirPlay` 只用于需要显式放宽
+            // 路由的录放类别，在部分系统版本上与 playback 组合会返回 paramErr(-50)。
+            try audioSession.setCategory(.playback, mode: .moviePlayback)
         } catch {
             Logger.warning("配置音频会话失败: \(error)", category: .app)
         }

@@ -29,7 +29,7 @@ struct FavoriteView: View {
         playerPresentation
             // 同步提示条挂在最外层(安全区正常),贴合灵动岛/刘海下方,不受列表 ignoresSafeArea 影响
             .overlay(alignment: .top) { syncBannerOverlay }
-            .animation(.easeInOut(duration: 0.25), value: viewModel.isCloudSyncing)
+            .animation(.easeInOut(duration: 0.25), value: viewModel.isFavoriteStatusRefreshing)
             .searchable(text: $searchText, prompt: "搜索主播名或房间标题")
             .task {
                 await loadIfNeeded()
@@ -101,10 +101,10 @@ struct FavoriteView: View {
     private var syncBannerOverlay: some View {
         switch DeviceTopSensor.current {
         case .dynamicIsland:
-            IslandSyncBanner(active: viewModel.isCloudSyncing)
+            IslandSyncBanner(active: viewModel.isFavoriteStatusRefreshing)
                 .allowsHitTesting(false)
         case .notch, .none:
-            PlainSyncBanner(active: viewModel.isCloudSyncing)
+            PlainSyncBanner(active: viewModel.isFavoriteStatusRefreshing)
                 .allowsHitTesting(false)
         }
     }

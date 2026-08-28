@@ -37,6 +37,7 @@ public struct FavoriteLiveSectionModel: Identifiable, Sendable {
 public actor FavoriteStateModel {
 
     var currentProgress: (String, String, String, Int, Int) = ("", "", "", 0, 0)
+    private let fetchLatestLiveInfo: @Sendable (LiveModel) async throws -> LiveModel
 
     /// 供非隔离闭包(如 `withTaskGroup` 的 body)跨 actor 边界更新进度。
     /// actor 属性无法用 `await self.prop = x` 直接赋值,故提供此方法。
@@ -45,7 +46,18 @@ public actor FavoriteStateModel {
     }
     private var isSyncing = false  // 添加同步标志
 
-    public init() {}
+    public init() {
+        fetchLatestLiveInfo = { liveModel in
+            try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
+        }
+    }
+
+    /// Phase 0 测试边界：允许在不加载真实插件与网络的情况下验证收藏聚合语义。
+    public init(fetcher: any FavoriteLiveInfoFetching) {
+        fetchLatestLiveInfo = { liveModel in
+            try await fetcher.fetchLatestLiveInfo(for: liveModel)
+        }
+    }
 
     /// 刷新收藏的直播状态。
     /// - Parameter members: 成员列表来源。Phase③ 由上层传入本地真相(CKSyncEngine 已同步);
@@ -126,6 +138,7 @@ public actor FavoriteStateModel {
         let reportProgress: @Sendable ((String, String, String, Int, Int)) async -> Void = { [weak self] value in
             await self?.setCurrentProgress(value)
         }
+        let fetchLatestLiveInfo = self.fetchLatestLiveInfo
 
         await withTaskGroup(of: (Int, LiveModel?, String, String, String, LiveType, Double).self) { group in
             for (index, liveModel) in favorites.enumerated() {
@@ -134,7 +147,7 @@ public actor FavoriteStateModel {
                     favoriteSyncLog("[\(index + 1)/\(favorites.count)] 开始查询 \(platformName) - \(liveModel.userName) (roomId=\(liveModel.roomId), userId=\(liveModel.userId))")
                     let taskStart = CFAbsoluteTimeGetCurrent()
                     do {
-                        let dataReq = try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
+                        let dataReq = try await fetchLatestLiveInfo(liveModel)
                         let duration = CFAbsoluteTimeGetCurrent() - taskStart
                         if PlatformHostBehavior.shouldPreserveFavoriteRoomInfoOnRefresh(for: liveModel.liveType) {
                             var finalLiveModel = liveModel
@@ -146,9 +159,8 @@ public actor FavoriteStateModel {
                     } catch {
                         let duration = CFAbsoluteTimeGetCurrent() - taskStart
                         favoriteSyncLog("[\(index + 1)/\(favorites.count)] 查询失败 \(platformName) - \(liveModel.userName) 耗时 \(formatSeconds(duration))s 错误: \(error)")
-                        var errorModel = liveModel
-                        errorModel.liveState = PlatformHostBehavior.liveStateOnFavoriteRefreshFailure(for: errorModel.liveType).rawValue
-                        return (index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败", liveModel.liveType, duration)
+                        // 网络、超时与业务失败都只表示“本轮未刷新”，不能据此把旧状态写成下播/未知。
+                        return (index, liveModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败", liveModel.liveType, duration)
                     }
                 }
             }

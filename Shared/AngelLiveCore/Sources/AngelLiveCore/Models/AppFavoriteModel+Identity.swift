@@ -41,7 +41,19 @@ extension AppFavoriteModel {
     /// 也故意**不**把昵称/标题/封面/头像纳入触发条件:高频快照若当触发器会导致几乎每次
     /// 刷新都全量回写 → 写放大(§3 R3)。快照仍随记录上云(makeRecord 写全字段),只是不单独触发。
     static func favoriteIdentityChanged(old: LiveModel, new: LiveModel) -> Bool {
-        guard PlatformHostBehavior.favoriteIdentityKey(for: old.liveType) == .userId else {
+        favoriteIdentityChanged(
+            old: old,
+            new: new,
+            identityKey: PlatformHostBehavior.favoriteIdentityKey(for: old.liveType)
+        )
+    }
+
+    static func favoriteIdentityChanged(
+        old: LiveModel,
+        new: LiveModel,
+        identityKey: FavoriteIdentityKey
+    ) -> Bool {
+        guard identityKey == .userId else {
             return false
         }
         // userId 稳定身份平台:userId 补全,或 userId 仍有效前提下每场换 roomId。
@@ -83,10 +95,20 @@ extension AppFavoriteModel {
     /// ⚠️ 升级注意:`reKeyRepair.v1` 只跑一次。日后**新增**某平台为 `.userId` 身份时,其存量
     /// recordName 不会自动收敛 —— 那时必须 bump `FavoriteSyncEngine.reKeyRepair` → v2 重跑对账。
     static func favoriteUniqueKey(for room: LiveModel) -> String {
+        favoriteUniqueKey(
+            for: room,
+            identityKey: PlatformHostBehavior.favoriteIdentityKey(for: room.liveType)
+        )
+    }
+
+    static func favoriteUniqueKey(
+        for room: LiveModel,
+        identityKey: FavoriteIdentityKey
+    ) -> String {
         let liveType = room.liveType.rawValue
         let roomId = validIdentity(room.roomId)
         let userId = validIdentity(room.userId)
-        switch PlatformHostBehavior.favoriteIdentityKey(for: room.liveType) {
+        switch identityKey {
         case .userId:
             if let userId { return "\(liveType)_u_\(userId)" }
             if let roomId { return "\(liveType)_r_\(roomId)" }

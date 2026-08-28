@@ -37,4 +37,8 @@ public enum LiveParsePlugins {
     public static func clearPlatformSession(platformId: String) {
         LiveParsePlatformSessionVault.clear(platformId: platformId)
     }
+
+    public static func invalidateHTTPFailureCaches() async {
+        await shared.invalidateHTTPFailureCaches()
+    }
 }

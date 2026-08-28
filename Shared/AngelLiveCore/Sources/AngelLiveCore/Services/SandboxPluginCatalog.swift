@@ -13,19 +13,22 @@ public struct SandboxPluginMetadata: Sendable, Hashable {
     public let displayName: String?
     public let liveTypes: [String]
     public let requiresLogin: Bool
+    public let hostBehavior: ManifestHostBehavior?
 
     public init(
         pluginId: String,
         version: String,
         displayName: String?,
         liveTypes: [String],
-        requiresLogin: Bool = false
+        requiresLogin: Bool = false,
+        hostBehavior: ManifestHostBehavior? = nil
     ) {
         self.pluginId = pluginId
         self.version = version
         self.displayName = displayName
         self.liveTypes = liveTypes
         self.requiresLogin = requiresLogin
+        self.hostBehavior = hostBehavior
     }
 }
 
@@ -71,7 +74,8 @@ public enum SandboxPluginCatalog {
                     version: manifest.version,
                     displayName: manifest.displayName,
                     liveTypes: manifest.liveTypes,
-                    requiresLogin: manifest.requiresLogin
+                    requiresLogin: manifest.requiresLogin,
+                    hostBehavior: manifest.hostBehavior
                 )
 
                 if let current = best {
