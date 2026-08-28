@@ -77,6 +77,8 @@ jobs:
           umask 077
           printf 'https://x-access-token:%s@github.com\n' \
             "${FFMPEGKIT_TOKEN}" > "${credentials_path}"
+          printf 'machine github.com\nlogin x-access-token\npassword %s\n' \
+            "${FFMPEGKIT_TOKEN}" > "${HOME}/.netrc"
           git config --global credential.helper \
             "store --file=${credentials_path}"
           git config --global url."https://github.com/".insteadOf \
@@ -163,6 +165,8 @@ jobs:
           umask 077
           printf 'https://x-access-token:%s@github.com\n' \
             "${FFMPEGKIT_TOKEN}" > "${credentials_path}"
+          printf 'machine github.com\nlogin x-access-token\npassword %s\n' \
+            "${FFMPEGKIT_TOKEN}" > "${HOME}/.netrc"
           git config --global credential.helper \
             "store --file=${credentials_path}"
           git config --global url."https://github.com/".insteadOf \
@@ -199,6 +203,8 @@ jobs:
         run: |
           # The committed Package.resolved pins plugin revisions. Skip Xcode's
           # first-use trust prompt so clean CI runners remain non-interactive.
+          # System SCM + netrc avoids an Xcode credential deadlock when a
+          # private package also exposes local binary targets.
           xcodebuild \
             -workspace AngelLive.xcworkspace \
             -scheme "${{ matrix.scheme }}" \
@@ -208,6 +214,8 @@ jobs:
             -derivedDataPath "${{ runner.temp }}/DerivedData/${{ matrix.derived_data }}" \
             -onlyUsePackageVersionsFromResolvedFile \
             -skipPackagePluginValidation \
+            -scmProvider system \
+            -packageAuthorizationProvider netrc \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \

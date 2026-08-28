@@ -278,7 +278,12 @@ struct FavoriteRefreshSessionTests {
         model.roomList = [fast, slow]
 
         await model.refreshStatesAndApply(members: model.roomList, trigger: .manual)
-        try await Task.sleep(for: .milliseconds(180))
+        try await waitUntil {
+            model.roomList.first(where: { $0.roomId == "fast" })?.liveState == "1"
+                && model.roomList.first(where: { $0.roomId == "slow" })?.liveState == "1"
+                && !model.isFavoriteStatusRefreshing
+                && model.pendingPluginIds == ["b"]
+        }
         #expect(model.roomList.first(where: { $0.roomId == "fast" })?.liveState == "1")
         #expect(model.roomList.first(where: { $0.roomId == "slow" })?.liveState == "1")
         #expect(!model.isFavoriteStatusRefreshing)
