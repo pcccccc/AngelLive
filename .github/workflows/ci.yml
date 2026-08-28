@@ -92,10 +92,22 @@ jobs:
       # currently omits it, while KSPlayer compiles a Metal shader resource.
       - name: Install Metal Toolchain when missing
         run: |
-          if ! xcrun --sdk macosx metal -v; then
-            xcodebuild -downloadComponent metalToolchain
+          if xcrun --sdk macosx metal -v; then
+            exit 0
           fi
-          xcrun --sdk macosx metal -v
+
+          xcodebuild -downloadComponent metalToolchain
+          xcrun --kill-cache
+          for attempt in {1..12}; do
+            if xcrun --sdk macosx metal -v; then
+              exit 0
+            fi
+            echo "Waiting for Metal Toolchain registration (attempt ${attempt}/12)..."
+            sleep 5
+            xcrun --kill-cache
+          done
+          echo "::error::Metal Toolchain was downloaded but did not become available"
+          exit 1
 
       - name: Test AngelLiveDependencies
         run: |
@@ -166,10 +178,22 @@ jobs:
       # currently omits it, while KSPlayer compiles a Metal shader resource.
       - name: Install Metal Toolchain when missing
         run: |
-          if ! xcrun --sdk macosx metal -v; then
-            xcodebuild -downloadComponent metalToolchain
+          if xcrun --sdk macosx metal -v; then
+            exit 0
           fi
-          xcrun --sdk macosx metal -v
+
+          xcodebuild -downloadComponent metalToolchain
+          xcrun --kill-cache
+          for attempt in {1..12}; do
+            if xcrun --sdk macosx metal -v; then
+              exit 0
+            fi
+            echo "Waiting for Metal Toolchain registration (attempt ${attempt}/12)..."
+            sleep 5
+            xcrun --kill-cache
+          done
+          echo "::error::Metal Toolchain was downloaded but did not become available"
+          exit 1
 
       - name: Build ${{ matrix.scheme }}
         run: |
