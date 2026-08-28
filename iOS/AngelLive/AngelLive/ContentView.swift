@@ -289,6 +289,14 @@ struct ContentView: View {
                 selectedTab = .home
             }
         }
+        // 原地升级不会改变 pluginId 列表。以目录修订号重建平台元数据和
+        // homeFeed 能力，避免长按 Tab 菜单继续使用更新前的能力快照。
+        .onChange(of: pluginAvailability.catalogRevision) { _, _ in
+            platformViewModel.refreshPlatforms(
+                installedPluginIds: pluginAvailability.installedPluginIds
+            )
+            updateHomeRecommendationAvailability()
+        }
         .onChange(of: pluginAvailability.isChecking) { _, isChecking in
             if !isChecking {
                 updateHomeRecommendationAvailability()

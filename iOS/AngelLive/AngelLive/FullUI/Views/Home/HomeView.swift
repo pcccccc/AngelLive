@@ -32,7 +32,8 @@ struct HomeView: View {
         playerPresentation
             .task(id: HomeFeedRefreshTrigger(
                 installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
+                catalogRevision: pluginAvailability.catalogRevision
             )) {
                 viewModel.selectPlatform(pluginId: persistedPluginId)
                 async let feedRefresh: Void = viewModel.refresh(
@@ -332,6 +333,7 @@ private enum HomeRoomOpenMode {
 private struct HomeFeedRefreshTrigger: Hashable {
     let installedPluginIds: [String]
     let availabilityConfirmed: Bool
+    let catalogRevision: UInt
 }
 
 private enum HomeNavigationMetrics {

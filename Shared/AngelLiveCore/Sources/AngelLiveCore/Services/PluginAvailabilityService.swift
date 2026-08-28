@@ -28,6 +28,12 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// 是否至少完成过一次本地插件检测。用于区分“尚未检测”和“确认没有插件”。
     public private(set) var hasCheckedAvailability: Bool = false
 
+    /// 本地插件目录每次重新检测后递增。
+    ///
+    /// 插件原地升级时 `installedPluginIds` 不会变，视图仍需要重新读取
+    /// manifest、平台元数据和首页能力，因此不能只依赖 ID 列表作为失效信号。
+    public private(set) var catalogRevision: UInt = 0
+
     public init() {}
 
     /// 检测 sandbox 目录下是否有任何已安装的插件
@@ -37,6 +43,7 @@ public final class PluginAvailabilityService: @unchecked Sendable {
         defer {
             isChecking = false
             hasCheckedAvailability = true
+            catalogRevision &+= 1
         }
 
         // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
