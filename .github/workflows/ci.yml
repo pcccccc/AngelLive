@@ -197,6 +197,8 @@ jobs:
 
       - name: Build ${{ matrix.scheme }}
         run: |
+          # The committed Package.resolved pins plugin revisions. Skip Xcode's
+          # first-use trust prompt so clean CI runners remain non-interactive.
           xcodebuild \
             -workspace AngelLive.xcworkspace \
             -scheme "${{ matrix.scheme }}" \
@@ -205,6 +207,7 @@ jobs:
             -clonedSourcePackagesDirPath "${{ runner.temp }}/SourcePackages" \
             -derivedDataPath "${{ runner.temp }}/DerivedData/${{ matrix.derived_data }}" \
             -onlyUsePackageVersionsFromResolvedFile \
+            -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
