@@ -139,7 +139,9 @@ struct FavoriteBackupServiceTests {
     ]
     let data = try JSONEncoder().encode(items)
 
-    let decoded = try FavoriteBackupService.decode(data)
+    let decoded = try FavoriteBackupService.decode(data) { siteId in
+      siteId == "douyu" ? LiveType(rawValue: "3") : nil
+    }
     let imported = try #require(decoded.rooms.first)
     let failure = try #require(decoded.itemFailures.first)
 
@@ -154,12 +156,15 @@ struct FavoriteBackupServiceTests {
     #expect(failure.reason.contains("missing-platform"))
   }
 
-  @Test("SimpleLive export uses plugin id when a platform manifest exists")
+  @Test("SimpleLive export uses the resolved plugin id")
   func simpleLiveExportUsesPluginId() throws {
     let data = try FavoriteBackupService.export(
       rooms: [room(liveType: "3", userName: "Known", userHeadImg: "face.png", roomId: "100")],
       format: .simpleLive,
-      deviceName: nil
+      deviceName: nil,
+      siteIdForLiveType: { liveType in
+        liveType.rawValue == "3" ? "douyu" : liveType.rawValue
+      }
     )
     let items = try JSONDecoder().decode([SimpleLiveFavoriteItem].self, from: data)
     let item = try #require(items.first)

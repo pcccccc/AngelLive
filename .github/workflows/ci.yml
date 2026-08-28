@@ -88,6 +88,15 @@ jobs:
           swift --version
           xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
 
+      # Xcode 27 ships Metal as an optional component. The preview runner image
+      # currently omits it, while KSPlayer compiles a Metal shader resource.
+      - name: Install Metal Toolchain when missing
+        run: |
+          if ! xcrun --sdk macosx metal -v; then
+            xcodebuild -downloadComponent metalToolchain
+          fi
+          xcrun --sdk macosx metal -v
+
       - name: Test AngelLiveDependencies
         run: |
           swift test \
@@ -152,6 +161,15 @@ jobs:
           xcodebuild -version
           swift --version
           xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+
+      # Xcode 27 ships Metal as an optional component. The preview runner image
+      # currently omits it, while KSPlayer compiles a Metal shader resource.
+      - name: Install Metal Toolchain when missing
+        run: |
+          if ! xcrun --sdk macosx metal -v; then
+            xcodebuild -downloadComponent metalToolchain
+          fi
+          xcrun --sdk macosx metal -v
 
       - name: Build ${{ matrix.scheme }}
         run: |

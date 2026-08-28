@@ -132,6 +132,24 @@ public enum FavoriteBackupService {
         format: FavoriteBackupFormat,
         deviceName: String?
     ) throws -> Data {
+        try export(
+            rooms: rooms,
+            format: format,
+            deviceName: deviceName,
+            siteIdForLiveType: { liveType in
+                LiveParseJSPlatformManager.platform(for: liveType)?.pluginId ?? liveType.rawValue
+            }
+        )
+    }
+
+    /// Internal resolver seam keeps backup format tests independent from plugins installed
+    /// in the current user's Application Support directory.
+    static func export(
+        rooms: [LiveModel],
+        format: FavoriteBackupFormat,
+        deviceName: String?,
+        siteIdForLiveType: (LiveType) -> String
+    ) throws -> Data {
         do {
             switch format {
             case .angelLive:
@@ -148,7 +166,7 @@ public enum FavoriteBackupService {
             case .simpleLive:
                 let items = rooms.map { room in
                     SimpleLiveFavoriteItem(
-                        siteId: siteId(for: room),
+                        siteId: siteIdForLiveType(room.liveType),
                         userName: room.userName,
                         face: room.userHeadImg,
                         roomId: room.roomId
@@ -169,6 +187,14 @@ public enum FavoriteBackupService {
     /// itemFailures 用于把 SimpleLive 路径上 siteId 无法解析的条目暴露给 UI,
     /// 让用户知道是哪个平台缺插件。
     public static func decode(_ data: Data) throws -> (rooms: [LiveModel], itemFailures: [FavoriteImportReport.Failure]) {
+        try decode(data, liveTypeForSiteId: LiveParseJSPlatformManager.liveType(forSiteId:))
+    }
+
+    /// Internal resolver seam keeps backup format tests deterministic on clean machines.
+    static func decode(
+        _ data: Data,
+        liveTypeForSiteId: (String?) -> LiveType?
+    ) throws -> (rooms: [LiveModel], itemFailures: [FavoriteImportReport.Failure]) {
         let envelopeDecoder = JSONDecoder()
         envelopeDecoder.dateDecodingStrategy = .iso8601
         if let envelope = try? envelopeDecoder.decode(AngelLiveFavoriteBackup.self, from: data) {
@@ -180,7 +206,7 @@ public enum FavoriteBackupService {
             var rooms: [LiveModel] = []
             var failures: [FavoriteImportReport.Failure] = []
             for item in items {
-                if let liveType = LiveParseJSPlatformManager.liveType(forSiteId: item.siteId) {
+                if let liveType = liveTypeForSiteId(item.siteId) {
                     rooms.append(LiveModel(
                         userName: item.userName,
                         roomTitle: "",
@@ -204,15 +230,6 @@ public enum FavoriteBackupService {
         }
 
         throw FavoriteBackupError.unrecognizedFormat
-    }
-
-    /// 优先使用 manifest 提供的 pluginId 作为 siteId,这样 SimpleLive/tvOS 等
-    /// 用 pluginId 索引的 reader 直接命中第一优先级解析路径;若找不到再退回 LiveType.rawValue。
-    private static func siteId(for room: LiveModel) -> String {
-        if let platform = LiveParseJSPlatformManager.platform(for: room.liveType) {
-            return platform.pluginId
-        }
-        return room.liveType.rawValue
     }
 }
 
