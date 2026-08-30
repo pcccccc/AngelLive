@@ -1,5 +1,5 @@
 {
-  "originHash" : "38da1e4e5b6b9c76e28a075bc459f5a01a160c1112a801e03c7211d4bf5a38a2",
+  "originHash" : "4924844180316ab505c5fb1bc8a36027b60ceebec024668152a11f5003c84d5b",
   "pins" : [
     {
       "identity" : "acknowlist",
@@ -114,8 +114,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "7b043d7cc2319cb671ff1819bb98e2eb0333b41f",
-        "version" : "3.8.0"
+        "revision" : "93e942ae1f9dbdf8c2a4220ef2437073fdb575de",
+        "version" : "5.0.0"
       }
     },
     {

@@ -80,6 +80,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 struct AngelLiveMacOSApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @FocusedValue(\.macHomeRefreshAction) private var macHomeRefreshAction
     #if !APPSTORE
     // Sparkle 更新管理器
     @StateObject private var updaterViewModel = UpdaterViewModel()
@@ -117,7 +118,11 @@ struct AngelLiveMacOSApp: App {
                 #endif
 
                 Button("刷新") {
-                    NotificationCenter.default.post(name: NSNotification.Name("RefreshContent"), object: nil)
+                    if let macHomeRefreshAction {
+                        macHomeRefreshAction()
+                    } else {
+                        NotificationCenter.default.post(name: NSNotification.Name("RefreshContent"), object: nil)
+                    }
                 }
                 .keyboardShortcut("r", modifiers: .command)
             }

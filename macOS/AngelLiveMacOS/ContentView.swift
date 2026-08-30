@@ -11,6 +11,7 @@ import AngelLiveCore
 
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {
+    case home
     case favorite
     case allPlatforms
     case platform(Platformdescription)
@@ -19,13 +20,20 @@ enum TabSelection: Hashable {
     case search
 }
 
+private enum HomeRecommendationAvailability {
+    case unconfirmed
+    case available
+    case unavailable
+}
+
 // 平台错误页「去登录」→ 跳转到设置 Tab 的通知（与 iOS 端同名同语义）
 extension Notification.Name {
     static let switchToSettings = Notification.Name("switchToSettings")
 }
 
 struct ContentView: View {
-    @State private var selectedTab: TabSelection = .favorite
+    @State private var selectedTab: TabSelection = .home
+    @State private var homeRecommendationAvailability = HomeRecommendationAvailability.unconfirmed
     // 首次启动管理器
     @Environment(WelcomeManager.self) private var welcomeManager
     // 从环境获取全局 ViewModels
@@ -45,6 +53,10 @@ struct ContentView: View {
     @State private var platformViewModel = PlatformViewModel()
     @State private var searchViewModel = SearchViewModel()
 
+    private var shouldShowHomeTab: Bool {
+        homeRecommendationAvailability != .unavailable
+    }
+
     var body: some View {
         @Bindable var manager = welcomeManager
 
@@ -58,6 +70,16 @@ struct ContentView: View {
                 // 正常内容
                 NavigationStack {
                     TabView(selection: $selectedTab) {
+                        if shouldShowHomeTab {
+                            Tab(value: TabSelection.home) {
+                                MacHomeView(isSelected: selectedTab == .home) {
+                                    selectedTab = .favorite
+                                }
+                            } label: {
+                                Label("首页", systemImage: "house.fill")
+                            }
+                        }
+
                         Tab(value: TabSelection.favorite) {
                             if pluginAvailability.hasAvailablePlugins {
                                 FavoriteView()
@@ -146,6 +168,7 @@ struct ContentView: View {
             Task { await PluginSourceKeyService.shared.fetchKeys() }
             await pluginAvailability.checkAvailability()
             platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+            updateHomeRecommendationAvailability()
 
             // 自动检查插件更新（非阻塞，在 UI 就绪后后台运行）
             if pluginAvailability.hasAvailablePlugins && !pluginSourceManager.sourceURLs.isEmpty {
@@ -166,6 +189,7 @@ struct ContentView: View {
                     }
                     await pluginAvailability.refresh()
                     platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+                    updateHomeRecommendationAvailability()
                     if successCount > 0 {
                         toastManager.show(
                             icon: "checkmark.circle.fill",
@@ -217,6 +241,7 @@ struct ContentView: View {
         }
         .onChange(of: pluginAvailability.installedPluginIds) { oldIds, installedPluginIds in
             platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
+            updateHomeRecommendationAvailability()
             // 从无插件变为有插件时，主动触发收藏同步
             if oldIds.isEmpty && !installedPluginIds.isEmpty {
                 Task {
@@ -232,6 +257,17 @@ struct ContentView: View {
             } else if selectedTab == .allPlatforms,
                       let firstPlatform = platformViewModel.platformInfo.first {
                 selectedTab = .platform(firstPlatform)
+            }
+        }
+        .onChange(of: pluginAvailability.catalogRevision) { _, _ in
+            platformViewModel.refreshPlatforms(
+                installedPluginIds: pluginAvailability.installedPluginIds
+            )
+            updateHomeRecommendationAvailability()
+        }
+        .onChange(of: pluginAvailability.isChecking) { _, isChecking in
+            if !isChecking {
+                updateHomeRecommendationAvailability()
             }
         }
         .onChange(of: platformViewModel.platformInfo) { _, newPlatforms in
@@ -251,6 +287,29 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: toastManager.currentToast)
+    }
+
+    @MainActor
+    private func updateHomeRecommendationAvailability() {
+        guard pluginAvailability.hasCheckedAvailability else {
+            homeRecommendationAvailability = .unconfirmed
+            return
+        }
+
+        let supportsRecommendations = SandboxPluginCatalog
+            .availablePlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+            .contains { platform in
+                PlatformCapability.supports(.homeFeed, for: platform.liveType)
+            }
+
+        if supportsRecommendations {
+            homeRecommendationAvailability = .available
+        } else {
+            if selectedTab == .home {
+                selectedTab = .favorite
+            }
+            homeRecommendationAvailability = .unavailable
+        }
     }
 
     // MARK: - 云端一键安装进度

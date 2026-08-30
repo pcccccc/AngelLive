@@ -1699,36 +1699,14 @@ private struct HomeCardButtonStyle: ButtonStyle {
     }
 }
 
-struct HomeCategoryRoute: Hashable {
-    let pluginId: String
-    let liveType: LiveType
-    let categoryID: String
-    let parentID: String
-    let title: String
-    let icon: String
-    let biz: String?
-
-    init(
-        pluginId: String,
-        liveType: LiveType,
-        category: LiveCategoryModel,
-        fallbackTitle: String
-    ) {
-        self.pluginId = pluginId
-        self.liveType = liveType
-        categoryID = category.id
-        parentID = category.parentId
-        title = category.title.isEmpty ? fallbackTitle : category.title
-        icon = category.icon
-        biz = category.biz
-    }
-}
+typealias HomeCategoryRoute = PluginHomeCategoryRoute
 
 private struct HomeCategoryView: View {
     let route: HomeCategoryRoute
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
-    @State private var model: HomeCategoryViewModel
+    @State private var model: PluginHomeCategoryModel
+    @State private var cardWidth: CGFloat = 170
 
     init(
         route: HomeCategoryRoute,
@@ -1738,7 +1716,7 @@ private struct HomeCategoryView: View {
         self.route = route
         self.navigationState = navigationState
         self.namespace = namespace
-        _model = State(initialValue: HomeCategoryViewModel(route: route))
+        model = PluginHomeCategoryModel(route: route)
     }
 
     var body: some View {
@@ -1753,7 +1731,7 @@ private struct HomeCategoryView: View {
                     } label: {
                         LiveRoomCard(
                             room: room,
-                            width: model.cardWidth,
+                            width: cardWidth,
                             liveCheckMode: .none,
                             disableTapGesture: true
                         )
@@ -1789,7 +1767,7 @@ private struct HomeCategoryView: View {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { width in
-            model.updateCardWidth(containerWidth: width)
+            updateCardWidth(containerWidth: width)
         }
         .task { await model.load(refresh: true) }
     }
@@ -1798,86 +1776,11 @@ private struct HomeCategoryView: View {
         guard room.id == model.rooms.last?.id else { return }
         Task { await model.loadMore() }
     }
-}
 
-@MainActor
-@Observable
-private final class HomeCategoryViewModel {
-    private(set) var rooms: [LiveModel] = []
-    private(set) var isLoading = false
-    private(set) var hasMore = true
-    private(set) var errorMessage: String?
-    private(set) var cardWidth: CGFloat = 170
-
-    @ObservationIgnored private let route: HomeCategoryRoute
-    @ObservationIgnored private var page = 1
-
-    init(route: HomeCategoryRoute) {
-        self.route = route
-    }
-
-    func updateCardWidth(containerWidth: CGFloat) {
+    private func updateCardWidth(containerWidth: CGFloat) {
         let usableWidth = max(154, containerWidth - AppConstants.Spacing.xl * 2)
         let columnCount = max(1, Int((usableWidth + AppConstants.Spacing.lg) / 190))
         let spacing = AppConstants.Spacing.lg * CGFloat(max(0, columnCount - 1))
         cardWidth = min(280, (usableWidth - spacing) / CGFloat(columnCount))
-    }
-
-    func load(refresh: Bool) async {
-        guard !isLoading else { return }
-        if refresh {
-            page = 1
-            hasMore = true
-            errorMessage = nil
-        } else if !hasMore {
-            return
-        }
-
-        guard let platform = LiveParseJSPlatformManager.platform(forPluginId: route.pluginId) else {
-            errorMessage = "对应内容源已不可用。"
-            return
-        }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let context: [String: Any] = [
-                "category": [
-                    "id": route.categoryID,
-                    "parentId": route.parentID,
-                    "title": route.title,
-                    "icon": route.icon,
-                    "biz": route.biz ?? ""
-                ]
-            ]
-            let fetched = try await LiveParseJSPlatformManager.getRoomList(
-                platform: platform,
-                id: route.categoryID,
-                parentId: route.parentID,
-                page: page,
-                context: context
-            )
-            hasMore = !fetched.isEmpty
-            if refresh {
-                rooms = fetched.removingDuplicates()
-            } else {
-                rooms = rooms.appendingUnique(contentsOf: fetched)
-            }
-            errorMessage = nil
-        } catch is CancellationError {
-            return
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func loadMore() async {
-        guard !isLoading, hasMore else { return }
-        page += 1
-        await load(refresh: false)
-        if errorMessage != nil {
-            page = max(1, page - 1)
-        }
     }
 }
