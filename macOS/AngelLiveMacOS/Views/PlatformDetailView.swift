@@ -377,19 +377,27 @@ struct PlatformDetailView: View {
 struct LiveRoomCard: View {
     let room: LiveModel
     let showsCoverBadge: Bool
+    private let isFavoritedOverride: Bool?
 
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(ToastManager.self) private var toastManager
+    @Environment(\.displayScale) private var displayScale
     @State private var isFavoriteLoading = false
     @State private var isFavoriteAnimating = false
 
-    init(room: LiveModel, showsCoverBadge: Bool = false) {
+    init(
+        room: LiveModel,
+        showsCoverBadge: Bool = false,
+        isFavoritedOverride: Bool? = nil
+    ) {
         self.room = room
         self.showsCoverBadge = showsCoverBadge
+        self.isFavoritedOverride = isFavoritedOverride
     }
 
     private var isFavorited: Bool {
-        favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
+        isFavoritedOverride
+            ?? favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
     }
 
     // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
@@ -479,27 +487,51 @@ struct LiveRoomCard: View {
     }
 
     private var coverView: some View {
-        Group {
-            if let coverURL {
-                KFImage(coverURL)
-                    .placeholder {
-                        placeholderCover()
-                    }
-                    .resizable()
-                    .blur(radius: 20)
-                    .overlay(
-                        KFImage(coverURL)
-                            .placeholder {
-                                placeholderCover()
-                            }
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    )
-            } else {
-                placeholderCover()
+        GeometryReader { geometry in
+            let targetSize = coverDownsampleSize(for: geometry.size)
+
+            Group {
+                if let coverURL {
+                    // 模糊层在 Kingfisher 处理阶段生成，避免每次卡片更新都对原图做实时模糊。
+                    KFImage(coverURL)
+                        .setProcessor(
+                            DownsamplingImageProcessor(size: CGSize(width: 80, height: 45))
+                            |> BlurImageProcessor(blurRadius: 8)
+                        )
+                        .scaleFactor(displayScale)
+                        .placeholder {
+                            placeholderCover()
+                        }
+                        .resizable()
+                        .overlay(
+                            // 前景只解码到实际显示尺寸，防止收藏页同时持有多张完整分辨率封面。
+                            KFImage(coverURL)
+                                .setProcessor(DownsamplingImageProcessor(size: targetSize))
+                                .scaleFactor(displayScale)
+                                .placeholder {
+                                    placeholderCover()
+                                }
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                        )
+                } else {
+                    placeholderCover()
+                }
             }
         }
         .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+    }
+
+    private func coverDownsampleSize(for size: CGSize) -> CGSize {
+        guard size.width > 1, size.height > 1 else {
+            return CGSize(width: 260, height: 146.25)
+        }
+
+        let headroom: CGFloat = 1.25
+        return CGSize(
+            width: size.width * headroom,
+            height: size.height * headroom
+        )
     }
 
     private func placeholderCover() -> some View {

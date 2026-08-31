@@ -2,20 +2,35 @@
 //  MacOSWheelScroll.swift
 //  AngelLiveCore
 //
-//  macOS 上 SwiftUI 的 ScrollView(.horizontal) 默认只响应 Shift+滚轮 或 触控板水平手势,
-//  普通鼠标滚轮(只有垂直 delta)不会被横向 ScrollView 接收。
-//  这里挂一个透明 NSView 在 ScrollView 内部,拦截 scrollWheel,
-//  把鼠标垂直滚轮的 delta 翻译成 NSScrollView 内容横向偏移。
+//  普通鼠标通常只产生垂直滚轮增量。横向 SwiftUI ScrollView 通过 hover 明确登记
+//  当前活动区域，再把完整滚轮事件转换成 ScrollPosition 的水平位移并停止事件分发，
+//  从而避免嵌套的外层纵向 ScrollView 同时滚动。
 //
 
 import SwiftUI
 
 public extension View {
-    /// 让横向 SwiftUI ScrollView 在 macOS 上能用鼠标垂直滚轮滚动。其它端 no-op。
+    /// 鼠标位于当前横向 ScrollView 时，把滚轮独占地转换成水平滚动。
     @ViewBuilder
     func enableMacHorizontalWheelScroll() -> some View {
         #if os(macOS)
-        self.background(MacHorizontalWheelScrollCatcher())
+        if #available(macOS 26.0, *) {
+            modifier(MacHorizontalWheelScrollModifier())
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+
+    /// 鼠标位于当前区域时，独占滚轮并由调用方执行离散翻页。
+    @ViewBuilder
+    func enableMacHorizontalWheelPaging(
+        _ action: @escaping @MainActor (_ delta: CGFloat) -> Void
+    ) -> some View {
+        #if os(macOS)
+        modifier(MacHorizontalWheelPagingModifier(action: action))
         #else
         self
         #endif
@@ -25,38 +40,117 @@ public extension View {
 #if os(macOS)
 import AppKit
 
-private struct MacHorizontalWheelScrollCatcher: NSViewRepresentable {
-    func makeNSView(context: Context) -> WheelCatcherView { WheelCatcherView() }
-    func updateNSView(_ nsView: WheelCatcherView, context: Context) {}
+@MainActor
+@available(macOS 26.0, *)
+private struct MacHorizontalWheelScrollModifier: ViewModifier {
+    @State private var position = ScrollPosition(idType: Int.self, x: 0)
+    @State private var requestedX: CGFloat = 0
+    @State private var hoverToken = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .onChange(of: position.x) { _, newValue in
+                if let newValue {
+                    requestedX = newValue
+                }
+            }
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    MacHorizontalWheelRouter.shared.activate(token: hoverToken) { delta, precise in
+                        let currentX = position.x ?? requestedX
+                        let multiplier: CGFloat = precise ? 1 : 32
+                        requestedX = max(0, currentX - delta * multiplier)
+                        position.scrollTo(x: requestedX)
+                        return true
+                    }
+                case .ended:
+                    MacHorizontalWheelRouter.shared.deactivate(token: hoverToken)
+                }
+            }
+            .onDisappear {
+                MacHorizontalWheelRouter.shared.deactivate(token: hoverToken)
+            }
+    }
 }
 
-private final class WheelCatcherView: NSView {
-    override func scrollWheel(with event: NSEvent) {
-        guard let scrollView = enclosingScrollView else {
-            super.scrollWheel(with: event)
-            return
-        }
+@MainActor
+private struct MacHorizontalWheelPagingModifier: ViewModifier {
+    let action: @MainActor (_ delta: CGFloat) -> Void
+    @State private var hoverToken = UUID()
 
-        // 触控板(hasPreciseScrollingDeltas) 或者已经带横向 delta 的事件,原样让系统处理。
-        // 只拦截普通鼠标滚轮(精确 delta = false,且 X 方向无信号)。
-        if event.hasPreciseScrollingDeltas || event.scrollingDeltaX != 0 {
-            super.scrollWheel(with: event)
-            return
-        }
-        guard event.scrollingDeltaY != 0 else {
-            super.scrollWheel(with: event)
-            return
-        }
+    func body(content: Content) -> some View {
+        content
+            .onContinuousHover { phase in
+                switch phase {
+                case .active:
+                    MacHorizontalWheelRouter.shared.activate(token: hoverToken) { delta, _ in
+                        action(delta)
+                        return true
+                    }
+                case .ended:
+                    MacHorizontalWheelRouter.shared.deactivate(token: hoverToken)
+                }
+            }
+            .onDisappear {
+                MacHorizontalWheelRouter.shared.deactivate(token: hoverToken)
+            }
+    }
+}
 
-        // 把垂直 delta 翻译成 contentView 的水平位移。
-        // 鼠标滚轮 Y 滚动一次 deltaY ≈ 1,这里乘 24 让单次滚动有可察觉的位移。
-        let clipView = scrollView.contentView
-        let documentBounds = scrollView.documentView?.bounds ?? clipView.bounds
-        var origin = clipView.bounds.origin
-        let step = event.scrollingDeltaY * 24
-        origin.x = max(0, min(documentBounds.width - clipView.bounds.width, origin.x - step))
-        clipView.scroll(to: origin)
-        scrollView.reflectScrolledClipView(clipView)
+@MainActor
+final class MacHorizontalWheelRouter {
+    typealias Handler = @MainActor (_ delta: CGFloat, _ precise: Bool) -> Bool
+
+    static let shared = MacHorizontalWheelRouter()
+
+    private var eventMonitor: Any?
+    private var activeToken: UUID?
+    private var activeHandler: Handler?
+
+    private init() {}
+
+    func activate(token: UUID, handler: @escaping Handler) {
+        activeToken = token
+        activeHandler = handler
+        startMonitoringIfNeeded()
+    }
+
+    func deactivate(token: UUID) {
+        guard activeToken == token else { return }
+        activeToken = nil
+        activeHandler = nil
+    }
+
+    func startMonitoringIfNeeded() {
+        guard eventMonitor == nil else { return }
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            self?.route(event) ?? event
+        }
+    }
+
+    func route(_ event: NSEvent) -> NSEvent? {
+        let consumed = route(
+            deltaX: event.scrollingDeltaX,
+            deltaY: event.scrollingDeltaY,
+            hasPreciseScrollingDeltas: event.hasPreciseScrollingDeltas
+        )
+        return consumed ? nil : event
+    }
+
+    @discardableResult
+    func route(
+        deltaX horizontalDelta: CGFloat,
+        deltaY verticalDelta: CGFloat,
+        hasPreciseScrollingDeltas: Bool
+    ) -> Bool {
+        guard let activeHandler else { return false }
+        let dominantDelta = abs(horizontalDelta) >= abs(verticalDelta)
+            ? horizontalDelta
+            : verticalDelta
+        guard dominantDelta != 0 else { return false }
+        return activeHandler(dominantDelta, hasPreciseScrollingDeltas)
     }
 }
 #endif

@@ -46,7 +46,7 @@ struct FavoriteView: View {
             ScrollView {
                 if viewModel.isLoading {
                     skeletonView()
-                } else if viewModel.cloudReturnError {
+                } else if viewModel.shouldShowBlockingCloudError {
                     // 仅真错误(未登录/拉取失败)显示同步不可用。关同步时 cloudKitReady 也为 false,
                     // 但那是正常的纯本地态,应继续展示本地收藏(与 iOS 一致)。
                     cloudKitErrorView()
@@ -322,7 +322,12 @@ struct FavoriteView: View {
         ) {
             ForEach(roomList, id: \.id) { room in
                 LiveRoomCardButton(room: room) {
-                    LiveRoomCard(room: room, showsCoverBadge: true)
+                    // 收藏页中的房间必然已收藏，避免每张卡片都观察整份 roomList。
+                    LiveRoomCard(
+                        room: room,
+                        showsCoverBadge: true,
+                        isFavoritedOverride: true
+                    )
                 }
             }
         }

@@ -82,12 +82,17 @@ struct RemoteAvatarView<Placeholder: View>: View {
 actor RemoteAvatarDataLoader {
     static let shared = RemoteAvatarDataLoader()
 
-    private var cache: [URL: Data] = [:]
+    private let cache: NSCache<NSURL, NSData> = {
+        let cache = NSCache<NSURL, NSData>()
+        cache.countLimit = 256
+        cache.totalCostLimit = 16 * 1_024 * 1_024
+        return cache
+    }()
     private var inFlightTasks: [URL: Task<Data, Error>] = [:]
 
     func data(for url: URL) async throws -> Data {
-        if let cachedData = cache[url] {
-            return cachedData
+        if let cachedData = cache.object(forKey: url as NSURL) {
+            return cachedData as Data
         }
 
         if let task = inFlightTasks[url] {
@@ -113,7 +118,7 @@ actor RemoteAvatarDataLoader {
         defer { inFlightTasks[url] = nil }
 
         let data = try await task.value
-        cache[url] = data
+        cache.setObject(data as NSData, forKey: url as NSURL, cost: data.count)
         return data
     }
 }

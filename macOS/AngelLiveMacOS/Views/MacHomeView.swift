@@ -58,11 +58,10 @@ struct MacHomeView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let contentWidth = max(geometry.size.width - 48, 320)
-            let cardWidth = min(max(contentWidth / 4.2, 190), 260)
+            let contentWidth = min(max(geometry.size.width - 48, 320), 1_440)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 32) {
+                LazyVStack(alignment: .leading, spacing: 36) {
                     hero(contentWidth: contentWidth)
 
                     if !favoriteModel.roomList.isEmpty {
@@ -70,19 +69,18 @@ struct MacHomeView: View {
                             title: "我的收藏",
                             subtitle: favoriteModel.isFavoriteStatusRefreshing ? "状态更新中" : nil,
                             rooms: Array(favoriteModel.roomList.prefix(10)),
-                            cardWidth: cardWidth,
-                            trailingTitle: "查看全部",
+                            trailingTitle: "全部",
                             trailingAction: onShowFavorites,
                             openMode: .favorite
                         )
                     }
 
                     ForEach(model.sectionEntries) { entry in
-                        MacHomePluginSection(entry: entry, cardWidth: cardWidth)
+                        MacHomePluginSection(entry: entry)
                     }
 
                     if isAwaitingFirstContent {
-                        MacHomeLoadingSections(cardWidth: cardWidth)
+                        MacHomeLoadingSections()
                             .shimmering()
                     }
 
@@ -107,9 +105,10 @@ struct MacHomeView: View {
                         )
                     }
                 }
-                .padding(24)
+                .frame(width: contentWidth, alignment: .leading)
+                .padding(.vertical, 24)
                 .padding(.bottom, 40)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .background(AppConstants.Colors.primaryBackground)
         }
@@ -210,7 +209,6 @@ private enum MacHomeRoomOpenMode: Equatable {
 
 private struct MacHomePluginSection: View {
     let entry: HomeSectionEntry
-    let cardWidth: CGFloat
 
     private var subtitle: String {
         let source = entry.section.personalized
@@ -236,7 +234,6 @@ private struct MacHomePluginSection: View {
             title: entry.section.title,
             subtitle: subtitle,
             rooms: entry.section.items.map(\.room),
-            cardWidth: cardWidth,
             route: route,
             openMode: .direct
         )
@@ -247,7 +244,6 @@ private struct MacHomeRoomRail: View {
     let title: String
     let subtitle: String?
     let rooms: [LiveModel]
-    let cardWidth: CGFloat
     var trailingTitle: String?
     var trailingAction: (() -> Void)?
     var route: PluginHomeCategoryRoute?
@@ -259,46 +255,55 @@ private struct MacHomeRoomRail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.title2.bold())
+                        .font(.title3.weight(.semibold))
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
-                            .font(.subheadline)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
-                Spacer()
+                Spacer(minLength: 12)
                 if let route {
                     NavigationLink(value: route) {
-                        Label("查看全部", systemImage: "chevron.right")
-                            .labelStyle(.titleAndIcon)
+                        MacHomeSeeAllLabel()
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .buttonStyle(.borderless)
                 } else if let trailingTitle, let trailingAction {
-                    Button(trailingTitle, action: trailingAction)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
+                    Button(action: trailingAction) {
+                        MacHomeSeeAllLabel(title: trailingTitle)
+                    }
+                    .buttonStyle(.borderless)
+                } else if !rooms.isEmpty {
+                    NavigationLink {
+                        MacHomeAllRoomsView(
+                            title: title,
+                            rooms: rooms,
+                            openMode: openMode
+                        )
+                    } label: {
+                        MacHomeSeeAllLabel()
+                    }
+                    .buttonStyle(.borderless)
                 }
             }
 
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 16) {
-                    ForEach(rooms) { room in
-                        Button {
-                            open(room)
-                        } label: {
-                            LiveRoomCard(room: room)
-                                .frame(width: cardWidth)
-                        }
-                        .buttonStyle(.plain)
+            LazyVGrid(
+                columns: [
+                    GridItem(.adaptive(minimum: 196, maximum: 248), spacing: 12)
+                ],
+                alignment: .leading,
+                spacing: 18
+            ) {
+                ForEach(rooms) { room in
+                    MacHomeRoomTile(room: room) {
+                        open(room)
                     }
                 }
             }
-            .scrollIndicators(.hidden)
-            .enableMacHorizontalWheelScroll()
         }
     }
 
@@ -311,6 +316,73 @@ private struct MacHomeRoomRail: View {
     }
 }
 
+private struct MacHomeSeeAllLabel: View {
+    var title = "全部"
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 6)
+        .frame(minHeight: 24)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct MacHomeRoomTile: View {
+    let room: LiveModel
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            LiveRoomCard(room: room)
+                .frame(maxWidth: .infinity)
+                .padding(7)
+                .background(
+                    AppConstants.Colors.secondaryBackground
+                        .opacity(isHovered ? 0.9 : 0),
+                    in: RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl)
+                        .strokeBorder(
+                            Color.primary.opacity(isHovered ? 0.1 : 0),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .buttonStyle(MacHomeRoomButtonStyle())
+        .onHover { hovering in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                isHovered = hovering
+            }
+        }
+        .accessibilityLabel("\(room.roomTitle)，\(room.userName)")
+        .accessibilityHint("打开直播间")
+    }
+}
+
+private struct MacHomeRoomButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.12),
+                value: configuration.isPressed
+            )
+    }
+}
+
 private struct MacHomeHeroCarousel: View {
     let entries: [HomeBannerEntry]
     let width: CGFloat
@@ -320,12 +392,13 @@ private struct MacHomeHeroCarousel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedID: String?
+    @State private var lastWheelAdvanceTime: TimeInterval = 0
 
     private var height: CGFloat { min(max(width * 0.42, 280), 480) }
 
     var body: some View {
         ZStack {
-            ScrollView(.horizontal) {
+            ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 0) {
                     ForEach(entries) { entry in
                         destination(for: entry)
@@ -340,6 +413,9 @@ private struct MacHomeHeroCarousel: View {
             .scrollPosition(id: $selectedID, anchor: .center)
             .scrollIndicators(.hidden)
             .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
+            .enableMacHorizontalWheelPaging { delta in
+                advanceWithWheel(delta)
+            }
 
             if entries.count > 1 {
                 HStack {
@@ -428,6 +504,13 @@ private struct MacHomeHeroCarousel: View {
         moveSelection(offset: 1)
     }
 
+    private func advanceWithWheel(_ delta: CGFloat) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastWheelAdvanceTime >= 0.24 else { return }
+        lastWheelAdvanceTime = now
+        moveSelection(offset: delta > 0 ? -1 : 1)
+    }
+
     private func moveSelection(offset: Int) {
         guard !entries.isEmpty else { return }
         let current = entries.firstIndex(where: { $0.id == selectedID }) ?? 0
@@ -510,18 +593,21 @@ private struct MacHomeHeroCard: View {
 }
 
 private struct MacHomeLoadingSections: View {
-    let cardWidth: CGFloat
-
     var body: some View {
         ForEach(0..<2, id: \.self) { _ in
             VStack(alignment: .leading, spacing: 14) {
                 RoundedRectangle(cornerRadius: 5)
                     .fill(Color.gray.opacity(0.28))
                     .frame(width: 150, height: 22)
-                HStack(alignment: .top, spacing: 16) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.adaptive(minimum: 196, maximum: 248), spacing: 12)
+                    ],
+                    alignment: .leading,
+                    spacing: 18
+                ) {
                     ForEach(0..<4, id: \.self) { _ in
                         LiveRoomCardSkeleton()
-                            .frame(width: cardWidth)
                     }
                 }
             }
@@ -551,6 +637,49 @@ private struct MacHomeFailureCard: View {
         }
         .padding(16)
         .background(AppConstants.Colors.secondaryBackground, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct MacHomeAllRoomsView: View {
+    let title: String
+    let rooms: [LiveModel]
+    let openMode: MacHomeRoomOpenMode
+
+    @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
+    @Environment(ToastManager.self) private var toastManager
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [
+                    GridItem(.adaptive(minimum: 196, maximum: 248), spacing: 16)
+                ],
+                spacing: 22
+            ) {
+                ForEach(rooms) { room in
+                    Button {
+                        open(room)
+                    } label: {
+                        LiveRoomCard(room: room)
+                    }
+                    .buttonStyle(MacHomeRoomButtonStyle())
+                    .accessibilityLabel("\(room.roomTitle)，\(room.userName)")
+                    .accessibilityHint("打开直播间")
+                }
+            }
+            .padding(24)
+        }
+        .background(AppConstants.Colors.primaryBackground)
+        .navigationTitle(title)
+    }
+
+    private func open(_ room: LiveModel) {
+        if openMode == .favorite, room.liveState == LiveState.close.rawValue {
+            toastManager.show(icon: "tv.slash", message: "主播已下播")
+        } else {
+            fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+        }
     }
 }
 
