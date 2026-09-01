@@ -17,6 +17,7 @@ struct FavoriteView: View {
     @State private var rotationAngle: Double = 0
     @State private var searchText = ""
     @State private var isSearching = false
+    @State private var contentWidth: CGFloat = 900
     private static var lastLeaveTimestamp: Date?
     private static var hasPerformedInitialSync = false
 
@@ -42,26 +43,31 @@ struct FavoriteView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                if viewModel.isLoading {
-                    skeletonView()
-                } else if viewModel.shouldShowBlockingCloudError {
-                    // 仅真错误(未登录/拉取失败)显示同步不可用。关同步时 cloudKitReady 也为 false,
-                    // 但那是正常的纯本地态,应继续展示本地收藏(与 iOS 一致)。
-                    cloudKitErrorView()
-                } else if viewModel.roomList.isEmpty {
-                    emptyStateView()
-                } else {
-                    favoriteContentView(geometry: geometry)
-                }
+        ScrollView {
+            if viewModel.isLoading {
+                skeletonView()
+            } else if viewModel.shouldShowBlockingCloudError {
+                // 仅真错误(未登录/拉取失败)显示同步不可用。关同步时 cloudKitReady 也为 false,
+                // 但那是正常的纯本地态,应继续展示本地收藏(与 iOS 一致)。
+                cloudKitErrorView()
+            } else if viewModel.roomList.isEmpty {
+                emptyStateView()
+            } else {
+                favoriteContentView(containerWidth: contentWidth)
             }
-            .onTapGesture {
-                if isSearching {
-                    withAnimation(.spring(duration: 0.25)) {
-                        isSearching = false
-                        searchText = ""
-                    }
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            // 滚动时可见高度会变化，这里只观察视口宽度，避免滚动触发网格重排。
+            guard newWidth > 0, abs(newWidth - contentWidth) >= 1 else { return }
+            contentWidth = newWidth
+        }
+        .onTapGesture {
+            if isSearching {
+                withAnimation(.spring(duration: 0.25)) {
+                    isSearching = false
+                    searchText = ""
                 }
             }
         }
@@ -254,8 +260,8 @@ struct FavoriteView: View {
     }
 
     @ViewBuilder
-    private func favoriteContentView(geometry: GeometryProxy) -> some View {
-        let displayList = filteredGroupedRoomList
+    private func favoriteContentView(containerWidth: CGFloat) -> some View {
+        let displayList = mergedSections(filteredGroupedRoomList)
 
         if displayList.isEmpty && !searchText.isEmpty {
             // 搜索无结果
@@ -266,30 +272,70 @@ struct FavoriteView: View {
                 tint: .secondary
             )
         } else {
-            LazyVStack(spacing: 32) {
-                ForEach(displayList, id: \.id) { section in
-                    sectionView(section: section, geometry: geometry)
+            let layout = FavoriteGridLayout(containerWidth: containerWidth)
+            let elements = layout.elements(for: displayList)
+
+            // 只使用一个懒加载容器。每行高度由固定卡片宽度和 16:9 封面决定，
+            // 避免嵌套 LazyVGrid 在滚动复用时反复估算 section 高度。
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(elements) { element in
+                    favoriteElementView(element, layout: layout)
                 }
             }
+            .padding(.bottom, 80)
         }
     }
 
-    @ViewBuilder
-    private func sectionView(section: FavoriteLiveSectionModel, geometry: GeometryProxy) -> some View {
-        let isLiveSection = section.title == "正在直播"
-        let screenWidth = geometry.size.width
+    /// `FavoriteLiveSectionModel.id` 就是逻辑分组键。同步和状态刷新交叉时如果
+    /// 短暂产生了同 ID section，展示层先合并再分行，避免同一个“已下播”标题出现两次。
+    /// 房间按 `LiveModel.id` 去重，保留首次出现的顺序。
+    private func mergedSections(
+        _ sections: [FavoriteLiveSectionModel]
+    ) -> [FavoriteLiveSectionModel] {
+        var merged: [FavoriteLiveSectionModel] = []
+        var sectionIndexByID: [String: Int] = [:]
+        var roomIDsBySectionID: [String: Set<String>] = [:]
 
-        VStack(alignment: .leading, spacing: 16) {
+        for section in sections {
+            if let existingIndex = sectionIndexByID[section.id] {
+                var seenRoomIDs = roomIDsBySectionID[section.id, default: []]
+                let uniqueRooms = section.roomList.filter { room in
+                    seenRoomIDs.insert(room.id).inserted
+                }
+                merged[existingIndex].roomList.append(contentsOf: uniqueRooms)
+                roomIDsBySectionID[section.id] = seenRoomIDs
+            } else {
+                var seenRoomIDs = Set<String>()
+                var uniqueSection = section
+                uniqueSection.roomList = section.roomList.filter { room in
+                    seenRoomIDs.insert(room.id).inserted
+                }
+                sectionIndexByID[section.id] = merged.count
+                roomIDsBySectionID[section.id] = seenRoomIDs
+                merged.append(uniqueSection)
+            }
+        }
+
+        return merged
+    }
+
+    @ViewBuilder
+    private func favoriteElementView(
+        _ element: FavoriteGridElement,
+        layout: FavoriteGridLayout
+    ) -> some View {
+        switch element {
+        case let .header(title, count, isLive, isFirst):
             HStack(alignment: .center, spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(isLiveSection ? Color.green.gradient : Color.gray.gradient)
+                    .fill(isLive ? Color.green.gradient : Color.gray.gradient)
                     .frame(width: 4, height: 18)
 
-                Text(section.title)
+                Text(title)
                     .font(.title2.bold())
                     .foregroundStyle(AppConstants.Colors.primaryText)
 
-                Text("\(section.roomList.count)")
+                Text("\(count)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
@@ -301,37 +347,117 @@ struct FavoriteView: View {
 
                 Spacer()
             }
-            .padding(.horizontal)
+            .padding(.horizontal, layout.horizontalPadding)
+            .padding(.top, isFirst ? 16 : 32)
+            .padding(.bottom, 16)
 
-            liveSectionGrid(roomList: section.roomList, screenWidth: screenWidth)
+        case let .roomRow(_, _, rooms, isLastInSection):
+            HStack(alignment: .top, spacing: layout.horizontalSpacing) {
+                ForEach(rooms) { room in
+                    LiveRoomCardButton(room: room) {
+                        // 收藏页卡片不再观察整份收藏数组，减少任意房间更新造成的全屏重算。
+                        LiveRoomCard(
+                            room: room,
+                            showsCoverBadge: true,
+                            isFavoritedOverride: true
+                        )
+                        .frame(width: layout.cardWidth, alignment: .leading)
+                    }
+                    .frame(width: layout.cardWidth)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, layout.horizontalPadding)
+            .padding(.bottom, isLastInSection ? 0 : layout.verticalSpacing)
         }
-        .padding(.top, 16)
+    }
+}
+
+private struct FavoriteGridLayout {
+    let horizontalPadding: CGFloat
+    let horizontalSpacing: CGFloat
+    let verticalSpacing: CGFloat
+    let cardWidth: CGFloat
+    let columnCount: Int
+
+    init(containerWidth: CGFloat) {
+        let horizontalPadding: CGFloat = 20
+        let horizontalSpacing: CGFloat = 15
+        let minimumCardWidth: CGFloat = 180
+        let maximumCardWidth: CGFloat = 260
+        let availableWidth = max(containerWidth - horizontalPadding * 2, minimumCardWidth)
+        let columnsNeededForMaximumWidth = max(
+            1,
+            Int(ceil((availableWidth + horizontalSpacing) / (maximumCardWidth + horizontalSpacing)))
+        )
+        let columnsAllowedByMinimumWidth = max(
+            1,
+            Int(floor((availableWidth + horizontalSpacing) / (minimumCardWidth + horizontalSpacing)))
+        )
+        let columnCount = min(columnsNeededForMaximumWidth, columnsAllowedByMinimumWidth)
+
+        self.horizontalPadding = horizontalPadding
+        self.horizontalSpacing = horizontalSpacing
+        verticalSpacing = 24
+        self.columnCount = columnCount
+        cardWidth = max(
+            minimumCardWidth,
+            min(
+                maximumCardWidth,
+                (availableWidth - horizontalSpacing * CGFloat(columnCount - 1)) / CGFloat(columnCount)
+            )
+        )
     }
 
-    @ViewBuilder
-    private func liveSectionGrid(roomList: [LiveModel], screenWidth: CGFloat) -> some View {
-        let horizontalSpacing: CGFloat = 15
-        let verticalSpacing: CGFloat = 24
-        let horizontalPadding: CGFloat = 20
+    func elements(for sections: [FavoriteLiveSectionModel]) -> [FavoriteGridElement] {
+        var result: [FavoriteGridElement] = []
 
-        LazyVGrid(
-            columns: [
-                GridItem(.adaptive(minimum: 180, maximum: 260), spacing: horizontalSpacing)
-            ],
-            spacing: verticalSpacing
-        ) {
-            ForEach(roomList, id: \.id) { room in
-                LiveRoomCardButton(room: room) {
-                    // 收藏页中的房间必然已收藏，避免每张卡片都观察整份 roomList。
-                    LiveRoomCard(
-                        room: room,
-                        showsCoverBadge: true,
-                        isFavoritedOverride: true
+        for (sectionIndex, section) in sections.enumerated() {
+            result.append(
+                .header(
+                    title: section.title,
+                    count: section.roomList.count,
+                    isLive: section.title == "正在直播",
+                    isFirst: sectionIndex == sections.startIndex
+                )
+            )
+
+            let rowCount = Int(ceil(Double(section.roomList.count) / Double(columnCount)))
+            for rowIndex in 0..<rowCount {
+                let startIndex = rowIndex * columnCount
+                let endIndex = min(startIndex + columnCount, section.roomList.count)
+                result.append(
+                    .roomRow(
+                        sectionID: section.id,
+                        rowIndex: rowIndex,
+                        rooms: Array(section.roomList[startIndex..<endIndex]),
+                        isLastInSection: rowIndex == rowCount - 1
                     )
-                }
+                )
             }
         }
-        .padding(.horizontal, horizontalPadding)
+
+        return result
+    }
+}
+
+private enum FavoriteGridElement: Identifiable {
+    case header(title: String, count: Int, isLive: Bool, isFirst: Bool)
+    case roomRow(
+        sectionID: String,
+        rowIndex: Int,
+        rooms: [LiveModel],
+        isLastInSection: Bool
+    )
+
+    var id: String {
+        switch self {
+        case let .header(title, _, _, _):
+            return "header::\(title)"
+        case let .roomRow(sectionID, rowIndex, _, _):
+            return "row::\(sectionID)::\(rowIndex)"
+        }
     }
 }
 

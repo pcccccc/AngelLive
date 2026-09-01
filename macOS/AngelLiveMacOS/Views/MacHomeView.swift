@@ -147,12 +147,20 @@ struct MacHomeView: View {
 
     @ViewBuilder
     private func hero(contentWidth: CGFloat) -> some View {
+        let heroWidth = MacHomeHeroMetrics.width(for: contentWidth)
+        let heroHeight = MacHomeHeroMetrics.height(for: heroWidth)
+
         if !model.bannerEntries.isEmpty {
-            MacHomeHeroCarousel(entries: model.bannerEntries, width: contentWidth)
+            MacHomeHeroCarousel(entries: model.bannerEntries, width: heroWidth)
+                .frame(width: contentWidth, alignment: .center)
         } else if isAwaitingFirstContent {
-            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl)
+            RoundedRectangle(
+                cornerRadius: MacHomeHeroMetrics.cornerRadius,
+                style: .continuous
+            )
                 .fill(Color.gray.opacity(0.24))
-                .frame(width: contentWidth, height: min(max(contentWidth * 0.42, 280), 480))
+                .frame(width: heroWidth, height: heroHeight)
+                .frame(width: contentWidth, alignment: .center)
                 .shimmering()
         }
     }
@@ -200,6 +208,30 @@ private struct MacHomeRefreshTrigger: Hashable {
     let installedPluginIds: [String]
     let availabilityConfirmed: Bool
     let catalogRevision: UInt
+}
+
+private enum MacHomeHeroMetrics {
+    static let maximumWidth: CGFloat = 1_080
+    static let sidePanelMinimumWidth: CGFloat = 760
+    static let cornerRadius = AppConstants.CornerRadius.lg
+
+    static func width(for contentWidth: CGFloat) -> CGFloat {
+        let availableWidth = max(contentWidth, 320)
+        guard availableWidth >= sidePanelMinimumWidth else { return availableWidth }
+
+        // 与 Twitch 桌面推荐位相同，宽窗口也保留足够两侧留白，
+        // 避免为了填满窗口继续放大低分辨率图片。
+        let proportionalWidth = availableWidth * 0.78
+        return min(max(proportionalWidth, sidePanelMinimumWidth), maximumWidth)
+    }
+
+    static func height(for width: CGFloat) -> CGFloat {
+        if width >= sidePanelMinimumWidth {
+            // Twitch 类型推荐位：16:9 媒体 + 右侧信息面板，整体约 2.5:1。
+            return width / 2.5
+        }
+        return width * 9 / 16
+    }
 }
 
 private enum MacHomeRoomOpenMode: Equatable {
@@ -337,49 +369,16 @@ private struct MacHomeRoomTile: View {
     let room: LiveModel
     let action: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
     var body: some View {
         Button(action: action) {
             LiveRoomCard(room: room)
                 .frame(maxWidth: .infinity)
                 .padding(7)
-                .background(
-                    AppConstants.Colors.secondaryBackground
-                        .opacity(isHovered ? 0.9 : 0),
-                    in: RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl)
-                        .strokeBorder(
-                            Color.primary.opacity(isHovered ? 0.1 : 0),
-                            lineWidth: 1
-                        )
-                }
         }
-        .buttonStyle(MacHomeRoomButtonStyle())
-        .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
-                isHovered = hovering
-            }
-        }
+        .buttonStyle(MacRoomCardButtonStyle())
+        .macRoomCardHoverEffect()
         .accessibilityLabel("\(room.roomTitle)，\(room.userName)")
         .accessibilityHint("打开直播间")
-    }
-}
-
-private struct MacHomeRoomButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(
-                reduceMotion ? nil : .easeOut(duration: 0.12),
-                value: configuration.isPressed
-            )
     }
 }
 
@@ -392,29 +391,28 @@ private struct MacHomeHeroCarousel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedID: String?
-    @State private var lastWheelAdvanceTime: TimeInterval = 0
+    @State private var autoplayProgress: CGFloat = 1
 
-    private var height: CGFloat { min(max(width * 0.42, 280), 480) }
+    private let autoplayInterval: TimeInterval = 6
+    private var height: CGFloat { MacHomeHeroMetrics.height(for: width) }
+    private var indicatorRegionWidth: CGFloat {
+        width >= MacHomeHeroMetrics.sidePanelMinimumWidth ? height * 16 / 9 : width
+    }
+
+    private var activeEntry: HomeBannerEntry? {
+        entries.first(where: { $0.id == selectedID }) ?? entries.first
+    }
+
+    private var activeID: String? {
+        activeEntry?.id
+    }
 
     var body: some View {
         ZStack {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 0) {
-                    ForEach(entries) { entry in
-                        destination(for: entry)
-                            .containerRelativeFrame(.horizontal)
-                            .frame(height: height)
-                            .id(entry.id)
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $selectedID, anchor: .center)
-            .scrollIndicators(.hidden)
-            .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
-            .enableMacHorizontalWheelPaging { delta in
-                advanceWithWheel(delta)
+            if let activeEntry {
+                destination(for: activeEntry)
+                    .id(activeEntry.id)
+                    .transition(reduceMotion ? .identity : .opacity)
             }
 
             if entries.count > 1 {
@@ -423,34 +421,56 @@ private struct MacHomeHeroCarousel: View {
                     Spacer()
                     carouselButton(systemImage: "chevron.right", action: showNext)
                 }
-                .padding(.horizontal, 14)
+                .frame(width: width >= 850 ? width + 80 : width)
+                .padding(.horizontal, width >= 850 ? 0 : 14)
 
-                HStack(spacing: 6) {
-                    ForEach(entries) { entry in
-                        Capsule()
-                            .fill(entry.id == selectedID ? Color.white : Color.white.opacity(0.45))
-                            .frame(width: entry.id == selectedID ? 22 : 7, height: 7)
-                    }
-                }
-                .padding(10)
-                .background(.black.opacity(0.25), in: Capsule())
-                .frame(maxHeight: .infinity, alignment: .bottom)
-                .padding(.bottom, 14)
+                MacHomeHeroPageIndicator(
+                    entries: entries,
+                    selectedID: activeID,
+                    progress: autoplayProgress
+                )
+                .padding(.trailing, 22)
+                .padding(.bottom, 18)
+                .frame(width: indicatorRegionWidth, height: height, alignment: .bottomTrailing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             }
         }
         .frame(width: width, height: height)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.35), value: activeID)
         .onAppear(perform: normalizeSelection)
         .onChange(of: entries.map(\.id)) { _, _ in normalizeSelection() }
-        .task(id: "\(entries.map(\.id).joined(separator: "|"))::\(selectedID ?? "")::\(scenePhase)::\(reduceMotion)") {
-            guard entries.count > 1, scenePhase == .active, !reduceMotion else { return }
-            do {
-                try await Task.sleep(for: .seconds(6))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            showNext()
+        .task(id: autoplayTaskID) {
+            await runAutoplayIfNeeded()
         }
+    }
+
+    private var autoplayTaskID: String {
+        "\(entries.map(\.id).joined(separator: "|"))::\(selectedID ?? "")::\(scenePhase)::\(reduceMotion)"
+    }
+
+    @MainActor
+    private func runAutoplayIfNeeded() async {
+        let canAutoplay = entries.count > 1 && scenePhase == .active && !reduceMotion
+        var resetTransaction = Transaction()
+        resetTransaction.disablesAnimations = true
+        withTransaction(resetTransaction) {
+            autoplayProgress = canAutoplay ? 0 : 1
+        }
+
+        guard canAutoplay else { return }
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+        withAnimation(.linear(duration: autoplayInterval)) {
+            autoplayProgress = 1
+        }
+
+        do {
+            try await Task.sleep(for: .seconds(autoplayInterval))
+        } catch {
+            return
+        }
+        guard !Task.isCancelled else { return }
+        showNext()
     }
 
     private func carouselButton(systemImage: String, action: @escaping () -> Void) -> some View {
@@ -470,7 +490,7 @@ private struct MacHomeHeroCarousel: View {
             Button {
                 fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
             } label: {
-                MacHomeHeroCard(entry: entry)
+                MacHomeHeroCard(entry: entry, width: width, height: height)
             }
             .buttonStyle(.plain)
         case .category(let category):
@@ -480,7 +500,7 @@ private struct MacHomeHeroCarousel: View {
                 category: category,
                 fallbackTitle: entry.banner.title
             )) {
-                MacHomeHeroCard(entry: entry)
+                MacHomeHeroCard(entry: entry, width: width, height: height)
             }
             .buttonStyle(.plain)
         }
@@ -504,13 +524,6 @@ private struct MacHomeHeroCarousel: View {
         moveSelection(offset: 1)
     }
 
-    private func advanceWithWheel(_ delta: CGFloat) {
-        let now = ProcessInfo.processInfo.systemUptime
-        guard now - lastWheelAdvanceTime >= 0.24 else { return }
-        lastWheelAdvanceTime = now
-        moveSelection(offset: delta > 0 ? -1 : 1)
-    }
-
     private func moveSelection(offset: Int) {
         guard !entries.isEmpty else { return }
         let current = entries.firstIndex(where: { $0.id == selectedID }) ?? 0
@@ -521,11 +534,79 @@ private struct MacHomeHeroCarousel: View {
     }
 }
 
+private struct MacHomeHeroPageIndicator: View {
+    let entries: [HomeBannerEntry]
+    let selectedID: String?
+    let progress: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(entries) { entry in
+                MacHomeHeroPageProgressCapsule(
+                    isSelected: entry.id == selectedID,
+                    progress: entry.id == selectedID ? progress : 0
+                )
+            }
+        }
+        .frame(height: 28)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: selectedID)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct MacHomeHeroPageProgressCapsule: View {
+    let isSelected: Bool
+    let progress: CGFloat
+
+    private let capsuleWidth: CGFloat = 18
+    private let capsuleHeight: CGFloat = 5
+
+    private var clampedProgress: CGFloat {
+        min(max(progress, 0), 1)
+    }
+
+    private var fillWidth: CGFloat {
+        guard isSelected else { return 0 }
+        return capsuleHeight
+            + (capsuleWidth - capsuleHeight) * clampedProgress
+    }
+
+    var body: some View {
+        RoundedRectangle(
+            cornerRadius: capsuleHeight / 2,
+            style: .continuous
+        )
+        .fill(AppConstants.Colors.tertiaryText)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(
+                cornerRadius: capsuleHeight / 2,
+                style: .continuous
+            )
+            .fill(AppConstants.Colors.primaryText)
+            .frame(width: fillWidth, height: capsuleHeight)
+        }
+        .frame(
+            width: isSelected ? capsuleWidth : capsuleHeight,
+            height: capsuleHeight
+        )
+    }
+}
+
 private struct MacHomeHeroCard: View {
     let entry: HomeBannerEntry
+    let width: CGFloat
+    let height: CGFloat
 
-    private var primaryURL: URL? {
-        entry.banner.imageURL ?? room.flatMap { URL(string: $0.roomCover) }
+    private var preferredImageURL: URL? {
+        // Banner 是插件为首页焦点位专门提供的图，优先级应高于普通房间封面。
+        entry.banner.imageURL ?? roomCoverURL
+    }
+
+    private var fallbackImageURL: URL? {
+        guard preferredImageURL != roomCoverURL else { return nil }
+        return roomCoverURL
     }
 
     private var room: LiveModel? {
@@ -533,52 +614,304 @@ private struct MacHomeHeroCard: View {
         return room
     }
 
+    private var roomCoverURL: URL? {
+        guard let room, !room.roomCover.isEmpty else { return nil }
+        return URL(string: room.roomCover)
+    }
+
+    private var usesSidePanel: Bool {
+        width >= MacHomeHeroMetrics.sidePanelMinimumWidth
+    }
+
+    private var mediaWidth: CGFloat {
+        usesSidePanel ? height * 16 / 9 : width
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: MacHomeHeroMetrics.cornerRadius,
+            style: .continuous
+        )
+    }
+
+    private var bannerTitle: String? {
+        meaningfulText(entry.banner.title)
+    }
+
+    private var displayedRoomUserName: String? {
+        guard let room, let value = meaningfulText(room.userName) else { return nil }
+        guard !matchesVisibleText(value, bannerTitle) else { return nil }
+        return value
+    }
+
+    private var bannerBadgeText: String? {
+        guard let value = meaningfulText(entry.banner.badge) else { return nil }
+        guard !matchesVisibleText(value, bannerTitle),
+              !matchesVisibleText(value, displayedRoomUserName) else { return nil }
+        return value
+    }
+
+    private var bannerSubtitle: String? {
+        guard let value = meaningfulText(entry.banner.subtitle) else { return nil }
+        guard !matchesVisibleText(value, bannerTitle),
+              !matchesVisibleText(value, displayedRoomUserName),
+              !matchesVisibleText(value, bannerBadgeText) else { return nil }
+        return value
+    }
+
+    private var actionTitle: String {
+        switch entry.banner.target {
+        case .room:
+            return "立即观看"
+        case .category:
+            return "查看分类"
+        }
+    }
+
+    private var actionSymbol: String {
+        switch entry.banner.target {
+        case .room:
+            return "play.fill"
+        case .category:
+            return "rectangle.grid.2x2.fill"
+        }
+    }
+
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Group {
-                if let primaryURL {
-                    KFImage(primaryURL)
-                        .placeholder { placeholder }
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    placeholder
-                }
+        Group {
+            if usesSidePanel {
+                sidePanelLayout
+            } else {
+                compactLayout
             }
+        }
+        .frame(width: width, height: height)
+        .background(AppConstants.Colors.secondaryBackground, in: cardShape)
+        .clipShape(cardShape)
+        .overlay {
+            cardShape
+                .strokeBorder(
+                    AppConstants.Colors.separator.opacity(0.35),
+                    lineWidth: 0.5
+                )
+        }
+        .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
+        .contentShape(cardShape)
+    }
+
+    private var sidePanelLayout: some View {
+        HStack(spacing: 0) {
+            heroImage
+                .frame(width: mediaWidth, height: height)
+                .clipped()
+
+            heroInformationPanel
+                .frame(width: width - mediaWidth, height: height)
+                .background {
+                    ZStack {
+                        AppConstants.Colors.secondaryBackground
+                        Color.primary.opacity(0.035)
+                    }
+                }
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(AppConstants.Colors.separator.opacity(0.5))
+                        .frame(width: 1)
+                }
+        }
+    }
+
+    private var compactLayout: some View {
+        ZStack(alignment: .bottomLeading) {
+            heroImage
+            .frame(width: width, height: height)
 
             LinearGradient(
                 colors: [.clear, .black.opacity(0.15), .black.opacity(0.8)],
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .frame(width: width, height: height)
 
             VStack(alignment: .leading, spacing: 7) {
-                if let badge = entry.banner.badge, !badge.isEmpty {
-                    Text(badge)
-                        .font(.caption.bold())
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
+                bannerBadge
+                if let bannerTitle {
+                    Text(bannerTitle)
+                        .font(.largeTitle.bold())
+                        .lineLimit(2)
                 }
-                Text(entry.banner.title)
-                    .font(.largeTitle.bold())
-                    .lineLimit(2)
-                if let subtitle = entry.banner.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
+                if let bannerSubtitle {
+                    Text(bannerSubtitle)
                         .font(.title3)
                         .foregroundStyle(.white.opacity(0.88))
                         .lineLimit(2)
                 }
-                Text("来自 \(entry.pluginDisplayName)")
+                HStack(spacing: 4) {
+                    Text("来自")
+                    platformSourceLabel
+                }
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.72))
             }
             .foregroundStyle(.white)
             .padding(28)
             .padding(.trailing, 80)
+            .frame(width: width, height: height, alignment: .bottomLeading)
         }
+        .frame(width: width, height: height)
         .clipped()
-        .contentShape(Rectangle())
+    }
+
+    private var heroImage: some View {
+        MacHomeHeroRemoteImage(
+            url: preferredImageURL,
+            fallbackURL: fallbackImageURL,
+            targetSize: CGSize(width: mediaWidth, height: height)
+        )
+    }
+
+    private var heroInformationPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let room, let displayedRoomUserName {
+                HStack(alignment: .center, spacing: 10) {
+                    RemoteAvatarView(url: URL(string: room.userHeadImg), size: 42) {
+                        Circle()
+                            .fill(.quaternary)
+                            .overlay {
+                                Image(systemName: "person.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(displayedRoomUserName)
+                            .font(.headline)
+                            .lineLimit(1)
+                        if let watchedCount = room.liveWatchedCount, !watchedCount.isEmpty {
+                            Text("\(watchedCount) 人正在观看")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+
+            bannerBadge
+
+            if let bannerTitle {
+                Text(bannerTitle)
+                    .font(.title2.weight(.bold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let bannerSubtitle {
+                Text(bannerSubtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 8) {
+                platformSourceLabel
+
+                Spacer(minLength: 4)
+
+                Label(actionTitle, systemImage: actionSymbol)
+                    .foregroundStyle(Color.accentColor)
+                    .lineLimit(1)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+        }
+        .padding(22)
+    }
+
+    @ViewBuilder
+    private var bannerBadge: some View {
+        if let bannerBadgeText {
+            Text(bannerBadgeText)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Color.accentColor.opacity(0.18), in: Capsule())
+                .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    private var platformSourceLabel: some View {
+        HStack(spacing: 6) {
+            if let image = MacPlatformIconProvider.tabImage(for: entry.liveType) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            } else {
+                Image(systemName: "puzzlepiece.extension")
+            }
+
+            Text(entry.pluginDisplayName)
+                .lineLimit(1)
+        }
+    }
+
+    private func meaningfulText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "-" else { return nil }
+        return trimmed
+    }
+
+    private func matchesVisibleText(_ value: String, _ other: String?) -> Bool {
+        guard let other else { return false }
+        return comparisonKey(value) == comparisonKey(other)
+    }
+
+    private func comparisonKey(_ value: String) -> String {
+        value
+            .folding(
+                options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+                locale: .current
+            )
+            .components(separatedBy: .whitespacesAndNewlines)
+            .joined()
+    }
+}
+
+private struct MacHomeHeroRemoteImage: View {
+    let url: URL?
+    let fallbackURL: URL?
+    let targetSize: CGSize
+
+    @Environment(\.displayScale) private var displayScale
+
+    private var downsamplingSize: CGSize {
+        let headroom: CGFloat = 1.1
+        return CGSize(
+            width: max(targetSize.width, 1) * headroom,
+            height: max(targetSize.height, 1) * headroom
+        )
+    }
+
+    var body: some View {
+        if let url {
+            KFImage(url)
+                .setProcessor(DownsamplingImageProcessor(size: downsamplingSize))
+                .scaleFactor(displayScale)
+                .cacheOriginalImage()
+                .alternativeSources(fallbackURL.map { [.network($0)] })
+                .placeholder { placeholder }
+                .fade(duration: 0.2)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFill()
+        } else {
+            placeholder
+        }
     }
 
     private var placeholder: some View {
@@ -663,7 +996,8 @@ private struct MacHomeAllRoomsView: View {
                     } label: {
                         LiveRoomCard(room: room)
                     }
-                    .buttonStyle(MacHomeRoomButtonStyle())
+                    .buttonStyle(MacRoomCardButtonStyle())
+                    .macRoomCardHoverEffect()
                     .accessibilityLabel("\(room.roomTitle)，\(room.userName)")
                     .accessibilityHint("打开直播间")
                 }
@@ -728,7 +1062,8 @@ private struct MacHomeCategoryView: View {
                             } label: {
                                 LiveRoomCard(room: room)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(MacRoomCardButtonStyle())
+                            .macRoomCardHoverEffect()
                             .onAppear {
                                 if room.id == model.rooms.last?.id {
                                     Task { await model.loadMore() }

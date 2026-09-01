@@ -1342,26 +1342,9 @@ private struct HomeHeroPageIndicator: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let maximumVisibleIndicators = 5
-
-    private var selectedIndex: Int {
-        entries.firstIndex(where: { $0.id == selectedID }) ?? 0
-    }
-
-    private var visibleEntries: ArraySlice<HomeBannerEntry> {
-        guard entries.count > maximumVisibleIndicators else {
-            return entries[...]
-        }
-
-        let halfWindow = maximumVisibleIndicators / 2
-        let maximumStart = entries.count - maximumVisibleIndicators
-        let start = min(max(selectedIndex - halfWindow, 0), maximumStart)
-        return entries[start..<(start + maximumVisibleIndicators)]
-    }
-
     var body: some View {
         HStack(spacing: 5) {
-            ForEach(visibleEntries) { entry in
+            ForEach(entries) { entry in
                 HomeHeroPageProgressCapsule(
                     isSelected: entry.id == selectedID,
                     progress: entry.id == selectedID ? progress : 0

@@ -204,7 +204,6 @@ public struct PluginConsoleView: View {
             }
             .padding(.horizontal, 16)
         }
-        .enableMacHorizontalWheelScroll()
         .padding(.bottom, 8)
     }
 

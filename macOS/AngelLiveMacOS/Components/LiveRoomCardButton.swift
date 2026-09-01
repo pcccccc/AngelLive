@@ -37,6 +37,43 @@ struct LiveRoomCardButton<Content: View>: View {
         } label: {
             content
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MacRoomCardButtonStyle())
+        .macRoomCardHoverEffect()
+    }
+}
+
+struct MacRoomCardButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(
+                reduceMotion ? nil : .easeOut(duration: 0.12),
+                value: configuration.isPressed
+            )
+    }
+}
+
+private struct MacRoomCardHoverModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isHovered && !reduceMotion ? 1.05 : 1)
+            .zIndex(isHovered ? 1 : 0)
+            .onHover { hovering in
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.32)) {
+                    isHovered = hovering
+                }
+            }
+    }
+}
+
+extension View {
+    func macRoomCardHoverEffect() -> some View {
+        modifier(MacRoomCardHoverModifier())
     }
 }

@@ -127,6 +127,7 @@ private struct HistoryRoomCardButton<Content: View>: View {
                     }
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MacRoomCardButtonStyle())
+        .macRoomCardHoverEffect()
     }
 }

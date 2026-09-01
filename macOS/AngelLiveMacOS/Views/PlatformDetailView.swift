@@ -223,7 +223,6 @@ struct PlatformDetailView: View {
                 .padding(.vertical, 12)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .enableMacHorizontalWheelScroll()
             .onChange(of: viewModel.selectedMainCategoryIndex) { _, newValue in
                 withAnimation {
                     proxy.scrollTo(newValue, anchor: .center)
@@ -258,7 +257,6 @@ struct PlatformDetailView: View {
                 .padding(.vertical, 8)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .enableMacHorizontalWheelScroll()
             .onChange(of: viewModel.selectedSubCategoryIndex) { _, newValue in
                 withAnimation {
                     proxy.scrollTo(newValue, anchor: .center)
@@ -323,7 +321,8 @@ struct PlatformDetailView: View {
                         } label: {
                             LiveRoomCard(room: room)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MacRoomCardButtonStyle())
+                        .macRoomCardHoverEffect()
                         .onAppear {
                             // 分页加载
                             if room.roomId == rooms.last?.roomId {
@@ -487,50 +486,44 @@ struct LiveRoomCard: View {
     }
 
     private var coverView: some View {
-        GeometryReader { geometry in
-            let targetSize = coverDownsampleSize(for: geometry.size)
-
-            Group {
-                if let coverURL {
-                    // 模糊层在 Kingfisher 处理阶段生成，避免每次卡片更新都对原图做实时模糊。
-                    KFImage(coverURL)
-                        .setProcessor(
-                            DownsamplingImageProcessor(size: CGSize(width: 80, height: 45))
-                            |> BlurImageProcessor(blurRadius: 8)
-                        )
-                        .scaleFactor(displayScale)
-                        .placeholder {
-                            placeholderCover()
-                        }
-                        .resizable()
-                        .overlay(
-                            // 前景只解码到实际显示尺寸，防止收藏页同时持有多张完整分辨率封面。
-                            KFImage(coverURL)
-                                .setProcessor(DownsamplingImageProcessor(size: targetSize))
-                                .scaleFactor(displayScale)
-                                .placeholder {
-                                    placeholderCover()
-                                }
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                        )
-                } else {
-                    placeholderCover()
-                }
+        Group {
+            if let coverURL {
+                // 使用稳定的处理器尺寸，避免 LazyVGrid 滚动时 GeometryReader 的细微尺寸变化
+                // 生成新缓存键并让图片在占位图与结果之间反复切换。
+                KFImage(coverURL)
+                    .setProcessor(
+                        DownsamplingImageProcessor(size: CGSize(width: 80, height: 45))
+                        |> BlurImageProcessor(blurRadius: 8)
+                    )
+                    .scaleFactor(displayScale)
+                    .placeholder {
+                        placeholderCover()
+                    }
+                    .resizable()
+                    .overlay(
+                        // 按网格允许的最大卡片尺寸解码，兼顾清晰度和稳定内存占用。
+                        KFImage(coverURL)
+                            .setProcessor(DownsamplingImageProcessor(size: coverDownsampleSize))
+                            .scaleFactor(displayScale)
+                            .placeholder {
+                                placeholderCover()
+                            }
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    )
+            } else {
+                placeholderCover()
             }
         }
         .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
     }
 
-    private func coverDownsampleSize(for size: CGSize) -> CGSize {
-        guard size.width > 1, size.height > 1 else {
-            return CGSize(width: 260, height: 146.25)
-        }
-
+    private var coverDownsampleSize: CGSize {
+        let maximumCardWidth: CGFloat = 260
         let headroom: CGFloat = 1.25
         return CGSize(
-            width: size.width * headroom,
-            height: size.height * headroom
+            width: maximumCardWidth * headroom,
+            height: maximumCardWidth / CGFloat(AppConstants.AspectRatio.pic) * headroom
         )
     }
 
