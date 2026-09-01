@@ -18,6 +18,8 @@ struct LiveCardView: View {
     var externalFocusState: FocusState<FocusableField?>.Binding?
     var onMoveCommand: ((MoveCommandDirection) -> Void)? = nil
     var currentLiveModel: LiveModel? = nil
+    var cardWidth: CGFloat = 370
+    var coverHeight: CGFloat = 210
     @State private var isLive: Bool = false
     @FocusState private var internalFocusState: FocusableField?
 
@@ -27,9 +29,6 @@ struct LiveCardView: View {
         .init(color: .black.opacity(0.3), location: 0.5),
         .init(color: .clear, location: 1.0)
     ], startPoint: .bottom, endPoint: .top)
-    private let cardWidth: CGFloat = 370
-    private let coverHeight: CGFloat = 210
-
     /// 是否获得焦点
     private var isFocused: Bool {
         if let external = externalFocusState {

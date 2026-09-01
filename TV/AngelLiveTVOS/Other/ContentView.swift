@@ -13,6 +13,12 @@ import Darwin
 import AngelLiveDependencies
 import AngelLiveCore
 
+private enum TVHomeRecommendationAvailability {
+    case unconfirmed
+    case available
+    case unavailable
+}
+
 struct ContentView: View {
     
     var appViewModel: AppState
@@ -23,7 +29,12 @@ struct ContentView: View {
     @State private var showUpdateToast = false
     @State private var updateToastTitle = ""
     @State private var updateToastSuccess = true
+    @State private var homeRecommendationAvailability = TVHomeRecommendationAvailability.unconfirmed
     private let updateToastOptions = SimpleToastOptions(alignment: .topLeading, hideAfter: 2.0)
+
+    private var shouldShowHomeTab: Bool {
+        homeRecommendationAvailability != .unavailable
+    }
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
@@ -35,69 +46,14 @@ struct ContentView: View {
 
         @Bindable var contentVM = appViewModel
 
-        NavigationView {
-            TabView(selection:$contentVM.selection) {
-                if appViewModel.pluginAvailability.hasAvailablePlugins {
-                    FavoriteMainView()
-                        .tabItem {
-                            if appViewModel.favoriteViewModel.isLoading == true || appViewModel.favoriteViewModel.cloudReturnError == true {
-                                Label(
-                                    title: {  },
-                                    icon: {
-                                        Image(systemName: appViewModel.favoriteViewModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteViewModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
-                                    }
-                                )
-                                .contentTransition(.symbolEffect(.replace))
-                            } else {
-                                Text("收藏")
-                            }
-                        }
-                        .tag(0)
-                        .environment(favoriteLiveViewModel)
-                        .environment(appViewModel)
-                } else {
-                    TVShellFavoriteView()
-                        .tabItem {
-                            Text("收藏")
-                        }
-                        .tag(0)
-                        .environment(appViewModel)
-                }
-                
-                PlatformView()
-                    .tabItem {
-                        Text("配置")
-                    }
-                    .tag(1)
-                    .environment(appViewModel)
-
-                
-                if appViewModel.pluginAvailability.hasAvailablePlugins {
-                    SearchRoomView()
-                        .tabItem {
-                            Text("搜索")
-                        }
-                        .tag(2)
-                        .environment(searchLiveViewModel)
-                        .environment(appViewModel)
-                }
-
-                
-                SettingView()
-                    .tabItem {
-                        Text("设置")
-                    }
-                    .tag(3)
-                    .environment(appViewModel)
-
-            }
-        }
+        rootTabView(selection: $contentVM.selection)
         .environment(appViewModel.consentService)
         .onAppear {
             Task {
                 // 启动时拉取 key 映射（后台静默，不阻塞 UI）
                 Task { await PluginSourceKeyService.shared.fetchKeys() }
                 await appViewModel.pluginAvailability.checkAvailability()
+                updateHomeRecommendationAvailability()
 
                 // 自动检查插件更新
                 if appViewModel.pluginAvailability.hasAvailablePlugins && !appViewModel.pluginSourceManager.sourceURLs.isEmpty {
@@ -114,6 +70,7 @@ struct ContentView: View {
                             }
                         }
                         await appViewModel.pluginAvailability.refresh()
+                        updateHomeRecommendationAvailability()
                         if successCount > 0 {
                             presentUpdateToast(success: true, title: "\(successCount) 个插件已更新完成")
                         } else {
@@ -181,6 +138,7 @@ struct ContentView: View {
             }
         })
         .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { oldIds, installedIds in
+            updateHomeRecommendationAvailability()
             // 从无插件变为有插件时，主动触发收藏同步
             if oldIds.isEmpty && !installedIds.isEmpty {
                 Task {
@@ -189,6 +147,14 @@ struct ContentView: View {
             }
             if installedIds.isEmpty, contentVM.selection == 2 {
                 contentVM.selection = 1
+            }
+        }
+        .onChange(of: appViewModel.pluginAvailability.catalogRevision) { _, _ in
+            updateHomeRecommendationAvailability()
+        }
+        .onChange(of: appViewModel.pluginAvailability.isChecking) { _, isChecking in
+            if !isChecking {
+                updateHomeRecommendationAvailability()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.navigateToSettings)) { _ in
@@ -208,11 +174,121 @@ struct ContentView: View {
 //        }
     }
 
+    @ViewBuilder
+    private func rootTabView(selection: Binding<Int>) -> some View {
+        if #available(tvOS 18.0, *), appViewModel.pluginAvailability.hasAvailablePlugins {
+            appTabView(selection: selection)
+                .tabViewStyle(.sidebarAdaptable)
+        } else {
+            NavigationView {
+                appTabView(selection: selection)
+            }
+        }
+    }
+
+    private func appTabView(selection: Binding<Int>) -> some View {
+        TabView(selection: selection) {
+            if shouldShowHomeTab {
+                TVHomeView(appViewModel: appViewModel)
+                    .tabItem {
+                        Label("推荐", systemImage: "house.fill")
+                    }
+                    .tag(4)
+                    .environment(appViewModel.pluginAvailability)
+                    .environment(appViewModel)
+            }
+
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                FavoriteMainView()
+                    .tabItem {
+                        if appViewModel.favoriteViewModel.isLoading || appViewModel.favoriteViewModel.cloudReturnError {
+                            Label(
+                                "收藏",
+                                systemImage: appViewModel.favoriteViewModel.isLoading
+                                    ? "arrow.triangle.2.circlepath.icloud"
+                                    : appViewModel.favoriteViewModel.cloudKitReady
+                                        ? "checkmark.icloud"
+                                        : "exclamationmark.icloud"
+                            )
+                            .contentTransition(.symbolEffect(.replace))
+                        } else {
+                            Label("收藏", systemImage: "star.fill")
+                        }
+                    }
+                    .tag(0)
+                    .environment(favoriteLiveViewModel)
+                    .environment(appViewModel)
+            } else {
+                TVShellFavoriteView()
+                    .tabItem {
+                        Text("收藏")
+                    }
+                    .tag(0)
+                    .environment(appViewModel)
+            }
+
+            PlatformView()
+                .tabItem {
+                    if appViewModel.pluginAvailability.hasAvailablePlugins {
+                        Label("配置", systemImage: "square.stack.3d.up.fill")
+                    } else {
+                        Text("配置")
+                    }
+                }
+                .tag(1)
+                .environment(appViewModel)
+
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                SearchRoomView()
+                    .tabItem {
+                        Label("搜索", systemImage: "magnifyingglass")
+                    }
+                    .tag(2)
+                    .environment(searchLiveViewModel)
+                    .environment(appViewModel)
+            }
+
+            SettingView()
+                .tabItem {
+                    if appViewModel.pluginAvailability.hasAvailablePlugins {
+                        Label("设置", systemImage: "gearshape.fill")
+                    } else {
+                        Text("设置")
+                    }
+                }
+                .tag(3)
+                .environment(appViewModel)
+        }
+    }
+
     @MainActor
     private func presentUpdateToast(success: Bool, title: String) {
         updateToastSuccess = success
         updateToastTitle = title
         showUpdateToast = true
+    }
+
+    @MainActor
+    private func updateHomeRecommendationAvailability() {
+        guard appViewModel.pluginAvailability.hasCheckedAvailability else {
+            homeRecommendationAvailability = .unconfirmed
+            return
+        }
+
+        let supportsHomeFeed = SandboxPluginCatalog
+            .availablePlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
+            .contains { platform in
+                PlatformCapability.supports(.homeFeed, for: platform.liveType)
+            }
+
+        if supportsHomeFeed {
+            homeRecommendationAvailability = .available
+        } else {
+            if appViewModel.selection == 4 {
+                appViewModel.selection = 0
+            }
+            homeRecommendationAvailability = .unavailable
+        }
     }
 
     // MARK: - 云端一键安装进度
