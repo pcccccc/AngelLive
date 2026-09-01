@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var updateToastTitle = ""
     @State private var updateToastSuccess = true
     @State private var homeRecommendationAvailability = TVHomeRecommendationAvailability.unconfirmed
+    @State private var presentsFullUI: Bool
     private let updateToastOptions = SimpleToastOptions(alignment: .topLeading, hideAfter: 2.0)
 
     private var shouldShowHomeTab: Bool {
@@ -40,6 +41,7 @@ struct ContentView: View {
         self.appViewModel = appViewModel
         self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .placeholder, appViewModel: appViewModel)
         self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .placeholder, appViewModel: appViewModel)
+        self.presentsFullUI = !SandboxPluginCatalog.installedPluginMap().isEmpty
     }
     
     var body: some View {
@@ -138,6 +140,7 @@ struct ContentView: View {
             }
         })
         .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { oldIds, installedIds in
+            presentsFullUI = !installedIds.isEmpty
             updateHomeRecommendationAvailability()
             // 从无插件变为有插件时，主动触发收藏同步
             if oldIds.isEmpty && !installedIds.isEmpty {
@@ -176,7 +179,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private func rootTabView(selection: Binding<Int>) -> some View {
-        if #available(tvOS 18.0, *), appViewModel.pluginAvailability.hasAvailablePlugins {
+        if #available(tvOS 18.0, *), presentsFullUI {
             appTabView(selection: selection)
                 .tabViewStyle(.sidebarAdaptable)
         } else {
@@ -198,7 +201,7 @@ struct ContentView: View {
                     .environment(appViewModel)
             }
 
-            if appViewModel.pluginAvailability.hasAvailablePlugins {
+            if presentsFullUI {
                 FavoriteMainView()
                     .tabItem {
                         if appViewModel.favoriteViewModel.isLoading || appViewModel.favoriteViewModel.cloudReturnError {
@@ -229,7 +232,7 @@ struct ContentView: View {
 
             PlatformView()
                 .tabItem {
-                    if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    if presentsFullUI {
                         Label("配置", systemImage: "square.stack.3d.up.fill")
                     } else {
                         Text("配置")
@@ -238,7 +241,7 @@ struct ContentView: View {
                 .tag(1)
                 .environment(appViewModel)
 
-            if appViewModel.pluginAvailability.hasAvailablePlugins {
+            if presentsFullUI {
                 SearchRoomView()
                     .tabItem {
                         Label("搜索", systemImage: "magnifyingglass")
@@ -250,7 +253,7 @@ struct ContentView: View {
 
             SettingView()
                 .tabItem {
-                    if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    if presentsFullUI {
                         Label("设置", systemImage: "gearshape.fill")
                     } else {
                         Text("设置")

@@ -1,5 +1,6 @@
 import AngelLiveCore
 import AngelLiveDependencies
+import SharedAssets
 import SwiftUI
 
 /// tvOS 的插件驱动首页。共享层负责内容、缓存和聚合，当前文件只拥有电视端布局、焦点和播放呈现。
@@ -14,8 +15,10 @@ struct TVHomeView: View {
     @State private var playback: TVHomePlaybackCoordinator
     @State private var navigationPath: [PluginHomeCategoryRoute] = []
     @State private var selectedBannerID: String?
+    @State private var autoplayProgress: CGFloat = 0
+    @State private var bannerTransitionStep = 1
     @State private var heroHasFocus = false
-    @State private var presentedInfoEntry: HomeBannerEntry?
+    @State private var hasEstablishedInitialHeroFocus = false
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
@@ -53,8 +56,8 @@ struct TVHomeView: View {
                     .frame(width: geometry.size.width, alignment: .leading)
                 }
                 .background(Color.black)
-                .ignoresSafeArea()
             }
+            .ignoresSafeArea()
             .navigationDestination(for: PluginHomeCategoryRoute.self) { route in
                 TVHomeCategoryView(route: route, appViewModel: appViewModel)
             }
@@ -62,15 +65,6 @@ struct TVHomeView: View {
         }
         .preferredColorScheme(.dark)
         .tvHomePlaybackPresentation(playback)
-        .overlay {
-            if let entry = presentedInfoEntry {
-                TVHomeBannerInfoOverlay(entry: entry) {
-                    presentedInfoEntry = nil
-                }
-                .transition(.opacity)
-                .zIndex(20)
-            }
-        }
         .task(id: refreshTrigger) {
             async let homeRefresh: Void = model.refresh(
                 installedPluginIds: pluginAvailability.installedPluginIds,
@@ -80,7 +74,11 @@ struct TVHomeView: View {
             _ = await (homeRefresh, favoriteRefresh)
             normalizeBannerSelection()
         }
-        .onChange(of: model.bannerEntries.map(\.id)) { _, _ in
+        .onChange(of: model.bannerEntries.map(\.id)) { _, bannerIDs in
+            if bannerIDs.isEmpty {
+                heroHasFocus = false
+                hasEstablishedInitialHeroFocus = false
+            }
             normalizeBannerSelection()
         }
         .task(id: autoplayTrigger) {
@@ -104,14 +102,61 @@ private extension TVHomeView {
             selectedBannerID: selectedBannerID,
             scenePhase: scenePhase,
             reduceMotion: reduceMotion,
-            heroHasFocus: heroHasFocus,
-            isPresentingInfo: presentedInfoEntry != nil
+            heroHasFocus: heroHasFocus
         )
     }
 
     var activeBanner: HomeBannerEntry? {
         model.bannerEntries.first(where: { $0.id == selectedBannerID })
             ?? model.bannerEntries.first
+    }
+
+    var bannerArtworkTransition: AnyTransition {
+        let insertionOffset = Double(bannerTransitionStep) * 42
+        let removalOffset = Double(bannerTransitionStep) * -24
+        return .asymmetric(
+            insertion: .modifier(
+                active: TVHomeParallaxTransitionModifier(
+                    horizontalOffset: insertionOffset,
+                    opacity: 0.18,
+                    scale: 1.025
+                ),
+                identity: TVHomeParallaxTransitionModifier()
+            ),
+            removal: .modifier(
+                active: TVHomeParallaxTransitionModifier(
+                    horizontalOffset: removalOffset,
+                    opacity: 0.12,
+                    scale: 1.012
+                ),
+                identity: TVHomeParallaxTransitionModifier()
+            )
+        )
+    }
+
+    var bannerContentTransition: AnyTransition {
+        let insertionOffset = Double(bannerTransitionStep) * 128
+        let removalOffset = Double(bannerTransitionStep) * -68
+        return .asymmetric(
+            insertion: .modifier(
+                active: TVHomeParallaxTransitionModifier(
+                    horizontalOffset: insertionOffset,
+                    opacity: 0,
+                    scale: 0.985,
+                    blurRadius: 8
+                ),
+                identity: TVHomeParallaxTransitionModifier()
+            ),
+            removal: .modifier(
+                active: TVHomeParallaxTransitionModifier(
+                    horizontalOffset: removalOffset,
+                    opacity: 0,
+                    scale: 0.992,
+                    blurRadius: 4
+                ),
+                identity: TVHomeParallaxTransitionModifier()
+            )
+        )
     }
 
     var isAwaitingFirstContent: Bool {
@@ -124,6 +169,11 @@ private extension TVHomeView {
                     || (hasConfiguredSources && !model.hasRestoredCache)
                     || (hasConfiguredSources && !model.hasLoaded)
             )
+    }
+
+    var needsInitialHeroFocusBridge: Bool {
+        isAwaitingFirstContent
+            || (!model.bannerEntries.isEmpty && !hasEstablishedInitialHeroFocus)
     }
 
     var favoriteRail: TVHomeRailData? {
@@ -181,30 +231,14 @@ private extension TVHomeView {
         let heroContentHeight = min(max(containerSize.height * 0.92, 900), 980)
         let stageHeight = heroContentHeight + (primaryRail == nil ? 0 : TVHomeMetrics.railHeight)
         return ZStack(alignment: .topLeading) {
-            TVHomeHeroBackdrop(entry: activeBanner)
-                .frame(width: containerSize.width, height: stageHeight)
+            if model.bannerEntries.isEmpty {
+                TVHomeHeroArtwork(entry: nil)
+                    .frame(width: containerSize.width, height: stageHeight)
 
-            VStack(alignment: .leading, spacing: 0) {
-                if let activeBanner {
-                    TVHomeHeroContent(
-                        entry: activeBanner,
-                        onPrimaryAction: { openHeroTarget(activeBanner) },
-                        onInfo: { presentedInfoEntry = activeBanner },
-                        onFocusChanged: { heroHasFocus = $0 }
-                    )
-                    .frame(
-                        width: containerSize.width,
-                        height: heroContentHeight,
-                        alignment: .topLeading
-                    )
-                } else if isAwaitingFirstContent {
-                    TVHomeHeroLoadingContent()
-                        .frame(
-                            width: containerSize.width,
-                            height: heroContentHeight,
-                            alignment: .topLeading
-                        )
-                } else {
+                TVHomeHeroScrim()
+                    .frame(width: containerSize.width, height: stageHeight)
+
+                if !isAwaitingFirstContent {
                     TVHomeEmptyHeroContent(
                         isRefreshing: model.isRefreshing,
                         retry: refreshHome
@@ -215,21 +249,66 @@ private extension TVHomeView {
                         alignment: .topLeading
                     )
                 }
+            } else if let activeBanner {
+                ZStack(alignment: .topLeading) {
+                    ForEach(model.bannerEntries.filter { $0.id == activeBanner.id }) { entry in
+                        TVHomeHeroArtwork(entry: entry)
+                            .frame(width: containerSize.width, height: stageHeight)
+                            .scaleEffect(1.035)
+                            .transition(bannerArtworkTransition)
+                            .zIndex(entry.id == selectedBannerID ? 1 : 0)
+                    }
 
-                if let primaryRail {
-                    TVHomeRoomRail(
-                        rail: primaryRail,
-                        appViewModel: appViewModel,
-                        onSeeAll: openCategory
-                    )
+                    TVHomeHeroScrim()
+                        .frame(width: containerSize.width, height: stageHeight)
+
+                    ForEach(model.bannerEntries.filter { $0.id == activeBanner.id }) { entry in
+                        TVHomeHeroContent(
+                            entry: entry,
+                            requestsInitialFocus: true,
+                            onPrimaryAction: { openHeroTarget(entry) },
+                            onPreviousBanner: { moveBanner(by: -1) },
+                            onNextBanner: { moveBanner(by: 1) },
+                            onFocusChanged: updateHeroFocus
+                        )
+                        .frame(
+                            width: containerSize.width,
+                            height: heroContentHeight,
+                            alignment: .topLeading
+                        )
+                        .transition(bannerContentTransition)
+                        .zIndex(entry.id == selectedBannerID ? 2 : 1)
+                    }
                 }
+                .frame(width: containerSize.width, height: stageHeight)
+                .clipped()
             }
-            .frame(width: containerSize.width, alignment: .topLeading)
+
+            if needsInitialHeroFocusBridge {
+                TVHomeHeroLoadingContent(isFocusEnabled: true)
+                    .frame(
+                        width: containerSize.width,
+                        height: heroContentHeight,
+                        alignment: .topLeading
+                    )
+                    .opacity(isAwaitingFirstContent ? 1 : 0.001)
+                    .zIndex(isAwaitingFirstContent ? 4 : -1)
+            }
+
+            if let primaryRail {
+                TVHomeRoomRail(
+                    rail: primaryRail,
+                    appViewModel: appViewModel,
+                    onSeeAll: openCategory
+                )
+                .padding(.top, heroContentHeight - TVHomeMetrics.primaryRailVerticalOverlap)
+            }
 
             if let activeBanner, model.bannerEntries.count > 1 {
                 TVHomePageIndicator(
                     entries: model.bannerEntries,
-                    selectedID: activeBanner.id
+                    selectedID: activeBanner.id,
+                    progress: autoplayProgress
                 )
                 .frame(width: containerSize.width, alignment: .center)
                 .padding(.top, heroContentHeight + 12)
@@ -242,7 +321,6 @@ private extension TVHomeView {
             height: stageHeight,
             alignment: .topLeading
         )
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.38), value: activeBanner?.id)
     }
 
     func openHeroTarget(_ entry: HomeBannerEntry) {
@@ -291,25 +369,98 @@ private extension TVHomeView {
         }
     }
 
+    func updateHeroFocus(_ isFocused: Bool) {
+        heroHasFocus = isFocused
+        if isFocused {
+            hasEstablishedInitialHeroFocus = true
+        }
+    }
+
+    @MainActor
+    func moveBanner(by step: Int) {
+        guard model.bannerEntries.count > 1 else { return }
+        let normalizedStep = step < 0 ? -1 : 1
+        let currentIndex = model.bannerEntries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
+        let nextIndex = (currentIndex + normalizedStep + model.bannerEntries.count)
+            % model.bannerEntries.count
+
+        bannerTransitionStep = normalizedStep
+
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.58)) {
+            selectedBannerID = model.bannerEntries[nextIndex].id
+        }
+    }
+
     @MainActor
     func runAutoplayIfNeeded() async {
-        guard model.bannerEntries.count > 1,
-              scenePhase == .active,
-              !reduceMotion,
-              !heroHasFocus,
-              presentedInfoEntry == nil else { return }
+        let canAutoplay = model.bannerEntries.count > 1
+            && scenePhase == .active
+            && !reduceMotion
+            && heroHasFocus
+
+        var resetTransaction = Transaction()
+        resetTransaction.disablesAnimations = true
+        withTransaction(resetTransaction) {
+            autoplayProgress = 0
+        }
+
+        guard canAutoplay else { return }
+        await Task.yield()
+        guard !Task.isCancelled else { return }
+        withAnimation(.linear(duration: TVHomeMetrics.autoplayInterval)) {
+            autoplayProgress = 1
+        }
+
         do {
-            try await Task.sleep(for: .seconds(7))
+            try await Task.sleep(for: .seconds(TVHomeMetrics.autoplayInterval))
         } catch {
             return
         }
         guard !Task.isCancelled else { return }
-        let currentIndex = model.bannerEntries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
-        selectedBannerID = model.bannerEntries[(currentIndex + 1) % model.bannerEntries.count].id
+        moveBanner(by: 1)
     }
 }
 
-private struct TVHomeHeroBackdrop: View {
+private struct TVHomeParallaxTransitionModifier: ViewModifier {
+    var horizontalOffset: Double = 0
+    var opacity: Double = 1
+    var scale: Double = 1
+    var blurRadius: Double = 0
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: horizontalOffset)
+            .opacity(opacity)
+            .scaleEffect(scale)
+            .blur(radius: blurRadius)
+    }
+}
+
+private extension View {
+    func tvHomeHeroTextShadow() -> some View {
+        shadow(
+            color: .black.opacity(0.82),
+            radius: 10,
+            x: 0,
+            y: 2
+        )
+    }
+
+    @ViewBuilder
+    func tvHomePrimaryActionStyle(reduceTransparency: Bool) -> some View {
+        if #available(tvOS 26.0, *) {
+            self.buttonStyle(
+                .glass(.clear.tint(.white.opacity(0.16)))
+            )
+        } else {
+            self
+                .buttonStyle(.borderedProminent)
+                .tint(.white.opacity(reduceTransparency ? 0.92 : 0.82))
+        }
+    }
+}
+
+private struct TVHomeHeroArtwork: View {
     let entry: HomeBannerEntry?
 
     private var roomCoverURL: URL? {
@@ -337,13 +488,29 @@ private struct TVHomeHeroBackdrop: View {
                     .scaledToFill()
                     .transition(.opacity)
             }
+        }
+        .clipped()
+        .accessibilityHidden(true)
+    }
+}
+
+private struct TVHomeHeroScrim: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let contrastBoost = colorSchemeContrast == .increased || reduceTransparency ? 0.10 : 0
+
+        ZStack {
+            Color.black.opacity(0.09 + contrastBoost * 0.35)
 
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.92), location: 0),
-                    .init(color: .black.opacity(0.62), location: 0.26),
-                    .init(color: .black.opacity(0.12), location: 0.62),
-                    .init(color: .clear, location: 1)
+                    .init(color: .black.opacity(0.96), location: 0),
+                    .init(color: .black.opacity(0.88 + contrastBoost), location: 0.24),
+                    .init(color: .black.opacity(0.72 + contrastBoost), location: 0.48),
+                    .init(color: .black.opacity(0.38 + contrastBoost), location: 0.68),
+                    .init(color: .clear, location: 0.88)
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -351,28 +518,31 @@ private struct TVHomeHeroBackdrop: View {
 
             LinearGradient(
                 stops: [
-                    .init(color: .clear, location: 0.48),
-                    .init(color: .black.opacity(0.48), location: 0.76),
+                    .init(color: .clear, location: 0.44),
+                    .init(color: .black.opacity(0.54 + contrastBoost), location: 0.74),
+                    .init(color: .black.opacity(0.92), location: 0.90),
                     .init(color: .black, location: 1)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
         }
-        .clipped()
         .accessibilityHidden(true)
     }
 }
 
 private struct TVHomeHeroContent: View {
     enum FocusedControl: Hashable {
+        case previousBanner
         case primary
-        case info
+        case nextBanner
     }
 
     let entry: HomeBannerEntry
+    let requestsInitialFocus: Bool
     let onPrimaryAction: () -> Void
-    let onInfo: () -> Void
+    let onPreviousBanner: () -> Void
+    let onNextBanner: () -> Void
     let onFocusChanged: (Bool) -> Void
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -399,9 +569,10 @@ private struct TVHomeHeroContent: View {
                 Text("来自")
                     .foregroundStyle(.white.opacity(0.62))
                 Text(entry.pluginDisplayName)
-                    .foregroundStyle(.purple.opacity(0.96))
+                    .foregroundStyle(SharedAssets.Colors.appAccent)
             }
             .font(.system(size: 26, weight: .medium))
+            .tvHomeHeroTextShadow()
 
             Text(entry.banner.title.isEmpty ? entry.pluginDisplayName : entry.banner.title)
                 .font(.system(size: 56, weight: .bold))
@@ -410,6 +581,7 @@ private struct TVHomeHeroContent: View {
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: 820, alignment: .leading)
                 .padding(.top, 24)
+                .tvHomeHeroTextShadow()
 
             if let subtitle = entry.banner.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
@@ -418,32 +590,26 @@ private struct TVHomeHeroContent: View {
                     .lineLimit(2)
                     .frame(maxWidth: 720, alignment: .leading)
                     .padding(.top, 18)
+                    .tvHomeHeroTextShadow()
             }
 
-            HStack(spacing: 48) {
+            HStack(spacing: 0) {
+                pagingFocusProxy(for: .previousBanner)
+
                 Button(action: onPrimaryAction) {
                     Label(primaryTitle, systemImage: primarySymbol)
                         .font(.system(size: 20, weight: .semibold))
-                        .frame(width: 173, height: 41)
+                        .frame(width: 173, height: 29)
                 }
-                .buttonStyle(.borderedProminent)
+                .tvHomePrimaryActionStyle(reduceTransparency: reduceTransparency)
                 .buttonBorderShape(.capsule)
-                .tint(.white.opacity(reduceTransparency ? 0.92 : 0.82))
                 .focused($focusedControl, equals: .primary)
-                .prefersDefaultFocus(true, in: focusScope)
+                .prefersDefaultFocus(requestsInitialFocus, in: focusScope)
                 .accessibilityLabel(primaryTitle)
 
-                Button(action: onInfo) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 41, height: 41)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-                .tint(.white)
-                .focused($focusedControl, equals: .info)
-                .accessibilityLabel("内容详情")
+                pagingFocusProxy(for: .nextBanner)
             }
+            .offset(x: -TVHomeMetrics.bannerFocusProxyWidth)
             .padding(.top, 76)
 
             Spacer(minLength: 0)
@@ -452,19 +618,48 @@ private struct TVHomeHeroContent: View {
         .padding(.top, 390)
         .focusScope(focusScope)
         .task {
-            guard focusedControl == nil else { return }
+            guard requestsInitialFocus else { return }
             await Task.yield()
+            guard !Task.isCancelled else { return }
             focusedControl = .primary
         }
-        .onChange(of: focusedControl) { _, value in
-            onFocusChanged(value != nil)
+        .onChange(of: focusedControl) { previousControl, focusedControl in
+            onFocusChanged(focusedControl != nil)
+            guard previousControl == .primary else { return }
+            switch focusedControl {
+            case .previousBanner:
+                onPreviousBanner()
+            case .nextBanner:
+                onNextBanner()
+            case .primary, nil:
+                break
+            }
         }
+    }
+
+    private func pagingFocusProxy(for control: FocusedControl) -> some View {
+        Button(action: {}) {
+            Rectangle()
+                .fill(.black.opacity(0.001))
+                .frame(
+                    width: TVHomeMetrics.bannerFocusProxyWidth,
+                    height: TVHomeMetrics.bannerFocusProxyHeight
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .focused($focusedControl, equals: control)
+        .accessibilityHidden(true)
     }
 }
 
 private struct TVHomePageIndicator: View {
     let entries: [HomeBannerEntry]
     let selectedID: String
+    let progress: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var visibleEntries: [HomeBannerEntry] {
         guard entries.count > 7,
@@ -478,12 +673,14 @@ private struct TVHomePageIndicator: View {
     var body: some View {
         HStack(spacing: 10) {
             ForEach(visibleEntries) { entry in
-                Capsule()
-                    .fill(.white.opacity(entry.id == selectedID ? 0.92 : 0.38))
-                    .frame(width: entry.id == selectedID ? 38 : 10, height: 10)
+                TVHomePageProgressCapsule(
+                    isSelected: entry.id == selectedID,
+                    progress: entry.id == selectedID ? progress : 0
+                )
             }
         }
-        .animation(.easeInOut(duration: 0.24), value: selectedID)
+        .frame(height: 34)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.24), value: selectedID)
         .accessibilityElement()
         .accessibilityLabel("焦点内容")
         .accessibilityValue(pageDescription)
@@ -492,6 +689,50 @@ private struct TVHomePageIndicator: View {
     private var pageDescription: String {
         let index = entries.firstIndex(where: { $0.id == selectedID }).map { $0 + 1 } ?? 1
         return "第 \(index) 项，共 \(entries.count) 项"
+    }
+}
+
+private struct TVHomePageProgressCapsule: View {
+    let isSelected: Bool
+    let progress: CGFloat
+
+    private let capsuleWidth: CGFloat = 38
+    private let capsuleHeight: CGFloat = 10
+
+    private var clampedProgress: CGFloat {
+        min(max(progress, 0), 1)
+    }
+
+    private var fillWidth: CGFloat {
+        guard isSelected else { return 0 }
+        return capsuleHeight
+            + (capsuleWidth - capsuleHeight) * clampedProgress
+    }
+
+    var body: some View {
+        RoundedRectangle(
+            cornerRadius: capsuleHeight / 2,
+            style: .continuous
+        )
+        .fill(.white.opacity(0.38))
+        .overlay(alignment: .leading) {
+            RoundedRectangle(
+                cornerRadius: capsuleHeight / 2,
+                style: .continuous
+            )
+            .fill(.white.opacity(0.92))
+            .frame(width: fillWidth, height: capsuleHeight)
+        }
+        .frame(
+            width: isSelected ? capsuleWidth : capsuleHeight,
+            height: capsuleHeight
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: capsuleHeight / 2,
+                style: .continuous
+            )
+        )
     }
 }
 
@@ -575,6 +816,8 @@ private struct TVHomeRoomRail: View {
 }
 
 private struct TVHomeHeroLoadingContent: View {
+    let isFocusEnabled: Bool
+
     @Namespace private var focusScope
 
     var body: some View {
@@ -599,8 +842,8 @@ private struct TVHomeHeroLoadingContent: View {
         .padding(.bottom, 30)
         .redacted(reason: .placeholder)
         .accessibilityLabel("首页内容加载中")
-        .focusable()
-        .prefersDefaultFocus(true, in: focusScope)
+        .focusable(isFocusEnabled)
+        .prefersDefaultFocus(isFocusEnabled, in: focusScope)
         .focusScope(focusScope)
     }
 }
@@ -659,45 +902,6 @@ private struct TVHomeFailureCard: View {
         }
         .padding(28)
         .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-}
-
-private struct TVHomeBannerInfoOverlay: View {
-    let entry: HomeBannerEntry
-    let dismiss: () -> Void
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.78).ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 24) {
-                Text("来自 \(entry.pluginDisplayName)")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                Text(entry.banner.title)
-                    .font(.largeTitle.weight(.bold))
-                if let subtitle = entry.banner.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                }
-                if let badge = entry.banner.badge, !badge.isEmpty {
-                    Text(badge)
-                        .font(.headline)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(.white.opacity(0.12), in: Capsule())
-                }
-                Button("返回", action: dismiss)
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .padding(.top, 12)
-            }
-            .padding(54)
-            .frame(width: 920, alignment: .leading)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 30, style: .continuous))
-        }
-        .onExitCommand(perform: dismiss)
     }
 }
 
@@ -896,10 +1100,14 @@ private extension View {
 private enum TVHomeMetrics {
     static let horizontalMargin: CGFloat = 92
     static let railHeight: CGFloat = 438
+    static let primaryRailVerticalOverlap: CGFloat = 15
     static let cardWidth: CGFloat = 420
     static let cardCoverHeight: CGFloat = 236
     static let cardHeight: CGFloat = 316
     static let cardSpacing: CGFloat = 36
+    static let bannerFocusProxyWidth: CGFloat = 72
+    static let bannerFocusProxyHeight: CGFloat = 76
+    static let autoplayInterval: TimeInterval = 7
 }
 
 private enum TVHomePlaybackMode: Equatable {
@@ -928,5 +1136,4 @@ private struct TVHomeAutoplayTrigger: Hashable {
     let scenePhase: ScenePhase
     let reduceMotion: Bool
     let heroHasFocus: Bool
-    let isPresentingInfo: Bool
 }
