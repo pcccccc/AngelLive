@@ -10,20 +10,28 @@ import AngelLiveCore
 
 struct GeneralSettingView: View {
     @State private var generalSettingModel = GeneralSettingModel()
-    @StateObject private var settingStore = SettingStore()
+    @State private var appIconSettings = AppIconSettingsModel()
     @AppStorage(HomePagePreference.storageKey, store: .shared)
     private var homePagePreference = HomePagePreference.recommendations
     @AppStorage(HomePagePreference.selectedPluginStorageKey, store: .shared)
     private var selectedHomePluginId = ""
 
     var body: some View {
+        @Bindable var appIconSettings = appIconSettings
+
         List {
             Section {
-                Picker("首页内容", selection: $homePagePreference) {
+                Picker(selection: $homePagePreference) {
                     ForEach(HomePagePreference.allCases, id: \.self) { preference in
                         Text(preference.displayName)
                             .tag(preference)
                     }
+                } label: {
+                    GeneralSettingLabel(
+                        title: "首页内容",
+                        systemImage: "house.fill",
+                        tint: .orange
+                    )
                 }
                 .pickerStyle(.navigationLink)
             } header: {
@@ -34,20 +42,62 @@ struct GeneralSettingView: View {
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
 
-            // 通用设置
             Section {
-                Toggle("匹配系统帧率", isOn: $settingStore.syncSystemRate)
-                    .tint(AppConstants.Colors.accent)
+                Picker(
+                    selection: Binding(
+                        get: { appIconSettings.selection },
+                        set: { choice in
+                            Task { await appIconSettings.select(choice) }
+                        }
+                    )
+                ) {
+                    ForEach(AppIconSettingsModel.Choice.allCases) { choice in
+                        Text(choice.title)
+                            .tag(choice)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(appIconSettings.selection.previewAssetName)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 30, height: 30)
+                            .clipShape(.rect(cornerRadius: 7))
 
-                Toggle("禁用渐变背景", isOn: $generalSettingModel.generalDisableMaterialBackground)
-                    .tint(AppConstants.Colors.accent)
+                        Text("应用图标")
+                    }
+                }
+                .pickerStyle(.navigationLink)
+                .disabled(appIconSettings.applyingChoice != nil)
 
-                Toggle("播放层滑动手势", isOn: $generalSettingModel.enablePlayerGesture)
-                    .tint(AppConstants.Colors.accent)
+                Toggle(isOn: materialBackgroundEnabled) {
+                    GeneralSettingLabel(
+                        title: "动态渐变背景",
+                        systemImage: "circle.lefthalf.filled",
+                        tint: .purple
+                    )
+                }
+                .tint(AppConstants.Colors.accent)
             } header: {
-                Text("通用设置")
+                Text("外观")
             } footer: {
-                Text("播放层滑动手势：开启后可在播放器左侧上下滑动调节亮度，右侧上下滑动调节音量。")
+                Text("动态渐变背景会根据直播封面生成沉浸式背景效果。")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
+
+            Section {
+                Toggle(isOn: $generalSettingModel.enablePlayerGesture) {
+                    GeneralSettingLabel(
+                        title: "播放层滑动手势",
+                        systemImage: "hand.draw.fill",
+                        tint: .blue
+                    )
+                }
+                .tint(AppConstants.Colors.accent)
+            } header: {
+                Text("播放")
+            } footer: {
+                Text("开启后，在播放器左侧上下滑动调节亮度，右侧上下滑动调节音量。")
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
@@ -59,6 +109,35 @@ struct GeneralSettingView: View {
             if preference == .recommendations {
                 selectedHomePluginId = ""
             }
+        }
+        .alert("无法更换应用图标", isPresented: $appIconSettings.isShowingError) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(appIconSettings.errorMessage)
+        }
+    }
+
+    private var materialBackgroundEnabled: Binding<Bool> {
+        Binding(
+            get: { !generalSettingModel.generalDisableMaterialBackground },
+            set: { generalSettingModel.generalDisableMaterialBackground = !$0 }
+        )
+    }
+}
+
+private struct GeneralSettingLabel: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(tint.gradient)
+                .frame(width: 30, height: 30)
+
+            Text(title)
         }
     }
 }

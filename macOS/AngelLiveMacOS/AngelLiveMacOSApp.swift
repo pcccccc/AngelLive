@@ -55,6 +55,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KSOptions.logLevel = .error
         KSOptions.hudLog = false
 
+        MacDockIconPreference.applyStoredPreference()
+
         configureImageCache()
 
         Task {

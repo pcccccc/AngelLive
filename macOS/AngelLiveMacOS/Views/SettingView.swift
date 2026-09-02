@@ -15,6 +15,8 @@ struct SettingView: View {
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     #endif
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @AppStorage(MacDockIconPreference.storageKey)
+    private var dockIconPreference = MacDockIconPreference.primary
 
     @State private var showOpenSourceList = false
     @State private var showPluginManagement = false
@@ -48,6 +50,10 @@ struct SettingView: View {
                 Section("插件与扩展") {
                     pluginManagementRow
                 }
+            }
+
+            Section("通用设置") {
+                appIconRow
             }
 
             Section("播放") {
@@ -138,7 +144,7 @@ struct SettingView: View {
                         }
                     }
             }
-            .frame(minWidth: 640, minHeight: 560)
+            .frame(minWidth: 680, minHeight: 640)
         }
         .task {
             await refreshCacheSize()
@@ -186,6 +192,33 @@ struct SettingView: View {
         }
         .buttonStyle(.plain)
         .disabled(isClearingCache)
+    }
+
+    private var appIconRow: some View {
+        PanelNavigationRow(
+            title: "应用图标",
+            subtitle: "选择应用运行期间显示的 Dock 图标",
+            showsChevron: false
+        ) {
+            Image(nsImage: dockIconPreference.previewImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 28, height: 28)
+                .clipShape(.rect(cornerRadius: 7))
+        } trailing: {
+            Picker("应用图标", selection: $dockIconPreference) {
+                ForEach(MacDockIconPreference.allCases) { choice in
+                    Text(choice.title)
+                        .tag(choice)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 112)
+            .onChange(of: dockIconPreference) { _, preference in
+                preference.apply()
+            }
+            .help("macOS 仅在应用运行期间更换 Dock 图标。")
+        }
     }
 
     private func refreshCacheSize() async {
@@ -355,125 +388,241 @@ private struct MacDanmuSettingView: View {
     @State private var danmuModel = DanmuSettingModel()
 
     var body: some View {
-        List {
+        Form {
             Section {
-                Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
-                    .tint(AppConstants.Colors.accent)
-
-                Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
-                    .tint(AppConstants.Colors.accent)
-            } header: {
-                Text("基本设置")
+                previewCard
             }
 
-            Section {
-                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
-                    HStack {
-                        Text("字体大小")
-                            .foregroundStyle(AppConstants.Colors.primaryText)
-                        Spacer()
-                        Text("\(danmuModel.danmuFontSize)")
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-                    }
-
-                    HStack(spacing: AppConstants.Spacing.md) {
-                        Button {
-                            if danmuModel.danmuFontSize > 15 {
-                                danmuModel.danmuFontSize -= 5
-                            }
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppConstants.Colors.error.gradient)
-                        }
-                        .buttonStyle(.borderless)
-
-                        Button {
-                            if danmuModel.danmuFontSize > 10 {
-                                danmuModel.danmuFontSize -= 1
-                            }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .font(.title3)
-                                .foregroundStyle(AppConstants.Colors.warning.gradient)
-                        }
-                        .buttonStyle(.borderless)
-
-                        Spacer()
-
-                        Text("这是测试弹幕")
-                            .font(.system(size: CGFloat(danmuModel.danmuFontSize)))
-                            .foregroundStyle(AppConstants.Colors.primaryText)
-
-                        Spacer()
-
-                        Button {
-                            if danmuModel.danmuFontSize < 100 {
-                                danmuModel.danmuFontSize += 1
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle")
-                                .font(.title3)
-                                .foregroundStyle(AppConstants.Colors.success.gradient)
-                        }
-                        .buttonStyle(.borderless)
-
-                        Button {
-                            if danmuModel.danmuFontSize < 95 {
-                                danmuModel.danmuFontSize += 5
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppConstants.Colors.link.gradient)
-                        }
-                        .buttonStyle(.borderless)
-                    }
+            Section("弹幕显示") {
+                Toggle(isOn: $danmuModel.showDanmu) {
+                    DanmakuSettingDescriptor(
+                        title: "显示弹幕",
+                        subtitle: "在直播画面上显示滚动弹幕",
+                        systemImage: "bubble.left.and.bubble.right.fill",
+                        tint: .green
+                    )
                 }
-                .padding(.vertical, AppConstants.Spacing.sm)
-            } header: {
-                Text("字体设置")
+                    .tint(AppConstants.Colors.accent)
+
+                Toggle(isOn: $danmuModel.showColorDanmu) {
+                    DanmakuSettingDescriptor(
+                        title: "彩色弹幕",
+                        subtitle: "显示弹幕发送者设置的颜色",
+                        systemImage: "paintpalette.fill",
+                        tint: .purple
+                    )
+                }
+                    .tint(AppConstants.Colors.accent)
+                    .disabled(!danmuModel.showDanmu)
             }
 
-            Section {
+            Section("外观") {
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
-                    HStack {
-                        Text("透明度")
-                        Spacer()
-                        Text(String(format: "%.1f", danmuModel.danmuAlpha))
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-                    }
+                    DanmakuSettingDescriptor(
+                        title: "字体大小",
+                        subtitle: "仅影响之后出现的新弹幕",
+                        systemImage: "textformat.size",
+                        tint: .blue,
+                        value: "\(danmuModel.danmuFontSize) pt"
+                    )
+
+                    Slider(value: fontSizeBinding, in: 10...100, step: 1)
+                        .tint(AppConstants.Colors.accent)
+                        .padding(.leading, 46)
+                        .accessibilityLabel("弹幕字体大小")
+                        .accessibilityValue("\(danmuModel.danmuFontSize) 点")
+                }
+
+                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                    DanmakuSettingDescriptor(
+                        title: "透明度",
+                        subtitle: "降低透明度可以减少对画面的遮挡",
+                        systemImage: "circle.lefthalf.filled",
+                        tint: .orange,
+                        value: String(format: "%.0f%%", danmuModel.danmuAlpha * 100)
+                    )
 
                     Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
-                        .tint(AppConstants.Colors.link)
+                        .tint(AppConstants.Colors.accent)
+                        .padding(.leading, 46)
+                        .accessibilityLabel("弹幕透明度")
+                        .accessibilityValue(String(format: "%.0f%%", danmuModel.danmuAlpha * 100))
                 }
-
-                Picker("弹幕速度", selection: $danmuModel.danmuSpeedIndex) {
-                    ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
-                        Text(DanmuSettingModel.danmuSpeedArray[index])
-                            .tag(index)
-                    }
-                }
-                .onChange(of: danmuModel.danmuSpeedIndex) { _, newValue in
-                    danmuModel.getDanmuSpeed(index: newValue)
-                }
-
-                Picker("显示区域", selection: $danmuModel.danmuAreaIndex) {
-                    ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
-                        Text(DanmuSettingModel.danmuAreaArray[index])
-                            .tag(index)
-                    }
-                }
-            } header: {
-                Text("显示设置")
             }
 
-            Section("关键词屏蔽") {
+            Section("运动与布局") {
+                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                    DanmakuSettingDescriptor(
+                        title: "移动速度",
+                        subtitle: "控制弹幕从右向左通过画面的时间",
+                        systemImage: "speedometer",
+                        tint: .cyan
+                    )
+
+                    Picker("移动速度", selection: $danmuModel.danmuSpeedIndex) {
+                        ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
+                            Text(DanmuSettingModel.danmuSpeedArray[index])
+                                .tag(index)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .padding(.leading, 46)
+                    .onChange(of: danmuModel.danmuSpeedIndex) { _, newValue in
+                        danmuModel.getDanmuSpeed(index: newValue)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                    DanmakuSettingDescriptor(
+                        title: "显示区域",
+                        subtitle: "限制弹幕在视频画面中的覆盖范围",
+                        systemImage: "rectangle.inset.filled",
+                        tint: .indigo
+                    )
+
+                    Picker("显示区域", selection: $danmuModel.danmuAreaIndex) {
+                        ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
+                            Text(DanmuSettingModel.danmuAreaArray[index])
+                                .tag(index)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .padding(.leading, 46)
+                }
+            }
+
+            Section {
                 DanmakuKeywordBlocklistForm(settings: danmuModel)
+            } header: {
+                Text("关键词屏蔽")
+            } footer: {
+                Text("包含任一关键词的消息不会出现在聊天列表或滚动弹幕中。")
             }
         }
-        .listStyle(.inset)
+        .formStyle(.grouped)
         .navigationTitle("弹幕设置")
+    }
+
+    private var fontSizeBinding: Binding<Double> {
+        Binding(
+            get: { Double(danmuModel.danmuFontSize) },
+            set: { danmuModel.danmuFontSize = Int($0.rounded()) }
+        )
+    }
+
+    private var previewFontSize: CGFloat {
+        min(max(CGFloat(danmuModel.danmuFontSize) * 0.45, 12), 30)
+    }
+
+    private var previewCard: some View {
+        VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+            HStack(spacing: AppConstants.Spacing.sm) {
+                Label("效果预览", systemImage: "play.rectangle.fill")
+                    .font(.headline)
+
+                Spacer()
+
+                PanelStatusBadge(
+                    danmuModel.showDanmu ? "实时更新" : "已关闭",
+                    tint: danmuModel.showDanmu ? AppConstants.Colors.success : .secondary
+                )
+            }
+
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.08, green: 0.10, blue: 0.15),
+                        Color(red: 0.16, green: 0.12, blue: 0.22)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                Image(systemName: "play.rectangle.fill")
+                    .font(.system(size: 72, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.06))
+
+                if danmuModel.showDanmu {
+                    VStack(spacing: AppConstants.Spacing.lg) {
+                        HStack {
+                            previewDanmaku("欢迎来到 AngelLive", color: .white)
+                            Spacer(minLength: 48)
+                        }
+
+                        HStack {
+                            Spacer(minLength: 72)
+                            previewDanmaku("这是一条彩色弹幕", color: .cyan)
+                            Spacer(minLength: 12)
+                        }
+                    }
+                    .padding(AppConstants.Spacing.lg)
+                } else {
+                    Label("弹幕已关闭", systemImage: "bubble.left.and.exclamationmark.bubble.right")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+            .frame(height: 128)
+            .clipShape(.rect(cornerRadius: AppConstants.CornerRadius.md))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.md, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+            }
+        }
+        .padding(AppConstants.Spacing.lg)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg, style: .continuous))
+    }
+
+    private func previewDanmaku(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: previewFontSize, weight: .semibold))
+            .foregroundStyle(danmuModel.showColorDanmu ? color : .white)
+            .opacity(danmuModel.danmuAlpha)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .shadow(color: .black.opacity(0.9), radius: 1, x: 1, y: 1)
+    }
+}
+
+private struct DanmakuSettingDescriptor: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+    var value: String? = nil
+
+    var body: some View {
+        HStack(spacing: AppConstants.Spacing.md) {
+            PanelIconTile {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint.gradient)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: AppConstants.Spacing.md)
+
+            if let value {
+                Text(value)
+                    .font(.callout.weight(.medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(.quaternary.opacity(0.55), in: Capsule(style: .continuous))
+            }
+        }
     }
 }
 
