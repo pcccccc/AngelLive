@@ -18,6 +18,8 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
     public let auth: ManifestAuth?
     /// 登录流程声明（可选）。未声明的插件不会出现在宿主的平台登录列表中。
     public let loginFlow: ManifestLoginFlow?
+    /// 登录挑战能力声明（可选）。只有显式声明时宿主才展示扫码登录入口。
+    public let loginChallenge: ManifestLoginChallenge?
     /// 分享链接候选匹配规则（可选）。宿主只用它筛选候选平台，最终解析仍由插件完成。
     public let shareResolve: ManifestShareResolve?
     /// 原生流能力声明（可选）。插件声明后才允许调用 Host.stream / Host.nativeStream。
@@ -40,6 +42,7 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
         preloadScripts: [String]? = nil,
         auth: ManifestAuth? = nil,
         loginFlow: ManifestLoginFlow? = nil,
+        loginChallenge: ManifestLoginChallenge? = nil,
         shareResolve: ManifestShareResolve? = nil,
         nativeStream: ManifestNativeStream? = nil,
         hostBehavior: ManifestHostBehavior? = nil,
@@ -57,11 +60,174 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
         self.preloadScripts = preloadScripts
         self.auth = auth
         self.loginFlow = loginFlow
+        self.loginChallenge = loginChallenge
         self.shareResolve = shareResolve
         self.nativeStream = nativeStream
         self.hostBehavior = hostBehavior
         self.sessionMigration = sessionMigration
     }
+}
+
+/// 当前宿主实现的登录挑战协议版本。该版本独立于各端的营销版本。
+public enum PlatformLoginChallengeProtocol {
+    public static let currentVersion = 1
+}
+
+/// 登录挑战类型。未知值会被保留，但不会被宿主当作受支持能力。
+public enum ManifestLoginChallengeKind: Codable, Equatable, Hashable, Sendable {
+    case qrcode
+    case unsupported(String)
+
+    public init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        if rawValue.lowercased() == "qrcode" {
+            self = .qrcode
+        } else {
+            self = .unsupported(rawValue)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .qrcode:
+            try container.encode("qrcode")
+        case .unsupported(let rawValue):
+            try container.encode(rawValue)
+        }
+    }
+}
+
+/// 插件实现登录挑战时使用的函数名。
+public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sendable {
+    public static let defaultCreate = "createLoginChallenge"
+    public static let defaultPoll = "pollLoginChallenge"
+    public static let defaultCancel = "cancelLoginChallenge"
+
+    public let create: String
+    public let poll: String
+    public let cancel: String
+
+    public var usesReservedCredentialFunction: Bool {
+        [create, poll, cancel].contains { function in
+            Self.reservedCredentialFunctions.contains(function.lowercased())
+        }
+    }
+
+    public init(
+        create: String = Self.defaultCreate,
+        poll: String = Self.defaultPoll,
+        cancel: String = Self.defaultCancel
+    ) {
+        self.create = Self.normalized(create, fallback: Self.defaultCreate)
+        self.poll = Self.normalized(poll, fallback: Self.defaultPoll)
+        self.cancel = Self.normalized(cancel, fallback: Self.defaultCancel)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case create
+        case poll
+        case cancel
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            create: try container.decodeIfPresent(String.self, forKey: .create) ?? Self.defaultCreate,
+            poll: try container.decodeIfPresent(String.self, forKey: .poll) ?? Self.defaultPoll,
+            cancel: try container.decodeIfPresent(String.self, forKey: .cancel) ?? Self.defaultCancel
+        )
+    }
+
+    private static func normalized(_ value: String, fallback: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? fallback : String(trimmed.prefix(256))
+    }
+
+    private static let reservedCredentialFunctions: Set<String> = [
+        "setcookie", "clearcookie", "setcredential", "clearcredential"
+    ]
+}
+
+/// 插件显式声明的登录挑战能力。
+public struct ManifestLoginChallenge: Codable, Equatable, Hashable, Sendable {
+    public static let defaultPollIntervalMs = 2_000
+    public static let defaultTimeoutSeconds = 180
+    public static let defaultMaxRefreshes = 3
+
+    public let kind: ManifestLoginChallengeKind
+    public let minLoginChallengeProtocol: Int
+    public let functions: ManifestLoginChallengeFunctions
+    public let pollIntervalMs: Int
+    public let timeoutSeconds: Int
+    public let maxRefreshes: Int
+    public let hint: String?
+    /// Manifest 原始平台标识。未知值会被忽略，不影响整个 manifest 解码。
+    public let preferOn: [String]
+
+    public init(
+        kind: ManifestLoginChallengeKind,
+        minLoginChallengeProtocol: Int = 1,
+        functions: ManifestLoginChallengeFunctions = .init(),
+        pollIntervalMs: Int = Self.defaultPollIntervalMs,
+        timeoutSeconds: Int = Self.defaultTimeoutSeconds,
+        maxRefreshes: Int = Self.defaultMaxRefreshes,
+        hint: String? = nil,
+        preferOn: [String] = []
+    ) {
+        self.kind = kind
+        self.minLoginChallengeProtocol = min(max(minLoginChallengeProtocol, 1), 1_000_000)
+        self.functions = functions
+        self.pollIntervalMs = min(max(pollIntervalMs, 1_000), 60_000)
+        self.timeoutSeconds = min(max(timeoutSeconds, 30), 600)
+        self.maxRefreshes = min(max(maxRefreshes, 0), 10)
+        self.hint = hint.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500)) }.flatMap(\.nilIfEmpty)
+        self.preferOn = preferOn.prefix(16).compactMap {
+            String($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().prefix(32)).nilIfEmpty
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case minLoginChallengeProtocol
+        case functions
+        case pollIntervalMs
+        case timeoutSeconds
+        case maxRefreshes
+        case hint
+        case preferOn
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            kind: try container.decode(ManifestLoginChallengeKind.self, forKey: .kind),
+            minLoginChallengeProtocol: try container.decodeIfPresent(Int.self, forKey: .minLoginChallengeProtocol) ?? 1,
+            functions: try container.decodeIfPresent(ManifestLoginChallengeFunctions.self, forKey: .functions) ?? .init(),
+            pollIntervalMs: try container.decodeIfPresent(Int.self, forKey: .pollIntervalMs) ?? Self.defaultPollIntervalMs,
+            timeoutSeconds: try container.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? Self.defaultTimeoutSeconds,
+            maxRefreshes: try container.decodeIfPresent(Int.self, forKey: .maxRefreshes) ?? Self.defaultMaxRefreshes,
+            hint: try container.decodeIfPresent(String.self, forKey: .hint),
+            preferOn: try container.decodeIfPresent([String].self, forKey: .preferOn) ?? []
+        )
+    }
+
+    public var isSupportedByCurrentHost: Bool {
+        kind == .qrcode
+            && minLoginChallengeProtocol <= PlatformLoginChallengeProtocol.currentVersion
+            && !functions.usesReservedCredentialFunction
+    }
+
+    public func prefers(_ platform: LoginChallengeHostPlatform) -> Bool {
+        preferOn.contains(platform.rawValue)
+    }
+}
+
+/// 宿主传给插件的运行平台标识。
+public enum LoginChallengeHostPlatform: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
+    case iOS = "ios"
+    case macOS = "macos"
+    case tvOS = "tvos"
 }
 
 public struct ManifestNativeStream: Codable, Equatable, Hashable, Sendable {
@@ -234,6 +400,20 @@ public struct ManifestLoginFlow: Codable, Equatable, Sendable {
 }
 
 extension LiveParsePluginManifest {
+    /// Destinations eligible for native credential injection. The login URL
+    /// host is included for compatibility, but plugins cannot nominate hosts at
+    /// request time; changing this allowlist requires a manifest update.
+    var hostManagedCredentialDomains: [String] {
+        var domains = loginFlow?.cookieDomains ?? []
+        if let loginURL = loginFlow?.loginURL,
+           let host = URL(string: loginURL)?.host {
+            domains.append(host)
+        }
+        return Array(Set(domains.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }.filter { !$0.isEmpty }))
+    }
+
     static func load(from url: URL) throws -> LiveParsePluginManifest {
         let data = try Data(contentsOf: url)
         do {
@@ -245,6 +425,10 @@ extension LiveParsePluginManifest {
 
     /// 该插件是否需要用户登录平台账号(用于安装前的凭证泄露风险确认)。
     public var requiresLogin: Bool {
-        (auth?.required == true) || (loginFlow != nil)
+        (auth?.required == true) || (loginFlow != nil) || (loginChallenge != nil)
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

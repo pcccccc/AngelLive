@@ -4,6 +4,21 @@ struct LiveParsePlatformSession: Sendable {
     let cookie: String
     let uid: String?
     let updatedAt: Date
+    /// Opaque credential generation. A timestamp cannot safely serve as the
+    /// generation because two writes may share the same clock value.
+    let revision: String
+
+    init(
+        cookie: String,
+        uid: String?,
+        updatedAt: Date,
+        revision: String = UUID().uuidString
+    ) {
+        self.cookie = cookie
+        self.uid = uid
+        self.updatedAt = updatedAt
+        self.revision = revision
+    }
 }
 
 enum LiveParsePlatformSessionVault {
@@ -15,11 +30,22 @@ enum LiveParsePlatformSessionVault {
         guard !normalizedId.isEmpty else { return }
 
         let normalizedCookie = cookie.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedUID = uid?.trimmingCharacters(in: .whitespacesAndNewlines)
         lock.lock()
+        // A read-only status check commonly republishes the persisted session
+        // before invoking plugin code. Preserve the revision when the effective
+        // credential is unchanged so read-only checks do not evict a healthy
+        // runtime or invalidate work tied to the current generation.
+        if let current = sessions[normalizedId],
+           current.cookie == normalizedCookie,
+           current.uid == normalizedUID {
+            lock.unlock()
+            return
+        }
         // 空值保留为带时间戳的 tombstone，使登录→退出后不会复用旧匿名 session 缓存。
         sessions[normalizedId] = LiveParsePlatformSession(
             cookie: normalizedCookie,
-            uid: uid?.trimmingCharacters(in: .whitespacesAndNewlines),
+            uid: normalizedUID,
             updatedAt: .now
         )
         lock.unlock()
@@ -42,26 +68,64 @@ enum LiveParsePlatformSessionVault {
         return session
     }
 
+    /// 恢复一次临时凭据校验前的精确运行时快照。nil 表示此前没有覆盖值，
+    /// 需要移除临时条目而不是留下空 Cookie tombstone。
+    static func restore(platformId: String, session: LiveParsePlatformSession?) {
+        let normalizedId = canonicalPlatformId(platformId)
+        guard !normalizedId.isEmpty else { return }
+        lock.lock()
+        if let session {
+            sessions[normalizedId] = session
+        } else {
+            sessions.removeValue(forKey: normalizedId)
+        }
+        lock.unlock()
+    }
+
     static func cookieValue(named name: String, for platformId: String) -> String? {
+        cookieValue(named: name, for: platformId, sessionOverride: nil)
+    }
+
+    static func cookieValue(
+        named name: String,
+        for platformId: String,
+        sessionOverride: LiveParsePlatformSession?
+    ) -> String? {
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedName.isEmpty else { return nil }
-        return mergedCookiePairs(for: platformId)
+        return mergedCookiePairs(for: platformId, sessionOverride: sessionOverride)
             .last { $0.0 == normalizedName }?
             .1
     }
 
     static func mergedCookieHeader(for platformId: String) -> String? {
-        let merged = mergedCookiePairs(for: platformId)
+        mergedCookieHeader(for: platformId, sessionOverride: nil)
+    }
+
+    static func mergedCookieHeader(
+        for platformId: String,
+        sessionOverride: LiveParsePlatformSession?
+    ) -> String? {
+        let merged = mergedCookiePairs(for: platformId, sessionOverride: sessionOverride)
             .map { "\($0.0)=\($0.1)" }
             .joined(separator: "; ")
         return merged.isEmpty ? nil : merged
     }
 
     static func revision(for platformId: String) -> String {
+        revision(for: platformId, sessionOverride: nil)
+    }
+
+    static func revision(
+        for platformId: String,
+        sessionOverride: LiveParsePlatformSession?
+    ) -> String {
         let normalizedId = canonicalPlatformId(platformId)
         guard !normalizedId.isEmpty else { return "anonymous" }
-        guard let updatedAt = session(for: normalizedId)?.updatedAt else { return "anonymous" }
-        return String(updatedAt.timeIntervalSinceReferenceDate.bitPattern, radix: 16)
+        guard let revision = (sessionOverride ?? session(for: normalizedId))?.revision else {
+            return "anonymous"
+        }
+        return revision
     }
 
     private static func parseCookiePairs(_ cookie: String) -> [(String, String)] {
@@ -74,7 +138,10 @@ enum LiveParsePlatformSessionVault {
         }
     }
 
-    private static func mergedCookiePairs(for platformId: String) -> [(String, String)] {
+    private static func mergedCookiePairs(
+        for platformId: String,
+        sessionOverride: LiveParsePlatformSession?
+    ) -> [(String, String)] {
         let normalizedId = canonicalPlatformId(platformId)
         guard !normalizedId.isEmpty else { return [] }
 
@@ -84,7 +151,7 @@ enum LiveParsePlatformSessionVault {
             cookiePairs.append(contentsOf: parseCookiePairs(defaultCookie))
         }
 
-        if let sessionCookie = session(for: normalizedId)?.cookie,
+        if let sessionCookie = (sessionOverride ?? session(for: normalizedId))?.cookie,
            !sessionCookie.isEmpty {
             cookiePairs.append(contentsOf: parseCookiePairs(sessionCookie))
         }

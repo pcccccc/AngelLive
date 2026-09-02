@@ -331,7 +331,12 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
             manifest: manifest,
             rootDirectory: storage.pluginVersionDirectory(pluginId: manifest.pluginId, version: manifest.version),
             location: .sandbox,
-            runtime: JSRuntime(pluginId: manifest.pluginId, session: session, nativeStream: manifest.nativeStream)
+            runtime: JSRuntime(
+                pluginId: manifest.pluginId,
+                session: session,
+                nativeStream: manifest.nativeStream,
+                credentialDomains: manifest.hostManagedCredentialDomains
+            )
         )
         try await plugin.load()
         _ = try await plugin.runtime.callPluginFunction(name: smoke, payload: payload)

@@ -12,6 +12,21 @@ struct PluginHTTPFlightSnapshot: Sendable, Equatable {
     let statusCode: Int
     let headers: [String: String]
     let responseURL: String
+    let setCookies: [String]
+
+    init(
+        data: Data,
+        statusCode: Int,
+        headers: [String: String],
+        responseURL: String,
+        setCookies: [String] = []
+    ) {
+        self.data = data
+        self.statusCode = statusCode
+        self.headers = headers
+        self.responseURL = responseURL
+        self.setCookies = setCookies
+    }
 }
 
 struct PluginHTTPFlightFailure: Error, LocalizedError, Sendable, Equatable {
@@ -181,6 +196,16 @@ actor PluginHTTPFlightCoordinator {
     }
 
     func invalidateAll() {
+        cache.removeAll(keepingCapacity: false)
+    }
+
+    /// Runtime abandonment is stronger than invalidation: no caller can
+    /// legitimately consume these flights again, so stop their network work.
+    func cancelAll() {
+        for flight in inFlight.values {
+            flight.task.cancel()
+        }
+        inFlight.removeAll(keepingCapacity: false)
         cache.removeAll(keepingCapacity: false)
     }
 

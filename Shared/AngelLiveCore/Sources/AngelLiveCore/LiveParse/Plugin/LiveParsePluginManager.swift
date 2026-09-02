@@ -1,5 +1,61 @@
 import Foundation
 
+final class LiveParsePluginVersionLeaseToken: @unchecked Sendable {
+    let pluginId: String
+    let version: String
+
+    init(pluginId: String, version: String) {
+        self.pluginId = pluginId
+        self.version = version
+        LiveParsePluginVersionLeaseRegistry.retain(pluginId: pluginId, version: version)
+    }
+
+    deinit {
+        LiveParsePluginVersionLeaseRegistry.release(pluginId: pluginId, version: version)
+    }
+}
+
+enum LiveParsePluginVersionLeaseRegistry {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var counts: [String: [String: Int]] = [:]
+
+    static func retain(pluginId: String, version: String) {
+        lock.withLock {
+            counts[pluginId, default: [:]][version, default: 0] += 1
+        }
+    }
+
+    static func release(pluginId: String, version: String) {
+        lock.withLock {
+            guard var versions = counts[pluginId], let count = versions[version] else { return }
+            if count <= 1 {
+                versions.removeValue(forKey: version)
+            } else {
+                versions[version] = count - 1
+            }
+            if versions.isEmpty {
+                counts.removeValue(forKey: pluginId)
+            } else {
+                counts[pluginId] = versions
+            }
+        }
+    }
+
+    static func protectedVersions(pluginId: String) -> Set<String> {
+        lock.withLock {
+            guard let versions = counts[pluginId] else { return [] }
+            return Set(versions.keys)
+        }
+    }
+}
+
+struct LiveParsePluginRuntimeLease: Sendable {
+    let pluginId: String
+    let version: String
+    fileprivate let plugin: LiveParseLoadedPlugin
+    fileprivate let versionLeaseToken: LiveParsePluginVersionLeaseToken
+}
+
 public final class LiveParsePluginManager: @unchecked Sendable {
     public typealias LogHandler = JSRuntime.LogHandler
 
@@ -11,6 +67,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     private let lock = NSLock()
     private var loadedPlugins: [String: LiveParseLoadedPlugin] = [:]
     private var state: LiveParsePluginState
+    private var stateRevision: UInt = 0
 
     public convenience init(bundle: Bundle? = nil, session: URLSession = .shared, logHandler: LogHandler? = nil) throws {
         try self.init(storage: LiveParsePluginStorage(), bundle: bundle, session: session, logHandler: logHandler)
@@ -26,39 +83,67 @@ public final class LiveParsePluginManager: @unchecked Sendable {
 
     public func reload() throws {
         try storage.ensureDirectories()
-        state = storage.loadState()
         lock.lock()
+        // 与 pin/unpin 的 state 写入使用同一临界区；否则锁外旧快照可能
+        // 在一次 pin 完成后反向覆盖内存中的新选择。
+        state = storage.loadState()
+        stateRevision &+= 1
         loadedPlugins.removeAll()
         lock.unlock()
     }
 
     public func pin(pluginId: String, version: String) throws {
-        var record = state.plugins[pluginId] ?? .init()
-        record.pinnedVersion = version
-        state.plugins[pluginId] = record
-        try storage.saveState(state)
-        try reload()
+        try lock.withLock {
+            var nextState = state
+            var record = nextState.plugins[pluginId] ?? .init()
+            record.pinnedVersion = version
+            nextState.plugins[pluginId] = record
+            try storage.saveState(nextState)
+            state = nextState
+            stateRevision &+= 1
+            loadedPlugins.removeAll()
+        }
     }
 
     public func unpin(pluginId: String) throws {
-        var record = state.plugins[pluginId] ?? .init()
-        record.pinnedVersion = nil
-        state.plugins[pluginId] = record
-        try storage.saveState(state)
-        try reload()
+        try lock.withLock {
+            var nextState = state
+            var record = nextState.plugins[pluginId] ?? .init()
+            record.pinnedVersion = nil
+            nextState.plugins[pluginId] = record
+            try storage.saveState(nextState)
+            state = nextState
+            stateRevision &+= 1
+            loadedPlugins.removeAll()
+        }
     }
 
     public func setLastGoodVersion(pluginId: String, version: String?) throws {
-        var record = state.plugins[pluginId] ?? .init()
-        record.lastGoodVersion = version
-        state.plugins[pluginId] = record
-        try storage.saveState(state)
+        try lock.withLock {
+            var nextState = state
+            var record = nextState.plugins[pluginId] ?? .init()
+            record.lastGoodVersion = version
+            nextState.plugins[pluginId] = record
+            try storage.saveState(nextState)
+            state = nextState
+            stateRevision &+= 1
+            loadedPlugins.removeValue(forKey: pluginId)
+        }
     }
 
     public func evict(pluginId: String) {
         lock.lock()
         loadedPlugins.removeValue(forKey: pluginId)
         lock.unlock()
+    }
+
+    /// Evict only the runtime that produced a cancelled sensitive call. A
+    /// replacement may already have won the cache lease and must not be lost.
+    private func evict(pluginId: String, ifRuntime runtime: JSRuntime) {
+        lock.withLock {
+            guard loadedPlugins[pluginId]?.runtime === runtime else { return }
+            loadedPlugins.removeValue(forKey: pluginId)
+        }
     }
 
     public func invalidateHTTPFailureCaches() async {
@@ -69,36 +154,53 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     }
 
     public func resolve(pluginId: String) throws -> LiveParseLoadedPlugin {
-        lock.lock()
-        if let existing = loadedPlugins[pluginId] {
+        while true {
+            let snapshot: (record: LiveParsePluginState.PluginRecord?, revision: UInt)
+            lock.lock()
+            if let existing = loadedPlugins[pluginId] {
+                lock.unlock()
+                return existing
+            }
+            snapshot = (state.plugins[pluginId], stateRevision)
             lock.unlock()
-            return existing
-        }
-        lock.unlock()
 
-        let record = state.plugins[pluginId]
-        if record?.enabled == false {
-            throw LiveParsePluginError.pluginNotFound("\(pluginId) (disabled)")
-        }
+            if snapshot.record?.enabled == false {
+                throw LiveParsePluginError.pluginNotFound("\(pluginId) (disabled)")
+            }
 
-        let pinned = record?.pinnedVersion
-        let selected = try selectBestCandidate(pluginId: pluginId, pinnedVersion: pinned, lastGood: record?.lastGoodVersion)
-        let plugin = LiveParseLoadedPlugin(
-            manifest: selected.manifest,
-            rootDirectory: selected.rootDirectory,
-            location: selected.location,
-            runtime: JSRuntime(
-                pluginId: selected.manifest.pluginId,
-                session: session,
-                nativeStream: selected.manifest.nativeStream,
-                logHandler: logHandler
+            let selected = try selectBestCandidate(
+                pluginId: pluginId,
+                pinnedVersion: snapshot.record?.pinnedVersion,
+                lastGood: snapshot.record?.lastGoodVersion
             )
-        )
+            let plugin = LiveParseLoadedPlugin(
+                manifest: selected.manifest,
+                rootDirectory: selected.rootDirectory,
+                location: selected.location,
+                runtime: JSRuntime(
+                    pluginId: selected.manifest.pluginId,
+                    session: session,
+                    nativeStream: selected.manifest.nativeStream,
+                    credentialDomains: selected.manifest.hostManagedCredentialDomains,
+                    logHandler: logHandler
+                )
+            )
 
-        lock.lock()
-        loadedPlugins[pluginId] = plugin
-        lock.unlock()
-        return plugin
+            // 首次并发 resolve 可能同时完成候选选择。只允许一个 runtime 赢得
+            // cache lease；若期间 state 改变则丢弃旧候选并按新快照重选。
+            lock.lock()
+            if let winner = loadedPlugins[pluginId] {
+                lock.unlock()
+                return winner
+            }
+            guard snapshot.revision == stateRevision else {
+                lock.unlock()
+                continue
+            }
+            loadedPlugins[pluginId] = plugin
+            lock.unlock()
+            return plugin
+        }
     }
 
     public func load(pluginId: String) async throws {
@@ -106,35 +208,88 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         try await plugin.load()
     }
 
-    public func call(pluginId: String, function: String, payload: [String: Any] = [:]) async throws -> Any {
-        if function == "setCookie" {
-            let cookie = (payload["cookie"] as? String) ?? ""
-            let uid = payload["uid"] as? String
-            LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: uid)
+    func runtimeLease(pluginId: String) throws -> LiveParsePluginRuntimeLease {
+        let plugin = try resolve(pluginId: pluginId)
+        return LiveParsePluginRuntimeLease(
+            pluginId: plugin.manifest.pluginId,
+            version: plugin.manifest.version,
+            plugin: plugin,
+            versionLeaseToken: LiveParsePluginVersionLeaseToken(
+                pluginId: plugin.manifest.pluginId,
+                version: plugin.manifest.version
+            )
+        )
+    }
+
+    public func call(
+        pluginId: String,
+        function: String,
+        payload: [String: Any] = [:],
+        sensitive: Bool = false,
+        hostManagesCredentialVault: Bool = false
+    ) async throws -> Any {
+        try await performCall(
+            pluginId: pluginId,
+            function: function,
+            payload: payload,
+            sensitive: sensitive,
+            hostManagesCredentialVault: hostManagesCredentialVault,
+            isolatedPlatformSession: nil,
+            runtimeLease: nil
+        )
+    }
+
+    private func performCall(
+        pluginId: String,
+        function: String,
+        payload: [String: Any],
+        sensitive: Bool,
+        hostManagesCredentialVault: Bool,
+        isolatedPlatformSession: LiveParsePlatformSession?,
+        runtimeLease: LiveParsePluginRuntimeLease?
+    ) async throws -> Any {
+        if function == "setCookie" || function == "setCredential" {
+            let (cookie, uid): (String, String?)
+            if function == "setCredential" {
+                (cookie, uid) = extractCredentialCookie(from: payload)
+            } else {
+                cookie = (payload["cookie"] as? String) ?? ""
+                uid = payload["uid"] as? String
+            }
+            if !hostManagesCredentialVault {
+                LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: uid)
+                evict(pluginId: pluginId)
+            }
             return ["ok": true, "managedByHost": true, "hasCookie": !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty]
         }
-        if function == "clearCookie" {
-            LiveParsePlatformSessionVault.clear(platformId: pluginId)
+        if function == "clearCookie" || function == "clearCredential" {
+            if !hostManagesCredentialVault {
+                LiveParsePlatformSessionVault.clear(platformId: pluginId)
+                evict(pluginId: pluginId)
+            }
             return ["ok": true, "managedByHost": true, "hasCookie": false]
-        }
-        // 新 credential 入口：写入 vault 后继续 forward 到插件，让插件初始化 runtime 并返回 status。
-        // 若插件未实现 setCredential/clearCredential，则在 forward 时会抛错；host 端的 Bridge 负责 fallback 到 setCookie/clearCookie。
-        if function == "setCredential" {
-            let (cookie, uid) = extractCredentialCookie(from: payload)
-            LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: uid)
-            // 不 return；继续走下方常规 forward 逻辑，让插件自身 runtime 处理。
-        }
-        if function == "clearCredential" {
-            LiveParsePlatformSessionVault.clear(platformId: pluginId)
-            // 同上，继续 forward。
         }
 
         // 开发者控制台关闭时完全跳过记录。收藏批量刷新会并发调用上百次，
         // 即使 UI 不展示，无条件写 @Observable entries 仍会造成主 actor 压力。
+        let sensitivePluginCall = sensitive
+            || Self.isSensitivePluginFunction(function)
+            || Self.containsSensitiveConsoleValue(payload)
         let console = PluginConsoleService.shared
         let consoleEntryId: UUID?
         if console.isEnabled {
-            let payloadStr = (try? String(data: JSONSerialization.data(withJSONObject: payload), encoding: .utf8)) ?? "{}"
+            // 敏感调用不尝试从任意字符串中猜 token；整段请求直接省略。
+            // 字段级递归脱敏只作为普通插件调用的第二层保护。
+            let payloadStr: String
+            if sensitivePluginCall {
+                payloadStr = "<sensitive request omitted>"
+            } else {
+                let consolePayload = Self.redactedLoginTransactionConsoleValue(payload)
+                payloadStr = (try? String(
+                    data: JSONSerialization.data(withJSONObject: consolePayload),
+                    encoding: .utf8
+                )) ?? "{}"
+            }
             let entryId = await console.log(tag: pluginId, method: function)
             await console.updateRequest(id: entryId, body: payloadStr)
             console.setActiveCall(pluginId: pluginId, entryId: entryId)
@@ -145,25 +300,83 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         do {
-            let plugin = try resolve(pluginId: pluginId)
-            try await plugin.load()
-            let result = try await plugin.runtime.callPluginFunction(name: function, payload: payload)
-
-            if consoleEntryId != nil {
-                console.clearActiveCall(pluginId: pluginId)
-            }
-            let elapsed = CFAbsoluteTimeGetCurrent() - startTime
-            if let consoleEntryId {
-                let responseStr = (try? String(data: JSONSerialization.data(withJSONObject: result), encoding: .utf8))
-                    .map { String($0.prefix(2_000)) }
-                await console.updateStatus(
-                    id: consoleEntryId,
-                    status: .success,
-                    duration: elapsed,
-                    responseBody: responseStr
+            if let runtimeLease, runtimeLease.pluginId != pluginId {
+                throw LiveParsePluginError.pluginNotFound(
+                    "Runtime lease owner mismatch for \(pluginId)"
                 )
             }
-            return result
+
+            let selected: LiveParseLoadedPlugin
+            if let runtimeLease {
+                selected = runtimeLease.plugin
+            } else {
+                selected = try resolve(pluginId: pluginId)
+            }
+            let plugin: LiveParseLoadedPlugin
+            if let isolatedPlatformSession {
+                plugin = LiveParseLoadedPlugin(
+                    manifest: selected.manifest,
+                    rootDirectory: selected.rootDirectory,
+                    location: selected.location,
+                    runtime: JSRuntime(
+                        pluginId: selected.manifest.pluginId,
+                        session: session,
+                        nativeStream: selected.manifest.nativeStream,
+                        loginTransactionStore: .shared,
+                        credentialDomains: selected.manifest.hostManagedCredentialDomains,
+                        platformSessionOverride: isolatedPlatformSession,
+                        logHandler: logHandler
+                    )
+                )
+            } else {
+                plugin = selected
+            }
+            if sensitivePluginCall {
+                await plugin.runtime.beginSensitiveLoggingSuppression()
+            }
+            do {
+                try await plugin.load()
+                let result = try await plugin.runtime.callPluginFunction(name: function, payload: payload)
+                if sensitivePluginCall {
+                    await plugin.runtime.endSensitiveLoggingSuppression()
+                }
+
+                if consoleEntryId != nil {
+                    console.clearActiveCall(pluginId: pluginId)
+                }
+                let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                if let consoleEntryId {
+                    let responseStr: String?
+                    if sensitivePluginCall {
+                        responseStr = "<sensitive response omitted>"
+                    } else {
+                        let consoleResult = Self.redactedLoginTransactionConsoleValue(result)
+                        responseStr = (try? String(data: JSONSerialization.data(withJSONObject: consoleResult), encoding: .utf8))
+                            .map { String($0.prefix(2_000)) }
+                    }
+                    await console.updateStatus(
+                        id: consoleEntryId,
+                        status: .success,
+                        duration: elapsed,
+                        responseBody: responseStr
+                    )
+                }
+                return result
+            } catch {
+                if sensitivePluginCall {
+                    if error is CancellationError {
+                        // A JavaScript Promise cannot be force-cancelled. Its
+                        // late continuation could still print credential text,
+                        // so leave the old runtime permanently muted and ensure
+                        // future calls resolve a fresh runtime.
+                        await plugin.runtime.abandonInFlightOperations()
+                        evict(pluginId: pluginId, ifRuntime: plugin.runtime)
+                    } else {
+                        await plugin.runtime.endSensitiveLoggingSuppression()
+                    }
+                }
+                throw error
+            }
         } catch {
             if consoleEntryId != nil {
                 console.clearActiveCall(pluginId: pluginId)
@@ -174,21 +387,100 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     id: consoleEntryId,
                     status: .error,
                     duration: elapsed,
-                    errorMessage: error.localizedDescription
+                    errorMessage: sensitivePluginCall
+                        ? "Sensitive plugin call failed"
+                        : error.localizedDescription
                 )
             }
             throw error
         }
     }
 
+    static func containsLoginTransactionIdentifier(_ value: Any) -> Bool {
+        if let dictionary = value as? [String: Any] {
+            for (key, nested) in dictionary {
+                if key.lowercased() == "transactionid" { return true }
+                if containsLoginTransactionIdentifier(nested) { return true }
+            }
+        } else if let array = value as? [Any] {
+            return array.contains(where: containsLoginTransactionIdentifier)
+        }
+        return false
+    }
+
+    static func containsSensitiveConsoleValue(_ value: Any, key: String? = nil) -> Bool {
+        if let key, isSensitiveConsoleKey(key) { return true }
+        if let dictionary = value as? [String: Any] {
+            return dictionary.contains { item in
+                containsSensitiveConsoleValue(item.value, key: item.key)
+            }
+        }
+        if let array = value as? [Any] {
+            return array.contains { containsSensitiveConsoleValue($0) }
+        }
+        return false
+    }
+
+    private static func isSensitivePluginFunction(_ function: String) -> Bool {
+        switch function.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "setcredential", "clearcredential", "validatecredential", "getcredentialstatus":
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func redactedLoginTransactionConsoleValue(_ value: Any, key: String? = nil) -> Any {
+        if let key {
+            let lowered = key.lowercased()
+            if isSensitiveConsoleKey(lowered) {
+                return "<redacted>"
+            }
+            if lowered == "url", let string = value as? String {
+                guard var components = URLComponents(string: string) else { return "<redacted>" }
+                components.query = nil
+                components.fragment = nil
+                return components.string ?? "<redacted>"
+            }
+        }
+
+        if let dictionary = value as? [String: Any] {
+            return dictionary.reduce(into: [String: Any]()) { result, item in
+                result[item.key] = redactedLoginTransactionConsoleValue(item.value, key: item.key)
+            }
+        }
+        if let array = value as? [Any] {
+            return array.map { redactedLoginTransactionConsoleValue($0) }
+        }
+        return value
+    }
+
+    private static func isSensitiveConsoleKey(_ key: String) -> Bool {
+        let lowered = key.lowercased()
+        let redactedKeys: Set<String> = [
+            "transactionid", "challengeid", "qrcontent", "credential", "cookie", "set-cookie",
+            "setcookies", "authorization", "location", "headers", "requestheaders",
+            "responseheaders", "body", "bodytext", "bodybase64", "requestbody", "responsebody"
+        ]
+        return redactedKeys.contains(lowered)
+            || lowered.contains("token")
+            || lowered.contains("cookie")
+    }
+
     public func callDecodable<T: Decodable>(
         pluginId: String,
         function: String,
         payload: [String: Any] = [:],
+        sensitive: Bool = false,
         decoder: JSONDecoder = JSONDecoder()
     ) async throws -> T {
         do {
-            let value = try await call(pluginId: pluginId, function: function, payload: payload)
+            let value = try await call(
+                pluginId: pluginId,
+                function: function,
+                payload: payload,
+                sensitive: sensitive
+            )
             let data = try JSONSerialization.data(withJSONObject: value)
             return try decoder.decode(T.self, from: data)
         } catch let error as LiveParsePluginError {
@@ -196,6 +488,75 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         } catch {
             throw LiveParsePluginError.invalidReturnValue(
                 "Decoding \(String(describing: T.self)) failed in \(pluginId).\(function): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    /// Validate an uncommitted credential in a short-lived runtime. Host
+    /// Native `platform_cookie` and `cookieInject` requests in that runtime use
+    /// the candidate; JavaScript cannot read it, and cached business runtimes
+    /// continue to use only the canonical committed vault entry.
+    func callDecodableUsingIsolatedCredential<T: Decodable>(
+        pluginId: String,
+        function: String,
+        payload: [String: Any],
+        cookie: String,
+        uid: String?,
+        runtimeLease: LiveParsePluginRuntimeLease? = nil,
+        decoder: JSONDecoder = JSONDecoder()
+    ) async throws -> T {
+        let isolatedSession = LiveParsePlatformSession(
+            cookie: cookie.trimmingCharacters(in: .whitespacesAndNewlines),
+            uid: uid?.trimmingCharacters(in: .whitespacesAndNewlines),
+            updatedAt: .now
+        )
+        do {
+            let value = try await performCall(
+                pluginId: pluginId,
+                function: function,
+                payload: payload,
+                sensitive: true,
+                hostManagesCredentialVault: true,
+                isolatedPlatformSession: isolatedSession,
+                runtimeLease: runtimeLease
+            )
+            let data = try JSONSerialization.data(withJSONObject: value)
+            return try decoder.decode(T.self, from: data)
+        } catch let error as LiveParsePluginError {
+            throw error
+        } catch {
+            throw LiveParsePluginError.invalidReturnValue(
+                "Decoding \(String(describing: T.self)) failed in \(pluginId).\(function): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    func callDecodable<T: Decodable>(
+        using runtimeLease: LiveParsePluginRuntimeLease,
+        function: String,
+        payload: [String: Any],
+        sensitive: Bool,
+        decoder: JSONDecoder = JSONDecoder()
+    ) async throws -> T {
+        do {
+            let value = try await performCall(
+                pluginId: runtimeLease.pluginId,
+                function: function,
+                payload: payload,
+                sensitive: sensitive,
+                // Challenge function names are manifest-controlled. They must
+                // never trigger the manager's reserved credential mutators.
+                hostManagesCredentialVault: true,
+                isolatedPlatformSession: nil,
+                runtimeLease: runtimeLease
+            )
+            let data = try JSONSerialization.data(withJSONObject: value)
+            return try decoder.decode(T.self, from: data)
+        } catch let error as LiveParsePluginError {
+            throw error
+        } catch {
+            throw LiveParsePluginError.invalidReturnValue(
+                "Decoding \(String(describing: T.self)) failed in \(runtimeLease.pluginId).\(function): \(error.localizedDescription)"
             )
         }
     }

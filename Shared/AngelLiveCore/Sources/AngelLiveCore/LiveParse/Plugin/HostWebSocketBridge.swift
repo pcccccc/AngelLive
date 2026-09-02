@@ -137,7 +137,13 @@ extension JSRuntime {
     /// - `__lp_host_ws_send(sessionId, frameJSON, resolve, reject)`
     /// - `__lp_host_ws_close(sessionId, optionsJSON, resolve, reject)`
     /// - 不暴露 set_handler:open 时同步把 handler 闭包传进 native 端,事件直接回调。
-    static func configureHostWebSocket(in context: JSContext, queue: DispatchQueue, pluginId: String) {
+    static func configureHostWebSocket(
+        in context: JSContext,
+        queue: DispatchQueue,
+        pluginId: String,
+        credentialDomains: [String],
+        platformSessionOverride: LiveParsePlatformSession?
+    ) {
         let openBlock: @convention(block) (String, JSValue) -> String = { optionsJSON, handler in
             let data = optionsJSON.data(using: .utf8) ?? Data()
             guard
@@ -148,14 +154,41 @@ extension JSRuntime {
                 return ""
             }
 
+            let authMode = ((options["authMode"] as? String) ?? "none")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let usesPlatformCredential = authMode == "platform_cookie"
+            if usesPlatformCredential {
+                let runtimePluginId = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+                let requestedPluginId = LiveParsePlatformSessionVault.canonicalPlatformId(
+                    (options["platformId"] as? String) ?? pluginId
+                )
+                guard !runtimePluginId.isEmpty,
+                      requestedPluginId == runtimePluginId,
+                      isAllowedCredentialWebSocketURL(url, domains: credentialDomains) else {
+                    return ""
+                }
+            }
+
             var request = URLRequest(url: url)
             let timeoutMs = (options["timeoutMs"] as? Int) ?? (options["timeout_ms"] as? Int) ?? 30_000
             request.timeoutInterval = max(1, TimeInterval(timeoutMs) / 1000)
 
             if let headers = options["headers"] as? [String: Any] {
                 for (key, value) in headers {
+                    if usesPlatformCredential,
+                       key.caseInsensitiveCompare("Cookie") == .orderedSame {
+                        continue
+                    }
                     request.setValue(String(describing: value), forHTTPHeaderField: key)
                 }
+            }
+            if usesPlatformCredential,
+               let cookie = LiveParsePlatformSessionVault.mergedCookieHeader(
+                   for: pluginId,
+                   sessionOverride: platformSessionOverride
+               ) {
+                request.setValue(cookie, forHTTPHeaderField: "Cookie")
             }
             if let protocols = options["protocols"] as? [Any], !protocols.isEmpty {
                 let joined = protocols.map { String(describing: $0) }.joined(separator: ", ")
@@ -175,7 +208,10 @@ extension JSRuntime {
             }
             HostWebSocketRegistry.add(session)
             session.connect()
-            Logger.debug("[Host.ws] open pluginId=\(pluginId) sessionId=\(sessionId) url=\(urlString)", category: .plugin)
+            let loggedDestination = usesPlatformCredential
+                ? "\(url.scheme ?? "wss")://\(url.host ?? "")"
+                : urlString
+            Logger.debug("[Host.ws] open pluginId=\(pluginId) sessionId=\(sessionId) url=\(loggedDestination)", category: .plugin)
             return sessionId
         }
 
@@ -259,5 +295,22 @@ extension JSRuntime {
         context.setObject(openBlock, forKeyedSubscript: "__lp_host_ws_open" as NSString)
         context.setObject(sendBlock, forKeyedSubscript: "__lp_host_ws_send" as NSString)
         context.setObject(closeBlock, forKeyedSubscript: "__lp_host_ws_close" as NSString)
+    }
+
+    private static func isAllowedCredentialWebSocketURL(_ url: URL, domains: [String]) -> Bool {
+        let scheme = url.scheme?.lowercased()
+        let host = url.host?.lowercased() ?? ""
+        let secureTransport = scheme == "wss"
+        let loopbackTransport = scheme == "ws"
+            && (host == "localhost" || host == "127.0.0.1" || host == "::1")
+        guard secureTransport || loopbackTransport else { return false }
+        return domains.contains { rawDomain in
+            let domain = rawDomain
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard !domain.isEmpty else { return false }
+            return host == domain || host.hasSuffix(".\(domain)")
+        }
     }
 }

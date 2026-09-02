@@ -12,6 +12,12 @@ import AngelLiveCore
 
 struct PlatformLoginWebSheet: View {
     let pluginId: String
+    let onUseQRCode: (() -> Void)?
+
+    init(pluginId: String, onUseQRCode: (() -> Void)? = nil) {
+        self.pluginId = pluginId
+        self.onUseQRCode = onUseQRCode
+    }
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
@@ -54,6 +60,8 @@ struct PlatformLoginWebSheet: View {
                         Button("退出登录", role: .destructive) {
                             logout()
                         }
+                    } else if let onUseQRCode {
+                        Button("扫码登录") { onUseQRCode() }
                     }
                 }
             }
@@ -121,6 +129,9 @@ struct PlatformLoginWebSheet: View {
             }
 
             Section {
+                if let onUseQRCode {
+                    Button("扫码重新登录") { onUseQRCode() }
+                }
                 Button("重新登录") {
                     Task { await prepareRelogin(entry: entry) }
                 }

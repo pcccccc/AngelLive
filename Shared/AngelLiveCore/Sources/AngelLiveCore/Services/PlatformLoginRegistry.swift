@@ -18,6 +18,8 @@ public struct LoginPlatformEntry: Sendable, Equatable, Identifiable {
     public let liveType: String
     /// manifest.loginFlow
     public let loginFlow: ManifestLoginFlow
+    /// manifest.loginChallenge；仅透传显式声明，不从其他字段推断。
+    public let loginChallenge: ManifestLoginChallenge?
     /// manifest.auth（可空）
     public let auth: ManifestAuth?
     /// manifest 版本。
@@ -30,6 +32,7 @@ public struct LoginPlatformEntry: Sendable, Equatable, Identifiable {
         displayName: String,
         liveType: String,
         loginFlow: ManifestLoginFlow,
+        loginChallenge: ManifestLoginChallenge? = nil,
         auth: ManifestAuth?,
         version: String
     ) {
@@ -37,15 +40,20 @@ public struct LoginPlatformEntry: Sendable, Equatable, Identifiable {
         self.displayName = displayName
         self.liveType = liveType
         self.loginFlow = loginFlow
+        self.loginChallenge = loginChallenge
         self.auth = auth
         self.version = version
     }
 }
 
 public actor PlatformLoginRegistry {
-    public static let shared = PlatformLoginRegistry()
+    public static let shared = PlatformLoginRegistry(pluginManager: LiveParsePlugins.shared)
 
-    private init() {}
+    private let pluginManager: LiveParsePluginManager
+
+    init(pluginManager: LiveParsePluginManager) {
+        self.pluginManager = pluginManager
+    }
 
     /// 读取当前所有已安装/内置插件中声明了 loginFlow 的平台。
     public func availablePlatforms() -> [LoginPlatformEntry] {
@@ -60,6 +68,7 @@ public actor PlatformLoginRegistry {
                 displayName: displayName,
                 liveType: liveType,
                 loginFlow: loginFlow,
+                loginChallenge: manifest.loginChallenge,
                 auth: manifest.auth,
                 version: manifest.version
             )
@@ -77,8 +86,8 @@ public actor PlatformLoginRegistry {
 
     private func discoverAllManifests() -> [LiveParsePluginManifest] {
         // 每个 pluginId 取 sandbox/builtIn 中可用的最高 semver manifest。
-        let storage = LiveParsePlugins.shared.storage
-        let bundle = LiveParsePlugins.shared.bundle
+        let storage = pluginManager.storage
+        let bundle = pluginManager.bundle
 
         var bestByPluginId: [String: LiveParsePluginManifest] = [:]
 
@@ -124,7 +133,12 @@ public actor PlatformLoginRegistry {
             }
         }
 
-        return Array(bestByPluginId.values)
+        // 这里只用扫描结果取得 pluginId；最终 manifest 必须通过同一个 manager
+        // resolve，才能与实际调用遵循完全一致的 enabled / pinned / last-good /
+        // sandbox-vs-built-in 选择语义。否则 UI 可能展示新版能力，却调用到旧版脚本。
+        return bestByPluginId.keys.compactMap { pluginId in
+            try? pluginManager.resolve(pluginId: pluginId).manifest
+        }
     }
 
     private nonisolated func discoverBuiltInFolderMode(

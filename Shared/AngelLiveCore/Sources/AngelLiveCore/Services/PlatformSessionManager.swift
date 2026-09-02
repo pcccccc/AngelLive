@@ -125,12 +125,75 @@ public struct PlatformSessionData: Sendable {
 public actor PlatformSessionManager {
     public static let shared = PlatformSessionManager()
 
+    private enum CredentialAcquireResult: Sendable {
+        case acquired
+        case cancelled
+        case timedOut
+    }
+
+    private enum CredentialAcquireError: Error {
+        case timedOut
+    }
+
+    private struct CredentialOperationWaiter {
+        let id: UUID
+        let continuation: CheckedContinuation<CredentialAcquireResult, Never>
+        let timeoutTask: Task<Void, Never>?
+    }
+
+    private struct LoginAttemptToken: Sendable {
+        let pluginKey: String
+        let generation: UInt
+        /// 多个可重入登录重叠时沿用最早尝试前的稳定快照，不能把另一个
+        /// 尚未完成的候选 Cookie 当成回滚基线。
+        let previousVaultSession: LiveParsePlatformSession?
+    }
+
     private let store = SessionStore()
+    private var loginAttemptGenerations: [String: UInt] = [:]
+    private var activeLoginAttempts: [String: LoginAttemptToken] = [:]
+    private var credentialOperationOwners: Set<String> = []
+    private var credentialOperationWaiters: [String: [CredentialOperationWaiter]] = [:]
 
     private init() {}
 
     public func getSession(pluginId: String) -> PlatformSession? {
         store.loadSession(for: pluginId)
+    }
+
+    /// Publish persisted state into the runtime vault under the same per-plugin
+    /// barrier used by login and validation. Loading outside this actor and
+    /// writing later can overwrite an in-flight QR candidate or a newer login.
+    public func hydratePersistedSessionToRuntime(pluginId: String) async {
+        let canonical = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+        let pluginKey = canonical.isEmpty
+            ? pluginId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            : canonical
+        do {
+            try await acquireCredentialOperation(for: pluginKey, timeout: .seconds(30))
+        } catch {
+            return
+        }
+        defer { releaseCredentialOperation(for: pluginKey) }
+        guard !Task.isCancelled else { return }
+
+        if let session = store.loadSession(for: pluginId) {
+            LiveParsePlatformSessionVault.update(
+                platformId: pluginId,
+                cookie: session.cookie ?? "",
+                uid: session.uid
+            )
+            PlatformSessionLiveParseBridge.syncSessionToLiveParse(
+                session,
+                expectedVaultRevision: LiveParsePlatformSessionVault.revision(for: pluginId)
+            )
+        } else {
+            LiveParsePlatformSessionVault.clear(platformId: pluginId)
+            PlatformSessionLiveParseBridge.clearForPlatform(
+                pluginId: pluginId,
+                expectedVaultRevision: LiveParsePlatformSessionVault.revision(for: pluginId)
+            )
+        }
     }
 
     @discardableResult
@@ -140,20 +203,116 @@ public actor PlatformSessionManager {
         uid: String? = nil,
         liveType: String? = nil,
         source: PlatformSessionSource = .local,
-        validateBeforeSave: Bool = true
+        validateBeforeSave: Bool = true,
+        /// 扫码等替换式登录应传 true：只有新凭据校验为 valid 才覆盖旧会话；
+        /// expired/invalid/网络失败或任务取消都会恢复校验前的运行时凭据。
+        preserveExistingSessionOnFailure: Bool = false,
+        /// 旧网页登录为兼容历史插件允许 fail-open；扫码协议必须传 true，
+        /// 只有 validateCredential 明确返回 state=valid 才能提交正式凭据。
+        requireExplicitValid: Bool = false,
+        /// Optional validation-only deadline. It ends before the durable save,
+        /// so a timeout can restore the previous vault session without racing
+        /// an already-committed login result.
+        validationTimeout: Duration? = nil
     ) async -> PlatformSessionValidationResult {
+        await loginWithCookie(
+            pluginId: pluginId,
+            cookie: cookie,
+            uid: uid,
+            liveType: liveType,
+            source: source,
+            validateBeforeSave: validateBeforeSave,
+            preserveExistingSessionOnFailure: preserveExistingSessionOnFailure,
+            requireExplicitValid: requireExplicitValid,
+            validationTimeout: validationTimeout,
+            runtimeLease: nil
+        )
+    }
+
+    @discardableResult
+    func loginWithCookie(
+        pluginId: String,
+        cookie: String,
+        uid: String?,
+        liveType: String?,
+        source: PlatformSessionSource,
+        validateBeforeSave: Bool,
+        preserveExistingSessionOnFailure: Bool,
+        requireExplicitValid: Bool,
+        validationTimeout: Duration?,
+        runtimeLease: LiveParsePluginRuntimeLease?
+    ) async -> PlatformSessionValidationResult {
+        let normalizedCookie = cookie.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cookieLength = normalizedCookie.count
+        guard !normalizedCookie.isEmpty else {
+            // 空输入不是一次候选登录，不能让它 supersede 正在校验的事务。
+            let entryId = await MainActor.run {
+                PluginConsoleService.shared.log(tag: "Credential", method: "login", status: .loading)
+            }
+            await MainActor.run {
+                PluginConsoleService.shared.updateRequest(
+                    id: entryId,
+                    body: "pluginId: \(pluginId)\ncookieLength: 0"
+                )
+            }
+            await Self.finishCredentialEntry(
+                id: entryId,
+                start: Date(),
+                status: .error,
+                errorMessage: "Cookie 为空"
+            )
+            return .invalid(reason: "Cookie 为空")
+        }
+
+        // 必须在第一个 await 之前登记。actor 方法可重入，较新的登录应使较旧
+        // 校验结果失效，避免迟到结果覆盖用户刚完成的另一条登录/同步操作。
+        let attempt = beginLoginAttempt(pluginId: pluginId)
+        let acquisitionClock = ContinuousClock()
+        let acquisitionStartedAt = acquisitionClock.now
+        do {
+            try await acquireCredentialOperation(
+                for: attempt.pluginKey,
+                timeout: validationTimeout
+            )
+        } catch is CancellationError {
+            restoreAndFinishLoginAttemptIfCurrent(
+                attempt,
+                shouldRestore: preserveExistingSessionOnFailure
+            )
+            return .networkError("登录已取消或被新的操作替代")
+        } catch {
+            restoreAndFinishLoginAttemptIfCurrent(
+                attempt,
+                shouldRestore: preserveExistingSessionOnFailure
+            )
+            return .networkError("扫码凭据校验超时")
+        }
+        defer { releaseCredentialOperation(for: attempt.pluginKey) }
+        let remainingValidationTimeout: Duration?
+        if let validationTimeout {
+            let elapsed = acquisitionStartedAt.duration(to: acquisitionClock.now)
+            let remaining = validationTimeout - elapsed
+            guard remaining > .zero else {
+                restoreAndFinishLoginAttemptIfCurrent(
+                    attempt,
+                    shouldRestore: preserveExistingSessionOnFailure
+                )
+                return .networkError("扫码凭据校验超时")
+            }
+            remainingValidationTimeout = remaining
+        } else {
+            remainingValidationTimeout = nil
+        }
         let consoleEntryId = await MainActor.run {
             PluginConsoleService.shared.log(tag: "Credential", method: "login", status: .loading)
         }
         let consoleStart = Date()
-        let normalizedCookie = cookie.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cookieLength = normalizedCookie.count
         await MainActor.run {
             PluginConsoleService.shared.updateRequest(
                 id: consoleEntryId,
                 body: """
                 pluginId: \(pluginId)
-                uid: \(uid ?? "-")
+                hasUID: \(uid?.isEmpty == false)
                 liveType: \(liveType ?? "-")
                 source: \(source)
                 validateBeforeSave: \(validateBeforeSave)
@@ -161,23 +320,63 @@ public actor PlatformSessionManager {
                 """
             )
         }
-        guard !normalizedCookie.isEmpty else {
+        guard isCurrentLoginAttempt(attempt), !Task.isCancelled else {
+            restoreAndFinishLoginAttemptIfCurrent(
+                attempt,
+                shouldRestore: preserveExistingSessionOnFailure
+            )
             await Self.finishCredentialEntry(
                 id: consoleEntryId,
                 start: consoleStart,
                 status: .error,
-                errorMessage: "Cookie 为空"
+                errorMessage: "登录已取消或被新的操作替代"
             )
-            return .invalid(reason: "Cookie 为空")
+            return .networkError("登录已取消或被新的操作替代")
         }
 
         let validationResult: PlatformSessionValidationResult
         if validateBeforeSave {
-            validationResult = await validateCookie(pluginId: pluginId, cookie: normalizedCookie)
+            if let remainingValidationTimeout {
+                validationResult = await validateCookie(
+                    pluginId: pluginId,
+                    cookie: normalizedCookie,
+                    uid: uid,
+                    useIsolatedCredential: true,
+                    runtimeLease: runtimeLease,
+                    requireExplicitValid: requireExplicitValid,
+                    timeout: remainingValidationTimeout
+                )
+            } else {
+                validationResult = await validateCookie(
+                    pluginId: pluginId,
+                    cookie: normalizedCookie,
+                    uid: uid,
+                    useIsolatedCredential: true,
+                    runtimeLease: runtimeLease,
+                    requireExplicitValid: requireExplicitValid
+                )
+            }
         } else {
             validationResult = .valid
         }
 
+        // 校验可能忽略协作式取消。持久化前必须重新检查，且下面直到
+        // updateSession 之间没有 suspension point，避免已取消扫码覆盖旧账号。
+        guard isCurrentLoginAttempt(attempt), !Task.isCancelled else {
+            restoreAndFinishLoginAttemptIfCurrent(
+                attempt,
+                shouldRestore: preserveExistingSessionOnFailure
+            )
+            await Self.finishCredentialEntry(
+                id: consoleEntryId,
+                start: consoleStart,
+                status: .error,
+                errorMessage: "登录已取消或被新的操作替代"
+            )
+            return .networkError("登录已取消或被新的操作替代")
+        }
+
+        var committedResult = validationResult
         switch validationResult {
         case .valid:
             let sessionData = PlatformSessionData(
@@ -187,23 +386,40 @@ public actor PlatformSessionManager {
                 state: .authenticated,
                 liveType: liveType
             )
-            updateSession(pluginId: pluginId, data: sessionData)
+            do {
+                try persistSession(pluginId: pluginId, data: sessionData)
+            } catch {
+                restoreVaultSession(for: attempt)
+                committedResult = .invalid(reason: "无法安全保存登录凭据")
+            }
         case .expired:
-            let sessionData = PlatformSessionData(
-                cookie: normalizedCookie,
-                uid: uid,
-                source: source,
-                state: .expired,
-                liveType: liveType
-            )
-            updateSession(pluginId: pluginId, data: sessionData)
+            if preserveExistingSessionOnFailure {
+                restoreVaultSession(for: attempt)
+            } else {
+                let sessionData = PlatformSessionData(
+                    cookie: normalizedCookie,
+                    uid: uid,
+                    source: source,
+                    state: .expired,
+                    liveType: liveType
+                )
+                do {
+                    try persistSession(pluginId: pluginId, data: sessionData)
+                } catch {
+                    restoreVaultSession(for: attempt)
+                    committedResult = .invalid(reason: "无法安全保存登录凭据")
+                }
+            }
         case .invalid, .networkError:
-            break
+            if preserveExistingSessionOnFailure {
+                restoreVaultSession(for: attempt)
+            }
         }
+        finishLoginAttemptIfCurrent(attempt)
 
-        let consoleSummary = Self.credentialDescription(for: validationResult)
+        let consoleSummary = Self.credentialDescription(for: committedResult)
         let consoleStatus: PluginConsoleEntryStatus
-        switch validationResult {
+        switch committedResult {
         case .valid, .expired:
             consoleStatus = .success
         case .invalid, .networkError:
@@ -217,10 +433,19 @@ public actor PlatformSessionManager {
             errorMessage: consoleStatus == .error ? consoleSummary : nil
         )
 
-        return validationResult
+        return committedResult
     }
 
     public func updateSession(pluginId: String, data: PlatformSessionData) {
+        invalidateLoginAttempts(pluginId: pluginId)
+        do {
+            try persistSession(pluginId: pluginId, data: data)
+        } catch {
+            Logger.error("Failed to persist platform session: \(pluginId)", category: .plugin)
+        }
+    }
+
+    private func persistSession(pluginId: String, data: PlatformSessionData) throws {
         let session = PlatformSession(
             pluginId: pluginId,
             liveType: data.liveType,
@@ -233,13 +458,26 @@ public actor PlatformSessionManager {
             state: data.state,
             updatedAt: Date()
         )
-        store.saveSession(session)
-        PlatformSessionLiveParseBridge.syncSessionToLiveParse(session)
+        try store.saveSession(session)
+        LiveParsePlatformSessionVault.update(
+            platformId: pluginId,
+            cookie: session.cookie ?? "",
+            uid: session.uid
+        )
+        PlatformSessionLiveParseBridge.syncSessionToLiveParse(
+            session,
+            expectedVaultRevision: LiveParsePlatformSessionVault.revision(for: pluginId)
+        )
     }
 
     public func clearSession(pluginId: String) {
+        invalidateLoginAttempts(pluginId: pluginId)
         store.clearSession(for: pluginId)
-        PlatformSessionLiveParseBridge.clearForPlatform(pluginId: pluginId)
+        LiveParsePlatformSessionVault.clear(platformId: pluginId)
+        PlatformSessionLiveParseBridge.clearForPlatform(
+            pluginId: pluginId,
+            expectedVaultRevision: LiveParsePlatformSessionVault.revision(for: pluginId)
+        )
         let snapshot = pluginId
         Task { @MainActor in
             let id = PluginConsoleService.shared.log(tag: "Credential", method: "logout", status: .loading)
@@ -252,7 +490,174 @@ public actor PlatformSessionManager {
         }
     }
 
+    private func beginLoginAttempt(pluginId: String) -> LoginAttemptToken {
+        let canonical = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+        let pluginKey = canonical.isEmpty
+            ? pluginId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            : canonical
+        let generation = (loginAttemptGenerations[pluginKey] ?? 0) &+ 1
+        loginAttemptGenerations[pluginKey] = generation
+        let baseline = activeLoginAttempts[pluginKey]?.previousVaultSession
+            ?? LiveParsePlatformSessionVault.session(for: pluginKey)
+        let token = LoginAttemptToken(
+            pluginKey: pluginKey,
+            generation: generation,
+            previousVaultSession: baseline
+        )
+        activeLoginAttempts[pluginKey] = token
+        return token
+    }
+
+    private func isCurrentLoginAttempt(_ token: LoginAttemptToken) -> Bool {
+        activeLoginAttempts[token.pluginKey]?.generation == token.generation
+    }
+
+    private func restoreVaultSession(for token: LoginAttemptToken) {
+        guard isCurrentLoginAttempt(token) else { return }
+        LiveParsePlatformSessionVault.restore(
+            platformId: token.pluginKey,
+            session: token.previousVaultSession
+        )
+    }
+
+    private func finishLoginAttemptIfCurrent(_ token: LoginAttemptToken) {
+        guard isCurrentLoginAttempt(token) else { return }
+        activeLoginAttempts.removeValue(forKey: token.pluginKey)
+    }
+
+    private func restoreAndFinishLoginAttemptIfCurrent(
+        _ token: LoginAttemptToken,
+        shouldRestore: Bool
+    ) {
+        guard isCurrentLoginAttempt(token) else { return }
+        if shouldRestore {
+            restoreVaultSession(for: token)
+        }
+        activeLoginAttempts.removeValue(forKey: token.pluginKey)
+    }
+
+    private func invalidateLoginAttempts(pluginId: String) {
+        let canonical = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+        let pluginKey = canonical.isEmpty
+            ? pluginId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            : canonical
+        loginAttemptGenerations[pluginKey] = (loginAttemptGenerations[pluginKey] ?? 0) &+ 1
+        activeLoginAttempts.removeValue(forKey: pluginKey)
+    }
+
+    /// actor 在 await 处可重入；同一插件的凭据校验必须额外串行，避免两个
+    /// validateCredential 调用交替覆盖全局 runtime vault。
+    private func acquireCredentialOperation(
+        for pluginKey: String,
+        timeout: Duration? = nil
+    ) async throws {
+        try Task.checkCancellation()
+        if let timeout, timeout <= .zero {
+            throw CredentialAcquireError.timedOut
+        }
+        if credentialOperationOwners.insert(pluginKey).inserted {
+            return
+        }
+
+        let waiterId = UUID()
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<CredentialAcquireResult, Never>) in
+                if Task.isCancelled {
+                    continuation.resume(returning: .cancelled)
+                    return
+                }
+                let timeoutTask = timeout.map { timeout in
+                    Task { [weak self] in
+                        do {
+                            try await Task.sleep(for: timeout)
+                        } catch {
+                            return
+                        }
+                        await self?.finishCredentialWaiter(
+                            pluginKey: pluginKey,
+                            waiterId: waiterId,
+                            result: .timedOut
+                        )
+                    }
+                }
+                credentialOperationWaiters[pluginKey, default: []].append(
+                    CredentialOperationWaiter(
+                        id: waiterId,
+                        continuation: continuation,
+                        timeoutTask: timeoutTask
+                    )
+                )
+            }
+        } onCancel: {
+            Task { [weak self] in
+                await self?.finishCredentialWaiter(
+                    pluginKey: pluginKey,
+                    waiterId: waiterId,
+                    result: .cancelled
+                )
+            }
+        }
+
+        switch result {
+        case .acquired:
+            // Ownership may have been handed over at the same instant the
+            // waiter was cancelled. Pass it onward before propagating cancel.
+            if Task.isCancelled {
+                releaseCredentialOperation(for: pluginKey)
+                throw CancellationError()
+            }
+        case .cancelled:
+            throw CancellationError()
+        case .timedOut:
+            throw CredentialAcquireError.timedOut
+        }
+    }
+
+    private func finishCredentialWaiter(
+        pluginKey: String,
+        waiterId: UUID,
+        result: CredentialAcquireResult
+    ) {
+        guard var waiters = credentialOperationWaiters[pluginKey],
+              let index = waiters.firstIndex(where: { $0.id == waiterId }) else {
+            return
+        }
+        let waiter = waiters.remove(at: index)
+        if waiters.isEmpty {
+            credentialOperationWaiters.removeValue(forKey: pluginKey)
+        } else {
+            credentialOperationWaiters[pluginKey] = waiters
+        }
+        waiter.timeoutTask?.cancel()
+        waiter.continuation.resume(returning: result)
+    }
+
+    private func releaseCredentialOperation(for pluginKey: String) {
+        if var waiters = credentialOperationWaiters[pluginKey], !waiters.isEmpty {
+            let next = waiters.removeFirst()
+            if waiters.isEmpty {
+                credentialOperationWaiters.removeValue(forKey: pluginKey)
+            } else {
+                credentialOperationWaiters[pluginKey] = waiters
+            }
+            // owner 标记保持占用，所有权直接交给下一位等待者。
+            next.timeoutTask?.cancel()
+            next.continuation.resume(returning: .acquired)
+        } else {
+            credentialOperationOwners.remove(pluginKey)
+        }
+    }
+
     public func validateSession(pluginId: String) async -> PlatformSessionValidationResult {
+        let pluginKey = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+        do {
+            try await acquireCredentialOperation(for: pluginKey, timeout: .seconds(30))
+        } catch is CancellationError {
+            return .networkError("凭据校验已取消")
+        } catch {
+            return .networkError("凭据校验等待超时")
+        }
+        defer { releaseCredentialOperation(for: pluginKey) }
         let consoleEntryId = await MainActor.run {
             PluginConsoleService.shared.log(tag: "Credential", method: "validate", status: .loading)
         }
@@ -272,7 +677,15 @@ public actor PlatformSessionManager {
             return .invalid(reason: "Cookie 为空")
         }
 
-        let result = await validateCookie(pluginId: pluginId, cookie: cookie)
+        let result = await validateCookie(
+            pluginId: pluginId,
+            cookie: cookie,
+            uid: session.uid,
+            useIsolatedCredential: false,
+            runtimeLease: nil,
+            requireExplicitValid: false,
+            timeout: .seconds(30)
+        )
         let summary = Self.credentialDescription(for: result)
         let consoleStatus: PluginConsoleEntryStatus
         switch result {
@@ -297,10 +710,10 @@ public actor PlatformSessionManager {
             return "valid"
         case .expired:
             return "expired"
-        case .invalid(let reason):
-            return "invalid: \(reason)"
-        case .networkError(let reason):
-            return "networkError: \(reason)"
+        case .invalid:
+            return "invalid"
+        case .networkError:
+            return "networkError"
         }
     }
 
@@ -332,89 +745,186 @@ public actor PlatformSessionManager {
     /// 与 `validateSession` 的区别：后者把插件返回值归一化成 valid/expired/invalid/networkError，丢掉 userName。
     /// UI 需要展示昵称时用这个。
     public func fetchCredentialStatus(pluginId: String) async -> CredentialStatus? {
+        let pluginKey = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+        do {
+            try await acquireCredentialOperation(for: pluginKey, timeout: .seconds(5))
+        } catch {
+            return nil
+        }
+        defer { releaseCredentialOperation(for: pluginKey) }
         guard let session = getSession(pluginId: pluginId),
               let cookie = session.cookie,
               !cookie.isEmpty else {
             return nil
         }
 
-        LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: nil)
+        LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: session.uid)
 
-        let payload: [String: Any] = [
-            "credential": ["cookie": cookie]
-        ]
-
-        do {
-            return try await LiveParsePlugins.shared.callDecodable(
-                pluginId: pluginId,
-                function: "validateCredential",
-                payload: payload
-            )
-        } catch {
-            return nil
+        return await withTaskGroup(of: CredentialStatus?.self) { group in
+            group.addTask {
+                await Self.fetchCredentialStatusFromPlugin(
+                    pluginId: pluginId
+                )
+            }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(5))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
+    }
+
+    private static func fetchCredentialStatusFromPlugin(pluginId: String) async -> CredentialStatus? {
+        // The plugin may ask Host.http to use the host-managed credential, but
+        // credential bytes never cross the Swift/JavaScriptCore boundary.
+        let payload: [String: Any] = ["credentialAvailable": true]
+        return try? await LiveParsePlugins.shared.callDecodable(
+            pluginId: pluginId,
+            function: "validateCredential",
+            payload: payload
+        )
     }
 
     // MARK: - 插件驱动的凭证校验
 
-    private func validateCookie(pluginId: String, cookie: String) async -> PlatformSessionValidationResult {
-        // 写入共享会话池，确保插件后续发 HTTP 请求可通过 authMode: "platform_cookie" 使用。
-        LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: nil)
-
-        let payload: [String: Any] = [
-            "credential": ["cookie": cookie]
-        ]
+    private func validateCookie(
+        pluginId: String,
+        cookie: String,
+        uid: String?,
+        useIsolatedCredential: Bool,
+        runtimeLease: LiveParsePluginRuntimeLease?,
+        requireExplicitValid: Bool
+    ) async -> PlatformSessionValidationResult {
+        // Validation receives only a capability hint. For an isolated QR
+        // candidate, `cookie` is supplied to JSRuntime as native-only state and
+        // can be consumed solely by Host.http's protected credential modes.
+        let payload: [String: Any] = ["credentialAvailable": true]
 
         do {
-            let status: CredentialStatus = try await LiveParsePlugins.shared.callDecodable(
-                pluginId: pluginId,
-                function: "validateCredential",
-                payload: payload
+            let status: CredentialStatus
+            if useIsolatedCredential {
+                status = try await LiveParsePlugins.shared.callDecodableUsingIsolatedCredential(
+                    pluginId: pluginId,
+                    function: "validateCredential",
+                    payload: payload,
+                    cookie: cookie,
+                    uid: uid,
+                    runtimeLease: runtimeLease
+                )
+            } else {
+                // This is an already-persisted session. A no-op update keeps
+                // its bridge revision stable while making cold-start runtime
+                // validation compatible with platform_cookie plugins.
+                LiveParsePlatformSessionVault.update(
+                    platformId: pluginId,
+                    cookie: cookie,
+                    uid: uid
+                )
+                status = try await LiveParsePlugins.shared.callDecodable(
+                    pluginId: pluginId,
+                    function: "validateCredential",
+                    payload: payload
+                )
+            }
+            return mapStatus(
+                status,
+                cookieFallback: cookie,
+                requireExplicitValid: requireExplicitValid
             )
-            return mapStatus(status, cookieFallback: cookie)
         } catch let error as LiveParsePluginError {
             switch error {
             case .pluginNotFound:
                 // 插件尚未安装：cookie 暂无法校验，但保留本地会话（下次插件就绪再复验）。
-                return .valid
+                return requireExplicitValid
+                    ? .invalid(reason: "插件不可用，无法明确校验扫码凭据")
+                    : .valid
             case .jsException(let message), .invalidReturnValue(let message), .invalidManifest(let message):
                 if message.lowercased().contains("network") {
-                    return .networkError(message)
+                    return .networkError(requireExplicitValid ? "扫码凭据校验网络失败" : message)
                 }
                 // JS 未实现 validateCredential / 返回异常：按未知处理，不阻断登录。
-                return .valid
+                return requireExplicitValid
+                    ? .invalid(reason: "插件未明确确认扫码凭据有效")
+                    : .valid
             case .standardized(let std):
                 switch std.code {
                 case .network, .timeout:
-                    return .networkError(std.message)
+                    return .networkError(requireExplicitValid ? "扫码凭据校验网络失败" : std.message)
                 case .authRequired:
                     return .expired
                 case .blocked:
-                    return .invalid(reason: std.message)
+                    return .invalid(reason: requireExplicitValid ? "扫码凭据校验被平台拒绝" : std.message)
                 default:
-                    return .valid
+                    return requireExplicitValid
+                        ? .invalid(reason: "插件未明确确认扫码凭据有效")
+                        : .valid
                 }
             default:
-                return .networkError(error.localizedDescription)
+                return .networkError(requireExplicitValid ? "扫码凭据校验失败" : error.localizedDescription)
             }
         } catch {
-            return .networkError(error.localizedDescription)
+            return .networkError(requireExplicitValid ? "扫码凭据校验失败" : error.localizedDescription)
         }
     }
 
-    private func mapStatus(_ status: CredentialStatus, cookieFallback: String) -> PlatformSessionValidationResult {
+    private func validateCookie(
+        pluginId: String,
+        cookie: String,
+        uid: String?,
+        useIsolatedCredential: Bool,
+        runtimeLease: LiveParsePluginRuntimeLease?,
+        requireExplicitValid: Bool,
+        timeout: Duration
+    ) async -> PlatformSessionValidationResult {
+        await withTaskGroup(of: PlatformSessionValidationResult.self) { group in
+            group.addTask {
+                await self.validateCookie(
+                    pluginId: pluginId,
+                    cookie: cookie,
+                    uid: uid,
+                    useIsolatedCredential: useIsolatedCredential,
+                    runtimeLease: runtimeLease,
+                    requireExplicitValid: requireExplicitValid
+                )
+            }
+            group.addTask {
+                do {
+                    try await Task.sleep(for: timeout)
+                } catch {
+                    return .networkError("扫码凭据校验已取消")
+                }
+                return .networkError("扫码凭据校验超时")
+            }
+            let first = await group.next() ?? .networkError("扫码凭据校验失败")
+            group.cancelAll()
+            return first
+        }
+    }
+
+    func mapStatus(
+        _ status: CredentialStatus,
+        cookieFallback: String,
+        requireExplicitValid: Bool
+    ) -> PlatformSessionValidationResult {
         switch status.state.lowercased() {
         case "valid":
             return .valid
         case "expired":
             return .expired
         case "invalid", "missing", "risk_control":
-            return .invalid(reason: status.message ?? status.state)
+            return .invalid(reason: requireExplicitValid ? "扫码凭据校验失败" : (status.message ?? status.state))
         case "unknown":
             // 插件无法判定：只要 cookie 非空就暂按有效处理（由上层业务 401 触发再登录）。
+            if requireExplicitValid {
+                return .invalid(reason: "插件未明确确认扫码凭据有效")
+            }
             return cookieFallback.isEmpty ? .invalid(reason: "Cookie 为空") : .valid
         default:
-            return .valid
+            return requireExplicitValid
+                ? .invalid(reason: "插件返回未知凭据状态")
+                : .valid
         }
     }
 }
@@ -476,7 +986,7 @@ private final class SessionStore {
         return pluginIds.compactMap { loadSession(for: $0) }
     }
 
-    func saveSession(_ session: PlatformSession) {
+    func saveSession(_ session: PlatformSession) throws {
         let metadata = SessionMetadata(
             uid: session.uid,
             source: session.source,
@@ -485,18 +995,17 @@ private final class SessionStore {
             updatedAt: session.updatedAt,
             liveType: session.liveType
         )
-        if let metadataData = try? encoder.encode(metadata) {
-            defaults.set(metadataData, forKey: metadataKey(for: session.pluginId))
-        }
-
         let sensitive = SessionSensitivePayload(
             cookie: session.cookie,
             csrf: session.csrf,
             refreshToken: session.refreshToken
         )
-        if let sensitiveData = try? encoder.encode(sensitive) {
-            keychain.write(sensitiveData, account: keychainAccount(for: session.pluginId))
-        }
+        // 两段数据先完成编码，再原子更新 Keychain，最后提交 metadata。
+        // 任何敏感项写入失败都不会删除旧 secret 或留下“已登录但无 Cookie”。
+        let metadataData = try encoder.encode(metadata)
+        let sensitiveData = try encoder.encode(sensitive)
+        try keychain.write(sensitiveData, account: keychainAccount(for: session.pluginId))
+        defaults.set(metadataData, forKey: metadataKey(for: session.pluginId))
 
         defaults.set(true, forKey: migrationKey(for: session.pluginId))
     }
@@ -532,8 +1041,9 @@ private final class SessionStore {
         }
 
         if let legacyData = keychain.read(account: legacyKeychainAccount) {
-            keychain.write(legacyData, account: keychainAccount(for: pluginId))
-            keychain.delete(account: legacyKeychainAccount)
+            if (try? keychain.write(legacyData, account: keychainAccount(for: pluginId))) != nil {
+                keychain.delete(account: legacyKeychainAccount)
+            }
         }
     }
 
@@ -553,7 +1063,7 @@ private final class SessionStore {
             state: legacyCookie.matchesAnyMarker(migration.authCookieMarkers) ? .authenticated : .invalid,
             updatedAt: Date()
         )
-        saveSession(migrated)
+        try? saveSession(migrated)
     }
 
     private func firstString(forKeys keys: [String]?) -> String? {
@@ -595,17 +1105,31 @@ private extension String {
     }
 }
 
+private enum KeychainStoreError: Error {
+    case unexpectedStatus(OSStatus)
+}
+
 private struct KeychainStore {
     let service: String
 
-    func write(_ data: Data, account: String) {
+    func write(_ data: Data, account: String) throws {
         let query = baseQuery(account: account)
-        SecItemDelete(query as CFDictionary)
+        let update = [kSecValueData as String: data]
+        let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return
+        }
+        guard updateStatus == errSecItemNotFound else {
+            throw KeychainStoreError.unexpectedStatus(updateStatus)
+        }
 
         var item = query
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        _ = SecItemAdd(item as CFDictionary, nil)
+        let addStatus = SecItemAdd(item as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw KeychainStoreError.unexpectedStatus(addStatus)
+        }
     }
 
     func read(account: String) -> Data? {

@@ -9,6 +9,7 @@ public enum LiveParsePluginStandardErrorCode: String, Codable, Sendable {
     case rateLimited = "RATE_LIMITED"
     case network = "NETWORK"
     case timeout = "TIMEOUT"
+    case unsupported = "UNSUPPORTED"
     case parse = "PARSE"
     case invalidResponse = "INVALID_RESPONSE"
     case upstream = "UPSTREAM"

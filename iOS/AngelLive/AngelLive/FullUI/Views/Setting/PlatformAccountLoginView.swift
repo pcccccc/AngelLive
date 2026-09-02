@@ -27,9 +27,15 @@ struct PlatformAccountLoginView: View {
                                 .frame(width: 24, height: 24)
                                 .frame(width: 32)
 
-                            Text(entry.displayName)
-                                .font(.body)
-                                .foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.displayName)
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text(loginMethodDescription(for: entry))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
 
                             Spacer()
 
@@ -48,7 +54,7 @@ struct PlatformAccountLoginView: View {
             } header: {
                 Text("平台列表")
             } footer: {
-                Text("登录成功后会保存会话；插件请求时由宿主自动注入鉴权，不会直接读取 Cookie 原文。")
+                Text("凭据由宿主安全保存，仅提供给对应插件用于登录验证和鉴权，不会与其他插件共享。")
             }
         }
         .listStyle(.insetGrouped)
@@ -63,7 +69,10 @@ struct PlatformAccountLoginView: View {
                 await syncService.refreshAllLoginStatus()
             }
         }) { entry in
-            PlatformLoginWebSheet(pluginId: entry.pluginId)
+            PlatformLoginSheet(
+                entry: entry,
+                isLoggedIn: syncService.isLoggedIn(pluginId: entry.pluginId)
+            )
         }
     }
 
@@ -82,6 +91,10 @@ struct PlatformAccountLoginView: View {
     private func loadPlatforms() async {
         let all = await PlatformLoginRegistry.shared.availablePlatforms()
         platforms = all.filter { pluginAvailability.isPluginInstalled(for: $0.pluginId) }
+    }
+
+    private func loginMethodDescription(for entry: LoginPlatformEntry) -> String {
+        entry.loginChallenge?.isSupportedByCurrentHost == true ? "支持扫码或网页登录" : "网页登录"
     }
 
     @ViewBuilder

@@ -50,7 +50,9 @@ final class PluginJSDanmakuDriver: Sendable {
         }
         if let platformSession = LiveParsePlatformSessionVault.session(for: pluginId) {
             if !platformSession.cookie.isEmpty {
-                payload["cookie"] = platformSession.cookie
+                // Plugins can request native Host.http / Host.ws credential
+                // injection, but never receive the Cookie bytes themselves.
+                payload["credentialAvailable"] = true
             }
             if let uid = platformSession.uid, !uid.isEmpty {
                 payload["uid"] = uid

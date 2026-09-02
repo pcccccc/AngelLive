@@ -20,7 +20,7 @@ struct MacAccountManagementView: View {
             Section {
                 PanelHintCard(
                     title: "登录后自动同步会话",
-                    message: "登录成功后会保存会话；插件请求时由宿主自动注入鉴权，不会直接读取 Cookie 原文。",
+                    message: "凭据由宿主安全保存，仅提供给对应插件用于登录验证和鉴权，不会与其他插件共享。",
                     systemImage: "person.crop.circle.badge.checkmark",
                     tint: .blue
                 )
@@ -65,7 +65,10 @@ struct MacAccountManagementView: View {
         .sheet(item: selectedPlatformBinding, onDismiss: {
             Task { await syncService.refreshAllLoginStatus() }
         }) { entry in
-            MacPlatformLoginWebSheet(pluginId: entry.pluginId)
+            MacPlatformLoginSheet(
+                entry: entry,
+                isLoggedIn: syncService.isLoggedIn(pluginId: entry.pluginId)
+            )
                 .frame(minWidth: 800, minHeight: 600)
         }
     }
@@ -76,7 +79,7 @@ struct MacAccountManagementView: View {
         } label: {
             PanelNavigationRow(
                 title: entry.displayName,
-                subtitle: "网页登录 Cookie 同步"
+                subtitle: loginMethodDescription(for: entry)
             ) {
                 if let liveType = LiveType(rawValue: entry.liveType),
                    let icon = MacPlatformIconProvider.tabImage(for: liveType) {
@@ -111,6 +114,10 @@ struct MacAccountManagementView: View {
     private func loadPlatforms() async {
         let all = await PlatformLoginRegistry.shared.availablePlatforms()
         platforms = all.filter { pluginAvailability.isPluginInstalled(for: $0.pluginId) }
+    }
+
+    private func loginMethodDescription(for entry: LoginPlatformEntry) -> String {
+        entry.loginChallenge?.isSupportedByCurrentHost == true ? "支持扫码或网页登录" : "网页登录 Cookie 同步"
     }
 
     private func loginStatusBadge(_ isLoggedIn: Bool) -> some View {

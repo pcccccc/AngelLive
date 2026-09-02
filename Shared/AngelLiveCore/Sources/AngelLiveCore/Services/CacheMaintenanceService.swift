@@ -269,6 +269,7 @@ public struct CacheMaintenanceService: Sendable {
         if let latest = pairs.max(by: { semverCompare($0.version, $1.version) < 0 }) {
             keep.insert(latest.version)
         }
+        keep.formUnion(LiveParsePluginVersionLeaseRegistry.protectedVersions(pluginId: pluginId))
 
         return pairs.filter { !keep.contains($0.version) }.map(\.url)
     }

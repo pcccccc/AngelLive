@@ -361,7 +361,7 @@ struct FavoriteLiveInfoRequestExecutor<Fetcher: FavoriteLiveInfoFetching, Timing
         case .blocked: kind = .blocked
         case .rateLimited: kind = .rateLimited
         case .timeout: kind = .timeout
-        case .parse, .invalidArgs, .invalidResponse: kind = .invalidResponse
+        case .parse, .invalidArgs, .invalidResponse, .unsupported: kind = .invalidResponse
         case .upstream: kind = .upstream
         case .network:
             if let underlying {

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CoreImage.CIFilterBuiltins
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -79,6 +80,11 @@ struct AccountManagementView: View {
                             Text(entry.displayName)
                                 .foregroundColor(.primary)
                             Spacer()
+                            if entry.loginChallenge?.isSupportedByCurrentHost == true {
+                                Image(systemName: "qrcode")
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel("支持扫码登录")
+                            }
                             Text(loginStatusText(for: entry))
                                 .font(.system(size: 30))
                                 .foregroundStyle(loginStatusColor(for: entry))
@@ -134,6 +140,7 @@ struct PlatformDetailPageView: View {
     @State private var isValidating = false
     @State private var validationMessage: String?
     @State private var showLogoutConfirm = false
+    @State private var showQRCodeLogin = false
 
     /// 是否支持服务端 Cookie 验证
     private var supportsValidation: Bool {
@@ -180,6 +187,20 @@ struct PlatformDetailPageView: View {
                 }
             }
 
+            if entry.loginChallenge?.isSupportedByCurrentHost == true {
+                Button {
+                    showQRCodeLogin = true
+                } label: {
+                    HStack {
+                        Text(isLoggedIn ? "扫码重新登录" : "扫码登录")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "qrcode.viewfinder")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             // 手动输入 Cookie（始终可用）
             Button {
                 onManualInput(entry)
@@ -201,6 +222,16 @@ struct PlatformDetailPageView: View {
             Button("确定", role: .destructive) { logout() }
         } message: {
             Text("确定要退出\(entry.displayName)登录吗？")
+        }
+        .fullScreenCover(isPresented: $showQRCodeLogin) {
+            TVPlatformLoginQRCodePageView(
+                entry: entry,
+                onBack: { showQRCodeLogin = false },
+                onSucceeded: {
+                    showQRCodeLogin = false
+                    Task { await refreshStatus() }
+                }
+            )
         }
         .task {
             await refreshStatus()
@@ -282,6 +313,215 @@ struct PlatformDetailPageView: View {
         }
         isLoggedIn = false
         validationMessage = nil
+    }
+}
+
+// MARK: - 插件二维码登录页面
+
+private struct TVPlatformLoginQRCodePageView: View {
+    let entry: LoginPlatformEntry
+    let onBack: () -> Void
+    let onSucceeded: () -> Void
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var service = PlatformLoginChallengeService()
+    @State private var backgroundTimeoutTask: Task<Void, Never>?
+    @State private var backgroundedAt: Date?
+
+    var body: some View {
+        content
+            .padding(80)
+            .safeAreaPadding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.thinMaterial)
+            .task {
+                service.start(entry: entry, platform: .tvOS)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                handleScenePhase(newPhase)
+            }
+            .onDisappear {
+                cancelBackgroundTimeout()
+                service.cancel()
+            }
+            .onExitCommand {
+                cancelChallengeAndGoBack()
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch service.state {
+        case .idle, .creating:
+            progressContent("正在创建二维码…")
+        case .presenting(let presentation):
+            challengeContent(presentation, scanned: false)
+        case .scanned(let presentation):
+            challengeContent(presentation, scanned: true)
+        case .validating:
+            progressContent("正在验证登录信息…")
+        case .succeeded(let success):
+            successContent(success)
+        case .failed(let failure):
+            failureContent(failure)
+        @unknown default:
+            progressContent("正在准备扫码登录…")
+        }
+    }
+
+    private func challengeContent(_ presentation: LoginChallengePresentation, scanned: Bool) -> some View {
+        ScrollView {
+            HStack(spacing: 80) {
+                Image(uiImage: TVLoginQRCodeGenerator.generate(from: presentation.qrContent))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 380, height: 380)
+                    .padding(28)
+                    .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .shadow(color: .black.opacity(0.3), radius: 24, x: 0, y: 18)
+                    .accessibilityLabel("\(entry.displayName) 登录二维码")
+
+                VStack(alignment: .leading, spacing: 24) {
+                    Label(
+                        scanned ? "已扫码，请在手机上确认" : "等待扫码",
+                        systemImage: scanned ? "iphone.radiowaves.left.and.right" : "qrcode.viewfinder"
+                    )
+                    .font(.title2.bold())
+
+                    Text(presentation.hint)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 580, alignment: .leading)
+
+                    Text("请保持此页面打开，登录完成后会自动保存。")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+
+                    Button("返回") { onBack() }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        }
+        .scrollClipDisabled()
+    }
+
+    private func progressContent(_ message: String) -> some View {
+        VStack(spacing: 22) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text(message)
+                .font(.title2.bold())
+            Text("请保持此页面打开")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Button("返回") { onBack() }
+                .padding(.top, 12)
+        }
+    }
+
+    private func successContent(_ success: LoginChallengeSuccess) -> some View {
+        VStack(spacing: 22) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 80))
+                .foregroundStyle(.green)
+            Text("登录成功")
+                .font(.title2.bold())
+            if let userName = success.userName, !userName.isEmpty {
+                Text(userName)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            Button("完成") { onSucceeded() }
+                .padding(.top, 12)
+        }
+    }
+
+    private func failureContent(_ failure: LoginChallengeFailure) -> some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 72))
+                    .foregroundStyle(.orange)
+                Text("扫码登录失败")
+                    .font(.title2.bold())
+                Text(failure.message)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 720)
+
+                HStack(spacing: 20) {
+                    if failure.canRetry {
+                        Button("重试") { service.retry() }
+                    }
+                    Button("返回并改用其他方式") { onBack() }
+                }
+                .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        }
+        .scrollClipDisabled()
+    }
+
+    private func handleScenePhase(_ phase: ScenePhase) {
+        switch phase {
+        case .active:
+            let exceededTimeout = backgroundedAt.map {
+                Date().timeIntervalSince($0) >= 60
+            } ?? false
+            cancelBackgroundTimeout()
+            if exceededTimeout {
+                cancelChallengeAndGoBack()
+            }
+        case .background:
+            guard backgroundTimeoutTask == nil else { return }
+            backgroundedAt = Date()
+            backgroundTimeoutTask = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: .seconds(60))
+                } catch {
+                    return
+                }
+                cancelChallengeAndGoBack()
+            }
+        case .inactive:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func cancelBackgroundTimeout() {
+        backgroundTimeoutTask?.cancel()
+        backgroundTimeoutTask = nil
+        backgroundedAt = nil
+    }
+
+    private func cancelChallengeAndGoBack() {
+        cancelBackgroundTimeout()
+        service.cancel()
+        onBack()
+    }
+}
+
+private enum TVLoginQRCodeGenerator {
+    static func generate(from string: String) -> UIImage {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(string.utf8)
+        filter.correctionLevel = "M"
+        let output = filter.outputImage?.transformed(
+            by: CGAffineTransform(scaleX: 10, y: 10)
+        )
+        let context = CIContext()
+        guard let output,
+              let cgImage = context.createCGImage(output, from: output.extent) else {
+            return UIImage(systemName: "xmark.circle") ?? UIImage()
+        }
+        return UIImage(cgImage: cgImage)
     }
 }
 

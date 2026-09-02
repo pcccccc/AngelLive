@@ -31,6 +31,370 @@ private struct PluginPayloadTransferBox: @unchecked Sendable {
     let value: [String: Any]
 }
 
+private actor LoginTransactionRedirectState {
+    private var setCookieHeaders: [String] = []
+    private var failure: LoginTransactionError?
+
+    func append(setCookies: [String]) {
+        setCookieHeaders.append(contentsOf: setCookies)
+    }
+
+    func record(failure: LoginTransactionError) {
+        if self.failure == nil { self.failure = failure }
+    }
+
+    func snapshot() -> (setCookies: [String], failure: LoginTransactionError?) {
+        (setCookieHeaders, failure)
+    }
+}
+
+private func isAllowedManagedCredentialTransport(_ url: URL?) -> Bool {
+    guard let url else { return false }
+    if url.scheme?.lowercased() == "https" { return true }
+    guard url.scheme?.lowercased() == "http" else { return false }
+    let host = url.host?.lowercased() ?? ""
+    return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDelegate, URLSessionDataDelegate {
+    let state = LoginTransactionRedirectState()
+
+    private let pluginId: String
+    private let transactionId: String
+    private let store: LoginTransactionStore
+    private let followRedirects: Bool
+    private let explicitCookieHeader: String?
+    private let pluginHeaderNames: Set<String>
+    private let originalURL: URL?
+
+    init(
+        pluginId: String,
+        transactionId: String,
+        store: LoginTransactionStore,
+        followRedirects: Bool,
+        explicitCookieHeader: String?,
+        pluginHeaderNames: Set<String>,
+        originalURL: URL?
+    ) {
+        self.pluginId = pluginId
+        self.transactionId = transactionId
+        self.store = store
+        self.followRedirects = followRedirects
+        self.explicitCookieHeader = explicitCookieHeader
+        self.pluginHeaderNames = pluginHeaderNames
+        self.originalURL = originalURL
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        guard followRedirects else {
+            completionHandler(nil)
+            return
+        }
+
+        let setCookies = LoginTransactionStore.setCookieHeaders(from: response)
+        guard let responseURL = response.url else {
+            completionHandler(nil)
+            return
+        }
+
+        let pluginId = pluginId
+        let transactionId = transactionId
+        let store = store
+        let state = state
+        guard isAllowedManagedCredentialTransport(request.url) else {
+            Task {
+                await state.record(failure: .invalidCookieScope)
+                completionHandler(nil)
+            }
+            return
+        }
+        let sameOrigin = Self.isSameOrigin(originalURL, request.url)
+        let isHTTPSDowngrade = responseURL.scheme?.lowercased() == "https"
+            && request.url?.scheme?.lowercased() != "https"
+        guard !isHTTPSDowngrade else {
+            completionHandler(nil)
+            return
+        }
+        let explicitCookieHeader = sameOrigin ? explicitCookieHeader : nil
+        Task {
+            do {
+                try await store.absorb(
+                    pluginId: pluginId,
+                    transactionId: transactionId,
+                    setCookieHeaders: setCookies,
+                    responseURL: responseURL
+                )
+                await state.append(setCookies: setCookies)
+
+                var redirectedRequest = request
+                if !sameOrigin {
+                    Self.removeCrossOriginPluginHeaders(
+                        from: &redirectedRequest,
+                        pluginHeaderNames: pluginHeaderNames
+                    )
+                }
+                // 登录事务必须完全绕过系统 Cookie storage 与本地 URLCache，
+                // 不能只依赖调用方恰好传入的 URLSessionConfiguration。
+                redirectedRequest.httpShouldHandleCookies = false
+                redirectedRequest.cachePolicy = .reloadIgnoringLocalCacheData
+                redirectedRequest.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+                redirectedRequest.setValue("no-cache", forHTTPHeaderField: "Pragma")
+                let transactionCookie = try await store.cookieHeader(
+                    pluginId: pluginId,
+                    transactionId: transactionId,
+                    for: request.url
+                )
+                redirectedRequest.setValue(
+                    mergedCookieHeader(transaction: transactionCookie, explicit: explicitCookieHeader),
+                    forHTTPHeaderField: "Cookie"
+                )
+                completionHandler(redirectedRequest)
+            } catch let error as LoginTransactionError {
+                await state.record(failure: error)
+                completionHandler(nil)
+            } catch {
+                await state.record(failure: .notFound)
+                completionHandler(nil)
+            }
+        }
+    }
+
+    private static func isSameOrigin(_ lhs: URL?, _ rhs: URL?) -> Bool {
+        guard let lhs, let rhs,
+              lhs.scheme?.lowercased() == rhs.scheme?.lowercased(),
+              lhs.host?.lowercased() == rhs.host?.lowercased() else {
+            return false
+        }
+        func effectivePort(_ url: URL) -> Int? {
+            if let port = url.port { return port }
+            switch url.scheme?.lowercased() {
+            case "https": return 443
+            case "http": return 80
+            default: return nil
+            }
+        }
+        return effectivePort(lhs) == effectivePort(rhs)
+    }
+
+    private static func removeCrossOriginPluginHeaders(
+        from request: inout URLRequest,
+        pluginHeaderNames: Set<String>
+    ) {
+        let credentialHeaders: Set<String> = [
+            "authorization", "proxy-authorization", "cookie", "cookie2"
+        ]
+        for header in request.allHTTPHeaderFields?.keys.map({ $0 }) ?? [] where
+            pluginHeaderNames.contains(header.lowercased())
+                || credentialHeaders.contains(header.lowercased()) {
+            request.setValue(nil, forHTTPHeaderField: header)
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        willCacheResponse proposedResponse: CachedURLResponse,
+        completionHandler: @escaping @Sendable (CachedURLResponse?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
+private final class ManagedCredentialRequestDelegate: NSObject, URLSessionTaskDelegate, URLSessionDataDelegate {
+    private let originalURL: URL?
+    private let pluginHeaderNames: Set<String>
+    private let rejectsCrossOriginRedirects: Bool
+
+    init(
+        originalURL: URL?,
+        pluginHeaderNames: Set<String>,
+        rejectsCrossOriginRedirects: Bool
+    ) {
+        self.originalURL = originalURL
+        self.pluginHeaderNames = pluginHeaderNames
+        self.rejectsCrossOriginRedirects = rejectsCrossOriginRedirects
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+        let sameOrigin = Self.isSameOrigin(originalURL, request.url)
+        let isHTTPSDowngrade = response.url?.scheme?.lowercased() == "https"
+            && request.url?.scheme?.lowercased() != "https"
+        // A credential placed in a query string or request body cannot be
+        // selectively removed from URLSession's proposed redirect without
+        // changing the plugin request semantics. Stop at the 3xx boundary
+        // instead of allowing a credential-bearing request to cross origins.
+        guard isAllowedManagedCredentialTransport(request.url),
+              !isHTTPSDowngrade,
+              sameOrigin || !rejectsCrossOriginRedirects else {
+            completionHandler(nil)
+            return
+        }
+
+        var redirectedRequest = request
+        redirectedRequest.httpShouldHandleCookies = false
+        redirectedRequest.cachePolicy = .reloadIgnoringLocalCacheData
+
+        if !sameOrigin {
+            let credentialHeaders: Set<String> = [
+                "authorization", "proxy-authorization", "cookie", "cookie2"
+            ]
+            for header in redirectedRequest.allHTTPHeaderFields?.keys.map({ $0 }) ?? [] where
+                pluginHeaderNames.contains(header.lowercased())
+                    || credentialHeaders.contains(header.lowercased()) {
+                redirectedRequest.setValue(nil, forHTTPHeaderField: header)
+            }
+        }
+        // Host cache policy wins even if the plugin originally supplied these
+        // header names and cross-origin stripping removed them above.
+        redirectedRequest.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+        redirectedRequest.setValue("no-cache", forHTTPHeaderField: "Pragma")
+        completionHandler(redirectedRequest)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        willCacheResponse proposedResponse: CachedURLResponse,
+        completionHandler: @escaping @Sendable (CachedURLResponse?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+
+    private static func isSameOrigin(_ lhs: URL?, _ rhs: URL?) -> Bool {
+        guard let lhs, let rhs,
+              lhs.scheme?.lowercased() == rhs.scheme?.lowercased(),
+              lhs.host?.lowercased() == rhs.host?.lowercased() else {
+            return false
+        }
+        func effectivePort(_ url: URL) -> Int? {
+            if let port = url.port { return port }
+            return url.scheme?.lowercased() == "https" ? 443 : (url.scheme?.lowercased() == "http" ? 80 : nil)
+        }
+        return effectivePort(lhs) == effectivePort(rhs)
+    }
+}
+
+private func mergedCookieHeader(transaction: String?, explicit: String?) -> String? {
+    func pairs(from header: String?) -> [(name: String, raw: String)] {
+        guard let header else { return [] }
+        return header.split(separator: ";", omittingEmptySubsequences: true).compactMap { component in
+            let raw = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let separator = raw.firstIndex(of: "=") else { return nil }
+            let name = raw[..<separator].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !name.isEmpty else { return nil }
+            return (name, raw)
+        }
+    }
+
+    let explicitPairs = pairs(from: explicit)
+    let explicitNames = Set(explicitPairs.map(\.name))
+    let transactionPairs = pairs(from: transaction).filter { !explicitNames.contains($0.name) }
+    let merged = (transactionPairs + explicitPairs).map(\.raw).joined(separator: "; ")
+    return merged.isEmpty ? nil : merged
+}
+
+/// A task may be cancelled while JavaScriptCore is evaluating a function or
+/// waiting for a Promise that the plugin never settles. Keep continuation
+/// completion one-shot and cancellation-aware without moving JSValue objects
+/// off the runtime's serial queue.
+private final class PluginCallCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Any, Error>?
+    private var completed = false
+
+    var isCompleted: Bool {
+        lock.withLock { completed }
+    }
+
+    func install(_ continuation: CheckedContinuation<Any, Error>) {
+        let wasCancelled = lock.withLock { () -> Bool in
+            if completed { return true }
+            self.continuation = continuation
+            return false
+        }
+        if wasCancelled { continuation.resume(throwing: CancellationError()) }
+    }
+
+    func resume(returning value: sending Any) {
+        let continuation = lock.withLock { () -> CheckedContinuation<Any, Error>? in
+            guard !completed else { return nil }
+            completed = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuation?.resume(returning: value)
+    }
+
+    func resume(throwing error: Error) {
+        let continuation = lock.withLock { () -> CheckedContinuation<Any, Error>? in
+            guard !completed else { return nil }
+            completed = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+        continuation?.resume(throwing: error)
+    }
+
+    func cancel() {
+        resume(throwing: CancellationError())
+    }
+}
+
+private final class PluginEvaluationCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Error>?
+    private var completed = false
+
+    var isCompleted: Bool {
+        lock.withLock { completed }
+    }
+
+    func install(_ continuation: CheckedContinuation<Void, Error>) {
+        let wasCancelled = lock.withLock { () -> Bool in
+            if completed { return true }
+            self.continuation = continuation
+            return false
+        }
+        if wasCancelled { continuation.resume(throwing: CancellationError()) }
+    }
+
+    func resume() {
+        takeContinuation()?.resume()
+    }
+
+    func resume(throwing error: Error) {
+        takeContinuation()?.resume(throwing: error)
+    }
+
+    func cancel() {
+        resume(throwing: CancellationError())
+    }
+
+    private func takeContinuation() -> CheckedContinuation<Void, Error>? {
+        lock.withLock {
+            guard !completed else { return nil }
+            completed = true
+            let continuation = self.continuation
+            self.continuation = nil
+            return continuation
+        }
+    }
+}
+
 public final class JSRuntime: @unchecked Sendable {
     public typealias LogHandler = @Sendable (String) -> Void
 
@@ -39,7 +403,18 @@ public final class JSRuntime: @unchecked Sendable {
         let reject: JSValue
         let envelope: HostHTTPRequestEnvelope
         let requestHeaders: [String: String]
+        let parentSensitive: Bool
         let startedAt: CFAbsoluteTime
+    }
+
+    private struct HostSessionCallback {
+        let resolve: JSValue
+        let reject: JSValue
+    }
+
+    private struct PendingPromiseCall {
+        let globalKey: String
+        let completion: PluginCallCompletion
     }
 
     public static let supportedAPIVersion = 1
@@ -50,20 +425,66 @@ public final class JSRuntime: @unchecked Sendable {
     private let session: URLSession
     private let nativeStream: ManifestNativeStream?
     private let httpFlightCoordinator: PluginHTTPFlightCoordinator
+    private let loginTransactionStore: LoginTransactionStore
+    /// Manifest-declared platform hosts that may receive a committed or
+    /// isolated credential through native Host.http injection.
+    private let credentialDomains: [String]
+    /// An isolated candidate credential used only by this runtime. Login
+    /// validation uses a short-lived runtime so an unconfirmed Cookie never
+    /// enters the canonical vault observed by concurrent business calls.
+    private let platformSessionOverride: LiveParsePlatformSession?
+    /// 只允许在 `queue` 上读写。敏感插件调用执行期间，JS console 与
+    /// runtime 异常日志都静默，防止插件把 Cookie/token 拼进任意字符串。
+    private var sensitiveLoggingDepth = 0
     /// 只允许在 `queue` 上读写；JSValue 永不跨出 JavaScriptCore 串行队列。
     private var hostHTTPCallbacks: [UUID: HostHTTPCallback] = [:]
+    /// Retain cancellable host request tasks until their matching JS callback
+    /// is finished. An evicted sensitive runtime must not keep network work
+    /// alive and deliver a late credential-bearing response.
+    private var hostHTTPTasks: [UUID: Task<Void, Never>] = [:]
+    /// 只允许在 `queue` 上读写；actor 任务仅携带 UUID 回到该队列。
+    private var hostSessionCallbacks: [UUID: HostSessionCallback] = [:]
+    /// 只允许在 `queue` 上读写。Promise 的 JS reaction 只捕获 call id；
+    /// Swift continuation 在取消时会从这里移除，避免永不 settle 的插件
+    /// Promise 永久保留 continuation 和敏感调用生命周期。
+    private var pendingPromiseCalls: [String: PendingPromiseCall] = [:]
 
-    public init(
+    public convenience init(
         pluginId: String,
         session: URLSession = .shared,
         nativeStream: ManifestNativeStream? = nil,
+        loginTransactionStore: LoginTransactionStore = .shared,
+        credentialDomains: [String] = [],
         logHandler: LogHandler? = nil
+    ) {
+        self.init(
+            pluginId: pluginId,
+            session: session,
+            nativeStream: nativeStream,
+            loginTransactionStore: loginTransactionStore,
+            credentialDomains: credentialDomains,
+            platformSessionOverride: nil,
+            logHandler: logHandler
+        )
+    }
+
+    init(
+        pluginId: String,
+        session: URLSession,
+        nativeStream: ManifestNativeStream?,
+        loginTransactionStore: LoginTransactionStore,
+        credentialDomains: [String],
+        platformSessionOverride: LiveParsePlatformSession?,
+        logHandler: LogHandler?
     ) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
         self.pluginId = pluginId
         self.session = session
         self.nativeStream = nativeStream
         self.httpFlightCoordinator = PluginHTTPFlightCoordinator()
+        self.loginTransactionStore = loginTransactionStore
+        self.credentialDomains = credentialDomains
+        self.platformSessionOverride = platformSessionOverride
 
         var createdContext: JSContext?
         queue.sync {
@@ -72,32 +493,48 @@ public final class JSRuntime: @unchecked Sendable {
         self.context = createdContext!
 
         queue.sync {
-            Self.configureConsole(in: context, logHandler: logHandler)
+            self.configureConsole(in: context, logHandler: logHandler)
             Self.configureExceptionHandler(in: context)
             self.configureHostHTTP(in: context)
             Self.configureHostCrypto(in: context)
-            Self.configureHostSession(in: context)
+            self.configureHostSession(in: context)
+            self.configureHostPromiseCallbacks(in: context)
             Self.configureHostRuntime(in: context)
             Self.configureHostBootstrap(in: context)
             Self.configureHostNativeStream(in: context, queue: queue, nativeStream: nativeStream)
-            Self.configureHostWebSocket(in: context, queue: queue, pluginId: pluginId)
+            Self.configureHostWebSocket(
+                in: context,
+                queue: queue,
+                pluginId: pluginId,
+                credentialDomains: credentialDomains,
+                platformSessionOverride: platformSessionOverride
+            )
         }
     }
 
     public func evaluate(script: String, sourceURL: URL? = nil) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async {
-                if let sourceURL {
-                    self.context.evaluateScript(script, withSourceURL: sourceURL)
-                } else {
-                    self.context.evaluateScript(script)
-                }
-                if let exception = self.context.exception {
-                    continuation.resume(throwing: LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>"))
-                } else {
-                    continuation.resume(returning: ())
+        let completion = PluginEvaluationCompletion()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                completion.install(continuation)
+                queue.async {
+                    guard !completion.isCompleted else { return }
+                    if let sourceURL {
+                        self.context.evaluateScript(script, withSourceURL: sourceURL)
+                    } else {
+                        self.context.evaluateScript(script)
+                    }
+                    if let exception = self.context.exception {
+                        completion.resume(throwing: LiveParsePluginError.fromJSException(
+                            exception.toString() ?? "<unknown>"
+                        ))
+                    } else {
+                        completion.resume()
+                    }
                 }
             }
+        } onCancel: {
+            completion.cancel()
         }
     }
 
@@ -127,34 +564,48 @@ public final class JSRuntime: @unchecked Sendable {
         // payload 必须跨到 JSContext 的串行队列才能构造 JSValue;
         // 装盒完成一次性所有权转移,理由与安全依据见 PluginPayloadTransferBox 文档。
         let payloadBox = PluginPayloadTransferBox(value: payload)
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
-                do {
-                    guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
-                        throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
-                    }
-                    guard let fn = pluginObject.objectForKeyedSubscript(name), fn.isObject else {
-                        throw LiveParsePluginError.invalidReturnValue("Missing function: \(name)")
-                    }
-
-                    let jsPayload = JSValue(object: payloadBox.value, in: self.context) as Any
-                    guard let result = pluginObject.invokeMethod(name, withArguments: [jsPayload]) else {
-                        if let exception = self.context.exception {
-                            throw LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>")
+        let callID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let completion = PluginCallCompletion()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                completion.install(continuation)
+                queue.async {
+                    guard !completion.isCompleted else { return }
+                    do {
+                        guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
+                            throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
                         }
-                        throw LiveParsePluginError.invalidReturnValue("Function returned nil")
-                    }
+                        guard let fn = pluginObject.objectForKeyedSubscript(name), fn.isObject else {
+                            throw LiveParsePluginError.invalidReturnValue("Missing function: \(name)")
+                        }
 
-                    if Self.isPromise(result) {
-                        self.awaitPromise(result, continuation: continuation)
-                        return
-                    }
+                        let jsPayload = JSValue(object: payloadBox.value, in: self.context) as Any
+                        guard let result = pluginObject.invokeMethod(name, withArguments: [jsPayload]) else {
+                            if let exception = self.context.exception {
+                                throw LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>")
+                            }
+                            throw LiveParsePluginError.invalidReturnValue("Function returned nil")
+                        }
 
-                    continuation.resume(returning: try Self.convertToJSONObject(result, in: self.context))
-                } catch {
-                    Logger.warning("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)", category: .plugin)
-                    continuation.resume(throwing: error)
+                        guard !completion.isCompleted else { return }
+                        if Self.isPromise(result) {
+                            self.awaitPromise(result, callID: callID, completion: completion)
+                            return
+                        }
+
+                        completion.resume(returning: try Self.convertToJSONObject(result, in: self.context))
+                    } catch {
+                        if self.sensitiveLoggingDepth == 0 {
+                            Logger.warning("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)", category: .plugin)
+                        }
+                        completion.resume(throwing: error)
+                    }
                 }
+            }
+        } onCancel: {
+            completion.cancel()
+            queue.async {
+                self.cancelPendingPromise(callID: callID)
             }
         }
     }
@@ -162,12 +613,58 @@ public final class JSRuntime: @unchecked Sendable {
     public func invalidateHTTPFailureCache() async {
         await httpFlightCoordinator.invalidateFailures()
     }
+
+    func pendingPromiseCallCountForTesting() async -> Int {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: self.pendingPromiseCalls.count)
+            }
+        }
+    }
+
+    /// 覆盖插件加载和函数调用的完整敏感区间。计数而非 Bool 是为了让同一
+    /// runtime 的重叠调用保持保守静默，直到最后一个敏感调用结束。
+    func beginSensitiveLoggingSuppression() async {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.sensitiveLoggingDepth += 1
+                continuation.resume()
+            }
+        }
+    }
+
+    func endSensitiveLoggingSuppression() async {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                self.sensitiveLoggingDepth = max(0, self.sensitiveLoggingDepth - 1)
+                continuation.resume()
+            }
+        }
+    }
+
+    /// Stop all host HTTP work owned by a runtime that will never be reused.
+    /// Dropping callbacks is intentional: the parent plugin continuation has
+    /// already been cancelled, so there is no remaining JS consumer to notify.
+    func abandonInFlightOperations() async {
+        await httpFlightCoordinator.cancelAll()
+        await withCheckedContinuation { continuation in
+            queue.async {
+                for task in self.hostHTTPTasks.values {
+                    task.cancel()
+                }
+                self.hostHTTPTasks.removeAll()
+                self.hostHTTPCallbacks.removeAll()
+                continuation.resume()
+            }
+        }
+    }
 }
 
 private extension JSRuntime {
-    static func configureConsole(in context: JSContext, logHandler: LogHandler?) {
+    func configureConsole(in context: JSContext, logHandler: LogHandler?) {
         let console = JSValue(newObjectIn: context)
-        let log: @convention(block) (JSValue) -> Void = { [logHandler] value in
+        let log: @convention(block) (JSValue) -> Void = { [weak self, logHandler] value in
+            guard self?.sensitiveLoggingDepth == 0 else { return }
             logHandler?(value.toString() ?? "")
         }
         console?.setObject(log, forKeyedSubscript: "log" as NSString)
@@ -268,6 +765,11 @@ private extension JSRuntime {
             throw Host.makeError(code, message, context);
           };
 
+          Host.capabilities = Host.capabilities || {};
+          Host.capabilities.loginTransaction = true;
+          Host.capabilities.credentialExposure = false;
+          Host.capabilities.webSocketPlatformCookie = true;
+
           Host.http = Host.http || {};
           Host.http.request = function (options) {
             return new Promise(function (resolve, reject) {
@@ -297,8 +799,26 @@ private extension JSRuntime {
           };
 
           Host.session = Host.session || {};
-          Host.session.getCookieHeader = function (platformId) {
-            return __lp_host_session_get_cookie_header(String(platformId || ""));
+          Host.session.getCookieHeader = function () {
+            Host.raise("UNSUPPORTED", "Credential values are host-managed and unavailable to plugins", {});
+          };
+          Host.session.getTransactionCookieHeader = function () {
+            return Promise.reject(Host.makeError(
+              "UNSUPPORTED",
+              "Login transaction cookie values are host-managed and unavailable to plugins",
+              {}
+            ));
+          };
+          Host.session.seedTransactionCookies = function (transactionId, cookies, scope) {
+            return new Promise(function (resolve, reject) {
+              __lp_host_session_seed_transaction_cookies(
+                String(transactionId || ""),
+                JSON.stringify(cookies || {}),
+                JSON.stringify(scope || {}),
+                function () { resolve({ ok: true }); },
+                function (err) { reject(Host.makeError("INVALID_RESPONSE", String(err || "login transaction unavailable"), {})); }
+              );
+            });
           };
 
           Host.runtime = Host.runtime || {};
@@ -429,8 +949,22 @@ private extension JSRuntime {
             let optionsData = optionsJSON.data(using: .utf8) ?? Data()
             let options = (try? JSONSerialization.jsonObject(with: optionsData) as? [String: Any]) ?? [:]
 
-            guard let envelope = Self.makeHostHTTPRequestEnvelope(options: options, pluginId: self.pluginId) else {
+            guard let envelope = Self.makeHostHTTPRequestEnvelope(
+                options: options,
+                pluginId: self.pluginId,
+                credentialDomains: self.credentialDomains,
+                sessionOverride: self.platformSessionOverride
+            ) else {
                 reject.call(withArguments: ["Invalid url"]) // already on JS thread
+                return
+            }
+            if envelope.authMode == .loginTransaction,
+               envelope.transactionId?.isEmpty != false {
+                reject.call(withArguments: [Self.standardErrorMessage(
+                    code: .invalidResponse,
+                    message: "Login transaction identifier is required",
+                    context: [:]
+                )])
                 return
             }
 
@@ -438,22 +972,36 @@ private extension JSRuntime {
             request.httpMethod = envelope.method
             request.timeoutInterval = envelope.timeout
             request.httpBody = envelope.body
+            let protectsManagedCredential = envelope.authMode != .none
+                || !envelope.cookieInject.isEmpty
+            if protectsManagedCredential {
+                request.httpShouldHandleCookies = false
+                request.cachePolicy = .reloadIgnoringLocalCacheData
+            }
 
             var requestHeaders = envelope.headers
             if envelope.authMode == .platformCookie {
                 requestHeaders = Self.removeProtectedHeaders(requestHeaders)
-                if let cookieHeader = LiveParsePlatformSessionVault.mergedCookieHeader(for: envelope.platformId) {
+                if let cookieHeader = LiveParsePlatformSessionVault.mergedCookieHeader(
+                    for: envelope.platformId,
+                    sessionOverride: self.platformSessionOverride
+                ) {
                     requestHeaders["Cookie"] = cookieHeader
                 }
             }
 
             // 通用 cookieInject：从 cookie 取值注入到 header、query 或 body
+            var injectedIntoURLOrBody = false
             if !envelope.cookieInject.isEmpty {
                 var mutableURL = envelope.urlString
                 var bodyJSON: [String: Any]?
 
                 for rule in envelope.cookieInject {
-                    guard let value = LiveParsePlatformSessionVault.cookieValue(named: rule.cookieName, for: envelope.platformId),
+                    guard let value = LiveParsePlatformSessionVault.cookieValue(
+                        named: rule.cookieName,
+                        for: envelope.platformId,
+                        sessionOverride: self.platformSessionOverride
+                    ),
                           !value.isEmpty else { continue }
                     let injectedValue = (rule.prefix ?? "") + value
 
@@ -486,20 +1034,29 @@ private extension JSRuntime {
 
                 if mutableURL != envelope.urlString, let newURL = URL(string: mutableURL) {
                     request.url = newURL
+                    injectedIntoURLOrBody = true
                 }
-                if let bodyJSON {
-                    request.httpBody = try? JSONSerialization.data(withJSONObject: bodyJSON)
+                if let bodyJSON,
+                   let encodedBody = try? JSONSerialization.data(withJSONObject: bodyJSON) {
+                    request.httpBody = encodedBody
+                    injectedIntoURLOrBody = true
                 }
             }
 
             for (key, value) in requestHeaders {
                 request.setValue(value, forHTTPHeaderField: key)
             }
+            if protectsManagedCredential {
+                request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+                request.setValue("no-cache", forHTTPHeaderField: "Pragma")
+            }
 
             // 至此 requestHeaders 不再变更。下面的响应闭包只用它做日志记录,
             // 捕获可变 var 会被判为「并发执行代码中引用捕获的 var」,
             // 故在此固化成不可变快照([String: String] 本身 Sendable)。
             let loggedRequestHeaders = requestHeaders
+            let pluginHeaderNames = Set(requestHeaders.keys.map { $0.lowercased() })
+            let rejectsCrossOriginRedirects = injectedIntoURLOrBody
 
             // 开发者控制台：记录请求开始时间
             let httpStartTime = CFAbsoluteTimeGetCurrent()
@@ -510,6 +1067,7 @@ private extension JSRuntime {
                 reject: reject,
                 envelope: envelope,
                 requestHeaders: loggedRequestHeaders,
+                parentSensitive: self.sensitiveLoggingDepth > 0,
                 startedAt: httpStartTime
             )
 
@@ -522,7 +1080,49 @@ private extension JSRuntime {
             let coordinator = self.httpFlightCoordinator
             let session = self.session
             let finalRequest = request
-            Task { [weak self] in
+            if envelope.authMode == .loginTransaction,
+               let transactionId = envelope.transactionId {
+                let pluginId = self.pluginId
+                let store = self.loginTransactionStore
+                let requestTask = Task { [weak self] in
+                    do {
+                        var transactionRequest = finalRequest
+                        let transactionCookie = try await store.cookieHeader(
+                            pluginId: pluginId,
+                            transactionId: transactionId,
+                            for: finalRequest.url
+                        )
+                        let explicitCookie = Self.headerValue(named: "cookie", in: envelope.headers)
+                        transactionRequest.setValue(
+                            mergedCookieHeader(transaction: transactionCookie, explicit: explicitCookie),
+                            forHTTPHeaderField: "Cookie"
+                        )
+                        let snapshot = try await Self.performLoginTransactionHTTPRequest(
+                            session: session,
+                            request: transactionRequest,
+                            pluginId: pluginId,
+                            transactionId: transactionId,
+                            store: store,
+                            followRedirects: envelope.followRedirects,
+                            explicitCookieHeader: explicitCookie,
+                            pluginHeaderNames: pluginHeaderNames
+                        )
+                        self?.queue.async { [weak self] in
+                            self?.finishHostHTTPRequest(callbackID: callbackID, result: .success(snapshot))
+                        }
+                    } catch {
+                        let failure = (error as? PluginHTTPFlightFailure)
+                            ?? PluginHTTPFlightFailure(error: error)
+                        self?.queue.async { [weak self] in
+                            self?.finishHostHTTPRequest(callbackID: callbackID, result: .failure(failure))
+                        }
+                    }
+                }
+                self.hostHTTPTasks[callbackID] = requestTask
+                return
+            }
+
+            let requestTask = Task { [weak self] in
                 do {
                     let snapshot = try await coordinator.execute(
                         key: flightKey,
@@ -530,7 +1130,13 @@ private extension JSRuntime {
                         failureTTL: envelope.singleFlightKey == nil ? 0 : envelope.failureCacheTTL,
                         bypassCache: envelope.bypassSingleFlightCache
                     ) {
-                        try await Self.performHostHTTPRequest(session: session, request: finalRequest)
+                        try await Self.performHostHTTPRequest(
+                            session: session,
+                            request: finalRequest,
+                            protectsManagedCredential: protectsManagedCredential,
+                            pluginHeaderNames: pluginHeaderNames,
+                            rejectsCrossOriginRedirects: rejectsCrossOriginRedirects
+                        )
                     }
                     self?.queue.async { [weak self] in
                         self?.finishHostHTTPRequest(callbackID: callbackID, result: .success(snapshot))
@@ -543,6 +1149,7 @@ private extension JSRuntime {
                     }
                 }
             }
+            self.hostHTTPTasks[callbackID] = requestTask
         }
 
         context.setObject(requestBlock, forKeyedSubscript: "__lp_host_http_request" as NSString)
@@ -551,6 +1158,7 @@ private extension JSRuntime {
     private enum HostHTTPAuthMode: String {
         case none
         case platformCookie = "platform_cookie"
+        case loginTransaction = "login_transaction"
     }
 
     /// 通用 cookie 值注入规则：从 cookie 取值注入到 header、query 或 JSON body
@@ -577,6 +1185,8 @@ private extension JSRuntime {
         let timeout: TimeInterval
         let authMode: HostHTTPAuthMode
         let platformId: String
+        let transactionId: String?
+        let followRedirects: Bool
         let cookieInject: [CookieInjectRule]
         let singleFlightKey: String?
         let successCacheTTL: TimeInterval
@@ -585,7 +1195,12 @@ private extension JSRuntime {
         let sessionRevision: String
     }
 
-    private static func makeHostHTTPRequestEnvelope(options: [String: Any], pluginId: String) -> HostHTTPRequestEnvelope? {
+    private static func makeHostHTTPRequestEnvelope(
+        options: [String: Any],
+        pluginId: String,
+        credentialDomains: [String],
+        sessionOverride: LiveParsePlatformSession?
+    ) -> HostHTTPRequestEnvelope? {
         let request = (options["request"] as? [String: Any]) ?? options
         guard let urlString = (request["url"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !urlString.isEmpty,
@@ -601,19 +1216,47 @@ private extension JSRuntime {
 
         let authRaw = ((options["authMode"] as? String) ?? "none").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let authMode = HostHTTPAuthMode(rawValue: authRaw) ?? .none
-        let platformId = LiveParsePlatformSessionVault.canonicalPlatformId(
+        let runtimePluginId = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+        let requestedPlatformId = LiveParsePlatformSessionVault.canonicalPlatformId(
             ((options["platformId"] as? String) ?? pluginId)
         )
+        let transactionId = (options["transactionId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let followRedirects = (options["followRedirects"] as? Bool)
+            ?? (request["followRedirects"] as? Bool)
+            ?? true
+        let cookieInject = authMode == .loginTransaction ? [] : resolveCookieInject(options: options)
         let requestedSingleFlightKey = (options["singleFlightKey"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let protectsManagedCredential = authMode != .none || !cookieInject.isEmpty
+        guard !protectsManagedCredential || isAllowedManagedCredentialURL(
+            url,
+            authMode: authMode,
+            credentialDomains: credentialDomains
+        ) else {
+            return nil
+        }
         let singleFlightKey: String?
-        if method == "GET" || method == "HEAD" {
+        if !protectsManagedCredential, (method == "GET" || method == "HEAD") {
             singleFlightKey = requestedSingleFlightKey?.isEmpty == false
                 ? requestedSingleFlightKey
                 : nil
         } else {
+            // Credential-bearing responses must never join or populate the
+            // plugin response cache. Besides stale auth, an anonymous call
+            // could otherwise log a cached sensitive response as non-sensitive.
             singleFlightKey = nil
         }
+        // 任何读取正式 vault 的路径都只能访问当前 runtime owner。platformId
+        // 仍保留给无凭据请求作业务路由，但不能成为跨插件凭据查询入口。
+        if authMode == .platformCookie || !cookieInject.isEmpty {
+            guard !runtimePluginId.isEmpty, requestedPlatformId == runtimePluginId else {
+                return nil
+            }
+        }
+        let platformId = authMode == .platformCookie || !cookieInject.isEmpty
+            ? runtimePluginId
+            : requestedPlatformId
 
         if authMode == .platformCookie {
             headers = removeProtectedHeaders(headers)
@@ -628,12 +1271,19 @@ private extension JSRuntime {
             timeout: timeout,
             authMode: authMode,
             platformId: platformId,
-            cookieInject: resolveCookieInject(options: options),
+            transactionId: transactionId,
+            followRedirects: followRedirects,
+            cookieInject: cookieInject,
             singleFlightKey: singleFlightKey,
             successCacheTTL: millisecondsOption(options["successCacheTTLms"]) / 1_000,
             failureCacheTTL: millisecondsOption(options["failureCacheTTLms"]) / 1_000,
             bypassSingleFlightCache: (options["bypassSingleFlightCache"] as? Bool) == true,
-            sessionRevision: LiveParsePlatformSessionVault.revision(for: platformId)
+            sessionRevision: authMode == .loginTransaction
+                ? "login-transaction"
+                : LiveParsePlatformSessionVault.revision(
+                    for: platformId,
+                    sessionOverride: sessionOverride
+                )
         )
     }
 
@@ -641,6 +1291,27 @@ private extension JSRuntime {
         if let number = value as? NSNumber { return max(0, number.doubleValue) }
         if let string = value as? String, let number = Double(string) { return max(0, number) }
         return 0
+    }
+
+    private static func isAllowedManagedCredentialURL(
+        _ url: URL,
+        authMode: HostHTTPAuthMode,
+        credentialDomains: [String]
+    ) -> Bool {
+        guard isAllowedManagedCredentialTransport(url) else { return false }
+        // Transaction cookies retain RFC domain/path scope in their isolated
+        // jar. Flat committed credentials have no per-cookie scope, so they
+        // may only be injected into manifest-declared platform domains.
+        if authMode == .loginTransaction { return true }
+        guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
+        return credentialDomains.contains { rawDomain in
+            let domain = rawDomain
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard !domain.isEmpty else { return false }
+            return host == domain || host.hasSuffix(".\(domain)")
+        }
     }
 
     private static func resolveCookieInject(options: [String: Any]) -> [CookieInjectRule] {
@@ -688,16 +1359,21 @@ private extension JSRuntime {
             return millis / 1000.0
         }
 
-        if let timeoutMs = milliseconds(from: request["timeoutMs"]) {
+        func bounded(_ value: TimeInterval?) -> TimeInterval? {
+            guard let value, value.isFinite, value > 0 else { return nil }
+            return min(max(value, 0.1), 120)
+        }
+
+        if let timeoutMs = bounded(milliseconds(from: request["timeoutMs"])) {
             return timeoutMs
         }
-        if let timeout = seconds(from: request["timeout"]) {
+        if let timeout = bounded(seconds(from: request["timeout"])) {
             return timeout
         }
-        if let timeoutMs = milliseconds(from: options["timeoutMs"]) {
+        if let timeoutMs = bounded(milliseconds(from: options["timeoutMs"])) {
             return timeoutMs
         }
-        if let timeout = seconds(from: options["timeout"]) {
+        if let timeout = bounded(seconds(from: options["timeout"])) {
             return timeout
         }
         return 20
@@ -716,10 +1392,24 @@ private extension JSRuntime {
 
     private static func performHostHTTPRequest(
         session: URLSession,
-        request: URLRequest
+        request: URLRequest,
+        protectsManagedCredential: Bool,
+        pluginHeaderNames: Set<String>,
+        rejectsCrossOriginRedirects: Bool
     ) async throws -> PluginHTTPFlightSnapshot {
         do {
-            let (data, response) = try await session.data(for: request)
+            let data: Data
+            let response: URLResponse
+            if protectsManagedCredential {
+                let delegate = ManagedCredentialRequestDelegate(
+                    originalURL: request.url,
+                    pluginHeaderNames: pluginHeaderNames,
+                    rejectsCrossOriginRedirects: rejectsCrossOriginRedirects
+                )
+                (data, response) = try await session.data(for: request, delegate: delegate)
+            } else {
+                (data, response) = try await session.data(for: request)
+            }
             guard let http = response as? HTTPURLResponse else {
                 throw PluginHTTPFlightFailure(
                     domain: "AngelLive.HostHTTP",
@@ -741,7 +1431,83 @@ private extension JSRuntime {
                 data: data,
                 statusCode: http.statusCode,
                 headers: headers,
-                responseURL: http.url?.absoluteString ?? request.url?.absoluteString ?? ""
+                responseURL: http.url?.absoluteString ?? request.url?.absoluteString ?? "",
+                setCookies: LoginTransactionStore.setCookieHeaders(from: http)
+            )
+        } catch let failure as PluginHTTPFlightFailure {
+            throw failure
+        } catch {
+            throw PluginHTTPFlightFailure(error: error)
+        }
+    }
+
+    private static func performLoginTransactionHTTPRequest(
+        session: URLSession,
+        request: URLRequest,
+        pluginId: String,
+        transactionId: String,
+        store: LoginTransactionStore,
+        followRedirects: Bool,
+        explicitCookieHeader: String?,
+        pluginHeaderNames: Set<String>
+    ) async throws -> PluginHTTPFlightSnapshot {
+        do {
+            try Task.checkCancellation()
+            let redirectDelegate = LoginTransactionRedirectDelegate(
+                pluginId: pluginId,
+                transactionId: transactionId,
+                store: store,
+                followRedirects: followRedirects,
+                explicitCookieHeader: explicitCookieHeader,
+                pluginHeaderNames: pluginHeaderNames,
+                originalURL: request.url
+            )
+            let (data, response) = try await session.data(for: request, delegate: redirectDelegate)
+            guard let http = response as? HTTPURLResponse else {
+                throw PluginHTTPFlightFailure(
+                    domain: "AngelLive.HostHTTP",
+                    code: 1,
+                    receivedHTTPResponse: false,
+                    message: "Host HTTP response was not HTTP"
+                )
+            }
+
+            let redirectSnapshot = await redirectDelegate.state.snapshot()
+            if let failure = redirectSnapshot.failure { throw failure }
+
+            let finalSetCookies = LoginTransactionStore.setCookieHeaders(from: http)
+            guard let responseURL = http.url ?? request.url else {
+                throw PluginHTTPFlightFailure(
+                    domain: "AngelLive.HostHTTP",
+                    code: 1,
+                    receivedHTTPResponse: true,
+                    message: "Host HTTP response URL was missing"
+                )
+            }
+            try await store.absorb(
+                pluginId: pluginId,
+                transactionId: transactionId,
+                setCookieHeaders: finalSetCookies,
+                responseURL: responseURL
+            )
+            try Task.checkCancellation()
+
+            var headers = http.allHeaderFields.reduce(into: [String: String]()) { result, item in
+                if let key = item.key as? String {
+                    result[key] = String(describing: item.value)
+                }
+            }
+            if headers["Set-Cookie"] == nil,
+               let setCookie = http.value(forHTTPHeaderField: "Set-Cookie") {
+                headers["Set-Cookie"] = setCookie
+            }
+
+            return PluginHTTPFlightSnapshot(
+                data: data,
+                statusCode: http.statusCode,
+                headers: headers,
+                responseURL: responseURL.absoluteString,
+                setCookies: redirectSnapshot.setCookies + finalSetCookies
             )
         } catch let failure as PluginHTTPFlightFailure {
             throw failure
@@ -755,15 +1521,22 @@ private extension JSRuntime {
         callbackID: UUID,
         result: Result<PluginHTTPFlightSnapshot, PluginHTTPFlightFailure>
     ) {
+        hostHTTPTasks.removeValue(forKey: callbackID)
         guard let callback = hostHTTPCallbacks.removeValue(forKey: callbackID) else { return }
         let elapsed = CFAbsoluteTimeGetCurrent() - callback.startedAt
 
         switch result {
         case .success(let snapshot):
             var headers = snapshot.headers
-            if callback.envelope.authMode == .platformCookie {
+            let hidesManagedCookieValues = callback.envelope.authMode != .none
+                || !callback.envelope.cookieInject.isEmpty
+            if hidesManagedCookieValues {
                 headers = Self.removeSetCookieHeaders(headers)
             }
+            let setCookies = hidesManagedCookieValues ? [] : snapshot.setCookies
+            let responseURL = hidesManagedCookieValues
+                ? Self.sanitizedManagedResponseURL(snapshot.responseURL)
+                : snapshot.responseURL
             let bodyText = String(data: snapshot.data, encoding: .utf8)
             let bodyBase64 = snapshot.data.base64EncodedString()
             Logger.debug(
@@ -775,6 +1548,7 @@ private extension JSRuntime {
                     pluginId: pluginId,
                     envelope: callback.envelope,
                     requestHeaders: callback.requestHeaders,
+                    parentSensitive: callback.parentSensitive,
                     statusCode: snapshot.statusCode,
                     responseHeaders: headers,
                     responseBody: bodyText.map { String($0.prefix(2_000)) },
@@ -785,7 +1559,8 @@ private extension JSRuntime {
             let payload: [String: Any] = [
                 "status": snapshot.statusCode,
                 "headers": headers,
-                "url": snapshot.responseURL,
+                "setCookies": setCookies,
+                "url": responseURL,
                 "bodyText": bodyText ?? NSNull(),
                 "bodyBase64": bodyBase64
             ]
@@ -798,6 +1573,7 @@ private extension JSRuntime {
                     pluginId: pluginId,
                     envelope: callback.envelope,
                     requestHeaders: callback.requestHeaders,
+                    parentSensitive: callback.parentSensitive,
                     statusCode: nil,
                     responseHeaders: nil,
                     responseBody: nil,
@@ -896,6 +1672,7 @@ private extension JSRuntime {
         pluginId: String,
         envelope: HostHTTPRequestEnvelope,
         requestHeaders: [String: String],
+        parentSensitive: Bool,
         statusCode: Int?,
         responseHeaders: [String: String]?,
         responseBody: String?,
@@ -907,17 +1684,38 @@ private extension JSRuntime {
         let console = PluginConsoleService.shared
         guard let entryId = console.activeEntryId(for: pluginId) else { return }
 
-        let bodyStr: String? = envelope.body.flatMap { String(data: $0, encoding: .utf8) }
+        let hasProtectedHeader = requestHeaders.keys.contains { key in
+            let lowered = key.lowercased()
+            return lowered == "cookie" || lowered == "authorization" || lowered == "proxy-authorization"
+        }
+        let sensitive = parentSensitive
+            || envelope.authMode == .loginTransaction
+            || envelope.authMode == .platformCookie
+            || !envelope.cookieInject.isEmpty
+            || hasProtectedHeader
+        let bodyStr: String? = sensitive
+            ? nil
+            : envelope.body.flatMap { String(data: $0, encoding: .utf8) }
+        let loggedURL: String
+        if sensitive {
+            var components = URLComponents()
+            components.scheme = envelope.url.scheme
+            components.host = envelope.url.host
+            components.port = envelope.url.port
+            loggedURL = components.string ?? envelope.url.host ?? "<redacted>"
+        } else {
+            loggedURL = envelope.urlString
+        }
 
         let record = PluginConsoleHTTPRecord(
-            url: envelope.urlString,
+            url: loggedURL,
             method: envelope.method,
-            headers: requestHeaders,
+            headers: sensitive ? [:] : requestHeaders,
             body: bodyStr,
             statusCode: statusCode,
-            responseHeaders: responseHeaders,
-            responseBody: responseBody,
-            error: error,
+            responseHeaders: sensitive ? nil : responseHeaders,
+            responseBody: sensitive ? nil : responseBody,
+            error: sensitive && error != nil ? "Sensitive plugin request failed" : error,
             duration: duration
         )
 
@@ -952,6 +1750,19 @@ private extension JSRuntime {
         }
     }
 
+    private static func sanitizedManagedResponseURL(_ string: String) -> String {
+        guard var components = URLComponents(string: string) else { return "" }
+        components.user = nil
+        components.password = nil
+        components.query = nil
+        components.fragment = nil
+        return components.string ?? ""
+    }
+
+    private static func headerValue(named name: String, in headers: [String: String]) -> String? {
+        headers.first { key, _ in key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
     static func configureHostCrypto(in context: JSContext) {
         let md5Block: @convention(block) (String) -> String = { input in
             input.md5
@@ -969,13 +1780,80 @@ private extension JSRuntime {
         context.setObject(base64DecodeBlock, forKeyedSubscript: "__lp_crypto_base64_decode" as NSString)
     }
 
-    static func configureHostSession(in context: JSContext) {
-        let getCookieHeaderBlock: @convention(block) (String) -> String = { platformId in
-            let trimmed = platformId.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return "" }
-            return LiveParsePlatformSessionVault.mergedCookieHeader(for: trimmed) ?? ""
+    func configureHostSession(in context: JSContext) {
+        let seedTransactionCookiesBlock: @convention(block) (String, String, String, JSValue, JSValue) -> Void = {
+            [weak self] transactionId, cookiesJSON, scopeJSON, resolve, reject in
+            guard let self else {
+                reject.call(withArguments: ["Login transaction runtime released"])
+                return
+            }
+
+            let cookiesObject = Self.jsonObject(from: cookiesJSON)
+            let cookies = cookiesObject.reduce(into: [String: String]()) { result, item in
+                if let string = item.value as? String {
+                    result[item.key] = string
+                } else if let number = item.value as? NSNumber {
+                    result[item.key] = number.stringValue
+                }
+            }
+            let scope = Self.jsonObject(from: scopeJSON)
+            let domain = (scope["domain"] as? String) ?? ""
+            let path = (scope["path"] as? String) ?? "/"
+            let secure = (scope["secure"] as? Bool) ?? false
+
+            let callbackID = UUID()
+            self.hostSessionCallbacks[callbackID] = HostSessionCallback(resolve: resolve, reject: reject)
+            let store = self.loginTransactionStore
+            let pluginId = self.pluginId
+            Task { [weak self] in
+                let result: Result<Void, LoginTransactionError>
+                do {
+                    try await store.seed(
+                        pluginId: pluginId,
+                        transactionId: transactionId,
+                        cookies: cookies,
+                        domain: domain,
+                        path: path,
+                        secure: secure
+                    )
+                    result = .success(())
+                } catch let error as LoginTransactionError {
+                    result = .failure(error)
+                } catch {
+                    result = .failure(.notFound)
+                }
+                self?.queue.async { [weak self] in
+                    self?.finishHostSessionSeed(callbackID: callbackID, result: result)
+                }
+            }
         }
-        context.setObject(getCookieHeaderBlock, forKeyedSubscript: "__lp_host_session_get_cookie_header" as NSString)
+        context.setObject(
+            seedTransactionCookiesBlock,
+            forKeyedSubscript: "__lp_host_session_seed_transaction_cookies" as NSString
+        )
+    }
+
+    /// Must run on the JavaScriptCore queue.
+    func finishHostSessionSeed(
+        callbackID: UUID,
+        result: Result<Void, LoginTransactionError>
+    ) {
+        guard let callback = hostSessionCallbacks.removeValue(forKey: callbackID) else { return }
+        switch result {
+        case .success:
+            callback.resolve.call(withArguments: [])
+        case .failure(let error):
+            callback.reject.call(withArguments: [error.localizedDescription])
+        }
+        context.evaluateScript("void(0)")
+    }
+
+    static func jsonObject(from string: String) -> [String: Any] {
+        guard let data = string.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return object
     }
 
     static func isPromise(_ value: JSValue) -> Bool {
@@ -984,35 +1862,68 @@ private extension JSRuntime {
         return then?.isObject == true
     }
 
-    func awaitPromise(_ promise: JSValue, continuation: CheckedContinuation<Any, Error>) {
-        let context = self.context
-
-        // 用唯一 key 将 promise 和回调注册到 JS 全局空间，
-        // 然后通过 evaluateScript 执行 .then()，确保回调在 JS 引擎内部被调度。
-        let key = "_lp_await_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
-
-        let resolve: @convention(block) (JSValue) -> Void = { [weak context] value in
-            // 清理全局变量
-            context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
-            do {
-                let converted = try Self.convertToJSONObject(value, in: context!)
-                continuation.resume(returning: converted)
-            } catch {
-                continuation.resume(throwing: error)
-            }
+    func configureHostPromiseCallbacks(in context: JSContext) {
+        let resolve: @convention(block) (String, JSValue) -> Void = { [weak self] callID, value in
+            self?.finishPendingPromise(callID: callID, value: value, isRejection: false)
         }
-        let reject: @convention(block) (JSValue) -> Void = { [weak context] value in
-            context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
-            continuation.resume(throwing: LiveParsePluginError.fromJSException(value.toString() ?? "<unknown>"))
+        let reject: @convention(block) (String, JSValue) -> Void = { [weak self] callID, value in
+            self?.finishPendingPromise(callID: callID, value: value, isRejection: true)
         }
+        context.setObject(resolve, forKeyedSubscript: "__lp_host_promise_resolve" as NSString)
+        context.setObject(reject, forKeyedSubscript: "__lp_host_promise_reject" as NSString)
+    }
 
-        // 将 promise 和回调注册到 JS 全局空间
+    /// Must run on the JavaScriptCore queue. Per-call JS reactions capture only
+    /// an opaque id and invoke shared host callbacks; they never retain a Swift
+    /// continuation if a plugin Promise remains pending forever.
+    func awaitPromise(
+        _ promise: JSValue,
+        callID: String,
+        completion: PluginCallCompletion
+    ) {
+        let key = "_lp_await_\(callID)"
+        pendingPromiseCalls[callID] = PendingPromiseCall(
+            globalKey: key,
+            completion: completion
+        )
         context.setObject(promise, forKeyedSubscript: key as NSString)
-        context.setObject(resolve, forKeyedSubscript: "\(key)_r" as NSString)
-        context.setObject(reject, forKeyedSubscript: "\(key)_j" as NSString)
+        context.evaluateScript("""
+        globalThis.\(key).then(
+          function(value) { __lp_host_promise_resolve("\(callID)", value); },
+          function(error) { __lp_host_promise_reject("\(callID)", error); }
+        );
+        delete globalThis.\(key);
+        """)
+        if let exception = context.exception {
+            pendingPromiseCalls.removeValue(forKey: callID)
+            context.evaluateScript("delete globalThis.\(key);")
+            completion.resume(throwing:
+                LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>")
+            )
+        }
+    }
 
-        // 通过 evaluateScript 执行 .then()，这样回调会在 JS 引擎的正常执行流中被调度
-        context.evaluateScript("globalThis.\(key).then(globalThis.\(key)_r, globalThis.\(key)_j);")
+    /// Must run on the JavaScriptCore queue.
+    func finishPendingPromise(callID: String, value: JSValue, isRejection: Bool) {
+        guard let pending = pendingPromiseCalls.removeValue(forKey: callID) else { return }
+        context.evaluateScript("delete globalThis.\(pending.globalKey);")
+        if isRejection {
+            pending.completion.resume(throwing:
+                LiveParsePluginError.fromJSException(value.toString() ?? "<unknown>")
+            )
+            return
+        }
+        do {
+            pending.completion.resume(returning: try Self.convertToJSONObject(value, in: context))
+        } catch {
+            pending.completion.resume(throwing: error)
+        }
+    }
+
+    /// Must run on the JavaScriptCore queue.
+    func cancelPendingPromise(callID: String) {
+        guard let pending = pendingPromiseCalls.removeValue(forKey: callID) else { return }
+        context.evaluateScript("delete globalThis.\(pending.globalKey);")
     }
 
     static func convertToJSONObject(_ value: JSValue, in context: JSContext) throws -> Any {

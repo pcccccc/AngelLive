@@ -32,10 +32,12 @@ public enum LiveParsePlugins {
 
     public static func updatePlatformSession(platformId: String, cookie: String, uid: String? = nil) {
         LiveParsePlatformSessionVault.update(platformId: platformId, cookie: cookie, uid: uid)
+        shared.evict(pluginId: platformId)
     }
 
     public static func clearPlatformSession(platformId: String) {
         LiveParsePlatformSessionVault.clear(platformId: platformId)
+        shared.evict(pluginId: platformId)
     }
 
     public static func invalidateHTTPFailureCaches() async {

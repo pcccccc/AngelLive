@@ -49,9 +49,14 @@ public final class PluginAvailabilityService: @unchecked Sendable {
         // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
         let pluginMap = SandboxPluginCatalog.installedPluginMap()
         installedPluginIds = pluginMap.keys.sorted()
-        loginRequiredInstalledPluginIds = Set(pluginMap.values
-            .filter { $0.requiresLogin }
-            .map { $0.pluginId })
+        // Keep Shell/Full UI availability driven strictly by sandbox presence,
+        // but derive login metadata from the same effective version that will
+        // execute (enabled, pinned, last-good, sandbox/built-in precedence).
+        loginRequiredInstalledPluginIds = Set(pluginMap.keys.compactMap { pluginId in
+            try? LiveParsePlugins.shared.resolve(pluginId: pluginId).manifest
+        }
+        .filter { $0.requiresLogin }
+        .map { $0.pluginId })
         hasAvailablePlugins = !installedPluginIds.isEmpty
     }
 
