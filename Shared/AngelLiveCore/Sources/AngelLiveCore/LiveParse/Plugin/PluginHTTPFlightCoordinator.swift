@@ -13,19 +13,25 @@ struct PluginHTTPFlightSnapshot: Sendable, Equatable {
     let headers: [String: String]
     let responseURL: String
     let setCookies: [String]
+    let requestContainsCookieHeader: Bool
+    let requestCookieDiagnostics: String
 
     init(
         data: Data,
         statusCode: Int,
         headers: [String: String],
         responseURL: String,
-        setCookies: [String] = []
+        setCookies: [String] = [],
+        requestContainsCookieHeader: Bool = false,
+        requestCookieDiagnostics: String = "missing"
     ) {
         self.data = data
         self.statusCode = statusCode
         self.headers = headers
         self.responseURL = responseURL
         self.setCookies = setCookies
+        self.requestContainsCookieHeader = requestContainsCookieHeader
+        self.requestCookieDiagnostics = requestCookieDiagnostics
     }
 }
 

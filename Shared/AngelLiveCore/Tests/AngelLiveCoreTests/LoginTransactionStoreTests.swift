@@ -270,6 +270,35 @@ struct LoginTransactionStoreTests {
         try await store.discard(pluginId: "fixture.plugin", transactionId: transactionId)
     }
 
+    @Test("promotion prefers manifest credential domains over external bootstrap cookies")
+    func promotePrefersCredentialDomains() async throws {
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: "fixture.plugin")
+        try await store.seed(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            cookies: ["anonymous_device": "external-value"],
+            domain: "registration.example.net",
+            secure: true
+        )
+        try await store.seed(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            cookies: ["anonymous_device": "credential-value", "session": "account-value"],
+            domain: "login.example.com",
+            secure: true
+        )
+
+        let promoted = try await store.promote(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            preferredDomains: ["example.com"]
+        )
+        #expect(promoted.contains("anonymous_device=credential-value"))
+        #expect(promoted.contains("session=account-value"))
+        #expect(!promoted.contains("external-value"))
+    }
+
     @Test("hard timeout destroys the transaction", .timeLimit(.minutes(1)))
     func hardTimeout() async throws {
         let store = LoginTransactionStore(hardTimeout: .milliseconds(5))
@@ -295,15 +324,23 @@ struct LoginTransactionStoreTests {
         #expect(fields[1] == "second=two; Path=/")
     }
 
-    @Test("JavaScript Host session bridge can seed but cannot read transaction Cookies")
-    func hostSessionBridge() async throws {
+    @Test("login challenge creation can read its own stored Cookie but not transaction Cookies")
+    func loginChallengeCookieAccess() async throws {
+        let pluginId = "fixture.plugin"
+        let vaultSnapshot = LiveParsePlatformSessionVault.session(for: pluginId)
+        defer { LiveParsePlatformSessionVault.restore(platformId: pluginId, session: vaultSnapshot) }
+        LiveParsePlatformSessionVault.update(
+            platformId: pluginId,
+            cookie: "account=available-to-own-plugin",
+            uid: nil
+        )
         let store = LoginTransactionStore()
-        let transactionId = try await store.begin(pluginId: "fixture.plugin")
-        let runtime = JSRuntime(pluginId: "fixture.plugin", loginTransactionStore: store)
+        let transactionId = try await store.begin(pluginId: pluginId)
+        let runtime = JSRuntime(pluginId: pluginId, loginTransactionStore: store)
         try await runtime.evaluate(script: """
             globalThis.LiveParsePlugin = {
               apiVersion: 1,
-              async probe(input) {
+              async createLoginChallenge(input) {
                 await Host.session.seedTransactionCookies(
                   input.transactionId,
                   { device: "generated", numeric: 42 },
@@ -311,7 +348,9 @@ struct LoginTransactionStoreTests {
                 );
                 return {
                   supported: Host.capabilities.loginTransaction === true,
+                  loginChallengeProtocol: Host.capabilities.loginChallengeProtocol,
                   credentialExposure: Host.capabilities.credentialExposure,
+                  storedCookie: Host.session.getCookieHeader(input.pluginId),
                   readable: await Host.session.getTransactionCookieHeader(input.transactionId)
                     .then(function () { return true; })
                     .catch(function () { return false; })
@@ -321,12 +360,14 @@ struct LoginTransactionStoreTests {
             """)
 
         let value = try await runtime.callPluginFunction(
-            name: "probe",
-            payload: ["transactionId": transactionId]
+            name: "createLoginChallenge",
+            payload: ["transactionId": transactionId, "pluginId": pluginId]
         )
         let result = try #require(value as? [String: Any])
         #expect(result["supported"] as? Bool == true)
-        #expect(result["credentialExposure"] as? Bool == false)
+        #expect(result["loginChallengeProtocol"] as? Int == PlatformLoginChallengeProtocol.currentVersion)
+        #expect(result["credentialExposure"] as? Bool == true)
+        #expect(result["storedCookie"] as? String == "account=available-to-own-plugin")
         #expect(result["readable"] as? Bool == false)
         let cookie = try await store.cookieHeader(
             pluginId: "fixture.plugin",
@@ -337,8 +378,28 @@ struct LoginTransactionStoreTests {
         #expect(cookie.contains("numeric=42"))
     }
 
-    @Test("legacy Host session getter never exposes any platform credential")
-    func legacyHostSessionCredentialIsUnavailable() async throws {
+    @Test("plugin-generated anonymous Cookie can be seeded for a parent domain")
+    func seedParentDomain() async throws {
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: "fixture.plugin")
+        try await store.seed(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            cookies: ["anonymous_device": "generated-value"],
+            domain: "example.test",
+            secure: true
+        )
+
+        let header = try await store.cookieHeader(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            for: URL(string: "https://login.example.test/check/")
+        )
+        #expect(header == "anonymous_device=generated-value")
+    }
+
+    @Test("Host session getter exposes only the current plugin credential")
+    func hostSessionCredentialIsScopedToCurrentPlugin() async throws {
         let owner = "owner-\(UUID().uuidString.lowercased()).plugin"
         let other = "other-\(UUID().uuidString.lowercased()).plugin"
         let ownerSnapshot = LiveParsePlatformSessionVault.session(for: owner)
@@ -355,21 +416,19 @@ struct LoginTransactionStoreTests {
             globalThis.LiveParsePlugin = {
               apiVersion: 1,
               probe() {
-                var ownReadable = true;
-                var otherReadable = true;
-                try { Host.session.getCookieHeader("\(owner)"); } catch (_) { ownReadable = false; }
-                try { Host.session.getCookieHeader("\(other)"); } catch (_) { otherReadable = false; }
                 return {
-                  ownReadable: ownReadable,
-                  otherReadable: otherReadable
+                  own: Host.session.getCookieHeader("\(owner)"),
+                  implicitOwn: Host.session.getCookieHeader(),
+                  other: Host.session.getCookieHeader("\(other)")
                 };
               }
             };
             """)
         let value = try await runtime.callPluginFunction(name: "probe")
         let result = try #require(value as? [String: Any])
-        #expect(result["ownReadable"] as? Bool == false)
-        #expect(result["otherReadable"] as? Bool == false)
+        #expect(result["own"] as? String == "ownerSecret=one")
+        #expect(result["implicitOwn"] as? String == "ownerSecret=one")
+        #expect(result["other"] as? String == "")
     }
 
     @Test("candidate validation runtime is isolated from concurrent committed-session calls")
@@ -423,9 +482,10 @@ struct LoginTransactionStoreTests {
                   authMode: "platform_cookie",
                   platformId: "\(owner)"
                 });
-                var readable = true;
-                try { Host.session.getCookieHeader("\(owner)"); } catch (_) { readable = false; }
-                return { readable: readable, body: response.bodyText };
+                return {
+                  cookie: Host.session.getCookieHeader("\(owner)"),
+                  body: response.bodyText
+                };
               }
             };
             """
@@ -443,8 +503,8 @@ struct LoginTransactionStoreTests {
         let candidateResult = try #require(try await candidateValue as? [String: Any])
         let businessResult = try #require(try await businessValue as? [String: Any])
 
-        #expect(candidateResult["readable"] as? Bool == false)
-        #expect(businessResult["readable"] as? Bool == false)
+        #expect(candidateResult["cookie"] as? String == "session=candidate")
+        #expect(businessResult["cookie"] as? String == "session=committed")
         #expect(candidateResult["body"] as? String == "ok")
         #expect(businessResult["body"] as? String == "ok")
         #expect(LoginTransactionURLProtocol.capturedHeader(
@@ -527,6 +587,272 @@ struct LoginTransactionStoreTests {
         )
         #expect(callbackCookie.contains("server=three"))
         #expect(callbackCookie.contains("callback=four"))
+    }
+
+    @Test("create and poll automatically share transaction Cookies across manifest login domains")
+    func loginChallengeAutomaticallyRoutesCrossDomainTransactionCookies() async throws {
+        let owner = "cross-domain-fixture.plugin"
+        let vaultSnapshot = LiveParsePlatformSessionVault.session(for: owner)
+        defer { LiveParsePlatformSessionVault.restore(platformId: owner, session: vaultSnapshot) }
+        LiveParsePlatformSessionVault.update(
+            platformId: owner,
+            cookie: "account=committed-user-value",
+            uid: nil
+        )
+
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: owner)
+        try await store.absorb(
+            pluginId: owner,
+            transactionId: transactionId,
+            setCookieHeaders: ["anonymous_device=transaction-value; Path=/; Secure"],
+            responseURL: try #require(URL(string: "https://registration-source.invalid/register/"))
+        )
+        let normallyScoped = try await store.cookieHeader(
+            pluginId: owner,
+            transactionId: transactionId,
+            for: URL(string: "https://login-destination.invalid/check/")
+        )
+        #expect(normallyScoped.isEmpty)
+
+        let createPath = "/capture-create-transaction-cookie"
+        let pollPath = "/capture-poll-transaction-cookie"
+        LoginTransactionURLProtocol.resetCapturedHeaders(for: createPath)
+        LoginTransactionURLProtocol.resetCapturedHeaders(for: pollPath)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LoginTransactionURLProtocol.self]
+        configuration.httpCookieStorage = nil
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let runtime = JSRuntime(
+            pluginId: owner,
+            session: session,
+            loginTransactionStore: store,
+            credentialDomains: ["login-destination.invalid"]
+        )
+        try await runtime.evaluate(script: """
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              async createLoginChallenge(input) {
+                return await Host.http.request({
+                  url: "https://login-destination.invalid" + input.path,
+                  authMode: "login_transaction",
+                  transactionId: input.transactionId
+                });
+              },
+              async pollLoginChallenge(input) {
+                return await Host.http.request({
+                  url: "https://login-destination.invalid" + input.path,
+                  authMode: "login_transaction",
+                  transactionId: input.transactionId
+                });
+              }
+            };
+            """)
+
+        let createValue = try await runtime.callPluginFunction(
+            name: "createLoginChallenge",
+            payload: ["transactionId": transactionId, "path": createPath]
+        )
+        let pollValue = try await runtime.callPluginFunction(
+            name: "pollLoginChallenge",
+            payload: ["transactionId": transactionId, "path": pollPath]
+        )
+        #expect((createValue as? [String: Any])?["bodyText"] as? String == "ok")
+        #expect((pollValue as? [String: Any])?["bodyText"] as? String == "ok")
+        let createCookie = try #require(LoginTransactionURLProtocol.capturedHeader(
+            named: "Cookie",
+            for: createPath
+        ))
+        let pollCookie = try #require(LoginTransactionURLProtocol.capturedHeader(
+            named: "Cookie",
+            for: pollPath
+        ))
+        #expect(createCookie.contains("anonymous_device=transaction-value"))
+        #expect(pollCookie.contains("anonymous_device=transaction-value"))
+        #expect(!createCookie.contains("committed-user-value"))
+        #expect(!pollCookie.contains("committed-user-value"))
+    }
+
+    @Test("cross-domain transaction Cookie injection is skipped outside manifest destinations")
+    func crossDomainTransactionCookieInjectionSkipsNonManifestDomain() async throws {
+        let owner = "cross-domain-fixture.plugin"
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: owner)
+        try await store.absorb(
+            pluginId: owner,
+            transactionId: transactionId,
+            setCookieHeaders: ["anonymous_device=transaction-value; Path=/; Secure"],
+            responseURL: try #require(URL(string: "https://registration-source.invalid/register/"))
+        )
+
+        let path = "/capture-nonmanifest-explicit-inject"
+        LoginTransactionURLProtocol.resetCapturedHeaders(for: path)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LoginTransactionURLProtocol.self]
+        configuration.httpCookieStorage = nil
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let runtime = JSRuntime(
+            pluginId: owner,
+            session: session,
+            loginTransactionStore: store,
+            credentialDomains: ["allowed-destination.invalid"]
+        )
+        try await runtime.evaluate(script: """
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              async probe(input) {
+                return await Host.http.request({
+                  url: "https://unlisted-destination.invalid" + input.path,
+                  authMode: "login_transaction",
+                  transactionId: input.transactionId,
+                  cookieInject: [{
+                    cookieName: "anonymous_device",
+                    target: "header",
+                    headerName: "Cookie",
+                    prefix: "anonymous_device="
+                  }]
+                });
+              }
+            };
+            """)
+
+        let value = try await runtime.callPluginFunction(
+            name: "probe",
+            payload: ["transactionId": transactionId, "path": path]
+        )
+        #expect((value as? [String: Any])?["bodyText"] as? String == "ok")
+        #expect(LoginTransactionURLProtocol.capturedHeader(named: "Cookie", for: path) == nil)
+    }
+
+    @Test("external transaction bootstrap can create a Cookie for a later manifest login request")
+    func externalBootstrapFeedsManifestLoginRequest() async throws {
+        let owner = "external-bootstrap-fixture.plugin"
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: owner)
+        let registerPath = "/register-anonymous-cookie"
+        let loginPath = "/capture-allowed-after-register"
+        LoginTransactionURLProtocol.resetCapturedHeaders(for: registerPath)
+        LoginTransactionURLProtocol.resetCapturedHeaders(for: loginPath)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LoginTransactionURLProtocol.self]
+        configuration.httpCookieStorage = nil
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let runtime = JSRuntime(
+            pluginId: owner,
+            session: session,
+            loginTransactionStore: store,
+            credentialDomains: ["allowed-destination.invalid"]
+        )
+        try await runtime.evaluate(script: """
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              async probe(input) {
+                var injection = [{
+                  cookieName: "anonymous_device",
+                  target: "header",
+                  headerName: "Cookie",
+                  prefix: "anonymous_device="
+                }];
+                await Host.http.request({
+                  url: "https://registration-source.invalid" + input.registerPath,
+                  authMode: "login_transaction",
+                  transactionId: input.transactionId,
+                  cookieInject: injection
+                });
+                await Host.session.seedTransactionCookies(
+                  input.transactionId,
+                  { anonymous_device: "credential-value" },
+                  { domain: "allowed-destination.invalid", path: "/", secure: true }
+                );
+                return await Host.http.request({
+                  url: "https://allowed-destination.invalid" + input.loginPath,
+                  authMode: "login_transaction",
+                  transactionId: input.transactionId,
+                  cookieInject: injection
+                });
+              }
+            };
+            """)
+
+        let value = try await runtime.callPluginFunction(
+            name: "probe",
+            payload: [
+                "transactionId": transactionId,
+                "registerPath": registerPath,
+                "loginPath": loginPath
+            ]
+        )
+        #expect((value as? [String: Any])?["bodyText"] as? String == "ok")
+        #expect(LoginTransactionURLProtocol.capturedHeader(named: "Cookie", for: registerPath) == nil)
+        #expect(LoginTransactionURLProtocol.capturedHeader(
+            named: "Cookie",
+            for: loginPath
+        )?.contains("anonymous_device=credential-value") == true)
+        #expect(LoginTransactionURLProtocol.capturedHeader(
+            named: "Cookie",
+            for: loginPath
+        )?.contains("anonymous_device=transaction-value") == false)
+    }
+
+    @Test("automatic transaction Cookie routing stays inside manifest login domains")
+    func automaticTransactionCookieRoutingRequiresManifestDomain() async throws {
+        let owner = "scoped-auto-route.plugin"
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: owner)
+        try await store.absorb(
+            pluginId: owner,
+            transactionId: transactionId,
+            setCookieHeaders: ["anonymous_device=transaction-value; Path=/; Secure"],
+            responseURL: try #require(URL(string: "https://registration-source.invalid/register/"))
+        )
+
+        let path = "/capture-nonmanifest-auto-route"
+        LoginTransactionURLProtocol.resetCapturedHeaders(for: path)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LoginTransactionURLProtocol.self]
+        configuration.httpCookieStorage = nil
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.httpShouldSetCookies = false
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let runtime = JSRuntime(
+            pluginId: owner,
+            session: session,
+            loginTransactionStore: store,
+            credentialDomains: ["allowed-destination.invalid"]
+        )
+        try await runtime.evaluate(script: """
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              async probe(input) {
+                return await Host.http.request({
+                  url: "https://unlisted-destination.invalid" + input.path,
+                  authMode: "login_transaction",
+                  transactionId: input.transactionId
+                });
+              }
+            };
+            """)
+
+        let value = try await runtime.callPluginFunction(
+            name: "probe",
+            payload: ["transactionId": transactionId, "path": path]
+        )
+        #expect((value as? [String: Any])?["bodyText"] as? String == "ok")
+        #expect(LoginTransactionURLProtocol.capturedHeader(named: "Cookie", for: path) == nil)
     }
 
     @Test("redirect hops are absorbed before the redirected request is sent")
@@ -1058,6 +1384,137 @@ struct LoginTransactionStoreTests {
         #expect(!credentialText.contains("promoted-secret"))
     }
 
+    @Test("login challenge console summaries expose state without exposing secrets")
+    func loginChallengeConsoleSummaries() {
+        let request = LiveParsePluginManager.sensitiveRequestSummary(
+            policy: .loginChallenge(.submitVerification),
+            payload: [
+                "transactionId": "transaction-secret",
+                "challengeId": "challenge-secret",
+                "verificationId": "verification-secret",
+                "code": "654321"
+            ]
+        )
+        #expect(request.contains("<redacted>"))
+        #expect(!request.contains("transaction-secret"))
+        #expect(!request.contains("challenge-secret"))
+        #expect(!request.contains("verification-secret"))
+        #expect(!request.contains("654321"))
+
+        let response = LiveParsePluginManager.sensitiveResponseSummary(
+            policy: .loginChallenge(.poll),
+            value: [
+                "state": "verification_required",
+                "rawStatus": 2046,
+                "message": "secret-ticket-in-message",
+                "uid": "user-secret",
+                "cookie": "session=cookie-secret",
+                "verification": [
+                    "kind": "sms_code",
+                    "verificationId": "verification-secret",
+                    "prompt": "prompt-secret",
+                    "maskedDestination": "13812345678",
+                    "codeLength": 6,
+                    "canResend": true,
+                    "resendAfterMs": 60_000
+                ]
+            ]
+        )
+        #expect(response.contains("verification_required"))
+        #expect(response.contains("2046"))
+        #expect(response.contains("sms_code"))
+        #expect(response.contains("codeLength"))
+        #expect(response.contains("hasDestination"))
+        #expect(!response.contains("secret-ticket-in-message"))
+        #expect(!response.contains("user-secret"))
+        #expect(!response.contains("cookie-secret"))
+        #expect(!response.contains("verification-secret"))
+        #expect(!response.contains("prompt-secret"))
+        #expect(!response.contains("13812345678"))
+
+        let createResponse = LiveParsePluginManager.sensitiveResponseSummary(
+            policy: .loginChallenge(.create),
+            value: [
+                "kind": "qrcode",
+                "challengeId": "challenge-secret",
+                "qrContent": "qr-secret",
+                "pollIntervalMs": 2_000,
+                "expiresAt": 1_800_000_000_000,
+                "hint": "hint-secret"
+            ]
+        )
+        #expect(createResponse.contains("qrcode"))
+        #expect(createResponse.contains("2000"))
+        #expect(!createResponse.contains("challenge-secret"))
+        #expect(!createResponse.contains("qr-secret"))
+        #expect(!createResponse.contains("hint-secret"))
+
+        let error = LiveParsePluginError.standardized(.init(
+            code: .rateLimited,
+            message: "ticket-secret",
+            context: ["ticket": "context-secret"]
+        ))
+        let errorSummary = LiveParsePluginManager.sensitiveErrorSummary(
+            policy: .loginChallenge(.poll),
+            error: error
+        )
+        #expect(errorSummary.contains("RATE_LIMITED"))
+        #expect(!errorSummary.contains("ticket-secret"))
+        #expect(!errorSummary.contains("context-secret"))
+    }
+
+    @Test("sensitive HTTP console reports Cookie attachment without exposing values")
+    func sensitiveHTTPConsoleResponseSummary() {
+        let summary = SensitivePluginHTTPConsoleSummary.responseBody(
+            requestContainsCookieHeader: true
+        )
+
+        #expect(summary?.contains("cookieHeader") == true)
+        #expect(summary?.contains("attached") == true)
+
+        let missing = SensitivePluginHTTPConsoleSummary.responseBody(
+            requestContainsCookieHeader: false
+        )
+        #expect(missing?.contains("missing") == true)
+        #expect(SensitivePluginHTTPConsoleSummary.containsCookieHeader("name=value"))
+        #expect(!SensitivePluginHTTPConsoleSummary.containsCookieHeader("  "))
+
+        let cookieDiagnostics = SensitivePluginHTTPConsoleSummary.cookieHeaderDiagnostics(
+            "anonymous_device=same-device-value; account_session=account-secret"
+        )
+        #expect(cookieDiagnostics.contains("anonymous_device{length=17,fingerprint="))
+        #expect(cookieDiagnostics.contains("account_session{length=14,fingerprint="))
+        #expect(!cookieDiagnostics.contains("same-device-value"))
+        #expect(!cookieDiagnostics.contains("account-secret"))
+
+        let redactedBody = SensitivePluginHTTPConsoleSummary.redactedBody(
+            #"{"data":{"status":1,"error_code":0,"token":"must-hide"},"message":"waiting"}"#
+        )
+        #expect(redactedBody.contains(#""status" : 1"#))
+        #expect(redactedBody.contains(#""error_code" : 0"#))
+        #expect(redactedBody.contains("waiting"))
+        #expect(redactedBody.contains("<redacted>"))
+        #expect(!redactedBody.contains("must-hide"))
+
+        let redactedHeaders = SensitivePluginHTTPConsoleSummary.redactedHeaders([
+            "Content-Type": "application/json",
+            "Set-Cookie": "anonymous_device=must-hide",
+            "Credential": "credential-must-not-leak",
+            "X-Auth": "generic-auth-must-not-leak",
+            "X-CSRF": "csrf-must-not-leak",
+            "X-Vault": "vault-must-not-leak"
+        ])
+        #expect(redactedHeaders.contains("Content-Type"))
+        #expect(redactedHeaders.contains("Set-Cookie"))
+        #expect(redactedHeaders.contains("present{length=26,fingerprint="))
+        #expect(redactedHeaders.contains(#""Credential":"<redacted>""#))
+        #expect(redactedHeaders.contains(#""X-Auth":"<redacted>""#))
+        #expect(redactedHeaders.contains(#""X-CSRF":"<redacted>""#))
+        #expect(redactedHeaders.contains(#""X-Vault":"<redacted>""#))
+        #expect(!redactedHeaders.contains("must-hide"))
+        #expect(!redactedHeaders.contains("must-not-leak"))
+    }
+
     @Test("sensitive runtime sections suppress arbitrary JavaScript console strings")
     func sensitiveRuntimeConsoleSuppression() async throws {
         let recorder = RuntimeLogRecorder()
@@ -1308,6 +1765,10 @@ private final class LoginTransactionURLProtocol: URLProtocol {
     override class func canInit(with request: URLRequest) -> Bool {
         request.url?.host == "login-transaction.invalid"
             || request.url?.host == "login-transaction-other.invalid"
+            || request.url?.host == "login-destination.invalid"
+            || request.url?.host == "allowed-destination.invalid"
+            || request.url?.host == "registration-source.invalid"
+            || request.url?.host == "unlisted-destination.invalid"
             || request.url?.host == "127.0.0.1"
     }
 
@@ -1488,9 +1949,14 @@ private final class LoginTransactionURLProtocol: URLProtocol {
             return
         }
 
-        let setCookie = url.path == "/redirect-final" || url.path == "/cross-final"
-            ? "final=ready; Path=/"
-            : "server=three; Path=/, callback=four; Path=/callback"
+        let setCookie: String
+        if url.path == "/redirect-final" || url.path == "/cross-final" {
+            setCookie = "final=ready; Path=/"
+        } else if url.path == "/register-anonymous-cookie" {
+            setCookie = "anonymous_device=transaction-value; Path=/; Secure"
+        } else {
+            setCookie = "server=three; Path=/, callback=four; Path=/callback"
+        }
         guard
               let response = HTTPURLResponse(
                 url: url,

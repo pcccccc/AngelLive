@@ -73,6 +73,8 @@ struct PlatformLoginChallengeManifestTests {
         #expect(challenge.functions.create == ManifestLoginChallengeFunctions.defaultCreate)
         #expect(challenge.functions.poll == "customPoll")
         #expect(challenge.functions.cancel == ManifestLoginChallengeFunctions.defaultCancel)
+        #expect(challenge.functions.submitVerification == ManifestLoginChallengeFunctions.defaultSubmitVerification)
+        #expect(challenge.functions.resendVerification == ManifestLoginChallengeFunctions.defaultResendVerification)
         #expect(challenge.hint == "Scan in the app")
         #expect(challenge.prefers(.tvOS))
         #expect(!challenge.prefers(.macOS))
@@ -216,6 +218,42 @@ struct PlatformLoginChallengeServiceTests {
         }
     }
 
+    @Test("plugin-provided PNG is shown instead of encoding qrContent")
+    func pluginPNGIsPresented() async throws {
+        let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        let created = try JSONDecoder().decode(
+            LoginChallengeCreateResponse.self,
+            from: Data(#"""
+            {
+              "kind": "qrcode",
+              "challengeId": "challenge-png",
+              "qrContent": "https://example.invalid/long-qr-url",
+              "qrImage": "data:image/png;base64,\#(pngBase64)",
+              "pollIntervalMs": 1000
+            }
+            """#.utf8)
+        )
+        let driver = ChallengeDriver(
+            creates: [created],
+            polls: [.init(state: .waiting)],
+            suspendedSleeps: [1]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(), platform: .iOS)
+        #expect(await eventually { await driver.hasSuspendedSleep(1) })
+        guard case .presenting(let presentation) = service.state else {
+            Issue.record("Expected presenting state")
+            return
+        }
+        #expect(presentation.qrContent == "https://example.invalid/long-qr-url")
+        let pngMagic = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        #expect(presentation.qrImageData?.prefix(pngMagic.count) == pngMagic)
+
+        service.cancel()
+        await service.waitForCurrentOperation()
+    }
+
     @Test("plugin failed state stops without promoting credentials")
     func pluginFailedStateStops() async {
         let driver = ChallengeDriver(
@@ -234,6 +272,193 @@ struct PlatformLoginChallengeServiceTests {
         #expect(failure.kind == .plugin)
         #expect(failure.message == "risk control")
         #expect((await driver.snapshot()).promoteCount == 0)
+    }
+
+    @Test("verification state requires a v2 manifest declaration")
+    func verificationRequiresV2Manifest() async {
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [.init(
+                state: .verificationRequired,
+                verification: .init(kind: .smsCode, verificationId: "verify-1")
+            )]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 1)), platform: .tvOS)
+        await service.waitForCurrentOperation()
+
+        guard case .failed(let failure) = service.state else {
+            Issue.record("Expected a protocol version failure")
+            return
+        }
+        #expect(failure.kind == .invalidResponse)
+        #expect(failure.message.contains("manifest 未声明 v2"))
+        #expect((await driver.snapshot()).verificationSubmitCount == 0)
+    }
+
+    @Test("SMS verification pauses polling then resumes the same challenge")
+    func smsVerificationResumesPolling() async {
+        let verification = LoginChallengeVerificationDescriptor(
+            kind: .smsCode,
+            verificationId: "verify-1",
+            prompt: "请输入短信验证码",
+            maskedDestination: "138****0000",
+            codeLength: 6,
+            canResend: true,
+            resendAfterMs: 30_000
+        )
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [
+                .init(state: .verificationRequired, rawStatus: 2046, verification: verification),
+                .init(state: .confirmed)
+            ],
+            verificationSubmits: [.init(state: .accepted)]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .tvOS)
+        #expect(await eventually {
+            guard case .awaitingVerification = service.state else { return false }
+            return true
+        })
+        guard case .awaitingVerification(let presentation) = service.state else {
+            Issue.record("Expected SMS verification input")
+            return
+        }
+        #expect(presentation.maskedDestination == "138****0000")
+        #expect(presentation.codeLength == 6)
+        #expect(presentation.canResend)
+
+        service.submitVerificationCode("123456")
+        await service.waitForCurrentOperation()
+
+        guard case .succeeded = service.state else {
+            Issue.record("Expected polling to resume and finish")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.verificationSubmitCount == 1)
+        #expect(snapshot.verificationSubmitFunctions == ["submitLoginChallengeVerification"])
+        #expect(snapshot.promoteCount == 1)
+    }
+
+    @Test("a rejected SMS code remains in the verification step")
+    func rejectedSMSCodeCanBeRetried() async {
+        let verification = LoginChallengeVerificationDescriptor(
+            kind: .smsCode,
+            verificationId: "verify-1",
+            maskedDestination: "138****0000"
+        )
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [
+                .init(state: .verificationRequired, verification: verification),
+                .init(state: .confirmed)
+            ],
+            verificationSubmits: [
+                .init(state: .rejected, message: "验证码错误"),
+                .init(state: .accepted)
+            ]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .iOS)
+        #expect(await eventually {
+            guard case .awaitingVerification = service.state else { return false }
+            return true
+        })
+        service.submitVerificationCode("111111")
+        #expect(await eventually {
+            guard case .awaitingVerification(let prompt) = service.state else { return false }
+            return prompt.errorMessage == "验证码错误"
+        })
+
+        service.submitVerificationCode("222222")
+        await service.waitForCurrentOperation()
+        guard case .succeeded = service.state else {
+            Issue.record("Expected the corrected SMS code to succeed")
+            return
+        }
+        #expect((await driver.snapshot()).verificationSubmitCount == 2)
+    }
+
+    @Test("SMS verification can request a new code before submission")
+    func smsVerificationCanResend() async {
+        let initial = LoginChallengeVerificationDescriptor(
+            kind: .smsCode,
+            verificationId: "verify-1",
+            maskedDestination: "138****0000",
+            canResend: true,
+            resendAfterMs: 0
+        )
+        let refreshed = LoginChallengeVerificationDescriptor(
+            kind: .smsCode,
+            verificationId: "verify-2",
+            maskedDestination: "138****0000",
+            canResend: true,
+            resendAfterMs: 60_000
+        )
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [
+                .init(state: .verificationRequired, verification: initial),
+                .init(state: .confirmed)
+            ],
+            verificationSubmits: [.init(state: .accepted)],
+            verificationResends: [refreshed]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .macOS)
+        #expect(await eventually {
+            guard case .awaitingVerification = service.state else { return false }
+            return true
+        })
+        service.resendVerificationCode()
+        #expect(await eventually {
+            guard case .awaitingVerification(let prompt) = service.state else { return false }
+            return prompt.errorMessage == "验证码已重新发送"
+                && prompt.resendAvailableAt != nil
+        })
+
+        service.submitVerificationCode("123456")
+        await service.waitForCurrentOperation()
+        guard case .succeeded = service.state else {
+            Issue.record("Expected resent SMS verification to finish")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.verificationResendCount == 1)
+        #expect(snapshot.verificationResendFunctions == ["resendLoginChallengeVerification"])
+    }
+
+    @Test("cancelling while waiting for an SMS code discards the challenge")
+    func cancelWhileAwaitingSMSCode() async {
+        let verification = LoginChallengeVerificationDescriptor(
+            kind: .smsCode,
+            verificationId: "verify-1"
+        )
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [.init(state: .verificationRequired, verification: verification)]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .tvOS)
+        #expect(await eventually {
+            guard case .awaitingVerification = service.state else { return false }
+            return true
+        })
+        service.cancel()
+        await service.waitForCurrentOperation()
+
+        #expect(service.state == .idle)
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.discardCount == 1)
+        #expect(snapshot.cancelledChallengeIds == ["challenge"])
+        #expect(snapshot.verificationSubmitCount == 0)
     }
 
     @Test("oversized QR content is rejected before presentation")
@@ -427,6 +652,20 @@ struct PlatformLoginChallengeServiceTests {
             poll: { pluginId, function, request in
                 try await driver.poll(pluginId: pluginId, function: function, request: request)
             },
+            submitVerification: { pluginId, function, request in
+                try await driver.submitVerification(
+                    pluginId: pluginId,
+                    function: function,
+                    request: request
+                )
+            },
+            resendVerification: { pluginId, function, request in
+                try await driver.resendVerification(
+                    pluginId: pluginId,
+                    function: function,
+                    request: request
+                )
+            },
             cancel: { pluginId, function, request in
                 try await driver.cancel(pluginId: pluginId, function: function, request: request)
             },
@@ -474,9 +713,10 @@ private extension LoginPlatformEntry {
 }
 
 private extension ManifestLoginChallenge {
-    static func fixture(maxRefreshes: Int = 1) -> Self {
+    static func fixture(maxRefreshes: Int = 1, minProtocol: Int = 1) -> Self {
         Self(
             kind: .qrcode,
+            minLoginChallengeProtocol: minProtocol,
             pollIntervalMs: 1_000,
             timeoutSeconds: 180,
             maxRefreshes: maxRefreshes,
@@ -503,16 +743,24 @@ private actor ChallengeDriver {
         let createFunctions: [String]
         let pollFunctions: [String]
         let cancelledChallengeIds: [String]
+        let verificationSubmitCount: Int
+        let verificationSubmitFunctions: [String]
+        let verificationResendCount: Int
+        let verificationResendFunctions: [String]
     }
 
     enum DriverError: Error {
         case missingCreate
         case missingPoll
         case cancelRejected
+        case missingVerificationSubmit
+        case missingVerificationResend
     }
 
     private var creates: [LoginChallengeCreateResponse]
     private var polls: [LoginChallengePollResponse]
+    private var verificationSubmits: [LoginChallengeVerificationSubmitResponse]
+    private var verificationResends: [LoginChallengeVerificationDescriptor]
     private var suspendFirstCreate: Bool
     private var suspendedCreate: CheckedContinuation<LoginChallengeCreateResponse, Never>?
     private let suspendedSleeps: Set<Int>
@@ -527,6 +775,10 @@ private actor ChallengeDriver {
     private var createFunctions: [String] = []
     private var pollFunctions: [String] = []
     private var cancelledChallengeIds: [String] = []
+    private var verificationSubmitCount = 0
+    private var verificationSubmitFunctions: [String] = []
+    private var verificationResendCount = 0
+    private var verificationResendFunctions: [String] = []
     private var suspendFirstCancel: Bool
     private var rejectFirstCancel: Bool
     private var suspendedCancel: CheckedContinuation<Void, Never>?
@@ -534,6 +786,8 @@ private actor ChallengeDriver {
     init(
         creates: [LoginChallengeCreateResponse],
         polls: [LoginChallengePollResponse],
+        verificationSubmits: [LoginChallengeVerificationSubmitResponse] = [],
+        verificationResends: [LoginChallengeVerificationDescriptor] = [],
         suspendFirstCreate: Bool = false,
         suspendFirstCancel: Bool = false,
         rejectFirstCancel: Bool = false,
@@ -541,6 +795,8 @@ private actor ChallengeDriver {
     ) {
         self.creates = creates
         self.polls = polls
+        self.verificationSubmits = verificationSubmits
+        self.verificationResends = verificationResends
         self.suspendFirstCreate = suspendFirstCreate
         self.suspendFirstCancel = suspendFirstCancel
         self.rejectFirstCancel = rejectFirstCancel
@@ -586,6 +842,28 @@ private actor ChallengeDriver {
         pollFunctions.append(function)
         guard !polls.isEmpty else { throw DriverError.missingPoll }
         return polls.removeFirst()
+    }
+
+    func submitVerification(
+        pluginId: String,
+        function: String,
+        request: LoginChallengeVerificationRequest
+    ) throws -> LoginChallengeVerificationSubmitResponse {
+        verificationSubmitCount += 1
+        verificationSubmitFunctions.append(function)
+        guard !verificationSubmits.isEmpty else { throw DriverError.missingVerificationSubmit }
+        return verificationSubmits.removeFirst()
+    }
+
+    func resendVerification(
+        pluginId: String,
+        function: String,
+        request: LoginChallengeVerificationResendRequest
+    ) throws -> LoginChallengeVerificationDescriptor {
+        verificationResendCount += 1
+        verificationResendFunctions.append(function)
+        guard !verificationResends.isEmpty else { throw DriverError.missingVerificationResend }
+        return verificationResends.removeFirst()
     }
 
     func cancel(pluginId: String, function: String, request: LoginChallengePollRequest) async throws {
@@ -656,7 +934,11 @@ private actor ChallengeDriver {
             didLoginCount: didLoginCount,
             createFunctions: createFunctions,
             pollFunctions: pollFunctions,
-            cancelledChallengeIds: cancelledChallengeIds
+            cancelledChallengeIds: cancelledChallengeIds,
+            verificationSubmitCount: verificationSubmitCount,
+            verificationSubmitFunctions: verificationSubmitFunctions,
+            verificationResendCount: verificationResendCount,
+            verificationResendFunctions: verificationResendFunctions
         )
     }
 }

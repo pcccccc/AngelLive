@@ -70,7 +70,8 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
 
 /// 当前宿主实现的登录挑战协议版本。该版本独立于各端的营销版本。
 public enum PlatformLoginChallengeProtocol {
-    public static let currentVersion = 1
+    /// v2 adds an optional host-collected verification step (currently SMS code).
+    public static let currentVersion = 2
 }
 
 /// 登录挑战类型。未知值会被保留，但不会被宿主当作受支持能力。
@@ -103,13 +104,17 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
     public static let defaultCreate = "createLoginChallenge"
     public static let defaultPoll = "pollLoginChallenge"
     public static let defaultCancel = "cancelLoginChallenge"
+    public static let defaultSubmitVerification = "submitLoginChallengeVerification"
+    public static let defaultResendVerification = "resendLoginChallengeVerification"
 
     public let create: String
     public let poll: String
     public let cancel: String
+    public let submitVerification: String
+    public let resendVerification: String
 
     public var usesReservedCredentialFunction: Bool {
-        [create, poll, cancel].contains { function in
+        [create, poll, cancel, submitVerification, resendVerification].contains { function in
             Self.reservedCredentialFunctions.contains(function.lowercased())
         }
     }
@@ -117,17 +122,29 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
     public init(
         create: String = Self.defaultCreate,
         poll: String = Self.defaultPoll,
-        cancel: String = Self.defaultCancel
+        cancel: String = Self.defaultCancel,
+        submitVerification: String = Self.defaultSubmitVerification,
+        resendVerification: String = Self.defaultResendVerification
     ) {
         self.create = Self.normalized(create, fallback: Self.defaultCreate)
         self.poll = Self.normalized(poll, fallback: Self.defaultPoll)
         self.cancel = Self.normalized(cancel, fallback: Self.defaultCancel)
+        self.submitVerification = Self.normalized(
+            submitVerification,
+            fallback: Self.defaultSubmitVerification
+        )
+        self.resendVerification = Self.normalized(
+            resendVerification,
+            fallback: Self.defaultResendVerification
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
         case create
         case poll
         case cancel
+        case submitVerification
+        case resendVerification
     }
 
     public init(from decoder: Decoder) throws {
@@ -135,7 +152,9 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
         self.init(
             create: try container.decodeIfPresent(String.self, forKey: .create) ?? Self.defaultCreate,
             poll: try container.decodeIfPresent(String.self, forKey: .poll) ?? Self.defaultPoll,
-            cancel: try container.decodeIfPresent(String.self, forKey: .cancel) ?? Self.defaultCancel
+            cancel: try container.decodeIfPresent(String.self, forKey: .cancel) ?? Self.defaultCancel,
+            submitVerification: try container.decodeIfPresent(String.self, forKey: .submitVerification) ?? Self.defaultSubmitVerification,
+            resendVerification: try container.decodeIfPresent(String.self, forKey: .resendVerification) ?? Self.defaultResendVerification
         )
     }
 

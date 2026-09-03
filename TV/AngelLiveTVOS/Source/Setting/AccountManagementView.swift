@@ -327,6 +327,8 @@ private struct TVPlatformLoginQRCodePageView: View {
     @State private var service = PlatformLoginChallengeService()
     @State private var backgroundTimeoutTask: Task<Void, Never>?
     @State private var backgroundedAt: Date?
+    @State private var verificationCode = ""
+    @FocusState private var verificationFieldFocused: Bool
 
     var body: some View {
         content
@@ -340,8 +342,15 @@ private struct TVPlatformLoginQRCodePageView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhase(newPhase)
             }
+            .onChange(of: service.state) { _, newState in
+                guard case .awaitingVerification = newState else {
+                    verificationCode = ""
+                    return
+                }
+            }
             .onDisappear {
                 cancelBackgroundTimeout()
+                verificationCode = ""
                 service.cancel()
             }
             .onExitCommand {
@@ -358,6 +367,12 @@ private struct TVPlatformLoginQRCodePageView: View {
             challengeContent(presentation, scanned: false)
         case .scanned(let presentation):
             challengeContent(presentation, scanned: true)
+        case .awaitingVerification(let presentation):
+            verificationContent(presentation, isWorking: false)
+        case .submittingVerification(let presentation):
+            verificationContent(presentation, isWorking: true)
+        case .requestingVerificationCode(let presentation):
+            verificationContent(presentation, isWorking: true)
         case .validating:
             progressContent("正在验证登录信息…")
         case .succeeded(let success):
@@ -369,10 +384,78 @@ private struct TVPlatformLoginQRCodePageView: View {
         }
     }
 
+    private func verificationContent(
+        _ presentation: LoginChallengeVerificationPresentation,
+        isWorking: Bool
+    ) -> some View {
+        VStack(spacing: 24) {
+            Image(systemName: "message.badge.waveform.fill")
+                .font(.system(size: 72))
+                .foregroundStyle(.tint)
+            Text("需要短信验证")
+                .font(.title2.bold())
+            Text(presentation.prompt)
+                .font(.title3)
+                .multilineTextAlignment(.center)
+            if let destination = presentation.maskedDestination {
+                Text("验证码已发送至 \(destination)")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            SecureField("短信验证码", text: $verificationCode)
+                .textContentType(.oneTimeCode)
+                .keyboardType(.numberPad)
+                .focused($verificationFieldFocused)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 520)
+                .onSubmit { submitVerificationCode(presentation) }
+                .onChange(of: verificationCode) { _, value in
+                    verificationCode = String(value.prefix(presentation.codeLength))
+                }
+            if let errorMessage = presentation.errorMessage {
+                Text(errorMessage)
+                    .font(.headline)
+                    .foregroundStyle(errorMessage == "验证码已重新发送" ? Color.secondary : Color.red)
+            }
+            HStack(spacing: 20) {
+                Button(isWorking ? "正在验证…" : "验证并继续") {
+                    submitVerificationCode(presentation)
+                }
+                .disabled(isWorking || verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).count != presentation.codeLength)
+                resendButton(presentation, isWorking: isWorking)
+                Button("返回") { onBack() }
+            }
+        }
+        .onAppear { verificationFieldFocused = !isWorking }
+    }
+
+    @ViewBuilder
+    private func resendButton(
+        _ presentation: LoginChallengeVerificationPresentation,
+        isWorking: Bool
+    ) -> some View {
+        if presentation.canResend {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = max(0, Int(ceil(presentation.resendAvailableAt?.timeIntervalSince(context.date) ?? 0)))
+                Button(remaining > 0 ? "\(remaining) 秒后可重发" : "重新发送") {
+                    service.resendVerificationCode()
+                }
+                .disabled(isWorking || remaining > 0)
+            }
+        }
+    }
+
+    private func submitVerificationCode(_ presentation: LoginChallengeVerificationPresentation) {
+        let code = verificationCode
+        guard code.trimmingCharacters(in: .whitespacesAndNewlines).count == presentation.codeLength else { return }
+        verificationCode = ""
+        service.submitVerificationCode(code)
+    }
+
     private func challengeContent(_ presentation: LoginChallengePresentation, scanned: Bool) -> some View {
         ScrollView {
             HStack(spacing: 80) {
-                Image(uiImage: TVLoginQRCodeGenerator.generate(from: presentation.qrContent))
+                Image(uiImage: qrCodeImage(presentation))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
@@ -505,6 +588,13 @@ private struct TVPlatformLoginQRCodePageView: View {
         cancelBackgroundTimeout()
         service.cancel()
         onBack()
+    }
+
+    private func qrCodeImage(_ presentation: LoginChallengePresentation) -> UIImage {
+        if let data = presentation.qrImageData, let image = UIImage(data: data) {
+            return image
+        }
+        return TVLoginQRCodeGenerator.generate(from: presentation.qrContent)
     }
 }
 

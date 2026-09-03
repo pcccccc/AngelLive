@@ -1,5 +1,18 @@
 import Foundation
 
+enum LoginChallengeConsoleOperation: Sendable {
+    case create
+    case poll
+    case submitVerification
+    case resendVerification
+    case cancel
+}
+
+enum SensitivePluginConsolePolicy: Sendable {
+    case omitted
+    case loginChallenge(LoginChallengeConsoleOperation)
+}
+
 final class LiveParsePluginVersionLeaseToken: @unchecked Sendable {
     let pluginId: String
     let version: String
@@ -52,6 +65,7 @@ enum LiveParsePluginVersionLeaseRegistry {
 struct LiveParsePluginRuntimeLease: Sendable {
     let pluginId: String
     let version: String
+    let credentialDomains: [String]
     fileprivate let plugin: LiveParseLoadedPlugin
     fileprivate let versionLeaseToken: LiveParsePluginVersionLeaseToken
 }
@@ -213,6 +227,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         return LiveParsePluginRuntimeLease(
             pluginId: plugin.manifest.pluginId,
             version: plugin.manifest.version,
+            credentialDomains: plugin.manifest.hostManagedCredentialDomains,
             plugin: plugin,
             versionLeaseToken: LiveParsePluginVersionLeaseToken(
                 pluginId: plugin.manifest.pluginId,
@@ -233,6 +248,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             function: function,
             payload: payload,
             sensitive: sensitive,
+            sensitiveConsolePolicy: .omitted,
             hostManagesCredentialVault: hostManagesCredentialVault,
             isolatedPlatformSession: nil,
             runtimeLease: nil
@@ -244,6 +260,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         function: String,
         payload: [String: Any],
         sensitive: Bool,
+        sensitiveConsolePolicy: SensitivePluginConsolePolicy,
         hostManagesCredentialVault: Bool,
         isolatedPlatformSession: LiveParsePlatformSession?,
         runtimeLease: LiveParsePluginRuntimeLease?
@@ -278,11 +295,14 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         let console = PluginConsoleService.shared
         let consoleEntryId: UUID?
         if console.isEnabled {
-            // 敏感调用不尝试从任意字符串中猜 token；整段请求直接省略。
-            // 字段级递归脱敏只作为普通插件调用的第二层保护。
+            // 敏感调用默认整段省略；登录挑战只输出宿主定义的字段白名单摘要。
+            // 绝不对任意插件 JSON 做“猜测式”放行。
             let payloadStr: String
             if sensitivePluginCall {
-                payloadStr = "<sensitive request omitted>"
+                payloadStr = Self.sensitiveRequestSummary(
+                    policy: sensitiveConsolePolicy,
+                    payload: payload
+                )
             } else {
                 let consolePayload = Self.redactedLoginTransactionConsoleValue(payload)
                 payloadStr = (try? String(
@@ -345,10 +365,28 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     console.clearActiveCall(pluginId: pluginId)
                 }
                 let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+#if DEBUG
+                if case .loginChallenge = sensitiveConsolePolicy {
+                    Logger.debug(
+                        """
+                        [PluginLogin][FUNCTION]
+                        pluginId=\(pluginId)
+                        function=\(function)
+                        request=\(Self.sensitiveRequestSummary(policy: sensitiveConsolePolicy, payload: payload))
+                        response=\(Self.sensitiveResponseSummary(policy: sensitiveConsolePolicy, value: result))
+                        duration=\(String(format: "%.3f", elapsed))s
+                        """,
+                        category: .plugin
+                    )
+                }
+#endif
                 if let consoleEntryId {
                     let responseStr: String?
                     if sensitivePluginCall {
-                        responseStr = "<sensitive response omitted>"
+                        responseStr = Self.sensitiveResponseSummary(
+                            policy: sensitiveConsolePolicy,
+                            value: result
+                        )
                     } else {
                         let consoleResult = Self.redactedLoginTransactionConsoleValue(result)
                         responseStr = (try? String(data: JSONSerialization.data(withJSONObject: consoleResult), encoding: .utf8))
@@ -382,18 +420,189 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 console.clearActiveCall(pluginId: pluginId)
             }
             let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+#if DEBUG
+            if case .loginChallenge = sensitiveConsolePolicy {
+                Logger.debug(
+                    """
+                    [PluginLogin][FUNCTION][FAILURE]
+                    pluginId=\(pluginId)
+                    function=\(function)
+                    request=\(Self.sensitiveRequestSummary(policy: sensitiveConsolePolicy, payload: payload))
+                    error=\(Self.sensitiveErrorSummary(policy: sensitiveConsolePolicy, error: error))
+                    duration=\(String(format: "%.3f", elapsed))s
+                    """,
+                    category: .plugin
+                )
+            }
+#endif
             if let consoleEntryId {
                 await console.updateStatus(
                     id: consoleEntryId,
                     status: .error,
                     duration: elapsed,
                     errorMessage: sensitivePluginCall
-                        ? "Sensitive plugin call failed"
+                        ? Self.sensitiveErrorSummary(
+                            policy: sensitiveConsolePolicy,
+                            error: error
+                        )
                         : error.localizedDescription
                 )
             }
             throw error
         }
+    }
+
+    static func sensitiveRequestSummary(
+        policy: SensitivePluginConsolePolicy,
+        payload: [String: Any]
+    ) -> String {
+        guard case .loginChallenge(let operation) = policy else {
+            return "<sensitive request omitted>"
+        }
+
+        var summary: [String: Any] = ["privacy": "sensitive fields redacted"]
+        switch operation {
+        case .create:
+            summary["transactionId"] = "<redacted>"
+            summary["platform"] = allowedString(
+                payload["platform"],
+                values: ["ios", "macos", "tvos"]
+            ) ?? "unknown"
+        case .poll:
+            summary["transactionId"] = "<redacted>"
+            summary["challengeId"] = "<redacted>"
+        case .submitVerification:
+            summary["transactionId"] = "<redacted>"
+            summary["challengeId"] = "<redacted>"
+            summary["verificationId"] = "<redacted>"
+            summary["code"] = "<redacted>"
+        case .resendVerification:
+            summary["transactionId"] = "<redacted>"
+            summary["challengeId"] = "<redacted>"
+            summary["verificationId"] = "<redacted>"
+        case .cancel:
+            summary["transactionId"] = "<redacted>"
+            summary["challengeId"] = "<redacted>"
+        }
+        return consoleJSONString(summary)
+    }
+
+    static func sensitiveResponseSummary(
+        policy: SensitivePluginConsolePolicy,
+        value: Any
+    ) -> String {
+        guard case .loginChallenge(let operation) = policy,
+              let response = value as? [String: Any] else {
+            return "<sensitive response omitted>"
+        }
+
+        var summary: [String: Any] = ["privacy": "sensitive fields redacted"]
+        switch operation {
+        case .create:
+            summary["kind"] = allowedString(response["kind"], values: ["qrcode"]) ?? "unknown"
+            addBoundedInteger(response["pollIntervalMs"], key: "pollIntervalMs", to: &summary)
+            summary["hasExpiration"] = numericValue(response["expiresAt"]) != nil
+            summary["hasHint"] = nonemptyString(response["hint"])
+            summary["challengeId"] = "<redacted>"
+            summary["qrContent"] = "<redacted>"
+            summary["hasQRImage"] = nonemptyString(response["qrImage"])
+        case .poll:
+            summary["state"] = allowedString(
+                response["state"],
+                values: ["waiting", "scanned", "verification_required", "confirmed", "expired", "failed"]
+            ) ?? "unknown"
+            addBoundedInteger(response["rawStatus"], key: "rawStatus", to: &summary)
+            if let ready = response["credentialReady"] as? Bool {
+                summary["credentialReady"] = ready
+            }
+            summary["hasMessage"] = nonemptyString(response["message"])
+            if let verification = response["verification"] as? [String: Any] {
+                summary["verification"] = verificationConsoleSummary(verification)
+            }
+        case .submitVerification:
+            summary["state"] = allowedString(
+                response["state"],
+                values: ["accepted", "rejected"]
+            ) ?? "unknown"
+            summary["hasMessage"] = nonemptyString(response["message"])
+            if let verification = response["verification"] as? [String: Any] {
+                summary["verification"] = verificationConsoleSummary(verification)
+            }
+        case .resendVerification:
+            summary["verification"] = verificationConsoleSummary(response)
+        case .cancel:
+            if let ok = response["ok"] as? Bool {
+                summary["ok"] = ok
+            }
+        }
+        return consoleJSONString(summary)
+    }
+
+    static func sensitiveErrorSummary(
+        policy: SensitivePluginConsolePolicy,
+        error: Error
+    ) -> String {
+        guard case .loginChallenge = policy else {
+            return "Sensitive plugin call failed"
+        }
+        if case .standardized(let standard)? = error as? LiveParsePluginError {
+            return "Login challenge failed [\(standard.code.rawValue)]"
+        }
+        if error is CancellationError {
+            return "Login challenge cancelled"
+        }
+        return "Login challenge failed [details omitted]"
+    }
+
+    private static func verificationConsoleSummary(_ value: [String: Any]) -> [String: Any] {
+        var summary: [String: Any] = [
+            "kind": allowedString(value["kind"], values: ["sms_code"]) ?? "unknown",
+            "verificationId": "<redacted>",
+            "hasPrompt": nonemptyString(value["prompt"]),
+            "hasDestination": nonemptyString(value["maskedDestination"])
+        ]
+        addBoundedInteger(value["codeLength"], key: "codeLength", to: &summary)
+        addBoundedInteger(value["resendAfterMs"], key: "resendAfterMs", to: &summary)
+        if let canResend = value["canResend"] as? Bool {
+            summary["canResend"] = canResend
+        }
+        return summary
+    }
+
+    private static func allowedString(_ value: Any?, values: Set<String>) -> String? {
+        guard let value = value as? String else { return nil }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return values.contains(normalized) ? normalized : nil
+    }
+
+    private static func nonemptyString(_ value: Any?) -> Bool {
+        guard let value = value as? String else { return false }
+        return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static func numericValue(_ value: Any?) -> Int? {
+        guard !(value is Bool), let number = value as? NSNumber else { return nil }
+        let candidate = number.int64Value
+        guard candidate >= -1_000_000_000_000, candidate <= 1_000_000_000_000 else { return nil }
+        return Int(candidate)
+    }
+
+    private static func addBoundedInteger(
+        _ value: Any?,
+        key: String,
+        to summary: inout [String: Any]
+    ) {
+        if let value = numericValue(value) {
+            summary[key] = value
+        }
+    }
+
+    private static func consoleJSONString(_ value: [String: Any]) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "<safe summary unavailable>"
+        }
+        return string
     }
 
     static func containsLoginTransactionIdentifier(_ value: Any) -> Bool {
@@ -458,7 +667,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     private static func isSensitiveConsoleKey(_ key: String) -> Bool {
         let lowered = key.lowercased()
         let redactedKeys: Set<String> = [
-            "transactionid", "challengeid", "qrcontent", "credential", "cookie", "set-cookie",
+            "transactionid", "challengeid", "qrcontent", "qrimage", "credential", "cookie", "set-cookie",
             "setcookies", "authorization", "location", "headers", "requestheaders",
             "responseheaders", "body", "bodytext", "bodybase64", "requestbody", "responsebody"
         ]
@@ -516,6 +725,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 function: function,
                 payload: payload,
                 sensitive: true,
+                sensitiveConsolePolicy: .omitted,
                 hostManagesCredentialVault: true,
                 isolatedPlatformSession: isolatedSession,
                 runtimeLease: runtimeLease
@@ -536,6 +746,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         function: String,
         payload: [String: Any],
         sensitive: Bool,
+        sensitiveConsolePolicy: SensitivePluginConsolePolicy = .omitted,
         decoder: JSONDecoder = JSONDecoder()
     ) async throws -> T {
         do {
@@ -544,6 +755,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 function: function,
                 payload: payload,
                 sensitive: sensitive,
+                sensitiveConsolePolicy: sensitiveConsolePolicy,
                 // Challenge function names are manifest-controlled. They must
                 // never trigger the manager's reserved credential mutators.
                 hostManagesCredentialVault: true,

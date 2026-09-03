@@ -116,6 +116,74 @@ public actor LoginTransactionStore {
         return cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
     }
 
+    /// Builds a Cookie header for a host-authorized login destination. Cookies
+    /// that directly satisfy RFC scope for the destination win. Only names
+    /// without a scoped candidate fall back to a unique cross-domain value.
+    /// This lets an external bootstrap retain its own anonymous cookie while a
+    /// plugin seeds a destination-scoped replacement without losing that name.
+    func cookieHeaderForNativeRouting(
+        pluginId: String,
+        transactionId: String,
+        for url: URL
+    ) throws -> String {
+        var transaction = try activeTransaction(pluginId: pluginId, transactionId: transactionId)
+        removeExpiredCookies(from: &transaction)
+        transactions[transactionId] = transaction
+
+        let storedCookies = transaction.cookies.values.sorted {
+            Self.cookieSortOrder($0.cookie, $1.cookie)
+        }
+        let scopedCookies = storedCookies.filter { Self.cookie($0, appliesTo: url) }.map(\.cookie)
+        let scopedNames = Set(scopedCookies.map { $0.name.lowercased() })
+        let fallbackCookies = storedCookies.map(\.cookie).filter {
+            !scopedNames.contains($0.name.lowercased())
+        }
+        var valuesByName: [String: Set<String>] = [:]
+        for cookie in fallbackCookies {
+            valuesByName[cookie.name.lowercased(), default: []].insert(cookie.value)
+        }
+
+        var emittedNames: Set<String> = []
+        let fallbackPairs = fallbackCookies.compactMap { cookie -> String? in
+            let name = cookie.name.lowercased()
+            guard emittedNames.insert(name).inserted,
+                  valuesByName[name]?.count == 1 else {
+                return nil
+            }
+            return "\(cookie.name)=\(cookie.value)"
+        }
+        return (scopedCookies.map { "\($0.name)=\($0.value)" } + fallbackPairs)
+            .joined(separator: "; ")
+    }
+
+    /// Resolves one transaction Cookie for host-side injection without exposing
+    /// its value to JavaScript. Unlike `cookieHeader(for:)`, this lookup is not
+    /// constrained by the destination URL because the caller separately
+    /// enforces the manifest destination allowlist before attaching it.
+    func cookieValueForNativeInjection(
+        pluginId: String,
+        transactionId: String,
+        named rawName: String,
+        for url: URL
+    ) throws -> String? {
+        var transaction = try activeTransaction(pluginId: pluginId, transactionId: transactionId)
+        removeExpiredCookies(from: &transaction)
+        transactions[transactionId] = transaction
+
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let matching = transaction.cookies.values.filter { stored in
+            stored.cookie.name.caseInsensitiveCompare(name) == .orderedSame
+        }
+        let scoped = matching.filter { Self.cookie($0, appliesTo: url) }
+        let candidates = scoped.isEmpty ? matching : scoped
+        let values = Set(candidates.map { $0.cookie.value })
+        guard values.count <= 1 else {
+            throw LoginTransactionError.ambiguousCookieName
+        }
+        return values.first
+    }
+
     /// Seeds plugin-generated anonymous device fields into a transaction jar.
     public func seed(
         pluginId: String,
@@ -199,14 +267,34 @@ public actor LoginTransactionStore {
     }
 
     /// Serializes all cookies and destroys the transaction before returning.
-    public func promote(pluginId: String, transactionId: String) throws -> String {
+    public func promote(
+        pluginId: String,
+        transactionId: String,
+        preferredDomains: [String] = []
+    ) throws -> String {
         var transaction = try activeTransaction(pluginId: pluginId, transactionId: transactionId)
         removeExpiredCookies(from: &transaction)
         transactions[transactionId] = transaction
 
+        let normalizedPreferredDomains = preferredDomains
+            .map(Self.normalizedDomain)
+            .filter { !$0.isEmpty }
+        let storedCookies: [StoredCookie]
+        if normalizedPreferredDomains.isEmpty {
+            storedCookies = Array(transaction.cookies.values)
+        } else {
+            storedCookies = transaction.cookies.values.filter { stored in
+                normalizedPreferredDomains.contains { allowedDomain in
+                    let domain = Self.normalizedDomain(stored.cookie.domain)
+                    return domain == allowedDomain
+                        || domain.hasSuffix(".\(allowedDomain)")
+                        || allowedDomain.hasSuffix(".\(domain)")
+                }
+            }
+        }
         var valueByName: [String: String] = [:]
         var promotedPairs: [String] = []
-        for cookie in transaction.cookies.values.map(\.cookie).sorted(by: Self.cookieSortOrder) {
+        for cookie in storedCookies.map(\.cookie).sorted(by: Self.cookieSortOrder) {
             if let existing = valueByName[cookie.name] {
                 guard existing == cookie.value else {
                     // The legacy persisted credential is a flat Cookie string.

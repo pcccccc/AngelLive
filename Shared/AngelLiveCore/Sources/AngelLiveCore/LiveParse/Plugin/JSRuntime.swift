@@ -56,6 +56,21 @@ private func isAllowedManagedCredentialTransport(_ url: URL?) -> Bool {
     return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
+private func isManifestManagedCredentialDestination(
+    _ url: URL?,
+    credentialDomains: [String]
+) -> Bool {
+    guard let host = url?.host?.lowercased(), !host.isEmpty else { return false }
+    return credentialDomains.contains { rawDomain in
+        let domain = rawDomain
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard !domain.isEmpty else { return false }
+        return host == domain || host.hasSuffix(".\(domain)")
+    }
+}
+
 private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDelegate, URLSessionDataDelegate {
     let state = LoginTransactionRedirectState()
 
@@ -65,6 +80,7 @@ private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDe
     private let followRedirects: Bool
     private let explicitCookieHeader: String?
     private let pluginHeaderNames: Set<String>
+    private let credentialDomains: [String]
     private let originalURL: URL?
 
     init(
@@ -74,6 +90,7 @@ private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDe
         followRedirects: Bool,
         explicitCookieHeader: String?,
         pluginHeaderNames: Set<String>,
+        credentialDomains: [String],
         originalURL: URL?
     ) {
         self.pluginId = pluginId
@@ -82,6 +99,7 @@ private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDe
         self.followRedirects = followRedirects
         self.explicitCookieHeader = explicitCookieHeader
         self.pluginHeaderNames = pluginHeaderNames
+        self.credentialDomains = credentialDomains
         self.originalURL = originalURL
     }
 
@@ -107,6 +125,7 @@ private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDe
         let transactionId = transactionId
         let store = store
         let state = state
+        let credentialDomains = credentialDomains
         guard isAllowedManagedCredentialTransport(request.url) else {
             Task {
                 await state.record(failure: .invalidCookieScope)
@@ -145,15 +164,39 @@ private final class LoginTransactionRedirectDelegate: NSObject, URLSessionTaskDe
                 redirectedRequest.cachePolicy = .reloadIgnoringLocalCacheData
                 redirectedRequest.setValue("no-store", forHTTPHeaderField: "Cache-Control")
                 redirectedRequest.setValue("no-cache", forHTTPHeaderField: "Pragma")
-                let transactionCookie = try await store.cookieHeader(
-                    pluginId: pluginId,
-                    transactionId: transactionId,
-                    for: request.url
-                )
+                let transactionCookie: String
+                if isManifestManagedCredentialDestination(
+                    redirectedRequest.url,
+                    credentialDomains: credentialDomains
+                ) {
+                    transactionCookie = try await store.cookieHeaderForNativeRouting(
+                        pluginId: pluginId,
+                        transactionId: transactionId,
+                        for: redirectedRequest.url ?? request.url!
+                    )
+                } else {
+                    transactionCookie = try await store.cookieHeader(
+                        pluginId: pluginId,
+                        transactionId: transactionId,
+                        for: redirectedRequest.url
+                    )
+                }
                 redirectedRequest.setValue(
                     mergedCookieHeader(transaction: transactionCookie, explicit: explicitCookieHeader),
                     forHTTPHeaderField: "Cookie"
                 )
+#if DEBUG
+                Logger.debug(
+                    """
+                    [JSRuntime][HTTP][REDIRECT]
+                    pluginId=\(pluginId)
+                    request.url=\(redirectedRequest.url.map(SensitivePluginHTTPConsoleSummary.redactedURL) ?? "<missing>")
+                    request.cookie=\(SensitivePluginHTTPConsoleSummary.cookieHeaderDiagnostics(redirectedRequest.value(forHTTPHeaderField: "Cookie")))
+                    request.headers=\(SensitivePluginHTTPConsoleSummary.redactedHeaders(redirectedRequest.allHTTPHeaderFields ?? [:]))
+                    """,
+                    category: .plugin
+                )
+#endif
                 completionHandler(redirectedRequest)
             } catch let error as LoginTransactionError {
                 await state.record(failure: error)
@@ -303,6 +346,151 @@ private func mergedCookieHeader(transaction: String?, explicit: String?) -> Stri
     let transactionPairs = pairs(from: transaction).filter { !explicitNames.contains($0.name) }
     let merged = (transactionPairs + explicitPairs).map(\.raw).joined(separator: "; ")
     return merged.isEmpty ? nil : merged
+}
+
+enum SensitivePluginHTTPConsoleSummary {
+    static func responseBody(
+        requestContainsCookieHeader: Bool? = nil
+    ) -> String? {
+        var summary: [String: Any] = [:]
+        if let requestContainsCookieHeader {
+            summary["request"] = [
+                "cookieHeader": requestContainsCookieHeader ? "attached" : "missing"
+            ]
+        }
+
+        guard !summary.isEmpty else { return nil }
+        guard let encoded = try? JSONSerialization.data(withJSONObject: summary, options: [.sortedKeys]) else {
+            return nil
+        }
+        return String(data: encoded, encoding: .utf8)
+    }
+
+    static func containsCookieHeader(_ header: String?) -> Bool {
+        header?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    static func cookieHeaderDiagnostics(_ header: String?) -> String {
+        guard let header, !header.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "missing"
+        }
+        let pairs = header.split(separator: ";", omittingEmptySubsequences: true).compactMap { component -> String? in
+            let raw = component.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let separator = raw.firstIndex(of: "=") else { return nil }
+            let name = String(raw[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(raw[raw.index(after: separator)...])
+            guard !name.isEmpty else { return nil }
+            return "\(name){length=\(value.utf8.count),fingerprint=\(String(value.md5.prefix(12)))}"
+        }
+        return pairs.isEmpty ? "present(unparseable)" : pairs.joined(separator: ", ")
+    }
+
+    static func redactedHeaders(_ headers: [String: String]) -> String {
+        guard !headers.isEmpty else { return "{}" }
+        let sanitized = headers.reduce(into: [String: String]()) { result, item in
+            let key = item.key.lowercased()
+            if key == "cookie" {
+                result[item.key] = cookieHeaderDiagnostics(item.value)
+            } else if key == "set-cookie" {
+                result[item.key] = "present{length=\(item.value.utf8.count),fingerprint=\(String(item.value.md5.prefix(12)))}"
+            } else if isSensitiveHeaderKey(key) {
+                result[item.key] = "<redacted>"
+            } else {
+                result[item.key] = item.value
+            }
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: sanitized, options: [.sortedKeys]),
+              let string = String(data: data, encoding: .utf8) else {
+            return "<unavailable>"
+        }
+        return string
+    }
+
+    static func redactedBody(_ rawBody: String?) -> String {
+        guard let rawBody else { return "<non-UTF8 or empty>" }
+        guard let data = rawBody.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            return redactFormEncodedSecrets(in: rawBody)
+        }
+        let sanitized = redactJSONObject(object)
+        guard JSONSerialization.isValidJSONObject(sanitized),
+              let encoded = try? JSONSerialization.data(
+                withJSONObject: sanitized,
+                options: [.prettyPrinted, .sortedKeys]
+              ),
+              let string = String(data: encoded, encoding: .utf8) else {
+            return "<JSON serialization unavailable>"
+        }
+        return string
+    }
+
+    static func redactedURL(_ url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return "\(url.scheme ?? "?")://\(url.host ?? "?")\(url.path)"
+        }
+        let queryNames = components.queryItems?.map(\.name) ?? []
+        components.user = nil
+        components.password = nil
+        components.query = nil
+        components.fragment = nil
+        let base = components.string ?? "\(url.scheme ?? "?")://\(url.host ?? "?")\(url.path)"
+        return queryNames.isEmpty ? base : "\(base)?<keys:\(queryNames.joined(separator: ","))>"
+    }
+
+    static func redactedText(_ value: String) -> String {
+        redactFormEncodedSecrets(in: value)
+    }
+
+    private static func redactJSONObject(_ value: Any, key: String? = nil) -> Any {
+        if let key, isSensitiveKey(key) { return "<redacted>" }
+        if let dictionary = value as? [String: Any] {
+            return dictionary.reduce(into: [String: Any]()) { result, item in
+                result[item.key] = redactJSONObject(item.value, key: item.key)
+            }
+        }
+        if let array = value as? [Any] {
+            return array.map { redactJSONObject($0) }
+        }
+        if let string = value as? String {
+            return redactFormEncodedSecrets(in: string)
+        }
+        return value
+    }
+
+    private static func isSensitiveHeaderKey(_ key: String) -> Bool {
+        key == "authorization"
+            || key == "proxy-authorization"
+            || key.contains("auth")
+            || key.contains("credential")
+            || key.contains("csrf")
+            || key.contains("vault")
+            || key.contains("token")
+            || key.contains("secret")
+            || key.contains("session")
+            || key.contains("ticket")
+            || key.contains("signature")
+    }
+
+    private static func isSensitiveKey(_ rawKey: String) -> Bool {
+        let key = rawKey.lowercased()
+        if key == "code" || key == "uid" || key == "user_id" || key == "userid" {
+            return true
+        }
+        return [
+            "cookie", "token", "ticket", "credential", "password", "secret",
+            "captcha", "mobile", "phone", "passport", "session", "verify",
+            "qrcode", "qr_code", "qrcontent", "qr_content"
+        ].contains { key.contains($0) }
+    }
+
+    private static func redactFormEncodedSecrets(in value: String) -> String {
+        let pattern = #"(?i)(cookie|token|ticket|credential|password|secret|captcha|mobile|phone|passport|session|verify|code)=([^&\s]+)"#
+        return value.replacingOccurrences(
+            of: pattern,
+            with: "$1=<redacted>",
+            options: .regularExpression
+        )
+    }
 }
 
 /// A task may be cancelled while JavaScriptCore is evaluating a function or
@@ -767,7 +955,8 @@ private extension JSRuntime {
 
           Host.capabilities = Host.capabilities || {};
           Host.capabilities.loginTransaction = true;
-          Host.capabilities.credentialExposure = false;
+          Host.capabilities.loginChallengeProtocol = \(PlatformLoginChallengeProtocol.currentVersion);
+          Host.capabilities.credentialExposure = true;
           Host.capabilities.webSocketPlatformCookie = true;
 
           Host.http = Host.http || {};
@@ -799,8 +988,8 @@ private extension JSRuntime {
           };
 
           Host.session = Host.session || {};
-          Host.session.getCookieHeader = function () {
-            Host.raise("UNSUPPORTED", "Credential values are host-managed and unavailable to plugins", {});
+          Host.session.getCookieHeader = function (platformId) {
+            return __lp_host_session_get_cookie_header(String(platformId || ""));
           };
           Host.session.getTransactionCookieHeader = function () {
             return Promise.reject(Host.makeError(
@@ -992,7 +1181,8 @@ private extension JSRuntime {
 
             // 通用 cookieInject：从 cookie 取值注入到 header、query 或 body
             var injectedIntoURLOrBody = false
-            if !envelope.cookieInject.isEmpty {
+            if !envelope.cookieInject.isEmpty,
+               envelope.authMode != .loginTransaction {
                 var mutableURL = envelope.urlString
                 var bodyJSON: [String: Any]?
 
@@ -1055,7 +1245,11 @@ private extension JSRuntime {
             // 捕获可变 var 会被判为「并发执行代码中引用捕获的 var」,
             // 故在此固化成不可变快照([String: String] 本身 Sendable)。
             let loggedRequestHeaders = requestHeaders
+            let injectedHeaderNames = envelope.cookieInject.compactMap { rule in
+                rule.target == .header ? rule.headerName?.lowercased() : nil
+            }
             let pluginHeaderNames = Set(requestHeaders.keys.map { $0.lowercased() })
+                .union(injectedHeaderNames)
             let rejectsCrossOriginRedirects = injectedIntoURLOrBody
 
             // 开发者控制台：记录请求开始时间
@@ -1084,18 +1278,61 @@ private extension JSRuntime {
                let transactionId = envelope.transactionId {
                 let pluginId = self.pluginId
                 let store = self.loginTransactionStore
+                let credentialDomains = self.credentialDomains
                 let requestTask = Task { [weak self] in
                     do {
                         var transactionRequest = finalRequest
-                        let transactionCookie = try await store.cookieHeader(
-                            pluginId: pluginId,
-                            transactionId: transactionId,
-                            for: finalRequest.url
-                        )
+                        let transactionCookie: String
+                        if isManifestManagedCredentialDestination(
+                            finalRequest.url,
+                            credentialDomains: credentialDomains
+                        ) {
+                            transactionCookie = try await store.cookieHeaderForNativeRouting(
+                                pluginId: pluginId,
+                                transactionId: transactionId,
+                                for: finalRequest.url!
+                            )
+                        } else {
+                            transactionCookie = try await store.cookieHeader(
+                                pluginId: pluginId,
+                                transactionId: transactionId,
+                                for: finalRequest.url
+                            )
+                        }
                         let explicitCookie = Self.headerValue(named: "cookie", in: envelope.headers)
+                        let mergedCookie = mergedCookieHeader(
+                            transaction: transactionCookie,
+                            explicit: explicitCookie
+                        )
                         transactionRequest.setValue(
-                            mergedCookieHeader(transaction: transactionCookie, explicit: explicitCookie),
+                            mergedCookie,
                             forHTTPHeaderField: "Cookie"
+                        )
+                        let allowsTransactionInjection = isManifestManagedCredentialDestination(
+                            finalRequest.url,
+                            credentialDomains: credentialDomains
+                        )
+                        var transactionInjectionValues: [String: String] = [:]
+                        if allowsTransactionInjection {
+                            for rule in envelope.cookieInject {
+                                if let value = try await store.cookieValueForNativeInjection(
+                                    pluginId: pluginId,
+                                    transactionId: transactionId,
+                                    named: rule.cookieName,
+                                    for: finalRequest.url!
+                                ) {
+                                    transactionInjectionValues[rule.cookieName.lowercased()] = value
+                                }
+                            }
+                        }
+                        let injectedCookieHeader = Self.applyCookieInject(
+                            envelope.cookieInject,
+                            values: transactionInjectionValues,
+                            to: &transactionRequest
+                        )
+                        let redirectCookieHeader = mergedCookieHeader(
+                            transaction: explicitCookie,
+                            explicit: injectedCookieHeader
                         )
                         let snapshot = try await Self.performLoginTransactionHTTPRequest(
                             session: session,
@@ -1104,8 +1341,9 @@ private extension JSRuntime {
                             transactionId: transactionId,
                             store: store,
                             followRedirects: envelope.followRedirects,
-                            explicitCookieHeader: explicitCookie,
-                            pluginHeaderNames: pluginHeaderNames
+                            explicitCookieHeader: redirectCookieHeader,
+                            pluginHeaderNames: pluginHeaderNames,
+                            credentialDomains: credentialDomains
                         )
                         self?.queue.async { [weak self] in
                             self?.finishHostHTTPRequest(callbackID: callbackID, result: .success(snapshot))
@@ -1225,7 +1463,11 @@ private extension JSRuntime {
         let followRedirects = (options["followRedirects"] as? Bool)
             ?? (request["followRedirects"] as? Bool)
             ?? true
-        let cookieInject = authMode == .loginTransaction ? [] : resolveCookieInject(options: options)
+        let cookieInject = resolveCookieInject(options: options)
+        guard authMode != .loginTransaction
+                || cookieInject.allSatisfy({ $0.target == .header }) else {
+            return nil
+        }
         let requestedSingleFlightKey = (options["singleFlightKey"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let protectsManagedCredential = authMode != .none || !cookieInject.isEmpty
@@ -1299,19 +1541,53 @@ private extension JSRuntime {
         credentialDomains: [String]
     ) -> Bool {
         guard isAllowedManagedCredentialTransport(url) else { return false }
-        // Transaction cookies retain RFC domain/path scope in their isolated
-        // jar. Flat committed credentials have no per-cookie scope, so they
-        // may only be injected into manifest-declared platform domains.
+        // A transaction may bootstrap anonymous state at a registration host
+        // outside the manifest login domains. Let that request run, then gate
+        // the actual cookieInject application at request construction time.
+        // This avoids rejecting the bootstrap merely because it declares rules
+        // whose cookie values do not exist yet, while still preventing values
+        // from being injected outside the manifest allowlist.
         if authMode == .loginTransaction { return true }
-        guard let host = url.host?.lowercased(), !host.isEmpty else { return false }
-        return credentialDomains.contains { rawDomain in
-            let domain = rawDomain
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .lowercased()
-                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            guard !domain.isEmpty else { return false }
-            return host == domain || host.hasSuffix(".\(domain)")
+        return isManifestManagedCredentialDestination(url, credentialDomains: credentialDomains)
+    }
+
+    private static func applyCookieInject(
+        _ rules: [CookieInjectRule],
+        values: [String: String],
+        to request: inout URLRequest
+    ) -> String? {
+        guard !rules.isEmpty else { return nil }
+        var injectedCookieHeader: String?
+        for rule in rules {
+            guard let value = values[rule.cookieName.lowercased()],
+                  !value.isEmpty else { continue }
+            let injectedValue = (rule.prefix ?? "") + value
+            switch rule.target {
+            case .header:
+                guard let headerName = rule.headerName, !headerName.isEmpty else { continue }
+                if headerName.caseInsensitiveCompare("Cookie") == .orderedSame {
+                    guard injectedValue.contains("=") else { continue }
+                    request.setValue(
+                        mergedCookieHeader(
+                            transaction: request.value(forHTTPHeaderField: "Cookie"),
+                            explicit: injectedValue
+                        ),
+                        forHTTPHeaderField: "Cookie"
+                    )
+                    injectedCookieHeader = mergedCookieHeader(
+                        transaction: injectedCookieHeader,
+                        explicit: injectedValue
+                    )
+                } else {
+                    request.setValue(injectedValue, forHTTPHeaderField: headerName)
+                }
+            case .query:
+                continue
+            case .body:
+                continue
+            }
         }
+        return injectedCookieHeader
     }
 
     private static func resolveCookieInject(options: [String: Any]) -> [CookieInjectRule] {
@@ -1432,7 +1708,13 @@ private extension JSRuntime {
                 statusCode: http.statusCode,
                 headers: headers,
                 responseURL: http.url?.absoluteString ?? request.url?.absoluteString ?? "",
-                setCookies: LoginTransactionStore.setCookieHeaders(from: http)
+                setCookies: LoginTransactionStore.setCookieHeaders(from: http),
+                requestContainsCookieHeader: SensitivePluginHTTPConsoleSummary.containsCookieHeader(
+                    request.value(forHTTPHeaderField: "Cookie")
+                ),
+                requestCookieDiagnostics: SensitivePluginHTTPConsoleSummary.cookieHeaderDiagnostics(
+                    request.value(forHTTPHeaderField: "Cookie")
+                )
             )
         } catch let failure as PluginHTTPFlightFailure {
             throw failure
@@ -1449,7 +1731,8 @@ private extension JSRuntime {
         store: LoginTransactionStore,
         followRedirects: Bool,
         explicitCookieHeader: String?,
-        pluginHeaderNames: Set<String>
+        pluginHeaderNames: Set<String>,
+        credentialDomains: [String]
     ) async throws -> PluginHTTPFlightSnapshot {
         do {
             try Task.checkCancellation()
@@ -1460,6 +1743,7 @@ private extension JSRuntime {
                 followRedirects: followRedirects,
                 explicitCookieHeader: explicitCookieHeader,
                 pluginHeaderNames: pluginHeaderNames,
+                credentialDomains: credentialDomains,
                 originalURL: request.url
             )
             let (data, response) = try await session.data(for: request, delegate: redirectDelegate)
@@ -1507,7 +1791,13 @@ private extension JSRuntime {
                 statusCode: http.statusCode,
                 headers: headers,
                 responseURL: responseURL.absoluteString,
-                setCookies: redirectSnapshot.setCookies + finalSetCookies
+                setCookies: redirectSnapshot.setCookies + finalSetCookies,
+                requestContainsCookieHeader: SensitivePluginHTTPConsoleSummary.containsCookieHeader(
+                    request.value(forHTTPHeaderField: "Cookie")
+                ),
+                requestCookieDiagnostics: SensitivePluginHTTPConsoleSummary.cookieHeaderDiagnostics(
+                    request.value(forHTTPHeaderField: "Cookie")
+                )
             )
         } catch let failure as PluginHTTPFlightFailure {
             throw failure
@@ -1543,6 +1833,42 @@ private extension JSRuntime {
                 "[JSRuntime][HTTP] pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) bytes=\(snapshot.data.count) duration=\(String(format: "%.3f", elapsed))s",
                 category: .plugin
             )
+#if DEBUG
+            let requestBody = callback.envelope.body.flatMap { String(data: $0, encoding: .utf8) }
+            let transactionLabel = callback.envelope.transactionId.map {
+                String($0.prefix(8))
+            } ?? "none"
+            let cookieInjectionLabel: String
+            if callback.envelope.cookieInject.isEmpty {
+                cookieInjectionLabel = "none"
+            } else if isManifestManagedCredentialDestination(
+                callback.envelope.url,
+                credentialDomains: credentialDomains
+            ) {
+                cookieInjectionLabel = "allowed_manifest_destination"
+            } else {
+                cookieInjectionLabel = "skipped_non_manifest_destination"
+            }
+            Logger.debug(
+                """
+                [JSRuntime][HTTP][DETAIL]
+                pluginId=\(pluginId)
+                request.method=\(callback.envelope.method)
+                request.url=\(SensitivePluginHTTPConsoleSummary.redactedURL(callback.envelope.url))
+                request.authMode=\(callback.envelope.authMode.rawValue)
+                request.transaction=\(transactionLabel)
+                request.cookieInject=\(cookieInjectionLabel)
+                request.cookie=\(snapshot.requestCookieDiagnostics)
+                request.headers=\(SensitivePluginHTTPConsoleSummary.redactedHeaders(callback.requestHeaders))
+                request.body=\(SensitivePluginHTTPConsoleSummary.redactedBody(requestBody))
+                response.status=\(snapshot.statusCode)
+                response.headers=\(SensitivePluginHTTPConsoleSummary.redactedHeaders(snapshot.headers))
+                response.body=
+                \(SensitivePluginHTTPConsoleSummary.redactedBody(bodyText))
+                """,
+                category: .plugin
+            )
+#endif
             if PluginConsoleService.shared.isEnabled {
                 Self.logHTTPRecord(
                     pluginId: pluginId,
@@ -1551,7 +1877,10 @@ private extension JSRuntime {
                     parentSensitive: callback.parentSensitive,
                     statusCode: snapshot.statusCode,
                     responseHeaders: headers,
-                    responseBody: bodyText.map { String($0.prefix(2_000)) },
+                    responseBody: bodyText,
+                    requestContainsCookieHeader: callback.envelope.authMode == .loginTransaction
+                        ? snapshot.requestContainsCookieHeader
+                        : nil,
                     error: nil,
                     duration: elapsed
                 )
@@ -1568,6 +1897,41 @@ private extension JSRuntime {
             callback.resolve.call(withArguments: [String(data: data, encoding: .utf8) ?? "{}"])
 
         case .failure(let failure):
+#if DEBUG
+            let requestBody = callback.envelope.body.flatMap { String(data: $0, encoding: .utf8) }
+            let transactionLabel = callback.envelope.transactionId.map {
+                String($0.prefix(8))
+            } ?? "none"
+            let cookieInjectionLabel: String
+            if callback.envelope.cookieInject.isEmpty {
+                cookieInjectionLabel = "none"
+            } else if isManifestManagedCredentialDestination(
+                callback.envelope.url,
+                credentialDomains: credentialDomains
+            ) {
+                cookieInjectionLabel = "allowed_manifest_destination"
+            } else {
+                cookieInjectionLabel = "skipped_non_manifest_destination"
+            }
+            Logger.debug(
+                """
+                [JSRuntime][HTTP][DETAIL][FAILURE]
+                pluginId=\(pluginId)
+                request.method=\(callback.envelope.method)
+                request.url=\(SensitivePluginHTTPConsoleSummary.redactedURL(callback.envelope.url))
+                request.authMode=\(callback.envelope.authMode.rawValue)
+                request.transaction=\(transactionLabel)
+                request.cookieInject=\(cookieInjectionLabel)
+                request.headers=\(SensitivePluginHTTPConsoleSummary.redactedHeaders(callback.requestHeaders))
+                request.body=\(SensitivePluginHTTPConsoleSummary.redactedBody(requestBody))
+                failure.domain=\(failure.domain)
+                failure.code=\(failure.code)
+                failure.receivedHTTPResponse=\(failure.receivedHTTPResponse)
+                failure.message=\(SensitivePluginHTTPConsoleSummary.redactedText(failure.message))
+                """,
+                category: .plugin
+            )
+#endif
             if PluginConsoleService.shared.isEnabled {
                 Self.logHTTPRecord(
                     pluginId: pluginId,
@@ -1577,6 +1941,7 @@ private extension JSRuntime {
                     statusCode: nil,
                     responseHeaders: nil,
                     responseBody: nil,
+                    requestContainsCookieHeader: nil,
                     error: failure.message,
                     duration: elapsed
                 )
@@ -1676,6 +2041,7 @@ private extension JSRuntime {
         statusCode: Int?,
         responseHeaders: [String: String]?,
         responseBody: String?,
+        requestContainsCookieHeader: Bool?,
         error: String?,
         duration: TimeInterval
     ) {
@@ -1696,6 +2062,11 @@ private extension JSRuntime {
         let bodyStr: String? = sensitive
             ? nil
             : envelope.body.flatMap { String(data: $0, encoding: .utf8) }
+        let loggedResponseBody = sensitive
+            ? SensitivePluginHTTPConsoleSummary.responseBody(
+                requestContainsCookieHeader: requestContainsCookieHeader
+            )
+            : responseBody.map { String($0.prefix(2_000)) }
         let loggedURL: String
         if sensitive {
             var components = URLComponents()
@@ -1714,7 +2085,7 @@ private extension JSRuntime {
             body: bodyStr,
             statusCode: statusCode,
             responseHeaders: sensitive ? nil : responseHeaders,
-            responseBody: sensitive ? nil : responseBody,
+            responseBody: loggedResponseBody,
             error: sensitive && error != nil ? "Sensitive plugin request failed" : error,
             duration: duration
         )
@@ -1781,6 +2152,30 @@ private extension JSRuntime {
     }
 
     func configureHostSession(in context: JSContext) {
+        // Some platform login/signing implementations must read the complete
+        // Cookie header while building their own signature. Keep the legacy
+        // synchronous API, but scope it to this runtime's plugin identity so a
+        // plugin cannot inspect another platform's credential. Isolated login
+        // validation runtimes read their candidate override, never the
+        // concurrently committed vault value.
+        let getCookieHeaderBlock: @convention(block) (String) -> String = {
+            [pluginId, platformSessionOverride] requestedPlatformId in
+            let owner = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+            let requested = requestedPlatformId.trimmingCharacters(in: .whitespacesAndNewlines)
+            let target = requested.isEmpty
+                ? owner
+                : LiveParsePlatformSessionVault.canonicalPlatformId(requested)
+            guard !owner.isEmpty, target == owner else { return "" }
+            return LiveParsePlatformSessionVault.mergedCookieHeader(
+                for: owner,
+                sessionOverride: platformSessionOverride
+            ) ?? ""
+        }
+        context.setObject(
+            getCookieHeaderBlock,
+            forKeyedSubscript: "__lp_host_session_get_cookie_header" as NSString
+        )
+
         let seedTransactionCookiesBlock: @convention(block) (String, String, String, JSValue, JSValue) -> Void = {
             [weak self] transactionId, cookiesJSON, scopeJSON, resolve, reject in
             guard let self else {

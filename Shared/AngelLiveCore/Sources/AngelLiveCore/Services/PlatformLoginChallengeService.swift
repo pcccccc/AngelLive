@@ -3,12 +3,20 @@ import Observation
 
 public struct LoginChallengePresentation: Equatable, Sendable {
     public let qrContent: String
+    public let qrImageData: Data?
     public let hint: String
     public let expiresAt: Date?
     public let refreshCount: Int
 
-    public init(qrContent: String, hint: String, expiresAt: Date?, refreshCount: Int) {
+    public init(
+        qrContent: String,
+        hint: String,
+        expiresAt: Date?,
+        refreshCount: Int,
+        qrImageData: Data? = nil
+    ) {
         self.qrContent = qrContent
+        self.qrImageData = qrImageData
         self.hint = hint
         self.expiresAt = expiresAt
         self.refreshCount = refreshCount
@@ -22,6 +30,67 @@ public struct LoginChallengeSuccess: Equatable, Sendable {
     public init(userId: String? = nil, userName: String? = nil) {
         self.userId = userId
         self.userName = userName
+    }
+}
+
+public enum LoginChallengeVerificationKind: Codable, Equatable, Sendable {
+    case smsCode
+    case unsupported(String)
+
+    public init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = rawValue.lowercased() == "sms_code" ? .smsCode : .unsupported(rawValue)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .smsCode:
+            try container.encode("sms_code")
+        case .unsupported(let rawValue):
+            try container.encode(rawValue)
+        }
+    }
+}
+
+/// Non-secret display metadata for a host-collected login verification step.
+public struct LoginChallengeVerificationPresentation: Equatable, Sendable {
+    public let kind: LoginChallengeVerificationKind
+    public let prompt: String
+    public let maskedDestination: String?
+    public let codeLength: Int
+    public let canResend: Bool
+    public let resendAvailableAt: Date?
+    public let errorMessage: String?
+
+    public init(
+        kind: LoginChallengeVerificationKind,
+        prompt: String,
+        maskedDestination: String?,
+        codeLength: Int,
+        canResend: Bool,
+        resendAvailableAt: Date?,
+        errorMessage: String? = nil
+    ) {
+        self.kind = kind
+        self.prompt = prompt
+        self.maskedDestination = maskedDestination
+        self.codeLength = codeLength
+        self.canResend = canResend
+        self.resendAvailableAt = resendAvailableAt
+        self.errorMessage = errorMessage
+    }
+
+    fileprivate func withError(_ errorMessage: String?) -> Self {
+        Self(
+            kind: kind,
+            prompt: prompt,
+            maskedDestination: maskedDestination,
+            codeLength: codeLength,
+            canResend: canResend,
+            resendAvailableAt: resendAvailableAt,
+            errorMessage: errorMessage
+        )
     }
 }
 
@@ -59,6 +128,9 @@ public enum PlatformLoginChallengeState: Equatable, Sendable {
     case creating
     case presenting(LoginChallengePresentation)
     case scanned(LoginChallengePresentation)
+    case awaitingVerification(LoginChallengeVerificationPresentation)
+    case submittingVerification(LoginChallengeVerificationPresentation)
+    case requestingVerificationCode(LoginChallengeVerificationPresentation)
     case validating
     case succeeded(LoginChallengeSuccess)
     case failed(LoginChallengeFailure)
@@ -68,6 +140,7 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
     public let kind: ManifestLoginChallengeKind
     public let challengeId: String
     public let qrContent: String
+    public let qrImage: String?
     public let pollIntervalMs: Int?
     public let expiresAt: Double?
     public let hint: String?
@@ -78,11 +151,13 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
         qrContent: String,
         pollIntervalMs: Int? = nil,
         expiresAt: Double? = nil,
-        hint: String? = nil
+        hint: String? = nil,
+        qrImage: String? = nil
     ) {
         self.kind = kind
         self.challengeId = challengeId
         self.qrContent = qrContent
+        self.qrImage = qrImage
         self.pollIntervalMs = pollIntervalMs.map { min(max($0, 1_000), 60_000) }
         self.expiresAt = expiresAt
         self.hint = hint
@@ -92,6 +167,7 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
         case kind
         case challengeId
         case qrContent
+        case qrImage
         case pollIntervalMs
         case expiresAt
         case hint
@@ -105,7 +181,8 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
             qrContent: try container.decode(String.self, forKey: .qrContent),
             pollIntervalMs: try container.decodeIfPresent(Int.self, forKey: .pollIntervalMs),
             expiresAt: try container.decodeIfPresent(Double.self, forKey: .expiresAt),
-            hint: try container.decodeIfPresent(String.self, forKey: .hint)
+            hint: try container.decodeIfPresent(String.self, forKey: .hint),
+            qrImage: try container.decodeIfPresent(String.self, forKey: .qrImage)
         )
     }
 }
@@ -113,9 +190,38 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
 public enum LoginChallengePollState: String, Codable, Equatable, Sendable {
     case waiting
     case scanned
+    case verificationRequired = "verification_required"
     case confirmed
     case expired
     case failed
+}
+
+public struct LoginChallengeVerificationDescriptor: Codable, Equatable, Sendable {
+    public let kind: LoginChallengeVerificationKind
+    public let verificationId: String
+    public let prompt: String?
+    public let maskedDestination: String?
+    public let codeLength: Int?
+    public let canResend: Bool?
+    public let resendAfterMs: Int?
+
+    public init(
+        kind: LoginChallengeVerificationKind,
+        verificationId: String,
+        prompt: String? = nil,
+        maskedDestination: String? = nil,
+        codeLength: Int? = nil,
+        canResend: Bool? = nil,
+        resendAfterMs: Int? = nil
+    ) {
+        self.kind = kind
+        self.verificationId = verificationId
+        self.prompt = prompt
+        self.maskedDestination = maskedDestination
+        self.codeLength = codeLength
+        self.canResend = canResend
+        self.resendAfterMs = resendAfterMs
+    }
 }
 
 public struct LoginChallengePollResponse: Codable, Equatable, Sendable {
@@ -125,24 +231,61 @@ public struct LoginChallengePollResponse: Codable, Equatable, Sendable {
     /// 兼容早期草案。nil 表示插件遵循“confirmed 即凭据就绪”的最终语义。
     public let credentialReady: Bool?
     public let uid: String?
+    public let verification: LoginChallengeVerificationDescriptor?
 
     public init(
         state: LoginChallengePollState,
         rawStatus: Int? = nil,
         message: String? = nil,
         credentialReady: Bool? = nil,
-        uid: String? = nil
+        uid: String? = nil,
+        verification: LoginChallengeVerificationDescriptor? = nil
     ) {
         self.state = state
         self.rawStatus = rawStatus
         self.message = message
         self.credentialReady = credentialReady
         self.uid = uid
+        self.verification = verification
     }
 
     var hasContradictoryCredentialReadiness: Bool {
         guard let credentialReady else { return false }
         return credentialReady != (state == .confirmed)
+    }
+}
+
+struct LoginChallengeVerificationRequest: Equatable, Sendable {
+    let transactionId: String
+    let challengeId: String
+    let verificationId: String
+    let code: String
+}
+
+struct LoginChallengeVerificationResendRequest: Equatable, Sendable {
+    let transactionId: String
+    let challengeId: String
+    let verificationId: String
+}
+
+public enum LoginChallengeVerificationSubmitState: String, Codable, Equatable, Sendable {
+    case accepted
+    case rejected
+}
+
+public struct LoginChallengeVerificationSubmitResponse: Codable, Equatable, Sendable {
+    public let state: LoginChallengeVerificationSubmitState
+    public let message: String?
+    public let verification: LoginChallengeVerificationDescriptor?
+
+    public init(
+        state: LoginChallengeVerificationSubmitState,
+        message: String? = nil,
+        verification: LoginChallengeVerificationDescriptor? = nil
+    ) {
+        self.state = state
+        self.message = message
+        self.verification = verification
     }
 }
 
@@ -162,6 +305,8 @@ struct PlatformLoginChallengeDependencies: Sendable {
     var discardTransaction: @Sendable (_ pluginId: String, _ transactionId: String) async throws -> Void
     var create: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengeCreateRequest) async throws -> LoginChallengeCreateResponse
     var poll: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengePollRequest) async throws -> LoginChallengePollResponse
+    var submitVerification: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengeVerificationRequest) async throws -> LoginChallengeVerificationSubmitResponse
+    var resendVerification: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengeVerificationResendRequest) async throws -> LoginChallengeVerificationDescriptor
     var cancel: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengePollRequest) async throws -> Void
     var login: @Sendable (_ pluginId: String, _ transactionId: String, _ cookie: String, _ uid: String?, _ liveType: String, _ validationTimeout: Duration) async -> PlatformSessionValidationResult
     var releaseRuntimeLease: @Sendable (_ pluginId: String, _ transactionId: String) -> Void
@@ -192,9 +337,14 @@ extension PlatformLoginChallengeDependencies {
                 return transactionId
             },
             promoteTransaction: { pluginId, transactionId in
-                try await LoginTransactionStore.shared.promote(
+                let lease = try runtimeLeases.lease(
                     pluginId: pluginId,
                     transactionId: transactionId
+                )
+                return try await LoginTransactionStore.shared.promote(
+                    pluginId: pluginId,
+                    transactionId: transactionId,
+                    preferredDomains: lease.credentialDomains
                 )
             },
             discardTransaction: { pluginId, transactionId in
@@ -221,7 +371,8 @@ extension PlatformLoginChallengeDependencies {
                         "transactionId": request.transactionId,
                         "platform": request.platform.rawValue
                     ],
-                    sensitive: true
+                    sensitive: true,
+                    sensitiveConsolePolicy: .loginChallenge(.create)
                 )
             },
             poll: { pluginId, function, request in
@@ -236,7 +387,43 @@ extension PlatformLoginChallengeDependencies {
                         "transactionId": request.transactionId,
                         "challengeId": request.challengeId
                     ],
-                    sensitive: true
+                    sensitive: true,
+                    sensitiveConsolePolicy: .loginChallenge(.poll)
+                )
+            },
+            submitVerification: { pluginId, function, request in
+                let lease = try runtimeLeases.lease(
+                    pluginId: pluginId,
+                    transactionId: request.transactionId
+                )
+                return try await LiveParsePlugins.shared.callDecodable(
+                    using: lease,
+                    function: function,
+                    payload: [
+                        "transactionId": request.transactionId,
+                        "challengeId": request.challengeId,
+                        "verificationId": request.verificationId,
+                        "code": request.code
+                    ],
+                    sensitive: true,
+                    sensitiveConsolePolicy: .loginChallenge(.submitVerification)
+                )
+            },
+            resendVerification: { pluginId, function, request in
+                let lease = try runtimeLeases.lease(
+                    pluginId: pluginId,
+                    transactionId: request.transactionId
+                )
+                return try await LiveParsePlugins.shared.callDecodable(
+                    using: lease,
+                    function: function,
+                    payload: [
+                        "transactionId": request.transactionId,
+                        "challengeId": request.challengeId,
+                        "verificationId": request.verificationId
+                    ],
+                    sensitive: true,
+                    sensitiveConsolePolicy: .loginChallenge(.resendVerification)
                 )
             },
             cancel: { pluginId, function, request in
@@ -251,7 +438,8 @@ extension PlatformLoginChallengeDependencies {
                         "transactionId": request.transactionId,
                         "challengeId": request.challengeId
                     ],
-                    sensitive: true
+                    sensitive: true,
+                    sensitiveConsolePolicy: .loginChallenge(.cancel)
                 )
                 guard response.ok else {
                     throw LiveParsePluginError.invalidReturnValue(
@@ -305,8 +493,8 @@ private struct LoginChallengeCancelResponse: Codable, Sendable {
     let ok: Bool
 }
 
-/// Pins one effective plugin runtime for the complete create → poll → cancel /
-/// validate lifecycle. Plugin reloads and pin changes may replace the manager's
+/// Pins one effective plugin runtime for the complete create → poll → optional
+/// verification → cancel / validate lifecycle. Plugin reloads and pin changes may replace the manager's
 /// cache, but they cannot splice a newer implementation into an active challenge.
 private final class LoginChallengePluginRuntimeLeaseStore: @unchecked Sendable {
     private struct Entry {
@@ -362,6 +550,7 @@ public final class PlatformLoginChallengeService {
     @ObservationIgnored private var cleanupTasks: [String: CleanupRecord] = [:]
     @ObservationIgnored private var finalizedTransactionIds: Set<String> = []
     @ObservationIgnored private var cancelledChallengeKeys: Set<ChallengeCancellationKey> = []
+    @ObservationIgnored private var verificationActionContinuation: AsyncStream<VerificationAction>.Continuation?
 
     public convenience init() {
         self.init(dependencies: .live)
@@ -391,8 +580,32 @@ public final class PlatformLoginChallengeService {
         launch(lastRequest)
     }
 
+    /// Sends a transient user-entered code to the active plugin challenge. The
+    /// value is never stored in observable state or a platform session.
+    public func submitVerificationCode(_ value: String) {
+        guard case .awaitingVerification(let presentation) = state else { return }
+        let code = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty, code.count <= Limits.verificationCodeCharacters else {
+            state = .awaitingVerification(presentation.withError("请输入有效的短信验证码"))
+            return
+        }
+        state = .submittingVerification(presentation.withError(nil))
+        sendVerificationAction(.submit(code))
+    }
+
+    public func resendVerificationCode() {
+        guard case .awaitingVerification(let presentation) = state,
+              presentation.canResend,
+              presentation.resendAvailableAt.map({ $0 <= dependencies.now() }) ?? true else {
+            return
+        }
+        state = .requestingVerificationCode(presentation.withError(nil))
+        sendVerificationAction(.resend)
+    }
+
     public func cancel() {
         generation &+= 1
+        finishVerificationActions()
         runningTask?.cancel()
         runningTask = nil
         let context = activeContext
@@ -438,6 +651,7 @@ public final class PlatformLoginChallengeService {
 
     private func launch(_ request: StartRequest) {
         generation &+= 1
+        finishVerificationActions()
         let operationGeneration = generation
         let previousOperation = runningTask
         previousOperation?.cancel()
@@ -465,6 +679,7 @@ public final class PlatformLoginChallengeService {
         var cleanupContext: OperationContext?
         var operationTransactionId: String?
         defer {
+            finishVerificationActions()
             if let cleanupContext {
                 scheduleCleanup(cleanupContext)
             }
@@ -526,15 +741,24 @@ public final class PlatformLoginChallengeService {
 
                 let challengeId = created.challengeId
                 let qrContent = created.qrContent
+                let qrImageData = Self.pngData(from: created.qrImage)
                 guard !challengeId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                       !qrContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     throw ServiceError.invalidResponse("插件返回的二维码挑战缺少必要字段")
+                }
+                if let rawImage = created.qrImage?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !rawImage.isEmpty,
+                   qrImageData == nil {
+                    throw ServiceError.invalidResponse("插件返回的二维码图片无效")
                 }
                 guard challengeId.utf8.count <= Limits.challengeIdBytes else {
                     throw ServiceError.invalidResponse("插件返回的登录挑战标识过长")
                 }
                 guard qrContent.utf8.count <= Limits.qrContentBytes else {
                     throw ServiceError.invalidResponse("插件返回的二维码内容过长")
+                }
+                if let qrImageData, qrImageData.count > Limits.qrImageBytes {
+                    throw ServiceError.invalidResponse("插件返回的二维码图片过大")
                 }
 
                 context.challengeId = challengeId
@@ -548,11 +772,13 @@ public final class PlatformLoginChallengeService {
                         ?? request.challenge.hint
                         ?? "请使用对应平台 App 扫描二维码并确认登录",
                     expiresAt: expiresAt,
-                    refreshCount: refreshCount
+                    refreshCount: refreshCount,
+                    qrImageData: qrImageData
                 )
                 state = .presenting(presentation)
 
                 let pollIntervalMs = created.pollIntervalMs ?? request.challenge.pollIntervalMs
+                var pollImmediately = false
                 while true {
                     try ensureWithinDeadline(deadline, generation: operationGeneration)
                     if let expiresAt, expiresAt <= dependencies.now() {
@@ -569,7 +795,11 @@ public final class PlatformLoginChallengeService {
                         throw ServiceError.expired
                     }
 
-                    try await dependencies.sleep(.milliseconds(pollIntervalMs))
+                    if pollImmediately {
+                        pollImmediately = false
+                    } else {
+                        try await dependencies.sleep(.milliseconds(pollIntervalMs))
+                    }
                     try ensureWithinDeadline(deadline, generation: operationGeneration)
 
                     let pollFunction = request.challenge.functions.poll
@@ -591,6 +821,25 @@ public final class PlatformLoginChallengeService {
                         state = .presenting(presentation)
                     case .scanned:
                         state = .scanned(presentation)
+                    case .verificationRequired:
+                        guard request.challenge.minLoginChallengeProtocol >= 2 else {
+                            throw ServiceError.invalidResponse(
+                                "插件返回了协议 v2 二次验证状态，但 manifest 未声明 v2"
+                            )
+                        }
+                        guard let verification = polled.verification else {
+                            throw ServiceError.invalidResponse("插件请求短信验证但未提供验证信息")
+                        }
+                        try await handleVerification(
+                            verification,
+                            request: request,
+                            transactionId: transactionId,
+                            challengeId: challengeId,
+                            deadline: deadline,
+                            generation: operationGeneration
+                        )
+                        state = .scanned(presentation)
+                        pollImmediately = true
                     case .expired:
                         if try await refreshIfAllowed(
                             request: request,
@@ -730,6 +979,141 @@ public final class PlatformLoginChallengeService {
         return true
     }
 
+    private func handleVerification(
+        _ initialDescriptor: LoginChallengeVerificationDescriptor,
+        request: StartRequest,
+        transactionId: String,
+        challengeId: String,
+        deadline: Date,
+        generation operationGeneration: UInt
+    ) async throws {
+        var descriptor = initialDescriptor
+        var presentation = try verificationPresentation(from: descriptor, errorMessage: nil)
+
+        while true {
+            try ensureWithinDeadline(deadline, generation: operationGeneration)
+            let action = try await awaitVerificationAction(
+                presentation: presentation,
+                deadline: deadline
+            )
+            try ensureCurrent(operationGeneration)
+
+            switch action {
+            case .submit(let code):
+                state = .submittingVerification(presentation.withError(nil))
+                let verificationRequest = LoginChallengeVerificationRequest(
+                    transactionId: transactionId,
+                    challengeId: challengeId,
+                    verificationId: descriptor.verificationId,
+                    code: code
+                )
+                let response = try await withPluginDeadline(deadline) {
+                    try await self.dependencies.submitVerification(
+                        request.entry.pluginId,
+                        request.challenge.functions.submitVerification,
+                        verificationRequest
+                    )
+                }
+                try ensureCurrent(operationGeneration)
+                switch response.state {
+                case .accepted:
+                    return
+                case .rejected:
+                    if let updated = response.verification {
+                        descriptor = updated
+                    }
+                    presentation = try verificationPresentation(
+                        from: descriptor,
+                        errorMessage: Self.normalizedMessage(response.message) ?? "验证码不正确，请重新输入"
+                    )
+                }
+
+            case .resend:
+                state = .requestingVerificationCode(presentation.withError(nil))
+                let resendRequest = LoginChallengeVerificationResendRequest(
+                    transactionId: transactionId,
+                    challengeId: challengeId,
+                    verificationId: descriptor.verificationId
+                )
+                descriptor = try await withPluginDeadline(deadline) {
+                    try await self.dependencies.resendVerification(
+                        request.entry.pluginId,
+                        request.challenge.functions.resendVerification,
+                        resendRequest
+                    )
+                }
+                try ensureCurrent(operationGeneration)
+                presentation = try verificationPresentation(
+                    from: descriptor,
+                    errorMessage: "验证码已重新发送"
+                )
+            }
+        }
+    }
+
+    private func awaitVerificationAction(
+        presentation: LoginChallengeVerificationPresentation,
+        deadline: Date
+    ) async throws -> VerificationAction {
+        let pair = AsyncStream.makeStream(
+            of: VerificationAction.self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        verificationActionContinuation = pair.continuation
+        state = .awaitingVerification(presentation)
+        defer {
+            pair.continuation.finish()
+            verificationActionContinuation = nil
+        }
+        return try await withPluginDeadline(deadline) {
+            for await action in pair.stream {
+                return action
+            }
+            throw CancellationError()
+        }
+    }
+
+    private func sendVerificationAction(_ action: VerificationAction) {
+        verificationActionContinuation?.yield(action)
+        verificationActionContinuation?.finish()
+        verificationActionContinuation = nil
+    }
+
+    private func finishVerificationActions() {
+        verificationActionContinuation?.finish()
+        verificationActionContinuation = nil
+    }
+
+    private func verificationPresentation(
+        from descriptor: LoginChallengeVerificationDescriptor,
+        errorMessage: String?
+    ) throws -> LoginChallengeVerificationPresentation {
+        guard descriptor.kind == .smsCode else {
+            throw ServiceError.invalidResponse("插件请求了宿主不支持的二次验证方式")
+        }
+        let verificationId = descriptor.verificationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !verificationId.isEmpty, verificationId.utf8.count <= Limits.verificationIdBytes else {
+            throw ServiceError.invalidResponse("插件返回的二次验证标识无效")
+        }
+        let prompt = Self.normalizedHint(descriptor.prompt) ?? "请输入短信验证码"
+        let maskedDestination = Self.normalizedMaskedDestination(descriptor.maskedDestination)
+        let codeLength = min(max(descriptor.codeLength ?? 6, 1), Limits.verificationCodeCharacters)
+        let canResend = descriptor.canResend ?? (descriptor.resendAfterMs != nil)
+        let resendAfterMs = min(max(descriptor.resendAfterMs ?? 0, 0), Limits.maxResendAfterMs)
+        let resendAvailableAt = canResend
+            ? dependencies.now().addingTimeInterval(Double(resendAfterMs) / 1_000)
+            : nil
+        return LoginChallengeVerificationPresentation(
+            kind: descriptor.kind,
+            prompt: prompt,
+            maskedDestination: maskedDestination,
+            codeLength: codeLength,
+            canResend: canResend,
+            resendAvailableAt: resendAvailableAt,
+            errorMessage: Self.normalizedMessage(errorMessage)
+        )
+    }
+
     private func ensureCurrent(_ operationGeneration: UInt) throws {
         try Task.checkCancellation()
         guard generation == operationGeneration else { throw CancellationError() }
@@ -866,9 +1250,30 @@ public final class PlatformLoginChallengeService {
         return trimmed.isEmpty ? nil : String(trimmed.prefix(Limits.hintCharacters))
     }
 
+    private static let pngMagic = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+
+    private static func pngData(from qrImage: String?) -> Data? {
+        var payload = qrImage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !payload.isEmpty else { return nil }
+        if let range = payload.range(of: "base64,", options: .caseInsensitive) {
+            payload = String(payload[range.upperBound...])
+        }
+        guard let data = Data(base64Encoded: payload, options: [.ignoreUnknownCharacters]),
+              data.count >= pngMagic.count,
+              data.prefix(pngMagic.count) == pngMagic else {
+            return nil
+        }
+        return data
+    }
+
     private static func normalizedMessage(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : String(trimmed.prefix(Limits.messageCharacters))
+    }
+
+    private static func normalizedMaskedDestination(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(Limits.maskedDestinationCharacters))
     }
 
     private static func failure(from error: Error) -> LoginChallengeFailure {
@@ -913,8 +1318,13 @@ private extension PlatformLoginChallengeService {
         static let challengeIdBytes = 4_096
         /// 三端 Core Image 生成器默认使用 M 级纠错；Version 40 字节模式最大 2331 字节。
         static let qrContentBytes = 2_331
+        static let qrImageBytes = 32_768
         static let hintCharacters = 500
         static let messageCharacters = 1_000
+        static let verificationIdBytes = 4_096
+        static let verificationCodeCharacters = 32
+        static let maskedDestinationCharacters = 100
+        static let maxResendAfterMs = 300_000
     }
 
     struct StartRequest: Sendable {
@@ -938,6 +1348,11 @@ private extension PlatformLoginChallengeService {
     struct ChallengeCancellationKey: Hashable {
         let transactionId: String
         let challengeId: String
+    }
+
+    enum VerificationAction: Sendable {
+        case submit(String)
+        case resend
     }
 
     enum ServiceError: Error {

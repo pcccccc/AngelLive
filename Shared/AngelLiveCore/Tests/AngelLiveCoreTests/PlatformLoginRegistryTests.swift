@@ -65,8 +65,8 @@ struct PlatformLoginRegistryTests {
         #expect(Set(runtimes.map(ObjectIdentifier.init)).count == 1)
     }
 
-    @Test("credential values stay in the host and never reach plugin JavaScript")
-    func credentialValuesNeverReachPluginJavaScript() async throws {
+    @Test("credential payload stays host-managed while the current plugin can read its Cookie header")
+    func credentialPayloadStaysHostManagedWithScopedCookieGetter() async throws {
         struct Status: Decodable { let state: String }
 
         let fixture = try PluginResolutionFixture()
@@ -87,11 +87,10 @@ struct PlatformLoginRegistryTests {
                 return { ok: true };
               },
               validateCredential(input) {
-                var getterReadable = true;
-                try { Host.session.getCookieHeader("\(pluginId)"); } catch (_) { getterReadable = false; }
+                var cookieHeader = Host.session.getCookieHeader("\(pluginId)");
                 var receivedCookie = !!(input && input.credential && input.credential.cookie);
                 return {
-                  state: input.credentialAvailable === true && !receivedCookie && !getterReadable
+                  state: input.credentialAvailable === true && !receivedCookie && cookieHeader.length > 0
                     ? "valid"
                     : "invalid"
                 };
