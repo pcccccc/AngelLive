@@ -266,6 +266,61 @@ public actor LoginTransactionStore {
         transactions[transactionId] = transaction
     }
 
+    /// Imports cookies harvested from a transaction-scoped native WebView.
+    /// Only manifest-authorized domains enter the jar; values never cross into JavaScript.
+    @discardableResult
+    func absorbWebViewCookies(
+        pluginId: String,
+        transactionId: String,
+        cookies: [HTTPCookie],
+        allowedDomains: [String]
+    ) throws -> Set<String> {
+        var transaction = try activeTransaction(pluginId: pluginId, transactionId: transactionId)
+        let domains = allowedDomains
+            .map(Self.normalizedDomain)
+            .filter { Self.isValidCookieDomain($0) && Self.isAllowedSeedDomain($0) }
+        guard !domains.isEmpty else { return [] }
+
+        for cookie in cookies {
+            let rawDomain = cookie.domain.trimmingCharacters(in: .whitespacesAndNewlines)
+            let domain = Self.normalizedDomain(rawDomain)
+            guard domains.contains(where: { domain == $0 || domain.hasSuffix(".\($0)") }),
+                  Self.isValidCookieDomain(domain),
+                  Self.isAllowedSeedDomain(domain) else {
+                continue
+            }
+
+            let hostOnly = !rawDomain.hasPrefix(".")
+            let path = Self.normalizedPath(cookie.path)
+            guard Self.hasValidPrefix(
+                name: cookie.name,
+                isSecure: cookie.isSecure,
+                path: path,
+                hasDomainAttribute: !hostOnly,
+                hasExplicitRootPath: path == "/"
+            ) else {
+                continue
+            }
+
+            let key = Self.key(for: cookie)
+            if Self.isExpired(cookie) {
+                transaction.cookies.removeValue(forKey: key)
+            } else {
+                transaction.cookies[key] = StoredCookie(cookie: cookie, hostOnly: hostOnly)
+            }
+        }
+        removeExpiredCookies(from: &transaction)
+        transactions[transactionId] = transaction
+
+        return Set(transaction.cookies.values.compactMap { stored in
+            let domain = Self.normalizedDomain(stored.cookie.domain)
+            guard domains.contains(where: { domain == $0 || domain.hasSuffix(".\($0)") }) else {
+                return nil
+            }
+            return stored.cookie.name
+        })
+    }
+
     /// Serializes all cookies and destroys the transaction before returning.
     public func promote(
         pluginId: String,

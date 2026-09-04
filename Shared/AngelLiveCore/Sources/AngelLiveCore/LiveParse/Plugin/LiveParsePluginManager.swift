@@ -5,6 +5,7 @@ enum LoginChallengeConsoleOperation: Sendable {
     case poll
     case submitVerification
     case resendVerification
+    case push
     case cancel
 }
 
@@ -468,6 +469,21 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 payload["platform"],
                 values: ["ios", "macos", "tvos"]
             ) ?? "unknown"
+            if let bootstrap = payload["bootstrap"] as? [String: Any] {
+                var bootstrapSummary: [String: Any] = [
+                    "state": allowedString(
+                        bootstrap["state"],
+                        values: ["ok", "timeout", "failed", "skipped"]
+                    ) ?? "unknown"
+                ]
+                bootstrapSummary["cookieNameCount"] = min(
+                    (bootstrap["cookieNames"] as? [Any])?.count ?? 0,
+                    64
+                )
+                addBoundedInteger(bootstrap["navigations"], key: "navigations", to: &bootstrapSummary)
+                addBoundedInteger(bootstrap["elapsedMs"], key: "elapsedMs", to: &bootstrapSummary)
+                summary["bootstrap"] = bootstrapSummary
+            }
         case .poll:
             summary["transactionId"] = "<redacted>"
             summary["challengeId"] = "<redacted>"
@@ -480,6 +496,14 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             summary["transactionId"] = "<redacted>"
             summary["challengeId"] = "<redacted>"
             summary["verificationId"] = "<redacted>"
+        case .push:
+            summary["transactionId"] = "<redacted>"
+            summary["challengeId"] = "<redacted>"
+            summary["event"] = allowedString(
+                payload["event"],
+                values: ["message", "tick"]
+            ) ?? "unknown"
+            summary["hasFrame"] = payload["frame"] != nil
         case .cancel:
             summary["transactionId"] = "<redacted>"
             summary["challengeId"] = "<redacted>"
@@ -506,6 +530,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             summary["challengeId"] = "<redacted>"
             summary["qrContent"] = "<redacted>"
             summary["hasQRImage"] = nonemptyString(response["qrImage"])
+            summary["hasPush"] = response["push"] != nil
         case .poll:
             summary["state"] = allowedString(
                 response["state"],
@@ -530,6 +555,14 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             }
         case .resendVerification:
             summary["verification"] = verificationConsoleSummary(response)
+        case .push:
+            if let pollNow = response["pollNow"] as? Bool {
+                summary["pollNow"] = pollNow
+            }
+            if let close = response["close"] as? Bool {
+                summary["close"] = close
+            }
+            summary["sendFrameCount"] = (response["send"] as? [Any])?.count ?? 0
         case .cancel:
             if let ok = response["ok"] as? Bool {
                 summary["ok"] = ok

@@ -99,6 +99,147 @@ public enum ManifestLoginChallengeKind: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+/// Optional host-side preparation performed before a login challenge is created.
+public enum ManifestLoginChallengeBootstrapKind: Codable, Equatable, Hashable, Sendable {
+    case webview
+    case unsupported(String)
+
+    public init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = rawValue.lowercased() == "webview" ? .webview : .unsupported(rawValue)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .webview:
+            try container.encode("webview")
+        case .unsupported(let rawValue):
+            try container.encode(rawValue)
+        }
+    }
+}
+
+/// Manifest-only configuration for an isolated, noninteractive WebView bootstrap.
+/// The host treats cookie names and domains as opaque protocol data.
+public struct ManifestLoginChallengeBootstrap: Codable, Equatable, Hashable, Sendable {
+    public static let defaultTimeoutMs = 8_000
+    public static let maximumTimeoutMs = 15_000
+    public static let defaultMaxNavigations = 3
+    public static let maximumNavigations = 20
+
+    public let kind: ManifestLoginChallengeBootstrapKind
+    public let url: String
+    public let userAgent: String
+    public let cookieDomains: [String]
+    public let readyCookies: [String]
+    public let reportCookies: [String]?
+    public let timeoutMs: Int
+    public let maxNavigations: Int
+
+    public init(
+        kind: ManifestLoginChallengeBootstrapKind,
+        url: String,
+        userAgent: String,
+        cookieDomains: [String],
+        readyCookies: [String],
+        reportCookies: [String]? = nil,
+        timeoutMs: Int = Self.defaultTimeoutMs,
+        maxNavigations: Int = Self.defaultMaxNavigations
+    ) {
+        self.kind = kind
+        self.url = String(url.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2_048))
+        self.userAgent = String(userAgent.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2_048))
+        self.cookieDomains = Self.normalizedValues(cookieDomains, maximumCount: 32, maximumLength: 253) {
+            $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        }.filter(Self.isValidDomainSyntax)
+        self.readyCookies = Self.normalizedValues(readyCookies, maximumCount: 64, maximumLength: 256)
+        self.reportCookies = reportCookies.map {
+            Self.normalizedValues($0, maximumCount: 64, maximumLength: 256)
+        }
+        self.timeoutMs = min(max(timeoutMs, 1), Self.maximumTimeoutMs)
+        self.maxNavigations = min(max(maxNavigations, 2), Self.maximumNavigations)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case url
+        case userAgent
+        case cookieDomains
+        case readyCookies
+        case reportCookies
+        case timeoutMs
+        case maxNavigations
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            kind: try container.decode(ManifestLoginChallengeBootstrapKind.self, forKey: .kind),
+            url: try container.decode(String.self, forKey: .url),
+            userAgent: try container.decode(String.self, forKey: .userAgent),
+            cookieDomains: try container.decode([String].self, forKey: .cookieDomains),
+            readyCookies: try container.decode([String].self, forKey: .readyCookies),
+            reportCookies: try container.decodeIfPresent([String].self, forKey: .reportCookies),
+            timeoutMs: try container.decodeIfPresent(Int.self, forKey: .timeoutMs) ?? Self.defaultTimeoutMs,
+            maxNavigations: try container.decodeIfPresent(Int.self, forKey: .maxNavigations) ?? Self.defaultMaxNavigations
+        )
+    }
+
+    /// Invalid or unknown declarations are ignored without disabling the login entry.
+    var runnableURL: URL? {
+        guard kind == .webview,
+              !userAgent.isEmpty,
+              !cookieDomains.isEmpty,
+              let url = URL(string: url),
+              url.scheme?.lowercased() == "https",
+              url.host?.isEmpty == false,
+              url.user == nil,
+              url.password == nil else {
+            return nil
+        }
+        return url
+    }
+
+    var reportedCookieNames: [String] {
+        reportCookies ?? readyCookies
+    }
+
+    private static func normalizedValues(
+        _ values: [String],
+        maximumCount: Int,
+        maximumLength: Int,
+        transform: (String) -> String = { $0 }
+    ) -> [String] {
+        var seen: Set<String> = []
+        return values.prefix(maximumCount).compactMap { rawValue in
+            let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = transform(String(trimmed.prefix(maximumLength)))
+            guard !value.isEmpty, seen.insert(value).inserted else { return nil }
+            return value
+        }
+    }
+
+    private static func isValidDomainSyntax(_ domain: String) -> Bool {
+        let labels = domain.split(separator: ".", omittingEmptySubsequences: false)
+        guard !labels.isEmpty else { return false }
+
+        return labels.allSatisfy { label in
+            guard !label.isEmpty,
+                  label.utf8.count <= 63,
+                  label.first != "-",
+                  label.last != "-" else {
+                return false
+            }
+            return label.utf8.allSatisfy { byte in
+                (byte >= 48 && byte <= 57)
+                    || (byte >= 97 && byte <= 122)
+                    || byte == 45
+            }
+        }
+    }
+}
+
 /// 插件实现登录挑战时使用的函数名。
 public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sendable {
     public static let defaultCreate = "createLoginChallenge"
@@ -106,15 +247,17 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
     public static let defaultCancel = "cancelLoginChallenge"
     public static let defaultSubmitVerification = "submitLoginChallengeVerification"
     public static let defaultResendVerification = "resendLoginChallengeVerification"
+    public static let defaultPush = "onLoginChallengePush"
 
     public let create: String
     public let poll: String
     public let cancel: String
     public let submitVerification: String
     public let resendVerification: String
+    public let push: String
 
     public var usesReservedCredentialFunction: Bool {
-        [create, poll, cancel, submitVerification, resendVerification].contains { function in
+        [create, poll, cancel, submitVerification, resendVerification, push].contains { function in
             Self.reservedCredentialFunctions.contains(function.lowercased())
         }
     }
@@ -124,7 +267,8 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
         poll: String = Self.defaultPoll,
         cancel: String = Self.defaultCancel,
         submitVerification: String = Self.defaultSubmitVerification,
-        resendVerification: String = Self.defaultResendVerification
+        resendVerification: String = Self.defaultResendVerification,
+        push: String = Self.defaultPush
     ) {
         self.create = Self.normalized(create, fallback: Self.defaultCreate)
         self.poll = Self.normalized(poll, fallback: Self.defaultPoll)
@@ -137,6 +281,7 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
             resendVerification,
             fallback: Self.defaultResendVerification
         )
+        self.push = Self.normalized(push, fallback: Self.defaultPush)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -145,6 +290,7 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
         case cancel
         case submitVerification
         case resendVerification
+        case push
     }
 
     public init(from decoder: Decoder) throws {
@@ -154,7 +300,8 @@ public struct ManifestLoginChallengeFunctions: Codable, Equatable, Hashable, Sen
             poll: try container.decodeIfPresent(String.self, forKey: .poll) ?? Self.defaultPoll,
             cancel: try container.decodeIfPresent(String.self, forKey: .cancel) ?? Self.defaultCancel,
             submitVerification: try container.decodeIfPresent(String.self, forKey: .submitVerification) ?? Self.defaultSubmitVerification,
-            resendVerification: try container.decodeIfPresent(String.self, forKey: .resendVerification) ?? Self.defaultResendVerification
+            resendVerification: try container.decodeIfPresent(String.self, forKey: .resendVerification) ?? Self.defaultResendVerification,
+            push: try container.decodeIfPresent(String.self, forKey: .push) ?? Self.defaultPush
         )
     }
 
@@ -181,6 +328,7 @@ public struct ManifestLoginChallenge: Codable, Equatable, Hashable, Sendable {
     public let timeoutSeconds: Int
     public let maxRefreshes: Int
     public let hint: String?
+    public let bootstrap: ManifestLoginChallengeBootstrap?
     /// Manifest 原始平台标识。未知值会被忽略，不影响整个 manifest 解码。
     public let preferOn: [String]
 
@@ -192,6 +340,7 @@ public struct ManifestLoginChallenge: Codable, Equatable, Hashable, Sendable {
         timeoutSeconds: Int = Self.defaultTimeoutSeconds,
         maxRefreshes: Int = Self.defaultMaxRefreshes,
         hint: String? = nil,
+        bootstrap: ManifestLoginChallengeBootstrap? = nil,
         preferOn: [String] = []
     ) {
         self.kind = kind
@@ -201,6 +350,7 @@ public struct ManifestLoginChallenge: Codable, Equatable, Hashable, Sendable {
         self.timeoutSeconds = min(max(timeoutSeconds, 30), 600)
         self.maxRefreshes = min(max(maxRefreshes, 0), 10)
         self.hint = hint.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500)) }.flatMap(\.nilIfEmpty)
+        self.bootstrap = bootstrap
         self.preferOn = preferOn.prefix(16).compactMap {
             String($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().prefix(32)).nilIfEmpty
         }
@@ -214,6 +364,7 @@ public struct ManifestLoginChallenge: Codable, Equatable, Hashable, Sendable {
         case timeoutSeconds
         case maxRefreshes
         case hint
+        case bootstrap
         case preferOn
     }
 
@@ -227,6 +378,7 @@ public struct ManifestLoginChallenge: Codable, Equatable, Hashable, Sendable {
             timeoutSeconds: try container.decodeIfPresent(Int.self, forKey: .timeoutSeconds) ?? Self.defaultTimeoutSeconds,
             maxRefreshes: try container.decodeIfPresent(Int.self, forKey: .maxRefreshes) ?? Self.defaultMaxRefreshes,
             hint: try container.decodeIfPresent(String.self, forKey: .hint),
+            bootstrap: try container.decodeIfPresent(ManifestLoginChallengeBootstrap.self, forKey: .bootstrap),
             preferOn: try container.decodeIfPresent([String].self, forKey: .preferOn) ?? []
         )
     }

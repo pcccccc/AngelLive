@@ -956,6 +956,8 @@ private extension JSRuntime {
           Host.capabilities = Host.capabilities || {};
           Host.capabilities.loginTransaction = true;
           Host.capabilities.loginChallengeProtocol = \(PlatformLoginChallengeProtocol.currentVersion);
+          Host.capabilities.loginChallengePush = true;
+          Host.capabilities.loginChallengeBootstrap = \(LoginChallengeWebViewBootstrapRunner.isSupported);
           Host.capabilities.credentialExposure = true;
           Host.capabilities.webSocketPlatformCookie = true;
 

@@ -242,6 +242,55 @@ struct LoginTransactionStoreTests {
         }
     }
 
+    @Test("webview harvest imports only manifest-authorized Cookie domains")
+    func webViewCookieHarvestDomainScope() async throws {
+        let store = LoginTransactionStore()
+        let transactionId = try await store.begin(pluginId: "fixture.plugin")
+        let accepted = try #require(HTTPCookie(properties: [
+            .name: "ready",
+            .value: "accepted-value",
+            .domain: ".example.com",
+            .path: "/",
+            .secure: "TRUE"
+        ]))
+        let rejected = try #require(HTTPCookie(properties: [
+            .name: "foreign",
+            .value: "rejected-value",
+            .domain: ".other.example",
+            .path: "/",
+            .secure: "TRUE"
+        ]))
+
+        let names = try await store.absorbWebViewCookies(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            cookies: [accepted, rejected],
+            allowedDomains: ["example.com"]
+        )
+
+        #expect(names == Set(["ready"]))
+        let header = try await store.cookieHeader(
+            pluginId: "fixture.plugin",
+            transactionId: transactionId,
+            for: URL(string: "https://login.example.com/")
+        )
+        #expect(header == "ready=accepted-value")
+        #expect(!header.contains("rejected-value"))
+    }
+
+    @Test("bootstrap result exposes Cookie names but never values")
+    func bootstrapResultContainsNamesOnly() {
+        let result = LoginChallengeBootstrapResult(
+            state: .ok,
+            cookieNames: ["ready"],
+            navigations: 2,
+            elapsedMs: 250
+        )
+
+        #expect(result.pluginPayload["cookieNames"] as? [String] == ["ready"])
+        #expect(Set(result.pluginPayload.keys) == ["state", "cookieNames", "navigations", "elapsedMs"])
+    }
+
     @Test("promotion rejects conflicting values for the same scoped Cookie name")
     func promoteRejectsAmbiguousCookieNames() async throws {
         let store = LoginTransactionStore()
@@ -349,6 +398,8 @@ struct LoginTransactionStoreTests {
                 return {
                   supported: Host.capabilities.loginTransaction === true,
                   loginChallengeProtocol: Host.capabilities.loginChallengeProtocol,
+                  loginChallengePush: Host.capabilities.loginChallengePush === true,
+                  loginChallengeBootstrap: Host.capabilities.loginChallengeBootstrap === true,
                   credentialExposure: Host.capabilities.credentialExposure,
                   storedCookie: Host.session.getCookieHeader(input.pluginId),
                   readable: await Host.session.getTransactionCookieHeader(input.transactionId)
@@ -366,6 +417,11 @@ struct LoginTransactionStoreTests {
         let result = try #require(value as? [String: Any])
         #expect(result["supported"] as? Bool == true)
         #expect(result["loginChallengeProtocol"] as? Int == PlatformLoginChallengeProtocol.currentVersion)
+        #expect(result["loginChallengePush"] as? Bool == true)
+        #expect(
+            result["loginChallengeBootstrap"] as? Bool
+                == LoginChallengeWebViewBootstrapRunner.isSupported
+        )
         #expect(result["credentialExposure"] as? Bool == true)
         #expect(result["storedCookie"] as? String == "account=available-to-own-plugin")
         #expect(result["readable"] as? Bool == false)
@@ -1386,6 +1442,27 @@ struct LoginTransactionStoreTests {
 
     @Test("login challenge console summaries expose state without exposing secrets")
     func loginChallengeConsoleSummaries() {
+        let createRequest = LiveParsePluginManager.sensitiveRequestSummary(
+            policy: .loginChallenge(.create),
+            payload: [
+                "transactionId": "transaction-secret",
+                "platform": "macos",
+                "bootstrap": [
+                    "state": "ok",
+                    "cookieNames": ["ready", "anonymous_device"],
+                    "cookieValues": ["ready": "cookie-secret"],
+                    "navigations": 2,
+                    "elapsedMs": 250
+                ]
+            ]
+        )
+        #expect(createRequest.contains("cookieNameCount"))
+        #expect(!createRequest.contains("ready"))
+        #expect(!createRequest.contains("anonymous_device"))
+        #expect(createRequest.contains("elapsedMs"))
+        #expect(!createRequest.contains("transaction-secret"))
+        #expect(!createRequest.contains("cookie-secret"))
+
         let request = LiveParsePluginManager.sensitiveRequestSummary(
             policy: .loginChallenge(.submitVerification),
             payload: [
@@ -1405,7 +1482,7 @@ struct LoginTransactionStoreTests {
             policy: .loginChallenge(.poll),
             value: [
                 "state": "verification_required",
-                "rawStatus": 2046,
+                "rawStatus": 1001,
                 "message": "secret-ticket-in-message",
                 "uid": "user-secret",
                 "cookie": "session=cookie-secret",
@@ -1421,7 +1498,7 @@ struct LoginTransactionStoreTests {
             ]
         )
         #expect(response.contains("verification_required"))
-        #expect(response.contains("2046"))
+        #expect(response.contains("1001"))
         #expect(response.contains("sms_code"))
         #expect(response.contains("codeLength"))
         #expect(response.contains("hasDestination"))
@@ -1440,14 +1517,32 @@ struct LoginTransactionStoreTests {
                 "qrContent": "qr-secret",
                 "pollIntervalMs": 2_000,
                 "expiresAt": 1_800_000_000_000,
-                "hint": "hint-secret"
+                "hint": "hint-secret",
+                "push": [
+                    "kind": "websocket",
+                    "url": "wss://push.example.invalid/login?token=query-secret"
+                ]
             ]
         )
         #expect(createResponse.contains("qrcode"))
         #expect(createResponse.contains("2000"))
+        #expect(createResponse.contains("hasPush"))
         #expect(!createResponse.contains("challenge-secret"))
         #expect(!createResponse.contains("qr-secret"))
         #expect(!createResponse.contains("hint-secret"))
+        #expect(!createResponse.contains("query-secret"))
+
+        let pushResponse = LiveParsePluginManager.sensitiveResponseSummary(
+            policy: .loginChallenge(.push),
+            value: [
+                "pollNow": true,
+                "send": [["type": "binary", "bytesBase64": "frame-secret"]],
+                "close": false
+            ]
+        )
+        #expect(pushResponse.contains("pollNow"))
+        #expect(pushResponse.contains("sendFrameCount"))
+        #expect(!pushResponse.contains("frame-secret"))
 
         let error = LiveParsePluginError.standardized(.init(
             code: .rateLimited,

@@ -85,7 +85,7 @@ public enum ApiManager {
         Logger.debug("[ApiManager] fetchLastestLiveInfo: 找到平台 pluginId=\(platform.pluginId), 准备调用 getLiveLastestInfo", category: .network)
         do {
             // 冷启动全量并发刷新收藏状态时,插件 JS runtime / 内部签名缓存尚未 warm,
-            // 个别房间(如小红书 userId 查询)首拍会间歇性抛 NOT_FOUND 等假阴性错误,
+            // 个别房间按用户标识查询时，首拍会间歇性抛 NOT_FOUND 等假阴性错误，
             // 但下拉刷新(整体重跑)又能成功。有限重试:退避后插件已 warm,成功率与
             // 下拉刷新一致。与 fetchRoomList 同样的 withRetry 模式。
             let result = try await withRetry(maxRetries: 3, delayNanoseconds: 500_000_000) {

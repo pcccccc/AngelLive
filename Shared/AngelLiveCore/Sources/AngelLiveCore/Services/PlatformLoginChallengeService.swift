@@ -33,6 +33,47 @@ public struct LoginChallengeSuccess: Equatable, Sendable {
     }
 }
 
+public enum LoginChallengeBootstrapState: String, Codable, Equatable, Sendable {
+    case ok
+    case timeout
+    case failed
+    case skipped
+}
+
+/// Non-secret summary passed to `createLoginChallenge` after host-side preparation.
+public struct LoginChallengeBootstrapResult: Codable, Equatable, Sendable {
+    public let state: LoginChallengeBootstrapState
+    public let cookieNames: [String]
+    public let navigations: Int?
+    public let elapsedMs: Int?
+
+    public init(
+        state: LoginChallengeBootstrapState,
+        cookieNames: [String] = [],
+        navigations: Int? = nil,
+        elapsedMs: Int? = nil
+    ) {
+        self.state = state
+        self.cookieNames = Array(Set(cookieNames)).sorted()
+        self.navigations = navigations
+        self.elapsedMs = elapsedMs
+    }
+
+    static var skipped: Self {
+        Self(state: .skipped)
+    }
+
+    var pluginPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "state": state.rawValue,
+            "cookieNames": cookieNames
+        ]
+        if let navigations { payload["navigations"] = navigations }
+        if let elapsedMs { payload["elapsedMs"] = elapsedMs }
+        return payload
+    }
+}
+
 public enum LoginChallengeVerificationKind: Codable, Equatable, Sendable {
     case smsCode
     case unsupported(String)
@@ -142,25 +183,31 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
     public let qrContent: String
     public let qrImage: String?
     public let pollIntervalMs: Int?
+    public let initialPollDelayMs: Int?
     public let expiresAt: Double?
     public let hint: String?
+    public let push: LoginChallengePushPlan?
 
     public init(
         kind: ManifestLoginChallengeKind,
         challengeId: String,
         qrContent: String,
         pollIntervalMs: Int? = nil,
+        initialPollDelayMs: Int? = nil,
         expiresAt: Double? = nil,
         hint: String? = nil,
-        qrImage: String? = nil
+        qrImage: String? = nil,
+        push: LoginChallengePushPlan? = nil
     ) {
         self.kind = kind
         self.challengeId = challengeId
         self.qrContent = qrContent
         self.qrImage = qrImage
         self.pollIntervalMs = pollIntervalMs.map { min(max($0, 1_000), 60_000) }
+        self.initialPollDelayMs = initialPollDelayMs.map { min(max($0, 1_000), 60_000) }
         self.expiresAt = expiresAt
         self.hint = hint
+        self.push = push
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -169,8 +216,10 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
         case qrContent
         case qrImage
         case pollIntervalMs
+        case initialPollDelayMs
         case expiresAt
         case hint
+        case push
     }
 
     public init(from decoder: Decoder) throws {
@@ -180,10 +229,143 @@ public struct LoginChallengeCreateResponse: Codable, Equatable, Sendable {
             challengeId: try container.decode(String.self, forKey: .challengeId),
             qrContent: try container.decode(String.self, forKey: .qrContent),
             pollIntervalMs: try container.decodeIfPresent(Int.self, forKey: .pollIntervalMs),
+            initialPollDelayMs: try container.decodeIfPresent(Int.self, forKey: .initialPollDelayMs),
             expiresAt: try container.decodeIfPresent(Double.self, forKey: .expiresAt),
             hint: try container.decodeIfPresent(String.self, forKey: .hint),
-            qrImage: try container.decodeIfPresent(String.self, forKey: .qrImage)
+            qrImage: try container.decodeIfPresent(String.self, forKey: .qrImage),
+            push: try container.decodeIfPresent(LoginChallengePushPlan.self, forKey: .push)
         )
+    }
+}
+
+public enum LoginChallengePushKind: Codable, Equatable, Sendable {
+    case websocket
+    case unsupported(String)
+
+    public init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        self = rawValue.lowercased() == "websocket" ? .websocket : .unsupported(rawValue)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .websocket:
+            try container.encode("websocket")
+        case .unsupported(let rawValue):
+            try container.encode(rawValue)
+        }
+    }
+}
+
+public enum LoginChallengePushFrameType: String, Codable, Equatable, Sendable {
+    case binary
+    case text
+}
+
+/// Optional v2 extension for a host-managed login push connection.
+public struct LoginChallengePushPlan: Codable, Equatable, Sendable {
+    public let kind: LoginChallengePushKind
+    public let url: String
+    public let frameType: LoginChallengePushFrameType
+    public let pingIntervalMs: Int?
+
+    public init(
+        kind: LoginChallengePushKind,
+        url: String,
+        frameType: LoginChallengePushFrameType,
+        pingIntervalMs: Int? = nil
+    ) {
+        self.kind = kind
+        self.url = url
+        self.frameType = frameType
+        self.pingIntervalMs = pingIntervalMs.map { min(max($0, 1_000), 60_000) }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case url
+        case frameType
+        case pingIntervalMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            kind: try container.decode(LoginChallengePushKind.self, forKey: .kind),
+            url: try container.decode(String.self, forKey: .url),
+            frameType: try container.decode(LoginChallengePushFrameType.self, forKey: .frameType),
+            pingIntervalMs: try container.decodeIfPresent(Int.self, forKey: .pingIntervalMs)
+        )
+    }
+}
+
+enum LoginChallengePushEventKind: String, Sendable {
+    case message
+    case tick
+}
+
+struct LoginChallengePushFrame: Codable, Equatable, Sendable {
+    let type: LoginChallengePushFrameType
+    let text: String?
+    let bytesBase64: String?
+
+    init(type: LoginChallengePushFrameType, text: String? = nil, bytesBase64: String? = nil) {
+        self.type = type
+        self.text = text
+        self.bytesBase64 = bytesBase64
+    }
+
+    init(text: String) {
+        self.init(type: .text, text: text)
+    }
+
+    init(binary data: Data) {
+        self.init(type: .binary, bytesBase64: data.base64EncodedString())
+    }
+
+    var isValid: Bool {
+        switch type {
+        case .binary:
+            return text == nil && bytesBase64.flatMap { Data(base64Encoded: $0) } != nil
+        case .text:
+            return bytesBase64 == nil && text != nil
+        }
+    }
+}
+
+struct LoginChallengePushEvent: Sendable {
+    let kind: LoginChallengePushEventKind
+    let frame: LoginChallengePushFrame?
+}
+
+struct LoginChallengePushAction: Codable, Equatable, Sendable {
+    let pollNow: Bool?
+    let send: [LoginChallengePushFrame]?
+    let close: Bool?
+}
+
+final class LoginChallengePushHandle: Sendable {
+    let pollSignals: AsyncStream<Void>
+    private let closeAction: @Sendable () async -> Void
+    private let cancelAction: @Sendable () -> Void
+
+    init(
+        pollSignals: AsyncStream<Void>,
+        close: @escaping @Sendable () async -> Void,
+        cancel: @escaping @Sendable () -> Void
+    ) {
+        self.pollSignals = pollSignals
+        closeAction = close
+        cancelAction = cancel
+    }
+
+    func close() async {
+        await closeAction()
+    }
+
+    func cancel() {
+        cancelAction()
     }
 }
 
@@ -292,6 +474,7 @@ public struct LoginChallengeVerificationSubmitResponse: Codable, Equatable, Send
 struct LoginChallengeCreateRequest: Equatable, Sendable {
     let transactionId: String
     let platform: LoginChallengeHostPlatform
+    let bootstrap: LoginChallengeBootstrapResult?
 }
 
 struct LoginChallengePollRequest: Equatable, Sendable {
@@ -303,11 +486,14 @@ struct PlatformLoginChallengeDependencies: Sendable {
     var beginTransaction: @Sendable (_ pluginId: String, _ expectedVersion: String) async throws -> String
     var promoteTransaction: @Sendable (_ pluginId: String, _ transactionId: String) async throws -> String
     var discardTransaction: @Sendable (_ pluginId: String, _ transactionId: String) async throws -> Void
+    var supportsBootstrap: Bool
+    var bootstrap: @Sendable (_ pluginId: String, _ transactionId: String, _ configuration: ManifestLoginChallengeBootstrap) async throws -> LoginChallengeBootstrapResult
     var create: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengeCreateRequest) async throws -> LoginChallengeCreateResponse
     var poll: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengePollRequest) async throws -> LoginChallengePollResponse
     var submitVerification: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengeVerificationRequest) async throws -> LoginChallengeVerificationSubmitResponse
     var resendVerification: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengeVerificationResendRequest) async throws -> LoginChallengeVerificationDescriptor
     var cancel: @Sendable (_ pluginId: String, _ function: String, _ request: LoginChallengePollRequest) async throws -> Void
+    var openPush: @Sendable (_ pluginId: String, _ function: String, _ transactionId: String, _ challengeId: String, _ plan: LoginChallengePushPlan) async throws -> LoginChallengePushHandle
     var login: @Sendable (_ pluginId: String, _ transactionId: String, _ cookie: String, _ uid: String?, _ liveType: String, _ validationTimeout: Duration) async -> PlatformSessionValidationResult
     var releaseRuntimeLease: @Sendable (_ pluginId: String, _ transactionId: String) -> Void
     var credentialStatus: @Sendable (_ pluginId: String) async -> CredentialStatus?
@@ -359,18 +545,30 @@ extension PlatformLoginChallengeDependencies {
                     throw error
                 }
             },
+            supportsBootstrap: LoginChallengeWebViewBootstrapRunner.isSupported,
+            bootstrap: { pluginId, transactionId, configuration in
+                try await LoginChallengeWebViewBootstrapRunner.run(
+                    pluginId: pluginId,
+                    transactionId: transactionId,
+                    configuration: configuration
+                )
+            },
             create: { pluginId, function, request in
                 let lease = try runtimeLeases.lease(
                     pluginId: pluginId,
                     transactionId: request.transactionId
                 )
+                var payload: [String: Any] = [
+                    "transactionId": request.transactionId,
+                    "platform": request.platform.rawValue
+                ]
+                if let bootstrap = request.bootstrap {
+                    payload["bootstrap"] = bootstrap.pluginPayload
+                }
                 return try await LiveParsePlugins.shared.callDecodable(
                     using: lease,
                     function: function,
-                    payload: [
-                        "transactionId": request.transactionId,
-                        "platform": request.platform.rawValue
-                    ],
+                    payload: payload,
                     sensitive: true,
                     sensitiveConsolePolicy: .loginChallenge(.create)
                 )
@@ -444,6 +642,39 @@ extension PlatformLoginChallengeDependencies {
                 guard response.ok else {
                     throw LiveParsePluginError.invalidReturnValue(
                         "\(function) returned ok=false"
+                    )
+                }
+            },
+            openPush: { pluginId, function, transactionId, challengeId, plan in
+                let lease = try runtimeLeases.lease(
+                    pluginId: pluginId,
+                    transactionId: transactionId
+                )
+                return try await LoginChallengePushCoordinator.open(
+                    pluginId: pluginId,
+                    transactionId: transactionId,
+                    challengeId: challengeId,
+                    plan: plan
+                ) { event in
+                    var payload: [String: Any] = [
+                        "transactionId": transactionId,
+                        "challengeId": challengeId,
+                        "event": event.kind.rawValue
+                    ]
+                    if let frame = event.frame {
+                        var encodedFrame: [String: Any] = ["type": frame.type.rawValue]
+                        if let text = frame.text { encodedFrame["text"] = text }
+                        if let bytesBase64 = frame.bytesBase64 {
+                            encodedFrame["bytesBase64"] = bytesBase64
+                        }
+                        payload["frame"] = encodedFrame
+                    }
+                    return try await LiveParsePlugins.shared.callDecodable(
+                        using: lease,
+                        function: function,
+                        payload: payload,
+                        sensitive: true,
+                        sensitiveConsolePolicy: .loginChallenge(.push)
                     )
                 }
             },
@@ -678,7 +909,9 @@ public final class PlatformLoginChallengeService {
     private func run(_ request: StartRequest, generation operationGeneration: UInt) async {
         var cleanupContext: OperationContext?
         var operationTransactionId: String?
+        var activePush: LoginChallengePushHandle?
         defer {
+            activePush?.cancel()
             finishVerificationActions()
             if let cleanupContext {
                 scheduleCleanup(cleanupContext)
@@ -720,6 +953,24 @@ public final class PlatformLoginChallengeService {
 
             let deadline = dependencies.now().addingTimeInterval(TimeInterval(request.challenge.timeoutSeconds))
             var refreshCount = 0
+            var bootstrapResult: LoginChallengeBootstrapResult?
+            if let configuration = request.challenge.bootstrap,
+               configuration.runnableURL != nil,
+               dependencies.supportsBootstrap {
+                do {
+                    bootstrapResult = try await dependencies.bootstrap(
+                        request.entry.pluginId,
+                        transactionId,
+                        configuration
+                    )
+                    try ensureCurrent(operationGeneration)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    try ensureCurrent(operationGeneration)
+                    bootstrapResult = LoginChallengeBootstrapResult(state: .failed)
+                }
+            }
 
             challengeLoop: while true {
                 try ensureWithinDeadline(deadline, generation: operationGeneration)
@@ -729,10 +980,14 @@ public final class PlatformLoginChallengeService {
                 let createFunction = request.challenge.functions.create
                 let createRequest = LoginChallengeCreateRequest(
                     transactionId: transactionId,
-                    platform: request.platform
+                    platform: request.platform,
+                    bootstrap: bootstrapResult
                 )
                 let created = try await withPluginDeadline(deadline) {
                     try await self.dependencies.create(pluginId, createFunction, createRequest)
+                }
+                if bootstrapResult != nil {
+                    bootstrapResult = .skipped
                 }
                 try ensureCurrent(operationGeneration)
                 guard created.kind == .qrcode else {
@@ -778,10 +1033,23 @@ public final class PlatformLoginChallengeService {
                 state = .presenting(presentation)
 
                 let pollIntervalMs = created.pollIntervalMs ?? request.challenge.pollIntervalMs
+                let initialPollDelayMs = created.initialPollDelayMs ?? pollIntervalMs
+                if let pushPlan = created.push, pushPlan.kind == .websocket {
+                    activePush = try? await dependencies.openPush(
+                        pluginId,
+                        request.challenge.functions.push,
+                        transactionId,
+                        challengeId,
+                        pushPlan
+                    )
+                }
                 var pollImmediately = false
+                var isFirstPoll = true
                 while true {
                     try ensureWithinDeadline(deadline, generation: operationGeneration)
                     if let expiresAt, expiresAt <= dependencies.now() {
+                        await activePush?.close()
+                        activePush = nil
                         if try await refreshIfAllowed(
                             request: request,
                             context: &context,
@@ -798,8 +1066,13 @@ public final class PlatformLoginChallengeService {
                     if pollImmediately {
                         pollImmediately = false
                     } else {
-                        try await dependencies.sleep(.milliseconds(pollIntervalMs))
+                        let delayMs = isFirstPoll ? initialPollDelayMs : pollIntervalMs
+                        try await waitForPollingTurn(
+                            delay: .milliseconds(delayMs),
+                            push: activePush
+                        )
                     }
+                    isFirstPoll = false
                     try ensureWithinDeadline(deadline, generation: operationGeneration)
 
                     let pollFunction = request.challenge.functions.poll
@@ -841,6 +1114,8 @@ public final class PlatformLoginChallengeService {
                         state = .scanned(presentation)
                         pollImmediately = true
                     case .expired:
+                        await activePush?.close()
+                        activePush = nil
                         if try await refreshIfAllowed(
                             request: request,
                             context: &context,
@@ -855,6 +1130,8 @@ public final class PlatformLoginChallengeService {
                     case .failed:
                         throw ServiceError.plugin(Self.normalizedMessage(polled.message) ?? "扫码登录失败")
                     case .confirmed:
+                        await activePush?.close()
+                        activePush = nil
                         state = .validating
                         try ensureWithinDeadline(deadline, generation: operationGeneration)
                         let cookie = try await dependencies.promoteTransaction(
@@ -937,8 +1214,12 @@ public final class PlatformLoginChallengeService {
                 }
             }
         } catch is CancellationError {
+            await activePush?.close()
+            activePush = nil
             return
         } catch {
+            await activePush?.close()
+            activePush = nil
             guard generation == operationGeneration else { return }
             state = .failed(Self.failure(from: error))
         }
@@ -1198,6 +1479,47 @@ public final class PlatformLoginChallengeService {
             timeoutError: ServiceError.timedOut,
             operation: operation
         )
+    }
+
+    /// Waits for the regular polling deadline or one coalesced push signal.
+    /// Push is advisory: a closed stream simply leaves the HTTP timer in charge.
+    private func waitForPollingTurn(
+        delay: Duration,
+        push: LoginChallengePushHandle?
+    ) async throws {
+        guard let push else {
+            try await dependencies.sleep(delay)
+            return
+        }
+
+        let first = LoginChallengeFirstResult<Void>()
+        let sleep = dependencies.sleep
+        let timerTask = Task {
+            do {
+                try await sleep(delay)
+                await first.resolve(.success(()))
+            } catch {
+                await first.resolve(.failure(error))
+            }
+        }
+        let signalTask = Task {
+            for await _ in push.pollSignals {
+                await first.resolve(.success(()))
+                return
+            }
+        }
+
+        try await withTaskCancellationHandler {
+            defer {
+                timerTask.cancel()
+                signalTask.cancel()
+            }
+            try await first.value()
+        } onCancel: {
+            timerTask.cancel()
+            signalTask.cancel()
+            Task { await first.resolve(.failure(CancellationError())) }
+        }
     }
 
     /// 插件 Promise 可能永不 settle；不能让它使 manifest deadline、取消和

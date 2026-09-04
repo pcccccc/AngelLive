@@ -75,9 +75,63 @@ struct PlatformLoginChallengeManifestTests {
         #expect(challenge.functions.cancel == ManifestLoginChallengeFunctions.defaultCancel)
         #expect(challenge.functions.submitVerification == ManifestLoginChallengeFunctions.defaultSubmitVerification)
         #expect(challenge.functions.resendVerification == ManifestLoginChallengeFunctions.defaultResendVerification)
+        #expect(challenge.functions.push == ManifestLoginChallengeFunctions.defaultPush)
         #expect(challenge.hint == "Scan in the app")
         #expect(challenge.prefers(.tvOS))
         #expect(!challenge.prefers(.macOS))
+    }
+
+    @Test("webview bootstrap is manifest-driven and clamps host resource limits")
+    func bootstrapManifestDecoding() throws {
+        let manifest = try decodeManifest("""
+        {
+          "pluginId": "fixture.login",
+          "version": "1.0.0",
+          "apiVersion": 1,
+          "liveTypes": ["fixture"],
+          "entry": "index.js",
+          "loginChallenge": {
+            "kind": "qrcode",
+            "minLoginChallengeProtocol": 2,
+            "bootstrap": {
+              "kind": "webview",
+              "url": "https://login.example.invalid/bootstrap",
+              "userAgent": " Fixture Agent ",
+              "cookieDomains": [".EXAMPLE.INVALID", "example.invalid", "bad domain"],
+              "readyCookies": ["ready", "ready"],
+              "reportCookies": ["ready", "anonymous_device"],
+              "timeoutMs": 999999,
+              "maxNavigations": 1
+            }
+          }
+        }
+        """)
+        let bootstrap = try #require(manifest.loginChallenge?.bootstrap)
+
+        #expect(PlatformLoginChallengeProtocol.currentVersion == 2)
+        #expect(bootstrap.kind == .webview)
+        #expect(bootstrap.runnableURL?.host == "login.example.invalid")
+        #expect(bootstrap.userAgent == "Fixture Agent")
+        #expect(bootstrap.cookieDomains == ["example.invalid"])
+        #expect(bootstrap.readyCookies == ["ready"])
+        #expect(bootstrap.reportedCookieNames == ["ready", "anonymous_device"])
+        #expect(bootstrap.timeoutMs == ManifestLoginChallengeBootstrap.maximumTimeoutMs)
+        #expect(bootstrap.maxNavigations == 2)
+    }
+
+    @Test("invalid or unknown bootstrap declarations do not disable QR login")
+    func invalidBootstrapIsIgnored() throws {
+        let bootstrap = ManifestLoginChallengeBootstrap(
+            kind: .unsupported("browser"),
+            url: "http://login.example.invalid/bootstrap",
+            userAgent: "Fixture Agent",
+            cookieDomains: ["example.invalid"],
+            readyCookies: []
+        )
+        let challenge = ManifestLoginChallenge(kind: .qrcode, bootstrap: bootstrap)
+
+        #expect(bootstrap.runnableURL == nil)
+        #expect(challenge.isSupportedByCurrentHost)
     }
 
     @Test("unknown challenge kinds survive decoding but are unsupported")
@@ -96,6 +150,35 @@ struct PlatformLoginChallengeManifestTests {
 
         #expect(challenge.kind == .unsupported("device_code"))
         #expect(!challenge.isSupportedByCurrentHost)
+    }
+
+    @Test("optional push plan decodes without changing protocol v2")
+    func pushPlanDecoding() throws {
+        let response = try JSONDecoder().decode(
+            LoginChallengeCreateResponse.self,
+            from: Data(#"""
+            {
+              "kind": "qrcode",
+              "challengeId": "challenge",
+              "qrContent": "content",
+              "initialPollDelayMs": 25,
+              "pollIntervalMs": 90000,
+              "push": {
+                "kind": "websocket",
+                "url": "wss://push.example.invalid/login?opaque=value",
+                "frameType": "binary",
+                "pingIntervalMs": 120000
+              }
+            }
+            """#.utf8)
+        )
+
+        #expect(PlatformLoginChallengeProtocol.currentVersion == 2)
+        #expect(response.initialPollDelayMs == 1_000)
+        #expect(response.pollIntervalMs == 60_000)
+        #expect(response.push?.kind == .websocket)
+        #expect(response.push?.frameType == .binary)
+        #expect(response.push?.pingIntervalMs == 60_000)
     }
 
     @Test("challenge functions cannot alias host credential mutators")
@@ -139,6 +222,220 @@ struct PlatformLoginChallengeManifestTests {
 @Suite("Platform login challenge state machine", .serialized)
 @MainActor
 struct PlatformLoginChallengeServiceTests {
+    @Test("bootstrap completes before create and a same-transaction refresh is marked skipped")
+    func bootstrapRunsOnceBeforeCreate() async {
+        let completed = LoginChallengeBootstrapResult(
+            state: .ok,
+            cookieNames: ["anonymous_device", "ready"],
+            navigations: 2,
+            elapsedMs: 250
+        )
+        let driver = ChallengeDriver(
+            creates: [.fixture(id: "first"), .fixture(id: "second")],
+            polls: [.init(state: .expired), .init(state: .confirmed)],
+            bootstrapResult: completed
+        )
+        let bootstrap = ManifestLoginChallengeBootstrap(
+            kind: .webview,
+            url: "https://login.example.invalid/bootstrap",
+            userAgent: "Fixture Agent",
+            cookieDomains: ["example.invalid"],
+            readyCookies: ["ready"],
+            reportCookies: ["ready", "anonymous_device"]
+        )
+        let challenge = ManifestLoginChallenge(
+            kind: .qrcode,
+            minLoginChallengeProtocol: 2,
+            pollIntervalMs: 1_000,
+            timeoutSeconds: 180,
+            maxRefreshes: 1,
+            bootstrap: bootstrap
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: challenge), platform: .iOS)
+        await service.waitForCurrentOperation()
+
+        guard case .succeeded = service.state else {
+            Issue.record("Expected refreshed challenge to succeed")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.bootstrapCount == 1)
+        #expect(snapshot.createBootstrapResults == [completed, .skipped])
+        #expect(Array(snapshot.events.prefix(3)) == ["begin", "bootstrap", "create"])
+    }
+
+    @Test("bootstrap errors degrade to failed metadata and do not fail QR login")
+    func bootstrapFailureFallsBackToCreate() async {
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [.init(state: .confirmed)],
+            rejectBootstrap: true
+        )
+        let bootstrap = ManifestLoginChallengeBootstrap(
+            kind: .webview,
+            url: "https://login.example.invalid/bootstrap",
+            userAgent: "Fixture Agent",
+            cookieDomains: ["example.invalid"],
+            readyCookies: ["ready"]
+        )
+        let challenge = ManifestLoginChallenge(kind: .qrcode, bootstrap: bootstrap)
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: challenge), platform: .iOS)
+        await service.waitForCurrentOperation()
+
+        guard case .succeeded = service.state else {
+            Issue.record("Expected QR login to continue after bootstrap failure")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.createBootstrapResults == [.init(state: .failed)])
+        #expect(Array(snapshot.events.prefix(3)) == ["begin", "bootstrap", "create"])
+    }
+
+    @Test("a host without WebKit omits bootstrap and keeps QR login available")
+    func unsupportedHostFallsBackWithoutBootstrap() async {
+        let bootstrap = ManifestLoginChallengeBootstrap(
+            kind: .webview,
+            url: "https://login.example.invalid/bootstrap",
+            userAgent: "Fixture Agent",
+            cookieDomains: ["example.invalid"],
+            readyCookies: ["ready"]
+        )
+        let driver = ChallengeDriver(
+            creates: [.fixture()],
+            polls: [.init(state: .confirmed)]
+        )
+        let service = makeService(driver: driver, supportsBootstrap: false)
+
+        service.start(
+            entry: .fixture(challenge: .fixture(minProtocol: 2, bootstrap: bootstrap)),
+            platform: .tvOS
+        )
+        await service.waitForCurrentOperation()
+
+        guard case .succeeded = service.state else {
+            Issue.record("Expected ordinary QR login to remain available")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.bootstrapCount == 0)
+        #expect(snapshot.createBootstrapResults == [nil])
+    }
+
+    @Test("WebSocket push can preempt the HTTP timer and closes before promotion")
+    func pushSignalTriggersImmediatePoll() async {
+        let plan = LoginChallengePushPlan(
+            kind: .websocket,
+            url: "wss://push.example.invalid/login?token=redacted",
+            frameType: .binary,
+            pingIntervalMs: 15_000
+        )
+        let created = LoginChallengeCreateResponse(
+            kind: .qrcode,
+            challengeId: "challenge-push",
+            qrContent: "qr-content",
+            pollIntervalMs: 5_000,
+            initialPollDelayMs: 1_000,
+            push: plan
+        )
+        let driver = ChallengeDriver(
+            creates: [created],
+            polls: [.init(state: .confirmed)],
+            suspendedSleeps: [1]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .tvOS)
+        #expect(await eventually {
+            let snapshot = await driver.snapshot()
+            let sleeping = await driver.hasSuspendedSleep(1)
+            return snapshot.pushOpenCount == 1 && sleeping
+        })
+        await driver.emitPushPollSignal()
+        await service.waitForCurrentOperation()
+        await driver.resumeSleep(1)
+
+        guard case .succeeded = service.state else {
+            Issue.record("Expected push-triggered poll to complete login")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.sleepDurations.first == .milliseconds(1_000))
+        #expect(snapshot.pushFunctions == ["onLoginChallengePush"])
+        #expect(snapshot.pushCloseCount == 1)
+        #expect(snapshot.pollFunctions == ["pollLoginChallenge"])
+    }
+
+    @Test("push setup failure falls back to ordinary HTTP polling")
+    func pushFailureFallsBackToPolling() async {
+        let created = LoginChallengeCreateResponse(
+            kind: .qrcode,
+            challengeId: "challenge-push-fallback",
+            qrContent: "qr-content",
+            pollIntervalMs: 1_000,
+            push: .init(
+                kind: .websocket,
+                url: "wss://push.example.invalid/login",
+                frameType: .text
+            )
+        )
+        let driver = ChallengeDriver(
+            creates: [created],
+            polls: [.init(state: .confirmed)],
+            rejectPushOpen: true
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .iOS)
+        await service.waitForCurrentOperation()
+
+        guard case .succeeded = service.state else {
+            Issue.record("Expected HTTP polling fallback to succeed")
+            return
+        }
+        let snapshot = await driver.snapshot()
+        #expect(snapshot.pushOpenCount == 1)
+        #expect(snapshot.pushCloseCount == 0)
+        #expect(snapshot.pollFunctions == ["pollLoginChallenge"])
+    }
+
+    @Test("cancelling a challenge closes its push connection")
+    func cancellationClosesPush() async {
+        let created = LoginChallengeCreateResponse(
+            kind: .qrcode,
+            challengeId: "challenge-cancel-push",
+            qrContent: "qr-content",
+            pollIntervalMs: 5_000,
+            push: .init(
+                kind: .websocket,
+                url: "wss://push.example.invalid/login",
+                frameType: .binary
+            )
+        )
+        let driver = ChallengeDriver(
+            creates: [created],
+            polls: [],
+            suspendedSleeps: [1]
+        )
+        let service = makeService(driver: driver)
+
+        service.start(entry: .fixture(challenge: .fixture(minProtocol: 2)), platform: .macOS)
+        #expect(await eventually {
+            let snapshot = await driver.snapshot()
+            return snapshot.pushOpenCount == 1
+        })
+        service.cancel()
+        #expect(await eventually { (await driver.snapshot()).pushCloseCount == 1 })
+        await driver.resumeSleep(1)
+        #expect(await eventually { (await driver.snapshot()).discardCount == 1 })
+
+        #expect(service.state == .idle)
+        #expect((await driver.snapshot()).discardCount == 1)
+    }
+
     @Test("confirmed means credential ready when compatibility flag is absent")
     func confirmedWithoutCompatibilityFlagSucceeds() async {
         let driver = ChallengeDriver(
@@ -311,7 +608,7 @@ struct PlatformLoginChallengeServiceTests {
         let driver = ChallengeDriver(
             creates: [.fixture()],
             polls: [
-                .init(state: .verificationRequired, rawStatus: 2046, verification: verification),
+                .init(state: .verificationRequired, rawStatus: 1001, verification: verification),
                 .init(state: .confirmed)
             ],
             verificationSubmits: [.init(state: .accepted)]
@@ -634,7 +931,10 @@ struct PlatformLoginChallengeServiceTests {
         #expect(snapshot.loginCount == 0)
     }
 
-    private func makeService(driver: ChallengeDriver) -> PlatformLoginChallengeService {
+    private func makeService(
+        driver: ChallengeDriver,
+        supportsBootstrap: Bool = true
+    ) -> PlatformLoginChallengeService {
         let fixedNow = Date(timeIntervalSince1970: 1_800_000_000)
         return PlatformLoginChallengeService(dependencies: .init(
             beginTransaction: { pluginId, _ in
@@ -645,6 +945,14 @@ struct PlatformLoginChallengeServiceTests {
             },
             discardTransaction: { pluginId, transactionId in
                 await driver.discard(pluginId: pluginId, transactionId: transactionId)
+            },
+            supportsBootstrap: supportsBootstrap,
+            bootstrap: { pluginId, transactionId, configuration in
+                try await driver.bootstrap(
+                    pluginId: pluginId,
+                    transactionId: transactionId,
+                    configuration: configuration
+                )
             },
             create: { pluginId, function, request in
                 try await driver.create(pluginId: pluginId, function: function, request: request)
@@ -669,6 +977,15 @@ struct PlatformLoginChallengeServiceTests {
             cancel: { pluginId, function, request in
                 try await driver.cancel(pluginId: pluginId, function: function, request: request)
             },
+            openPush: { pluginId, function, transactionId, challengeId, plan in
+                try await driver.openPush(
+                    pluginId: pluginId,
+                    function: function,
+                    transactionId: transactionId,
+                    challengeId: challengeId,
+                    plan: plan
+                )
+            },
             login: { pluginId, _, cookie, uid, liveType, _ in
                 await driver.login(pluginId: pluginId, cookie: cookie, uid: uid, liveType: liveType)
             },
@@ -679,7 +996,7 @@ struct PlatformLoginChallengeServiceTests {
             didLogin: { pluginId in
                 await driver.didLogin(pluginId: pluginId)
             },
-            sleep: { _ in await driver.didSleep() },
+            sleep: { duration in await driver.didSleep(duration) },
             now: { fixedNow },
             cleanupPluginCallTimeout: .milliseconds(25)
         ))
@@ -713,7 +1030,11 @@ private extension LoginPlatformEntry {
 }
 
 private extension ManifestLoginChallenge {
-    static func fixture(maxRefreshes: Int = 1, minProtocol: Int = 1) -> Self {
+    static func fixture(
+        maxRefreshes: Int = 1,
+        minProtocol: Int = 1,
+        bootstrap: ManifestLoginChallengeBootstrap? = nil
+    ) -> Self {
         Self(
             kind: .qrcode,
             minLoginChallengeProtocol: minProtocol,
@@ -721,6 +1042,7 @@ private extension ManifestLoginChallenge {
             timeoutSeconds: 180,
             maxRefreshes: maxRefreshes,
             hint: "Scan now",
+            bootstrap: bootstrap,
             preferOn: ["tvos"]
         )
     }
@@ -747,6 +1069,13 @@ private actor ChallengeDriver {
         let verificationSubmitFunctions: [String]
         let verificationResendCount: Int
         let verificationResendFunctions: [String]
+        let pushOpenCount: Int
+        let pushCloseCount: Int
+        let pushFunctions: [String]
+        let bootstrapCount: Int
+        let createBootstrapResults: [LoginChallengeBootstrapResult?]
+        let events: [String]
+        let sleepDurations: [Duration]
     }
 
     enum DriverError: Error {
@@ -755,6 +1084,8 @@ private actor ChallengeDriver {
         case cancelRejected
         case missingVerificationSubmit
         case missingVerificationResend
+        case pushOpenRejected
+        case bootstrapRejected
     }
 
     private var creates: [LoginChallengeCreateResponse]
@@ -779,8 +1110,19 @@ private actor ChallengeDriver {
     private var verificationSubmitFunctions: [String] = []
     private var verificationResendCount = 0
     private var verificationResendFunctions: [String] = []
+    private var pushOpenCount = 0
+    private var pushCloseCount = 0
+    private var pushFunctions: [String] = []
+    private var bootstrapCount = 0
+    private var createBootstrapResults: [LoginChallengeBootstrapResult?] = []
+    private var events: [String] = []
+    private let bootstrapResult: LoginChallengeBootstrapResult
+    private var pushContinuation: AsyncStream<Void>.Continuation?
+    private var sleepDurations: [Duration] = []
     private var suspendFirstCancel: Bool
     private var rejectFirstCancel: Bool
+    private var rejectPushOpen: Bool
+    private let rejectBootstrap: Bool
     private var suspendedCancel: CheckedContinuation<Void, Never>?
 
     init(
@@ -791,6 +1133,9 @@ private actor ChallengeDriver {
         suspendFirstCreate: Bool = false,
         suspendFirstCancel: Bool = false,
         rejectFirstCancel: Bool = false,
+        rejectPushOpen: Bool = false,
+        rejectBootstrap: Bool = false,
+        bootstrapResult: LoginChallengeBootstrapResult = .init(state: .ok),
         suspendedSleeps: Set<Int> = []
     ) {
         self.creates = creates
@@ -800,11 +1145,15 @@ private actor ChallengeDriver {
         self.suspendFirstCreate = suspendFirstCreate
         self.suspendFirstCancel = suspendFirstCancel
         self.rejectFirstCancel = rejectFirstCancel
+        self.rejectPushOpen = rejectPushOpen
+        self.rejectBootstrap = rejectBootstrap
+        self.bootstrapResult = bootstrapResult
         self.suspendedSleeps = suspendedSleeps
     }
 
     func begin(pluginId: String) -> String {
         beginCount += 1
+        events.append("begin")
         return "transaction-\(beginCount)-for-\(pluginId)"
     }
 
@@ -817,13 +1166,28 @@ private actor ChallengeDriver {
         discardCount += 1
     }
 
+    func bootstrap(
+        pluginId: String,
+        transactionId: String,
+        configuration: ManifestLoginChallengeBootstrap
+    ) throws -> LoginChallengeBootstrapResult {
+        bootstrapCount += 1
+        events.append("bootstrap")
+        if rejectBootstrap {
+            throw DriverError.bootstrapRejected
+        }
+        return bootstrapResult
+    }
+
     func create(
         pluginId: String,
         function: String,
         request: LoginChallengeCreateRequest
     ) async throws -> LoginChallengeCreateResponse {
         createCount += 1
+        events.append("create")
         createFunctions.append(function)
+        createBootstrapResults.append(request.bootstrap)
         if suspendFirstCreate {
             suspendFirstCreate = false
             return await withCheckedContinuation { continuation in
@@ -840,6 +1204,7 @@ private actor ChallengeDriver {
         request: LoginChallengePollRequest
     ) throws -> LoginChallengePollResponse {
         pollFunctions.append(function)
+        events.append("poll")
         guard !polls.isEmpty else { throw DriverError.missingPoll }
         return polls.removeFirst()
     }
@@ -880,6 +1245,40 @@ private actor ChallengeDriver {
         }
     }
 
+    func openPush(
+        pluginId: String,
+        function: String,
+        transactionId: String,
+        challengeId: String,
+        plan: LoginChallengePushPlan
+    ) throws -> LoginChallengePushHandle {
+        pushOpenCount += 1
+        pushFunctions.append(function)
+        if rejectPushOpen {
+            throw DriverError.pushOpenRejected
+        }
+        let (signals, continuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        pushContinuation = continuation
+        return LoginChallengePushHandle(
+            pollSignals: signals,
+            close: { await self.closePush() },
+            cancel: { Task { await self.closePush() } }
+        )
+    }
+
+    func emitPushPollSignal() {
+        pushContinuation?.yield(())
+    }
+
+    func closePush() {
+        guard pushContinuation != nil else { return }
+        pushCloseCount += 1
+        pushContinuation?.finish()
+        pushContinuation = nil
+    }
+
     func login(
         pluginId: String,
         cookie: String,
@@ -898,7 +1297,8 @@ private actor ChallengeDriver {
         didLoginCount += 1
     }
 
-    func didSleep() async {
+    func didSleep(_ duration: Duration) async {
+        sleepDurations.append(duration)
         sleepCount += 1
         let count = sleepCount
         guard suspendedSleeps.contains(count) else { return }
@@ -938,7 +1338,14 @@ private actor ChallengeDriver {
             verificationSubmitCount: verificationSubmitCount,
             verificationSubmitFunctions: verificationSubmitFunctions,
             verificationResendCount: verificationResendCount,
-            verificationResendFunctions: verificationResendFunctions
+            verificationResendFunctions: verificationResendFunctions,
+            pushOpenCount: pushOpenCount,
+            pushCloseCount: pushCloseCount,
+            pushFunctions: pushFunctions,
+            bootstrapCount: bootstrapCount,
+            createBootstrapResults: createBootstrapResults,
+            events: events,
+            sleepDurations: sleepDurations
         )
     }
 }

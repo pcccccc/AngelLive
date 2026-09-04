@@ -1,8 +1,8 @@
-# 插件纯 HTTP 扫码登录与可选短信验证协议
+# 插件扫码登录、WebView 预热、可选验证与 WebSocket 推送协议
 
-更新时间：2026-09-02
+更新时间：2026-09-04
 
-本文档定义宿主与插件之间的"登录挑战"协议，让 macOS、tvOS、iOS 都能在不依赖 WebView 的情况下，由插件驱动纯 HTTP 扫码登录，并可在手机确认后请求宿主收集一次短信验证码。宿主负责原生二维码/验证码 UI、临时 Cookie Jar 和凭据落库。协议与具体直播平台无关，任何插件只要实现本文的函数契约即可接入。
+本文档定义宿主与插件之间的"登录挑战"协议：插件驱动 HTTP 扫码登录和可选 WebSocket 状态推送，也可以请求支持 WebKit 的宿主在出码前用隔离、不可见的 WebView 完成一次浏览器环境预热。宿主负责原生二维码/验证码 UI、临时 Cookie Jar、预热与推送生命周期和凭据落库。协议与具体直播平台无关，任何插件只要实现本文的函数契约即可接入。
 
 各平台自身的接口链路、状态码和安全态引导属于插件实现细节，记录在插件仓库 `docs/research/` 下对应平台的研究文档中，本文不引用其内容。
 
@@ -17,6 +17,7 @@
 - 普通 HTTP 桥仍通过 `allHeaderFields` 收集响应头；`login_transaction` 模式单独接管每一跳以吸收多个 `Set-Cookie` 和中间跳 Cookie，其他宿主管理凭据的请求也接管重定向以防跨源泄漏和 HTTPS 降级。
 - 开发者控制台通常会记录插件函数的完整入参与前 2000 字节返回值；登录事务调用和 HTTP 子请求必须走新增的脱敏分支，`qrContent`、`challengeId`、事务 ID 和任何 Cookie 都不能进入日志。
 - 插件函数统一经 `LiveParsePlugins.shared.call(pluginId:function:payload:)` 调用。兼容入口 `setCookie`、`clearCookie`、`setCredential`、`clearCredential` 由 `LiveParsePluginManager` 完全截获，只修改宿主 vault 并返回非敏感 receipt，绝不继续调用同名插件 JS 函数。新协议函数沿用同一调度入口，但只携带不透明 ID 和状态。
+- 登录挑战协议版本仍为 `2`。WebSocket 与预热分别通过 `Host.capabilities.loginChallengePush`、`Host.capabilities.loginChallengeBootstrap` 探测，均为可选扩展，不提高 `minLoginChallengeProtocol`，也不改变纯 HTTP 插件的行为。
 
 ## 2. 责任划分
 
@@ -26,6 +27,10 @@
 | --- | --- | --- |
 | 匿名设备态生成、安全脚本、签名、创建与轮询接口、状态码语义 | 插件 | 这是平台能力，宿主不得内置任何平台专属请求。 |
 | 一次登录事务的临时 Cookie Jar | 宿主 | 按 host/path 吸收所有 `Set-Cookie`，包括重定向中间跳，事务结束即销毁。 |
+| 预热 URL、UA、Cookie 域和完成条件 | 插件 manifest | 所有站点知识都在 `loginChallenge.bootstrap`；宿主只校验格式与资源上限。 |
+| 非交互 WebView 与 Cookie 收割 | 宿主 | 每事务使用独立 non-persistent data store，轮询 cookie store，将允许域的 Cookie 收入事务 Jar。 |
+| WebSocket URL、帧编码、心跳帧与推送语义 | 插件 | 插件生成完整 URL 并解释原始帧；宿主不拼接鉴权参数、不解析平台消息。 |
+| WebSocket 建连、收发、计时与关闭 | 宿主 | 连接绑定同一 `transactionId` / `challengeId`，失败时退回 HTTP 轮询。 |
 | 二维码渲染、短信验证码输入、轮询节奏、取消、超时、刷新 UI | 宿主 | 三端 FullUI 各用原生组件，并共用 `AngelLiveCore` 中的状态机。验证码只在内存中短暂存在。 |
 | 最终校验与凭据落库 | 宿主 | 事务 Jar 提升为宿主内 Cookie 字符串后走 `loginWithCookie(validateBeforeSave: true)`；插件 `validateCredential` 只收到可用性标记，并通过原生注入的 `Host.http` 校验。 |
 | WebView 兜底 | 宿主 | 扫码不可用或失败时，macOS/iOS 回退到现有 `loginFlow.kind = webview`。 |
@@ -62,12 +67,23 @@
       "poll": "pollLoginChallenge",
       "cancel": "cancelLoginChallenge",
       "submitVerification": "submitLoginChallengeVerification",
-      "resendVerification": "resendLoginChallengeVerification"
+      "resendVerification": "resendLoginChallengeVerification",
+      "push": "onLoginChallengePush"
     },
     "pollIntervalMs": 2000,
     "timeoutSeconds": 180,
     "maxRefreshes": 3,
     "hint": "打开对应 App 扫描二维码，并在手机上确认登录",
+    "bootstrap": {
+      "kind": "webview",
+      "url": "https://login.example.invalid/bootstrap",
+      "userAgent": "Fixture Browser Agent",
+      "cookieDomains": ["example.invalid"],
+      "readyCookies": ["browser_ready"],
+      "reportCookies": ["browser_ready", "anonymous_device"],
+      "timeoutMs": 8000,
+      "maxNavigations": 3
+    },
     "preferOn": ["tvos", "macos", "ios"]
   }
 }
@@ -78,8 +94,11 @@
 - `kind`：当前只定义 `qrcode`。未来短信验证码或设备码登录可以增加新值，宿主对未知 `kind` 一律视为不支持。
 - `loginChallenge` 字段本身：可选。缺失表示插件没有声明二维码登录能力；宿主不得通过 `auth`、`credentialKinds`、`loginFlow.kind` 或函数扫描猜测支持情况。
 - `minLoginChallengeProtocol`：插件所需的最低登录挑战协议版本。当前宿主版本为 `2`。只会返回五个基础扫码状态的插件可继续声明 `1`；可能返回 `verification_required` 的插件必须声明 `2`。它独立于三端不一致的 `MARKETING_VERSION`。
-- `functions`：允许插件自定义函数名。基础扫码函数为 create/poll/cancel；协议 v2 另外定义 submitVerification/resendVerification。宿主按默认名回退。自定义名不得使用宿主保留的 `setCookie`、`clearCookie`、`setCredential`、`clearCredential`；否则该挑战声明视为当前宿主不支持，避免挑战调用误触正式凭据写入语义。
+- `functions`：允许插件自定义函数名。基础扫码函数为 create/poll/cancel；协议 v2 另外定义 submitVerification/resendVerification；可选推送回调默认为 `onLoginChallengePush`。宿主按默认名回退。自定义名不得使用宿主保留的 `setCookie`、`clearCookie`、`setCredential`、`clearCredential`；否则该挑战声明视为当前宿主不支持，避免挑战调用误触正式凭据写入语义。
 - `pollIntervalMs`、`timeoutSeconds`、`maxRefreshes`：宿主状态机的默认节奏，插件在 create 响应里可以逐次覆盖 `pollIntervalMs` 和过期时间。
+- `bootstrap`：可选的出码前预热。当前只识别 `kind: "webview"`；未知 kind、非 HTTPS URL、空 UA 或空域列表按未声明处理，不影响扫码入口。
+- `bootstrap.cookieDomains` 是 Cookie 收割白名单；`readyCookies` 全部出现即返回 `ok`。空 `readyCookies` 只按超时结束。`reportCookies` 缺省等于 `readyCookies`，其内容只控制回给插件的 Cookie 名字。
+- `bootstrap.timeoutMs` 默认 8000、上限 15000；`maxNavigations` 默认 3、最小 2、上限 20。WebView 的页面自刷新属于正常导航。
 - `preferOn`：在这些平台上扫码作为首选入口，未列出的平台仍展示但排在 WebView 之后。tvOS 没有 WebView，只要声明了 `loginChallenge` 就必然首选。
 - 宿主会把轮询间隔限制在 1 至 60 秒、总超时限制在 30 至 600 秒、自动刷新次数限制在 0 至 10 次；函数名、提示文案和平台数组也会做长度限制。
 
@@ -91,13 +110,24 @@
 
 ### 4.1 createLoginChallenge
 
-入参：
+入参（未声明或宿主不支持预热时没有 `bootstrap` 字段）：
 
 ```json
-{ "transactionId": "opaque-host-token", "platform": "tvos" }
+{
+  "transactionId": "opaque-host-token",
+  "platform": "macos",
+  "bootstrap": {
+    "state": "ok",
+    "cookieNames": ["anonymous_device", "browser_ready"],
+    "navigations": 2,
+    "elapsedMs": 420
+  }
+}
 ```
 
 `transactionId` 由宿主在调用前通过 `beginLoginTransaction` 创建，标识本次登录事务的临时 Cookie Jar。插件后续所有请求都带上它。
+
+`bootstrap.state` 为 `ok`、`timeout`、`failed` 或 `skipped`。宿主只返回 `reportCookies` 与 Jar 中实际存在名字的交集，绝不返回 Cookie 值。`timeout` 和 `failed` 仍会收割已产生的允许域 Cookie 并继续 create，不能直接判定登录失败。同一事务刷新二维码不重复启动 WebView，而向下一次 create 传 `skipped`。
 
 返回：
 
@@ -106,15 +136,27 @@
   "kind": "qrcode",
   "challengeId": "opaque-plugin-token",
   "qrContent": "待编码的二维码文本",
-  "pollIntervalMs": 2000,
+  "initialPollDelayMs": 1000,
+  "pollIntervalMs": 5000,
   "expiresAt": 0,
-  "hint": "可选，覆盖 manifest 的 hint"
+  "hint": "可选，覆盖 manifest 的 hint",
+  "push": {
+    "kind": "websocket",
+    "url": "wss://push.example.invalid/login?opaque=...",
+    "frameType": "binary",
+    "pingIntervalMs": 15000
+  }
 }
 ```
 
 - `challengeId` 对宿主不透明，插件内部关联上游挑战标识，这些数据只存在插件内存，随 cancel 或事务结束清除。
 - `qrContent` 是待编码文本，宿主用原生二维码组件渲染，插件不生成图片。
 - `expiresAt` 是 Unix 毫秒时间戳，上游没有可靠过期时间时填 0，由轮询返回的 `expired` 驱动刷新。
+- `initialPollDelayMs` 只控制出码后的第一次 HTTP poll；缺失时等于 `pollIntervalMs`。二者都会被限制在 1 至 60 秒。
+- `push` 是可选的 v2 能力扩展。插件只有在 `Host.capabilities.loginChallengePush === true` 时才应返回；未返回时保持原有纯 HTTP 轮询。
+- `push.url` 必须是完整 `wss` URL；仅本机调试允许 `ws://localhost`、`ws://127.0.0.1` 或 `ws://[::1]`。URL 不允许 userinfo，最长 8192 字节。
+- `frameType` 为 `binary` 或 `text`，表示该连接的主帧类型。宿主按实际收到的帧传递（二进制不猜 UTF-8）。插件 `send` 可以是 text 或 binary（例如 FWS 数据为二进制、应用层心跳为文本 `"hi"`）；无效帧才会关掉推送连接。
+- `pingIntervalMs` 可选，范围 1 至 60 秒。它不是 WebSocket control ping；到时宿主调用插件，由插件决定是否返回平台协议所需的应用层心跳帧。
 
 失败时抛出标准化错误。`code` 使用现有 `LiveParsePluginError.standardized` 的取值，宿主据此决定提示文案和是否回退 WebView：
 
@@ -156,12 +198,12 @@
 
 `confirmed` 本身就是“正式凭据已就绪”的唯一协议语义，宿主随后提升事务 Jar。`credentialReady` 只为兼容早期草案而可选：缺失表示遵循最终语义；若提供，其值必须与 state 一致，否则宿主按无效响应拒绝。`uid` 可选，插件能从兑换响应或 Jar 中解析出用户 ID 时填入，供 `PlatformSession.uid` 使用。
 
-当平台在手机确认后返回二次验证信号（例如上游 `error_code = 2046`）时，插件先调用平台的发送短信接口，成功后返回：
+当平台在手机确认后返回二次验证信号时，插件先调用平台的发送短信接口，成功后返回：
 
 ```json
 {
   "state": "verification_required",
-  "rawStatus": 2046,
+  "rawStatus": 1001,
   "verification": {
     "kind": "sms_code",
     "verificationId": "opaque-plugin-verification-token",
@@ -174,7 +216,7 @@
 }
 ```
 
-`verificationId` 对宿主不透明。`encrypt_uid`、`schema`、`mobile_ticket`、`verify_ways` 等平台字段全部由插件内部保存并映射到该 ID，不能塞进宿主 UI 模型。插件返回该状态前必须已经成功发送首条短信，避免宿主展示一个实际未发送的验证码输入页。
+`verificationId` 对宿主不透明。上游用户标识、验证票据、验证方式和回跳参数等平台字段全部由插件内部保存并映射到该 ID，不能塞进宿主 UI 模型。插件返回该状态前必须已经成功发送首条短信，避免宿主展示一个实际未发送的验证码输入页。
 
 ### 4.3 submitLoginChallengeVerification
 
@@ -189,7 +231,7 @@
 }
 ```
 
-验证码正确时返回 `{ "state": "accepted" }`。插件应在内部保存校验接口返回的 ticket，并准备好下一次 poll 所需的 `std_verify_*` 等参数；宿主随即恢复同一 challenge 的 poll。验证码错误时返回：
+验证码正确时返回 `{ "state": "accepted" }`。插件应在内部保存校验接口返回的票据，并准备好下一次 poll 所需的验证参数；宿主随即恢复同一 challenge 的 poll。验证码错误时返回：
 
 ```json
 {
@@ -214,6 +256,39 @@
 ### 4.5 cancelLoginChallenge
 
 入参同 poll，返回 `{ "ok": true }`。插件清理内存中的挑战数据，宿主随后丢弃事务。用户主动取消、超时、切换页面、宿主进入后台超过阈值都会调用它。
+
+### 4.6 onLoginChallengePush（可选）
+
+宿主收到消息帧或到达应用层心跳时调用。所有调用仍固定在创建该挑战的同一个插件 runtime lease 上，并使用敏感日志策略。
+
+二进制消息：
+
+```json
+{
+  "transactionId": "...",
+  "challengeId": "...",
+  "event": "message",
+  "frame": { "type": "binary", "bytesBase64": "AAECAw==" }
+}
+```
+
+文本消息使用 `{ "type": "text", "text": "..." }`。应用层心跳只传 `event: "tick"`，不带 `frame`。插件返回：
+
+```json
+{
+  "pollNow": true,
+  "send": [
+    { "type": "binary", "bytesBase64": "BAUGBw==" }
+  ],
+  "close": false
+}
+```
+
+- `pollNow: true` 只要求宿主尽快执行一次现有 `pollLoginChallenge`；推送帧本身不能产生 `confirmed`，最终状态仍以 HTTP poll 为准。
+- `send` 最多处理 16 帧，每帧解码后最大 1 MiB。二进制统一使用 base64。允许 text 与 binary 混发（FWS 心跳是文本 `"hi"`）。
+- `close: true` 只关闭推送连接，HTTP 轮询继续。回调抛错、返回无效帧或发送失败也采用同样降级。
+- 多个 `pollNow` 会合并；若 HTTP poll 已在执行，不并发启动第二次 poll。
+- 插件应把推送连接视作提示通道，而不是凭据提交通道。Cookie、token、二维码内容和完整帧不得进入日志。
 
 ## 5. 宿主新增桥能力
 
@@ -281,6 +356,25 @@ await Host.session.seedTransactionCookies(
 
 `login_transaction`、`platform_cookie` 和 `cookieInject` 路径强制绕过 URLCache；凭据型请求不会加入插件响应缓存，避免轮询被去重、旧认证响应复用，或敏感响应从匿名调用的日志路径输出。
 
+### 5.5 登录挑战 WebSocket
+
+- 宿主使用临时 `URLSessionConfiguration.ephemeral` 和 `URLSessionWebSocketTask`；系统 Cookie storage 与 URLCache 均关闭。
+- 握手时只附加事务 Jar 中按 RFC domain/path/secure 规则适用于 `push.url` 的 Cookie，不使用正式账号 vault，也不跨域扁平携带其他事务 Cookie。
+- 握手不能向事务 Jar 写入新 Cookie；需要建立或更新会话的响应必须继续通过 `Host.http.request({ authMode: "login_transaction" })` 完成。
+- 消息与 tick 进入同一个 actor 队列，插件回调严格串行；回调等待期间到达的事件只排队，不并发进入 JavaScriptCore。
+- WebSocket 失败不会把登录状态机切到 `failed`。宿主关闭推送流后继续按 `pollIntervalMs` 轮询。
+- challenge 刷新时先关闭旧连接再调用旧 challenge 的 cancel；确认、失败、超时、用户取消或页面离开时均关闭连接。连接不得复用到另一个 transaction 或 challenge。
+- DEBUG 日志只记录 scheme/host、path 字节数与有限数量的 query 键名，绝不记录 path/query 值、Cookie 或帧内容；开发者控制台只记录事件类型、是否带帧、动作计数与布尔状态。
+
+### 5.6 登录挑战 WebView 预热
+
+- 宿主在事务创建后、首次 `createLoginChallenge` 前运行一次；不注入脚本、不改写请求头（manifest UA 除外），不显示页面，也不允许用户交互。
+- `WKWebsiteDataStore.nonPersistent()` 与 `WKWebView` 均按事务新建。不能复用交互式网页登录实例、共享 data store 或系统 Cookie storage。
+- `customUserAgent` 必须在首次 load 前强制设置成 manifest 值。Cookie 通过 `WKHTTPCookieStore.getAllCookies()` 每 100 ms 轮询，不能只在导航完成时读取一次。
+- 每轮只把 domain 等于或位于 `cookieDomains` 子域内、且通过 Cookie scope/安全前缀检查的 Cookie 导入事务 Jar；包括 WebView cookie store 中的 HttpOnly Cookie。
+- 达到 ready、超时、加载失败或导航超限后销毁 WebView。取消任务会立即停止加载并走事务原有清理路径。
+- iOS 与 macOS 提供 `Host.capabilities.loginChallengeBootstrap === true`。tvOS 27 SDK 不提供 WebKit，因此该端不声明能力，插件保持原有 HTTP 降级；扫码入口不能因此被禁用。
+
 ## 6. 宿主状态机
 
 新增 `@MainActor @Observable PlatformLoginChallengeService`（`AngelLiveCore/Services`），三端 UI 只订阅它的单一枚举状态，不直接调插件。
@@ -289,7 +383,8 @@ await Host.session.seedTransactionCookies(
 idle
   └─ start(pluginId)
        ├─ beginLoginTransaction
-       ├─ call createLoginChallenge
+       ├─ optional isolated WebView bootstrap（仅首次）
+       ├─ call createLoginChallenge（携带预热的非敏感摘要）
        └─ presenting(qrContent, expiresAt)
             └─ 定时 poll
                  ├─ waiting  → presenting
@@ -361,20 +456,21 @@ cancel / timeout / background 超时
 
 按第 4 节契约，一个平台插件在其 login 脚本中通常按下面的方式落地。具体接口、字段名和安全态步骤由各平台研究文档决定，这里只给结构。
 
-1. `createLoginChallenge`：在事务内完成平台网页端的匿名冷启动。典型步骤包括导航首页吸收 host-scoped Cookie、本地生成匿名设备标识并 seed 进事务 Jar、执行平台要求的安全脚本或风控初始化、激活访客会话、调用创建二维码接口、必要时做一次预轮询或设备画像上报。返回 `qrContent` 和 `challengeId`。
+1. `createLoginChallenge`：在事务内完成平台网页端的匿名冷启动。典型步骤包括导航首页吸收 host-scoped Cookie、本地生成匿名设备标识并 seed 进事务 Jar、执行平台要求的安全脚本或风控初始化、激活访客会话、调用创建二维码接口、必要时做一次预轮询或设备画像上报。返回 `qrContent` 和 `challengeId`；检测到 `Host.capabilities.loginChallengePush` 后可另外返回 `push`。
 2. `pollLoginChallenge`：调用轮询接口，把上游状态码映射到协议状态。若手机确认后需要短信二次验证，插件先发送验证码，再返回 `verification_required`；否则完成会话兑换后返回 `confirmed`。未知状态码一律映射为 `waiting` 并保留 `rawStatus`。
-3. `submitLoginChallengeVerification`：用用户输入的 code 调校验接口，把返回 ticket 保存在 challenge 内存，再返回 `accepted`。下次 poll 带 ticket/`std_verify_*` 继续上游流程。
+3. `submitLoginChallengeVerification`：用用户输入的 code 调校验接口，把返回验证票据保存在 challenge 内存，再返回 `accepted`。下次 poll 带该票据及上游所需验证参数继续流程。
 4. `resendLoginChallengeVerification`：可选重发短信并返回更新后的脱敏提示与倒计时。
-5. `cancelLoginChallenge`：清空挑战标识及关联的二次验证临时字段。
-6. `validateCredential` 需采用宿主管理凭据语义：入参只读取 `credentialAvailable`，再通过 `authMode: "platform_cookie"`（隔离校验时由同一模式自动使用候选凭据）调用平台校验接口。需要插件内签名时可读取当前 runtime 的 `Host.session.getCookieHeader(pluginId)`；不得期待 `input.credential.cookie` 或 `setCredential` JS 通知。
+5. `onLoginChallengePush`：解释推送帧、生成应用层心跳，需要刷新状态时返回 `pollNow: true`。它不直接返回登录状态。
+6. `cancelLoginChallenge`：清空挑战标识及关联的二次验证临时字段。
+7. `validateCredential` 需采用宿主管理凭据语义：入参只读取 `credentialAvailable`，再通过 `authMode: "platform_cookie"`（隔离校验时由同一模式自动使用候选凭据）调用平台校验接口。需要插件内签名时可读取当前 runtime 的 `Host.session.getCookieHeader(pluginId)`；不得期待 `input.credential.cookie` 或 `setCredential` JS 通知。
 
 插件仓库中已有的探测脚本验证了"扫码到手机确认"以及短信验证这一段，缺失的正是把这些步骤收敛进插件函数。插件实现完成后，探测脚本应改为直接调用插件挑战函数，用一个模拟事务 Jar 替代宿主，从而与宿主实现共享同一份状态机测试。
 
 ## 11. 实施状态
 
-1. **已完成（宿主 Core）**：manifest 显式能力、事务 Cookie Jar、`login_transaction`、manifest 登录域间自动保持事务 Cookie、重定向接管、事务 seed 接口、仅限当前插件的正式 Cookie getter、事务 Cookie 不可见边界、状态机、最终校验和控制台脱敏。
+1. **已完成（宿主 Core）**：manifest 显式能力、事务 Cookie Jar、`login_transaction`、manifest 登录域间自动保持事务 Cookie、重定向接管、事务 seed 接口、仅限当前插件的正式 Cookie getter、事务 Cookie 不可见边界、状态机、可选 WebView 预热、可选 WebSocket 推送、最终校验和控制台脱敏。
 2. **已完成（宿主 FullUI）**：tvOS、macOS、iOS 扫码入口与现有网页登录/手动 Cookie 回退；ShellUI 不在本次范围内。
-3. **已完成（自动化）**：覆盖多 `Set-Cookie`、中间跳、停止/跨源重定向、所有权、超时、提升销毁、缓存绕过、日志脱敏、基础轮询状态、短信验证暂停/拒绝重试/恢复轮询、刷新上限和取消迟到回写。
+3. **已完成（自动化）**：覆盖多 `Set-Cookie`、中间跳、停止/跨源重定向、WebView Cookie 域隔离、预热先于 create、同事务刷新跳过、所有权、超时、提升销毁、缓存绕过、日志脱敏、基础轮询状态、短信验证暂停/拒绝重试/恢复轮询、推送抢占定时轮询、推送失败降级、刷新上限和取消迟到回写。
 4. **待插件仓库完成**：Authoring Guide 增加本协议；首个平台插件发布新版本，实现基础函数及所需的短信验证函数并真机验收，不覆盖旧版本；探测脚本改为直接调用插件函数。
 5. **后续平台插件**：先完成各自协议研究，确认扫码创建、轮询与兑换接口，再按同一契约实现；宿主无需增加平台专属代码。
 
