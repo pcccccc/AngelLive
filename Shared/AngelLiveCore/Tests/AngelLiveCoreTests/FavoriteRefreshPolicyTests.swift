@@ -320,7 +320,7 @@ private func favoriteRoom(liveState: String? = "0") -> LiveModel {
         roomTitle: "Room",
         roomCover: "cover",
         userHeadImg: "avatar",
-        liveType: LiveType(rawValue: "3")!,
+        liveType: LiveType(rawValue: "fixture-source")!,
         liveState: liveState,
         userId: "user-1",
         roomId: "room-1",

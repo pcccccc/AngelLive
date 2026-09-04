@@ -670,7 +670,7 @@ private func sessionRoom(
         roomTitle: id,
         roomCover: "cover",
         userHeadImg: "avatar",
-        liveType: LiveType(rawValue: "3")!,
+        liveType: LiveType(rawValue: "fixture-source")!,
         liveState: state,
         userId: userId ?? "user-\(id)",
         roomId: id,

@@ -15,55 +15,63 @@ struct FavoriteIdentityRulesTests {
     #expect(AppFavoriteModel.validIdentity(" 0 \n") == nil)
   }
 
-  @Test("same streamer requires same platform plus a valid matching user or room id")
-  func sameStreamerUsesValidDimensionsOnSamePlatformOnly() {
-    let original = room(liveType: "3", userId: "u-1", roomId: "r-1")
+  @Test("same streamer requires the same plugin source plus a valid matching user or room id")
+  func sameStreamerUsesValidDimensionsOnSameSourceOnly() {
+    let original = room(liveType: "source-a", userId: "u-1", roomId: "r-1")
 
     #expect(
-      AppFavoriteModel.isSameStreamer(original, room(liveType: "3", userId: "u-1", roomId: "r-2")))
+      AppFavoriteModel.isSameStreamer(
+        original, room(liveType: "source-a", userId: "u-1", roomId: "r-2")))
     #expect(
-      AppFavoriteModel.isSameStreamer(original, room(liveType: "3", userId: "u-2", roomId: "r-1")))
-    #expect(
-      !AppFavoriteModel.isSameStreamer(original, room(liveType: "4", userId: "u-1", roomId: "r-1")))
+      AppFavoriteModel.isSameStreamer(
+        original, room(liveType: "source-a", userId: "u-2", roomId: "r-1")))
     #expect(
       !AppFavoriteModel.isSameStreamer(
-        room(liveType: "3", userId: "0", roomId: ""), room(liveType: "3", userId: "0", roomId: "")))
+        original, room(liveType: "source-b", userId: "u-1", roomId: "r-1")))
+    #expect(
+      !AppFavoriteModel.isSameStreamer(
+        room(liveType: "source-a", userId: "0", roomId: ""),
+        room(liveType: "source-a", userId: "0", roomId: "")))
   }
 
   @Test("default unique key prefers valid room id then user id then trimmed name")
   func favoriteUniqueKeyFallbacks() {
     #expect(
-      AppFavoriteModel.favoriteUniqueKey(for: room(liveType: "3", userId: "u-1", roomId: "r-1"))
-        == "3_r_r-1")
-    #expect(
-      AppFavoriteModel.favoriteUniqueKey(for: room(liveType: "3", userId: "u-1", roomId: "0"))
-        == "3_u_u-1")
+      AppFavoriteModel.favoriteUniqueKey(
+        for: room(liveType: "source-a", userId: "u-1", roomId: "r-1"))
+        == "source-a_r_r-1")
     #expect(
       AppFavoriteModel.favoriteUniqueKey(
-        for: room(liveType: "3", userName: "  Alice  ", userId: "0", roomId: "")) == "3_n_Alice")
+        for: room(liveType: "source-a", userId: "u-1", roomId: "0"))
+        == "source-a_u_u-1")
+    #expect(
+      AppFavoriteModel.favoriteUniqueKey(
+        for: room(liveType: "source-a", userName: "  Alice  ", userId: "0", roomId: ""))
+        == "source-a_n_Alice")
   }
 
-  @Test("default room-id platforms do not trigger identity writeback")
-  func defaultRoomIdPlatformsDoNotReportIdentityChange() {
-    let old = room(liveType: "3", userId: "old-user", roomId: "old-room")
-    let refreshed = room(liveType: "3", userId: "new-user", roomId: "new-room")
+  @Test("the default room-id identity does not trigger writeback")
+  func defaultRoomIdIdentityDoesNotReportChange() {
+    let old = room(liveType: "source-a", userId: "old-user", roomId: "old-room")
+    let refreshed = room(liveType: "source-a", userId: "new-user", roomId: "new-room")
 
     #expect(!AppFavoriteModel.favoriteIdentityChanged(old: old, new: refreshed))
   }
 
   @Test("deduplication keeps first occurrence and does not collide on invalid identities")
   func deduplicatedKeepsFirstAndIgnoresInvalidDimensions() {
-    let first = room(liveType: "3", userName: "first", userId: "u-1", roomId: "r-1")
+    let first = room(liveType: "source-a", userName: "first", userId: "u-1", roomId: "r-1")
     let duplicateUser = room(
-      liveType: "3", userName: "duplicate user", userId: "u-1", roomId: "r-2")
+      liveType: "source-a", userName: "duplicate user", userId: "u-1", roomId: "r-2")
     let duplicateRoom = room(
-      liveType: "3", userName: "duplicate room", userId: "u-2", roomId: "r-1")
-    let invalidA = room(liveType: "3", userName: "invalid A", userId: "0", roomId: "")
-    let invalidB = room(liveType: "3", userName: "invalid B", userId: "0", roomId: "")
-    let otherPlatform = room(liveType: "4", userName: "other", userId: "u-1", roomId: "r-1")
+      liveType: "source-a", userName: "duplicate room", userId: "u-2", roomId: "r-1")
+    let invalidA = room(liveType: "source-a", userName: "invalid A", userId: "0", roomId: "")
+    let invalidB = room(liveType: "source-a", userName: "invalid B", userId: "0", roomId: "")
+    let otherSource = room(
+      liveType: "source-b", userName: "other", userId: "u-1", roomId: "r-1")
 
     let result = AppFavoriteModel.deduplicated([
-      first, duplicateUser, duplicateRoom, invalidA, invalidB, otherPlatform,
+      first, duplicateUser, duplicateRoom, invalidA, invalidB, otherSource,
     ])
 
     #expect(result.map(\.userName) == ["first", "invalid A", "invalid B", "other"])
@@ -96,7 +104,7 @@ struct FavoriteCloudStateTests {
 
     #expect(model.shouldShowBlockingCloudError)
 
-    model.roomList = [room(liveType: "3", userId: "user-1", roomId: "room-1")]
+    model.roomList = [room(liveType: "source-a", userId: "user-1", roomId: "room-1")]
 
     #expect(!model.shouldShowBlockingCloudError)
   }
@@ -108,7 +116,7 @@ struct FavoriteBackupServiceTests {
   func angelLiveRoundTripPreservesFullPayload() throws {
     let updatedAt = Date(timeIntervalSince1970: 1_790_000_000)
     let original = room(
-      liveType: "3",
+      liveType: "fixture-live-type",
       userName: "Streamer",
       roomTitle: "Title",
       roomCover: "https://example.com/cover.jpg",
@@ -133,43 +141,48 @@ struct FavoriteBackupServiceTests {
   @Test("SimpleLive decode imports known plugin ids and reports unknown sites")
   func simpleLiveDecodeSeparatesKnownAndUnknownItems() throws {
     let items = [
-      SimpleLiveFavoriteItem(siteId: "douyu", userName: "Known", face: "face.png", roomId: "100"),
+      SimpleLiveFavoriteItem(siteId: "known-source", userName: "Known", face: "face.png", roomId: "100"),
       SimpleLiveFavoriteItem(
-        siteId: "missing-platform", userName: "", face: "ignored.png", roomId: "200"),
+        siteId: "unknown-source", userName: "", face: "ignored.png", roomId: "200"),
     ]
     let data = try JSONEncoder().encode(items)
 
     let decoded = try FavoriteBackupService.decode(data) { siteId in
-      siteId == "douyu" ? LiveType(rawValue: "3") : nil
+      siteId == "known-source" ? LiveType(rawValue: "fixture-live-type") : nil
     }
     let imported = try #require(decoded.rooms.first)
     let failure = try #require(decoded.itemFailures.first)
 
     #expect(decoded.rooms.count == 1)
-    #expect(imported.liveType.rawValue == "3")
+    #expect(imported.liveType.rawValue == "fixture-live-type")
     #expect(imported.userName == "Known")
     #expect(imported.userHeadImg == "face.png")
     #expect(imported.roomId == "100")
     #expect(decoded.itemFailures.count == 1)
     #expect(failure.userName == "(未知主播)")
-    #expect(failure.siteId == "missing-platform")
-    #expect(failure.reason.contains("missing-platform"))
+    #expect(failure.siteId == "unknown-source")
+    #expect(failure.reason.contains("unknown-source"))
   }
 
   @Test("SimpleLive export uses the resolved plugin id")
   func simpleLiveExportUsesPluginId() throws {
     let data = try FavoriteBackupService.export(
-      rooms: [room(liveType: "3", userName: "Known", userHeadImg: "face.png", roomId: "100")],
+      rooms: [room(
+        liveType: "fixture-live-type",
+        userName: "Known",
+        userHeadImg: "face.png",
+        roomId: "100"
+      )],
       format: .simpleLive,
       deviceName: nil,
       siteIdForLiveType: { liveType in
-        liveType.rawValue == "3" ? "douyu" : liveType.rawValue
+        liveType.rawValue == "fixture-live-type" ? "known-source" : liveType.rawValue
       }
     )
     let items = try JSONDecoder().decode([SimpleLiveFavoriteItem].self, from: data)
     let item = try #require(items.first)
 
-    #expect(item.siteId == "douyu")
+    #expect(item.siteId == "known-source")
     #expect(item.userName == "Known")
     #expect(item.face == "face.png")
     #expect(item.roomId == "100")
@@ -187,7 +200,8 @@ struct FavoriteBackupServiceTests {
 
   @Test("import report exposes derived counts and failure flag")
   func importReportCounts() {
-    let failure = FavoriteImportReport.Failure(userName: "A", siteId: "3", reason: "boom")
+    let failure = FavoriteImportReport.Failure(
+      userName: "A", siteId: "unknown-source", reason: "boom")
     let report = FavoriteImportReport(
       added: [room()], skipped: [room(roomId: "2")], failed: [failure])
 
@@ -227,16 +241,16 @@ struct FavoriteListGroupingTests {
     #expect(sections.map(\.id) == sections.map(\.title))
   }
 
-  @Test("append unique only filters matching platform-room pairs")
-  func appendUniqueUsesPlatformAndRoomPair() {
-    let existing = [room(liveType: "3", userName: "existing", roomId: "same")]
+  @Test("append unique only filters matching source-room pairs")
+  func appendUniqueUsesSourceAndRoomPair() {
+    let existing = [room(liveType: "source-a", userName: "existing", roomId: "same")]
     let result = existing.appendingUnique(contentsOf: [
-      room(liveType: "3", userName: "duplicate", roomId: "same"),
-      room(liveType: "4", userName: "other platform", roomId: "same"),
-      room(liveType: "3", userName: "new room", roomId: "new"),
+      room(liveType: "source-a", userName: "duplicate", roomId: "same"),
+      room(liveType: "source-b", userName: "other source", roomId: "same"),
+      room(liveType: "source-a", userName: "new room", roomId: "new"),
     ])
 
-    #expect(result.map(\.userName) == ["existing", "other platform", "new room"])
+    #expect(result.map(\.userName) == ["existing", "other source", "new room"])
   }
 }
 
@@ -268,7 +282,7 @@ struct FavoriteSyncErrorDisplayTests {
 }
 
 private func room(
-  liveType rawLiveType: String = "3",
+  liveType rawLiveType: String = "source-a",
   userName: String = "User",
   roomTitle: String = "Room",
   roomCover: String = "cover",

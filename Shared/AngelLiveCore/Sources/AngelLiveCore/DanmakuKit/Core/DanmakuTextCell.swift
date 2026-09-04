@@ -41,7 +41,7 @@ public class DanmakuTextCell: DanmakuCell {
 }
 
 enum DanmakuTextOutlineStyle {
-    /// Bilibili DanmakuFlameMaster 示例使用 3px 描边。
+    /// 使用固定物理像素描边，避免不同屏幕缩放比例下视觉粗细漂移。
     static let physicalStrokeWidth: CGFloat = 3
 
     static func strokePercentage(fontSize: CGFloat, screenScale: CGFloat) -> CGFloat {

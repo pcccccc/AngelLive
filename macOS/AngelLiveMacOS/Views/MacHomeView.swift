@@ -219,15 +219,14 @@ private enum MacHomeHeroMetrics {
         let availableWidth = max(contentWidth, 320)
         guard availableWidth >= sidePanelMinimumWidth else { return availableWidth }
 
-        // 与 Twitch 桌面推荐位相同，宽窗口也保留足够两侧留白，
-        // 避免为了填满窗口继续放大低分辨率图片。
+        // 宽窗口保留足够两侧留白，避免为了填满窗口继续放大低分辨率图片。
         let proportionalWidth = availableWidth * 0.78
         return min(max(proportionalWidth, sidePanelMinimumWidth), maximumWidth)
     }
 
     static func height(for width: CGFloat) -> CGFloat {
         if width >= sidePanelMinimumWidth {
-            // Twitch 类型推荐位：16:9 媒体 + 右侧信息面板，整体约 2.5:1。
+            // 聚焦推荐位：16:9 媒体 + 右侧信息面板，整体约 2.5:1。
             return width / 2.5
         }
         return width * 9 / 16

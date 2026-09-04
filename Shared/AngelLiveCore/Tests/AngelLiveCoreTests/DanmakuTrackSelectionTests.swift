@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct DanmakuTrackSelectionTests {
 
-    @Test("uses Bilibili-style top-first collision-safe tracks by default")
+    @Test("uses top-first collision-safe tracks by default")
     func defaultsToTopPriority() {
         let view = DanmakuView(frame: CGRect(x: 0, y: 0, width: 600, height: 120))
 

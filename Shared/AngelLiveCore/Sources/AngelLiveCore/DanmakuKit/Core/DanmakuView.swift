@@ -593,8 +593,8 @@ private extension DanmakuView {
                 let minCount = candidates.map { $0.danmakuCount }.min()!
                 return candidates.filter { $0.danmakuCount == minCount }.randomElement()
             case .topPriority:
-                // 与 DanmakuFlameMaster AlignTopRetainer 一致:按 Y 从上往下扫描,
-                // 复用第一条通过未来碰撞检测的轨道。上一条是否仍在轨道里并不重要。
+                // 按 Y 从上往下扫描，复用第一条通过未来碰撞检测的轨道。
+                // 上一条是否仍在轨道里并不重要。
                 // 限制在 visibleFloatingTrackCount 内——recalculate 时非空轨道不会被立即移除,
                 // floatingTracks.count 可能临时大于当前实际可见轨道数。
                 let visibleTracks = floatingTracks.prefix(min(visibleFloatingTrackCount, floatingTracks.count))

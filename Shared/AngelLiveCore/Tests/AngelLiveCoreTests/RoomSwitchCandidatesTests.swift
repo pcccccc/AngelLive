@@ -39,17 +39,17 @@ struct RoomSwitchCandidatesTests {
         #expect(result == [first, second])
     }
 
-    @Test("same room id on different platforms remains independently switchable")
-    func preservesCrossPlatformRooms() {
-        let current = room(id: "current", liveType: "3")
-        let douyu = room(id: "shared", liveType: "3")
-        let bilibili = room(id: "shared", liveType: "4")
+    @Test("same room id from different plugin sources remains independently switchable")
+    func preservesRoomsFromDifferentSources() {
+        let current = room(id: "current", liveType: "source-a")
+        let sourceA = room(id: "shared", liveType: "source-a")
+        let sourceB = room(id: "shared", liveType: "source-b")
 
         let count = RoomSwitchCandidates.totalSwitchableCount(
             currentRoom: current,
-            favorites: [douyu],
-            history: [bilibili],
-            category: [douyu]
+            favorites: [sourceA],
+            history: [sourceB],
+            category: [sourceA]
         )
 
         #expect(count == 2)
@@ -57,7 +57,7 @@ struct RoomSwitchCandidatesTests {
 
     private func room(
         id: String,
-        liveType: LiveType = "3",
+        liveType: LiveType = "source-a",
         state: String? = "1"
     ) -> LiveModel {
         LiveModel(
