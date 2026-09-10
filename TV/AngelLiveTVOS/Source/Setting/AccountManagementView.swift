@@ -483,42 +483,43 @@ private struct TVPlatformLoginQRCodePageView: View {
     }
 
     private func challengeContent(_ presentation: LoginChallengePresentation, scanned: Bool) -> some View {
-        ScrollView {
-            HStack(spacing: 80) {
-                Image(uiImage: qrCodeImage(presentation))
-                    .interpolation(.none)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 380, height: 380)
-                    .padding(28)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .shadow(color: .black.opacity(0.3), radius: 24, x: 0, y: 18)
-                    .accessibilityLabel("\(entry.displayName) 登录二维码")
+        GeometryReader { geometry in
+            ScrollView {
+                HStack(spacing: 88) {
+                    TVLoginQRCodeCard(image: qrCodeImage(presentation))
+                        .accessibilityLabel("\(entry.displayName) 登录二维码")
 
-                VStack(alignment: .leading, spacing: 24) {
-                    Label(
-                        scanned ? "已扫码，请在手机上确认" : "等待扫码",
-                        systemImage: scanned ? "iphone.radiowaves.left.and.right" : "qrcode.viewfinder"
-                    )
-                    .font(.title2.bold())
+                    VStack(alignment: .leading, spacing: 24) {
+                        Label(
+                            scanned ? "已扫码，请在手机上确认" : "等待扫码",
+                            systemImage: scanned ? "iphone.radiowaves.left.and.right" : "qrcode.viewfinder"
+                        )
+                        .font(.title2.weight(.semibold))
 
-                    Text(presentation.hint)
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 580, alignment: .leading)
+                        Text(presentation.hint)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(6)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    Text("请保持此页面打开，登录完成后会自动保存。")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        Text("请保持此页面打开，登录完成后会自动保存。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
-                    Button("返回") { onBack() }
+                        Button("返回") { onBack() }
+                            .padding(.top, 8)
+                    }
+                    .frame(maxWidth: 620, alignment: .leading)
                 }
+                .frame(maxWidth: 1120)
+                .padding(.vertical, 24)
+                // 内容较短时整体居中，长说明仍可完整滚动；兼容 tvOS 17。
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollClipDisabled()
         }
-        .scrollClipDisabled()
     }
 
     private func progressContent(_ message: String) -> some View {
@@ -625,6 +626,31 @@ private struct TVPlatformLoginQRCodePageView: View {
             return image
         }
         return TVLoginQRCodeGenerator.generate(from: presentation.qrContent)
+    }
+}
+
+private struct TVLoginQRCodeCard: View {
+    let image: UIImage
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Image(uiImage: image)
+            .renderingMode(.original)
+            .interpolation(.none)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 340, height: 340)
+            // 保留二维码原图和白色留边；深色适配只作用于外围底框。
+            .padding(24)
+            .background(.white, in: .rect(cornerRadius: 14))
+            .padding(10)
+            .background(.regularMaterial, in: .rect(cornerRadius: 24))
+            .overlay {
+                RoundedRectangle(cornerRadius: 24)
+                    .strokeBorder(.primary.opacity(colorScheme == .dark ? 0.14 : 0.06), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.12),
+                    radius: colorScheme == .dark ? 12 : 20, x: 0, y: 8)
     }
 }
 

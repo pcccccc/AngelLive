@@ -17,6 +17,13 @@ struct TVHomeView: View {
     @State private var selectedBannerID: String?
     @State private var autoplayProgress: CGFloat = 0
     @State private var bannerTransitionStep = 1
+    @State private var isBannerTransitioning = false
+    @State private var pendingBannerStep: Int?
+    @State private var bannerTransitionGeneration = 0
+    @State private var previousBanner: HomeBannerEntry?
+    @State private var artworkProgress: CGFloat = 0
+    @State private var artworkProgressOrigin: CGFloat = 0
+    @State private var artworkPrefetcher: ImagePrefetcher?
     @State private var heroHasFocus = false
     @State private var hasEstablishedInitialHeroFocus = false
 
@@ -28,34 +35,43 @@ struct TVHomeView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             GeometryReader { geometry in
-                ScrollView(.vertical) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        heroStage(containerSize: geometry.size)
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.vertical) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            heroStage(containerSize: geometry.size)
+                                .id("home-hero")
 
-                        ForEach(remainingRails) { rail in
-                            TVHomeRoomRail(
-                                rail: rail,
-                                appViewModel: appViewModel,
-                                onSeeAll: openCategory
-                            )
-                            .padding(.top, 26)
+                            ForEach(remainingRails) { rail in
+                                TVHomeRoomRail(
+                                    rail: rail,
+                                    appViewModel: appViewModel,
+                                    onSeeAll: openCategory
+                                )
+                                .padding(.top, 26)
+                            }
+
+                            if !model.failedPluginNames.isEmpty {
+                                TVHomeFailureCard(
+                                    pluginNames: model.failedPluginNames,
+                                    isRefreshing: model.isRefreshing,
+                                    retry: refreshHome
+                                )
+                                .padding(.horizontal, TVHomeMetrics.horizontalMargin)
+                                .padding(.top, 32)
+                            }
+
+                            Color.clear.frame(height: 120)
                         }
-
-                        if !model.failedPluginNames.isEmpty {
-                            TVHomeFailureCard(
-                                pluginNames: model.failedPluginNames,
-                                isRefreshing: model.isRefreshing,
-                                retry: refreshHome
-                            )
-                            .padding(.horizontal, TVHomeMetrics.horizontalMargin)
-                            .padding(.top, 32)
-                        }
-
-                        Color.clear.frame(height: 120)
+                        .frame(width: geometry.size.width, alignment: .leading)
                     }
-                    .frame(width: geometry.size.width, alignment: .leading)
+                    .background(Color.black)
+                    .onChange(of: heroHasFocus) { _, isFocused in
+                        guard isFocused else { return }
+                        withAnimation(reduceMotion ? nil : .smooth(duration: 0.35)) {
+                            scrollProxy.scrollTo("home-hero", anchor: .top)
+                        }
+                    }
                 }
-                .background(Color.black)
             }
             .ignoresSafeArea()
             .navigationDestination(for: PluginHomeCategoryRoute.self) { route in
@@ -85,6 +101,20 @@ struct TVHomeView: View {
         .task(id: autoplayTrigger) {
             await runAutoplayIfNeeded()
         }
+        .onAppear {
+            prefetchNeighborArtwork(neighborArtworkURLs)
+        }
+        .onChange(of: neighborArtworkURLs) { _, urls in
+            prefetchNeighborArtwork(urls)
+        }
+        .onDisappear {
+            cancelPendingBannerTransition()
+            artworkPrefetcher?.stop()
+            artworkPrefetcher = nil
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { pendingBannerStep = nil }
+        }
     }
 }
 
@@ -103,7 +133,8 @@ private extension TVHomeView {
             selectedBannerID: selectedBannerID,
             scenePhase: scenePhase,
             reduceMotion: reduceMotion,
-            heroHasFocus: heroHasFocus
+            heroHasFocus: heroHasFocus,
+            isBannerTransitioning: isBannerTransitioning
         )
     }
 
@@ -112,50 +143,51 @@ private extension TVHomeView {
             ?? model.bannerEntries.first
     }
 
-    var bannerArtworkTransition: AnyTransition {
-        let insertionOffset = Double(bannerTransitionStep) * 42
-        let removalOffset = Double(bannerTransitionStep) * -24
-        return .asymmetric(
-            insertion: .modifier(
-                active: TVHomeParallaxTransitionModifier(
-                    horizontalOffset: insertionOffset,
-                    opacity: 0.18,
-                    scale: 1.025
-                ),
-                identity: TVHomeParallaxTransitionModifier()
-            ),
-            removal: .modifier(
-                active: TVHomeParallaxTransitionModifier(
-                    horizontalOffset: removalOffset,
-                    opacity: 0.12,
-                    scale: 1.012
-                ),
-                identity: TVHomeParallaxTransitionModifier()
-            )
-        )
+    var neighborArtworkURLs: [URL] {
+        guard scenePhase == .active, model.bannerEntries.count > 1 else { return [] }
+        let entries = model.bannerEntries
+        let index = entries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
+        var urls: [URL] = []
+        var seen = Set<URL>()
+        for step in [-1, 1] {
+            let entry = entries[(index + step + entries.count) % entries.count]
+            var candidates = [entry.banner.imageURL].compactMap { $0 }
+            if case .room(let room) = entry.banner.target,
+               let cover = URL(string: room.roomCover), !room.roomCover.isEmpty {
+                candidates.append(cover)
+            }
+            for url in candidates where seen.insert(url).inserted {
+                urls.append(url)
+            }
+        }
+        return urls
     }
 
-    var bannerContentTransition: AnyTransition {
-        let insertionOffset = Double(bannerTransitionStep) * 128
-        let removalOffset = Double(bannerTransitionStep) * -68
+    func prefetchNeighborArtwork(_ urls: [URL]) {
+        artworkPrefetcher?.stop()
+        artworkPrefetcher = nil
+        guard !urls.isEmpty else { return }
+        // Match the visible images' processor/cache keys, including WebP.
+        let prefetcher = ImagePrefetcher(
+            urls: urls,
+            options: KingfisherManager.shared.defaultOptions + [.alsoPrefetchToMemory, .downloadPriority(0.25)]
+        )
+        prefetcher.maxConcurrentDownloads = 2
+        artworkPrefetcher = prefetcher
+        prefetcher.start()
+    }
+
+    func bannerContentTransition(width: CGFloat) -> AnyTransition {
+        guard !reduceMotion else { return .identity }
+        let direction = CGFloat(bannerTransitionStep)
         return .asymmetric(
             insertion: .modifier(
-                active: TVHomeParallaxTransitionModifier(
-                    horizontalOffset: insertionOffset,
-                    opacity: 0,
-                    scale: 0.985,
-                    blurRadius: 8
-                ),
-                identity: TVHomeParallaxTransitionModifier()
+                active: TVHomeCaptionReveal(progress: direction, viewportWidth: width),
+                identity: TVHomeCaptionReveal(progress: 0, viewportWidth: width)
             ),
             removal: .modifier(
-                active: TVHomeParallaxTransitionModifier(
-                    horizontalOffset: removalOffset,
-                    opacity: 0,
-                    scale: 0.992,
-                    blurRadius: 4
-                ),
-                identity: TVHomeParallaxTransitionModifier()
+                active: TVHomeCaptionReveal(progress: -direction, viewportWidth: width),
+                identity: TVHomeCaptionReveal(progress: 0, viewportWidth: width)
             )
         )
     }
@@ -236,7 +268,7 @@ private extension TVHomeView {
                 TVHomeHeroArtwork(entry: nil)
                     .frame(width: containerSize.width, height: stageHeight)
 
-                TVHomeHeroScrim()
+                TVHomeHeroScrim(heroContentHeight: heroContentHeight)
                     .frame(width: containerSize.width, height: stageHeight)
 
                 if !isAwaitingFirstContent {
@@ -252,34 +284,41 @@ private extension TVHomeView {
                 }
             } else if let activeBanner {
                 ZStack(alignment: .topLeading) {
-                    ForEach(model.bannerEntries.filter { $0.id == activeBanner.id }) { entry in
-                        TVHomeHeroArtwork(entry: entry)
-                            .frame(width: containerSize.width, height: stageHeight)
-                            .scaleEffect(1.035)
-                            .transition(bannerArtworkTransition)
-                            .zIndex(entry.id == selectedBannerID ? 1 : 0)
-                    }
+                    TVHomeHeroArtworkPages(
+                        progress: artworkProgress,
+                        origin: artworkProgressOrigin,
+                        direction: CGFloat(bannerTransitionStep),
+                        entry: activeBanner,
+                        previousEntry: previousBanner,
+                        viewportSize: CGSize(width: containerSize.width, height: stageHeight),
+                        reduceMotion: reduceMotion
+                    )
+                    .zIndex(1)
 
-                    TVHomeHeroScrim()
+                    TVHomeHeroScrim(heroContentHeight: heroContentHeight)
                         .frame(width: containerSize.width, height: stageHeight)
+                        .zIndex(2)
 
-                    ForEach(model.bannerEntries.filter { $0.id == activeBanner.id }) { entry in
-                        TVHomeHeroContent(
-                            entry: entry,
-                            requestsInitialFocus: true,
-                            onPrimaryAction: { openHeroTarget(entry) },
-                            onPreviousBanner: { moveBanner(by: -1) },
-                            onNextBanner: { moveBanner(by: 1) },
-                            onFocusChanged: updateHeroFocus
-                        )
-                        .frame(
-                            width: containerSize.width,
-                            height: heroContentHeight,
-                            alignment: .topLeading
-                        )
-                        .transition(bannerContentTransition)
-                        .zIndex(entry.id == selectedBannerID ? 2 : 1)
-                    }
+                    // Keep the remote's controls mounted. Only artwork and
+                    // captions turn pages; focus must not follow an offscreen page.
+                    TVHomeHeroContent(
+                        entry: activeBanner,
+                        captionTransition: bannerContentTransition(width: containerSize.width),
+                        requestsInitialFocus: true,
+                        onPrimaryAction: {
+                            guard !isBannerTransitioning else { return }
+                            openHeroTarget(activeBanner)
+                        },
+                        onPreviousBanner: { moveBanner(by: -1) },
+                        onNextBanner: { moveBanner(by: 1) },
+                        onFocusChanged: updateHeroFocus
+                    )
+                    .frame(
+                        width: containerSize.width,
+                        height: heroContentHeight,
+                        alignment: .topLeading
+                    )
+                    .zIndex(3)
                 }
                 .frame(width: containerSize.width, height: stageHeight)
                 .clipped()
@@ -362,10 +401,12 @@ private extension TVHomeView {
 
     func normalizeBannerSelection() {
         guard !model.bannerEntries.isEmpty else {
+            cancelPendingBannerTransition()
             selectedBannerID = nil
             return
         }
         if !model.bannerEntries.contains(where: { $0.id == selectedBannerID }) {
+            cancelPendingBannerTransition()
             selectedBannerID = model.bannerEntries[0].id
         }
     }
@@ -381,15 +422,50 @@ private extension TVHomeView {
     func moveBanner(by step: Int) {
         guard model.bannerEntries.count > 1 else { return }
         let normalizedStep = step < 0 ? -1 : 1
+        guard !isBannerTransitioning else {
+            // Keep one pending remote intent, without stacking half-finished pages.
+            pendingBannerStep = normalizedStep
+            return
+        }
         let currentIndex = model.bannerEntries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
         let nextIndex = (currentIndex + normalizedStep + model.bannerEntries.count)
             % model.bannerEntries.count
 
         bannerTransitionStep = normalizedStep
-
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.58)) {
+        guard !reduceMotion else {
+            previousBanner = nil
             selectedBannerID = model.bannerEntries[nextIndex].id
+            return
         }
+
+        isBannerTransitioning = true
+        let outgoingBanner = activeBanner
+        // Alternate endpoints so the next animation needs no unrendered reset
+        // or deferred task. Both images derive their position from this clock.
+        artworkProgressOrigin = artworkProgress
+        bannerTransitionGeneration &+= 1
+        let generation = bannerTransitionGeneration
+        withAnimation(.timingCurve(0.76, 0, 0.24, 1, duration: 0.78), completionCriteria: .removed) {
+            previousBanner = outgoingBanner
+            selectedBannerID = model.bannerEntries[nextIndex].id
+            artworkProgress = 1 - artworkProgressOrigin
+        } completion: {
+            guard generation == bannerTransitionGeneration else { return }
+            previousBanner = nil
+            isBannerTransitioning = false
+            let pendingStep = pendingBannerStep
+            pendingBannerStep = nil
+            if let pendingStep, heroHasFocus {
+                moveBanner(by: pendingStep)
+            }
+        }
+    }
+
+    func cancelPendingBannerTransition() {
+        bannerTransitionGeneration &+= 1
+        previousBanner = nil
+        pendingBannerStep = nil
+        isBannerTransitioning = false
     }
 
     @MainActor
@@ -398,11 +474,12 @@ private extension TVHomeView {
             && scenePhase == .active
             && !reduceMotion
             && heroHasFocus
+            && !isBannerTransitioning
 
         var resetTransaction = Transaction()
         resetTransaction.disablesAnimations = true
         withTransaction(resetTransaction) {
-            autoplayProgress = 0
+            autoplayProgress = canAutoplay ? 0 : 1
         }
 
         guard canAutoplay else { return }
@@ -422,26 +499,100 @@ private extension TVHomeView {
     }
 }
 
-private struct TVHomeParallaxTransitionModifier: ViewModifier {
-    var horizontalOffset: Double = 0
-    var opacity: Double = 1
-    var scale: Double = 1
-    var blurRadius: Double = 0
+@Animatable
+private struct TVHomeHeroArtworkPages: View {
+    var progress: CGFloat
+    @AnimatableIgnored var origin: CGFloat
+    @AnimatableIgnored var direction: CGFloat
+    @AnimatableIgnored var entry: HomeBannerEntry
+    @AnimatableIgnored var previousEntry: HomeBannerEntry?
+    @AnimatableIgnored var viewportSize: CGSize
+    @AnimatableIgnored var reduceMotion: Bool
+
+    var body: some View {
+        let travel = min(max(abs(progress - origin), 0), 1)
+        // Selection and retained artwork can be observed during reconciliation;
+        // the same business ID must never appear twice in the image hierarchy.
+        let distinctPrevious = previousEntry.flatMap { $0.id == entry.id ? nil : $0 }
+        let entries = [distinctPrevious, entry].compactMap { $0 }
+        ZStack {
+            ForEach(entries) { page in
+                let isCurrent = page.id == entry.id
+                let pageProgress = distinctPrevious == nil || reduceMotion
+                    ? 0 : direction * (isCurrent ? 1 - travel : -travel)
+                TVHomeHeroArtwork(entry: page)
+                    .frame(width: viewportSize.width, height: viewportSize.height)
+                    .modifier(TVHomeArtworkReveal(
+                        progress: pageProgress,
+                        viewportSize: viewportSize,
+                        clipsToPage: isCurrent,
+                        reduceMotion: reduceMotion
+                    ))
+                    .transition(.identity)
+                    .zIndex(isCurrent ? 1 : 0)
+            }
+        }
+        .frame(width: viewportSize.width, height: viewportSize.height)
+        .clipped()
+    }
+}
+
+private struct TVHomeArtworkReveal: ViewModifier {
+    let progress: CGFloat
+    let viewportSize: CGSize
+    let clipsToPage: Bool
+    let reduceMotion: Bool
 
     func body(content: Content) -> some View {
+        // Match iOS: the page edge reveals the image, while the image itself
+        // follows a separate S-curve over at most 18% of the viewport width.
+        let distance = min(abs(progress), 1)
+        let easedDistance = distance * distance * (3 - 2 * distance)
+        let direction: CGFloat = progress < 0 ? -1 : 1
+        let imagePosition = direction * easedDistance * 0.18
+        let feather = min(32 / max(viewportSize.width, 1), 0.05)
+        let edgeOpacity = clipsToPage ? max(0, 1 - distance / feather) : 1
         content
-            .offset(x: horizontalOffset)
+            .scaleEffect(reduceMotion ? 1 : 1.1)
+            .offset(x: (imagePosition - (clipsToPage ? progress : 0)) * viewportSize.width)
+            .frame(width: viewportSize.width, height: viewportSize.height)
+            .mask {
+                // Keep the mask's structure stable when a current page becomes
+                // the underlay. Swapping mask branches would fade it from clear.
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(edgeOpacity), location: 0),
+                        .init(color: .black, location: feather),
+                        .init(color: .black, location: 1)
+                    ],
+                    startPoint: progress < 0 ? .trailing : .leading,
+                    endPoint: progress < 0 ? .leading : .trailing
+                )
+            }
+            .offset(x: clipsToPage ? progress * viewportSize.width : 0)
+    }
+}
+
+@Animatable
+private struct TVHomeCaptionReveal: ViewModifier {
+    var progress: CGFloat
+    @AnimatableIgnored var viewportWidth: CGFloat
+
+    func body(content: Content) -> some View {
+        let fraction = max(0, 1 - abs(progress) / 0.36)
+        let opacity = fraction * fraction * fraction * (fraction * (6 * fraction - 15) + 10)
+        let remaining = 1 - fraction
+        content
             .opacity(opacity)
-            .scaleEffect(scale)
-            .blur(radius: blurRadius)
+            .offset(x: progress * viewportWidth, y: remaining * remaining * remaining * 10)
     }
 }
 
 private extension View {
     func tvHomeHeroTextShadow() -> some View {
         shadow(
-            color: .black.opacity(0.82),
-            radius: 10,
+            color: .black.opacity(0.48),
+            radius: 6,
             x: 0,
             y: 2
         )
@@ -479,7 +630,7 @@ private struct TVHomeHeroArtwork: View {
                 KFImage(roomCoverURL)
                     .resizable()
                     .scaledToFill()
-                    .transition(.opacity)
+                    .transition(.identity)
             }
 
             if let imageURL = entry?.banner.imageURL {
@@ -487,7 +638,7 @@ private struct TVHomeHeroArtwork: View {
                     .placeholder { Color.clear }
                     .resizable()
                     .scaledToFill()
-                    .transition(.opacity)
+                    .transition(.identity)
             }
         }
         .clipped()
@@ -496,37 +647,46 @@ private struct TVHomeHeroArtwork: View {
 }
 
 private struct TVHomeHeroScrim: View {
+    let heroContentHeight: CGFloat
+
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         let contrastBoost = colorSchemeContrast == .increased || reduceTransparency ? 0.10 : 0
 
-        ZStack {
-            Color.black.opacity(0.09 + contrastBoost * 0.35)
-
-            LinearGradient(
+        ZStack(alignment: .topLeading) {
+            // Shade the lower-leading caption area, leaving the top and
+            // trailing artwork clear. The rail has its own bottom fade.
+            EllipticalGradient(
                 stops: [
-                    .init(color: .black.opacity(0.96), location: 0),
-                    .init(color: .black.opacity(0.88 + contrastBoost), location: 0.24),
-                    .init(color: .black.opacity(0.72 + contrastBoost), location: 0.48),
-                    .init(color: .black.opacity(0.38 + contrastBoost), location: 0.68),
-                    .init(color: .clear, location: 0.88)
+                    .init(color: .black.opacity(0.80 + contrastBoost), location: 0),
+                    .init(color: .black.opacity(0.77 + contrastBoost), location: 0.20),
+                    .init(color: .black.opacity(0.70 + contrastBoost), location: 0.40),
+                    .init(color: .black.opacity(0.54 + contrastBoost), location: 0.60),
+                    .init(color: .black.opacity(0.22 + contrastBoost * 0.5), location: 0.80),
+                    .init(color: .black.opacity(0.03), location: 0.92),
+                    .init(color: .clear, location: 1)
                 ],
-                startPoint: .leading,
-                endPoint: .trailing
+                center: UnitPoint(x: 0.03, y: 0.5),
+                startRadiusFraction: 0,
+                endRadiusFraction: 0.5
             )
+            .frame(height: heroContentHeight)
+            .scaleEffect(x: 1.45, y: 1.2, anchor: .topLeading)
+            .offset(y: heroContentHeight * 0.20)
 
             LinearGradient(
                 stops: [
-                    .init(color: .clear, location: 0.44),
-                    .init(color: .black.opacity(0.54 + contrastBoost), location: 0.74),
-                    .init(color: .black.opacity(0.92), location: 0.90),
+                    .init(color: .clear, location: 0),
+                    .init(color: .black.opacity(0.28 + contrastBoost), location: 0.30),
+                    .init(color: .black.opacity(0.86 + contrastBoost), location: 0.68),
                     .init(color: .black, location: 1)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .padding(.top, heroContentHeight * 0.74)
         }
         .accessibilityHidden(true)
     }
@@ -540,6 +700,7 @@ private struct TVHomeHeroContent: View {
     }
 
     let entry: HomeBannerEntry
+    let captionTransition: AnyTransition
     let requestsInitialFocus: Bool
     let onPrimaryAction: () -> Void
     let onPreviousBanner: () -> Void
@@ -566,32 +727,13 @@ private struct TVHomeHeroContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Text("来自")
-                    .foregroundStyle(.white.opacity(0.62))
-                Text(entry.pluginDisplayName)
-                    .foregroundStyle(SharedAssets.Colors.appAccent)
-            }
-            .font(.system(size: 26, weight: .medium))
-            .tvHomeHeroTextShadow()
+            Spacer(minLength: 0)
 
-            Text(entry.banner.title.isEmpty ? entry.pluginDisplayName : entry.banner.title)
-                .font(.system(size: 56, weight: .bold))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: 820, alignment: .leading)
-                .padding(.top, 24)
-                .tvHomeHeroTextShadow()
-
-            if let subtitle = entry.banner.subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.system(size: 30, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.90))
-                    .lineLimit(2)
-                    .frame(maxWidth: 720, alignment: .leading)
-                    .padding(.top, 18)
-                    .tvHomeHeroTextShadow()
+            ZStack(alignment: .bottomLeading) {
+                ForEach([entry]) { captionEntry in
+                    TVHomeHeroCaption(entry: captionEntry)
+                        .transition(captionTransition)
+                }
             }
 
             HStack(spacing: 0) {
@@ -611,12 +753,10 @@ private struct TVHomeHeroContent: View {
                 pagingFocusProxy(for: .nextBanner)
             }
             .offset(x: -TVHomeMetrics.bannerFocusProxyWidth)
-            .padding(.top, 76)
-
-            Spacer(minLength: 0)
+            .padding(.top, 32)
         }
         .padding(.horizontal, TVHomeMetrics.horizontalMargin)
-        .padding(.top, 390)
+        .padding(.bottom, TVHomeMetrics.heroContentBottomInset)
         .focusScope(focusScope)
         .task {
             guard requestsInitialFocus else { return }
@@ -624,14 +764,15 @@ private struct TVHomeHeroContent: View {
             guard !Task.isCancelled else { return }
             focusedControl = .primary
         }
-        .onChange(of: focusedControl) { previousControl, focusedControl in
-            onFocusChanged(focusedControl != nil)
-            guard previousControl == .primary else { return }
-            switch focusedControl {
+        .onChange(of: focusedControl) { previousControl, newControl in
+            onFocusChanged(newControl != nil)
+            switch newControl {
             case .previousBanner:
-                onPreviousBanner()
+                if previousControl == .primary { onPreviousBanner() }
+                focusedControl = .primary
             case .nextBanner:
-                onNextBanner()
+                if previousControl == .primary { onNextBanner() }
+                focusedControl = .primary
             case .primary, nil:
                 break
             }
@@ -639,19 +780,62 @@ private struct TVHomeHeroContent: View {
     }
 
     private func pagingFocusProxy(for control: FocusedControl) -> some View {
-        Button(action: {}) {
-            Rectangle()
-                .fill(.black.opacity(0.001))
-                .frame(
-                    width: TVHomeMetrics.bannerFocusProxyWidth,
-                    height: TVHomeMetrics.bannerFocusProxyHeight
-                )
-                .contentShape(Rectangle())
+        Rectangle()
+            .fill(.black.opacity(0.001))
+            .frame(
+                width: TVHomeMetrics.bannerFocusProxyWidth,
+                height: TVHomeMetrics.bannerFocusProxyHeight
+            )
+            .contentShape(Rectangle())
+            .focusable()
+            .focusEffectDisabled()
+            .focused($focusedControl, equals: control)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct TVHomeHeroCaption: View {
+    let entry: HomeBannerEntry
+
+    private var detailText: String? {
+        if case .room(let room) = entry.banner.target {
+            let name = room.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty { return name }
         }
-        .buttonStyle(.plain)
-        .focusEffectDisabled()
-        .focused($focusedControl, equals: control)
-        .accessibilityHidden(true)
+        let subtitle = entry.banner.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return subtitle.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("来自")
+                    .foregroundStyle(.white.opacity(0.62))
+                Text(entry.pluginDisplayName)
+                    .foregroundStyle(SharedAssets.Colors.appAccent)
+            }
+            .font(.system(size: 26, weight: .medium))
+            .tvHomeHeroTextShadow()
+
+            Text(entry.banner.title.isEmpty ? entry.pluginDisplayName : entry.banner.title)
+                .font(.system(size: 56, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: 820, alignment: .leading)
+                .padding(.top, 16)
+                .tvHomeHeroTextShadow()
+
+            if let detailText {
+                Text(detailText)
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.90))
+                    .lineLimit(2)
+                    .frame(maxWidth: 720, alignment: .leading)
+                    .padding(.top, 12)
+                    .tvHomeHeroTextShadow()
+            }
+        }
     }
 }
 
@@ -1100,6 +1284,7 @@ private extension View {
 
 private enum TVHomeMetrics {
     static let horizontalMargin: CGFloat = 92
+    static let heroContentBottomInset: CGFloat = 96
     static let railHeight: CGFloat = 438
     static let primaryRailVerticalOverlap: CGFloat = 15
     static let cardWidth: CGFloat = 420
@@ -1108,7 +1293,7 @@ private enum TVHomeMetrics {
     static let cardSpacing: CGFloat = 36
     static let bannerFocusProxyWidth: CGFloat = 72
     static let bannerFocusProxyHeight: CGFloat = 76
-    static let autoplayInterval: TimeInterval = 7
+    static let autoplayInterval: TimeInterval = 6
 }
 
 private enum TVHomePlaybackMode: Equatable {
@@ -1137,4 +1322,5 @@ private struct TVHomeAutoplayTrigger: Hashable {
     let scenePhase: ScenePhase
     let reduceMotion: Bool
     let heroHasFocus: Bool
+    let isBannerTransitioning: Bool
 }

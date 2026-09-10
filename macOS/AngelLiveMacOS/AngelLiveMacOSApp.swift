@@ -109,6 +109,7 @@ struct AngelLiveMacOSApp: App {
                 .frame(minWidth: 800, maxWidth: .infinity, minHeight: 450, maxHeight: .infinity)
         }
         .commands {
+            MacPluginManagementCommands()
             CommandGroup(after: .appInfo) {
                 #if !APPSTORE
                 Button("检查更新...") {

@@ -15,10 +15,20 @@ struct PluginManagementView: View {
     @State private var inputURL = ""
     @State private var isProcessing = false
     @State private var showAvailablePlugins = false
+    @State private var showAddSource = false
 
     var body: some View {
         List {
-            // 已安装插件
+            Section {
+                PluginUpdateOverview(manager: pluginSourceManager,
+                                     installedPluginIds: pluginAvailability.installedPluginIds,
+                                     update: updatePlugins, check: checkUpdates)
+            }
+
+            if !showAddSource, pluginSourceManager.errorMessage != nil {
+                Section { PluginManagementOperationError(manager: pluginSourceManager) }
+            }
+
             installedPluginsSection
 
             // 可安装插件（内联显示）
@@ -27,20 +37,39 @@ struct PluginManagementView: View {
             // 订阅源管理
             subscriptionSourcesSection
 
-            // 添加新订阅源
-            addSourceSection
+            if pluginSourceManager.sourceURLs.isEmpty {
+                Section {
+                    Button("添加订阅源", systemImage: "plus") { showAddSource = true }
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("插件管理")
         .navigationBarTitleDisplayMode(.large)
-        .task {
-            await pluginSourceManager.fetchAllSourceIndexes()
-            await pluginSourceManager.refreshAvailableUpdates()
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("添加订阅源", systemImage: "plus") { showAddSource = true }
+                    .disabled(pluginSourceManager.isManagementBusy)
+            }
+        }
+        .task { await reloadCatalog() }
+        .refreshable { await reloadCatalog() }
+        .sheet(isPresented: $showAddSource) {
+            NavigationStack {
+                List { addSourceSection }
+                    .navigationTitle("添加订阅源")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { showAddSource = false }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
         }
         .onChange(of: pluginAvailability.installedPluginIds) { _, _ in
-            Task {
-                await pluginSourceManager.refreshAvailableUpdates()
-            }
+            guard !pluginSourceManager.isManagementBusy else { return }
+            Task { await reloadCatalog() }
         }
         .sheet(isPresented: $showAvailablePlugins) {
             availablePluginsSheet
@@ -57,27 +86,7 @@ struct PluginManagementView: View {
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             } else {
                 ForEach(pluginAvailability.installedPluginIds, id: \.self) { pluginId in
-                    HStack {
-                        pluginIconView(for: pluginId)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(pluginDisplayName(for: pluginId))
-                                    .font(.body)
-                                    .foregroundStyle(AppConstants.Colors.primaryText)
-                                if pluginAvailability.requiresLogin(for: pluginId) {
-                                    RequiresLoginTag()
-                                }
-                            }
-
-                            versionSubtitleView(for: pluginId)
-                        }
-
-                        Spacer()
-
-                        pluginStatusView(for: pluginId)
-                    }
-                    .padding(.vertical, AppConstants.Spacing.xs)
+                    managedPluginRow(pluginId: pluginId)
                     #if !os(tvOS)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
@@ -90,6 +99,7 @@ struct PluginManagementView: View {
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
+                        .disabled(pluginSourceManager.isManagementBusy)
                     }
                     #endif
                 }
@@ -113,31 +123,14 @@ struct PluginManagementView: View {
         if !notInstalled.isEmpty {
             Section {
                 ForEach(notInstalled) { displayItem in
-                    HStack {
-                        pluginIconView(for: displayItem.id)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text(displayItem.displayName)
-                                    .font(.body)
-                                    .foregroundStyle(AppConstants.Colors.primaryText)
-                                if displayItem.item.auth?.required == true {
-                                    RequiresLoginTag()
-                                }
-                            }
-                            Text("版本 \(displayItem.item.version)")
-                                .font(.caption)
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-                        }
-
-                        Spacer()
-
-                        remotePluginActionView(for: displayItem)
-                    }
-                    .padding(.vertical, AppConstants.Spacing.xs)
+                    managedPluginRow(pluginId: displayItem.id, remote: displayItem)
                 }
             } header: {
-                Text("可安装插件")
+                HStack {
+                    Text("可安装插件")
+                    Spacer()
+                    Button("查看全部") { showAvailablePlugins = true }
+                }
             }
         }
     }
@@ -166,8 +159,8 @@ struct PluginManagementView: View {
                     .font(.caption)
                     .foregroundStyle(sourceHealthTint(health))
 
-                Text(url)
-                    .font(.caption)
+                Text(URL(string: url)?.host() ?? url)
+                    .font(.subheadline)
                     .foregroundStyle(AppConstants.Colors.primaryText)
                     .lineLimit(1)
 
@@ -176,6 +169,11 @@ struct PluginManagementView: View {
                 sourceHealthBadge(health)
             }
 
+            Text(url)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
             if case .failed(let reason) = health {
                 Text(reason)
                     .font(.caption2)
@@ -183,6 +181,7 @@ struct PluginManagementView: View {
                     .lineLimit(2)
             }
         }
+        .disabled(pluginSourceManager.isManagementBusy)
         .swipeActions(edge: .leading) {
             if health.isFailed {
                 Button {
@@ -260,7 +259,7 @@ struct PluginManagementView: View {
                     Text("添加订阅源")
                 }
             }
-            .disabled(inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
+            .disabled(inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing || pluginSourceManager.isManagementBusy)
 
             if let error = pluginSourceManager.errorMessage {
                 PluginSourceErrorCard(title: "插件源异常", message: error)
@@ -275,6 +274,7 @@ struct PluginManagementView: View {
     // MARK: - Actions
 
     private func addSource() {
+        guard !pluginSourceManager.isManagementBusy, !isProcessing else { return }
         let input = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return }
 
@@ -284,90 +284,60 @@ struct PluginManagementView: View {
             if !addedURLs.isEmpty {
                 inputURL = ""
                 await pluginSourceManager.refreshAvailableUpdates()
-                showAvailablePlugins = true
+                showAddSource = false
+                await pluginSourceManager.fetchAllSourceIndexes()
             }
             isProcessing = false
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Plugin rows and operations
 
-    private func pluginDisplayName(for pluginId: String) -> String {
-        guard let platform = platformForPluginId(pluginId) else {
-            return pluginId
-        }
-        return LiveParseTools.getLivePlatformName(platform.liveType)
-    }
-
-    private func platformForPluginId(_ pluginId: String) -> LiveParseJSPlatform? {
-        LiveParseJSPlatformManager.availablePlatforms.first { $0.pluginId == pluginId }
-    }
-
-    @ViewBuilder
-    private func pluginIconView(for pluginId: String) -> some View {
-        if let platform = platformForPluginId(pluginId),
-           let image = PlatformIconProvider.pluginManagementImage(for: platform.liveType) {
-            Image(uiImage: image)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        } else {
-            Image(systemName: "puzzlepiece.extension")
-                .frame(width: 32, height: 32)
-                .foregroundStyle(AppConstants.Colors.secondaryText)
-        }
-    }
-
-    @ViewBuilder
-    private func versionSubtitleView(for pluginId: String) -> some View {
-        let installed = pluginSourceManager.installedVersion(for: pluginId) ?? "未知"
-        if let latest = pluginSourceManager.latestVersion(for: pluginId),
-           pluginSourceManager.hasUpdate(for: pluginId) {
-            (
-                Text(installed).foregroundStyle(Color.red) +
-                Text(" → ").foregroundStyle(AppConstants.Colors.secondaryText) +
-                Text(latest).foregroundStyle(Color.green)
-            )
-            .font(.caption)
-        } else {
-            Text("版本 \(installed)")
-                .font(.caption)
-                .foregroundStyle(AppConstants.Colors.secondaryText)
-        }
-    }
-
-    @ViewBuilder
-    private func pluginStatusView(for pluginId: String) -> some View {
-        if pluginSourceManager.updatingPluginIds.contains(pluginId) {
-            HStack(spacing: AppConstants.Spacing.xs) {
-                ProgressView()
-                    .scaleEffect(0.8)
-                Text("更新中")
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
-            }
-        } else if pluginSourceManager.hasUpdate(for: pluginId) {
-            Button {
+    private func managedPluginRow(pluginId: String, remote: RemotePluginDisplayItem? = nil) -> some View {
+        let installed = pluginSourceManager.installedVersion(for: pluginId)
+        let latest = pluginSourceManager.latestVersion(for: pluginId)
+        let version = installed.map { current in
+            pluginSourceManager.hasUpdate(for: pluginId) ? "版本 \(current) → \(latest ?? current)" : "版本 \(current)"
+        } ?? "版本 \(remote?.item.version ?? "未知")"
+        let state = pluginSourceManager.managementActionState(for: pluginId, remote: remote)
+        let platform = LiveParseJSPlatformManager.availablePlatforms.first { $0.pluginId == pluginId }
+        let icon = platform.flatMap { PlatformIconProvider.pluginManagementImage(for: $0.liveType) }.map { Image(uiImage: $0) }
+        return PluginManagementPluginRow(
+            name: pluginSourceManager.managementDisplayName(for: pluginId),
+            version: version,
+            requiresLogin: pluginAvailability.requiresLogin(for: pluginId) || remote?.item.auth?.required == true,
+            state: state, icon: icon, disabled: pluginSourceManager.isManagementBusy,
+            isWaiting: pluginSourceManager.isWaitingForUpdate(for: pluginId)
+        ) {
+            if installed != nil {
+                updatePlugins([pluginId])
+            } else if let remote {
                 Task {
-                    let success = await pluginSourceManager.updatePlugin(pluginId: pluginId)
-                    if success {
-                        await pluginAvailability.refresh()
-                    }
-                    await pluginSourceManager.refreshAvailableUpdates()
+                    _ = await pluginSourceManager.installPlugin(remote)
+                    await pluginAvailability.refresh()
                 }
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                    .foregroundStyle(AppConstants.Colors.link)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("更新插件")
-        } else {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(AppConstants.Colors.success)
         }
+    }
+
+    private func updatePlugins(_ ids: [String]) {
+        guard !pluginSourceManager.isManagementBusy else { return }
+        Task {
+            _ = await pluginSourceManager.updateAllPlugins(pluginIds: ids)
+            await pluginAvailability.refresh()
+        }
+    }
+
+    private func checkUpdates() {
+        guard !pluginSourceManager.isManagementBusy else { return }
+        pluginSourceManager.updateBatch.clearResult()
+        Task { await reloadCatalog() }
+    }
+
+    private func reloadCatalog() async {
+        guard !pluginSourceManager.isManagementBusy else { return }
+        await pluginSourceManager.fetchAllSourceIndexes()
+        await pluginSourceManager.refreshAvailableUpdates()
     }
 
     // MARK: - 可安装插件 Sheet
@@ -382,29 +352,7 @@ struct PluginManagementView: View {
                 } else {
                     Section {
                         ForEach(pluginSourceManager.remotePlugins) { displayItem in
-                            HStack {
-                                pluginIconView(for: displayItem.id)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    HStack(spacing: 6) {
-                                        Text(displayItem.displayName)
-                                            .font(.body)
-                                            .foregroundStyle(AppConstants.Colors.primaryText)
-                                        if displayItem.item.auth?.required == true
-                                            || pluginAvailability.requiresLogin(for: displayItem.id) {
-                                            RequiresLoginTag()
-                                        }
-                                    }
-                                    Text("版本 \(displayItem.item.version)")
-                                        .font(.caption)
-                                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                                }
-
-                                Spacer()
-
-                                remotePluginActionView(for: displayItem)
-                            }
-                            .padding(.vertical, AppConstants.Spacing.xs)
+                            managedPluginRow(pluginId: displayItem.id, remote: displayItem)
                         }
                     } header: {
                         Text("共 \(pluginSourceManager.remotePlugins.count) 个插件")
@@ -438,73 +386,12 @@ struct PluginManagementView: View {
                                 Text("全部安装")
                             }
                         }
-                        .disabled(pluginSourceManager.isInstalling)
+                        .disabled(pluginSourceManager.isManagementBusy)
                     }
                 }
             }
         }
-        .task {
-            // Sheet 自己建立观察和刷新边界；无需关闭后依赖父页面的 .task 才看到更新。
-            await pluginSourceManager.refreshAvailableUpdates()
-        }
-    }
 
-    @ViewBuilder
-    private func remotePluginActionView(for displayItem: RemotePluginDisplayItem) -> some View {
-        switch pluginSourceManager.catalogActionState(for: displayItem) {
-        case .install:
-            Button {
-                Task {
-                    let success = await pluginSourceManager.installPlugin(displayItem)
-                    if success {
-                        await pluginAvailability.refresh()
-                        await pluginSourceManager.refreshAvailableUpdates()
-                    }
-                }
-            } label: {
-                Text("安装")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(AppConstants.Colors.link, in: Capsule())
-            }
-            .buttonStyle(.plain)
-        case .update:
-            Button {
-                Task {
-                    let success = await pluginSourceManager.updatePlugin(pluginId: displayItem.id)
-                    if success {
-                        await pluginAvailability.refresh()
-                    }
-                    await pluginSourceManager.refreshAvailableUpdates()
-                }
-            } label: {
-                Text("更新")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(AppConstants.Colors.link, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("更新插件")
-        case .installing, .updating:
-            ProgressView()
-                .scaleEffect(0.8)
-        case .installed:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(AppConstants.Colors.success)
-        case .failed(let message):
-            VStack(alignment: .trailing, spacing: 2) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                Text(message)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(1)
-            }
-        }
     }
 
 }

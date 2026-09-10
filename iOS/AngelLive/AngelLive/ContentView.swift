@@ -39,7 +39,7 @@ struct ContentView: View {
     @Environment(WelcomeManager.self) private var welcomeManager
 
     // 插件检测服务
-    @State private var pluginAvailability = PluginAvailabilityService()
+    @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
 
     // 壳 UI 服务
     @State private var bookmarkService = StreamBookmarkService()

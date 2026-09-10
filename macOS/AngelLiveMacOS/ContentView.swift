@@ -41,7 +41,7 @@ struct ContentView: View {
     @Environment(ToastManager.self) private var toastManager
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     // 插件与壳 UI 服务
-    @State private var pluginAvailability = PluginAvailabilityService()
+    @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
     @State private var bookmarkService = StreamBookmarkService()
     @State private var pluginSourceManager = PluginSourceManager()
     // CloudKit 插件源同步

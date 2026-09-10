@@ -48,7 +48,7 @@ struct LiquidRefreshIndicator: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(isRefreshing ? accessibilityTitle : "下拉刷新")
             .accessibilityHidden(!isRefreshing)
-            .onChange(of: pullDistance) { _, distance in
+            .onChange(of: pullDistance, initial: true) { _, distance in
                 pullState.observe(distance: distance, refreshPresented: isRefreshing || startedAt != nil)
             }
             .onChange(of: startedAt) { _, start in
@@ -60,7 +60,7 @@ struct LiquidRefreshIndicator: View {
                 let newCycle = observedCycle != nil && observedCycle != refreshCycle
                 observedCycle = refreshCycle
                 if isRefreshing || newCycle {
-                    initialPull = progress
+                    initialPull = pullState.isHovering ? 1 : progress
                     pullState.consume()
                     completedAt = nil
                     startedAt = .now
@@ -68,10 +68,10 @@ struct LiquidRefreshIndicator: View {
                 if !isRefreshing, let startedAt {
                     let completion = Date.now
                     completedAt = completion
-                    // Only presentation is held: fast requests must still show
-                    // the neck break and a detached drop before retracting.
+                    // The circle is already detached while waiting for release.
+                    // Briefly show loading even when the request finishes fast.
                     let end = max(completion.timeIntervalSinceReferenceDate,
-                                  startedAt.timeIntervalSinceReferenceDate + 0.56) + 0.48
+                                  startedAt.timeIntervalSinceReferenceDate + 0.20) + 0.40
                     let remaining = max(0, end - Date.now.timeIntervalSinceReferenceDate)
                     do { try await Task.sleep(for: .seconds(remaining)) }
                     catch { return }
@@ -97,66 +97,78 @@ struct LiquidRefreshIndicator: View {
 /// return to rest before it can draw a new pull preview.
 struct LiquidRefreshPullState {
     private(set) var waitsForRest = false
+    private(set) var isHovering = false
 
     mutating func consume() {
         waitsForRest = true
     }
 
     mutating func observe(distance: CGFloat, refreshPresented: Bool) {
-        guard !refreshPresented, distance <= 1 else { return }
-        waitsForRest = false
+        guard !refreshPresented else { return }
+        if distance <= 1 {
+            waitsForRest = false
+            isHovering = false
+        } else if !waitsForRest && distance >= 108 {
+            isHovering = true
+        }
     }
 
     func visibleProgress(for distance: CGFloat) -> CGFloat {
-        waitsForRest ? 0 : min(max((distance - 8) / 100, 0), 1)
+        waitsForRest ? 0 : (isHovering ? 1 : min(max((distance - 8) / 100, 0), 1))
     }
 }
 
-/// Pinch first, then let the drop fall. Radius stays stable until the final
-/// part of the return, avoiding a shrinking bead on a long string.
+/// Pulling drives the whole separation directly. A detached circle waits at
+/// its anchor until release; the return is translation/fade, never a liquid neck.
 struct LiquidRefreshPose {
     var progress: CGFloat
     var separation: CGFloat
     var centerY: CGFloat
     var loading: CGFloat
     var rotation: Double
+    var opacity: CGFloat = 1
+
+    static func pulling(_ progress: CGFloat) -> Self {
+        let p = clamp(progress)
+        let stretch = min(p / 0.75, 1)
+        let separation = smooth(clamp((p - 0.75) / 0.25))
+        return .init(progress: stretch, separation: separation,
+                     centerY: -8 + 44 * stretch + 14 * separation,
+                     loading: separation, rotation: 0)
+    }
 
     static func resolve(
         now: Date, startedAt: Date?, completedAt: Date?,
         initialPull: CGFloat, pull: CGFloat, reducedMotion: Bool
     ) -> Self {
         guard let start = startedAt else {
-            return .init(progress: pull, separation: 0, centerY: -8 + 32 * pull, loading: 0, rotation: 0)
+            return pulling(pull)
         }
         if reducedMotion {
             return .init(progress: completedAt == nil ? 1 : 0, separation: 1, centerY: 26, loading: 1, rotation: 0)
         }
         let elapsed = max(0, now.timeIntervalSince(start))
-        if elapsed < 0.38 {
-            let pinch = smooth(clamp(elapsed / 0.18))
-            let fall = smooth(clamp((elapsed - 0.10) / 0.28))
-            let fromY = -8 + 32 * initialPull
-            return .init(
-                progress: initialPull + (1 - initialPull) * fall,
-                separation: pinch,
-                centerY: fromY + (44 - fromY) * fall,
-                loading: smooth(clamp((elapsed - 0.22) / 0.16)), rotation: 0
-            )
-        }
-        let rotation = max(0, elapsed - 0.38) * 2 * Double.pi
+        let rotation = elapsed * 2 * Double.pi
         if let completedAt {
-            let returnStart = max(0.56, completedAt.timeIntervalSince(start))
+            let returnStart = max(0.20, completedAt.timeIntervalSince(start))
             if elapsed >= returnStart {
-                let t = clamp((elapsed - returnStart) / 0.48)
-                let y = 44 - 52 * smooth(t)
+                let t = clamp((elapsed - returnStart) / 0.40)
+                let y = 50 - 58 * smooth(t)
                 return .init(
-                    progress: 1 - smooth(clamp((t - 0.65) / 0.35)),
-                    separation: smooth(clamp((y - 3) / 19)),
-                    centerY: y, loading: 1 - smooth(clamp(t / 0.24)), rotation: rotation
+                    progress: 1, separation: 1,
+                    centerY: y, loading: 1 - smooth(clamp(t / 0.3)), rotation: rotation,
+                    opacity: 1 - smooth(clamp((t - 0.55) / 0.45))
                 )
             }
         }
-        return .init(progress: 1, separation: 1, centerY: 44, loading: 1, rotation: rotation)
+        // Native thresholds can differ from the visual threshold. Finish only
+        // the remaining separation on release; a hovering circle never jumps.
+        let from = pulling(initialPull)
+        let settle = smooth(clamp(elapsed / 0.18))
+        return .init(progress: from.progress + (1 - from.progress) * settle,
+                     separation: from.separation + (1 - from.separation) * settle,
+                     centerY: from.centerY + (50 - from.centerY) * settle,
+                     loading: 1, rotation: rotation)
     }
 
     private static func clamp(_ value: Double) -> Double { min(max(value, 0), 1) }
@@ -175,33 +187,33 @@ private struct LiquidRefreshArtwork: View {
             let p = pose.progress
             let s = pose.separation
             let x = size.width / 2
-            let radius = 6 + 6 * p
+            let radius = 6 + 7 * p
             let y = reducedMotion ? 26 : pose.centerY + (attached ? 0 : 22)
-            let rx = radius * (1 - 0.04 * p * (1 - s))
+            let rx = radius * (1 - 0.10 * p * (1 - s))
             let drop = Path(ellipseIn: CGRect(x: x - rx, y: y - radius, width: rx * 2, height: radius * 2))
-            context.opacity = min(p * 5, 1)
+            context.opacity = min(p * 5, 1) * pose.opacity
 
-            if attached && s < 0.999 && y > radius * 0.65 && p > 0.015 {
-                let base = (12 - 2 * p) * (1 - s)
-                let thin = (3.8 - 2 * p) * pow(1 - s, 1.6)
-                let join = y - radius * 0.65
-                let waist = join * 0.48
-                let shoulder = rx * 0.78 * (1 - s)
+            if attached && s < 0.98 && y + radius > 0 && y < 49 && p > 0.015 {
+                let base = (13 - 3 * p) * (1 - s)
+                let thin = max(0.15, (4 - 2.5 * p) * (1 - s))
+                let join = y - radius * 0.40
+                let waist = 2 + max(0, join - 2) * 0.47
+                let shoulder = rx * 0.9 * (1 - s)
                 var neck = Path()
                 neck.move(to: CGPoint(x: x - base, y: 0))
-                neck.addCurve(to: CGPoint(x: x - thin, y: waist),
-                              control1: CGPoint(x: x - base * 0.45, y: waist * 0.3),
-                              control2: CGPoint(x: x - thin, y: waist * 0.7))
+                neck.addCurve(to: CGPoint(x: x - thin, y: waist + 3),
+                              control1: CGPoint(x: x - base * 0.45, y: 3),
+                              control2: CGPoint(x: x - thin, y: waist))
                 neck.addCurve(to: CGPoint(x: x - shoulder, y: join + 3),
-                              control1: CGPoint(x: x - thin, y: waist + (join - waist) * 0.6),
-                              control2: CGPoint(x: x - shoulder, y: join))
+                              control1: CGPoint(x: x - thin, y: join - 4),
+                              control2: CGPoint(x: x - shoulder, y: join - 3))
                 neck.addLine(to: CGPoint(x: x + shoulder, y: join + 3))
-                neck.addCurve(to: CGPoint(x: x + thin, y: waist),
-                              control1: CGPoint(x: x + shoulder, y: join),
-                              control2: CGPoint(x: x + thin, y: waist + (join - waist) * 0.6))
+                neck.addCurve(to: CGPoint(x: x + thin, y: waist + 3),
+                              control1: CGPoint(x: x + shoulder, y: join - 3),
+                              control2: CGPoint(x: x + thin, y: join - 4))
                 neck.addCurve(to: CGPoint(x: x + base, y: 0),
-                              control1: CGPoint(x: x + thin, y: waist * 0.7),
-                              control2: CGPoint(x: x + base * 0.45, y: waist * 0.3))
+                              control1: CGPoint(x: x + thin, y: waist),
+                              control2: CGPoint(x: x + base * 0.45, y: 3))
                 neck.closeSubpath()
                 context.fill(neck, with: .color(.black))
             }

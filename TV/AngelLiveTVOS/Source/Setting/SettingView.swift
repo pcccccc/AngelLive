@@ -231,10 +231,19 @@ struct SettingView: View {
     private func fullScreenContentView(for index: Int) -> some View {
         switch index {
         case 1: // 插件管理
-            TVPluginManagementView(
-                pluginSourceManager: appViewModel.pluginSourceManager,
-                pluginAvailability: appViewModel.pluginAvailability
-            )
+            Group {
+                if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    TVFullPluginManagementView(
+                        pluginSourceManager: appViewModel.pluginSourceManager,
+                        pluginAvailability: appViewModel.pluginAvailability
+                    )
+                } else {
+                    TVPluginManagementView(
+                        pluginSourceManager: appViewModel.pluginSourceManager,
+                        pluginAvailability: appViewModel.pluginAvailability
+                    )
+                }
+            }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
                 .onExitCommand {

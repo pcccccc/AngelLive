@@ -109,6 +109,16 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// 正在更新中的插件 ID
     public private(set) var updatingPluginIds: Set<String> = []
 
+    /// Used only by FullUI management pages; legacy ShellUI operations retain
+    /// their existing entry points and presentation.
+    @ObservationIgnored @MainActor
+    public private(set) lazy var updateBatch = PluginUpdateBatch()
+
+    @MainActor public var isManagementBusy: Bool {
+        updateBatch.isRunning || isFetchingIndex || isCheckingUpdates || isInstalling ||
+        installTotalCount > 0 || !updatingPluginIds.isEmpty
+    }
+
     /// 批量安装进度：已完成数量
     public private(set) var installCompletedCount: Int = 0
 
@@ -689,6 +699,38 @@ public final class PluginSourceManager: @unchecked Sendable {
         } catch {
             errorMessage = "更新插件失败: \(error.localizedDescription)"
             return false
+        }
+    }
+
+    /// Updates an explicit set of installed plugins without installing catalog
+    /// entries. Snapshot versions before suspension and reuse the updater's
+    /// activation, last-good, pinned-version retention and rollback behavior.
+    @MainActor
+    @discardableResult
+    public func updateAllPlugins(pluginIds: [String]) async -> Int {
+        guard !updateBatch.isRunning, !isInstalling,
+              installTotalCount == 0, updatingPluginIds.isEmpty,
+              !isFetchingIndex, !isCheckingUpdates else { return 0 }
+        let candidates = pluginIds.filter { hasUpdate(for: $0) }
+        let items = latestRemoteItemsByPluginId
+        // Reserve the whole queue before the first suspension. Existing
+        // automatic/single-update entry points already honor this set.
+        let reservedIds = Set(candidates)
+        updatingPluginIds.formUnion(reservedIds)
+        defer { updatingPluginIds.subtract(reservedIds) }
+        return await updateBatch.run(pluginIds: candidates) { [self] id in
+            guard let item = items[id], installedVersion(for: id) != nil else {
+                return .failed("插件已移除，请重新检查更新。")
+            }
+            do {
+                try await updater.installAndActivate(item: item, manager: LiveParsePlugins.shared)
+                remotePlugins.first(where: { $0.id == id })?.installState = .installed
+                return .updated
+            } catch is CancellationError {
+                return .cancelled
+            } catch {
+                return .failed(Self.detailedErrorDescription(error))
+            }
         }
     }
 

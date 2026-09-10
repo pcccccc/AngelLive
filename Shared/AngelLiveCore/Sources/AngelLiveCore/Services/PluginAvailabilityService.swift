@@ -34,7 +34,22 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// manifest、平台元数据和首页能力，因此不能只依赖 ID 列表作为失效信号。
     public private(set) var catalogRevision: UInt = 0
 
+    @ObservationIgnored private var managesAPICredentialPolicy = false
+
     public init() {}
+
+    /// Opt in only at a host's root FullUI/ShellUI decision point. Preparing the
+    /// local policy synchronously prevents the first request racing a view task.
+    @MainActor
+    public convenience init(managesAPICredentialPolicy: Bool) {
+        self.init()
+        self.managesAPICredentialPolicy = managesAPICredentialPolicy
+        if managesAPICredentialPolicy {
+            PlatformAPICredentialHostPolicy.shared.initializeIfNeeded(
+                hasInstalledPlugins: !SandboxPluginCatalog.installedPluginMap().isEmpty
+            )
+        }
+    }
 
     /// 检测 sandbox 目录下是否有任何已安装的插件
     @MainActor
@@ -48,6 +63,10 @@ public final class PluginAvailabilityService: @unchecked Sendable {
 
         // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
         let pluginMap = SandboxPluginCatalog.installedPluginMap()
+        if managesAPICredentialPolicy {
+            // Publish authorization policy before publishing a mode/catalog change.
+            PlatformAPICredentialHostPolicy.shared.update(hasInstalledPlugins: !pluginMap.isEmpty)
+        }
         installedPluginIds = pluginMap.keys.sorted()
         // Keep Shell/Full UI availability driven strictly by sandbox presence,
         // but derive login metadata from the same effective version that will

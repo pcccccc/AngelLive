@@ -3,6 +3,38 @@ import Testing
 @testable import AngelLiveCore
 
 struct PluginHomeFeedCacheStoreTests {
+    @Test("expired home snapshot appears before catalog readiness and is removed only after confirmed absence")
+    @MainActor
+    func cachePrecedesPlatformReadiness() async throws {
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = PluginHomeFeedCacheStore(fileURL: directoryURL.appendingPathComponent("home-feed.json"))
+        let feed = PluginHomeFeed(
+            pluginId: "fixture.plugin", pluginDisplayName: "Fixture",
+            schemaVersion: PluginHomeFeedRequest.supportedSchemaVersion, revision: "cached",
+            generatedAt: Date(timeIntervalSince1970: 1), ttlSeconds: 60,
+            banners: [PluginHomeBanner(
+                id: "cached-banner", imageURL: try #require(URL(string: "https://example.invalid/banner.jpg")),
+                title: "Cached banner", subtitle: nil, badge: nil,
+                target: .category(.init(id: "category", parentId: "", title: "Category", icon: "", biz: nil))
+            )],
+            sections: [], diagnostics: .init(droppedBanners: 0, droppedSections: 0, droppedItems: 0)
+        )
+        #expect(await store.save([feed]))
+        let model = PluginHomeFeedModel(cacheStore: store)
+
+        await model.refresh(installedPluginIds: [], availabilityConfirmed: false)
+        #expect(model.bannerEntries.map(\.banner.title) == ["Cached banner"])
+        #expect(model.hasRestoredCache)
+        #expect(!model.hasLoaded)
+        #expect(await store.load().count == 1)
+
+        await model.refresh(installedPluginIds: [], availabilityConfirmed: true)
+        #expect(model.bannerEntries.isEmpty)
+        #expect(model.hasLoaded)
+        #expect(await store.load().isEmpty)
+    }
+
     @Test("home feed cache round-trips validated content")
     func roundTrip() async throws {
         let directoryURL = FileManager.default.temporaryDirectory

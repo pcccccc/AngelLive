@@ -157,36 +157,13 @@ public struct PlatformAPITokenStatusLabel: View {
 private struct PlatformAPICredentialLifecycle: ViewModifier {
     let enabled: Bool
     @Environment(\.scenePhase) private var scenePhase
-    @State private var isReady = false
 
     func body(content: Content) -> some View {
-        Group {
-            if enabled && !isReady {
-                ProgressView("正在准备平台…")
-            } else {
-                content
-            }
-        }
-            .task(id: enabled) {
-                guard enabled else { isReady = false; return }
-                let consumer = UUID()
-                await PlatformAPITokenVault.shared.activate(consumer)
-                guard !Task.isCancelled else {
-                    await PlatformAPITokenVault.shared.deactivate(consumer)
-                    return
-                }
-                // Child browsing tasks must start after the FullUI policy is
-                // active, including the first launch with persisted credentials.
-                isReady = true
-                do {
-                    while !Task.isCancelled { try await Task.sleep(for: .seconds(86_400)) }
-                } catch { }
-                await PlatformAPITokenVault.shared.deactivate(consumer)
-            }
+        content
+            // The root catalog service owns policy activation. Keep the view
+            // tree mounted while foreground credential validation runs.
             .task(id: enabled && scenePhase == .active) {
                 guard enabled, scenePhase == .active else { return }
-                let consumer = UUID()
-                await PlatformAPITokenVault.shared.activate(consumer)
                 do {
                     while !Task.isCancelled {
                         let entries = await PlatformLoginRegistry.shared.availablePlatforms()
@@ -198,12 +175,13 @@ private struct PlatformAPICredentialLifecycle: ViewModifier {
                         try await Task.sleep(for: .seconds(3_600))
                     }
                 } catch { }
-                await PlatformAPITokenVault.shared.deactivate(consumer)
             }
     }
 }
 
 public extension View {
+    /// Background status maintenance. The host's root PluginAvailabilityService
+    /// must opt in to managesAPICredentialPolicy before creating browsing views.
     func platformAPICredentialLifecycle(enabled: Bool) -> some View {
         modifier(PlatformAPICredentialLifecycle(enabled: enabled))
     }

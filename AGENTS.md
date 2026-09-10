@@ -95,7 +95,7 @@
 ## 6. 新电脑或全新环境启动
 
 1. 克隆仓库并进入根目录。
-2. 安装项目要求的 Xcode 27 版本。Xcode 应用名称和安装位置可以不同；动态查找候选并用 `<XCODE_APP>/Contents/Developer/usr/bin/xcodebuild -version` 确认主版本为 27。
+2. 安装项目要求的 Xcode 27 版本，优先使用用户指定的 RC 或正式版，不自动回退到旧 Beta。Xcode 应用名称和安装位置可以不同；动态查找候选并用 `<XCODE_APP>/Contents/Developer/usr/bin/xcodebuild -version` 确认版本与 build number，不能仅凭应用名称判断。当前已核验基线为 Xcode 27.0 RC（27A266a）。
 3. 为当前命令设置 `DEVELOPER_DIR=<XCODE_APP>/Contents/Developer`；不要永久修改用户的全局 `xcode-select`，除非用户明确要求。
 4. 打开根目录 `AngelLive.xcworkspace`，不要只打开某个 `.xcodeproj`。workspace 同时包含三个宿主工程和三个本地 Package。
 5. 让 Xcode 从已提交的 `Package.resolved` 解析依赖。不要随意删除 resolved 文件、Package cache 或 DerivedData；依赖变更必须是任务本身的一部分。
@@ -143,6 +143,7 @@ swift test --package-path Shared/AngelLiveDependencies
 3. 首次连接批准 Xcode 的 PID 级权限弹窗；MCP 客户端重启后 PID 改变，可能需要再次批准。
 4. 优先使用客户端已注册的 Xcode MCP server。新电脑可按 Skill 的客户端配置方式注册 `xcrun mcpbridge`。
 5. 多个 Xcode 同时运行时，动态取得目标 Xcode 27 的 PID，并为 bridge 设置 `MCP_XCODE_PID=<PID>`。同时设置 `DEVELOPER_DIR=<XCODE_APP>/Contents/Developer`，不要写死旧机器的 PID 或 Xcode Beta 小版本路径。
+6. Xcode 升级或更换应用路径后重新发现 toolchain、进程、workspace 和工具 schema；不要复用旧 Beta 的 PID、连接或工具参数。Skills 导出成功不等于 MCP workspace build 或设备验证通过。
 
 原始 stdio 方式仅作回退：
 
@@ -187,6 +188,7 @@ xcrun mcpbridge
 - 新启动后先用空 interaction 的 `DeviceEventSynthesize` 获取截图和 hierarchy；仍在启动/加载则再次捕获。
 - 优先使用 hierarchy 的 `hitPoint`；只有 hitPoint 尝试失败并重新捕获后，才使用截图估算坐标。
 - 每次点击、滑动、切换、旋转或状态变化后重新捕获并核对可见状态与 hierarchy。
+- tvOS 按焦点导航：读取 hierarchy 的 `Focused` 标记，使用 Siri Remote 命令 `r up/down/left/right/select/menu/playpause/home`，不使用触屏坐标。方向键可根据 hierarchy 顺序合并成一次命令，之后捕获确认焦点；激活或返回后核对目标页面。先确认当前工具 schema 支持该命令。
 - 视觉问题检查原尺寸截图，覆盖颜色、对齐、裁切、重叠、圆角、安全区和深浅色。
 - 交互问题必须验证结果状态；“发出了点击”不等于通过。
 - 完成后记录设备/OS、交互路径、观察结果和安装后的截图路径，并调用 `DeviceInteractionEndSession`。
@@ -195,23 +197,35 @@ xcrun mcpbridge
 
 ## 10. Skill 路由
 
-### 新电脑上恢复 Skill
+### 新电脑及 Xcode 升级后同步 Apple Skills
 
-如果第三方 Agent 环境（如 Codex、Claude Code 或 Cursor）找不到 Xcode 27 内置的 Apple 原生 Agent Skills，使用当前选定的 Xcode 27 toolchain 导出：
-
-```sh
-DEVELOPER_DIR=<xcode-27-app>/Contents/Developer \
-xcrun agent skills export --output-dir ~/Downloads/xcode-skills
-```
-
-上述命令适合先导出到临时目录检查内容。确认目标 Agent 使用 `~/.agents/skills` 且不会覆盖需要保留的同名 Skill 后，也可直接导出：
+新电脑缺少 Apple 原生 Skills，或 Xcode 从 Beta 升级到 RC／正式版时，都应重新导出。先核验目标 Xcode 的版本和 build number，再查看该版本实际支持的参数：
 
 ```sh
 DEVELOPER_DIR=<xcode-27-app>/Contents/Developer \
-xcrun agent skills export ~/.agents/skills
+xcrun agent skills export --help
 ```
 
-导出后重新启动或刷新 Agent 会话，并通过当前环境的 Skill 列表确认所需 `SKILL.md` 已被发现。不要假设 Xcode 的安装路径或 Skill 目录在新电脑上与旧电脑一致。
+先导出到新建临时目录并清点 `SKILL.md` 与引用文件，避免混入旧版本残留：
+
+```sh
+skills_export_dir=$(mktemp -d "${TMPDIR:-/tmp}/xcode-skills.XXXXXX")
+DEVELOPER_DIR=<xcode-27-app>/Contents/Developer \
+xcrun agent skills export --output-dir "$skills_export_dir"
+```
+
+检查当前 Agent 的技能目录及软链接实际指向。更新前将本次导出中已有的同名目录备份到技能扫描目录之外；只更新导出的 Apple Skills，不覆盖 Axiom、自定义技能或其他插件。保留 Codex 等客户端已有软链接，更新其真实目标目录。确认目标目录后使用显式参数（RC 的帮助只列出 `--output-dir`，不依赖旧示例中的位置参数）：
+
+```sh
+DEVELOPER_DIR=<xcode-27-app>/Contents/Developer \
+xcrun agent skills export --output-dir <confirmed-skills-directory> --replace-existing
+```
+
+导出后比较文件清单、正文及引用资源，并验证客户端软链接仍有效。导出器可能重排 YAML front matter 的字段顺序，比较元数据时按键值语义判断，不把字段重排当作正文更新。若命令失败，保留原技能与备份，不以退出前的部分输出宣称更新完成。
+
+导出后重新启动或刷新 Agent 会话，并通过新会话的 Skill 列表确认所需 `SKILL.md` 已被发现；旧会话可能保留此前已读取的内容。不要假设 Xcode 的安装路径或 Skill 目录在新电脑上与旧电脑一致。遇到导出器无法连接／启动 Xcode，先排查所选版本、进程与执行权限，不删除隔离属性或修改应用签名来绕过系统检查。
+
+2026-09-10 已核验 Xcode 27.0 RC（27A266a）可导出以下 10 项；后续版本以实际导出清单为准：`adopt-c-bounds-safety`、`app-intents-specialist`、`app-intents-whats-new-27`、`audit-xcode-security-settings`、`building-document-based-swiftui-applications`、`device-interaction`、`modernize-tests`、`swiftui-specialist`、`swiftui-whats-new-27`、`uikit-app-modernization`。本次 RC 的设备交互技能补充了 tvOS Siri Remote／焦点操作，安全设置技能增加了 Checked Pointer Arithmetic 指引；同步这些技能不自动授权修改项目安全设置。
 
 如果任务需要 Axiom Skill，但当前的 Skill 列表和已导出的 Xcode Skills 中都找不到，从 [Axiom](https://charleswiltgen.github.io/Axiom/) 查找对应 Skill 的安装与使用方法。不要伪造未安装的 Skill 名称或假装已经读取其 `SKILL.md`。
 

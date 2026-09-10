@@ -64,7 +64,10 @@ enum APITokenError: Error, LocalizedError {
 /// API credential records never enter Cookie sessions, defaults, or credential sync.
 /// This actor serializes persistence and generation changes without suspension.
 actor PlatformAPITokenVault {
-    static let shared = PlatformAPITokenVault(storage: APITokenKeychain())
+    static let shared = PlatformAPITokenVault(
+        storage: APITokenKeychain(),
+        hostPolicy: { PlatformAPICredentialHostPolicy.shared.isFullUI }
+    )
     nonisolated let deviceAuth: PlatformDeviceAuthCoordinator
     struct Record: Codable, Sendable {
         let token: String?
@@ -136,17 +139,28 @@ actor PlatformAPITokenVault {
     private var generations: [String: UUID] = [:]
     private var runtimes: [String: [ObjectIdentifier: JSRuntime]] = [:]
     private var fullUIConsumers: Set<UUID> = []
+    private let hostPolicy: @MainActor @Sendable () -> Bool
     // A rotated single-use refresh token must never fall back to the disk record.
     private var pendingRotations: [String: Record] = [:]
 
-    init(storage: sending any APITokenStorage, now: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 }) {
+    init(
+        storage: sending any APITokenStorage,
+        now: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 },
+        hostPolicy: @escaping @MainActor @Sendable () -> Bool = { false }
+    ) {
         self.storage = storage
         self.deviceAuth = PlatformDeviceAuthCoordinator(now: now)
+        self.hostPolicy = hostPolicy
     }
 
     func activate(_ consumer: UUID) { fullUIConsumers.insert(consumer) }
     func deactivate(_ consumer: UUID) { fullUIConsumers.remove(consumer) }
-    var isEnabled: Bool { !fullUIConsumers.isEmpty }
+    var isEnabled: Bool {
+        get async {
+            if !fullUIConsumers.isEmpty { return true }
+            return await hostPolicy()
+        }
+    }
 
     func record(pluginId: String) throws -> Record? {
         if let pending = pendingRotations[pluginId] { return pending }
@@ -206,6 +220,26 @@ actor PlatformAPITokenVault {
         guard let record = pendingRotations[pluginId] else { return }
         try storage.write(JSONEncoder().encode(record), pluginId: pluginId)
         pendingRotations[pluginId] = nil
+    }
+}
+
+/// Host mode is known before browsing views mount. Only the three hosts' root
+/// catalog services opt in; ShellUI, extensions and standalone managers default off.
+/// Request tasks await this policy without delaying cached or local UI.
+@MainActor
+final class PlatformAPICredentialHostPolicy {
+    static let shared = PlatformAPICredentialHostPolicy()
+    private(set) var isFullUI = false
+    private var isInitialized = false
+
+    func initializeIfNeeded(hasInstalledPlugins: @autoclosure () -> Bool) {
+        guard !isInitialized else { return }
+        update(hasInstalledPlugins: hasInstalledPlugins())
+    }
+
+    func update(hasInstalledPlugins: Bool) {
+        isFullUI = hasInstalledPlugins
+        isInitialized = true
     }
 }
 

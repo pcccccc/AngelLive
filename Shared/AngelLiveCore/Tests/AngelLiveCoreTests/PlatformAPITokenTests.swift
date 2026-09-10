@@ -265,6 +265,48 @@ struct PlatformAPITokenTests {
         #expect(result.received == nil)
     }
 
+    @Test("first FullUI request uses persisted credentials before any view lifecycle task")
+    @MainActor
+    func hostPolicyProtectsFirstRequest() async throws {
+        let policy = PlatformAPICredentialHostPolicy()
+        policy.initializeIfNeeded(hasInstalledPlugins: true)
+        // Recreating a root view must not replace the already configured policy.
+        policy.initializeIfNeeded(hasInstalledPlugins: false)
+        let fixture = try TokenFixture(hostPolicy: { policy.isFullUI })
+        defer { fixture.remove() }
+        try await fixture.store("fixture-secret-a")
+
+        // No activate() call: rendering cached UI must not be a prerequisite.
+        let result: TokenProbe = try await fixture.manager.callDecodable(
+            pluginId: fixture.pluginId, function: "getRooms", payload: ["apiToken": "caller-token"]
+        )
+        #expect(result.received == "fixture-secret-a")
+    }
+
+    @Test("ShellUI policy never reads API credentials")
+    @MainActor
+    func shellHostPolicyDoesNotReadStorage() async throws {
+        let policy = PlatformAPICredentialHostPolicy()
+        let fixture = try TokenFixture(tokenStorage: UnavailableTokenStorage(), hostPolicy: { policy.isFullUI })
+        defer { fixture.remove() }
+        let result: TokenProbe = try await fixture.manager.callDecodable(pluginId: fixture.pluginId, function: "getRooms")
+        #expect(result.received == nil)
+    }
+
+    @Test("catalog mode changes apply without mounting or removing a window")
+    @MainActor
+    func catalogPolicyTracksModeChanges() async throws {
+        let policy = PlatformAPICredentialHostPolicy()
+        let fixture = try TokenFixture(hostPolicy: { policy.isFullUI })
+        defer { fixture.remove() }
+        try await fixture.store("fixture-secret-a")
+        for enabled in [false, true, false, true] {
+            policy.update(hasInstalledPlugins: enabled)
+            let result: TokenProbe = try await fixture.manager.callDecodable(pluginId: fixture.pluginId, function: "getRooms")
+            #expect(result.received == (enabled ? "fixture-secret-a" : nil))
+        }
+    }
+
     @Test(arguments: ["getPlayback", "getDanmaku"])
     func anonymousMediaDoesNotReadKeychain(function: String) async throws {
         let fixture = try TokenFixture(tokenStorage: UnavailableTokenStorage())
@@ -308,11 +350,15 @@ private struct TokenFixture {
     let otherPluginId = "other-\(UUID().uuidString.lowercased()).plugin"
     let vault: PlatformAPITokenVault
     let manager: LiveParsePluginManager
-    init(tokenStorage: sending any APITokenStorage = MemoryTokenStorage(), credentialKinds: [String] = ["token"]) throws {
+    init(
+        tokenStorage: sending any APITokenStorage = MemoryTokenStorage(),
+        credentialKinds: [String] = ["token"],
+        hostPolicy: @escaping @MainActor @Sendable () -> Bool = { false }
+    ) throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let storage = try LiveParsePluginStorage(baseDirectory: root)
         try storage.ensureDirectories()
-        vault = PlatformAPITokenVault(storage: tokenStorage)
+        vault = PlatformAPITokenVault(storage: tokenStorage, hostPolicy: hostPolicy)
         manager = LiveParsePluginManager(storage: storage, apiTokenVault: vault)
         for id in [pluginId, otherPluginId] {
             let directory = storage.pluginVersionDirectory(pluginId: id, version: "1.0.0")

@@ -111,10 +111,19 @@ struct ContentView: View {
         // consent alert 不在这里挂 —— 改由 TVPluginManagementView 内部统一处理,
         // 所有触发 consent 的路径都通过 showPluginManagement 先把 cover 打开。
         .fullScreenCover(isPresented: $contentVM.showPluginManagement) {
-            TVPluginManagementView(
-                pluginSourceManager: appViewModel.pluginSourceManager,
-                pluginAvailability: appViewModel.pluginAvailability
-            )
+            Group {
+                if presentsFullUI {
+                    TVFullPluginManagementView(
+                        pluginSourceManager: appViewModel.pluginSourceManager,
+                        pluginAvailability: appViewModel.pluginAvailability
+                    )
+                } else {
+                    TVPluginManagementView(
+                        pluginSourceManager: appViewModel.pluginSourceManager,
+                        pluginAvailability: appViewModel.pluginAvailability
+                    )
+                }
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
             .environment(appViewModel)

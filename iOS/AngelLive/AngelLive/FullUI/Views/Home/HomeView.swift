@@ -1210,6 +1210,7 @@ private struct HomeHeroCard: View {
                 Spacer(minLength: 0)
                 HomeHeroContent(
                     title: heroTitle,
+                    streamerName: streamerName,
                     pageIndicatorReservedWidth: pageIndicatorReservedWidth
                 )
             }
@@ -1307,17 +1308,28 @@ private struct HomeHeroCard: View {
 
 private struct HomeHeroContent: View {
     let title: String
+    let streamerName: String?
     let pageIndicatorReservedWidth: CGFloat
 
     var body: some View {
-        Text(title)
-            .font(.title2.weight(.bold))
-            .foregroundStyle(AppConstants.Colors.primaryText)
-            .multilineTextAlignment(.leading)
-            .lineLimit(2)
-            .minimumScaleFactor(0.82)
-            .padding(.trailing, pageIndicatorReservedWidth)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(AppConstants.Colors.primaryText)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+
+            if let streamerName {
+                Text(streamerName)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+        }
+        .padding(.trailing, pageIndicatorReservedWidth)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

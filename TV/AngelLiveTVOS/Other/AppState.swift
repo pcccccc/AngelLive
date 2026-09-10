@@ -23,7 +23,7 @@ class AppState {
     /// 首页在能力确认前也保持有效 selection；若没有 homeFeed，ContentView 会有序回退到收藏。
     var selection = 4
     var favoriteViewModel = AppFavoriteModel()
-    var pluginAvailability = PluginAvailabilityService()
+    var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
     var pluginSourceManager = PluginSourceManager()
     var pluginSourceSyncService = PluginSourceSyncService()
     var consentService = PluginInstallConsentService()
