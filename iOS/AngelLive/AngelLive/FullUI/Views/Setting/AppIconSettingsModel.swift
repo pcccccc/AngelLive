@@ -5,29 +5,29 @@ import UIKit
 @Observable
 final class AppIconSettingsModel {
     enum Choice: String, CaseIterable, Identifiable {
-        case primary
         case xiaoShengBiBi
+        case classic
 
         var id: Self { self }
 
         var title: String {
             switch self {
-            case .primary: "默认"
-            case .xiaoShengBiBi: "小声逼逼"
+            case .xiaoShengBiBi: "小声逼逼（联名）"
+            case .classic: "AngelLive 原版"
             }
         }
 
         var alternateIconName: String? {
             switch self {
-            case .primary: nil
-            case .xiaoShengBiBi: "XiaoShengBB"
+            case .xiaoShengBiBi: nil
+            case .classic: "AngelLiveClassic"
             }
         }
 
         var previewAssetName: String {
             switch self {
-            case .primary: "icon"
             case .xiaoShengBiBi: "XiaoShengBBPreview"
+            case .classic: "icon"
             }
         }
     }
@@ -39,9 +39,11 @@ final class AppIconSettingsModel {
 
     init() {
         let application = UIApplication.shared
-        selection = application.alternateIconName == Choice.xiaoShengBiBi.alternateIconName
-            ? .xiaoShengBiBi
-            : .primary
+        // Both the bundle default and the legacy XiaoShengBB alternate use
+        // the collaboration artwork, including after an app update.
+        selection = application.alternateIconName == Choice.classic.alternateIconName
+            ? .classic
+            : .xiaoShengBiBi
     }
 
     func select(_ choice: Choice) async {

@@ -16,7 +16,7 @@ struct SettingView: View {
     #endif
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @AppStorage(MacDockIconPreference.storageKey)
-    private var dockIconPreference = MacDockIconPreference.primary
+    private var dockIconPreference = MacDockIconPreference.xiaoShengBiBi
 
     @State private var showOpenSourceList = false
     @State private var showPluginManagement = false
@@ -213,7 +213,7 @@ struct SettingView: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 112)
+            .frame(minWidth: 160)
             .onChange(of: dockIconPreference) { _, preference in
                 preference.apply()
             }

@@ -4,43 +4,44 @@ enum MacDockIconPreference: String, CaseIterable, Identifiable {
     static let storageKey = "macDockIconPreference"
 
     @MainActor
-    private static var primaryIconImage: NSImage?
+    private static var bundledIconImage: NSImage?
 
-    case primary
     case xiaoShengBiBi = "xiaoShengBB"
+    // Preserve the stored value for users who explicitly selected the original.
+    case classic = "primary"
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .primary: "默认"
-        case .xiaoShengBiBi: "小声逼逼"
+        case .xiaoShengBiBi: "小声逼逼（联名）"
+        case .classic: "AngelLive 原版"
         }
     }
 
     @MainActor
     var previewImage: NSImage {
-        Self.cachePrimaryIconIfNeeded()
+        Self.cacheBundledIconIfNeeded()
 
         switch self {
-        case .primary:
-            return Self.primaryIconImage ?? NSApp.applicationIconImage
         case .xiaoShengBiBi:
-            return Self.alternateIconImage
+            return Self.bundledIconImage ?? NSApp.applicationIconImage
+        case .classic:
+            return Self.classicIconImage
         }
     }
 
     @MainActor
     func apply() {
-        Self.cachePrimaryIconIfNeeded()
+        Self.cacheBundledIconIfNeeded()
 
         switch self {
-        case .primary:
+        case .xiaoShengBiBi:
             // nil restores the bundle icon so Icon Composer can keep supplying
             // the correct appearance-specific representation.
             NSApp.applicationIconImage = nil
-        case .xiaoShengBiBi:
-            NSApp.applicationIconImage = Self.alternateIconImage
+        case .classic:
+            NSApp.applicationIconImage = Self.classicIconImage
         }
         NSApp.dockTile.display()
     }
@@ -48,38 +49,23 @@ enum MacDockIconPreference: String, CaseIterable, Identifiable {
     @MainActor
     static func applyStoredPreference(defaults: UserDefaults = .standard) {
         let preference = defaults.string(forKey: storageKey)
-            .flatMap(Self.init(rawValue:)) ?? .primary
+            .flatMap(Self.init(rawValue:)) ?? .xiaoShengBiBi
         preference.apply()
     }
 
     @MainActor
-    private static func cachePrimaryIconIfNeeded() {
-        guard primaryIconImage == nil else { return }
-        primaryIconImage = NSApp.applicationIconImage.copy() as? NSImage
+    private static func cacheBundledIconIfNeeded() {
+        guard bundledIconImage == nil else { return }
+        bundledIconImage = NSApp.applicationIconImage.copy() as? NSImage
     }
 
     @MainActor
-    private static var alternateIconImage: NSImage {
-        if let composedIcon = NSImage(named: "XiaoShengBB") {
-            return composedIcon
-        }
-
-        guard let source = NSImage(named: "XiaoShengBBRuntime") else {
-            return primaryIconImage ?? NSApp.applicationIconImage
-        }
-
-        // Compatibility fallback for a toolchain that cannot expose the compiled
-        // Icon Composer rendition through NSImage(named:).
-        let size = source.size
-        let output = NSImage(size: size)
-        output.lockFocus()
-        defer { output.unlockFocus() }
-
-        NSGraphicsContext.current?.imageInterpolation = .high
-        let bounds = NSRect(origin: .zero, size: size)
-        let radius = min(size.width, size.height) * 0.2237
-        NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).addClip()
-        source.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
-        return output
+    private static var classicIconImage: NSImage {
+        // The fallback is the existing rendered original icon, including its
+        // rounded silhouette, for systems without named Icon Composer images.
+        NSImage(named: "AngelLiveClassic")
+            ?? NSImage(named: "AngelLiveClassicRuntime")
+            ?? bundledIconImage
+            ?? NSApp.applicationIconImage
     }
 }
