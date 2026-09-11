@@ -210,7 +210,7 @@ struct ContentView: View {
     private func appTabView(selection: Binding<Int>) -> some View {
         TabView(selection: selection) {
             if shouldShowHomeTab {
-                TVHomeView(appViewModel: appViewModel)
+                TVHomeView(appViewModel: appViewModel, enhancesArtwork: presentsFullUI)
                     .apiCredentialContentIdentity()
                     .tabItem {
                         Label("推荐", systemImage: "house.fill")

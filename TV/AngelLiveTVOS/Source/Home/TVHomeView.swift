@@ -6,12 +6,16 @@ import SwiftUI
 /// tvOS 的插件驱动首页。共享层负责内容、缓存和聚合，当前文件只拥有电视端布局、焦点和播放呈现。
 struct TVHomeView: View {
     private let appViewModel: AppState
+    private let enhancesArtwork: Bool
 
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @Environment(\.displayScale) private var displayScale
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var model = PluginHomeFeedModel()
+    @State private var artworkFilter = TVHomeArtworkFilter()
+    @State private var artworkProcessor: TVHomeArtworkProcessor?
     @State private var playback: TVHomePlaybackCoordinator
     @State private var navigationPath: [PluginHomeCategoryRoute] = []
     @State private var selectedBannerID: String?
@@ -27,19 +31,34 @@ struct TVHomeView: View {
     @State private var heroHasFocus = false
     @State private var hasEstablishedInitialHeroFocus = false
 
-    init(appViewModel: AppState) {
+    init(appViewModel: AppState, enhancesArtwork: Bool) {
         self.appViewModel = appViewModel
+        self.enhancesArtwork = enhancesArtwork
         _playback = State(initialValue: TVHomePlaybackCoordinator(appViewModel: appViewModel))
     }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             GeometryReader { geometry in
+                let viewportProcessor = enhancesArtwork
+                    ? TVHomeArtworkProcessor(viewportSize: heroArtworkSize(containerSize: geometry.size), displayScale: displayScale)
+                    : nil
+                let filterRequest = TVHomeArtworkFilterRequest(
+                    urls: candidateArtworkURLs, processor: viewportProcessor,
+                    isActive: scenePhase == .active, isRefreshing: model.isRefreshing
+                )
+                let prefetchTrigger = TVHomeArtworkPrefetchTrigger(urls: neighborArtworkURLs, processor: viewportProcessor)
                 ScrollViewReader { scrollProxy in
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            heroStage(containerSize: geometry.size)
-                                .id("home-hero")
+                            if showsHeroStage {
+                                heroStage(containerSize: geometry.size, artworkProcessor: viewportProcessor)
+                                    .id("home-hero")
+                            } else if let primaryRail {
+                                TVHomeRoomRail(rail: primaryRail, appViewModel: appViewModel, onSeeAll: openCategory)
+                                    .padding(.top, 120)
+                                    .id("home-hero")
+                            }
 
                             ForEach(remainingRails) { rail in
                                 TVHomeRoomRail(
@@ -72,6 +91,16 @@ struct TVHomeView: View {
                         }
                     }
                 }
+                .task(id: filterRequest) {
+                    artworkProcessor = viewportProcessor
+                    await artworkFilter.evaluate(filterRequest)
+                }
+                .onAppear {
+                    prefetchNeighborArtwork(prefetchTrigger)
+                }
+                .onChange(of: prefetchTrigger) { _, trigger in
+                    prefetchNeighborArtwork(trigger)
+                }
             }
             .ignoresSafeArea()
             .navigationDestination(for: PluginHomeCategoryRoute.self) { route in
@@ -91,7 +120,7 @@ struct TVHomeView: View {
             _ = await (homeRefresh, favoriteRefresh)
             normalizeBannerSelection()
         }
-        .onChange(of: model.bannerEntries.map(\.id)) { _, bannerIDs in
+        .onChange(of: displayedBannerEntries.map(\.id)) { _, bannerIDs in
             if bannerIDs.isEmpty {
                 heroHasFocus = false
                 hasEstablishedInitialHeroFocus = false
@@ -100,12 +129,6 @@ struct TVHomeView: View {
         }
         .task(id: autoplayTrigger) {
             await runAutoplayIfNeeded()
-        }
-        .onAppear {
-            prefetchNeighborArtwork(neighborArtworkURLs)
-        }
-        .onChange(of: neighborArtworkURLs) { _, urls in
-            prefetchNeighborArtwork(urls)
         }
         .onDisappear {
             cancelPendingBannerTransition()
@@ -119,6 +142,29 @@ struct TVHomeView: View {
 }
 
 private extension TVHomeView {
+    var candidateArtworkURLs: [URL] {
+        model.bannerEntries.compactMap(TVHomeArtworkFilter.artworkURL(for:))
+    }
+
+    var displayedBannerEntries: [HomeBannerEntry] {
+        guard enhancesArtwork else { return model.bannerEntries }
+        guard let artworkProcessor else { return [] }
+        return model.bannerEntries.filter { artworkFilter.accepts($0, processor: artworkProcessor) }
+    }
+
+    var isAssessingFirstArtwork: Bool {
+        guard enhancesArtwork, !model.bannerEntries.isEmpty, displayedBannerEntries.isEmpty else { return false }
+        guard let artworkProcessor else { return true }
+        return artworkFilter.hasPending(candidateArtworkURLs, processor: artworkProcessor)
+    }
+
+    var showsHeroStage: Bool {
+        // No suitable artwork: promote the existing rails instead of restoring a
+        // rejected banner or presenting a large empty hero. ShellUI is unaffected.
+        !enhancesArtwork || !displayedBannerEntries.isEmpty || isAwaitingFirstContent
+            || primaryRail == nil
+    }
+
     var refreshTrigger: TVHomeRefreshTrigger {
         TVHomeRefreshTrigger(
             installedPluginIds: pluginAvailability.installedPluginIds,
@@ -129,7 +175,7 @@ private extension TVHomeView {
 
     var autoplayTrigger: TVHomeAutoplayTrigger {
         TVHomeAutoplayTrigger(
-            bannerIDs: model.bannerEntries.map(\.id),
+            bannerIDs: displayedBannerEntries.map(\.id),
             selectedBannerID: selectedBannerID,
             scenePhase: scenePhase,
             reduceMotion: reduceMotion,
@@ -139,13 +185,13 @@ private extension TVHomeView {
     }
 
     var activeBanner: HomeBannerEntry? {
-        model.bannerEntries.first(where: { $0.id == selectedBannerID })
-            ?? model.bannerEntries.first
+        displayedBannerEntries.first(where: { $0.id == selectedBannerID })
+            ?? displayedBannerEntries.first
     }
 
     var neighborArtworkURLs: [URL] {
-        guard scenePhase == .active, model.bannerEntries.count > 1 else { return [] }
-        let entries = model.bannerEntries
+        guard scenePhase == .active, displayedBannerEntries.count > 1 else { return [] }
+        let entries = displayedBannerEntries
         let index = entries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
         var urls: [URL] = []
         var seen = Set<URL>()
@@ -163,14 +209,24 @@ private extension TVHomeView {
         return urls
     }
 
-    func prefetchNeighborArtwork(_ urls: [URL]) {
+    func prefetchNeighborArtwork(_ trigger: TVHomeArtworkPrefetchTrigger) {
         artworkPrefetcher?.stop()
         artworkPrefetcher = nil
-        guard !urls.isEmpty else { return }
+        guard !trigger.urls.isEmpty else { return }
+        var options = KingfisherManager.shared.defaultOptions + [.alsoPrefetchToMemory, .downloadPriority(0.25)]
+        if let processor = trigger.processor {
+            options += [
+                .processor(processor),
+                .cacheSerializer(TVHomeArtworkCacheSerializer.shared),
+                .scaleFactor(1),
+                .cacheOriginalImage,
+                .onlyLoadFirstFrame
+            ]
+        }
         // Match the visible images' processor/cache keys, including WebP.
         let prefetcher = ImagePrefetcher(
-            urls: urls,
-            options: KingfisherManager.shared.defaultOptions + [.alsoPrefetchToMemory, .downloadPriority(0.25)]
+            urls: trigger.urls,
+            options: options
         )
         prefetcher.maxConcurrentDownloads = 2
         artworkPrefetcher = prefetcher
@@ -194,19 +250,19 @@ private extension TVHomeView {
 
     var isAwaitingFirstContent: Bool {
         let hasConfiguredSources = !pluginAvailability.installedPluginIds.isEmpty
-        return model.bannerEntries.isEmpty
+        return isAssessingFirstArtwork || (model.bannerEntries.isEmpty
             && model.sectionEntries.isEmpty
             && (
                 !pluginAvailability.hasCheckedAvailability
                     || pluginAvailability.isChecking
                     || (hasConfiguredSources && !model.hasRestoredCache)
                     || (hasConfiguredSources && !model.hasLoaded)
-            )
+            ))
     }
 
     var needsInitialHeroFocusBridge: Bool {
         isAwaitingFirstContent
-            || (!model.bannerEntries.isEmpty && !hasEstablishedInitialHeroFocus)
+            || (!displayedBannerEntries.isEmpty && !hasEstablishedInitialHeroFocus)
     }
 
     var favoriteRail: TVHomeRailData? {
@@ -260,16 +316,32 @@ private extension TVHomeView {
         return Array(pluginRails.dropFirst())
     }
 
-    func heroStage(containerSize: CGSize) -> some View {
+    func heroStageSize(containerSize: CGSize) -> CGSize {
         let heroContentHeight = min(max(containerSize.height * 0.92, 900), 980)
-        let stageHeight = heroContentHeight + (primaryRail == nil ? 0 : TVHomeMetrics.railHeight)
+        return CGSize(
+            width: containerSize.width,
+            height: heroContentHeight + (primaryRail == nil ? 0 : TVHomeMetrics.railHeight)
+        )
+    }
+
+    func heroArtworkSize(containerSize: CGSize) -> CGSize {
+        guard enhancesArtwork else { return heroStageSize(containerSize: containerSize) }
+        // The rail has a black background. Including it in scaledToFill enlarges
+        // low-resolution artwork even though those extra pixels are obscured.
+        return CGSize(width: containerSize.width, height: min(max(containerSize.height * 0.92, 900), 980))
+    }
+
+    func heroStage(containerSize: CGSize, artworkProcessor: TVHomeArtworkProcessor?) -> some View {
+        let heroContentHeight = min(max(containerSize.height * 0.92, 900), 980)
+        let stageHeight = heroStageSize(containerSize: containerSize).height
+        let artworkSize = heroArtworkSize(containerSize: containerSize)
         return ZStack(alignment: .topLeading) {
-            if model.bannerEntries.isEmpty {
-                TVHomeHeroArtwork(entry: nil)
-                    .frame(width: containerSize.width, height: stageHeight)
+            if displayedBannerEntries.isEmpty {
+                TVHomeHeroArtwork(entry: nil, processor: artworkProcessor)
+                    .frame(width: artworkSize.width, height: artworkSize.height)
 
                 TVHomeHeroScrim(heroContentHeight: heroContentHeight)
-                    .frame(width: containerSize.width, height: stageHeight)
+                    .frame(width: artworkSize.width, height: artworkSize.height)
 
                 if !isAwaitingFirstContent {
                     TVHomeEmptyHeroContent(
@@ -290,13 +362,14 @@ private extension TVHomeView {
                         direction: CGFloat(bannerTransitionStep),
                         entry: activeBanner,
                         previousEntry: previousBanner,
-                        viewportSize: CGSize(width: containerSize.width, height: stageHeight),
+                        artworkProcessor: artworkProcessor,
+                        viewportSize: artworkSize,
                         reduceMotion: reduceMotion
                     )
                     .zIndex(1)
 
                     TVHomeHeroScrim(heroContentHeight: heroContentHeight)
-                        .frame(width: containerSize.width, height: stageHeight)
+                        .frame(width: artworkSize.width, height: artworkSize.height)
                         .zIndex(2)
 
                     // Keep the remote's controls mounted. Only artwork and
@@ -320,7 +393,7 @@ private extension TVHomeView {
                     )
                     .zIndex(3)
                 }
-                .frame(width: containerSize.width, height: stageHeight)
+                .frame(width: containerSize.width, height: stageHeight, alignment: .topLeading)
                 .clipped()
             }
 
@@ -344,9 +417,9 @@ private extension TVHomeView {
                 .padding(.top, heroContentHeight - TVHomeMetrics.primaryRailVerticalOverlap)
             }
 
-            if let activeBanner, model.bannerEntries.count > 1 {
+            if let activeBanner, displayedBannerEntries.count > 1 {
                 TVHomePageIndicator(
-                    entries: model.bannerEntries,
+                    entries: displayedBannerEntries,
                     selectedID: activeBanner.id,
                     progress: autoplayProgress
                 )
@@ -400,14 +473,17 @@ private extension TVHomeView {
     }
 
     func normalizeBannerSelection() {
-        guard !model.bannerEntries.isEmpty else {
+        let entries = displayedBannerEntries
+        guard !entries.isEmpty else {
             cancelPendingBannerTransition()
             selectedBannerID = nil
             return
         }
-        if !model.bannerEntries.contains(where: { $0.id == selectedBannerID }) {
+        if !entries.contains(where: { $0.id == selectedBannerID }) {
             cancelPendingBannerTransition()
-            selectedBannerID = model.bannerEntries[0].id
+            selectedBannerID = entries[0].id
+        } else if let previousBanner, !entries.contains(where: { $0.id == previousBanner.id }) {
+            cancelPendingBannerTransition()
         }
     }
 
@@ -420,21 +496,21 @@ private extension TVHomeView {
 
     @MainActor
     func moveBanner(by step: Int) {
-        guard model.bannerEntries.count > 1 else { return }
+        let entries = displayedBannerEntries
+        guard entries.count > 1 else { return }
         let normalizedStep = step < 0 ? -1 : 1
         guard !isBannerTransitioning else {
             // Keep one pending remote intent, without stacking half-finished pages.
             pendingBannerStep = normalizedStep
             return
         }
-        let currentIndex = model.bannerEntries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
-        let nextIndex = (currentIndex + normalizedStep + model.bannerEntries.count)
-            % model.bannerEntries.count
+        let currentIndex = entries.firstIndex(where: { $0.id == selectedBannerID }) ?? 0
+        let nextIndex = (currentIndex + normalizedStep + entries.count) % entries.count
 
         bannerTransitionStep = normalizedStep
         guard !reduceMotion else {
             previousBanner = nil
-            selectedBannerID = model.bannerEntries[nextIndex].id
+            selectedBannerID = entries[nextIndex].id
             return
         }
 
@@ -447,7 +523,7 @@ private extension TVHomeView {
         let generation = bannerTransitionGeneration
         withAnimation(.timingCurve(0.76, 0, 0.24, 1, duration: 0.78), completionCriteria: .removed) {
             previousBanner = outgoingBanner
-            selectedBannerID = model.bannerEntries[nextIndex].id
+            selectedBannerID = entries[nextIndex].id
             artworkProgress = 1 - artworkProgressOrigin
         } completion: {
             guard generation == bannerTransitionGeneration else { return }
@@ -470,7 +546,7 @@ private extension TVHomeView {
 
     @MainActor
     func runAutoplayIfNeeded() async {
-        let canAutoplay = model.bannerEntries.count > 1
+        let canAutoplay = displayedBannerEntries.count > 1
             && scenePhase == .active
             && !reduceMotion
             && heroHasFocus
@@ -506,6 +582,7 @@ private struct TVHomeHeroArtworkPages: View {
     @AnimatableIgnored var direction: CGFloat
     @AnimatableIgnored var entry: HomeBannerEntry
     @AnimatableIgnored var previousEntry: HomeBannerEntry?
+    @AnimatableIgnored var artworkProcessor: TVHomeArtworkProcessor?
     @AnimatableIgnored var viewportSize: CGSize
     @AnimatableIgnored var reduceMotion: Bool
 
@@ -520,7 +597,7 @@ private struct TVHomeHeroArtworkPages: View {
                 let isCurrent = page.id == entry.id
                 let pageProgress = distinctPrevious == nil || reduceMotion
                     ? 0 : direction * (isCurrent ? 1 - travel : -travel)
-                TVHomeHeroArtwork(entry: page)
+                TVHomeHeroArtwork(entry: page, processor: artworkProcessor)
                     .frame(width: viewportSize.width, height: viewportSize.height)
                     .modifier(TVHomeArtworkReveal(
                         progress: pageProgress,
@@ -614,6 +691,7 @@ private extension View {
 
 private struct TVHomeHeroArtwork: View {
     let entry: HomeBannerEntry?
+    let processor: TVHomeArtworkProcessor?
 
     private var roomCoverURL: URL? {
         guard let entry, case .room(let room) = entry.banner.target, !room.roomCover.isEmpty else {
@@ -627,14 +705,14 @@ private struct TVHomeHeroArtwork: View {
             TVHomeHeroArtworkPlaceholder()
 
             if let roomCoverURL {
-                KFImage(roomCoverURL)
+                artworkImage(roomCoverURL)
                     .resizable()
                     .scaledToFill()
                     .transition(.identity)
             }
 
             if let imageURL = entry?.banner.imageURL {
-                KFImage(imageURL)
+                artworkImage(imageURL)
                     .placeholder { Color.clear }
                     .resizable()
                     .scaledToFill()
@@ -643,6 +721,17 @@ private struct TVHomeHeroArtwork: View {
         }
         .clipped()
         .accessibilityHidden(true)
+    }
+
+    private func artworkImage(_ url: URL) -> KFImage {
+        let image = KFImage(url)
+        guard let processor else { return image }
+        image.options.onlyLoadFirstFrame = true
+        return image
+            .setProcessor(processor)
+            .serialize(by: TVHomeArtworkCacheSerializer.shared)
+            .scaleFactor(1)
+            .cacheOriginalImage()
     }
 }
 
@@ -1342,4 +1431,9 @@ private struct TVHomeAutoplayTrigger: Hashable {
     let reduceMotion: Bool
     let heroHasFocus: Bool
     let isBannerTransitioning: Bool
+}
+
+private struct TVHomeArtworkPrefetchTrigger: Equatable {
+    let urls: [URL]
+    let processor: TVHomeArtworkProcessor?
 }

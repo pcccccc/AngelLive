@@ -474,6 +474,26 @@ pluginId + pluginVersion + homeSchemaVersion + sessionContextRevision
 
 tvOS Banner 沿用以上图片与标题曲线，遥控器左右翻页也使用 0.78 秒揭幕；保留电视端全幅画面和原生焦点按钮。图片与文案分别切换，播放按钮保持挂载，避免焦点跟随离场页面。动画结束后重新计算 6 秒停留时间，焦点离开 Banner、应用进入后台或开启“减弱动态效果”时暂停自动轮播；连续方向输入最多保留一个待执行方向。相邻前后页图片通过现有 Kingfisher 缓存预取，离开页面或进入后台时停止预取。
 
+tvOS FullUI 的静态 Banner 在 Kingfisher 后台处理队列执行 Lanczos 缩放，并在需要放大超过 5% 时添加轻量亮度锐化（强度 0.25、半径 1）。目标像素由 Banner 实际视口、屏幕倍率及既有 1.1 倍图片留边计算，单张输出限制为 4,194,304 像素、最长边 3,840 像素，按原有居中填充方式裁切。增强失败回退解码后的原图；保留 WebP 解码，处理结果以 PNG 缓存，原始下载数据另行缓存。展示与相邻预取共用包含处理版本和目标像素尺寸的缓存键，不随翻页进度重新处理，也不累积锐化。增强仅由 FullUI 入口启用。
+
+FullUI 的图片和渐变遮罩只覆盖 Banner 内容高度，不再把下方 438 pt 的内容行高度计入 `scaledToFill`。整页、标题、按钮、页码及内容行布局位置保持原值，图片底部在内容行之前渐变至黑色。以 1920×1080 视口和 16:9 原图计算，覆盖高度从 1418 pt 降至 980 pt，计入相同留边后的线性放大倍率约减少 24%；低清原图仍不能仅靠插值和锐化恢复细节。增强目标尺寸与该图片视口保持一致，尺寸缓存键自动区分旧版本构图，不清理全局图片缓存。DEBUG 的 `TVHomeArtwork` 日志仅记录输入/输出尺寸、倍率和处理成功/渲染回退，不记录图片 URL 或来源信息。
+
+本节的 tvOS 图片来源行为以实现为准：房间封面作底图，`imageURL` 成功后覆盖其上；§2.2 中优先高清房间封面及 iPhone 尺寸的描述不适用于 tvOS。本次增强不改变图片来源优先级或插件协议。
+
+tvOS FullUI 还会在增强前预检 Banner 原图。按实际居中填充画幅计算有效宽度，不足 640 像素的图片不进入轮播；保留 640×360 档及以上图片进行清晰度检查，避免仅因电视放大倍率较高而过量过滤。图片缩至 512 像素宽灰度样本，以 4×3 分块的拉普拉斯方差及梯度能量比检测明显模糊。规则使用最清晰内容区域，忽略无法提供可靠证据的平色/缓变区域，避免背景虚化占比过大导致误判；这是保守启发式筛选，无法识别所有压缩失真、局部人脸或文字模糊。边缘检测思路参考 Apple 的 [Finding the sharpest image in a sequence of captured images](https://developer.apple.com/documentation/accelerate/finding-the-sharpest-image-in-a-sequence-of-captured-images)，阈值为宿主的电视大图展示策略。
+
+质量预检与增强共用 Kingfisher 后台处理和 `v2.quality2` 尺寸缓存键，最多同时请求两张；未通过检查的图片不会先显示再跳走。判定按原始图片 URL 和目标处理尺寸复用，限定在当前 feed，五分钟后在下次刷新/激活时重查；网络失败单独标记，在下次刷新或激活时重试。任务取消及代次检查阻止旧请求回写，同业务 ID 更换图片 URL 会重新检查。保留条目的顺序和 ID，页码、相邻预取、左右切换及自动轮播只消费合格条目；全部不合格时收起 Banner，将既有直播内容行移到顶部，不把低质图片补回轮播。只有首页本来就没有内容行时沿用空态和重试入口。共享 feed、房间列表、插件协议及 ShellUI 不参与过滤。
+
+2026-09-11 质量过滤初版（800 像素门槛）验证：该版最后 Swift 修改后，Xcode 27 RC workspace `AngelLiveTVOS` MCP BuildProject 成功（7.409 秒），Navigator error 为 0，并在 Apple TV 4K（第三代）/ tvOS 27 模拟器完成新的 DeviceInteractionInstallAndRun。MCP RunCodeSnippet 的 10 项图片检查和 14 项筛选状态检查全部通过，包括低分辨率、有效裁切宽度、失焦样本、平色与局部清晰区域、处理缓存、重复 URL、失败重试、同 ID 换 URL、取消及旧代次隔离、全部拒绝后零展示且无待检查项。当前 scheme 的 GetTestList 返回 0 项，没有新增或运行单元测试 target。强烈模糊使细密周期纹理趋近纯色时会被保守保留，不能据此声称所有模糊程度都能识别。初版实际预检为 14 个不同图片 URL：3 个通过、11 个拒绝、0 个网络失败；通过图片数不等于 Banner 条目数，多个条目可以共用同一图片。下方直播内容行保持显示。该分辨率门槛过滤过多，当前版本已降至 640 像素并升级判定缓存版本。真机画质和性能、iOS / macOS 未验证。
+
+2026-09-11 放宽至 640 像素复核：最后 Swift 修改后，MCP BuildProject 成功（11.742 秒），Navigator error 为 0；4 项新门槛检查通过：清晰的 640×360 保留、639 宽及 380×214 拒绝、原高清失焦样本仍被拒绝。Apple TV 4K（第三代）/ tvOS 27 模拟器重新 DeviceInteractionInstallAndRun 成功，新包实际检查 16 个不同图片 URL，14 个通过、2 个拒绝、0 个网络失败，界面有 14 个 Banner 条目。右切后可进入推荐内容行，后续上移左切的 hierarchy 确认第 11 → 10 项，房间卡片保持焦点，列表图片和文字无重叠；安装后截图为 `quality2-banner-top.png`、`quality2-banner-right-rail.png`、`quality2-banner-left-rail.png`，Device Hub 已结束。本批推荐内容已经刷新，不能作为与初版同批图片的严格 A/B。未重跑初版其余合成和状态检查；真机、iOS / macOS 未验证。
+
+2026-09-11 轻量增强初版验证：该版最后 Swift 源码修改后，Xcode 27 RC workspace 的 `AngelLiveTVOS` MCP BuildProject 成功（34.735 秒），Navigator error 为 0；Apple TV 4K（第三代）/ tvOS 27 模拟器完成新的 DeviceInteractionInstallAndRun。新包多张 Banner 方向正常，未观察到明显色偏、锐化白边或黑框；左右切换及第 1 → 2 → 1 项往返正常，焦点保持稳定。安装后截图保存于临时验收目录的 `banner-launch.png`、`banner-next.png`、`banner-previous.png`、`banner-return-first.png`，Device Hub 已结束。低分辨率源的像素感仍存在，本轮没有相同原图的增强前后严格对照或真机画质、性能测量；iOS / macOS 未改动、未验证。
+
+同轮 MCP RunCodeSnippet 的 8 项合成图检查通过：PNG 输出尺寸、增强 PNG 缓存往返、JPEG 解码增强、WebP 解码增强、缓存 WebP 原始数据重用、无效数据失败语义、8 种图片方向的归一化输出、大视口像素上限。未新增或运行单元测试 target。模拟器运行日志出现 Core Video 像素格式不支持（-6680）及 RawCamera bundle 缺失消息；应用保持运行且合成检查成功，仍不能仅凭截图断言每张实际网络图都走到了增强成功分支。
+
+2026-09-11 减少放大范围复核：最后 Swift 修改（固定高度舞台内的图层显式顶部对齐）后，workspace `AngelLiveTVOS` MCP BuildProject 成功（13.253 秒），Navigator error 为 0；Apple TV 4K（第三代）/ tvOS 27 模拟器重新 DeviceInteractionInstallAndRun 成功。新包首屏及下滚状态的标题、按钮和推荐内容行位置与旧布局一致，未出现重叠，图片底部渐变未见黑色硬边。左右操作后的 hierarchy 确认第 10 → 9 → 10 项，回到顶部后观看按钮保持焦点；安装后截图包括 `final-top.png`、`final-rail.png`、`final-previous.png`、`final-return-top.png`，Device Hub 和 bridge 均已关闭。本次捕获的 13 条实际图片处理日志均为 `result=enhanced`，没有 `render_fallback`，输入包括 380×214、640×360、899×500，输出为 2866×1463；日志不含来源，不能将这些尺寸归给用户截图中的某张海报。远程推荐已刷新，未完成用户示例海报的同图前后对照。未重跑合成检查或单元测试；真机画质与性能、iOS / macOS 未验证。
+
 tvOS 图片切换由一个可动画进度同时驱动前后两张图片，并保持图片业务 ID 对应的视图，避免两个独立进出过渡在反向时分离。旧图在整个切换期间保留为底层，仅新图使用揭幕裁切；交界处最多 32 pt 羽化，混合到旧图，到位后恢复完全不透明再释放旧图。进度在 0 和 1 之间交替，无须延迟重置。左下遮罩使用连续变浅的椭圆渐变节点，文字投影减轻，减少黑色块状感。
 
 保留旧图、选择新条目与推进动画在同一事务内完成，图片集合额外排除重复业务 ID。当前图变为底层图时仍使用同一结构的渐变 mask，只调整透明度和位置，不切换 mask 分支；图片层插入和移除使用 identity transition，避免加载视图或遮罩重建叠加淡出，造成切换开始时整幅闪黑。
