@@ -624,7 +624,7 @@ private struct TVHomeHeroArtwork: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            TVHomeHeroArtworkPlaceholder()
 
             if let roomCoverURL {
                 KFImage(roomCoverURL)
@@ -642,6 +642,25 @@ private struct TVHomeHeroArtwork: View {
             }
         }
         .clipped()
+        .accessibilityHidden(true)
+    }
+}
+
+private struct TVHomeHeroArtworkPlaceholder: View {
+    var body: some View {
+        // Keep missing or unavailable artwork distinct from a black frame.
+        // The entry's own caption and playback action remain available above it.
+        LinearGradient(
+            colors: [Color.secondary.opacity(0.35), Color.secondary.opacity(0.12)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .background(.black)
+        .overlay {
+            Image(systemName: "photo")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+        }
         .accessibilityHidden(true)
     }
 }
