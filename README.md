@@ -15,6 +15,7 @@
 ### PackyCode
 
 感谢 PackyCode 对本项目的赞助。
+
 <p>
   <a href="https://www.packyapi.com/register?aff=7cYv">
     <picture>
@@ -23,7 +24,6 @@
     </picture>
   </a>
 </p>
-<br />
 
 PackyCode 是一家稳定、高效的 API 中转服务商，提供 Claude Code、Codex、Gemini 等多种中转服务。具备自动故障转移、智能路由和无限并发等多种功能，让 AI 编程成为真正的生产力工具。
 
