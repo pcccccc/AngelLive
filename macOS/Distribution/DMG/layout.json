@@ -1,0 +1,12 @@
+{
+  "width": 720,
+  "height": 460,
+  "iconSize": 128,
+  "labelSize": 13,
+  "applicationPosition": [188, 268],
+  "applicationsPosition": [532, 268],
+  "collaboration": "AngelLive  ×  小声逼逼",
+  "title": "安装 AngelLive",
+  "instruction": "将应用拖入右侧文件夹，即可完成安装",
+  "footer": "安装完成后，可在「应用程序」中打开。"
+}
