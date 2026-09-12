@@ -26,6 +26,51 @@ extension AppFavoriteModel {
         return false
     }
 
+    /// 成员快照决定存在性和顺序，已有成员保留内存中最新的直播状态。
+    /// 同平台的任一有效 ID 都能匹配，所以这里不需要读取插件的主键偏好。
+    static func mergingMembership(_ members: [LiveModel], preserving current: [LiveModel]) -> [LiveModel] {
+        struct Identity: Hashable {
+            enum Dimension: Hashable { case user, room, name }
+            let source: String
+            let dimension: Dimension
+            let value: String
+        }
+
+        func identities(for room: LiveModel) -> [Identity] {
+            let source = room.liveType.rawValue
+            var keys: [Identity] = []
+            if let userId = validIdentity(room.userId) {
+                keys.append(Identity(source: source, dimension: .user, value: userId))
+            }
+            if let roomId = validIdentity(room.roomId) {
+                keys.append(Identity(source: source, dimension: .room, value: roomId))
+            }
+            if keys.isEmpty {
+                keys.append(Identity(
+                    source: source,
+                    dimension: .name,
+                    value: room.userName.trimmingCharacters(in: .whitespacesAndNewlines)
+                ))
+            }
+            return keys
+        }
+
+        // 保留各维度首次出现的位置；多个维度命中时仍取 current 中最早的一项。
+        var firstIndex: [Identity: Int] = [:]
+        firstIndex.reserveCapacity(current.count)
+        for (index, room) in current.enumerated() {
+            for identity in identities(for: room) where firstIndex[identity] == nil {
+                firstIndex[identity] = index
+            }
+        }
+        return members.map { member in
+            guard let index = identities(for: member).compactMap({ firstIndex[$0] }).min() else {
+                return member
+            }
+            return current[index]
+        }
+    }
+
     /// 刷新后判断是否发生**值得回写**的身份变化。身份回写**只服务于声明了
     /// `favoriteIdentityKey: userId` 的平台**(roomId 每场会变、userId 稳定)。
     ///

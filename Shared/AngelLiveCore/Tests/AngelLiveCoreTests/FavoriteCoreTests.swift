@@ -78,6 +78,100 @@ struct FavoriteIdentityRulesTests {
   }
 }
 
+@Suite("Favorite membership snapshots")
+struct FavoriteMembershipSnapshotTests {
+  @Test("membership controls additions removals and order while preserving refreshed payloads")
+  func preservesRefreshedMembers() {
+    let refreshed = room(userName: "refreshed", roomTitle: "live title", liveState: "1", userId: "u-1", roomId: "new-room")
+    let removed = room(userName: "removed", userId: "u-2", roomId: "r-2")
+    let stale = room(userName: "stale", liveState: "0", userId: "u-1", roomId: "old-room")
+    let added = room(userName: "added", userId: "u-3", roomId: "r-3")
+
+    let merged = AppFavoriteModel.mergingMembership([added, stale], preserving: [refreshed, removed])
+
+    #expect(merged.map(\.userName) == ["added", "refreshed"])
+    #expect(merged[1].roomTitle == "live title")
+    #expect(merged[1].liveState == "1")
+    #expect(merged[1].roomId == "new-room")
+    #expect(AppFavoriteModel.mergingMembership([], preserving: [refreshed]).isEmpty)
+    #expect(AppFavoriteModel.mergingMembership([added], preserving: []).first?.userName == "added")
+  }
+
+  @Test("conflicting user and room matches preserve the earliest current snapshot")
+  func earliestMatchWinsAcrossDimensions() {
+    let byRoom = room(userName: "room match", userId: "other-user", roomId: "shared-room")
+    let byUser = room(userName: "user match", userId: "shared-user", roomId: "other-room")
+    let member = room(userId: " shared-user \n", roomId: " shared-room ")
+
+    #expect(AppFavoriteModel.mergingMembership([member], preserving: [byRoom, byUser]).first?.userName == "room match")
+    #expect(AppFavoriteModel.mergingMembership([member], preserving: [byUser, byRoom]).first?.userName == "user match")
+  }
+
+  @Test("trimmed names only match when both snapshots have no valid identifiers")
+  func anonymousNameFallback() {
+    let anonymous = room(userName: "  Guest \n", roomTitle: "refreshed", userId: "0", roomId: "")
+    let stale = room(userName: "Guest", userId: " ", roomId: " 0 ")
+    let identified = room(userName: "Guest", roomTitle: "identified", userId: "u-1", roomId: "r-1")
+
+    #expect(AppFavoriteModel.mergingMembership([stale], preserving: [identified, anonymous]).first?.roomTitle == "refreshed")
+    #expect(AppFavoriteModel.mergingMembership([identified], preserving: [anonymous]).first?.roomTitle == "identified")
+    #expect(AppFavoriteModel.mergingMembership([stale], preserving: [identified]).first?.roomTitle == stale.roomTitle)
+  }
+
+  @Test("sources and identity dimensions remain separate even when values contain separators")
+  func keepsIdentityNamespacesSeparate() {
+    let current = [
+      room(liveType: "source-a", userName: "source a", userId: "u-1", roomId: "r-1"),
+      room(liveType: "source-a|part", userName: "separator", userId: "value", roomId: "0"),
+      room(liveType: "source-a", userName: "room only", userId: "0", roomId: "user-value"),
+    ]
+    let members = [
+      room(liveType: "source-b", userName: "source b", userId: "u-1", roomId: "r-1"),
+      room(liveType: "source-a", userName: "separate value", userId: "part|value", roomId: "0"),
+      room(liveType: "source-a", userName: "user only", userId: "user-value", roomId: "0"),
+    ]
+
+    #expect(AppFavoriteModel.mergingMembership(members, preserving: current).map(\.userName) == members.map(\.userName))
+  }
+
+  @Test("indexed merge agrees with first-match identity rules for either primary key")
+  func agreesWithReferenceMatching() {
+    let values = ["", "0", " u-1 ", "u-2"]
+    var current: [LiveModel] = []
+    for source in ["source-a", "source-b"] {
+      for userId in values {
+        for roomId in values {
+          current.append(room(liveType: source, userName: "name-\(current.count % 3)", roomTitle: "snapshot-\(current.count)", userId: userId, roomId: roomId))
+        }
+      }
+    }
+    let members = Array(current.reversed()) + [room(liveType: "source-c", roomId: "new-room")]
+    let actual = AppFavoriteModel.mergingMembership(members, preserving: current)
+    for preference in [FavoriteIdentityKey.roomId, .userId] {
+      let expected = members.map { member in
+        current.first {
+          AppFavoriteModel.favoriteUniqueKey(for: $0, identityKey: preference)
+            == AppFavoriteModel.favoriteUniqueKey(for: member, identityKey: preference)
+            || AppFavoriteModel.isSameStreamer($0, member)
+        } ?? member
+      }
+      #expect(actual.map(\.roomTitle) == expected.map(\.roomTitle))
+    }
+  }
+
+  @Test("large membership batches preserve every snapshot")
+  func largeMembershipBatch() {
+    let current = (0..<10_000).map { index in
+      room(userName: "current-\(index)", userId: "user-\(index)", roomId: "room-\(index)")
+    }
+    let members = current.reversed().map { item in
+      room(userName: "stale", userId: item.userId, roomId: item.roomId)
+    }
+    let merged = AppFavoriteModel.mergingMembership(members, preserving: current)
+    #expect(merged.map(\.userName) == current.reversed().map(\.userName))
+  }
+}
+
 @Suite("Favorite cloud state")
 struct FavoriteCloudStateTests {
   @Test("a recovered account check clears the stale cloud error")

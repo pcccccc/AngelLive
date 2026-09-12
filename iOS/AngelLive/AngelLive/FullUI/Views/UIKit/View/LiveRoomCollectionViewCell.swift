@@ -29,9 +29,10 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
         backgroundColor = .clear
     }
 
-    func configure(with room: LiveModel, liveCheckMode: LiveCheckMode = .local, showsCoverBadge: Bool = false) {
+    func configure(with room: LiveModel, favoriteModel: AppFavoriteModel, liveCheckMode: LiveCheckMode = .local, showsCoverBadge: Bool = false) {
         let roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
-        applyRootView(AnyView(roomCard), interactive: true)
+        // 每个 hosting controller 都是独立的 SwiftUI 根，必须显式注入宿主模型。
+        applyRootView(AnyView(roomCard.environment(favoriteModel)), interactive: true)
     }
 
     /// 仅复用房间卡片外观，点击统一交给 UICollectionViewDelegate。
@@ -48,11 +49,12 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
 
     /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
     /// cell-based 场景:SwiftUI 只渲染视觉,tap 由 UICollectionView.didSelectItemAt 接管
-    func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, liveCheckMode: LiveCheckMode = .local, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
+    func configure(with room: LiveModel, favoriteModel: AppFavoriteModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, liveCheckMode: LiveCheckMode = .local, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
         var roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
         roomCard.onDelete = onDelete
         roomCard.disableTapGesture = true
         let cardView = roomCard
+            .environment(favoriteModel)
             .environment(\.liveRoomNavigationState, navigationState)
             .environment(\.roomTransitionNamespace, namespace)
         // interactive=false:hostingView 不收 touches,UICollectionView.didSelectItemAt 才能正常触发。

@@ -192,6 +192,9 @@ public struct KSVideoPlayerView: View {
         PlayerGestureView(
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
+            orientationErrorHandler: { @Sendable error in
+                Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
+            },
             isLocked: $model.isLocked
         )
     }

@@ -440,13 +440,13 @@ extension RoomListViewController: UICollectionViewDataSource {
             return cell
         }
         let room = currentRooms[indexPath.item]
+        guard let favoriteModel else { return cell }
         if usesStaticRooms {
-            guard let favoriteModel else { return cell }
             cell.configureForSelection(with: room, favoriteModel: favoriteModel, liveCheckMode: .none)
         } else if let navigationState, let namespace {
-            cell.configure(with: room, navigationState: navigationState, namespace: namespace, liveCheckMode: .none)
+            cell.configure(with: room, favoriteModel: favoriteModel, navigationState: navigationState, namespace: namespace, liveCheckMode: .none)
         } else {
-            cell.configure(with: room, liveCheckMode: .none)
+            cell.configure(with: room, favoriteModel: favoriteModel, liveCheckMode: .none)
         }
         cell.attachHostingController(to: self)
 

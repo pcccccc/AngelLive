@@ -397,7 +397,8 @@ struct DetailPlayerView: View {
                     let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                         interfaceOrientations: .portrait
                     )
-                    windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                    // UIKit 可能在后台调用失败回调；日志闭包不继承 MainActor。
+                    windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
                         Logger.error("[PlayerFlow] 强制竖屏失败: \(error.localizedDescription)", category: .player)
                     }
                 }
@@ -424,7 +425,7 @@ struct DetailPlayerView: View {
             let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                 interfaceOrientations: .landscape
             )
-            windowScene.requestGeometryUpdate(geometryPreferences) { error in
+            windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
                 Logger.warning("[PlayerFlow] 回前台保留横屏失败: \(error.localizedDescription)", category: .player)
             }
             // 旋转完成后恢复自由旋转,允许用户后续旋转/双击切回竖屏

@@ -229,7 +229,8 @@ extension HistoryListViewController: UICollectionViewDataSource {
         }
 
         let room = historyModel.watchList[indexPath.item]
-        cell.configure(with: room, navigationState: navigationState, namespace: namespace, liveCheckMode: .remote, onDelete: { [weak self] in
+        guard let favoriteModel else { return cell }
+        cell.configure(with: room, favoriteModel: favoriteModel, navigationState: navigationState, namespace: namespace, liveCheckMode: .remote, onDelete: { [weak self] in
             // 删除历史记录回调
             self?.historyModel.removeHistory(room: room)
             self?.updateViewState()

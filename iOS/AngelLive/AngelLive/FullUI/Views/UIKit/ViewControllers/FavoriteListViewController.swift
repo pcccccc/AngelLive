@@ -438,7 +438,7 @@ extension FavoriteListViewController: UICollectionViewDataSource {
             return cell
         }
         let room = rooms[indexPath.item]
-        cell.configure(with: room, navigationState: navigationState, namespace: namespace, showsCoverBadge: true)
+        cell.configure(with: room, favoriteModel: viewModel, navigationState: navigationState, namespace: namespace, showsCoverBadge: true)
         cell.attachHostingController(to: self)
 
         return cell

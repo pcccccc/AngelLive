@@ -94,16 +94,20 @@ struct PlayerGestureView: View {
     var onSingleTap: (() -> Void)?
     /// 双击回调；未提供时沿用播放器默认的全屏/方向切换行为。
     var onDoubleTap: (() -> Void)?
+    /// FullUI 注入可在任意线程调用的方向失败回调；其他入口保持既有行为。
+    private var orientationErrorHandler: (@Sendable (Error) -> Void)?
     /// 锁定状态绑定
     @Binding var isLocked: Bool
 
     init(
         onSingleTap: (() -> Void)? = nil,
         onDoubleTap: (() -> Void)? = nil,
+        orientationErrorHandler: (@Sendable (Error) -> Void)? = nil,
         isLocked: Binding<Bool>
     ) {
         self.onSingleTap = onSingleTap
         self.onDoubleTap = onDoubleTap
+        self.orientationErrorHandler = orientationErrorHandler
         _isLocked = isLocked
     }
 
@@ -306,8 +310,12 @@ struct PlayerGestureView: View {
                 let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                     interfaceOrientations: targetOrientation
                 )
-                windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                    Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
+                if let orientationErrorHandler {
+                    windowScene.requestGeometryUpdate(geometryPreferences, errorHandler: orientationErrorHandler)
+                } else {
+                    windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                        Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
+                    }
                 }
                 // 旋转完成后恢复自由旋转，允许后续横屏自动全屏
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

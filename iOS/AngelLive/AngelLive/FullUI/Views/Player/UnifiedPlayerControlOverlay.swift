@@ -610,7 +610,7 @@ struct UnifiedPlayerControlOverlay: View {
             }
             // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
             DispatchQueue.main.async {
-                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
                     Logger.warning("退出全屏失败: \(error)", category: .ui)
                 }
                 // 旋转完成后恢复自由旋转，允许再次横屏自动全屏
@@ -652,7 +652,7 @@ struct UnifiedPlayerControlOverlay: View {
             let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                 interfaceOrientations: targetOrientation
             )
-            windowScene.requestGeometryUpdate(geometryPreferences) { error in
+            windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
                 Logger.warning("方向更新失败: \(error)", category: .ui)
             }
             // 旋转完成后恢复自由旋转

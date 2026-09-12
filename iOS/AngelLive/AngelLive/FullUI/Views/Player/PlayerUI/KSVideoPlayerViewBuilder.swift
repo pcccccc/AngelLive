@@ -343,7 +343,7 @@ public enum KSVideoPlayerViewBuilder {
             let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                 interfaceOrientations: targetOrientation
             )
-            windowScene.requestGeometryUpdate(geometryPreferences) { error in
+            windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
                 Logger.warning("方向更新失败: \(error)", category: .ui)
             }
             // 旋转完成后恢复自由旋转
@@ -393,7 +393,7 @@ public enum KSVideoPlayerViewBuilder {
                 let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                     interfaceOrientations: .portrait
                 )
-                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
                     Logger.warning("方向更新失败: \(error)", category: .ui)
                 }
                 // 旋转完成后恢复自由旋转

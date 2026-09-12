@@ -231,14 +231,7 @@ public final class AppFavoriteModel {
     /// 成员同步只决定哪些收藏存在；已在内存中刷新的直播状态不被较旧成员快照覆盖。
     @MainActor
     private func applyMembershipSnapshot(_ members: [LiveModel]) {
-        let current = roomList
-        let merged = members.map { member in
-            current.first(where: {
-                favoriteKey(for: $0) == favoriteKey(for: member)
-                    || AppFavoriteModel.isSameStreamer($0, member)
-            }) ?? member
-        }
-        applyRoomList(merged)
+        applyRoomList(AppFavoriteModel.mergingMembership(members, preserving: roomList))
     }
 
     /// 启动新代际并只等待页面前台预算；事件消费任务继续持有慢请求的增量结果。
