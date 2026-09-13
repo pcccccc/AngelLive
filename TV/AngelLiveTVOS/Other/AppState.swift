@@ -20,7 +20,7 @@ enum PluginManagementAutoAction: Sendable {
 
 @Observable
 class AppState {
-    /// 首页在能力确认前也保持有效 selection；若没有 homeFeed，ContentView 会有序回退到收藏。
+    /// ShellUI 从收藏启动；FullUI 在推荐能力确认后由 ContentView 决定是否回退。
     var selection = 4
     var favoriteViewModel = AppFavoriteModel()
     var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
@@ -50,6 +50,7 @@ class AppState {
         let service = RemoteInputService()
         service.start()
         self.remoteInputService = service
+        selection = pluginAvailability.hasAvailablePlugins ? 4 : 0
 
         // 注入插件安装确认请求器
         pluginSourceManager.consentRequester = consentService

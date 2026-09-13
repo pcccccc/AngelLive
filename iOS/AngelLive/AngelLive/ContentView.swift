@@ -14,7 +14,7 @@ enum TabSelection: Hashable {
     case home
     case favorites
     case allPlatforms
-    case platform(Platformdescription)
+    case platform(String)
     case settings
     case search
 }
@@ -62,9 +62,32 @@ struct ContentView: View {
     // 触觉反馈生成器
     private let hapticFeedback = UISelectionFeedbackGenerator()
 
+    /// iPad 的首页仅存在于 FullUI；模式切换时始终给 TabView 一个有效选择。
+    private var tabSelection: Binding<TabSelection> {
+        Binding(
+            get: {
+                if !pluginAvailability.hasAvailablePlugins {
+                    switch selectedTab {
+                    case .home, .search, .platform:
+                        return AppConstants.Device.isIPad ? .favorites : .home
+                    default:
+                        break
+                    }
+                }
+                if case .platform(let pluginId) = selectedTab,
+                   !platformViewModel.platformInfo.contains(where: { $0.pluginId == pluginId }) {
+                    return .home
+                }
+                return selectedTab
+            },
+            set: { selectedTab = $0 }
+        )
+    }
+
     // 动态获取 TabSection 标题
     private var platformSectionTitle: String {
-        if case .platform(let platform) = selectedTab {
+        if case .platform(let pluginId) = selectedTab,
+           let platform = platformViewModel.platformInfo.first(where: { $0.pluginId == pluginId }) {
             return platform.title
         }
         return "配置"
@@ -92,7 +115,7 @@ struct ContentView: View {
     /// 不覆盖持久化偏好，以便以后安装支持推荐页的插件后恢复用户原选择。
     private var effectiveHomePagePreference: HomePagePreference {
         guard pluginAvailability.hasAvailablePlugins else {
-            return homePagePreference
+            return .favorites
         }
 
         switch homeRecommendationAvailability {
@@ -123,12 +146,16 @@ struct ContentView: View {
 
     @ViewBuilder
     private var preferredHomePage: some View {
-        switch effectiveHomePagePreference {
-        case .recommendations:
-            HomeView()
-                .apiCredentialContentIdentity()
-        case .favorites:
+        if !pluginAvailability.hasAvailablePlugins {
             AdaptiveFavoriteView()
+        } else {
+            switch effectiveHomePagePreference {
+            case .recommendations:
+                HomeView()
+                    .apiCredentialContentIdentity()
+            case .favorites:
+                AdaptiveFavoriteView()
+            }
         }
     }
 
@@ -209,6 +236,7 @@ struct ContentView: View {
             // 启动时拉取 key 映射（后台静默，不阻塞 UI）
             Task { await PluginSourceKeyService.shared.fetchKeys() }
             await pluginAvailability.checkAvailability()
+            platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
             updateHomeRecommendationAvailability()
 
             // 自动检查插件更新（非阻塞，在 UI 就绪后后台运行）
@@ -311,12 +339,10 @@ struct ContentView: View {
             }
         }
         .onChange(of: platformViewModel.platformInfo) { _, newPlatforms in
-            // 平台列表刷新后,选中平台可能已不存在(被移除,或元数据变更致
-            // Platformdescription 合成 Hashable 不匹配旧值)。此时 sidebarAdaptable
-            // TabView 的 selection 指向无效 tab,iPad resize/snapshot 时会 fatal error
-            // "Tried to update with invalid selection value"。按稳定身份 pluginId 兜底。
-            if case .platform(let selected) = selectedTab,
-               !newPlatforms.contains(where: { $0.pluginId == selected.pluginId }) {
+            // Tab 选择只保存稳定的 pluginId；标题或图标更新不应改变身份。
+            // 仅在插件被移除后回退，避免 selection 指向已不存在的 Tab。
+            if case .platform(let pluginId) = selectedTab,
+               !newPlatforms.contains(where: { $0.pluginId == pluginId }) {
                 selectedTab = .home
             }
 
@@ -369,8 +395,14 @@ struct ContentView: View {
 
     @MainActor
     private func updateHomeRecommendationAvailability() {
-        guard pluginAvailability.hasCheckedAvailability,
-              pluginAvailability.hasAvailablePlugins else {
+        guard pluginAvailability.hasAvailablePlugins else {
+            homeRecommendationAvailability = .unavailable
+            if AppConstants.Device.isIPad, selectedTab == .home {
+                selectedTab = .favorites
+            }
+            return
+        }
+        guard pluginAvailability.hasCheckedAvailability else {
             homeRecommendationAvailability = .unconfirmed
             return
         }
@@ -449,10 +481,12 @@ struct ContentView: View {
 
     @available(iOS 18.0, *)
     private var iPadTabView: some View {
-        TabView(selection: $selectedTab) {
-            Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
-                HomeView(usesPersistedPlatformSelection: false)
-                    .apiCredentialContentIdentity()
+        TabView(selection: tabSelection) {
+            if pluginAvailability.hasAvailablePlugins {
+                Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
+                    HomeView(usesPersistedPlatformSelection: false)
+                        .apiCredentialContentIdentity()
+                }
             }
 
             Tab(value: TabSelection.favorites) {
@@ -478,8 +512,8 @@ struct ContentView: View {
                     }
                 }
 
-                ForEach(platformViewModel.platformInfo) { platform in
-                    Tab(value: TabSelection.platform(platform)) {
+                ForEach(platformViewModel.platformInfo, id: \.pluginId) { platform in
+                    Tab(value: TabSelection.platform(platform.pluginId)) {
                         PlatformDetailTabContainer(platform: platform)
                             .apiCredentialContentIdentity(pluginId: platform.pluginId)
                     } label: {
@@ -539,7 +573,7 @@ struct ContentView: View {
     @available(iOS 18.0, *)
     private var iPhoneTabView: some View {
         if #available(iOS 26.0, *) {
-            return TabView(selection: $selectedTab) {
+            return TabView(selection: tabSelection) {
                 if pluginAvailability.hasAvailablePlugins {
                     Tab(value: TabSelection.home) {
                         preferredHomePage
@@ -551,7 +585,7 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
+                    Tab("收藏", systemImage: "bookmark.fill", value: TabSelection.home) {
                         preferredHomePage
                     }
                 }
@@ -573,7 +607,7 @@ struct ContentView: View {
             .tabViewStyle(.sidebarAdaptable)
             .tabBarMinimizeBehavior(.onScrollDown)
         } else {
-           return TabView(selection: $selectedTab) {
+           return TabView(selection: tabSelection) {
                 if pluginAvailability.hasAvailablePlugins {
                     Tab(value: TabSelection.home) {
                         preferredHomePage
@@ -585,7 +619,7 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
+                    Tab("收藏", systemImage: "bookmark.fill", value: TabSelection.home) {
                         preferredHomePage
                     }
                 }
@@ -614,13 +648,15 @@ struct ContentView: View {
 
     // iPad iOS 17 TabView
     private var iOS17iPadTabView: some View {
-        TabView(selection: $selectedTab) {
-            HomeView(usesPersistedPlatformSelection: false)
-                .apiCredentialContentIdentity()
-                .tabItem {
-                    Label("首页", systemImage: "house.fill")
-                }
-                .tag(TabSelection.home)
+        TabView(selection: tabSelection) {
+            if pluginAvailability.hasAvailablePlugins {
+                HomeView(usesPersistedPlatformSelection: false)
+                    .apiCredentialContentIdentity()
+                    .tabItem {
+                        Label("首页", systemImage: "house.fill")
+                    }
+                    .tag(TabSelection.home)
+            }
 
             AdaptiveFavoriteView()
                 .tabItem {
@@ -656,7 +692,7 @@ struct ContentView: View {
 
     // iPhone iOS 17 TabView
     private var iOS17iPhoneTabView: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: tabSelection) {
             if pluginAvailability.hasAvailablePlugins {
                 preferredHomePage
                     .tabItem {
@@ -670,7 +706,7 @@ struct ContentView: View {
             } else {
                 preferredHomePage
                     .tabItem {
-                        Label("首页", systemImage: "house.fill")
+                        Label("收藏", systemImage: "bookmark.fill")
                     }
                     .tag(TabSelection.home)
             }

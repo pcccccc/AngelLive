@@ -27,6 +27,8 @@ public struct KSVideoPlayerView: View {
     private var dismiss
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
+    @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
+    @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -113,7 +115,8 @@ public struct KSVideoPlayerView: View {
                     }
                 }
                 .ksIsFocused($model.focusableView, equals: .play)
-                .opacity(!model.config.isMaskShow ? 1 : 0)
+                .opacity(!model.config.isMaskShow && !isVerticalLiveMode ? 1 : 0)
+                .allowsHitTesting(!isVerticalLiveMode && !model.config.isMaskShow)
 
                 // 弹幕层（在控制层下方）
                 if viewModel.supportsDanmu && viewModel.danmuSettings.showDanmu && !isVerticalLiveMode {
@@ -189,14 +192,33 @@ public struct KSVideoPlayerView: View {
     }
 
     private var playerGestureLayer: some View {
-        PlayerGestureView(
+        let gestures = PlayerGestureView(
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
+            onHorizontalSwipe: verticalLiveSwipeAction,
+            edgePassthroughWidth: isVerticalLiveMode && !verticalLiveControlsVisible.wrappedValue ? 0 : 20,
             orientationErrorHandler: { @Sendable error in
                 Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
             },
             isLocked: $model.isLocked
         )
+
+        return Group {
+            if isVerticalLiveMode {
+                gestures
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("直播画面")
+                    .accessibilityValue(verticalLiveControlsVisible.wrappedValue ? "控制层已显示" : "已清屏")
+                    .accessibilityAction(named: Text(verticalLiveControlsVisible.wrappedValue ? "清屏" : "显示控制层")) {
+                        handleVerticalLiveSwipe(verticalLiveControlsVisible.wrappedValue ? .left : .right)
+                    }
+                    .accessibilityAction(named: Text(viewModel.isPlaying ? "暂停播放" : "继续播放")) {
+                        toggleVerticalLivePlayback()
+                    }
+            } else {
+                gestures
+            }
+        }
     }
 
     private var verticalLiveDoubleTapAction: (() -> Void)? {
@@ -204,12 +226,24 @@ public struct KSVideoPlayerView: View {
         return toggleVerticalLivePlayback
     }
 
+    private var verticalLiveSwipeAction: ((PlayerHorizontalSwipeDirection) -> Void)? {
+        guard isVerticalLiveMode else { return nil }
+        return handleVerticalLiveSwipe
+    }
+
     private func handleSingleTap() {
         if model.showVideoSetting {
             model.showVideoSetting = false
-        } else {
+        } else if !isVerticalLiveMode {
             model.config.isMaskShow.toggle()
         }
+    }
+
+    private func handleVerticalLiveSwipe(_ direction: PlayerHorizontalSwipeDirection) {
+        guard isVerticalLiveMode,
+              !model.isLocked,
+              !verticalLiveControlPopupPresented.wrappedValue else { return }
+        verticalLiveControlsVisible.wrappedValue = direction == .right
     }
 
     @MainActor

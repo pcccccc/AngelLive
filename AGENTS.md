@@ -172,6 +172,14 @@ xcrun mcpbridge
 
 任何设备 UI 验证使用 `device-interaction` Skill。该 Skill 要求主代理把 Device Hub session 委派给子代理，并确保一个 session 只有一个代理操作。
 
+### 模拟器选择与启动约束
+
+- 使用已经存在、保留 Xcode 标准名称的模拟器。用户指定设备时，选择对应的已有标准设备；不得自行创建、克隆或重命名模拟器，也不得创建带任务名、日期或测试标记的临时设备。用户指定设备不等于授权新建；没有对应可用设备时先说明情况。
+- 启动前检查当前设备列表和 `Booted` 状态，优先复用已运行的对应平台标准模拟器。
+- 同一时间最多运行一个 iOS 模拟器和一个 tvOS 模拟器；即使型号、名称或系统版本不同，也不得为测试同时启动同平台的第二台。
+- 确需切换到另一台已有标准设备时，先结束当前 Device Hub session，并关闭同平台旧模拟器，再启动目标设备。涉及用户正在操作的设备时先协调，不能擅自打断。
+- 验收结束后关闭本轮 session；若改变了 Xcode 的运行目标，恢复原有标准目标。不得为了测试清空或删除已有模拟器及其应用、插件、账号数据。
+
 ### 新包门禁
 
 源码在上次安装后有变化时，当前可见 App 一律视为旧包，不能作为证据。必须执行：
@@ -181,7 +189,7 @@ xcrun mcpbridge
 3. 在最后一次代码修改之后调用 `DeviceInteractionInstallAndRun`，完成 build、install、launch。
 4. 确认操作成功且 App 已重新启动，随后才能截图和判断。
 
-禁止仅因为 Simulator 或 Device Hub 已显示 AngelLive 就声称“已测试”。禁止复用最后一次成功 `InstallAndRun` 之前的截图。多个模拟器运行时必须使用明确 UDID，不能模糊使用 `booted`。
+禁止仅因为 Simulator 或 Device Hub 已显示 AngelLive 就声称“已测试”。禁止复用最后一次成功 `InstallAndRun` 之前的截图。iOS 与 tvOS 同时运行时，也必须使用明确 UDID，不能模糊使用 `booted`。
 
 ### 交互证据
 

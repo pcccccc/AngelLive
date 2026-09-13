@@ -1,6 +1,6 @@
 # 三端启动与首页缓存
 
-更新：2026-09-10
+更新：2026-09-13
 
 ## 问题
 
@@ -10,7 +10,8 @@
 
 ## 当前行为
 
-- 三端根 `PluginAvailabilityService` 显式启用 `managesAPICredentialPolicy`。首次构造时仅从本地插件目录确定 FullUI 策略，不读取 Keychain、不执行插件请求。该初始化每个进程只运行一次，重建根视图或增加窗口不会重复扫描。
+- 三端根 `PluginAvailabilityService` 显式启用 `managesAPICredentialPolicy`。构造时从本地插件目录确定 FullUI 策略，不读取 Keychain、不执行插件请求。凭据策略的首次初始化在进程内保持幂等；每个根服务仍读取自己的安装快照。
+- 根服务同时用本地安装快照初始化 UI 模式和插件 ID，`hasCheckedAvailability` 仍保留为未确认，后续检查继续确认运行时能力。ShellUI 首帧直接展示各端的直链收藏页；空收藏展示“暂无收藏”，不挂载 FullUI 首页，也不覆盖用户保存的 FullUI 首页偏好。iPad、macOS、tvOS 移除 ShellUI 的首页栏目时，同时保证 TabView 的选择指向收藏。
 - 安装、卸载及目录复查继续由同一根服务处理，先同步发布凭据策略，再发布插件列表和 FullUI/ShellUI 状态。
 - `PlatformAPITokenVault` 在请求执行路径上读取主 actor 管理的策略。授权数据仍由 vault 和现有运行时管理，首个请求不需要等待某个视图的 `.task` 启用策略。
 - `PlatformAPICredentialLifecycle` 只维护前台凭据状态，不替换根内容。离开前台或视图消失时，SwiftUI 取消其维护任务；窗口可见性不再决定已有请求是否使用凭据。
@@ -25,6 +26,7 @@
 
 ## 回归覆盖
 
+- 空安装快照和有插件的安装快照在异步检查前决定正确的 ShellUI/FullUI 模式，同时保持运行时能力未确认；根服务实际使用同一份本地安装目录。
 - 不调用视图生命周期的 activate，首个 FullUI 请求仍使用已保存凭据并覆盖调用方传入的凭据。
 - ShellUI 的请求在安全存储不可用时仍不读取 API 凭据。
 - 本地目录模式变化可启用或关闭策略，无需挂载或销毁窗口。
@@ -33,7 +35,7 @@
 
 设备验收需在最后源码修改后重新构建、安装和启动；启动后的单张截图不能证明启动全过程无瞬时闪屏。
 
-## 本轮验证
+## 2026-09-10 验证记录
 
 - Xcode 27 RC workspace MCP 最终构建：iOS `AngelLive` 15.433 秒、macOS `AngelLiveMacOS` 24.183 秒、tvOS `AngelLiveTVOS` 24.543 秒，均成功；各端 Navigator error 为 0。
 - 最后源码版本 Core 测试：`PlatformAPITokenTests`、`PlatformDeviceAuthTests`、`PluginHomeFeedCacheStoreTests`、`PluginAvailabilityServiceTests`、`PluginHomeFeedTests`，共 48 项测试、5 个 suite 全部通过。
@@ -41,3 +43,13 @@
 - tvOS 最后编辑后 InstallAndRun 成功，空截图及一次重试均失败，工具报 `Target device has invalid screen scale`；首次 UI 和再次启动未完成验收，不能用旧截图替代。
 - macOS Device Hub 不支持运行验收，本轮仅验证构建。
 - 设备会话均已结束，恢复原 tvOS scheme/destination；未删除缓存或修改账号、持久设置。全仓具体内容平台标识及测试映射扫描无命中，`git diff --check` 通过。
+
+## 2026-09-13 验证记录
+
+- Core 回归：`PluginAvailabilityServiceTests`、`PlatformAPITokenTests`、`PluginHomeFeedCacheStoreTests`、`PluginHomeFeedTests`，34 项测试、4 个 suite 全部通过。
+- Xcode 27 RC workspace MCP 构建：`AngelLive`、`AngelLiveMacOS`、`AngelLiveTVOS` 均成功，各端 Navigator error 为 0。
+- 最后源码修改后重新 InstallAndRun：已有标准 iPhone 17e（iOS 27）和 Apple TV 4K 第三代（tvOS 27）的无插件环境均默认进入 ShellUI 收藏，空列表显示“暂无收藏”，配置、设置和返回收藏正常。
+- 已有插件的标准 iPhone 18 Pro 也重新安装最终代码，FullUI 首页、配置及返回首页正常。
+- iPad mini 的构建成功，但 Device Hub 安装会话初始化超时，单次恢复后会话失效，未完成 iPad UI 验收。iOS 17 兼容分支未运行。
+- macOS 新构建已通过原生桌面工具启动；本机有已安装插件，返回的是 FullUI 收藏页面，未取得 macOS 空 ShellUI 的运行证据。
+- 所有 Device Hub 会话已结束，恢复原 iPhone 18 Pro 运行目标；本轮使用的其他标准模拟器均已关闭，未新建、改名或清空设备数据。

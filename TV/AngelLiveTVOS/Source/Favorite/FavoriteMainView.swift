@@ -18,34 +18,12 @@ struct FavoriteMainView: View {
     @State var timer: Timer?
     @State var second = 0
     @State var firstLoad = true
-    @State private var isRefreshTaskRunning = false
-    
-    /// 顶部 loading 只跟随收藏状态刷新的前台阶段，完成后自动隐藏。
-    private var syncBanner: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-            Text("正在同步收藏…")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .background(Capsule().fill(.thinMaterial))
-    }
+    @State private var isManualRefreshRunning = false
+    @State private var refreshCycle = 0
 
     var body: some View {
 
         VStack {
-            if appViewModel.favoriteViewModel.isFavoriteStatusRefreshing {
-                HStack {
-                    syncBanner
-                    Spacer()
-                }
-                .padding(.leading, 50)
-                .padding(.top, 20)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             // 本地优先(已迁到 Core 模型):有本地收藏、或非真错误时都展示内容(空/列表由内部分支处理)。
             // 仅「真 iCloud 错误且本地无数据」才整页报错;cloudKitReady=false 在纯本地/未就绪时仍应显示本地收藏。
             if !appViewModel.favoriteViewModel.cloudReturnError || !appViewModel.favoriteViewModel.roomList.isEmpty {
@@ -84,7 +62,12 @@ struct FavoriteMainView: View {
                                 // 正在直播 - 竖向网格布局
                                 VStack(alignment: .leading, spacing: 20) {
                                     // Section Header
-                                    FavoriteSectionHeader(title: section.title, count: section.roomList.count, isLive: true)
+                                    FavoriteSectionHeader(
+                                        title: section.title,
+                                        count: section.roomList.count,
+                                        isLive: true,
+                                        showsRefreshHint: section.id == appViewModel.favoriteViewModel.groupedRoomList.first?.id
+                                    )
                                         .padding(.leading, 50)
 
                                     LazyVGrid(
@@ -112,7 +95,12 @@ struct FavoriteMainView: View {
                                 // 其他状态（已下播、回放/轮播、未知状态） - 横向滚动列表
                                 VStack(alignment: .leading, spacing: 20) {
                                     // Section Header
-                                    FavoriteSectionHeader(title: section.title, count: section.roomList.count, isLive: false)
+                                    FavoriteSectionHeader(
+                                        title: section.title,
+                                        count: section.roomList.count,
+                                        isLive: false,
+                                        showsRefreshHint: section.id == appViewModel.favoriteViewModel.groupedRoomList.first?.id
+                                    )
                                         .padding(.leading, 50)
 
                                     ScrollView(.horizontal) {
@@ -159,27 +147,17 @@ struct FavoriteMainView: View {
                 )
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: appViewModel.favoriteViewModel.isFavoriteStatusRefreshing)
-        .overlay {
-            if appViewModel.favoriteViewModel.roomList.count > 0 {
-                VStack {
-                    Spacer()
-                    HStack {
-                        ZStack {
-                            HStack(spacing: 10) {
-                                Image(systemName: "playpause.circle")
-                                Text("刷新")
-                            }
-                            .frame(width: 190, height: 60)
-                            .background(Color("hintBackgroundColor", bundle: .main).opacity(0.4))
-                            .font(.callout.bold())
-                            .cornerRadius(8)
-                        }
-                        .frame(width: 200, height: 100)
-                        Spacer()
-                    }
-                }
-            }
+        .overlay(alignment: .top) {
+            TVFavoriteRefreshIndicator(
+                model: appViewModel.favoriteViewModel,
+                isManualRefreshRunning: isManualRefreshRunning,
+                refreshCycle: refreshCycle
+            )
+        }
+        .onChange(of: appViewModel.favoriteViewModel.listVersion) { _, _ in
+            // 慢请求在前台预算结束后仍会回写，播放列表也要跟随这些增量结果。
+            liveViewModel.roomList = appViewModel.favoriteViewModel.roomList
+            TopShelfManager.notifyContentChanged()
         }
         // ContentView owns the remote command; this view consumes it once.
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.favoriteRefresh)) { _ in
@@ -221,12 +199,16 @@ struct FavoriteMainView: View {
 //MARK: Events
 extension FavoriteMainView {
     private func getViewStateAndFavoriteList(manual: Bool = false) {
-        guard !isRefreshTaskRunning else { return }
-        isRefreshTaskRunning = true
-        Task {
-            defer { isRefreshTaskRunning = false }
+        if manual {
+            // 仅合并连续手动按键；自动刷新不能拦截用户发起的新一轮刷新。
+            guard !isManualRefreshRunning else { return }
+            isManualRefreshRunning = true
+            refreshCycle &+= 1
+        }
+        Task { @MainActor in
             if manual {
                 await appViewModel.favoriteViewModel.pullToRefresh()
+                isManualRefreshRunning = false
             } else {
                 await appViewModel.favoriteViewModel.syncWithActor()
             }
@@ -252,6 +234,7 @@ struct FavoriteSectionHeader: View {
     let title: String
     let count: Int
     let isLive: Bool
+    var showsRefreshHint = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -276,6 +259,14 @@ struct FavoriteSectionHeader: View {
                 )
 
             Spacer()
+
+            if showsRefreshHint {
+                Label("刷新", systemImage: "playpause")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("按遥控器播放或暂停键刷新收藏")
+                    .padding(.trailing, 50)
+            }
         }
     }
 }

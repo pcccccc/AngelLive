@@ -83,6 +83,11 @@ enum GestureAdjustType {
     case volume
 }
 
+enum PlayerHorizontalSwipeDirection {
+    case left
+    case right
+}
+
 /// 播放器手势处理视图
 struct PlayerGestureView: View {
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
@@ -94,6 +99,9 @@ struct PlayerGestureView: View {
     var onSingleTap: (() -> Void)?
     /// 双击回调；未提供时沿用播放器默认的全屏/方向切换行为。
     var onDoubleTap: (() -> Void)?
+    /// 仅在宿主显式注入时启用横向手势；默认入口保持原有亮度/音量行为。
+    var onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)?
+    private let edgePassthroughWidth: CGFloat
     /// FullUI 注入可在任意线程调用的方向失败回调；其他入口保持既有行为。
     private var orientationErrorHandler: (@Sendable (Error) -> Void)?
     /// 锁定状态绑定
@@ -102,11 +110,15 @@ struct PlayerGestureView: View {
     init(
         onSingleTap: (() -> Void)? = nil,
         onDoubleTap: (() -> Void)? = nil,
+        onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)? = nil,
+        edgePassthroughWidth: CGFloat = 20,
         orientationErrorHandler: (@Sendable (Error) -> Void)? = nil,
         isLocked: Binding<Bool>
     ) {
         self.onSingleTap = onSingleTap
         self.onDoubleTap = onDoubleTap
+        self.onHorizontalSwipe = onHorizontalSwipe
+        self.edgePassthroughWidth = edgePassthroughWidth
         self.orientationErrorHandler = orientationErrorHandler
         _isLocked = isLocked
     }
@@ -121,14 +133,13 @@ struct PlayerGestureView: View {
     @State private var startValue: CGFloat = 0.0
     /// 是否正在滑动
     @State private var isDragging: Bool = false
+    @State private var dragAxis: Axis?
+    @GestureState private var dragIsActive = false
 
     /// 硬件音量键监听器（KVO 观察 outputVolume）
     @State private var volumeObserver = VolumeButtonObserver()
     /// 硬件音量键触发后自动隐藏 HUD 的延迟任务
     @State private var hideIndicatorWorkItem: DispatchWorkItem?
-
-    /// 左边缘让出区域宽度，此区域内触摸穿透给系统手势（zoom transition dismiss）
-    private static let edgePassthroughWidth: CGFloat = 20
 
     /// 音量滑块（系统音量控制）
     private let volumeView: MPVolumeView = {
@@ -156,7 +167,7 @@ struct PlayerGestureView: View {
                 HStack(spacing: 0) {
                     // 左边缘：不加 contentShape，触摸穿透给系统返回手势
                     Color.clear
-                        .frame(width: Self.edgePassthroughWidth)
+                        .frame(width: edgePassthroughWidth)
 
                     // 主手势区域（顶部和底部留出安全区域）
                     Color.clear
@@ -169,16 +180,27 @@ struct PlayerGestureView: View {
                         .padding(.top, topSafeArea)
                         .gesture(
                             DragGesture(minimumDistance: 20)
+                                .updating($dragIsActive) { _, active, _ in
+                                    active = true
+                                }
                                 .onChanged { value in
-                                    // 锁定时或禁用滑动手势时不响应
-                                    guard !isLocked && GeneralSettingModel().enablePlayerGesture else { return }
+                                    guard !isLocked else { return }
                                     // 检查起始位置是否在顶部或底部安全区域内
                                     guard value.startLocation.y > topSafeArea,
                                           value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
-                                    handleDragChanged(value: value, in: geometry.size)
+                                    if onHorizontalSwipe != nil {
+                                        handleDirectionalDragChanged(value: value, in: geometry.size)
+                                    } else if GeneralSettingModel().enablePlayerGesture {
+                                        handleDragChanged(value: value, in: geometry.size)
+                                    }
                                 }
-                                .onEnded { _ in
-                                    handleDragEnded()
+                                .onEnded { value in
+                                    if onHorizontalSwipe != nil {
+                                        finishDirectionalDrag(value)
+                                        resetGestureState()
+                                    } else {
+                                        handleDragEnded()
+                                    }
                                 }
                         )
                         .simultaneousGesture(
@@ -210,6 +232,16 @@ struct PlayerGestureView: View {
                     .opacity(0.01)
             }
         }
+        .onChange(of: dragIsActive) { _, active in
+            if !active && onHorizontalSwipe != nil {
+                resetGestureState()
+            }
+        }
+        .onChange(of: isLocked) { _, locked in
+            if locked && onHorizontalSwipe != nil {
+                resetGestureState()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // 进入后台/画中画时重置手势状态
             resetGestureState()
@@ -227,6 +259,9 @@ struct PlayerGestureView: View {
         }
         .onDisappear {
             volumeObserver.stop()
+            if onHorizontalSwipe != nil {
+                resetGestureState()
+            }
         }
     }
 
@@ -237,6 +272,7 @@ struct PlayerGestureView: View {
         showIndicator = false
         adjustType = .none
         isDragging = false
+        dragAxis = nil
     }
 
     // MARK: - 调节指示器
@@ -333,12 +369,12 @@ struct PlayerGestureView: View {
     }
 
     /// 处理拖动手势变化
-    private func handleDragChanged(value: DragGesture.Value, in size: CGSize) {
+    private func handleDragChanged(value: DragGesture.Value, in size: CGSize, locksVerticalAxis: Bool = false) {
         let startX = value.startLocation.x
         let translation = value.translation
 
         // 判断是否为垂直滑动（垂直位移大于水平位移）
-        guard abs(translation.height) > abs(translation.width) else { return }
+        guard locksVerticalAxis || abs(translation.height) > abs(translation.width) else { return }
 
         isDragging = true
 
@@ -378,6 +414,39 @@ struct PlayerGestureView: View {
         case .none:
             break
         }
+    }
+
+    /// 一次拖动只选一个方向，避免斜滑在清屏与音量/亮度之间来回切换。
+    private func handleDirectionalDragChanged(value: DragGesture.Value, in size: CGSize) {
+        let translation = value.translation
+        if dragAxis == nil {
+            if abs(translation.width) > abs(translation.height) * 1.5 {
+                dragAxis = .horizontal
+            } else if abs(translation.height) > abs(translation.width) * 1.5 {
+                dragAxis = .vertical
+            } else {
+                return
+            }
+        }
+
+        isDragging = true
+        if dragAxis == .vertical && GeneralSettingModel().enablePlayerGesture {
+            handleDragChanged(
+                value: value,
+                in: CGSize(width: max(1, size.width - edgePassthroughWidth), height: size.height),
+                locksVerticalAxis: true
+            )
+        }
+    }
+
+    private func finishDirectionalDrag(_ value: DragGesture.Value) {
+        guard !isLocked, dragAxis == .horizontal else { return }
+        let distance = value.translation.width
+        guard abs(distance) > abs(value.translation.height) * 1.5 else { return }
+        let isFlick = abs(distance) >= 24 && abs(value.velocity.width) >= 500
+            && distance * value.velocity.width > 0
+        guard abs(distance) >= 60 || isFlick else { return }
+        onHorizontalSwipe?(distance < 0 ? .left : .right)
     }
 
     /// 处理拖动手势结束

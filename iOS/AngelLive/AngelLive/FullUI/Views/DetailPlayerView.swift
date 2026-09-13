@@ -39,6 +39,9 @@ struct DetailPlayerView: View {
 
     /// 是否为竖屏直播模式
     @State private var isVerticalLiveMode: Bool = false
+    /// 用户主动控制竖屏清屏状态，不随播放器的自动隐藏或播放状态改变。
+    @State private var verticalLiveControlsVisible = true
+    @State private var verticalLiveControlPopupPresented = false
 
     /// 当前是否 iPhone 横屏（用于禁用下滑手势）
     @State private var isIPhoneLandscape: Bool = false
@@ -107,7 +110,11 @@ struct DetailPlayerView: View {
         if #available(iOS 18.0, *) {
             return false
         }
-        return !isIPhoneLandscape
+        return !isIPhoneLandscape && allowsEdgeDismiss
+    }
+
+    private var allowsEdgeDismiss: Bool {
+        !isVerticalLiveMode || verticalLiveControlsVisible
     }
 
     // MARK: - Body
@@ -262,7 +269,7 @@ struct DetailPlayerView: View {
 
                     // iOS 18+ interactivePopGesture 被禁用，这里用独立的 20pt 左边缘视图补回返回手势。
                     // 作为 ZStack 兄弟视图(而非 player 的 .overlay)，避免破坏 PreferenceKey 传递。
-                    if #available(iOS 18.0, *), !iPhoneLandscapeMode {
+                    if #available(iOS 18.0, *), !iPhoneLandscapeMode, allowsEdgeDismiss {
                         EdgeSwipeDismissView(edgeWidth: 20) {
                             if AppConstants.Device.isIPad && isIPadFullscreen {
                                 isIPadFullscreen = false
@@ -295,9 +302,15 @@ struct DetailPlayerView: View {
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
         .environment(\.roomSwitcherPresentation, $isRoomSwitcherPresented)
+        .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
+        .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
         .interactiveDismissDisabled(isIPhoneLandscape)
+        .onChange(of: viewModel.currentRoom.id) { _, _ in
+            verticalLiveControlsVisible = true
+            verticalLiveControlPopupPresented = false
+        }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             Logger.debug("[PlayerFlow] Detail scenePhase -> \(newPhase), roomId=\(viewModel.currentRoom.roomId)", category: .player)
             switch newPhase {
@@ -713,7 +726,25 @@ struct VerticalLiveModeEnvironmentKey: EnvironmentKey {
     static let defaultValue: Bool = false
 }
 
+private struct VerticalLiveControlsVisibleKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(true)
+}
+
+private struct VerticalLiveControlPopupPresentedKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(false)
+}
+
 extension EnvironmentValues {
+    var verticalLiveControlsVisible: Binding<Bool> {
+        get { self[VerticalLiveControlsVisibleKey.self] }
+        set { self[VerticalLiveControlsVisibleKey.self] = newValue }
+    }
+
+    var verticalLiveControlPopupPresented: Binding<Bool> {
+        get { self[VerticalLiveControlPopupPresentedKey.self] }
+        set { self[VerticalLiveControlPopupPresentedKey.self] = newValue }
+    }
+
     var isVerticalLiveMode: Bool {
         get { self[VerticalLiveModeEnvironmentKey.self] }
         set { self[VerticalLiveModeEnvironmentKey.self] = newValue }

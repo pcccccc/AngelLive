@@ -470,7 +470,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                         )
                     } else {
                         let consoleResult = Self.redactedLoginTransactionConsoleValue(result)
-                        responseStr = (try? String(data: JSONSerialization.data(withJSONObject: consoleResult), encoding: .utf8))
+                        responseStr = (try? String(data: JSONSerialization.data(withJSONObject: consoleResult, options: [.fragmentsAllowed]), encoding: .utf8))
                             .map { String($0.prefix(2_000)) }
                     }
                     await console.updateStatus(
@@ -818,7 +818,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 payload: payload,
                 sensitive: sensitive
             )
-            let data = try JSONSerialization.data(withJSONObject: value)
+            // The runtime maps null/undefined to NSNull. Allow it through JSON
+            // serialization so JSONDecoder can report a typed decoding error
+            // instead of Foundation raising an uncaught Objective-C exception.
+            let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
             return try decoder.decode(T.self, from: data)
         } catch let error as LiveParsePluginError {
             throw error
@@ -858,7 +861,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 isolatedPlatformSession: isolatedSession,
                 runtimeLease: runtimeLease
             )
-            let data = try JSONSerialization.data(withJSONObject: value)
+            let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
             return try decoder.decode(T.self, from: data)
         } catch let error as LiveParsePluginError {
             throw error
@@ -890,7 +893,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 isolatedPlatformSession: nil,
                 runtimeLease: runtimeLease
             )
-            let data = try JSONSerialization.data(withJSONObject: value)
+            let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
             return try decoder.decode(T.self, from: data)
         } catch let error as LiveParsePluginError {
             throw error

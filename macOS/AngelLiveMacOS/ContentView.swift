@@ -54,7 +54,23 @@ struct ContentView: View {
     @State private var searchViewModel = SearchViewModel()
 
     private var shouldShowHomeTab: Bool {
-        homeRecommendationAvailability != .unavailable
+        pluginAvailability.hasAvailablePlugins && homeRecommendationAvailability != .unavailable
+    }
+
+    private var tabSelection: Binding<TabSelection> {
+        Binding(
+            get: {
+                if !pluginAvailability.hasAvailablePlugins {
+                    switch selectedTab {
+                    case .platform: return .allPlatforms
+                    case .search: return .favorite
+                    default: break
+                    }
+                }
+                return !shouldShowHomeTab && selectedTab == .home ? .favorite : selectedTab
+            },
+            set: { selectedTab = $0 }
+        )
     }
 
     var body: some View {
@@ -69,7 +85,7 @@ struct ContentView: View {
             } else {
                 // 正常内容
                 NavigationStack {
-                    TabView(selection: $selectedTab) {
+                    TabView(selection: tabSelection) {
                         if shouldShowHomeTab {
                             Tab(value: TabSelection.home) {
                                 MacHomeView(isSelected: selectedTab == .home) {

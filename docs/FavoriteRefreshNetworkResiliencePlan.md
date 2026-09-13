@@ -15,6 +15,11 @@
 > iOS 新包验证：最后源码修改后完成 `DeviceInteractionInstallAndRun`，设备为 iPhone 17 Pro Max 模拟器 / iOS 27.0。冷启动、进入收藏、返回首页、再次进入收藏的累计日志只有 1 轮 automatic；随后下拉触发 1 轮 manual，总计 2 轮，无额外 automatic。macOS 交互与真机冷启动日志未验证。
 > tvOS 新包验证受阻：一次 `DeviceInteractionInstallAndRun` 仍遇到上述 Info.plist 错误，未完成安装，不能用旧包验证遥控器命令；设备会话已结束。
 >
+> 2026-09-13 tvOS FullUI 反馈更新：参照 iOS 收藏页使用顶部悬浮圆环，移除参与列表布局的同步横条与左下角方块提示。遥控器提示移入首个分组标题右侧；4 秒前台预算结束后，仍有慢请求时显示“部分收藏仍在更新”，完整结果显示刷新数量或未更新数量，3 秒后收起。结果仅在本页观察到刷新时展示，返回收藏页不重播旧结果。
+> 手动入口只合并连续手动按键，不再被页面自动刷新拦截；播放列表与 Top Shelf 通知跟随收藏增量回写。请求预算、共享 Core 状态机、iOS、macOS 与 ShellUI 行为保持原状。
+> 本次验证：最终源码的 tvOS MCP `BuildProject` 通过，Navigator error 为 0；手动替换、并发入口合并（自动／手动各 24 个调用）、自动有效期 3 项 Core 测试通过。最后源码修改后已在现有 Apple TV 4K（第 3 代，1080p）/ tvOS 27.0 完成新的 `DeviceInteractionInstallAndRun` 并确认 App 运行。
+> 设备验收限制：该设备无收藏且未登录 iCloud。尝试从现有插件正常准备临时收藏时，首个插件要求登录；最终新包切换配置页时 Device Hub 超时并丢失 session，一次新会话恢复后 `InstallAndRun` 也返回 session 不存在。没有新增收藏；带列表的圆环、慢请求／结果文案、连续按键、焦点稳定和深浅色／减少动态效果仍未完成设备验证，不能以构建或空基线截图作为通过证据。本轮未重新构建 iOS/macOS。
+>
 > 范围：`AngelLiveCore` 收藏直播状态刷新、插件 HTTP 错误分类、请求合并与三端宿主状态消费
 >
 > 不在本计划范围：CloudKit 成员同步协议、播放链路、音频会话、凭证兼容回退、ShellUI

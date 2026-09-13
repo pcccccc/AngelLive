@@ -23,6 +23,9 @@ struct VerticalLiveControllerView: View {
     @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.presentToast) private var presentToast
+    @Environment(\.verticalLiveControlsVisible) private var controlsVisible
+    @Environment(\.verticalLiveControlPopupPresented) private var controlPopupPresented
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var backTapped = false
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
@@ -61,32 +64,47 @@ struct VerticalLiveControllerView: View {
     }
 
     var body: some View {
-        ZStack {
-            // 顶部信息栏
-            topBar
-                .padding(.top, topBarTopPadding)
+        GeometryReader { geometry in
+            ZStack {
+                ZStack {
+                    topBar
+                        .padding(.top, topBarTopPadding)
 
-            // 左下角：弹幕气泡
-            bottomLeftArea
-                .padding(.bottom, safeAreaInsets.bottom)
+                    bottomLeftArea
+                        .padding(.bottom, safeAreaInsets.bottom)
+                        .allowsHitTesting(false)
 
-            // 右下角：更多按钮
-            bottomRightArea
-                .padding(.bottom, safeAreaInsets.bottom)
+                    bottomRightArea
+                        .padding(.bottom, safeAreaInsets.bottom)
+                }
+                .offset(x: controlsVisible.wrappedValue || reduceMotion ? 0 : -geometry.size.width)
+                .opacity(controlsVisible.wrappedValue ? 1 : 0)
+                .allowsHitTesting(controlsVisible.wrappedValue)
+                .accessibilityHidden(!controlsVisible.wrappedValue)
 
-            // 清晰度选择面板（右侧滑入）
-            if showQualityPanel {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .onTapGesture { showQualityPanel = false }
-                QualitySelectionPanel(isShowing: $showQualityPanel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                // 面板独立于清屏动画；展开时不接收底层清屏手势。
+                if showQualityPanel {
+                    Color.black.opacity(0.001)
+                        .ignoresSafeArea()
+                        .onTapGesture { showQualityPanel = false }
+                    QualitySelectionPanel(isShowing: $showQualityPanel)
+                        .padding(.top, safeAreaInsets.top)
+                        .padding(.bottom, safeAreaInsets.bottom)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
+            .clipped()
         }
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.28), value: controlsVisible.wrappedValue)
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         .environment(\.colorScheme, .dark)
-        .opacity(model.config.isMaskShow || showQualityPanel ? 1 : 0)
+        .onChange(of: showQualityPanel || showStreamerInfo, initial: true) { _, presented in
+            controlPopupPresented.wrappedValue = presented
+        }
+        .onDisappear {
+            controlPopupPresented.wrappedValue = false
+        }
     }
 
     // MARK: - 顶部信息栏
@@ -265,9 +283,7 @@ struct VerticalLiveControllerView: View {
                 MoreActionsButton(
                     room: viewModel.currentRoom,
                     onClearChat: {
-                        withAnimation {
-                            viewModel.danmuMessages.removeAll()
-                        }
+                        controlsVisible.wrappedValue = false
                     },
                     showQualityOption: true,
                     onShowQualityPanel: {

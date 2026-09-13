@@ -156,7 +156,7 @@ struct PlatformCardButtonStyle: ButtonStyle {
 }
 
 extension Platformdescription: @retroactive Identifiable {
-    public var id: String { title }
+    public var id: String { pluginId }
 }
 
 extension Notification.Name {

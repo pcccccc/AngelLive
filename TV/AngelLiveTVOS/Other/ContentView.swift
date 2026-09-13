@@ -30,25 +30,37 @@ struct ContentView: View {
     @State private var updateToastTitle = ""
     @State private var updateToastSuccess = true
     @State private var homeRecommendationAvailability = TVHomeRecommendationAvailability.unconfirmed
-    @State private var presentsFullUI: Bool
     private let updateToastOptions = SimpleToastOptions(alignment: .topLeading, hideAfter: 2.0)
 
+    private var presentsFullUI: Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins
+    }
+
     private var shouldShowHomeTab: Bool {
-        homeRecommendationAvailability != .unavailable
+        presentsFullUI && homeRecommendationAvailability != .unavailable
+    }
+
+    private var tabSelection: Binding<Int> {
+        Binding(
+            get: {
+                if !presentsFullUI, appViewModel.selection == 2 { return 1 }
+                return !shouldShowHomeTab && appViewModel.selection == 4 ? 0 : appViewModel.selection
+            },
+            set: { appViewModel.selection = $0 }
+        )
     }
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
         self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .placeholder, appViewModel: appViewModel)
         self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .placeholder, appViewModel: appViewModel)
-        self.presentsFullUI = !SandboxPluginCatalog.installedPluginMap().isEmpty
     }
     
     var body: some View {
 
         @Bindable var contentVM = appViewModel
 
-        rootTabView(selection: $contentVM.selection)
+        rootTabView(selection: tabSelection)
         .environment(appViewModel.consentService)
         .platformAPICredentialLifecycle(enabled: presentsFullUI)
         .onChange(of: PlatformAPITokenService.shared.contentRevision) { _, _ in
@@ -154,7 +166,6 @@ struct ContentView: View {
             }
         })
         .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { oldIds, installedIds in
-            presentsFullUI = !installedIds.isEmpty
             updateHomeRecommendationAvailability()
             // 从无插件变为有插件时，主动触发收藏同步
             if oldIds.isEmpty && !installedIds.isEmpty {

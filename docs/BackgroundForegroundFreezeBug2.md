@@ -1,5 +1,7 @@
 # Bug2 修复文档:iOS 直播播放中「后台→前台」概率卡死
 
+> 2026-09-13 依赖核对更正：当前锁定的 KSPlayer 5.0.0（`93e942ae1f9dbdf8c2a4220ef2437073fdb575de`）没有实现本页历史 F5 所称的同步停止解码后再关闭上下文。Bugsnag 的 7 个 tvOS 事件同时命中旧解码器重建与读线程重连，当前依赖仍存在旧上下文提前释放风险；见 [本次崩溃研究](BugsnagCrashResearch20260913.md)。这与本页已采证的 iOS 渲染冻结不是同一结论，不能将一项的修复状态用于另一项。
+
 > 2026-09-07 宿主接入核对：iOS FullUI 已将业务状态、结束事件接入 `KSCorePlayerView` 的统一回调，取消 `onAppear` 对同一 Coordinator 回调的覆盖。相同 URL 的 KSPlayer 重连改为显式替换媒体项并重新准备播放，不再通过 URL 临时置空等待 SwiftUI 拆建视图；保留活跃画中画控制器的 delegate。不同内核类型仍走 KSPlayer 的 `set(url:options:)`。这些是宿主接入修复，**不是后台冻结根因或修复成功的证据**；下述历史诊断需按当前 KSPlayer 版本和新安装包重新验证。
 > 验证：最后源码编辑后，Xcode MCP workspace `BuildProject` 成功，确认重新编译修改文件，Navigator error 为 0。iPhone 17 Pro Max 模拟器 / iOS 27.0（24A5423a）重新执行 `DeviceInteractionInstallAndRun` 成功；从已有收藏进入播放、暂停/恢复、手动重载、退出后重新进入播放均通过。同地址分支未独立证明，真机快速前后台与画中画未验证。`AngelLive` scheme 当前没有自动测试，未运行单元测试；macOS、tvOS 未验证。
 >
@@ -34,7 +36,7 @@
 | F2 | 回前台(非画中画)只调 `player.enterForeground()`,**只恢复 Metal 渲染定时器,不调用 `play()`** | `KSPlayerLayer.swift:941-967` / `MEPlayer/MetalPlayView.swift:257` |
 | F3 | App 自己的 `didBecomeActive` 处理**只关画中画**,不重连/不踢播放 | `PlayerContainerView.swift:150-164` |
 | F4 | `MetalPlayView.enterBackground` 在 `!isPaused` 时会按 fps 在后台继续 `draw`;但 F1 的 `pause()` 已把 `isPaused` 置真,故正常不会在后台跑 GPU | `MetalPlayView.swift:248-255` |
-| F5 | **已解决:** KSPlayer 先同步停止旧 decode operation 再关闭 context，三端 Room 使用真实 `isLive`，允许内核重连直播边缘 | `KSPlayer/MEPlayerItem.swift` / `MEPlayerItemTrack.swift` |
+| F5 | **当前锁定依赖未解决（2026-09-13 更正）:** 三端 Room 使用真实 `isLive`，但重连先关闭旧 context，异步轨道 shutdown 也未等待 decode operation 退出，仍有借用指针失效风险 | `KSPlayer/MEPlayerItem.swift` / `MEPlayerItemTrack.swift` |
 | F6 | 恢复协调器采样对 **KSAVPlayer(HLS 流)直接返回 nil** → 这类流**没有零吞吐 stall 检测** | `PlaybackRecoveryAdapter.swift:98-112` |
 | F7 | 手动 reload / 恢复动作都走 `changePlayUrl`,复用全局 `@StateObject playerCoordinator`(`.id("stable_player")` 永不重建);URL 变化时 `KSPlayerLayer.set(url:)` 只 `player.replace(url:)`,**复用同一个 player 实例**;只有退房间才会重建 coordinator | `DetailPlayerView.swift:22` / `KSPlayerLayer.swift:199-224` |
 | F8 | `assignCurrentPlayURL`:URL 相同走 `nil→url` 真重建;URL 变化只换地址,**跳过重建** | `RoomInfoViewModel.swift:342-362` |
@@ -54,7 +56,7 @@
 后台→前台过程中 `CAMetalLayer` 的 drawable 失效或渲染管线被打断,回前台 `nextDrawable` 拿不到/管线未恢复 → **声音在播,画面定格在最后一帧**。属图形层,需 GPU Frame Capture 确认。
 
 ### B. 直播管线陈旧(解复用/网络)
-后台期间直播连接被服务器掐断或直播边缘漂移过远;回前台 demuxer 想从旧位置续读但数据已不存在。KSPlayer 现可安全重连，但仍需真机确认后台挂起/恢复时是否一定触发该路径。
+后台期间直播连接被服务器掐断或直播边缘漂移过远;回前台 demuxer 想从旧位置续读但数据已不存在。当前锁定 KSPlayer 的重连仍有 F5 所述生命周期风险，也需要真机确认后台挂起/恢复时是否触发该路径。
 
 ### C. 暂停未被恢复(纯生命周期)
 F2 表明前台不自动 `play()`。若没有别处补 `play()`,就停在暂停态 → **画面是「暂停的最后一帧」,手动点播放可能能恢复(或恢复后再走 B)**。

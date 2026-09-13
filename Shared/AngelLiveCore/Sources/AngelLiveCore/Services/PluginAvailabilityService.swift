@@ -38,15 +38,23 @@ public final class PluginAvailabilityService: @unchecked Sendable {
 
     public init() {}
 
+    /// 根页面首帧使用本地安装快照；运行时能力仍由后续检查确认。
+    init(initialInstalledPluginIds: [String]) {
+        installedPluginIds = initialInstalledPluginIds.sorted()
+        hasAvailablePlugins = !installedPluginIds.isEmpty
+    }
+
     /// Opt in only at a host's root FullUI/ShellUI decision point. Preparing the
     /// local policy synchronously prevents the first request racing a view task.
     @MainActor
     public convenience init(managesAPICredentialPolicy: Bool) {
-        self.init()
+        self.init(initialInstalledPluginIds: managesAPICredentialPolicy
+            ? SandboxPluginCatalog.installedPluginIds()
+            : [])
         self.managesAPICredentialPolicy = managesAPICredentialPolicy
         if managesAPICredentialPolicy {
             PlatformAPICredentialHostPolicy.shared.initializeIfNeeded(
-                hasInstalledPlugins: !SandboxPluginCatalog.installedPluginMap().isEmpty
+                hasInstalledPlugins: hasAvailablePlugins
             )
         }
     }

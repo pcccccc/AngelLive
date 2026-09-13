@@ -1801,7 +1801,6 @@ private struct HomeCategoryView: View {
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
     @State private var model: PluginHomeCategoryModel
-    @State private var cardWidth: CGFloat = 170
 
     init(
         route: HomeCategoryRoute,
@@ -1815,9 +1814,30 @@ private struct HomeCategoryView: View {
     }
 
     var body: some View {
-        ScrollView {
+        GeometryReader { geometry in
+            roomList(containerWidth: geometry.size.width)
+        }
+        .background(AppConstants.Colors.groupedBackground)
+        .navigationTitle(route.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .task { await model.load(refresh: true) }
+    }
+
+    private func roomList(containerWidth: CGFloat) -> some View {
+        let availableWidth = max(1, containerWidth - AppConstants.Spacing.xl * 2)
+        let columnCount = max(1, Int((availableWidth + AppConstants.Spacing.lg) / (154 + AppConstants.Spacing.lg)))
+        let totalSpacing = AppConstants.Spacing.lg * CGFloat(columnCount - 1)
+        let cardWidth = min(280, (availableWidth - totalSpacing) / CGFloat(columnCount))
+
+        return ScrollView {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 154, maximum: 280), spacing: AppConstants.Spacing.lg)],
+                // 列数和卡片共用同一份容器尺寸，避免网格与卡片各自计算列宽后互相溢出。
+                columns: Array(
+                    repeating: GridItem(.fixed(cardWidth), spacing: AppConstants.Spacing.lg, alignment: .top),
+                    count: columnCount
+                ),
                 spacing: AppConstants.Spacing.xl
             ) {
                 ForEach(model.rooms) { room in
@@ -1853,29 +1873,11 @@ private struct HomeCategoryView: View {
                 .padding(.vertical, 80)
             }
         }
-        .background(AppConstants.Colors.groupedBackground)
-        .navigationTitle(route.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
         .refreshable { await model.load(refresh: true) }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            updateCardWidth(containerWidth: width)
-        }
-        .task { await model.load(refresh: true) }
     }
 
     private func loadMoreIfNeeded(after room: LiveModel) {
         guard room.id == model.rooms.last?.id else { return }
         Task { await model.loadMore() }
-    }
-
-    private func updateCardWidth(containerWidth: CGFloat) {
-        let usableWidth = max(154, containerWidth - AppConstants.Spacing.xl * 2)
-        let columnCount = max(1, Int((usableWidth + AppConstants.Spacing.lg) / 190))
-        let spacing = AppConstants.Spacing.lg * CGFloat(max(0, columnCount - 1))
-        cardWidth = min(280, (usableWidth - spacing) / CGFloat(columnCount))
     }
 }
