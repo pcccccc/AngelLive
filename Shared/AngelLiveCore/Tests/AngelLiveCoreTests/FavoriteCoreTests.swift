@@ -346,6 +346,58 @@ struct FavoriteListGroupingTests {
 
     #expect(result.map(\.userName) == ["existing", "other source", "new room"])
   }
+
+  @Test("display grouping combines missing and offline states without losing rooms")
+  func displayGroupingCombinesMissingAndOffline() throws {
+    let rooms = [
+      room(liveState: nil, roomId: "missing"),
+      room(liveState: LiveState.close.rawValue, roomId: "offline"),
+      room(liveType: "source-b", liveState: nil, roomId: "missing"),
+    ]
+    let sections = rooms.groupedByDisplayLiveState()
+
+    #expect(sections.map(\.id) == [LiveStateDisplayName.offline])
+    let offline = try #require(sections.first)
+    #expect(offline.roomList.map(\.id) == rooms.map(\.id))
+    #expect(offline.roomList.map(\.liveState) == rooms.map(\.liveState))
+  }
+
+  @Test("display grouping combines unknown values and preserves status order")
+  func displayGroupingCombinesUnknownValues() throws {
+    let rooms = [
+      room(liveState: "invalid-a", roomId: "invalid-a"),
+      room(liveState: LiveState.close.rawValue, roomId: "offline"),
+      room(liveState: "", roomId: "empty"),
+      room(liveState: LiveState.video.rawValue, roomId: "replay"),
+      room(liveState: LiveState.unknow.rawValue, roomId: "unknown"),
+      room(liveState: LiveState.live.rawValue, roomId: "live"),
+      room(liveState: "invalid-b", roomId: "invalid-b"),
+    ]
+    let sections = rooms.groupedByDisplayLiveState()
+
+    #expect(sections.map(\.id) == LiveStateDisplayName.sortOrder)
+    #expect(sections.flatMap(\.roomList).count == rooms.count)
+    let unknown = try #require(sections.last)
+    #expect(unknown.roomList.map(\.roomId) == ["invalid-a", "empty", "unknown", "invalid-b"])
+  }
+
+  @Test("display grouping moves refreshed rooms once and removes empty sections")
+  func displayGroupingTracksStateTransitions() {
+    var rooms = [
+      room(liveState: nil, roomId: "first"),
+      room(liveState: LiveState.close.rawValue, roomId: "second"),
+    ]
+    rooms[0].liveState = LiveState.live.rawValue
+    let mixed = rooms.groupedByDisplayLiveState()
+    #expect(mixed.map(\.id) == [LiveStateDisplayName.live, LiveStateDisplayName.offline])
+    #expect(mixed.flatMap(\.roomList).map(\.roomId) == ["first", "second"])
+
+    rooms[1].liveState = LiveState.live.rawValue
+    let live = rooms.groupedByDisplayLiveState()
+    #expect(live.map(\.id) == [LiveStateDisplayName.live])
+    #expect(live.first?.roomList.map(\.roomId) == ["first", "second"])
+    #expect([LiveModel]().groupedByDisplayLiveState().isEmpty)
+  }
 }
 
 @Suite("Favorite sync error display")

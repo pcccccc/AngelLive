@@ -132,6 +132,21 @@ public extension Array where Element == LiveModel {
         }
     }
     
+    /// 按显示状态生成唯一分组，供 FullUI 显式使用。
+    /// 缺失状态与明确下播目前显示相同标题；未知原始值也可能映射到同一标题。
+    /// 先统一分组键再创建 section，保留组内输入顺序和全部房间。
+    func groupedByDisplayLiveState() -> [FavoriteLiveSectionModel] {
+        let roomsByTitle = Dictionary(grouping: self) { $0.liveStateFormat() }
+        return LiveStateDisplayName.sortOrder.compactMap { title in
+            guard let rooms = roomsByTitle[title], let first = rooms.first else { return nil }
+            var section = FavoriteLiveSectionModel()
+            section.title = title
+            section.roomList = rooms
+            section.type = first.liveType
+            return section
+        }
+    }
+
     /// 根据设置的分组样式进行分组
     /// - Parameter style: 分组样式
     /// - Returns: 分组后的列表

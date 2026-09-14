@@ -21,13 +21,25 @@ struct FavoriteMainView: View {
     @State private var isManualRefreshRunning = false
     @State private var refreshCycle = 0
 
-    var body: some View {
+    private var favoriteSections: [FavoriteLiveSectionModel] {
+        let model = appViewModel.favoriteViewModel
+        // 仅 FullUI 收藏页采用统一显示状态分组，不改共享状态或 ShellUI。
+        let style = AngelLiveFavoriteStyle(
+            rawValue: appViewModel.generalSettingsViewModel.globalGeneralSettingFavoriteStyle
+        ) ?? .liveState
+        if style == .section {
+            return model.groupedRoomList
+        }
+        return model.roomList.groupedByDisplayLiveState()
+    }
 
+    var body: some View {
+        let sections = favoriteSections
         VStack {
             // 本地优先(已迁到 Core 模型):有本地收藏、或非真错误时都展示内容(空/列表由内部分支处理)。
             // 仅「真 iCloud 错误且本地无数据」才整页报错;cloudKitReady=false 在纯本地/未就绪时仍应显示本地收藏。
             if !appViewModel.favoriteViewModel.cloudReturnError || !appViewModel.favoriteViewModel.roomList.isEmpty {
-                if appViewModel.favoriteViewModel.groupedRoomList.isEmpty && appViewModel.favoriteViewModel.isLoading == false {
+                if sections.isEmpty && appViewModel.favoriteViewModel.isLoading == false {
                     if appViewModel.favoriteViewModel.roomList.isEmpty {
                         if appViewModel.favoriteViewModel.cloudReturnError {
                             ErrorView(
@@ -57,7 +69,7 @@ struct FavoriteMainView: View {
                 }else {
                     ScrollView(.vertical) {
                         // 按直播状态分组展示：正在直播用竖向列表，其他用横向列表
-                        ForEach(appViewModel.favoriteViewModel.groupedRoomList, id: \.id) { section in
+                        ForEach(sections, id: \.id) { section in
                             if section.title == "正在直播" {
                                 // 正在直播 - 竖向网格布局
                                 VStack(alignment: .leading, spacing: 20) {
@@ -66,7 +78,7 @@ struct FavoriteMainView: View {
                                         title: section.title,
                                         count: section.roomList.count,
                                         isLive: true,
-                                        showsRefreshHint: section.id == appViewModel.favoriteViewModel.groupedRoomList.first?.id
+                                        showsRefreshHint: section.id == sections.first?.id
                                     )
                                         .padding(.leading, 50)
 
@@ -81,7 +93,11 @@ struct FavoriteMainView: View {
                                         spacing: 50
                                     ) {
                                         ForEach(Array(section.roomList.enumerated()), id: \.element.id) { index, room in
-                                            LiveCardView(index: index, currentLiveModel: room)
+                                            LiveCardView(
+                                                index: index,
+                                                currentLiveModel: room,
+                                                contentRevision: appViewModel.favoriteViewModel.listVersion
+                                            )
                                                 .environment(liveViewModel)
                                                 .environment(appViewModel)
                                                 .frame(width: 370, height: 280)
@@ -99,14 +115,18 @@ struct FavoriteMainView: View {
                                         title: section.title,
                                         count: section.roomList.count,
                                         isLive: false,
-                                        showsRefreshHint: section.id == appViewModel.favoriteViewModel.groupedRoomList.first?.id
+                                        showsRefreshHint: section.id == sections.first?.id
                                     )
                                         .padding(.leading, 50)
 
                                     ScrollView(.horizontal) {
                                         LazyHGrid(rows: [GridItem(.fixed(280), spacing: 50, alignment: .leading)], spacing: 50) {
                                             ForEach(Array(section.roomList.enumerated()), id: \.element.id) { index, room in
-                                                LiveCardView(index: index, currentLiveModel: room)
+                                                LiveCardView(
+                                                    index: index,
+                                                    currentLiveModel: room,
+                                                    contentRevision: appViewModel.favoriteViewModel.listVersion
+                                                )
                                                     .environment(liveViewModel)
                                                     .environment(appViewModel)
                                                     .frame(width: 370, height: 280)
@@ -149,8 +169,7 @@ struct FavoriteMainView: View {
         }
         .overlay(alignment: .top) {
             TVFavoriteRefreshIndicator(
-                model: appViewModel.favoriteViewModel,
-                isManualRefreshRunning: isManualRefreshRunning,
+                isRefreshing: isManualRefreshRunning || appViewModel.favoriteViewModel.isFavoriteStatusRefreshing,
                 refreshCycle: refreshCycle
             )
         }

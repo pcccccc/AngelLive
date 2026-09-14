@@ -18,6 +18,9 @@ struct LiveCardView: View {
     var externalFocusState: FocusState<FocusableField?>.Binding?
     var onMoveCommand: ((MoveCommandDirection) -> Void)? = nil
     var currentLiveModel: LiveModel? = nil
+    // LiveModel 的相等判断只比较房间身份。收藏数据版本作为独立输入，
+    // 让同一房间的新封面、标题等内容触发视图更新，不重建卡片或焦点状态。
+    var contentRevision: Int = 0
     var cardWidth: CGFloat = 370
     var coverHeight: CGFloat = 210
     @State private var isLive: Bool = false
