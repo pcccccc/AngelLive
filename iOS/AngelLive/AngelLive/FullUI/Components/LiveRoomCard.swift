@@ -180,7 +180,9 @@ struct LiveRoomCard: View {
                 favoriteContextMenu
             }
 
-            if useExternalNavigation {
+            // 外层 Button / UICollectionView 接管选择时不注册本地播放器 presentation。
+            // UIKit cell 的 UIHostingController 是独立 SwiftUI 根，不能继承应用的自定义环境。
+            if disableTapGesture || useExternalNavigation {
                 baseTappable
             } else {
                 if #available(iOS 18.0, *) {

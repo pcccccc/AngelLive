@@ -57,7 +57,6 @@ struct ContentView: View {
     @State private var platformViewModel = PlatformViewModel()
     @Environment(AppFavoriteModel.self) private var favoriteViewModel
     @State private var searchViewModel = SearchViewModel()
-    @State private var historyViewModel = HistoryModel()
 
     // 触觉反馈生成器
     private let hapticFeedback = UISelectionFeedbackGenerator()
@@ -212,7 +211,6 @@ struct ContentView: View {
         .environment(platformViewModel)
         .environment(favoriteViewModel)
         .environment(searchViewModel)
-        .environment(historyViewModel)
         .onChange(of: selectedTab) { _, newValue in
             hapticFeedback.selectionChanged()
         }
@@ -764,4 +762,7 @@ private struct PlatformDetailTabContainer: View {
 #Preview {
     ContentView()
         .environment(AppFavoriteModel())
+        .environment(HistoryModel())
+        .environment(WelcomeManager())
+        .environment(PlayerCoordinatorManager())
 }

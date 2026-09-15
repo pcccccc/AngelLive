@@ -70,6 +70,8 @@ Apple Developer Forums 的 SF Symbols 页面有开发者的最小复现：两个
 
 当前 `ContentView` 已持有并注入同一个 HistoryModel。实际消费点是 FullUI 历史列表和播放器；收藏、历史和分类列表的常用 UIKit 路径均传入外部导航状态，由上层呈现播放器。独立 UIHostingController 的基础房间卡片配置只注入收藏模型，仍有潜在环境边界风险，但尚未证明这些事件经过该回退入口。
 
+2026-09-15 更新：build 19 查询中的 9 次事件仍全部来自 iOS App 在 Mac 上运行。模型已改为由每窗口 `AngelLiveSceneView` 持有并在 `ContentView` 外注入，UIKit 接管点击的卡片不再注册本地播放器呈现；iPad 新包的非空历史进入播放已通过，Mac 对应运行环境仍未验证。当前处理与证据见 [build 19 修复与验证](BugsnagBuild19Fixes20260915.md)。
+
 生命周期中的 `FUWindowSceneSessionRoleSystemUI` 是系统场景标记，不能单独作为“应用额外开了一个未注入环境的窗口”的证据。当前 iOS App 只有一个 WindowGroup 声明，没有找到主动 openWindow 路径。
 
 下一步应使用 iOS App 在 Mac 上运行的模式，分别检查冷启动、历史进入播放、封面导航、退出再进入、窗口缩放；在导航与 hosting 边界记录中性的入口名称和模型实例关联，不能记录房间标题、用户标识或凭证。原生 macOS App 编译通过不能验证此问题。本轮不以新增全局单例或临时空 HistoryModel 掩盖注入缺口。
@@ -98,3 +100,13 @@ Apple Developer Forums 的 SF Symbols 页面有开发者的最小复现：两个
 授权恢复后，iOS MCP workspace 构建通过，Navigator error 为 0；最后源码修改后的 iPhone 18 Pro / iOS 27 新包 InstallAndRun 成功。首页更多列表、平台列表、历史列表打开、普通直播播放、前后台恢复和边缘返回通过。iPad 安装会话初始化受阻，Tab 身份修复的 iPad UI 验收仍未完成；本轮未启动 tvOS。用户随后要求停止继续验收，标记状态后提交。
 
 这轮 iPhone 检查没有复现或关闭上述剩余崩溃：未执行 iOS 26.0／26.0.1 符号动画 A/B、iOS App 在 Mac 上运行或真实 Apple TV 解码重连。详细通过项、中断和未验证项目见[修复与验证状态](RegressionVerification20260913.md)。
+
+## 2026-09-15 追加：iOS 照片写入缺少图库用途说明
+
+[分组](https://app.bugsnag.com/personal-829/angelliveios/errors/6a6b3e2ce9828b141c1440aa)
+
+最新事件来自 iOS TestFlight `3.0.0 (19)`。TCC 异步终止线程本身没有携带用途说明键名，但同一时刻的工作线程位于 Photos 的 `PHPerformChangesRequest.determineAuthorizationStatusForChanges`，证明应用正在请求写入照片图库。事件的 dSYM UUID 与本地归档精确匹配；该归档最终 App `Info.plist` 缺少 `NSPhotoLibraryAddUsageDescription` 和 `NSPhotoLibraryUsageDescription`。
+
+匹配归档二进制中的 `_UIImageWriteToSavedPhotosAlbum` 调用地址可符号化为 KSPlayer `IOSVideoPlayerView.handleScreenshot()`，这只说明相关代码已链接，不能证明它是本次事件的调用方。当前宿主使用的 `KSVideoPlayer` 渲染链不创建 `IOSVideoPlayerView`，FullUI／ShellUI 控制层均没有截图按钮；线上事件的实际 Photos 写入入口仍待确认。本轮针对已确认的照片添加权限缺项，只在 iOS target 的 Debug 和 Release 配置生成 `NSPhotoLibraryAddUsageDescription`，不声明照片读取用途，也不扩大播放器或其他页面行为。
+
+最后修改后，Xcode MCP workspace 构建已通过，生成的 AngelLive App `Info.plist` 中 `NSPhotoLibraryAddUsageDescription` 存在且文案非空，`NSPhotoLibraryUsageDescription` 仍不存在。随后在 iPad 新包通过现有网页登录界面长按保存中性测试图片：系统正常弹出照片添加授权框，允许后图片实际进入图库，应用未发生 TCC 终止。这是已验证的可达写入入口，仍不能反推全部线上事件来自该页面；本轮没有发布或关闭线上分组。详细记录见 [build 19 修复与验证](BugsnagBuild19Fixes20260915.md)。

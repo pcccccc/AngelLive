@@ -312,6 +312,7 @@
 				INFOPLIST_FILE = AngelLive/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于发现局域网内的电视设备、连接设备并投送直播内容，也用于 Apple TV 登录信息同步";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "用于在您选择保存图片时，将图片添加到照片图库";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -355,6 +356,7 @@
 				INFOPLIST_FILE = AngelLive/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于发现局域网内的电视设备、连接设备并投送直播内容，也用于 Apple TV 登录信息同步";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "用于在您选择保存图片时，将图片添加到照片图库";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

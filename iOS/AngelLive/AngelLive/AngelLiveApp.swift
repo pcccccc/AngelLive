@@ -33,7 +33,7 @@ struct AngelLiveApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AngelLiveSceneView()
                 .environment(favoriteViewModel)
                 .developerModeConsoleOverlay()
                 .environment(playerManager)
@@ -44,6 +44,16 @@ struct AngelLiveApp: App {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }
         }
+    }
+}
+
+/// 每个窗口独立持有历史模型，并在 ContentView 的 presentation / navigation 边界外注入。
+private struct AngelLiveSceneView: View {
+    @State private var historyModel = HistoryModel()
+
+    var body: some View {
+        ContentView()
+            .environment(historyModel)
     }
 }
 
