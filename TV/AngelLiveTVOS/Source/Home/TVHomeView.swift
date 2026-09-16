@@ -29,7 +29,6 @@ struct TVHomeView: View {
     @State private var artworkProgressOrigin: CGFloat = 0
     @State private var artworkPrefetcher: ImagePrefetcher?
     @State private var heroHasFocus = false
-    @State private var hasEstablishedInitialHeroFocus = false
 
     init(appViewModel: AppState, enhancesArtwork: Bool) {
         self.appViewModel = appViewModel
@@ -123,7 +122,6 @@ struct TVHomeView: View {
         .onChange(of: displayedBannerEntries.map(\.id)) { _, bannerIDs in
             if bannerIDs.isEmpty {
                 heroHasFocus = false
-                hasEstablishedInitialHeroFocus = false
             }
             normalizeBannerSelection()
         }
@@ -260,11 +258,6 @@ private extension TVHomeView {
             ))
     }
 
-    var needsInitialHeroFocusBridge: Bool {
-        isAwaitingFirstContent
-            || (!displayedBannerEntries.isEmpty && !hasEstablishedInitialHeroFocus)
-    }
-
     var favoriteRail: TVHomeRailData? {
         let rooms = Array(appViewModel.favoriteViewModel.roomList.prefix(10))
         guard !rooms.isEmpty else { return nil }
@@ -377,7 +370,6 @@ private extension TVHomeView {
                     TVHomeHeroContent(
                         entry: activeBanner,
                         captionTransition: bannerContentTransition(width: containerSize.width),
-                        requestsInitialFocus: true,
                         onPrimaryAction: {
                             guard !isBannerTransitioning else { return }
                             openHeroTarget(activeBanner)
@@ -397,15 +389,14 @@ private extension TVHomeView {
                 .clipped()
             }
 
-            if needsInitialHeroFocusBridge {
-                TVHomeHeroLoadingContent(isFocusEnabled: true)
+            if isAwaitingFirstContent {
+                TVHomeHeroLoadingContent()
                     .frame(
                         width: containerSize.width,
                         height: heroContentHeight,
                         alignment: .topLeading
                     )
-                    .opacity(isAwaitingFirstContent ? 1 : 0.001)
-                    .zIndex(isAwaitingFirstContent ? 4 : -1)
+                    .zIndex(4)
             }
 
             if let primaryRail {
@@ -489,9 +480,6 @@ private extension TVHomeView {
 
     func updateHeroFocus(_ isFocused: Bool) {
         heroHasFocus = isFocused
-        if isFocused {
-            hasEstablishedInitialHeroFocus = true
-        }
     }
 
     @MainActor
@@ -809,7 +797,6 @@ private struct TVHomeHeroContent: View {
 
     let entry: HomeBannerEntry
     let captionTransition: AnyTransition
-    let requestsInitialFocus: Bool
     let onPrimaryAction: () -> Void
     let onPreviousBanner: () -> Void
     let onNextBanner: () -> Void
@@ -817,7 +804,6 @@ private struct TVHomeHeroContent: View {
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focusedControl: FocusedControl?
-    @Namespace private var focusScope
 
     private var primaryTitle: String {
         switch entry.banner.target {
@@ -855,7 +841,6 @@ private struct TVHomeHeroContent: View {
                 .tvHomePrimaryActionStyle(reduceTransparency: reduceTransparency)
                 .buttonBorderShape(.capsule)
                 .focused($focusedControl, equals: .primary)
-                .prefersDefaultFocus(requestsInitialFocus, in: focusScope)
                 .accessibilityLabel(primaryTitle)
 
                 pagingFocusProxy(for: .nextBanner)
@@ -865,13 +850,6 @@ private struct TVHomeHeroContent: View {
         }
         .padding(.horizontal, TVHomeMetrics.horizontalMargin)
         .padding(.bottom, TVHomeMetrics.heroContentBottomInset)
-        .focusScope(focusScope)
-        .task {
-            guard requestsInitialFocus else { return }
-            await Task.yield()
-            guard !Task.isCancelled else { return }
-            focusedControl = .primary
-        }
         .onChange(of: focusedControl) { previousControl, newControl in
             onFocusChanged(newControl != nil)
             switch newControl {
@@ -895,7 +873,7 @@ private struct TVHomeHeroContent: View {
                 height: TVHomeMetrics.bannerFocusProxyHeight
             )
             .contentShape(Rectangle())
-            .focusable()
+            .focusable(focusedControl != nil)
             .focusEffectDisabled()
             .focused($focusedControl, equals: control)
             .accessibilityHidden(true)
@@ -1109,10 +1087,6 @@ private struct TVHomeRoomRail: View {
 }
 
 private struct TVHomeHeroLoadingContent: View {
-    let isFocusEnabled: Bool
-
-    @Namespace private var focusScope
-
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             Capsule()
@@ -1135,9 +1109,6 @@ private struct TVHomeHeroLoadingContent: View {
         .padding(.bottom, 30)
         .redacted(reason: .placeholder)
         .accessibilityLabel("首页内容加载中")
-        .focusable(isFocusEnabled)
-        .prefersDefaultFocus(isFocusEnabled, in: focusScope)
-        .focusScope(focusScope)
     }
 }
 

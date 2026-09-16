@@ -16,6 +16,8 @@ struct SidebarView: View {
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(\.colorScheme) var colorScheme
     @FocusState.Binding var focusState: FocusableField?
+    let onSelectCategory: (Int, Int) -> Void
+    let onExitSidebar: () -> Void
 
     // 亮色预设（适合 dark mode）
     private static let brightPresets: [ColorfulPreset] = [.sunrise, .barbie, .watermelon, .neon, .appleIntelligence]
@@ -55,29 +57,15 @@ struct SidebarView: View {
                 sidebarTip.invalidate(reason: .actionPerformed)
             }
         }
-        .onExitCommand {
-            handleExitCommand()
-        }
-
-    }
-
-    private func handleExitCommand() {
-        guard liveViewModel.isSidebarExpanded else { return }
-
-        switch focusState {
-        case .leftMenu(let parentIndex, let subIndex):
-            if subIndex > 0 {
-                // 子菜单项 -> 返回到主菜单项
-                focusState = .leftMenu(parentIndex, 0)
-            } else {
-                // 主菜单项 -> 关闭 sidebar
-                liveViewModel.isSidebarExpanded = false
-                focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
-            }
-        default:
-            // 其他情况关闭 sidebar
-            liveViewModel.isSidebarExpanded = false
-            focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
+        .task(id: liveViewModel.isSidebarExpanded) {
+            guard liveViewModel.isSidebarExpanded,
+                  !liveViewModel.categories.isEmpty,
+                  !Task.isCancelled else { return }
+            Logger.debug(
+                "RoomListNavigation sidebarFocusRequest model=\(ObjectIdentifier(liveViewModel)) expanded=true",
+                category: .ui
+            )
+            focusState = .leftMenu(0, 0)
         }
     }
 
@@ -93,6 +81,7 @@ struct SidebarView: View {
                 ForEach(Array(liveViewModel.categories.enumerated()), id: \.element.id) { index, category in
                     SidebarMenuItem(
                         focusState: $focusState,
+                        onSelectCategory: onSelectCategory,
                         icon: category.icon,
                         title: category.title,
                         index: index,
@@ -107,6 +96,10 @@ struct SidebarView: View {
         }
         .frame(minHeight: 30, maxHeight: .infinity, alignment: .top)
         .background(.thinMaterial)
+        .focusSection()
+        .onExitCommand {
+            onExitSidebar()
+        }
     }
 
     // MARK: - 右侧指示器
@@ -191,6 +184,7 @@ struct SidebarMenuItem: View {
 
     @Environment(LiveViewModel.self) var liveViewModel
     @FocusState.Binding var focusState: FocusableField?
+    let onSelectCategory: (Int, Int) -> Void
     var icon: String
     var title: String
     var index: Int
@@ -254,6 +248,7 @@ struct SidebarMenuItem: View {
                     ForEach(Array(subItems.enumerated()), id: \.element.id) { subIndex, item in
                         SidebarSubMenuItem(
                             focusState: $focusState,
+                            onSelectCategory: onSelectCategory,
                             icon: item.icon,
                             title: item.title,
                             subIndex: subIndex,
@@ -277,6 +272,7 @@ struct SidebarSubMenuItem: View {
 
     @Environment(LiveViewModel.self) var liveViewModel
     @FocusState.Binding var focusState: FocusableField?
+    let onSelectCategory: (Int, Int) -> Void
     var icon: String
     var title: String
     var subIndex: Int
@@ -332,18 +328,7 @@ struct SidebarSubMenuItem: View {
     }
 
     private func selectSubCategory() {
-        // 设置选中的主分类
-        if parentIndex < liveViewModel.categories.count {
-            liveViewModel.selectedMainListCategory = liveViewModel.categories[parentIndex]
-        }
-        liveViewModel.selectedSubListIndex = subIndex
-        liveViewModel.roomPage = 1
-        liveViewModel.getRoomList(index: subIndex)
-        // 选择后收起 sidebar
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            liveViewModel.isSidebarExpanded = false
-            focusState = .mainContent(0)
-        }
+        onSelectCategory(parentIndex, subIndex)
     }
 }
 

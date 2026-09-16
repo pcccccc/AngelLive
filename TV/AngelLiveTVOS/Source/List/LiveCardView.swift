@@ -360,7 +360,7 @@ struct LiveCardView: View {
         liveViewModel.currentRoom = liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = focusedIndex
         if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search {
-            if focusedIndex >= liveViewModel.roomList.count - 4 && liveModel.wrappedValue.roomListType != .favorite && liveViewModel.hasMoreRooms {
+            if focusedIndex >= liveViewModel.roomList.count - 4 && liveModel.wrappedValue.roomListType != .favorite && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
                 liveViewModel.roomPage += 1
             }
         }

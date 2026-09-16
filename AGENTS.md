@@ -182,6 +182,7 @@ swift test --package-path Shared/AngelLiveDependencies
 3. 首次连接批准 Xcode 的 PID 级权限弹窗；MCP 客户端重启后 PID 改变，可能需要再次批准。
 4. 优先使用客户端已注册的 Xcode MCP server。新电脑可按 Skill 的客户端配置方式注册 `xcrun mcpbridge`。
 5. 多个 Xcode 同时运行时，动态取得目标 Xcode 27 的 PID，并为 bridge 设置 `MCP_XCODE_PID=<PID>`。同时设置 `DEVELOPER_DIR=<XCODE_APP>/Contents/Developer`，不要写死旧机器的 PID 或 Xcode Beta 小版本路径。
+   多版本并存时，UI 工具也必须使用已核验版本的完整应用路径；不要用 `getApp("Xcode")` 或共享 bundle identifier 定位。`getApp` 会自动启动所匹配的应用，名称匹配可能拉起默认旧版本，bundle identifier 也不能区分多个安装。
 6. Xcode 升级或更换应用路径后重新发现 toolchain、进程、workspace 和工具 schema；不要复用旧 Beta 的 PID、连接或工具参数。Skills 导出成功不等于 MCP workspace build 或设备验证通过。
 
 原始 stdio 方式仅作回退：
@@ -236,6 +237,7 @@ xcrun mcpbridge
 - 优先使用 hierarchy 的 `hitPoint`；只有 hitPoint 尝试失败并重新捕获后，才使用截图估算坐标。
 - 每次点击、滑动、切换、旋转或状态变化后重新捕获并核对可见状态与 hierarchy。
 - tvOS 按焦点导航：读取 hierarchy 的 `Focused` 标记，使用 Siri Remote 命令 `r up/down/left/right/select/menu/playpause/home`，不使用触屏坐标。方向键可根据 hierarchy 顺序合并成一次命令，之后捕获确认焦点；激活或返回后核对目标页面。先确认当前工具 schema 支持该命令。
+- tvOS 返回问题必须区分工具的 Siri Remote Menu 与 Device Hub 原生键盘 Escape；tvOS 27 已观察到 Escape 绕过 `onExitCommand`。快速组合按键须用日志核对实际间隔，不能把链式命令当成零等待。本项目案例见 `docs/TVFocusAndRemoteNavigation.md`；原生键盘操作仍由当前设备 session 的唯一负责人执行。
 - 视觉问题检查原尺寸截图，覆盖颜色、对齐、裁切、重叠、圆角、安全区和深浅色。
 - 交互问题必须验证结果状态；“发出了点击”不等于通过。
 - 完成后记录设备/OS、交互路径、观察结果和安装后的截图路径，并调用 `DeviceInteractionEndSession`。

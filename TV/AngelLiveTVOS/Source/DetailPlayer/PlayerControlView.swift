@@ -137,18 +137,6 @@ struct PlayerControlView: View {
                     .frame(width: 1920, height: 390)
                     .padding(.top, 30)
                     .transition(.move(edge: .top))
-                    .onExitCommand(perform: {
-                        withAnimation {
-                            roomInfoViewModel.showTop = false
-                        }
-                        DispatchQueue.main.async {
-                            if roomInfoViewModel.showControl {
-                                restoreControlFocus()
-                            } else {
-                                restoreHiddenControlFocus()
-                            }
-                        }
-                    })
                     
                     Spacer()
                 }
@@ -181,14 +169,6 @@ struct PlayerControlView: View {
                                 .padding([.leading, .trailing], 50)
                                 .background(.thinMaterial)
                                 .focused($state, equals: .danmuSetting)
-                                .onExitCommand {
-                                    if roomInfoModel.showDanmuSettingView == true {
-                                        roomInfoModel.showDanmuSettingView.toggle()
-                                        showDanmuSetting.toggle()
-                                        state = roomInfoViewModel.lastOptionState
-                                        roomInfoViewModel.showControl = true
-                                    }
-                                }
                         }
                     }
                 }
@@ -537,10 +517,35 @@ struct PlayerControlView: View {
             }
         })
         .onExitCommand {
-            guard roomInfoViewModel.showTop == false,
-                  roomInfoViewModel.showDanmuSettingView == false,
-                  showStatisticsPanel == false,
-                  showQualityPanel == false else {
+            if roomInfoViewModel.showTop {
+                withAnimation {
+                    roomInfoViewModel.showTop = false
+                }
+                DispatchQueue.main.async {
+                    if roomInfoViewModel.showControl {
+                        restoreControlFocus()
+                    } else {
+                        restoreHiddenControlFocus()
+                    }
+                }
+                return
+            }
+
+            if roomInfoViewModel.showDanmuSettingView {
+                roomInfoViewModel.showDanmuSettingView = false
+                showDanmuSetting = false
+                state = roomInfoViewModel.lastOptionState
+                roomInfoViewModel.showControl = true
+                return
+            }
+
+            if showStatisticsPanel {
+                hideStatisticsPanel()
+                return
+            }
+
+            if showQualityPanel {
+                hideQualityPanel()
                 return
             }
 
@@ -643,7 +648,10 @@ struct PlayerControlView: View {
     }
 
     private func hiddenControlAnchor(width: CGFloat, height: CGFloat, focus: PlayControlFocusableField) -> some View {
-        Button(action: {}) {
+        Button(action: {
+            pendingVisibleFocusAfterReveal = resolvedVisibleControlFocus(from: focus)
+            roomInfoViewModel.showControl = true
+        }) {
             Color.clear
                 .frame(width: width, height: height)
                 .contentShape(Rectangle())

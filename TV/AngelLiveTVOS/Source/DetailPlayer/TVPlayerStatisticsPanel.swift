@@ -52,7 +52,6 @@ struct TVPlayerStatisticsPanel: View {
         .onAppear {
             isCloseButtonFocused = true
         }
-        .onExitCommand(perform: onClose)
     }
 
     private var header: some View {

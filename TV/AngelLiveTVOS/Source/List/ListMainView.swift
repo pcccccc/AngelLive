@@ -2,24 +2,37 @@ import SwiftUI
 import GameController
 import AngelLiveDependencies
 import AngelLiveCore
+#if DEBUG
+import os
+#endif
 
 enum FocusableField: Hashable {
     case leftMenu(Int, Int)
     case mainContent(Int)
     case leftFavorite(Int, Int)
-    case leftTrigger
+    case platformInfo
+    case emptyContent
 }
 
 struct ListMainView: View {
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) var scenePhase
     @State var needFullScreenLoading: Bool = false
     @State private var hasSetInitialFocus: Bool = false
+    @State private var pendingCategoryFocus = false
+    @State private var pendingSidebarFocus: FocusableField?
     @State private var showEmptyState: Bool = false
     @State private var pendingEmptyState: DispatchWorkItem?
-    @State private var isOpeningSidebar: Bool = false
     @State private var showCapabilitySheet: Bool = false
+    @State private var hasStartedInitialLoad = false
     private static let topId = "topIdHere"
+    #if DEBUG
+    private static let navigationLog = OSLog(
+        subsystem: Bundle.main.bundleIdentifier ?? "AngelLiveTVOS",
+        category: "RoomListNavigation"
+    )
+    #endif
     private let gridColumnCount = 4
     private let gridSpacing: CGFloat = 50
     private let cardWidth: CGFloat = 380
@@ -28,14 +41,21 @@ struct ListMainView: View {
     private let headerToGridSpacing: CGFloat = 24
 
     var liveType: LiveType
-    var liveViewModel: LiveViewModel
+    @State private var liveViewModel: LiveViewModel
     @FocusState var focusState: FocusableField?
     var appViewModel: AppState
     
     init(liveType: LiveType, appViewModel: AppState) {
         self.liveType = liveType
         self.appViewModel = appViewModel
-        self.liveViewModel = LiveViewModel(roomListType: .live, liveType: liveType, appViewModel: appViewModel)
+        _liveViewModel = State(
+            initialValue: LiveViewModel(
+                roomListType: .live,
+                liveType: liveType,
+                appViewModel: appViewModel,
+                shouldLoadData: false
+            )
+        )
     }
 
     private enum RoomGridItem: Hashable {
@@ -75,13 +95,23 @@ struct ListMainView: View {
         return items
     }
 
-    private func handleMoveCommand(_ direction: MoveCommandDirection) {
-        Logger.debug("ListMainView handleMoveCommand direction=\(direction) focus=\(String(describing: focusState)) selectedIndex=\(liveViewModel.selectedRoomListIndex)", category: .ui)
+    private func handleMoveCommand(_ direction: MoveCommandDirection, from cardIndex: Int? = nil) {
+        logNavigation("move direction=\(direction) cardIndex=\(String(describing: cardIndex)) selectedIndex=\(liveViewModel.selectedRoomListIndex)")
+        cancelPendingFocus()
+
         switch focusState {
         case .leftMenu, .leftFavorite:
             if direction == .right {
-                liveViewModel.isSidebarExpanded = false
-                focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
+                closeSidebar()
+            }
+        case .mainContent(let focusedIndex):
+            let index = cardIndex ?? focusedIndex
+            if direction == .left && index >= 0 && index % gridColumnCount == 0 {
+                openSidebar()
+            }
+        case .emptyContent, .platformInfo:
+            if direction == .left {
+                openSidebar()
             }
         default:
             break
@@ -92,7 +122,13 @@ struct ListMainView: View {
     private func roomGridItemView(_ item: RoomGridItem, reader: ScrollViewProxy) -> some View {
         switch item {
         case .room(let index):
-            LiveCardView(index: index, externalFocusState: $focusState, onMoveCommand: handleMoveCommand)
+            LiveCardView(
+                index: index,
+                externalFocusState: $focusState,
+                onMoveCommand: { direction in
+                    handleMoveCommand(direction, from: index)
+                }
+            )
                 .environment(liveViewModel)
                 .onPlayPauseCommand(perform: {
                     liveViewModel.roomPage = 1
@@ -126,11 +162,24 @@ struct ListMainView: View {
             }
             .buttonStyle(.plain)
             .padding(.trailing, 80)
+            .focused($focusState, equals: .platformInfo)
+            .onMoveCommand { direction in
+                handleMoveCommand(direction)
+            }
         }
     }
 
     private var shouldShowLoadingPlaceholder: Bool {
         (liveViewModel.isLoading || (liveViewModel.roomList.isEmpty && !showEmptyState)) && liveViewModel.hasMoreRooms
+    }
+
+    private var sidebarOwnsFocus: Bool {
+        switch focusState {
+        case .leftMenu, .leftFavorite:
+            return true
+        default:
+            return false
+        }
     }
 
     private func updateEmptyState() {
@@ -154,12 +203,79 @@ struct ListMainView: View {
     }
 
     private func openSidebar() {
-        guard !liveViewModel.isSidebarExpanded else { return }
-        isOpeningSidebar = true
+        guard !liveViewModel.isSidebarExpanded, !liveViewModel.categories.isEmpty else { return }
+        logNavigation("openSidebar")
+        cancelPendingFocus()
         liveViewModel.isSidebarExpanded = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            focusState = .leftMenu(0, 0)
+    }
+
+    private func selectCategory(parentIndex: Int, subIndex: Int) {
+        guard liveViewModel.selectCategory(parentIndex: parentIndex, subIndex: subIndex) else { return }
+
+        cancelPendingFocus()
+        pendingCategoryFocus = true
+        closeSidebar(restoreContentFocus: false)
+    }
+
+    private func cancelPendingFocus() {
+        pendingCategoryFocus = false
+        pendingSidebarFocus = nil
+        hasSetInitialFocus = true
+    }
+
+    private var focusAfterSidebarClose: FocusableField {
+        guard !liveViewModel.roomList.isEmpty else {
+            return showEmptyState && !liveViewModel.isLoading ? .emptyContent : .platformInfo
         }
+        let selectedIndex = liveViewModel.selectedRoomListIndex
+        let validIndex = liveViewModel.roomList.indices.contains(selectedIndex) ? selectedIndex : 0
+        return .mainContent(validIndex)
+    }
+
+    private func closeSidebar(restoreContentFocus: Bool = true) {
+        logNavigation("closeSidebar target=\(focusAfterSidebarClose)")
+        pendingSidebarFocus = restoreContentFocus ? focusAfterSidebarClose : nil
+        liveViewModel.isSidebarExpanded = false
+    }
+
+    private func handleBackCommand() {
+        cancelPendingFocus()
+        if liveViewModel.isSidebarExpanded {
+            closeSidebar()
+        } else {
+            logNavigation("dismissList")
+            dismiss()
+        }
+    }
+
+    private func logNavigation(_ event: String) {
+        let message = "RoomListNavigation \(event) model=\(ObjectIdentifier(liveViewModel)) focus=\(String(describing: focusState)) expanded=\(liveViewModel.isSidebarExpanded) loading=\(liveViewModel.isLoading) pendingCategory=\(pendingCategoryFocus)"
+        Logger.debug(message, category: .ui)
+        #if DEBUG
+        // 保留非调试器启动后的返回记录，避免设备会话结束时丢失现场。
+        os_log("%{public}@", log: Self.navigationLog, type: .default, message)
+        #endif
+    }
+
+    private var pendingFocusTarget: FocusableField? {
+        guard !liveViewModel.isLoading,
+              !liveViewModel.hasError,
+              !liveViewModel.isSidebarExpanded else {
+            return nil
+        }
+
+        if pendingCategoryFocus {
+            if liveViewModel.roomList.isEmpty {
+                return showEmptyState ? .emptyContent : nil
+            }
+            return .mainContent(0)
+        }
+
+        guard !hasSetInitialFocus else { return nil }
+        if !liveViewModel.roomList.isEmpty {
+            return .mainContent(0)
+        }
+        return showEmptyState ? .emptyContent : nil
     }
 
     private var emptyStateView: some View {
@@ -170,6 +286,12 @@ struct ListMainView: View {
                 .foregroundStyle(.secondary)
         }
         .padding()
+        .focusable()
+        .focusEffectDisabled()
+        .focused($focusState, equals: .emptyContent)
+        .onMoveCommand { direction in
+            handleMoveCommand(direction)
+        }
     }
 
     private var roomListView: some View {
@@ -215,51 +337,61 @@ struct ListMainView: View {
                     roomListView
                 }
             }
+            // 菜单接到焦点之前保留原卡片，确保快速“左 → 返回”仍有命令接收者。
+            // 焦点进入菜单后，再将背景排除出遥控器的焦点搜索。
+            .disabled(liveViewModel.isSidebarExpanded && sidebarOwnsFocus)
             .blur(radius: liveViewModel.isSidebarExpanded ? 5 : 0)
             .animation(.easeInOut(duration: 0.25), value: liveViewModel.isSidebarExpanded)
 
             // 遮罩层
             if liveViewModel.isSidebarExpanded {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        liveViewModel.isSidebarExpanded = false
-                        focusState = .mainContent(liveViewModel.selectedRoomListIndex)
-                    }
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            logNavigation("dimmingTap")
+                            cancelPendingFocus()
+                            closeSidebar()
+                        }
                     .transition(.opacity)
             }
 
             // Sidebar
             if liveViewModel.roomList.count > 0 || liveViewModel.categories.count > 0 {
-                SidebarView(focusState: $focusState)
+                SidebarView(
+                    focusState: $focusState,
+                    onSelectCategory: selectCategory,
+                    onExitSidebar: {
+                        logNavigation("sidebarExitCommand")
+                        cancelPendingFocus()
+                        closeSidebar()
+                    }
+                )
                     .environment(liveViewModel)
                     .zIndex(2)
                     .onMoveCommand { direction in
+                        cancelPendingFocus()
                         if direction == .right {
-                            liveViewModel.isSidebarExpanded = false
-                            focusState = .mainContent(max(0, liveViewModel.selectedRoomListIndex))
+                            closeSidebar()
                         }
                     }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-
-    private var leftSidebarTrigger: some View {
-        Button(action: {
-            openSidebar()
-        }) {
-            Rectangle()
-                .fill(Color.clear)
+        .task(id: pendingSidebarFocus) {
+            guard let target = pendingSidebarFocus,
+                  !liveViewModel.isSidebarExpanded,
+                  !Task.isCancelled else { return }
+            // 等背景在新视图树中重新启用，再请求恢复焦点。
+            focusState = target
+            pendingSidebarFocus = nil
         }
-        .frame(width: 1)
-        .frame(maxHeight: .infinity)
-        .opacity(0.001)
-        .contentShape(Rectangle())
-        .buttonStyle(.plain)
-        .focusable(liveViewModel.endFirstLoading && !liveViewModel.isSidebarExpanded)
-        .focused($focusState, equals: .leftTrigger)
-        .accessibilityHidden(true)
+        .task(id: pendingFocusTarget) {
+            guard let target = pendingFocusTarget else { return }
+            guard !Task.isCancelled else { return }
+            focusState = target
+            pendingCategoryFocus = false
+            hasSetInitialFocus = true
+        }
     }
 
     private func errorView(_ error: Error) -> some View {
@@ -300,50 +432,42 @@ struct ListMainView: View {
             } else {
                 listContainerView
             }
-
-            if !liveViewModel.isSidebarExpanded && (liveViewModel.roomList.count > 0 || liveViewModel.categories.count > 0) {
-                HStack(spacing: 0) {
-                    leftSidebarTrigger
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .ignoresSafeArea()
-            }
         }
         .background(.thinMaterial)
-        .onChange(of: focusState) { _, newValue in
-            // 当焦点移到主内容时，关闭 sidebar
-            switch newValue {
-            case .mainContent:
-                if liveViewModel.isSidebarExpanded {
-                    if isOpeningSidebar {
-                        return
-                    }
-                    liveViewModel.isSidebarExpanded = false
-                }
-            case .leftTrigger:
-                openSidebar()
-            case .leftMenu, .leftFavorite:
-                isOpeningSidebar = false
-            default:
-                break
-            }
+        .interactiveDismissDisabled()
+        .task {
+            guard !hasStartedInitialLoad else { return }
+            hasStartedInitialLoad = true
+            await liveViewModel.getCategoryList()
         }
-        .onChange(of: liveViewModel.roomList) { _, newValue in
-            updateEmptyState()
-            // 当 roomList 首次加载完成时，设置初始焦点到主内容
-            if !hasSetInitialFocus && !newValue.isEmpty {
-                hasSetInitialFocus = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    focusState = .mainContent(0)
-                }
+        .onExitCommand {
+            logNavigation("exitCommand")
+            handleBackCommand()
+        }
+        .onKeyPress(.escape, phases: .all) { press in
+            logNavigation("escape phase=\(press.phase)")
+            // Escape 不一定转换为遥控器的 Exit 命令。消费整个按键，
+            // 松开时只返回一层，避免按下时收起菜单、松开时又退出页面。
+            if press.phase == .up {
+                handleBackCommand()
             }
+            return .handled
+        }
+        .onChange(of: focusState) { oldValue, newValue in
+            logNavigation("focusChanged from=\(String(describing: oldValue)) to=\(String(describing: newValue))")
+        }
+        .onChange(of: liveViewModel.roomList) { _, _ in
+            updateEmptyState()
         }
         .onChange(of: liveViewModel.isLoading) { _, _ in
             updateEmptyState()
         }
         .onAppear {
+            logNavigation("listAppeared")
             updateEmptyState()
+        }
+        .onDisappear {
+            logNavigation("listDisappeared")
         }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
@@ -374,7 +498,7 @@ struct ListMainView: View {
             }
         }
         .overlay {
-            if liveViewModel.roomList.count > 0 {
+            if !liveViewModel.roomList.isEmpty && !liveViewModel.isSidebarExpanded {
                 VStack {
                     Spacer()
                     HStack {

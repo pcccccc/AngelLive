@@ -73,7 +73,6 @@ struct TVQualitySelectionPanel: View {
                 focusedItem = .close
             }
         }
-        .onExitCommand(perform: onClose)
     }
 
     // MARK: - Header
@@ -234,6 +233,7 @@ struct TVQualitySelectionPanel: View {
     }
 }
 
+
 // MARK: - tvOS Button Styles
 
 /// 清晰度选项按钮样式：聚焦时微缩放 + 高亮
@@ -276,4 +276,3 @@ private struct TVCdnHeaderButtonStyle: ButtonStyle {
             .animation(.easeInOut(duration: 0.18), value: isFocused)
     }
 }
-

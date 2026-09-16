@@ -101,6 +101,7 @@ class LiveViewModel {
     )
     var endFirstLoading = false
     var lodingTimer: Timer?
+    private var roomRequestGeneration = UUID()
 
     
     init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: AppState, shouldLoadData: Bool = true) {
@@ -151,7 +152,6 @@ class LiveViewModel {
             await MainActor.run {
                 self.categories = fetchedCategories
                 self.getRoomList(index: self.selectedSubListIndex)
-                self.isLoading = false
             }
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
@@ -167,8 +167,23 @@ class LiveViewModel {
         }
     }
 
+    @discardableResult
+    func selectCategory(parentIndex: Int, subIndex: Int) -> Bool {
+        guard categories.indices.contains(parentIndex) else { return false }
+        let parent = categories[parentIndex]
+        guard parent.subList.indices.contains(subIndex) else { return false }
+
+        selectedMainListCategory = parent
+        selectedSubCategory = parent.subList
+        selectedSubListIndex = subIndex
+        selectedRoomListIndex = 0
+        hasMoreRooms = true
+        roomPage = 1
+        return true
+    }
+
     func getRoomList(index: Int) {
-        if index == -1 || index == 1 {
+        if roomPage == 1 {
             selectedRoomListIndex = 0
         }
         isLoading = true
@@ -196,34 +211,47 @@ class LiveViewModel {
     }
     
     private func fetchLiveRooms(index: Int) {
+        let generation = UUID()
+        roomRequestGeneration = generation
+        let requestedPage = roomPage
+        let requestedCategory: LiveCategoryModel?
+        let requestedParentBiz: String?
+        if index == -1 {
+            requestedCategory = categories.first?.subList.first
+            requestedParentBiz = categories.first?.biz
+        } else if let selectedMainListCategory,
+                  selectedMainListCategory.subList.indices.contains(index) {
+            requestedCategory = selectedMainListCategory.subList[index]
+            requestedParentBiz = selectedMainListCategory.biz
+        } else {
+            requestedCategory = nil
+            requestedParentBiz = nil
+        }
+
         Task {
             do {
                 let newRooms: [LiveModel]
-                if index == -1 {
-                    if let subListCategory = self.categories.first?.subList.first {
-                        let parentBiz = self.categories.first?.biz
-                        newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
-                    } else {
-                        newRooms = []
-                    }
+                if let requestedCategory {
+                    newRooms = try await LiveService.fetchRoomList(
+                        liveType: liveType,
+                        category: requestedCategory,
+                        parentBiz: requestedParentBiz,
+                        page: requestedPage
+                    )
                 } else {
-                    if let subListCategory = self.selectedMainListCategory?.subList[index] {
-                        let parentBiz = self.selectedMainListCategory?.biz
-                        newRooms = try await LiveService.fetchRoomList(liveType: liveType, category: subListCategory, parentBiz: parentBiz, page: self.roomPage)
-                    } else {
-                        newRooms = []
-                    }
+                    newRooms = []
                 }
 
                 await MainActor.run {
-                    if self.roomPage == 1 {
+                    guard self.roomRequestGeneration == generation else { return }
+                    if requestedPage == 1 {
                         self.hasMoreRooms = true
                     }
                     if newRooms.isEmpty {
                         self.hasMoreRooms = false
                     }
                     let mergedRooms: [LiveModel]
-                    if self.roomPage == 1 {
+                    if requestedPage == 1 {
                         mergedRooms = newRooms.removingDuplicates()
                     } else {
                         mergedRooms = self.roomList.appendingUnique(contentsOf: newRooms)
@@ -233,13 +261,14 @@ class LiveViewModel {
                 }
             } catch {
                 await MainActor.run {
+                    guard self.roomRequestGeneration == generation else { return }
                     self.isLoading = false
                     // 插件抛 "返回结果为空" 不算错误:分页到底 / 当前分类无房间。
                     // 不弹错误页,只置 hasMoreRooms=false,首页同时清空列表让空态接管。
                     if let liveParseError = error as? LiveParseError,
                        liveParseError.detail.contains("返回结果为空") {
                         self.hasMoreRooms = false
-                        if self.roomPage == 1 {
+                        if requestedPage == 1 {
                             self.roomList = []
                         }
                         return
