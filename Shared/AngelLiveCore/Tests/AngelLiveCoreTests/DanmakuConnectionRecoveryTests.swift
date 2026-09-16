@@ -179,7 +179,7 @@ struct DanmakuConnectionRecoveryTests {
         connection.disconnect()
     }
 
-    @Test func missingPongReconnectsButMatchingPongKeepsConnectionAlive() async throws {
+    @Test func connectionWithoutPluginTimerStaysOpenWithoutPingPastNinetySeconds() async throws {
         let clock = ManualDanmakuClock()
         let connection = makeWebSocket()
         let engine = RecordingDanmakuEngine()
@@ -193,15 +193,54 @@ struct DanmakuConnectionRecoveryTests {
         let socket = try #require(connection.socket)
         connection.didReceive(event: .connected([:]), client: socket)
         await connection.workQueue.drain()
-        clock.advance(30)
-        let ping = try #require(engine.pings.first)
-        connection.didReceive(event: .pong(ping), client: socket)
-        clock.advance(30)
+        clock.advance(91)
         #expect(delegate.disconnected == 0)
-        #expect(engine.pings.count == 2)
+        #expect(connection.socket === socket)
+        #expect(engine.pings.isEmpty)
+        connection.disconnect()
+    }
+
+    @Test func pluginHeartbeatWritesAcrossPeriodsWithoutPingAndStopsWhenDisabled() async throws {
+        let clock = ManualDanmakuClock()
+        let connection = makeWebSocket()
+        let engine = RecordingDanmakuEngine()
+        let delegate = RecordingDanmakuDelegate()
+        let heartbeat = FixtureHeartbeatWrites()
+        connection.delegate = delegate
+        connection.schedule = clock.schedule
+        connection.makeDriver = { _, _, _, _ in
+            FixtureDanmakuDriver(
+                onOpen: { try decodeResult(#"{"timer":{"mode":"heartbeat","intervalMs":30000}}"#) },
+                onTick: { _ in try await heartbeat.next() }
+            )
+        }
+        connection.makeSocket = { WebSocket(request: $0, engine: engine) }
+        connection.connect()
+        await connection.workQueue.drain()
+        let socket = try #require(connection.socket)
+        connection.didReceive(event: .connected([:]), client: socket)
+        await connection.workQueue.drain()
+
+        for _ in 0..<3 {
+            clock.advance(30)
+            await connection.workQueue.drain()
+        }
+
+        #expect(engine.textWrites == ["heartbeat-1", "heartbeat-2", "heartbeat-3"])
+        #expect(engine.binaryWrites == [Data([1]), Data([2]), Data([3])])
+        #expect(engine.pings.isEmpty)
+        #expect(delegate.disconnected == 0)
+        #expect(connection.socket === socket)
+
         clock.advance(30)
-        #expect(delegate.disconnected == 1)
-        #expect(connection.socket == nil)
+        await connection.workQueue.drain()
+        clock.advance(91)
+        await connection.workQueue.drain()
+        #expect(engine.textWrites == ["heartbeat-1", "heartbeat-2", "heartbeat-3"])
+        #expect(engine.binaryWrites == [Data([1]), Data([2]), Data([3])])
+        #expect(engine.pings.isEmpty)
+        #expect(delegate.disconnected == 0)
+        #expect(connection.socket === socket)
         connection.disconnect()
     }
 
@@ -280,11 +319,27 @@ private func emptyResult() throws -> LiveParseDanmakuDriverResult { try decodeRe
 
 private struct FixtureDanmakuDriver: DanmakuRuntimeDriving {
     var create: @Sendable () async throws -> LiveParseDanmakuDriverResult = { try emptyResult() }
+    var onOpen: @Sendable () async throws -> LiveParseDanmakuDriverResult = { try emptyResult() }
+    var onTick: @Sendable (PluginJSDanmakuDriver.TickReason) async throws -> LiveParseDanmakuDriverResult = { _ in try emptyResult() }
     func createSession() async throws -> LiveParseDanmakuDriverResult { try await create() }
-    func onOpen() async throws -> LiveParseDanmakuDriverResult { try emptyResult() }
-    func onTick(reason: PluginJSDanmakuDriver.TickReason) async throws -> LiveParseDanmakuDriverResult { try emptyResult() }
+    func onOpen() async throws -> LiveParseDanmakuDriverResult { try await onOpen() }
+    func onTick(reason: PluginJSDanmakuDriver.TickReason) async throws -> LiveParseDanmakuDriverResult { try await onTick(reason) }
     func onFrame(frameType: PluginJSDanmakuDriver.IncomingFrameType, text: String?, data: Data?, statusCode: Int?, responseHeaders: [String: String]?) async throws -> LiveParseDanmakuDriverResult { try emptyResult() }
     func destroy(reason: PluginJSDanmakuDriver.DestroyReason) async {}
+}
+
+private actor FixtureHeartbeatWrites {
+    private var tick = 0
+
+    func next() throws -> LiveParseDanmakuDriverResult {
+        tick += 1
+        guard tick <= 3 else {
+            return try decodeResult(#"{"timer":{"mode":"off"}}"#)
+        }
+        return try decodeResult(
+            #"{"writes":[{"kind":"text","text":"heartbeat-\#(tick)"},{"kind":"binary","bytesBase64":"\#(Data([UInt8(tick)]).base64EncodedString())"}]}"#
+        )
+    }
 }
 
 private actor DeferredDanmakuResult {
@@ -342,6 +397,7 @@ private final class ManualDanmakuClock {
 private final class RecordingDanmakuEngine: @preconcurrency Engine {
     var starts = 0
     var textWrites: [String] = []
+    var binaryWrites: [Data] = []
     var pings: [Data] = []
     func register(delegate: any EngineDelegate) {}
     func start(request: URLRequest) { starts += 1 }
@@ -349,6 +405,7 @@ private final class RecordingDanmakuEngine: @preconcurrency Engine {
     func forceStop() {}
     func write(data: Data, opcode: FrameOpCode, completion: (() -> Void)?) {
         if opcode == .ping { pings.append(data) }
+        else { binaryWrites.append(data) }
         completion?()
     }
     func write(string: String, completion: (() -> Void)?) { textWrites.append(string); completion?() }

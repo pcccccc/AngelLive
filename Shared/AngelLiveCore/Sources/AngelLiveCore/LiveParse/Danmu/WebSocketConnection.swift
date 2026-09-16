@@ -44,12 +44,10 @@ public final class WebSocketConnection {
     var makeSocket: @MainActor (URLRequest) -> WebSocket = { WebSocket(request: $0) }
     var schedule: DanmakuSchedule = scheduleDanmakuWork
     private lazy var heartbeatTimer = DanmakuConnectionTimer(schedule: schedule)
-    private lazy var livenessTimer = DanmakuConnectionTimer(schedule: schedule)
     let workQueue = DanmakuConnectionWorkQueue()
     private var cancelReconnect: (@MainActor () -> Void)?
     private var shouldReconnect = false
     private var reconnectPolicy = DanmakuReconnectPolicy()
-    private var pendingPing: Data?
     private var socketIsOpen = false
     private var pendingWrites: [LiveParseDanmakuWriteAction] = []
     /// 去重断开通知:重连期间只首次回调 delegate,避免刷屏
@@ -134,8 +132,6 @@ public final class WebSocketConnection {
     private func tearDownAttempt() {
         workQueue.invalidate()
         heartbeatTimer.stop()
-        livenessTimer.stop()
-        pendingPing = nil
         socketIsOpen = false
         pendingWrites.removeAll()
         let oldSocket = socket
@@ -341,18 +337,6 @@ extension WebSocketConnection: WebSocketDelegate {
             cancelReconnect?()
             cancelReconnect = nil
             guard let driver = pluginDriver else { return }
-            // Transport liveness is independent of application heartbeat plans.
-            pendingPing = nil
-            livenessTimer.update(.init(mode: .heartbeat, intervalMs: 30_000)) { [weak self] in
-                guard let self, self.shouldReconnect, let socket = self.socket else { return }
-                guard self.pendingPing == nil else {
-                    self.handleConnectionFailure(URLError(.timedOut))
-                    return
-                }
-                let ping = Data(UUID().uuidString.utf8)
-                self.pendingPing = ping
-                socket.write(ping: ping)
-            }
             workQueue.enqueue(operation: { try await driver.onOpen() }) { [weak self] outcome in
                 guard let self, self.shouldReconnect else { return }
                 switch outcome {
@@ -368,8 +352,6 @@ extension WebSocketConnection: WebSocketDelegate {
                 domain: "websocket.disconnected", code: Int(code),
                 userInfo: [NSLocalizedDescriptionKey: reason]
             ))
-        case .pong(let data):
-            if data == pendingPing { pendingPing = nil }
         case .text(let string):
             handleIncomingFrame(frameType: .text, text: string, data: nil)
         case .binary(let data):
