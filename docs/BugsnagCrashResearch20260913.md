@@ -8,9 +8,9 @@
 |---|---:|---|---|
 | tvOS FFmpeg 无效内存访问 | 7 | 每次均同时存在旧视频解码器重建与读线程重连；锁定依赖源码存在上下文提前释放的竞争 | 高可信根因，尚未修复内核或完成运行时复现 |
 | iOS RenderBox 符号动画 | 30 | 全部为 iPhone / iOS 26.0、26.0.1；与收藏图标替换动画路径吻合 | 高可信候选，尚未完成同系统 A/B 复现 |
-| iPad Tab 标识重复 | 4 | 全部为 iPadOS 27 启动；宿主使用显示名作为列表 ID、可变元数据作为 Tab 选择值 | 已修宿主身份缺陷，尚未证明覆盖全部线上事件 |
-| HistoryModel 缺失 | 5 | 全部是 iOS App 在 Mac 上运行，不是原生 macOS 宿主 | 运行环境已定位，环境丢失边界待复现 |
-| SwiftUI 布局 App Hang | 1 | 同样是 iOS App 在 Mac 上运行，主线程停留在惰性布局测量 | 未定位具体视图，不能据此替换所有惰性布局 |
+| iPad Tab 标识重复 | 4 | 全部为 iPadOS 27 启动；宿主使用显示名作为列表 ID、可变元数据作为 Tab 选择值 | 已修宿主身份缺陷；9 月 15 日更新：**本轮验证通过，未复现崩溃**，实际覆盖范围见下文 |
+| HistoryModel 缺失 | 5 | 全部是 iOS App 在 Mac 上运行，不是原生 macOS 宿主 | 已调整模型注入边界；9 月 16 日 **本轮已覆盖场景通过，未复现崩溃**，范围见下文 |
+| SwiftUI 布局 App Hang | 1 | 同样是 iOS App 在 Mac 上运行，主线程停留在惰性布局测量 | 9 月 16 日 **本轮已覆盖场景通过，未复现挂起**；根因仍未定位，本轮未新增布局修复 |
 
 研究阶段未发布版本或将 Bugsnag 分组标记为 resolved。随后按用户要求整理验证状态并提交代码，交付时的验证范围见[修复与验证状态](RegressionVerification20260913.md)。
 
@@ -60,7 +60,9 @@ Apple Developer Forums 的 SF Symbols 页面有开发者的最小复现：两个
 
 本轮修改限定于 iOS FullUI 平台 Tab：列表 identity 和选择值统一采用稳定 `pluginId`；标题仍读取当前元数据；插件移除时，selection binding 立即回退有效首页，随后更新 `selectedTab`。ShellUI 目录及其书签导航未修改。此前工作树已有的启动模式修复继续保留。
 
-待验收：同名插件并存；选中插件原地更新标题和图标；移除选中插件；iPadOS 27 冷启动及侧栏切换。源码修复能消除上述身份缺陷，但尚不能把这 4 个线上事件全部标为已修复。
+研究结束时待验收：同名插件并存；选中插件原地更新标题和图标；移除选中插件；iPadOS 27 冷启动及侧栏切换。源码修复能消除上述身份缺陷，但尚不能把这 4 个线上事件全部标为已修复。
+
+2026-09-15 状态更新：新包完成普通标签切换、插件安装／卸载造成的标签集合变化、播放器呈现／返回及历史导航，未复现崩溃。按用户确认，iPad Tab 标记为**本轮验证通过，未复现崩溃**，从本轮待验收清单移除；本次仅更新状态，未补测同名插件、选中插件原地更新及真实窗口尺寸变化等场景，未关闭线上分组。实际设备证据与覆盖范围见[新包记录](BugsnagBuild19Fixes20260915.md#ipad-tabbar)。
 
 ## 4. HistoryModel：集中于 iOS App 在 Mac 上运行
 
@@ -70,7 +72,7 @@ Apple Developer Forums 的 SF Symbols 页面有开发者的最小复现：两个
 
 当前 `ContentView` 已持有并注入同一个 HistoryModel。实际消费点是 FullUI 历史列表和播放器；收藏、历史和分类列表的常用 UIKit 路径均传入外部导航状态，由上层呈现播放器。独立 UIHostingController 的基础房间卡片配置只注入收藏模型，仍有潜在环境边界风险，但尚未证明这些事件经过该回退入口。
 
-2026-09-15 更新：build 19 查询中的 9 次事件仍全部来自 iOS App 在 Mac 上运行。模型已改为由每窗口 `AngelLiveSceneView` 持有并在 `ContentView` 外注入，UIKit 接管点击的卡片不再注册本地播放器呈现；iPad 新包的非空历史进入播放已通过，Mac 对应运行环境仍未验证。当前处理与证据见 [build 19 修复与验证](BugsnagBuild19Fixes20260915.md)。
+2026-09-15 更新：build 19 查询中的 9 次事件仍全部来自 iOS App 在 Mac 上运行。模型已改为由每窗口 `AngelLiveSceneView` 持有并在 `ContentView` 外注入，UIKit 接管点击的卡片不再注册本地播放器呈现；iPad 新包的非空历史进入播放已通过。15 日晚间至 16 日已清理重装 iOS App on Mac 新包，非空历史页、收藏实际起播及返回、标签往返、窗口放大和恢复未复现模型缺失；历史条目因下播或插件网络失败，仍未取得历史记录实际起播通过证据。当前处理与证据见 [build 19 修复与验证](BugsnagBuild19Fixes20260915.md)。
 
 生命周期中的 `FUWindowSceneSessionRoleSystemUI` 是系统场景标记，不能单独作为“应用额外开了一个未注入环境的窗口”的证据。当前 iOS App 只有一个 WindowGroup 声明，没有找到主动 openWindow 路径。
 
@@ -83,6 +85,8 @@ Apple Developer Forums 的 SF Symbols 页面有开发者的最小复现：两个
 唯一事件来自 iOS App 在 Mac 上运行，macOS 26.5.1 / Mac16,12，运行约 85 秒后被记录为无响应终止，带有直播元数据。主线程采样停在 `LazyLayoutComputer.spacing → LayoutEngineBox.sizeThatFits → IgnoresAutomaticPaddingLayout`，没有可定位宿主视图的调用帧。其他线程未提供证据将其归因于网络、解码或 CloudKit。
 
 已检查播放器信息区：实际聊天列表是 UIKit `ChatTableView`；含 LazyVStack 的 `ChatListView` 仅出现在自身 Preview，没有生产调用，不能将它当成根因。应用其他首页和平台页面仍使用惰性布局，直播元数据也不能证明挂起时可见页面仍为播放器。
+
+2026-09-16 追加：iOS App on Mac 已完成清理重装、收藏实际起播及返回、标签往返、窗口放大和恢复，未复现挂起；三秒主线程采样主要为系统无障碍接口和事件循环，未捕获上述布局堆栈。本轮未新增布局修复，长时间播放及更多窗口场景未覆盖，该分组仍未关闭；详情见 [清理重装记录](BugsnagBuild19Fixes20260915.md)。
 
 下一步在同运行模式采集可见页面、窗口尺寸、前台切换和连续主线程采样，用 SwiftUI Instruments / Time Profiler 定位测量循环。单次被采样到的函数不足以证明死循环；本轮不作全局替换 LazyVStack、固定尺寸或移除安全区的推测性修改。
 

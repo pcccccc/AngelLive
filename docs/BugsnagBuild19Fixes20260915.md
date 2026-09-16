@@ -6,9 +6,9 @@
 
 | 分组 | 窗口内事件 | 新旧判断 | 本轮处理 |
 |---|---:|---|---|
-| [HistoryModel 缺失](https://app.bugsnag.com/personal-829/angelliveios/errors/6a741fe2f952d9851bcf8a68) | 9 | 旧分组，8 月 6 日首次出现 | 调整窗口内的模型注入边界，移除 UIKit 卡片的冗余本地播放器呈现 |
+| [HistoryModel 缺失](https://app.bugsnag.com/personal-829/angelliveios/errors/6a741fe2f952d9851bcf8a68) | 9 | 旧分组，8 月 6 日首次出现 | 已修模型注入和呈现边界；9 月 16 日 iOS-on-Mac **本轮已覆盖场景通过，未复现崩溃**，范围见文末 |
 | [照片写入触发 TCC 终止](https://app.bugsnag.com/personal-829/angelliveios/errors/6a6b3e2ce9828b141c1440aa) | 2 | 旧分组，7 月 30 日首次出现 | 为 iOS Debug/Release 补充照片添加用途说明 |
-| [iPad TabBar 空对象异常](https://app.bugsnag.com/personal-829/angelliveios/errors/6aa82ba15ab98605a9cefedd) | 1 | 新分组，9 月 15 日首次出现 | 未复现；真实窗口尺寸转换未覆盖，保留待查 |
+| [iPad TabBar 空对象异常](https://app.bugsnag.com/personal-829/angelliveios/errors/6aa82ba15ab98605a9cefedd) | 1 | 新分组，9 月 15 日首次出现 | **本轮验证通过，未复现崩溃**；按用户确认从本轮待验收清单移除，真实窗口尺寸转换未覆盖 |
 
 build 18 的方向回调、收藏模型等事件不属于本轮新增修复范围。没有发布新版本，也没有将线上分组标记为已解决。
 
@@ -40,7 +40,9 @@ build 18 的方向回调、收藏模型等事件不属于本轮新增修复范�
 
 事件来自 iPadOS 27，尺寸变化触发 `UITabBarController.traitCollectionDidChange`，随后 `_tabs_rebuildTabBarItemsAnimated` 向数组插入空对象。当前源码没有手动覆盖 UIKit size class；既有 TabSection、动态平台 Tab 与播放器呈现路径需要结合运行时复现判断。不能把修改 Tab role、强制重建 TabView 或移除侧栏当作已验证的根因修复。
 
-新包在 iPad mini（A17 Pro）上完成普通标签切换、插件安装／卸载造成的标签集合变化、播放器呈现／返回及历史导航，未出现该异常。窗口缩放则未取得有效覆盖：两次操作 SpringBoard 提供的窗口缩放把手均进入 App Switcher，恢复后应用窗口仍为 744 × 1133；尝试从顶部下滑显示系统窗口菜单也回到主屏幕，未出现窗口排列控件。因此不能将这些操作或屏幕旋转算作跨 size class 验证。本轮保留 Tab 实现，后续仍需在可操作真实窗口尺寸变化的环境中复现。
+新包在 iPad mini（A17 Pro）上完成普通标签切换、插件安装／卸载造成的标签集合变化、播放器呈现／返回及历史导航，未出现该异常。根据上述已有测试及用户确认，iPad Tab 标记为**本轮验证通过，未复现崩溃**，从本轮待验收清单移除。本次状态更新没有重新运行设备测试，也没有修改 Tab 实现或关闭线上崩溃分组。
+
+覆盖范围说明：窗口缩放未取得有效覆盖。两次操作 SpringBoard 提供的窗口缩放把手均进入 App Switcher，恢复后应用窗口仍为 744 × 1133；尝试从顶部下滑显示系统窗口菜单也回到主屏幕，未出现窗口排列控件。因此这些操作及屏幕旋转不计作跨 size class 验证；该限制保留为测试范围说明。
 
 ## 验证状态
 
@@ -55,7 +57,8 @@ build 18 的方向回调、收藏模型等事件不属于本轮新增修复范�
 - 本轮遇到的 Xcode MCP 连接问题已恢复。未升级依赖、清理 Package cache 或更改签名来绕过环境问题。
 - 收尾时再次通过 MCP 查询 Issue Navigator：`issues = []`、`totalFound = 0`；Device Hub 返回 `Session stopped`。正常 UI 清理后，历史记录为空、已安装插件和订阅源均为 0、ShellUI 书签为空；测试图片已删除，原有六张图片保留。本轮 localhost HTTP 服务已关闭。
 - 全仓检查覆盖 650 个已跟踪及非忽略的新文件：具体内容平台标识无命中；31 个测试／fixture 文件中的数字 `liveType`／`siteId` 检查无命中。
-- 尚未验证：新包 iPad 尺寸切换和 iOS-on-Mac 历史路径。当前 Debug／Release 均关闭 iOS App on Mac 支持，本轮没有更改该产品设置，也没有用原生 macOS App 代替验证。
+- iPad Tab：本轮验证通过，未复现崩溃；真实窗口尺寸切换未覆盖，范围说明见上节。
+- iOS-on-Mac：晚间追加清理重装，非空历史页、收藏起播及返回、标签往返、窗口放大和恢复通过，覆盖路径未复现 `HistoryModel` 缺失或布局挂起；历史记录实际起播仍受数据状态限制，详见文末追加记录。
 - 本轮没有修改共享 Package 或 macOS／tvOS 宿主，未重复运行这些平台的构建或 Package 单元测试。
 
 ## 环境恢复
@@ -63,3 +66,16 @@ build 18 的方向回调、收藏模型等事件不属于本轮新增修复范�
 Device Hub session 已结束，本轮 MCP bridge 已正常退出。测试 iPad mini 已关闭，原 iPhone 18 Pro 已恢复为唯一运行的 iOS 模拟器；没有新建、克隆或删除模拟器。
 
 恢复 Xcode 运行目标时，电脑已锁屏，UI 工具明确返回无法解锁，因此原 `AngelLiveTVOS-SimpleLive / Any tvOS Device (arm64)` 目标尚未恢复，当前仍为 `AngelLive / iPad mini (A17 Pro)`。没有绕过锁屏、重启 Xcode 或更改工程签名来处理该限制。
+
+## iOS App on Mac 清理重装（9 月 15 日晚间至 16 日追加）
+
+- 环境：Apple M1 Mac／macOS 27.0（26A5425a），Xcode 27.0 RC（27A266a），基线 `88aa021`。临时为 iOS target 的 Debug／Release 开启 Designed for iPhone/iPad on Mac，使用 `AngelLive / My Mac (Designed for iPad)`；Mac Catalyst 保持关闭。
+- 按用户要求停止旧进程，执行 Xcode `Clean Build Folder`，清理成功；随后根 workspace 的 MCP `BuildProject` 成功（433.201 秒），Navigator error 为 0。MCP `RunProject` 再次构建、安装并启动成功（36.543 秒），采用无调试器附加的普通运行。
+- 实际安装包为 iPhoneOS 平台、iOS 27 SDK、Debug `3.0.0 (1)`；运行包与本次构建产物的 `AngelLive.debug.dylib` SHA-256 一致，确认是清理后重建的新包。没有升级依赖、修改业务源码、删除账号或插件数据。
+- 当前 Device Hub 接口没有可选的 Mac 目标，本次未执行 `DeviceInteractionInstallAndRun`。Mac 页面检查由专用子代理通过 CUA 完成，以下结果对应本次 `RunProject` 的新进程，不借用此前 iPad 或原生 macOS App 的验证。
+- 新包实际打开收藏、设置、非空历史页，三列内容正常；一条历史明确下播，另一条历史进入播放后显示插件网络失败，能够返回。这两项未计为历史记录实际起播通过。
+- 随后从收藏打开正在直播的内容：先显示 `CONNECTING`，后续截图出现视频画面及实时消息，实际起播通过；按 Escape 返回收藏成功。完成收藏 → 首页 → 搜索 → 收藏的标签往返，以及窗口公开 `zoom the window` 操作的放大和恢复，两种尺寸下网格无重叠、出界或明显裁切。最终停留在原尺寸收藏页，主代理独立复核最终 AX 和截图。
+- MCP 查询时新进程持续运行，异常过滤未检出 `No Observable object`、`HistoryModel`、`Fatal error` 或未捕获异常。23:57 的三秒线程采样主要处于系统无障碍属性遍历和事件循环，未出现原事件的 `LazyLayoutComputer.spacing → LayoutEngineBox.sizeThatFits → IgnoresAutomaticPaddingLayout` 堆栈。采样保留在本机临时目录，文件名 `angellive-ios-mac-reinstalled-68409.sample.txt`。
+- 结论：按用户确认，将上述已覆盖场景标记为**本轮验证通过，未复现 `HistoryModel` 缺失或布局挂起**。没有新增布局修复或关闭线上分组；历史记录实际起播、长时间播放及更多窗口转换场景仍保留验证缺口。
+- CUA 在设置／历史路径曾报告两个导航项同时处于 selected，另有一次侧栏配置标题在截图中不可见；当前收藏页已恢复正常。这两项仅记录为待复核观察，未定位或修改实现。关键页面截图由 CUA 作为工具图片返回，工具未提供本地导出路径。
+- 收尾已将 Debug／Release 的 Mac 运行支持恢复为原值 `NO`，工程文件无剩余 diff；Xcode 恢复本次开始时的 `AngelLive / iPhone 18 Pro`，未启动模拟器。新包仍留在 Mac 的收藏页；最后核对时同一进程已运行约 9 分钟，异常过滤仍无上述命中。
