@@ -33,7 +33,8 @@ public class DanmakuTextCell: DanmakuCell {
             model.text,
             font: model.font,
             color: model.color,
-            at: CGPoint(x: 25, y: 5)
+            at: model.textDrawingOrigin,
+            in: context
         )
     }
 
@@ -41,26 +42,16 @@ public class DanmakuTextCell: DanmakuCell {
 }
 
 enum DanmakuTextOutlineStyle {
-    /// 使用固定物理像素描边，避免不同屏幕缩放比例下视觉粗细漂移。
-    static let physicalStrokeWidth: CGFloat = 3
-
-    static func strokePercentage(fontSize: CGFloat, screenScale: CGFloat) -> CGFloat {
-        let safeFontSize = max(fontSize, 1)
-        let safeScale = max(screenScale, 1)
-        let strokeWidthInPoints = physicalStrokeWidth / safeScale
-        return -(strokeWidthInPoints / safeFontSize * 100)
-    }
+    /// 描边线宽为字号的 5%，在不同屏幕倍率下保持相同的逻辑宽度。
+    static let strokePercentage: CGFloat = -5
 
     static func outlineColor(
         red: CGFloat,
         green: CGFloat,
-        blue: CGFloat,
-        alpha: CGFloat
+        blue: CGFloat
     ) -> DanmakuColor {
-        // 官方解析器仅对纯黑文字切白边。这里把接近黑色也纳入,避免深色插件弹幕
-        // 与黑边糊成一团,其余文字仍使用官方默认的黑色描边。
+        // 接近黑色的正文使用白边，避免字芯与黑边混在一起。
         let isNearlyBlack = max(red, green, blue) <= 0.12
-        return (isNearlyBlack ? DanmakuColor.white : DanmakuColor.black)
-            .withAlphaComponent(alpha)
+        return isNearlyBlack ? DanmakuColor.white : DanmakuColor.black
     }
 }

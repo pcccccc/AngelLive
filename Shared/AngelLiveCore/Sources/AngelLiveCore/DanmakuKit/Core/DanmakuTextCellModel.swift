@@ -52,6 +52,8 @@ public class DanmakuTextCellModel: DanmakuCellModel, Equatable {
 
     public var size: CGSize = .zero
 
+    private(set) var textDrawingOrigin: CGPoint = CGPoint(x: 25, y: 5)
+
     public var track: UInt?
 
     public var displayTime: Double = 10
@@ -95,6 +97,9 @@ public class DanmakuTextCellModel: DanmakuCellModel, Equatable {
 
         let horizontalPadding = font.pointSize + 25
         let verticalPadding = font.pointSize * 0.5 + 12
+
+        // 绘点与测量共用这段上下留白，避免文字固定贴在 cell 顶部。
+        textDrawingOrigin = CGPoint(x: 25, y: verticalPadding / 2)
 
         size = CGSize(
             width: textSize.width + horizontalPadding,

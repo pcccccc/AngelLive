@@ -27,7 +27,13 @@ public final class DanmakuMixedCell: DanmakuCell {
             guard !isCancelled else { return }
             switch item.segment {
             case .text(let text):
-                DanmakuTextDrawing.draw(text, font: model.font, color: model.color, at: item.rect.origin)
+                DanmakuTextDrawing.draw(
+                    text,
+                    font: model.font,
+                    color: model.color,
+                    at: item.rect.origin,
+                    in: context
+                )
             case .image(let image, _):
 #if canImport(AppKit) && !canImport(UIKit)
                 context.draw(image, in: item.rect)
