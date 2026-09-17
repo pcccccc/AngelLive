@@ -146,6 +146,7 @@ struct AngelLiveMacOSApp: App {
                     .environment(favoriteViewModel)
                     .environment(historyViewModel)
                     .environment(toastManager)
+                    .supportDiagnosticsHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
                     .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))
             }
         }

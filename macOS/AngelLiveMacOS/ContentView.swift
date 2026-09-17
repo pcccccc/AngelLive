@@ -175,6 +175,20 @@ struct ContentView: View {
         .environment(searchViewModel)
         .environment(pluginAvailability)
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
+        .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
+        .onChange(of: selectedTab) { _, selection in
+            guard pluginAvailability.hasAvailablePlugins else { return }
+            let action: SupportDiagnosticAction
+            switch selection {
+            case .home: action = .openedHome
+            case .favorite: action = .openedFavorites
+            case .allPlatforms, .platform: action = .openedPlatform
+            case .history: action = .openedHistory
+            case .settings: action = .openedSettings
+            case .search: action = .openedSearch
+            }
+            SupportDiagnosticsService.shared.recordAction(action)
+        }
         .environment(bookmarkService)
         .environment(pluginSourceManager)
         .environment(consentService)

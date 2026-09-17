@@ -26,7 +26,7 @@ class PlatformDetailViewController: UIViewController {
     private var skeletonHostingController: UIHostingController<PlatformDetailSkeletonView>?
 
     // 错误视图容器
-    private var errorHostingController: UIHostingController<ErrorView>?
+    private var errorHostingController: UIHostingController<AnyView>?
 
     // 主分类 JXSegmentedView
     private lazy var mainCategoryDataSource = JXSegmentedTitleDataSource()
@@ -224,7 +224,7 @@ class PlatformDetailViewController: UIViewController {
             }
         )
 
-        let hostingController = UIHostingController(rootView: errorView)
+        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled()))
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
         addChild(hostingController)

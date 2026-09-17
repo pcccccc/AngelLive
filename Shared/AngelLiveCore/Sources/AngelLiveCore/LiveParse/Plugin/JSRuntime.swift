@@ -634,6 +634,8 @@ public final class JSRuntime: @unchecked Sendable {
         let envelope: HostHTTPRequestEnvelope
         let requestHeaders: [String: String]
         let parentSensitive: Bool
+        let consoleContext: PluginConsoleHTTPContext
+        let shouldLog: Bool
         let startedAt: CFAbsoluteTime
     }
 
@@ -645,6 +647,7 @@ public final class JSRuntime: @unchecked Sendable {
     private struct PendingPromiseCall {
         let globalKey: String
         let completion: PluginCallCompletion
+        let consoleContext: PluginConsoleInvocationContext?
     }
 
     public static let supportedAPIVersion = 1
@@ -683,6 +686,12 @@ public final class JSRuntime: @unchecked Sendable {
     /// Swift continuation 在取消时会从这里移除，避免永不 settle 的插件
     /// Promise 永久保留 continuation 和敏感调用生命周期。
     private var pendingPromiseCalls: [String: PendingPromiseCall] = [:]
+    /// 仅在插件函数的同步 invoke 区间非空。异步 Promise reaction 不冒充
+    /// 精确上下文，而是从 pendingPromiseCalls 生成候选集合。
+    private var currentInvocationContext: PluginConsoleInvocationContext?
+    /// 异常先在 JSContext 队列提取为值类型，再由等待该调用的 Swift task
+    /// 消费；JSValue 永不跨队列。
+    private var exceptionSnapshotsByCallID: [String: LiveParseJSExceptionSnapshot] = [:]
 
     public convenience init(
         pluginId: String,
@@ -755,6 +764,7 @@ public final class JSRuntime: @unchecked Sendable {
                 queue.async {
                     guard !completion.isCompleted else { return }
                     guard !self.credentialRetired else { completion.cancel(); return }
+                    self.context.exception = nil
                     if let sourceURL {
                         self.context.evaluateScript(script, withSourceURL: sourceURL)
                     } else {
@@ -796,64 +806,97 @@ public final class JSRuntime: @unchecked Sendable {
         }
     }
 
-    public func callPluginFunction(name: String, payload: [String: Any] = [:], checkSynchronousException: Bool = false) async throws -> Any {
+    public func callPluginFunction(
+        name: String,
+        payload: [String: Any] = [:],
+        checkSynchronousException: Bool = false,
+        consoleContext: PluginConsoleInvocationContext? = nil
+    ) async throws -> Any {
         // payload 必须跨到 JSContext 的串行队列才能构造 JSValue;
         // 装盒完成一次性所有权转移,理由与安全依据见 PluginPayloadTransferBox 文档。
         let payloadBox = PluginPayloadTransferBox(value: payload)
         let callID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         let completion = PluginCallCompletion()
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                completion.install(continuation)
-                queue.async {
-                    guard !completion.isCompleted else { return }
-                    do {
-                        guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
-                            throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
-                        }
-                        guard !self.credentialRetired else { throw CancellationError() }
-                        guard let fn = pluginObject.objectForKeyedSubscript(name), fn.isObject else {
-                            throw LiveParsePluginError.invalidReturnValue("Missing function: \(name)")
-                        }
-
-                        let jsPayload = JSValue(object: payloadBox.value, in: self.context) as Any
-                        let previousExceptionHandler = self.context.exceptionHandler
-                        if checkSynchronousException {
-                            self.context.exception = nil
-                            self.context.exceptionHandler = { context, exception in context?.exception = exception }
-                        }
-                        defer {
-                            if checkSynchronousException { self.context.exceptionHandler = previousExceptionHandler }
-                        }
-                        guard let result = pluginObject.invokeMethod(name, withArguments: [jsPayload]) else {
-                            if let exception = self.context.exception {
-                                throw LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>")
-                            }
-                            throw LiveParsePluginError.invalidReturnValue("Function returned nil")
-                        }
-
-                        if checkSynchronousException, let exception = self.context.exception {
-                            throw LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>")
-                        }
+        do {
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    completion.install(continuation)
+                    queue.async {
                         guard !completion.isCompleted else { return }
-                        if Self.isPromise(result) {
-                            self.awaitPromise(result, callID: callID, completion: completion)
-                            return
-                        }
+                        do {
+                            guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
+                                throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
+                            }
+                            guard !self.credentialRetired else { throw CancellationError() }
+                            guard let fn = pluginObject.objectForKeyedSubscript(name), fn.isObject else {
+                                throw LiveParsePluginError.invalidReturnValue("Missing function: \(name)")
+                            }
 
-                        completion.resume(returning: try Self.convertToJSONObject(result, in: self.context))
-                    } catch {
-                        if self.sensitiveLoggingDepth == 0 {
-                            Logger.warning("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)", category: .plugin)
+                            let jsPayload = JSValue(object: payloadBox.value, in: self.context) as Any
+                            let previousExceptionHandler = self.context.exceptionHandler
+                            let previousInvocationContext = self.currentInvocationContext
+                            self.context.exception = nil
+                            self.context.exceptionHandler = { context, exception in
+                                context?.exception = exception
+                            }
+                            self.currentInvocationContext = consoleContext
+                            defer {
+                                self.currentInvocationContext = previousInvocationContext
+                                self.context.exceptionHandler = previousExceptionHandler
+                            }
+                            let result = pluginObject.invokeMethod(name, withArguments: [jsPayload])
+                            if let exception = self.context.exception {
+                                self.recordException(exception, callID: callID)
+                                throw LiveParsePluginError.fromJSException(
+                                    exception.toString() ?? "<unknown>"
+                                )
+                            }
+                            guard let result else {
+                                throw LiveParsePluginError.invalidReturnValue("Function returned nil")
+                            }
+
+                            guard !completion.isCompleted else { return }
+                            if Self.isPromise(result) {
+                                self.awaitPromise(
+                                    result,
+                                    callID: callID,
+                                    completion: completion,
+                                    consoleContext: consoleContext
+                                )
+                                return
+                            }
+
+                            completion.resume(returning: try Self.convertToJSONObject(result, in: self.context))
+                        } catch {
+                            if self.sensitiveLoggingDepth == 0 {
+                                Logger.warning("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)", category: .plugin)
+                            }
+                            completion.resume(throwing: error)
                         }
-                        completion.resume(throwing: error)
                     }
                 }
+            } onCancel: {
+                completion.cancel()
+                queue.async {
+                    self.cancelPendingPromise(callID: callID)
+                }
             }
-        } onCancel: {
-            completion.cancel()
+        } catch {
+            if let snapshot = await takeExceptionSnapshot(callID: callID),
+               let entryID = consoleContext?.entryID {
+                await PluginConsoleService.shared.updateException(
+                    id: entryID,
+                    exception: snapshot
+                )
+            }
+            throw error
+        }
+    }
+
+    private func takeExceptionSnapshot(callID: String) async -> LiveParseJSExceptionSnapshot? {
+        await withCheckedContinuation { continuation in
             queue.async {
-                self.cancelPendingPromise(callID: callID)
+                continuation.resume(returning: self.exceptionSnapshotsByCallID.removeValue(forKey: callID))
             }
         }
     }
@@ -949,6 +992,38 @@ private extension JSRuntime {
         context.exceptionHandler = { _, exception in
             _ = exception
         }
+    }
+
+    func recordException(_ exception: JSValue, callID: String) {
+        guard sensitiveLoggingDepth == 0 else { return }
+        exceptionSnapshotsByCallID[callID] = Self.exceptionSnapshot(from: exception)
+    }
+
+    static func exceptionSnapshot(from exception: JSValue) -> LiveParseJSExceptionSnapshot {
+        func stringProperty(_ name: String) -> String? {
+            guard let value = exception.forProperty(name),
+                  !value.isUndefined,
+                  !value.isNull else { return nil }
+            return value.toString()
+        }
+        func intProperty(_ names: [String]) -> Int? {
+            for name in names {
+                guard let value = exception.forProperty(name),
+                      !value.isUndefined,
+                      !value.isNull else { continue }
+                return Int(value.toInt32())
+            }
+            return nil
+        }
+
+        return LiveParseJSExceptionSnapshot(
+            name: stringProperty("name"),
+            message: stringProperty("message") ?? exception.toString() ?? "<unknown>",
+            stack: stringProperty("stack"),
+            sourceURL: stringProperty("sourceURL") ?? stringProperty("fileName"),
+            line: intProperty(["line", "lineNumber"]),
+            column: intProperty(["column", "columnNumber"])
+        )
     }
 
     static func configureHostBootstrap(in context: JSContext) {
@@ -1346,6 +1421,9 @@ private extension JSRuntime {
 
             // 开发者控制台：记录请求开始时间
             let httpStartTime = CFAbsoluteTimeGetCurrent()
+            let consoleContext = self.makeHTTPConsoleContext()
+            let shouldLog = PluginConsoleService.shared.isEnabled
+                || consoleContext.isDiagnosticCapture
 
             let callbackID = UUID()
             self.hostHTTPCallbacks[callbackID] = HostHTTPCallback(
@@ -1354,6 +1432,8 @@ private extension JSRuntime {
                 envelope: envelope,
                 requestHeaders: loggedRequestHeaders,
                 parentSensitive: self.sensitiveLoggingDepth > 0,
+                consoleContext: consoleContext,
+                shouldLog: shouldLog,
                 startedAt: httpStartTime
             )
 
@@ -1486,6 +1566,67 @@ private extension JSRuntime {
         }
 
         context.setObject(requestBlock, forKeyedSubscript: "__lp_host_http_request" as NSString)
+    }
+
+    /// 必须在 JavaScriptCore 串行队列调用。
+    func makeHTTPConsoleContext() -> PluginConsoleHTTPContext {
+        if let currentInvocationContext {
+            return PluginConsoleHTTPContext(
+                parentEntryID: currentInvocationContext.entryID,
+                association: .exact,
+                candidateEntryIDs: [],
+                pluginVersion: currentInvocationContext.pluginVersion,
+                diagnosticSessionID: currentInvocationContext.diagnosticSessionID,
+                operationID: currentInvocationContext.operationID,
+                isDiagnosticCapture: currentInvocationContext.diagnosticSessionID != nil
+            )
+        }
+
+        let candidates = pendingPromiseCalls.values
+            .compactMap(\.consoleContext)
+            .reduce(into: [UUID: PluginConsoleInvocationContext]()) { result, context in
+                result[context.entryID] = context
+            }
+            .values
+            .sorted { $0.entryID.uuidString < $1.entryID.uuidString }
+
+        func commonString(_ values: [String?]) -> String? {
+            guard let first = values.first ?? nil,
+                  values.allSatisfy({ $0 == first }) else { return nil }
+            return first
+        }
+        func commonUUID(_ values: [UUID?]) -> UUID? {
+            guard let first = values.first ?? nil,
+                  values.allSatisfy({ $0 == first }) else { return nil }
+            return first
+        }
+
+        let currentDiagnosticSessionID = PluginConsoleService.shared.diagnosticSessionID
+        let diagnosticSessionID = candidates.isEmpty
+            ? currentDiagnosticSessionID
+            : commonUUID(candidates.map(\.diagnosticSessionID))
+        let isDiagnosticCapture = PluginConsoleService.shared.isDiagnosticRecording
+            || candidates.contains { $0.diagnosticSessionID != nil }
+        let diagnosticSessionIDsForOmission: [UUID]
+        if diagnosticSessionID == nil, isDiagnosticCapture {
+            diagnosticSessionIDsForOmission = Array(Set(
+                candidates.compactMap(\.diagnosticSessionID)
+                    + [currentDiagnosticSessionID].compactMap { $0 }
+            )).sorted { $0.uuidString < $1.uuidString }
+        } else {
+            diagnosticSessionIDsForOmission = []
+        }
+        return PluginConsoleHTTPContext(
+            parentEntryID: nil,
+            association: candidates.isEmpty ? .unassociated : .uncertain,
+            candidateEntryIDs: Array(candidates.map(\.entryID).prefix(64)),
+            pluginVersion: commonString(candidates.map(\.pluginVersion)),
+            diagnosticSessionID: diagnosticSessionID,
+            operationID: commonUUID(candidates.map(\.operationID)),
+            omittedCandidateEntryIDCount: max(0, candidates.count - 64),
+            isDiagnosticCapture: isDiagnosticCapture,
+            diagnosticSessionIDsForOmission: diagnosticSessionIDsForOmission
+        )
     }
 
     private enum HostHTTPAuthMode: String {
@@ -1941,15 +2082,17 @@ private extension JSRuntime {
             if let loginErrorBody {
                 Logger.debug("[JSRuntime][HTTP][LOGIN] pluginId=\(pluginId) status=\(snapshot.statusCode) response=\(loginErrorBody)", category: .plugin)
             }
-            if PluginConsoleService.shared.isEnabled {
+            if callback.shouldLog {
                 Self.logHTTPRecord(
                     pluginId: pluginId,
                     envelope: callback.envelope,
                     requestHeaders: callback.requestHeaders,
                     parentSensitive: callback.parentSensitive,
+                    consoleContext: callback.consoleContext,
+                    startedAt: Date(timeIntervalSinceReferenceDate: callback.startedAt),
                     statusCode: snapshot.statusCode,
                     responseHeaders: headers,
-                    responseBody: bodyText,
+                    responseData: snapshot.data,
                     requestContainsCookieHeader: callback.envelope.authMode == .loginTransaction
                         ? snapshot.requestContainsCookieHeader
                         : nil,
@@ -1974,15 +2117,17 @@ private extension JSRuntime {
                 "[JSRuntime][HTTP][FAILURE] pluginId=\(pluginId) method=\(callback.envelope.method) domain=\(failure.domain) code=\(failure.code) receivedHTTPResponse=\(failure.receivedHTTPResponse) duration=\(String(format: "%.3f", elapsed))s",
                 category: .plugin
             )
-            if PluginConsoleService.shared.isEnabled {
+            if callback.shouldLog {
                 Self.logHTTPRecord(
                     pluginId: pluginId,
                     envelope: callback.envelope,
                     requestHeaders: callback.requestHeaders,
                     parentSensitive: callback.parentSensitive,
+                    consoleContext: callback.consoleContext,
+                    startedAt: Date(timeIntervalSinceReferenceDate: callback.startedAt),
                     statusCode: nil,
                     responseHeaders: nil,
-                    responseBody: nil,
+                    responseData: nil,
                     requestContainsCookieHeader: nil,
                     error: failure.message,
                     duration: elapsed
@@ -2080,19 +2225,16 @@ private extension JSRuntime {
         envelope: HostHTTPRequestEnvelope,
         requestHeaders: [String: String],
         parentSensitive: Bool,
+        consoleContext: PluginConsoleHTTPContext,
+        startedAt: Date,
         statusCode: Int?,
         responseHeaders: [String: String]?,
-        responseBody: String?,
+        responseData: Data?,
         requestContainsCookieHeader: Bool?,
         error: String?,
         duration: TimeInterval,
         diagnosticResponseBody: String? = nil
     ) {
-        // 跟父调用对齐:无条件记录 HTTP 子请求,挂到当前活跃的 entry 上。
-        // 没有活跃 entry(很罕见,通常意味着插件函数已结束)才跳过。
-        let console = PluginConsoleService.shared
-        guard let entryId = console.activeEntryId(for: pluginId) else { return }
-
         let hasProtectedHeader = requestHeaders.keys.contains { key in
             let lowered = key.lowercased()
             return lowered == "cookie" || lowered == "authorization" || lowered == "proxy-authorization"
@@ -2102,14 +2244,16 @@ private extension JSRuntime {
             || envelope.authMode == .platformCookie
             || !envelope.cookieInject.isEmpty
             || hasProtectedHeader
-        let bodyStr: String? = sensitive
-            ? nil
-            : envelope.body.flatMap { String(data: $0, encoding: .utf8) }
-        let loggedResponseBody = sensitive
-            ? diagnosticResponseBody ?? SensitivePluginHTTPConsoleSummary.responseBody(
+        let isDiagnostic = consoleContext.isDiagnosticCapture
+        let requestBody = consoleBodySnapshot(data: envelope.body, sensitive: sensitive)
+        let responseBody = consoleBodySnapshot(
+            data: responseData,
+            sensitive: sensitive,
+            sensitiveSummary: diagnosticResponseBody ?? SensitivePluginHTTPConsoleSummary.responseBody(
                 requestContainsCookieHeader: requestContainsCookieHeader
-            )
-            : responseBody.map { String($0.prefix(2_000)) }
+            ),
+            textLimit: isDiagnostic ? nil : 2_000
+        )
         let loggedURL: String
         if sensitive {
             var components = URLComponents()
@@ -2125,17 +2269,78 @@ private extension JSRuntime {
             url: loggedURL,
             method: envelope.method,
             headers: sensitive ? [:] : requestHeaders,
-            body: bodyStr,
+            startedAt: startedAt,
+            body: requestBody.text,
+            bodyKind: requestBody.kind,
+            bodyByteCount: requestBody.byteCount,
+            bodyWasTruncated: requestBody.wasTruncated,
             statusCode: statusCode,
             responseHeaders: sensitive ? nil : responseHeaders,
-            responseBody: loggedResponseBody,
+            responseBody: responseBody.text,
+            responseBodyKind: responseBody.kind,
+            responseBodyByteCount: responseBody.byteCount,
+            responseBodyWasTruncated: responseBody.wasTruncated,
             error: sensitive && error != nil ? "Sensitive plugin request failed" : error,
-            duration: duration
+            duration: duration,
+            association: consoleContext.association,
+            candidateEntryIDs: consoleContext.candidateEntryIDs,
+            omittedCandidateEntryIDCount: consoleContext.omittedCandidateEntryIDCount,
+            sanitize: isDiagnostic
         )
 
         Task { @MainActor in
-            console.appendHTTPRecord(entryId: entryId, record: record)
+            PluginConsoleService.shared.appendHTTPRecord(
+                pluginId: pluginId,
+                context: consoleContext,
+                record: record
+            )
         }
+    }
+
+    private struct ConsoleBodySnapshot {
+        let text: String?
+        let kind: PluginConsoleBodyKind?
+        let byteCount: Int?
+        let wasTruncated: Bool
+    }
+
+    private static func consoleBodySnapshot(
+        data: Data?,
+        sensitive: Bool,
+        sensitiveSummary: String? = nil,
+        textLimit: Int? = nil
+    ) -> ConsoleBodySnapshot {
+        guard let data else {
+            return ConsoleBodySnapshot(
+                text: sensitiveSummary,
+                kind: sensitiveSummary == nil ? nil : .omittedSensitive,
+                byteCount: nil,
+                wasTruncated: false
+            )
+        }
+        if sensitive {
+            return ConsoleBodySnapshot(
+                text: sensitiveSummary,
+                kind: .omittedSensitive,
+                byteCount: data.count,
+                wasTruncated: false
+            )
+        }
+        guard let text = String(data: data, encoding: .utf8) else {
+            return ConsoleBodySnapshot(
+                text: "<binary body omitted: \(data.count) bytes>",
+                kind: .binary,
+                byteCount: data.count,
+                wasTruncated: false
+            )
+        }
+        let storedText = textLimit.map { String(text.prefix($0)) } ?? text
+        return ConsoleBodySnapshot(
+            text: storedText,
+            kind: .utf8,
+            byteCount: data.count,
+            wasTruncated: textLimit.map { text.count > $0 } ?? (data.count > 16_384)
+        )
     }
 
     /// 按 key path 设置嵌套字典值，如 ["data","token"] → {"data":{"token":"xxx"}}
@@ -2317,12 +2522,14 @@ private extension JSRuntime {
     func awaitPromise(
         _ promise: JSValue,
         callID: String,
-        completion: PluginCallCompletion
+        completion: PluginCallCompletion,
+        consoleContext: PluginConsoleInvocationContext?
     ) {
         let key = "_lp_await_\(callID)"
         pendingPromiseCalls[callID] = PendingPromiseCall(
             globalKey: key,
-            completion: completion
+            completion: completion,
+            consoleContext: consoleContext
         )
         context.setObject(promise, forKeyedSubscript: key as NSString)
         context.evaluateScript("""
@@ -2335,6 +2542,7 @@ private extension JSRuntime {
         if let exception = context.exception {
             pendingPromiseCalls.removeValue(forKey: callID)
             context.evaluateScript("delete globalThis.\(key);")
+            recordException(exception, callID: callID)
             completion.resume(throwing:
                 LiveParsePluginError.fromJSException(exception.toString() ?? "<unknown>")
             )
@@ -2346,6 +2554,7 @@ private extension JSRuntime {
         guard let pending = pendingPromiseCalls.removeValue(forKey: callID) else { return }
         context.evaluateScript("delete globalThis.\(pending.globalKey);")
         if isRejection {
+            recordException(value, callID: callID)
             pending.completion.resume(throwing:
                 LiveParsePluginError.fromJSException(value.toString() ?? "<unknown>")
             )
@@ -2362,6 +2571,7 @@ private extension JSRuntime {
     func cancelPendingPromise(callID: String) {
         guard let pending = pendingPromiseCalls.removeValue(forKey: callID) else { return }
         context.evaluateScript("delete globalThis.\(pending.globalKey);")
+        exceptionSnapshotsByCallID.removeValue(forKey: callID)
     }
 
     static func convertToJSONObject(_ value: JSValue, in context: JSContext) throws -> Any {

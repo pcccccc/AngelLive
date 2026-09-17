@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 import AppKit
 
 enum ErrorViewPresentationStyle {
@@ -70,6 +71,8 @@ struct ErrorView: View {
     let onLogin: (() -> Void)?
 
     @State private var showCopiedAlert = false
+    @State private var showingSupportDiagnostics = false
+    @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
 
     init(
         style: ErrorViewPresentationStyle = .error,
@@ -105,6 +108,14 @@ struct ErrorView: View {
         (showDismiss && onDismiss != nil)
             || (showRetry && onRetry != nil)
             || (showLoginButton && onLogin != nil)
+            || (supportDiagnosticsEnabled && isErrorStyle)
+    }
+
+    private var isErrorStyle: Bool {
+        if case .error = style {
+            return true
+        }
+        return false
     }
 
     var body: some View {
@@ -120,6 +131,19 @@ struct ErrorView: View {
             Button("好的", role: .cancel) {}
         } message: {
             Text("CURL 命令已复制到剪贴板")
+        }
+        .sheet(isPresented: $showingSupportDiagnostics) {
+            NavigationStack {
+                SupportDiagnosticsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showingSupportDiagnostics = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 640)
         }
     }
 
@@ -275,11 +299,24 @@ struct ErrorView: View {
 
         if showLoginButton, let onLogin {
             Button(action: onLogin) {
-                Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
+                Label(
+                    supportDiagnosticsEnabled ? "管理账号" : "去登录",
+                    systemImage: "person.crop.circle.badge.checkmark"
+                )
             }
             .buttonStyle(.borderedProminent)
             .tint(.green)
             .controlSize(.large)
+        }
+
+        if supportDiagnosticsEnabled, isErrorStyle {
+            Button(action: openSupportDiagnostics) {
+                Label("诊断与反馈", systemImage: "waveform.path.ecg")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .accessibilityLabel("诊断与反馈")
+            .accessibilityHint("记录并预览当前错误信息")
         }
 
         if showRetry, let onRetry {
@@ -296,6 +333,15 @@ struct ErrorView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(curlCommand, forType: .string)
         showCopiedAlert = true
+    }
+
+    private func openSupportDiagnostics() {
+        SupportDiagnosticsService.shared.makeReportForError(
+            title: title,
+            message: message,
+            detail: detailMessage
+        )
+        showingSupportDiagnostics = true
     }
 }
 

@@ -57,7 +57,7 @@ class RoomListViewController: UIViewController {
         return rc
     }()
 
-    private var errorHostingController: UIHostingController<ErrorView>?
+    private var errorHostingController: UIHostingController<AnyView>?
     private var emptyHostingController: UIHostingController<AnyView>?
     private var isLoadingMore = false
     private var isLoadingMoreStaticRooms = false
@@ -387,7 +387,7 @@ class RoomListViewController: UIViewController {
             } : nil
         )
 
-        let hostingController = UIHostingController(rootView: errorView)
+        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 

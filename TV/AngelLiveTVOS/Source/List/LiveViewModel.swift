@@ -284,7 +284,12 @@ class LiveViewModel {
             isLoading = true
         }
         do {
-            let newRooms = try await LiveService.searchRooms(keyword: text, page: roomPage)
+            let operationID = await MainActor.run {
+                SupportDiagnosticsService.shared.recordAction(.searched, context: ["kind": "keyword", "page": String(roomPage)])
+            }
+            let newRooms = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                try await LiveService.searchRooms(keyword: text, page: roomPage)
+            }
             await MainActor.run {
                 if roomPage == 1 {
                     self.roomList = newRooms.removingDuplicates()
@@ -315,7 +320,13 @@ class LiveViewModel {
             roomList.removeAll()
         }
         do {
-            if let room = try await LiveService.searchRoomWithShareCode(shareCode: text) {
+            let operationID = await MainActor.run {
+                SupportDiagnosticsService.shared.recordAction(.searched, context: ["kind": "share"])
+            }
+            let room = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                try await LiveService.searchRoomWithShareCode(shareCode: text)
+            }
+            if let room {
                 await MainActor.run {
                     roomList.append(room)
                 }

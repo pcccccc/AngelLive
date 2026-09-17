@@ -205,6 +205,7 @@ struct ContentView: View {
         }
         .environment(pluginAvailability)
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
+        .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
         .environment(bookmarkService)
         .environment(pluginSourceManager)
         .environment(shellHistoryService)
@@ -213,6 +214,16 @@ struct ContentView: View {
         .environment(searchViewModel)
         .onChange(of: selectedTab) { _, newValue in
             hapticFeedback.selectionChanged()
+            guard pluginAvailability.hasAvailablePlugins else { return }
+            let action: SupportDiagnosticAction
+            switch newValue {
+            case .home: action = .openedHome
+            case .favorites: action = .openedFavorites
+            case .allPlatforms, .platform: action = .openedPlatform
+            case .settings: action = .openedSettings
+            case .search: action = .openedSearch
+            }
+            SupportDiagnosticsService.shared.recordAction(action)
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
             selectedTab = .settings

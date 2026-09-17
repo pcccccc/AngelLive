@@ -22,7 +22,9 @@ struct ErrorView: View {
     let onRetry: (() -> Void)?
 
     @State private var showDetailView = false
+    @State private var showingSupportDiagnostics = false
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
 
     /// 是否有任何平台已登录
     private var isAnyPlatformLoggedIn: Bool {
@@ -99,8 +101,16 @@ struct ErrorView: View {
                             }
                         }
 
-                        // 需要登录时，已有任一平台登录时不重复显示登录按钮
-                        if showLoginButton && !isAnyPlatformLoggedIn {
+                        // FullUI 入口始终显示通用账号管理；旧环境继续沿用原有登录判断。
+                        if showLoginButton && supportDiagnosticsEnabled {
+                            Button(action: {
+                                onDismiss()
+                                NotificationCenter.default.post(name: SimpleLiveNotificationNames.navigateToSettings, object: nil)
+                            }) {
+                                Label("管理账号", systemImage: "person.crop.circle.badge.checkmark")
+                                    .font(.caption)
+                            }
+                        } else if showLoginButton && !isAnyPlatformLoggedIn {
                             Button(action: {
                                 onDismiss()
                                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.navigateToSettings, object: nil)
@@ -122,6 +132,15 @@ struct ErrorView: View {
                                 Label("查看详情", systemImage: "doc.text.magnifyingglass")
                                     .font(.caption)
                             }
+                        }
+
+                        if supportDiagnosticsEnabled {
+                            Button(action: openSupportDiagnostics) {
+                                Label("诊断与反馈", systemImage: "waveform.path.ecg")
+                                    .font(.caption)
+                            }
+                            .accessibilityLabel("诊断与反馈")
+                            .accessibilityHint("记录并预览当前错误信息")
                         }
                     }
                 }
@@ -162,6 +181,23 @@ struct ErrorView: View {
                 )
             }
         }
+        .fullScreenCover(isPresented: $showingSupportDiagnostics) {
+            NavigationStack {
+                SupportDiagnosticsView()
+            }
+            .onExitCommand {
+                showingSupportDiagnostics = false
+            }
+        }
+    }
+
+    private func openSupportDiagnostics() {
+        SupportDiagnosticsService.shared.makeReportForError(
+            title: title,
+            message: message,
+            detail: detailMessage
+        )
+        showingSupportDiagnostics = true
     }
 }
 

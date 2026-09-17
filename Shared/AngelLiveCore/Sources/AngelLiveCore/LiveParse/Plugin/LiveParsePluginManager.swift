@@ -359,6 +359,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             || Self.containsSensitiveConsoleValue(payload)
         let console = PluginConsoleService.shared
         let consoleEntryId: UUID?
+        let consoleInvocationContext: PluginConsoleInvocationContext?
         if console.isEnabled {
             // 敏感调用默认整段省略；登录挑战只输出宿主定义的字段白名单摘要。
             // 绝不对任意插件 JSON 做“猜测式”放行。
@@ -375,12 +376,18 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     encoding: .utf8
                 )) ?? "{}"
             }
-            let entryId = await console.log(tag: pluginId, method: function)
+            let entryId = await console.log(
+                tag: pluginId,
+                method: function,
+                pluginVersion: selectedPlugin.manifest.version,
+                operationID: SupportDiagnosticContext.operationID
+            )
             await console.updateRequest(id: entryId, body: payloadStr)
-            console.setActiveCall(pluginId: pluginId, entryId: entryId)
             consoleEntryId = entryId
+            consoleInvocationContext = await console.invocationContext(for: entryId)
         } else {
             consoleEntryId = nil
+            consoleInvocationContext = nil
         }
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -428,7 +435,12 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     try await apiTokenVault.register(plugin.runtime, pluginId: pluginId, generation: tokenSnapshot.generation)
                 }
                 try await plugin.load()
-                let result = try await plugin.runtime.callPluginFunction(name: function, payload: payload, checkSynchronousException: tokenEnabled)
+                let result = try await plugin.runtime.callPluginFunction(
+                    name: function,
+                    payload: payload,
+                    checkSynchronousException: tokenEnabled,
+                    consoleContext: consoleInvocationContext
+                )
                 if tokenEnabled, !JSONSerialization.isValidJSONObject(result) {
                     throw LiveParsePluginError.invalidReturnValue("API 插件返回了无效响应。")
                 }
@@ -442,9 +454,6 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     await plugin.runtime.endSensitiveLoggingSuppression()
                 }
 
-                if consoleEntryId != nil {
-                    console.clearActiveCall(pluginId: pluginId)
-                }
                 let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 #if DEBUG
                 if case .loginChallenge = sensitiveConsolePolicy {
@@ -470,8 +479,16 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                         )
                     } else {
                         let consoleResult = Self.redactedLoginTransactionConsoleValue(result)
-                        responseStr = (try? String(data: JSONSerialization.data(withJSONObject: consoleResult, options: [.fragmentsAllowed]), encoding: .utf8))
-                            .map { String($0.prefix(2_000)) }
+                        let serialized = (try? String(
+                            data: JSONSerialization.data(
+                                withJSONObject: consoleResult,
+                                options: [.fragmentsAllowed]
+                            ),
+                            encoding: .utf8
+                        ))
+                        responseStr = consoleInvocationContext?.diagnosticSessionID == nil
+                            ? serialized.map { String($0.prefix(2_000)) }
+                            : serialized
                     }
                     await console.updateStatus(
                         id: consoleEntryId,
@@ -500,9 +517,6 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 throw error
             }
         } catch {
-            if consoleEntryId != nil {
-                console.clearActiveCall(pluginId: pluginId)
-            }
             let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 #if DEBUG
             if case .loginChallenge = sensitiveConsolePolicy {

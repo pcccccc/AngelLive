@@ -63,6 +63,19 @@ struct ContentView: View {
         rootTabView(selection: tabSelection)
         .environment(appViewModel.consentService)
         .platformAPICredentialLifecycle(enabled: presentsFullUI)
+        .supportDiagnosticsHost(enabled: presentsFullUI)
+        .onChange(of: appViewModel.selection) { _, selection in
+            guard presentsFullUI else { return }
+            let action: SupportDiagnosticAction
+            switch selection {
+            case 0: action = .openedFavorites
+            case 1: action = .openedPlatform
+            case 2: action = .openedSearch
+            case 3: action = .openedSettings
+            default: action = .openedHome
+            }
+            SupportDiagnosticsService.shared.recordAction(action)
+        }
         .onChange(of: PlatformAPITokenService.shared.contentRevision) { _, _ in
             guard presentsFullUI else { return }
             searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .placeholder, appViewModel: appViewModel)

@@ -1,5 +1,32 @@
 import Foundation
 
+/// JavaScriptCore 异常在其所属串行队列上提取后的值快照。
+/// 不持有 JSValue，也不参与业务错误分类。
+public struct LiveParseJSExceptionSnapshot: Codable, Sendable, Equatable {
+    public let name: String?
+    public let message: String
+    public let stack: String?
+    public let sourceURL: String?
+    public let line: Int?
+    public let column: Int?
+
+    public init(
+        name: String?,
+        message: String,
+        stack: String?,
+        sourceURL: String?,
+        line: Int?,
+        column: Int?
+    ) {
+        self.name = name.map { SupportDiagnosticSanitizer.text($0, limit: 256) }
+        self.message = SupportDiagnosticSanitizer.text(message)
+        self.stack = stack.map { SupportDiagnosticSanitizer.text($0) }
+        self.sourceURL = sourceURL.map { SupportDiagnosticSanitizer.url($0) }
+        self.line = line
+        self.column = column
+    }
+}
+
 public enum LiveParsePluginStandardErrorCode: String, Codable, Sendable {
     case unknown = "UNKNOWN"
     case invalidArgs = "INVALID_ARGS"

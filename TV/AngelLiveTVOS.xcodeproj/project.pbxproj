@@ -528,7 +528,7 @@
 				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内与 iPhone/iPad 同步登录信息";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内同步信息，以及将您选择的诊断报告下载到手机";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen.storyboard;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = arm64;
@@ -567,7 +567,7 @@
 				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内与 iPhone/iPad 同步登录信息";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内同步信息，以及将您选择的诊断报告下载到手机";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen.storyboard;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = arm64;
@@ -642,7 +642,7 @@
 				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内与 iPhone/iPad 同步登录信息";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内同步信息，以及将您选择的诊断报告下载到手机";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen.storyboard;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = arm64;
@@ -715,7 +715,7 @@
 				INFOPLIST_FILE = AngelLiveTVOS/Other/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Angel Live";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内与 iPhone/iPad 同步登录信息";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "用于在局域网内同步信息，以及将您选择的诊断报告下载到手机";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen.storyboard;
 				INFOPLIST_KEY_UIRequiredDeviceCapabilities = arm64;

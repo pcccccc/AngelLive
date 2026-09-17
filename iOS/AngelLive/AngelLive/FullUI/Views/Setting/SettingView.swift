@@ -15,7 +15,9 @@ struct SettingView: View {
     @State private var cacheSizeText: String = "计算中..."
     @State private var isClearingCache = false
     @State private var showClearCacheConfirm = false
+    @State private var supportDiagnosticsService = SupportDiagnosticsService.shared
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
 
     var body: some View {
         @Bindable var setting = generalSetting
@@ -28,6 +30,10 @@ struct SettingView: View {
                         NavigationLink {
                             PlatformAccountLoginView()
                                 .toolbar(.hidden, for: .tabBar)
+                                .onAppear {
+                                    guard supportDiagnosticsEnabled else { return }
+                                    supportDiagnosticsService.recordAction(.openedAccountManagement)
+                                }
                         } label: {
                             HStack {
                                 Image(systemName: "person.crop.circle.badge.checkmark")
@@ -56,6 +62,10 @@ struct SettingView: View {
                         NavigationLink {
                             PluginManagementView()
                                 .toolbar(.hidden, for: .tabBar)
+                                .onAppear {
+                                    guard supportDiagnosticsEnabled else { return }
+                                    supportDiagnosticsService.recordAction(.openedPluginManagement)
+                                }
                         } label: {
                             HStack {
                                 Image(systemName: "puzzlepiece.extension.fill")
@@ -207,6 +217,36 @@ struct SettingView: View {
                     Text("清理图片缓存、插件旧版本及网络临时文件。保留收藏、登录与已激活的插件版本。")
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
+                }
+
+                // 帮助（仅 FullUI 根入口显式启用）
+                if supportDiagnosticsEnabled {
+                    Section {
+                        NavigationLink {
+                            SupportDiagnosticsView()
+                                .toolbar(.hidden, for: .tabBar)
+                        } label: {
+                            HStack {
+                                Image(systemName: "waveform.path.ecg")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.orange.gradient)
+                                    .frame(width: 32)
+
+                                Text("问题诊断与反馈")
+
+                                Spacer()
+
+                                if supportDiagnosticsService.isRecording {
+                                    Label("录制中", systemImage: "record.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(.red)
+                                        .labelStyle(.titleAndIcon)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("帮助")
+                    }
                 }
 
                 // 关于

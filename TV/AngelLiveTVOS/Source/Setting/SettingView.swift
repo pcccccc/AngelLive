@@ -15,12 +15,15 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈"]
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
+    @State private var lastFocusedIndex: Int?
     @StateObject var settingStore = SettingStore()
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @State private var supportDiagnosticsService = SupportDiagnosticsService.shared
     @Environment(AppState.self) var appViewModel
+    @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
     @FocusState private var focusedIndex: Int?
     @State private var cacheSizeText: String = "计算中..."
     @State private var isClearingCache = false
@@ -80,6 +83,10 @@ struct SettingView: View {
         .fullScreenCover(item: $fullScreenIndex) { index in
             fullScreenContentView(for: index)
         }
+        .onChange(of: fullScreenIndex) { _, newValue in
+            guard newValue == nil, let lastFocusedIndex else { return }
+            focusedIndex = lastFocusedIndex
+        }
         .onChange(of: appViewModel.pluginAvailability.hasAvailablePlugins) { _, hasPlugins in
             guard !hasPlugins else { return }
             if selectedIndex == 0 {
@@ -123,6 +130,9 @@ struct SettingView: View {
                     Button {
                         if index == 7 {
                             showClearCacheConfirm = true
+                        } else if index == 9 {
+                            lastFocusedIndex = focusedIndex ?? index
+                            fullScreenIndex = index
                         } else if halfScreenIndices.contains(index) {
                             selectedIndex = index
                         } else {
@@ -172,10 +182,17 @@ struct SettingView: View {
                     .font(.system(size: 30))
                     .foregroundStyle(.gray)
             }
+        } else if index == 9, supportDiagnosticsService.isRecording {
+            Text("录制中")
+                .font(.system(size: 30))
+                .foregroundStyle(.red)
         }
     }
 
     private func shouldShowMenuItem(_ index: Int) -> Bool {
+        if index == 9 {
+            return supportDiagnosticsEnabled
+        }
         if appViewModel.pluginAvailability.hasAvailablePlugins {
             // 已安装插件均无登录入口时,隐藏账号管理(0)
             if index == 0 {
@@ -199,6 +216,10 @@ struct SettingView: View {
                 .environmentObject(settingStore)
                 .environment(appViewModel)
                 .environment(appViewModel.pluginAvailability)
+                .onAppear {
+                    guard supportDiagnosticsEnabled else { return }
+                    supportDiagnosticsService.recordAction(.openedAccountManagement)
+                }
                 .onExitCommand {
                     selectedIndex = nil
                 }
@@ -246,6 +267,10 @@ struct SettingView: View {
             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
+                .onAppear {
+                    guard supportDiagnosticsEnabled else { return }
+                    supportDiagnosticsService.recordAction(.openedPluginManagement)
+                }
                 .onExitCommand {
                     fullScreenIndex = nil
                 }
@@ -272,6 +297,15 @@ struct SettingView: View {
                 .onExitCommand {
                     fullScreenIndex = nil
                 }
+        case 9: // 问题诊断与反馈
+            NavigationStack {
+                SupportDiagnosticsView()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
+            .onExitCommand {
+                fullScreenIndex = nil
+            }
         default:
             EmptyView()
         }

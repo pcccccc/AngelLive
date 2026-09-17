@@ -23,9 +23,12 @@ struct SettingView: View {
     @State private var showDanmuSetting = false
     @State private var showAccountManagement = false
     @State private var showSyncManagement = false
+    @State private var showSupportDiagnostics = false
     @State private var cacheSizeText: String = "计算中..."
     @State private var isClearingCache = false
     @State private var showClearCacheConfirm = false
+    @State private var supportDiagnosticsService = SupportDiagnosticsService.shared
+    @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
 
     var body: some View {
         Form {
@@ -68,6 +71,9 @@ struct SettingView: View {
                 #if !APPSTORE
                 checkUpdateRow
                 #endif
+                if supportDiagnosticsEnabled {
+                    supportDiagnosticsRow
+                }
                 openSourceRow
                 githubRow
             }
@@ -90,6 +96,10 @@ struct SettingView: View {
                                 showAccountManagement = false
                             }
                         }
+                    }
+                    .onAppear {
+                        guard supportDiagnosticsEnabled else { return }
+                        supportDiagnosticsService.recordAction(.openedAccountManagement)
                     }
             }
             .frame(minWidth: 600, minHeight: 480)
@@ -116,6 +126,10 @@ struct SettingView: View {
                                 showPluginManagement = false
                             }
                         }
+                    }
+                    .onAppear {
+                        guard supportDiagnosticsEnabled else { return }
+                        supportDiagnosticsService.recordAction(.openedPluginManagement)
                     }
             }
             .frame(minWidth: 600, minHeight: 480)
@@ -145,6 +159,19 @@ struct SettingView: View {
                     }
             }
             .frame(minWidth: 680, minHeight: 640)
+        }
+        .sheet(isPresented: $showSupportDiagnostics) {
+            NavigationStack {
+                SupportDiagnosticsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showSupportDiagnostics = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 640)
         }
         .task {
             await refreshCacheSize()
@@ -380,6 +407,30 @@ struct SettingView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var supportDiagnosticsRow: some View {
+        Button {
+            showSupportDiagnostics = true
+        } label: {
+            PanelNavigationRow(
+                title: "问题诊断与反馈",
+                subtitle: "记录复现过程并在分享前预览报告"
+            ) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.orange.gradient)
+            } trailing: {
+                if supportDiagnosticsService.isRecording {
+                    Label("录制中", systemImage: "record.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("问题诊断与反馈")
+        .accessibilityHint("打开诊断录制和报告预览")
     }
 
 }

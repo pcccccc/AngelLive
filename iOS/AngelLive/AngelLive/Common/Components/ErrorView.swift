@@ -32,7 +32,9 @@ struct ErrorView: View {
 
     @State private var showingDetailSheet = false
     @State private var showingCookieDebugView = false
+    @State private var showingSupportDiagnostics = false
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
 
     /// 是否有任何平台已登录
     private var isAnyPlatformLoggedIn: Bool {
@@ -98,6 +100,18 @@ struct ErrorView: View {
         .sheet(isPresented: $showingCookieDebugView) {
             // 调试视图已随旧服务删除
             Text("调试视图不可用")
+        }
+        .sheet(isPresented: $showingSupportDiagnostics) {
+            NavigationStack {
+                SupportDiagnosticsView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showingSupportDiagnostics = false
+                            }
+                        }
+                    }
+            }
         }
     }
 }
@@ -347,9 +361,17 @@ private extension ErrorView {
 
     var hasVisibleActions: Bool {
         (showDismiss && onDismiss != nil)
+            || (supportDiagnosticsEnabled && isErrorStyle)
             || showLoginButton
             || (showRetry && onRetry != nil)
             || (showDetailButton && detailMessage?.isEmpty == false)
+    }
+
+    var isErrorStyle: Bool {
+        if case .error = style {
+            return true
+        }
+        return false
     }
 
     var qrBlock: some View {
@@ -407,8 +429,29 @@ private extension ErrorView {
         }
 
         if showLoginButton {
-            if isAnyPlatformLoggedIn {
-                // 已登录：显示查看官方页面按钮
+            if supportDiagnosticsEnabled {
+                // FullUI always opens the current platform's account management action.
+                if let onLogin = onLogin {
+                    Button(action: onLogin) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("管理账号")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            Capsule()
+                                .fill(Color.green)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else if isAnyPlatformLoggedIn {
+                // ShellUI legacy behavior: keep the existing logged-in path.
                 Button(action: {
                     showingCookieDebugView = true
                 }) {
@@ -429,7 +472,7 @@ private extension ErrorView {
                 }
                 .buttonStyle(.plain)
             } else if let onLogin = onLogin {
-                // 未登录：显示去登录按钮
+                // ShellUI legacy behavior: keep the existing login path.
                 Button(action: onLogin) {
                     HStack(spacing: 6) {
                         Image(systemName: "person.crop.circle.badge.checkmark")
@@ -448,6 +491,28 @@ private extension ErrorView {
                 }
                 .buttonStyle(.plain)
             }
+        }
+
+        if supportDiagnosticsEnabled, isErrorStyle {
+            Button(action: openSupportDiagnostics) {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("诊断与反馈")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("诊断与反馈")
+            .accessibilityHint("记录并预览当前错误信息")
         }
 
         if showRetry, let onRetry = onRetry {
@@ -514,6 +579,15 @@ private extension ErrorView {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.secondarySystemBackground))
         )
+    }
+
+    func openSupportDiagnostics() {
+        SupportDiagnosticsService.shared.makeReportForError(
+            title: title,
+            message: message,
+            detail: detailMessage
+        )
+        showingSupportDiagnostics = true
     }
 }
 

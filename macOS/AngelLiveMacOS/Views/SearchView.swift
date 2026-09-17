@@ -161,18 +161,26 @@ struct SearchView: View {
         isSearching = true
         hasSearched = true
 
+        let operationID = SupportDiagnosticsService.shared.recordAction(
+            .searched, context: ["kind": viewModel.searchTypeIndex == 1 ? "keyword" : "share"]
+        )
+
         Task {
             do {
                 if viewModel.searchTypeIndex == 1 {
                     // 关键词搜索
-                    let rooms = try await LiveService.searchRooms(keyword: keyword, page: 1)
+                    let rooms = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                        try await LiveService.searchRooms(keyword: keyword, page: 1)
+                    }
                     await MainActor.run {
                         searchResults = rooms
                         isSearching = false
                     }
                 } else {
                     // 链接/口令搜索
-                    let room = try await LiveService.searchRoomWithShareCode(shareCode: keyword)
+                    let room = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                        try await LiveService.searchRoomWithShareCode(shareCode: keyword)
+                    }
                     await MainActor.run {
                         if let room {
                             searchResults = [room]

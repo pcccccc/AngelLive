@@ -132,7 +132,13 @@ final class RoomInfoViewModel {
             playError = nil
             playErrorMessage = nil
         }
-        await getPlayArgs(silent: silentRefresh)
+        let operationID = SupportDiagnosticsService.shared.recordAction(
+            force ? .retriedPlayback : .openedRoom,
+            context: ["source": currentRoom.liveType.rawValue, "silentRefresh": String(silentRefresh)]
+        )
+        await SupportDiagnosticContext.$operationID.withValue(operationID) {
+            await getPlayArgs(silent: silentRefresh)
+        }
     }
 
     // 获取播放参数
@@ -229,6 +235,13 @@ final class RoomInfoViewModel {
 
         let currentCdn = playArgs[cdnIndex]
         guard urlIndex < currentCdn.qualitys.count else { return }
+
+        if currentPlayURL != nil, currentCdnIndex != cdnIndex || currentQualityIndex != urlIndex {
+            SupportDiagnosticsService.shared.recordAction(
+                currentCdnIndex != cdnIndex ? .selectedLine : .selectedQuality,
+                context: ["lineIndex": String(cdnIndex), "qualityIndex": String(urlIndex)]
+            )
+        }
 
         // 逻辑会话 = 本次进房(roomId)。同 key 时协调器内部早退,自身的 switchCDN/refresh
         // 不会重置熔断预算;仅首次进房真正复位。

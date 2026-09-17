@@ -182,6 +182,13 @@ final class RoomInfoViewModel {
         let currentCdn = playArgs[cdnIndex]
         guard urlIndex < currentCdn.qualitys.count else { return }
 
+        if currentPlayURL != nil, currentCdnIndex != cdnIndex || currentQualityIndex != urlIndex {
+            SupportDiagnosticsService.shared.recordAction(
+                currentCdnIndex != cdnIndex ? .selectedLine : .selectedQuality,
+                context: ["lineIndex": String(cdnIndex), "qualityIndex": String(urlIndex)]
+            )
+        }
+
         // 逻辑会话 = 本次进房(roomId)。同 key 时协调器内部早退,自身的 switchCDN/refresh
         // 不会重置熔断预算;仅首次进房真正复位。
         recoveryCoordinator.episodeChanged(streamKey: currentRoom.roomId)
@@ -430,7 +437,7 @@ final class RoomInfoViewModel {
      - Parameters:
        - silent: 已在播时的续播重取;不全屏 loading/错误页抢 UI。
     */
-    func getPlayArgs(silent: Bool = false) {
+    func getPlayArgs(silent: Bool = false, diagnosticAction: SupportDiagnosticAction = .openedRoom) {
         if !silent {
             isLoading = true
         }
@@ -439,7 +446,13 @@ final class RoomInfoViewModel {
                 guard let platform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
                     throw LiveParseError.liveParseError("不支持的平台", "\(currentRoom.liveType)")
                 }
-                let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                let operationID = SupportDiagnosticsService.shared.recordAction(
+                    diagnosticAction,
+                    context: ["source": currentRoom.liveType.rawValue, "silentRefresh": String(silent)]
+                )
+                let playArgs = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                    try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                }
                 updateCurrentRoomPlayArgs(playArgs)
             } catch {
                 await MainActor.run {
@@ -646,7 +659,7 @@ final class RoomInfoViewModel {
         if !silent, appViewModel.danmuSettingsViewModel.showDanmu {
             disConnectSocket()
         }
-        getPlayArgs(silent: silent)
+        getPlayArgs(silent: silent, diagnosticAction: .retriedPlayback)
     }
 
     func stopTimer() {
