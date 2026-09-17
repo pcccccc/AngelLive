@@ -117,6 +117,15 @@ struct DetailPlayerView: View {
         !isVerticalLiveMode || verticalLiveControlsVisible
     }
 
+    private var legacyPlayerGestureMask: GestureMask {
+        #if canImport(KSPlayer)
+        if #available(iOS 18.0, *) {
+            return .subviews
+        }
+        #endif
+        return .all
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -236,10 +245,10 @@ struct DetailPlayerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         // iPhone 横屏时让播放器区域覆盖 Safe Area，避免控制层/统计被刘海遮挡
                         .edgesIgnoringSafeArea(iPhoneLandscapeMode ? .all : [])
-                        // iPad: 阻止播放器区域的下拉手势触发退出，聊天面板仍可下拉退出
+                        // 新画面手势桥接未启用的系统或内核，保留原有播放器手势处理。
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 1)
-                                .onChanged { _ in }
+                            DragGesture(minimumDistance: 1).onChanged { _ in },
+                            including: legacyPlayerGestureMask
                         )
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {

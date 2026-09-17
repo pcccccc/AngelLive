@@ -197,6 +197,7 @@ public struct KSVideoPlayerView: View {
             onDoubleTap: verticalLiveDoubleTapAction,
             onHorizontalSwipe: verticalLiveSwipeAction,
             edgePassthroughWidth: isVerticalLiveMode && !verticalLiveControlsVisible.wrappedValue ? 0 : 20,
+            preventsInteractiveDismissal: true,
             orientationErrorHandler: { @Sendable error in
                 Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
             },

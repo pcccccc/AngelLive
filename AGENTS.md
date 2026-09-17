@@ -208,6 +208,11 @@ xcrun mcpbridge
 
 若出现 Cocoa 4099/helper connection 不存在：确认 Xcode、workspace、MCP 开关和权限弹窗，激活 Xcode 后重连一次；仍失败就如实报告 MCP 未验证。未经用户同意不要重启 Xcode 或打断其现有窗口。
 
+原始 stdio bridge 在 sandbox 内出现 4099 时，还要检查 XPC 权限边界。2026-09-17 已验证：同一 Xcode 在默认 sandbox 内无法连接 helper，经正常权限审批在 sandbox 外运行 bridge 后可取得工具列表和 workspace；不要将这类隔离错误直接判为 Xcode 或 Device Hub 不可用，也不要绕过审批。
+原始 JSON-RPC 响应先保存到临时文件，再向模型输出状态和证据路径摘要。已经返回但被输出截断或上下文压缩丢失的响应，不能靠继续轮询重放；先读已保存响应，或用只读状态查询恢复判断，避免重复安装及设备 session 因空等而过期。
+必须按 JSON-RPC `response.id` 等待当前请求的最终 `result`/`error`；进度通知、其他请求的响应或缺省的 `isError=false` 都不能证明当前请求成功。2026-09-17 已观察到安装响应晚于提前发出的截图响应，先收到 `NotRun`、后收到安装成功；此时应修正请求等待顺序，不要据此反复重装。
+Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不要用每调用一次工具就启动并终止 bridge 的短连接脚本。2026-09-17 的 iPad 验收中，此做法反复触发新 PID 授权，并伴随 `Automation Mode has been disabled` 和连接失效；这类工具生命周期问题应先修正，不能当作 App 启动失败。
+
 ## 9. Device Hub / 模拟器 / 真机验收
 
 任何设备 UI 验证使用 `device-interaction` Skill。该 Skill 要求主代理把 Device Hub session 委派给子代理，并确保一个 session 只有一个代理操作。
@@ -236,6 +241,7 @@ xcrun mcpbridge
 - 新启动后先用空 interaction 的 `DeviceEventSynthesize` 获取截图和 hierarchy；仍在启动/加载则再次捕获。
 - 优先使用 hierarchy 的 `hitPoint`；只有 hitPoint 尝试失败并重新捕获后，才使用截图估算坐标。
 - 每次点击、滑动、切换、旋转或状态变化后重新捕获并核对可见状态与 hierarchy。
+- 原始 JSON-RPC 请求须按当次 `tools/list` 校验参数名。Xcode 27 RC 的 `DeviceInteractionSynthesize` 使用 `interactionCommand`；2026-09-17 已观察到误传未知字段会被静默忽略，仍返回新截图和 `Running`，因此这些响应不能单独证明触摸已执行。
 - tvOS 按焦点导航：读取 hierarchy 的 `Focused` 标记，使用 Siri Remote 命令 `r up/down/left/right/select/menu/playpause/home`，不使用触屏坐标。方向键可根据 hierarchy 顺序合并成一次命令，之后捕获确认焦点；激活或返回后核对目标页面。先确认当前工具 schema 支持该命令。
 - tvOS 返回问题必须区分工具的 Siri Remote Menu 与 Device Hub 原生键盘 Escape；tvOS 27 已观察到 Escape 绕过 `onExitCommand`。快速组合按键须用日志核对实际间隔，不能把链式命令当成零等待。本项目案例见 `docs/TVFocusAndRemoteNavigation.md`；原生键盘操作仍由当前设备 session 的唯一负责人执行。
 - 视觉问题检查原尺寸截图，覆盖颜色、对齐、裁切、重叠、圆角、安全区和深浅色。

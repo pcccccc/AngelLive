@@ -102,6 +102,8 @@ struct PlayerGestureView: View {
     /// 仅在宿主显式注入时启用横向手势；默认入口保持原有亮度/音量行为。
     var onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)?
     private let edgePassthroughWidth: CGFloat
+    /// FullUI 仅在触摸播放画面期间阻止交互式返回。
+    private let preventsInteractiveDismissal: Bool
     /// FullUI 注入可在任意线程调用的方向失败回调；其他入口保持既有行为。
     private var orientationErrorHandler: (@Sendable (Error) -> Void)?
     /// 锁定状态绑定
@@ -112,6 +114,7 @@ struct PlayerGestureView: View {
         onDoubleTap: (() -> Void)? = nil,
         onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)? = nil,
         edgePassthroughWidth: CGFloat = 20,
+        preventsInteractiveDismissal: Bool = false,
         orientationErrorHandler: (@Sendable (Error) -> Void)? = nil,
         isLocked: Binding<Bool>
     ) {
@@ -119,6 +122,7 @@ struct PlayerGestureView: View {
         self.onDoubleTap = onDoubleTap
         self.onHorizontalSwipe = onHorizontalSwipe
         self.edgePassthroughWidth = edgePassthroughWidth
+        self.preventsInteractiveDismissal = preventsInteractiveDismissal
         self.orientationErrorHandler = orientationErrorHandler
         _isLocked = isLocked
     }
@@ -155,6 +159,13 @@ struct PlayerGestureView: View {
         horizontalSizeClass == .regular && verticalSizeClass == .compact
     }
 
+    private var blocksCanvasDismissal: Bool {
+        if #available(iOS 18.0, *) {
+            return preventsInteractiveDismissal
+        }
+        return false
+    }
+
     var body: some View {
         GeometryReader { geometry in
             // 底部安全区域：使用实际安全区 + 额外边距，避免与系统底部手势（Home Indicator）冲突
@@ -169,15 +180,15 @@ struct PlayerGestureView: View {
                     Color.clear
                         .frame(width: edgePassthroughWidth)
 
-                    // 主手势区域（顶部和底部留出安全区域）
-                    Color.clear
+                    // FullUI 覆盖整块画面以阻止下拉退出，调节数值时仍排除系统安全带。
+                    gestureCanvas
                         // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
                         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                             resetGestureState()
                         }
                         .contentShape(Rectangle())
-                        .padding(.bottom, bottomSafeArea)
-                        .padding(.top, topSafeArea)
+                        .padding(.bottom, blocksCanvasDismissal ? 0 : bottomSafeArea)
+                        .padding(.top, blocksCanvasDismissal ? 0 : topSafeArea)
                         .gesture(
                             DragGesture(minimumDistance: 20)
                                 .updating($dragIsActive) { _, active, _ in
@@ -238,7 +249,7 @@ struct PlayerGestureView: View {
             }
         }
         .onChange(of: isLocked) { _, locked in
-            if locked && onHorizontalSwipe != nil {
+            if locked && (onHorizontalSwipe != nil || blocksCanvasDismissal) {
                 resetGestureState()
             }
         }
@@ -259,9 +270,22 @@ struct PlayerGestureView: View {
         }
         .onDisappear {
             volumeObserver.stop()
-            if onHorizontalSwipe != nil {
+            if onHorizontalSwipe != nil || blocksCanvasDismissal {
                 resetGestureState()
             }
+        }
+    }
+
+    @ViewBuilder
+    private var gestureCanvas: some View {
+        if #available(iOS 18.0, *), preventsInteractiveDismissal {
+            Color.clear
+                .background {
+                    PlayerInteractiveDismissalSurface()
+                        .allowsHitTesting(false)
+                }
+        } else {
+            Color.clear
         }
     }
 
@@ -506,6 +530,148 @@ struct PlayerGestureView: View {
             DispatchQueue.main.async {
                 slider.value = Float(volume)
             }
+        }
+    }
+}
+
+/// 在播放画面触摸开始时，让呈现控制器的返回拖动失败，保留原有播放器手势。
+@available(iOS 18.0, *)
+private struct PlayerInteractiveDismissalSurface: UIViewRepresentable {
+    func makeUIView(context: Context) -> SurfaceView {
+        let view = SurfaceView()
+        view.isUserInteractionEnabled = false
+        view.observer.cancelsTouchesInView = false
+        view.observer.delaysTouchesBegan = false
+        view.observer.delaysTouchesEnded = false
+        view.observer.delegate = view
+        return view
+    }
+
+    func updateUIView(_ uiView: SurfaceView, context: Context) {
+        uiView.attachIfNeeded()
+    }
+
+    static func dismantleUIView(_ uiView: SurfaceView, coordinator: ()) {
+        uiView.detach()
+    }
+
+    @MainActor
+    final class SurfaceView: UIView, UIGestureRecognizerDelegate {
+        let observer = TouchObserver(target: nil, action: nil)
+        private weak var gestureHost: UIView?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard let window else {
+                detach()
+                return
+            }
+            attachIfNeeded()
+            // SwiftUI 初次挂载时，presented controller 的 parent 链可能尚未就绪。
+            if gestureHost == nil {
+                DispatchQueue.main.async { [weak self, weak window] in
+                    guard let self, let window, self.window === window else { return }
+                    self.attachIfNeeded()
+                }
+            }
+        }
+
+        func attachIfNeeded() {
+            guard window != nil else { return }
+            var responder: UIResponder? = next
+            while let current = responder {
+                if var controller = current as? UIViewController {
+                    while let parent = controller.parent { controller = parent }
+                    guard controller.presentingViewController != nil,
+                          let host = controller.viewIfLoaded else { return }
+                    guard gestureHost !== host else { return }
+                    detach()
+                    observer.controller = controller
+                    host.addGestureRecognizer(observer)
+                    gestureHost = host
+                    return
+                }
+                responder = current.next
+            }
+        }
+
+        func detach() {
+            observer.finishTracking()
+            gestureHost?.removeGestureRecognizer(observer)
+            gestureHost = nil
+            observer.controller = nil
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let window, touch.view?.window === window,
+                  observer.controller?.presentingViewController != nil else { return false }
+            guard bounds.contains(touch.location(in: self)) else { return false }
+            observer.hasCanvasTouch = true
+            return true
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy other: UIGestureRecognizer
+        ) -> Bool {
+            guard observer.hasCanvasTouch, let gestureHost else { return false }
+            // 呈现返回的 pan 挂在 controller 根视图；播放器拖动位于内部 SwiftUI 视图。
+            // 按每次触摸建立优先级，避免异步更新 SwiftUI 状态晚于系统首次识别。
+            let shouldWait = other.view === gestureHost
+                && other is UIPanGestureRecognizer
+                && !(other is UIScreenEdgePanGestureRecognizer)
+            return shouldWait
+        }
+    }
+
+    @MainActor
+    final class TouchObserver: UIGestureRecognizer {
+        weak var controller: UIViewController?
+        private var activeTouches = Set<UITouch>()
+        // 当前这次识别是否接收过播放区触摸起点；保持到 reset，避免影响其他区域。
+        var hasCanvasTouch = false
+
+        override func canPrevent(_ preventedGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+        override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesBegan(touches, with: event)
+            let wasActive = !activeTouches.isEmpty
+            activeTouches.formUnion(touches)
+            if !wasActive { state = .began }
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesMoved(touches, with: event)
+            state = .changed
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesEnded(touches, with: event)
+            activeTouches.subtract(touches)
+            if activeTouches.isEmpty {
+                state = .ended
+            }
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesCancelled(touches, with: event)
+            activeTouches.removeAll()
+            state = .cancelled
+        }
+
+        override func reset() {
+            activeTouches.removeAll()
+            hasCanvasTouch = false
+            super.reset()
+        }
+
+        func finishTracking() {
+            activeTouches.removeAll()
+            if state == .began || state == .changed {
+                state = .cancelled
+            }
+            hasCanvasTouch = false
         }
     }
 }
