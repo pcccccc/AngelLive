@@ -1,6 +1,6 @@
 # tvOS 焦点与遥控器返回层级
 
-更新：2026-09-16。范围仅为 tvOS FullUI；共享播放器、插件能力和 ShellUI 不参与本轮修改。
+更新：2026-09-17。范围仅为 tvOS FullUI；共享播放器、插件能力和 ShellUI 不参与本轮修改。
 
 ## 交互约定
 
@@ -130,3 +130,19 @@ root 独立比较了每轮快速操作前后的累计日志：每轮准确增加
 子分类补充验证于 17:40:06 通过：先确认 `leftMenu(0,1)` 实际持有焦点，再发送一次原生 Escape；down、up 均保持该子项和 `expanded=true`，up 后仅关闭侧栏，随后恢复 `mainContent(0)`，页面仍在房间列表。root 已独立核对 `/tmp/angellive-native-escape-sub-final-stable.json` 中的日志与 hierarchy。17:37–17:38 期间受并发用户输入影响的中间操作未计入此结论，不能以主分类的返回冒充子分类回归。
 
 本轮全速 Left／Right／Left 未取得完整事件链，未计为通过；能力弹窗与播放器边界未完成本轮回归。原 workspace session 失效后没有重新构建或继续扩展测试，而是用非 workspace session 从电视桌面正常启动同一最终包。17:48:21 的最终 hierarchy 确认房间首卡持有焦点；结束检查 session 后进程仍运行。证据为 `/tmp/angellive-native-escape-final-list.json`、`/tmp/angellive-native-escape-cleanup-end.json` 和 `/tmp/angellive-native-escape-final-process.txt`。Xcode 已恢复原 scheme 与运行目标，relay 已关闭。实体 Apple TV、其他 tvOS 版本、iOS 与 macOS 本轮未验证。
+
+### 播放页关联房间列表的原生返回
+
+用户随后报告：播放时按下键打开关联房间列表，再按返回会退出播放页。源码中该控制层只注册了 `onExitCommand`，原生 Escape 没有进入已有的菜单返回优先级。现在由 `PlayerControlView` 统一处理 Menu 与 Escape：Escape 的所有阶段均消费，只在松开时执行一次返回；关联列表优先关闭，其后才是设置面板、可见控件和播放页退出。
+
+关闭关联列表时清除顶部焦点，随后按当前控件显隐恢复播放器焦点；打开列表时的延迟焦点写入会检查列表仍然展开，避免快速关闭后再向已移除的顶部菜单写焦点。`PlayerNavigation` 诊断只记录按键阶段、菜单及控件状态和焦点枚举，用于区分关闭列表与结束播放，不记录房间或插件内容。
+
+验收需要分别覆盖原生 Down → Escape 快速组合、顶部标签与实际房间卡片持有焦点时的单次返回、工具 Siri Remote Menu，以及控件显示／隐藏的返回层级。以上源码说明不替代最后编辑后新安装的设备结果。
+
+2026-09-17 的最后源码修改后，`AngelLiveTVOS` 通过 workspace MCP `BuildProject`（30.709 秒），error navigator 为 0，随后新的 workspace session 完成 `DeviceInteractionInstallAndRun`。设备为已有的 Apple TV 4K（第 3 代）、tvOS 27.0 模拟器。构建、诊断、安装响应分别保存在 `/tmp/angellive_playerback_{build,issues,install_run}.json`。
+
+新包的实际房间卡片聚焦后，工具 Menu 于 17:39:15 只记录 `exitCommand → closeRelatedRooms`。原生快速序列在同一个脚本中连续发送 Down、Escape，不插入等待或截图；日志中打开为 17:40:46.798712、Escape down 为 46.918684、up 为 46.919996，随后只关闭一次列表。实际输入间隔约 120 毫秒，返回到达时焦点仍是播放器的隐藏控件，尚未交给顶部列表。另一轮先确认实际房间卡片持有 `Focused`，原生 Escape 于 17:41:54.941060 松开后也只关闭列表。上述三次均留在播放页，没有 `endPlayback`、`dismissList` 或 `listDisappeared`。root 已独立核对按键日志、卡片的 hierarchy 和返回后的原尺寸截图；原生两条路径的响应索引为 `/tmp/angellive_playerback_native_{quick,card}_after.json`。
+
+控件隐藏后的正常原生返回于 17:46:41 确认回到浏览首页，证据为 `/tmp/angellive_playerback_normal_exit.json`。控件可见时的返回补测因截图间隔超过 5 秒且缺少新增按键日志，无法排除自动隐藏，不计为通过；顶部标签聚焦后的单独 Escape 本轮未覆盖。旧包基线也未能确认原生按键送达，不计为复现证据。
+
+Workspace 与最后的非 workspace 检查 session 均已结束，响应分别为 `/tmp/angellive_playerback_end_session.json` 和 `/tmp/angellive_playerback_final_end_session.json`。新包留在浏览首页；Xcode 恢复原来的 `AngelLive` / `iPad Pro 13-inch (M5) (27.0)` 运行配置，本轮 relay 已关闭。实体 Apple TV、其他 tvOS 版本、iOS 与 macOS 未验证。

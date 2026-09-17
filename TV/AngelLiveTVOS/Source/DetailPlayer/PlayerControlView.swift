@@ -10,6 +10,9 @@ import TipKit
 import AVFoundation
 import AngelLiveCore
 import AngelLiveDependencies
+#if DEBUG
+import os
+#endif
 
 enum PlayControlFocusableField: Hashable {
     case playPause
@@ -52,6 +55,12 @@ struct PlayerControlView: View {
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
 
     private let multiCameraTip = MultiCameraTip()
+    #if DEBUG
+    private static let navigationLog = OSLog(
+        subsystem: Bundle.main.bundleIdentifier ?? "AngelLiveTVOS",
+        category: "PlayerNavigation"
+    )
+    #endif
 
     /// 是否有多机位（cdn数量大于1）
     private var hasMultiCamera: Bool {
@@ -517,48 +526,74 @@ struct PlayerControlView: View {
             }
         })
         .onExitCommand {
-            if roomInfoViewModel.showTop {
-                withAnimation {
-                    roomInfoViewModel.showTop = false
-                }
-                DispatchQueue.main.async {
-                    if roomInfoViewModel.showControl {
-                        restoreControlFocus()
-                    } else {
-                        restoreHiddenControlFocus()
-                    }
-                }
-                return
-            }
-
-            if roomInfoViewModel.showDanmuSettingView {
-                roomInfoViewModel.showDanmuSettingView = false
-                showDanmuSetting = false
-                state = roomInfoViewModel.lastOptionState
-                roomInfoViewModel.showControl = true
-                return
-            }
-
-            if showStatisticsPanel {
-                hideStatisticsPanel()
-                return
-            }
-
-            if showQualityPanel {
-                hideQualityPanel()
-                return
-            }
-
-            if roomInfoViewModel.showControl {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    roomInfoViewModel.showControl = false
-                }
-            } else {
-                roomInfoViewModel.liveFlagTimer?.invalidate()
-                roomInfoViewModel.liveFlagTimer = nil
-                NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
-            }
+            logNavigation("exitCommand")
+            handleBackCommand()
         }
+        .onKeyPress(.escape, phases: .all) { press in
+            logNavigation("escape phase=\(press.phase)")
+            // 原生 Escape 不一定转换为 Exit。消费整个按键，只在松开时返回一层，
+            // 避免按下收起列表后，同一次按键的松开又退出播放。
+            if press.phase == .up {
+                handleBackCommand()
+            }
+            return .handled
+        }
+    }
+
+    private func handleBackCommand() {
+        if roomInfoViewModel.showTop {
+            logNavigation("closeRelatedRooms")
+            withAnimation {
+                roomInfoViewModel.showTop = false
+            }
+            topState = nil
+            DispatchQueue.main.async {
+                if roomInfoViewModel.showControl {
+                    restoreControlFocus()
+                } else {
+                    restoreHiddenControlFocus()
+                }
+            }
+            return
+        }
+
+        if roomInfoViewModel.showDanmuSettingView {
+            roomInfoViewModel.showDanmuSettingView = false
+            showDanmuSetting = false
+            state = roomInfoViewModel.lastOptionState
+            roomInfoViewModel.showControl = true
+            return
+        }
+
+        if showStatisticsPanel {
+            hideStatisticsPanel()
+            return
+        }
+
+        if showQualityPanel {
+            hideQualityPanel()
+            return
+        }
+
+        if roomInfoViewModel.showControl {
+            logNavigation("hideControls")
+            withAnimation(.easeInOut(duration: 0.2)) {
+                roomInfoViewModel.showControl = false
+            }
+        } else {
+            logNavigation("endPlayback")
+            roomInfoViewModel.liveFlagTimer?.invalidate()
+            roomInfoViewModel.liveFlagTimer = nil
+            NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
+        }
+    }
+
+    private func logNavigation(_ event: String) {
+        let message = "PlayerNavigation \(event) top=\(roomInfoViewModel.showTop) controls=\(roomInfoViewModel.showControl) focus=\(String(describing: state)) topFocus=\(String(describing: topState))"
+        Logger.debug(message, category: .ui)
+        #if DEBUG
+        os_log("%{public}@", log: Self.navigationLog, type: .default, message)
+        #endif
     }
 
     private func showStatisticsAction() {
@@ -723,6 +758,7 @@ struct PlayerControlView: View {
     }
 
     private func showRelatedRoomsPanel() {
+        logNavigation("openRelatedRooms")
         let initialSection = preferredTopSectionIndex()
         changeList(initialSection)
 
@@ -731,6 +767,7 @@ struct PlayerControlView: View {
         }
 
         DispatchQueue.main.async {
+            guard roomInfoViewModel.showTop else { return }
             topState = .section(initialSection)
         }
     }
