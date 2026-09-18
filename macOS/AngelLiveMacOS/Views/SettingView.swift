@@ -164,14 +164,17 @@ struct SettingView: View {
             NavigationStack {
                 SupportDiagnosticsView()
                     .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("关闭", systemImage: "xmark") {
                                 showSupportDiagnostics = false
                             }
+                            .labelStyle(.iconOnly)
+                            .help("关闭问题诊断")
+                            .keyboardShortcut(.cancelAction)
                         }
                     }
             }
-            .frame(minWidth: 600, minHeight: 640)
+            .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 560)
         }
         .task {
             await refreshCacheSize()

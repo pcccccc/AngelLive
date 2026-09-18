@@ -182,7 +182,7 @@ class PlatformDetailViewModel {
         defer { loadingRoomKeys.remove(requestKey) }
 
         do {
-            // 获取 parentBiz (对于 YY 平台可能需要)
+            // 将父分类业务标识一并传给插件。
             let parentBiz = mainCategory.biz
 
             let fetchedRooms = try await LiveService.fetchRoomList(

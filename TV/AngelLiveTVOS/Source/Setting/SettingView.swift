@@ -301,11 +301,9 @@ struct SettingView: View {
             NavigationStack {
                 SupportDiagnosticsView()
             }
+            .preferredColorScheme(.dark)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
-            .onExitCommand {
-                fullScreenIndex = nil
-            }
         default:
             EmptyView()
         }

@@ -185,9 +185,7 @@ struct ErrorView: View {
             NavigationStack {
                 SupportDiagnosticsView()
             }
-            .onExitCommand {
-                showingSupportDiagnostics = false
-            }
+            .preferredColorScheme(.dark)
         }
     }
 

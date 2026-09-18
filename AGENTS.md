@@ -217,6 +217,8 @@ Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不�
 
 任何设备 UI 验证使用 `device-interaction` Skill。该 Skill 要求主代理把 Device Hub session 委派给子代理，并确保一个 session 只有一个代理操作。
 
+2026-09-18 在 Xcode 27.0 RC（27A266a）实测：Device Interaction 仅支持 iOS/watchOS/tvOS 27 模拟器，`My Mac` 明确返回不支持。macOS UI 验收改用最后编辑后的 workspace MCP build、Xcode Run 和原生应用 UI 交互/截图，确认运行的是本次构建的应用路径；不得把已安装的同名旧应用或仅构建成功当作通过，也不得声称执行了 Mac `InstallAndRun`。同名应用有歧义时用当次 build log 中的完整产物路径定位。此限制以实际工具响应为准，后续 Xcode 版本须重新核验。
+
 ### 模拟器选择与启动约束
 
 - 使用已经存在、保留 Xcode 标准名称的模拟器。用户指定设备时，选择对应的已有标准设备；不得自行创建、克隆或重命名模拟器，也不得创建带任务名、日期或测试标记的临时设备。用户指定设备不等于授权新建；没有对应可用设备时先说明情况。
@@ -299,6 +301,8 @@ xcrun agent skills export --output-dir <confirmed-skills-directory> --replace-ex
 - 设备交互：`device-interaction`
 
 不要在本仓库使用 `impeccable` 前端设计 Skill，除非用户以后明确要求重新启用。使用 Skill 前按 Skill 规则完整读取必要文件，并在 Skill 导致行动或暂停时简短告知用户。
+
+用户指定「UX MCP」时，优先发现并调用已注册的 SwiftUX 工具，不要把它替换成 Figma MCP 或仅调用 Xcode MCP。遵循 SwiftUX 的单一组件／流程检索范围，先读取 conventions，再检索并读取匹配组件及源码；返回结果必须符合当前用途，不能因置信度高而硬套无关组件。参考结构仍须按三端 HIG、真实服务状态和本项目验收要求落地。
 
 ## 11. 修改与交付纪律
 
