@@ -124,7 +124,7 @@ struct QualitySelectionPanel: View {
                     ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
                         let selected = viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex
                         Button {
-                            viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                            viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
                             isShowing = false
                         } label: {
                             HStack(spacing: 10) {

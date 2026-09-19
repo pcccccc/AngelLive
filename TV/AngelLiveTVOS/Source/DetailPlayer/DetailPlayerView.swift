@@ -165,6 +165,10 @@ struct DetailPlayerView: View {
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        SupportDiagnosticsService.shared.recordAction(
+            .closedRoom,
+            context: SupportDiagnosticActionContext.room(roomInfoViewModel.currentRoom)
+        )
         roomInfoViewModel.recoveryCoordinator.stop()
         playerCoordinator.resetPlayer()
         roomInfoViewModel.disConnectSocket()

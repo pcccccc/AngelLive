@@ -256,13 +256,17 @@ struct SettingView: View {
                 if appViewModel.pluginAvailability.hasAvailablePlugins {
                     TVFullPluginManagementView(
                         pluginSourceManager: appViewModel.pluginSourceManager,
-                        pluginAvailability: appViewModel.pluginAvailability
+                        pluginAvailability: appViewModel.pluginAvailability,
+                        onClose: { fullScreenIndex = nil }
                     )
                 } else {
                     TVPluginManagementView(
                         pluginSourceManager: appViewModel.pluginSourceManager,
                         pluginAvailability: appViewModel.pluginAvailability
                     )
+                    .onExitCommand {
+                        fullScreenIndex = nil
+                    }
                 }
             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -270,9 +274,6 @@ struct SettingView: View {
                 .onAppear {
                     guard supportDiagnosticsEnabled else { return }
                     supportDiagnosticsService.recordAction(.openedPluginManagement)
-                }
-                .onExitCommand {
-                    fullScreenIndex = nil
                 }
         case 5: // 历史记录
             HistoryListView(appViewModel: appViewModel)

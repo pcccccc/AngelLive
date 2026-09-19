@@ -449,7 +449,7 @@ public enum KSVideoPlayerViewBuilder {
                     Menu {
                         ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
                             Button {
-                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
                             } label: {
                                 HStack {
                                     Text(quality.title)

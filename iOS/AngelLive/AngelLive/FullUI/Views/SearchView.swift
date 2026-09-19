@@ -243,16 +243,21 @@ struct SearchView: View {
         isSearching = true
         hasSearched = true
 
+        let isKeywordSearch = viewModel.searchTypeIndex == 1
+        let searchInput = keyword
         let operationID = SupportDiagnosticsService.shared.recordAction(
-            .searched, context: ["kind": viewModel.searchTypeIndex == 1 ? "keyword" : "share"]
+            .searched,
+            context: isKeywordSearch
+                ? SupportDiagnosticActionContext.search(keyword: searchInput, page: 1, additional: ["searchKind": "keyword"])
+                : SupportDiagnosticActionContext.shareSearch(page: 1)
         )
 
         Task {
             do {
-                if viewModel.searchTypeIndex == 1 {
+                if isKeywordSearch {
                     // 关键词搜索
                     let rooms = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
-                        try await LiveService.searchRooms(keyword: keyword, page: 1)
+                        try await LiveService.searchRooms(keyword: searchInput, page: 1)
                     }
                     await MainActor.run {
                         searchResults = rooms
@@ -261,7 +266,19 @@ struct SearchView: View {
                 } else {
                     // 链接/口令搜索
                     let room = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
-                        try await LiveService.searchRoomWithShareCode(shareCode: keyword)
+                        let room = try await LiveService.searchRoomWithShareCode(shareCode: searchInput)
+                        if let room {
+                            await MainActor.run {
+                                SupportDiagnosticsService.shared.recordAction(
+                                    .searched,
+                                    context: SupportDiagnosticActionContext.room(
+                                        room,
+                                        additional: ["searchKind": "share", "entryPoint": "searchResult"]
+                                    )
+                                )
+                            }
+                        }
+                        return room
                     }
                     await MainActor.run {
                         if let room {

@@ -35,9 +35,10 @@ struct SupportDiagnosticsTests {
         let sanitizedURL = SupportDiagnosticSanitizer.url("https://user:password@example.invalid/path?token=secret&room=42#fragment")
         #expect(!sanitizedURL.contains("password"))
         #expect(!sanitizedURL.contains("secret"))
-        #expect(!sanitizedURL.contains("fragment"))
+        #expect(sanitizedURL.contains("fragment"))
         #expect(sanitizedURL.contains("token="))
-        #expect(sanitizedURL.contains("room="))
+        #expect(sanitizedURL.contains("room=42"))
+        #expect(SupportDiagnosticSanitizer.url("https://example.invalid/#token=private&room=room-a") == "https://example.invalid/#token=<redacted>&room=room-a")
         let malformedURL = SupportDiagnosticSanitizer.url("https://user:secret@example.invalid/path with space?token=secret")
         #expect(!malformedURL.contains("secret"))
 
@@ -116,6 +117,97 @@ struct SupportDiagnosticsTests {
         )
         #expect(restored.lastReport?.sessionID == report.sessionID)
         #expect(restored.errorMessage == nil)
+    }
+
+    @Test("raw HTML and JSON retain formatting, ordering, escaped text and ordinary URL parameters")
+    func originalBodiesArePreserved() throws {
+        let json = "{\n  \"z\": 1e+02,\n  \"rooms\" : [ { \"id\": \"room-a\", \"text\": \"\\u4f60\\u597d\" } ],\n  \"a\": \"https:\\/\\/example.invalid/list?q=live%20music&page=2\"\n}\n"
+        let html = "<!doctype html>\r\n<html><head><title>直播</title></head>\r\n<body>  <a href=\"https://example.invalid/list?room=room-a&page=2\">房间</a><script>const result = {\"z\":1, \"a\":2};</script></body></html>\r\n"
+        #expect(SupportDiagnosticSanitizer.body(json) == json)
+        #expect(SupportDiagnosticSanitizer.body(html) == html)
+        let form = "<form>\n<input value='private-csrf' name='csrfToken'>\n<input name=\"room\" value=\"room-a\">\n</form>"
+        let sanitizedForm = SupportDiagnosticSanitizer.body(form)
+        #expect(!sanitizedForm.contains("private-csrf"))
+        #expect(sanitizedForm.contains("<input name=\"room\" value=\"room-a\">"))
+        let credentials = "{\n  \"z\": 1,\n  \"t\\u006fken\": {\"nested\":[\"private-value\"]},\n  \"url\": \"https:\\/\\/example.invalid/?room=room-a&token=private-value\",\n  \"a\": 2\n}"
+        let sanitized = SupportDiagnosticSanitizer.body(credentials)
+        #expect(!sanitized.contains("private-value"))
+        #expect(sanitized.contains("\"z\": 1,\n"))
+        #expect(sanitized.contains("room=room-a"))
+        #expect(sanitized.hasSuffix("\"a\": 2\n}"))
+        #expect(try JSONSerialization.jsonObject(with: Data(sanitized.utf8)) is [String: Any])
+    }
+
+    @Test("report and restored export include full HTML transport body and separate plugin JSON result")
+    @MainActor
+    func reportPreservesTransportAndPluginBodies() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fixture = Fixture()
+        let service = SupportDiagnosticsService(
+            storageDirectory: directory,
+            entriesProvider: { fixture.entries },
+            sessionSetter: { fixture.recordedSessionIDs.append($0) }
+        )
+        service.startRecording()
+        let sessionID = try #require(fixture.recordedSessionIDs.last ?? nil)
+        let operation = service.recordAction(.openedRoom, context: ["pluginID": "fixture.plugin", "roomID": "room-a", "anchorName": "示例主播"])
+        let html = "<!DOCTYPE html>\n<html>\n" + String(repeating: "<p>original  HTML &amp; text</p>\n", count: 900) + "</html>\n"
+        let payload = "{\n  \"roomId\": \"room-a\",\n  \"page\": 2\n}"
+        let response = "{\n  \"z\": \"room-a\",\n  \"a\": [1, 2]\n}"
+        var entry = PluginConsoleEntry(tag: "fixture.plugin", method: "getPlayArgs", status: .success, pluginVersion: "1.2.3", diagnosticSessionID: sessionID, operationID: operation)
+        entry.requestBody = payload
+        entry.responseBody = response
+        entry.httpRecords = [PluginConsoleHTTPRecord(
+            url: "https://example.invalid/room?room=room-a&page=2&token=private",
+            method: "POST",
+            headers: ["Content-Type": "application/json", "Cookie": "credential=private"],
+            body: payload,
+            bodyKind: .utf8,
+            bodyByteCount: payload.utf8.count,
+            statusCode: 200,
+            responseHeaders: ["Content-Type": "text/html; charset=utf-8"],
+            responseBody: html,
+            responseBodyKind: .utf8,
+            responseBodyByteCount: html.utf8.count,
+            association: .exact
+        )]
+        fixture.entries = [entry]
+        service.stopRecording()
+        let report = try #require(service.lastReport)
+        #expect(report.entries[0].httpRecords[0].responseBody == html)
+        #expect(report.entries[0].responseBody == response)
+        #expect(report.entries[0].requestBody == payload)
+        #expect(service.reportText.contains(html))
+        #expect(service.reportText.contains(response))
+        #expect(service.reportText.contains("房间 ID：room-a"))
+        #expect(service.reportText.contains("fixture.plugin @ 1.2.3"))
+        #expect(service.reportText.contains("room=room-a&page=2"))
+        #expect(!service.reportText.contains("private"))
+        let restored = SupportDiagnosticsService(storageDirectory: directory, entriesProvider: { [] }, sessionSetter: { _ in })
+        let exported = try String(contentsOf: restored.exportReport(), encoding: .utf8)
+        #expect(exported.contains(html))
+        #expect(exported.contains(response))
+        #expect(restored.lastReport?.environment != nil)
+    }
+
+    @Test("schema one report still restores without invented environment or log classification")
+    @MainActor
+    func oldReportRestores() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = SupportDiagnosticsService(storageDirectory: directory, entriesProvider: { [] }, sessionSetter: { _ in })
+        service.makeReportForError(title: "错误快照", message: "fixture failure", detail: nil)
+        let url = directory.appendingPathComponent("latest.json")
+        var object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        object["schemaVersion"] = 1
+        object.removeValue(forKey: "environment")
+        try JSONSerialization.data(withJSONObject: object).write(to: url)
+        let restored = SupportDiagnosticsService(storageDirectory: directory, entriesProvider: { [] }, sessionSetter: { _ in })
+        #expect(restored.errorMessage == nil)
+        #expect(restored.lastReport?.schemaVersion == 1)
+        #expect(restored.lastReport?.environment == nil)
+        #expect(restored.reportText.contains("此报告未采集设备型号"))
     }
 
     @Test("an old delayed stop cannot stop a new session, and export has explicit no-report failure")
@@ -229,21 +321,24 @@ struct SupportDiagnosticsTests {
         )
         service.startRecording()
         let sessionID = try #require(fixture.recordedSessionIDs.last ?? nil)
-        fixture.entries = (0..<200).map { index in
+        fixture.entries = (0..<32).map { index in
             var entry = PluginConsoleEntry(
                 tag: "fixture-\(index)", method: "getRooms",
-                status: index == 199 ? .error : .success,
+                status: index == 31 ? .error : .success,
                 diagnosticSessionID: sessionID
             )
-            entry.responseBody = String(repeating: "x", count: 16_384) + "-\(index)"
-            entry.errorMessage = index == 199 ? "latest failure" : nil
+            entry.requestBody = "{\"roomID\":\"room-\(index)\"}"
+            entry.responseBody = String(repeating: "x", count: 600_000) + "-\(index)"
+            entry.errorMessage = index == 31 ? "latest failure" : nil
             return entry
         }
         service.stopRecording()
         let capped = try #require(service.lastReport)
-        #expect(capped.entries.count < 200)
-        #expect(capped.entries.contains { $0.pluginID == "fixture-199" && $0.errorMessage == "latest failure" })
-        #expect(capped.limitations.joined().contains("较早插件调用"))
+        #expect(capped.entries.count == 32)
+        #expect(capped.entries.contains { $0.pluginID == "fixture-31" && $0.errorMessage == "latest failure" })
+        #expect(capped.entries.first?.requestBody == #"{"roomID":"room-0"}"#)
+        #expect(capped.limitations.joined().contains("响应正文已缩短"))
+        #expect(try Data(contentsOf: directory.appendingPathComponent("latest.json")).count <= 16 * 1_024 * 1_024)
 
         service.startRecording()
         _ = service.recordAction(.openedHome)

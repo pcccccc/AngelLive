@@ -134,7 +134,10 @@ final class RoomInfoViewModel {
         }
         let operationID = SupportDiagnosticsService.shared.recordAction(
             force ? .retriedPlayback : .openedRoom,
-            context: ["source": currentRoom.liveType.rawValue, "silentRefresh": String(silentRefresh)]
+            context: SupportDiagnosticActionContext.room(
+                currentRoom,
+                additional: ["silentRefresh": String(silentRefresh)]
+            )
         )
         await SupportDiagnosticContext.$operationID.withValue(operationID) {
             await getPlayArgs(silent: silentRefresh)
@@ -186,7 +189,11 @@ final class RoomInfoViewModel {
             preferredQualityIndex: currentQualityIndex
         )
         let firstLoad = !hasLoadedPlayURL
-        self.changePlayUrl(cdnIndex: clamped.cdnIndex, urlIndex: clamped.qualityIndex)
+        self.changePlayUrl(
+            cdnIndex: clamped.cdnIndex,
+            urlIndex: clamped.qualityIndex,
+            selectionOrigin: .automatic
+        )
 
         // 已成功获取到播放参数，标记已加载
         hasLoadedPlayURL = true
@@ -227,6 +234,15 @@ final class RoomInfoViewModel {
     // 切换清晰度
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
+        changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .automatic)
+    }
+
+    @MainActor
+    func changePlayUrl(
+        cdnIndex: Int,
+        urlIndex: Int,
+        selectionOrigin: PlaybackSelectionOrigin
+    ) {
         guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
               cdnIndex < playArgs.count else {
             isLoading = false
@@ -236,11 +252,22 @@ final class RoomInfoViewModel {
         let currentCdn = playArgs[cdnIndex]
         guard urlIndex < currentCdn.qualitys.count else { return }
 
+        let selectionOperationID: UUID?
         if currentPlayURL != nil, currentCdnIndex != cdnIndex || currentQualityIndex != urlIndex {
-            SupportDiagnosticsService.shared.recordAction(
+            selectionOperationID = SupportDiagnosticsService.shared.recordAction(
                 currentCdnIndex != cdnIndex ? .selectedLine : .selectedQuality,
-                context: ["lineIndex": String(cdnIndex), "qualityIndex": String(urlIndex)]
+                context: SupportDiagnosticActionContext.selection(
+                    room: currentRoom,
+                    lineIndex: cdnIndex,
+                    lineName: currentCdn.displayName ?? currentCdn.cdn,
+                    qualityIndex: urlIndex,
+                    qualityName: currentCdn.qualitys[urlIndex].title,
+                    playerKernel: diagnosticPlayerKernel,
+                    additional: ["selection": selectionOrigin.rawValue]
+                )
             )
+        } else {
+            selectionOperationID = nil
         }
 
         // 逻辑会话 = 本次进房(roomId)。同 key 时协调器内部早退,自身的 switchCDN/refresh
@@ -271,13 +298,20 @@ final class RoomInfoViewModel {
             let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
             playerOption.playerTypes = resolved.playerTypes
             isHLSStream = resolved.isHLS
+            recordAutomaticPlaybackConfiguration(
+                cdn: currentCdn,
+                quality: currentQuality,
+                cdnIndex: cdnIndex,
+                qualityIndex: urlIndex
+            )
 
             applyPlayURL(
                 quality: currentQuality,
                 cdn: currentCdn,
                 cdnIndex: cdnIndex,
                 urlIndex: urlIndex,
-                debugContext: debugContext
+                debugContext: debugContext,
+                diagnosticOperationID: selectionOperationID
             )
             return
         }
@@ -298,6 +332,13 @@ final class RoomInfoViewModel {
         // 1. 决定播放器类型
         playerOption.playerTypes = resolved.playerTypes
         isHLSStream = resolved.isHLS
+        let effectiveCdn = effectiveSelection.map { playArgs[$0.cdnIndex] } ?? currentCdn
+        recordAutomaticPlaybackConfiguration(
+            cdn: effectiveCdn,
+            quality: effectiveQuality,
+            cdnIndex: self.currentCdnIndex,
+            qualityIndex: self.currentQualityIndex
+        )
 
         // 如果已经通过 HLS 查找确定了播放地址，直接返回
         if let resolvedURL = resolved.overrideURL {
@@ -308,14 +349,45 @@ final class RoomInfoViewModel {
         }
 
         // 2. 设置播放地址（部分平台需要异步重新请求）
-        let effectiveCdn = effectiveSelection.map { playArgs[$0.cdnIndex] } ?? currentCdn
         applyPlayURL(
             quality: effectiveQuality,
             cdn: effectiveCdn,
             cdnIndex: self.currentCdnIndex,
             urlIndex: self.currentQualityIndex,
-            debugContext: debugContext
+            debugContext: debugContext,
+            diagnosticOperationID: selectionOperationID
         )
+    }
+
+    enum PlaybackSelectionOrigin: String {
+        case automatic
+        case user
+    }
+
+    @MainActor
+    private func recordAutomaticPlaybackConfiguration(
+        cdn: LiveQualityModel,
+        quality: LiveQualityDetail,
+        cdnIndex: Int,
+        qualityIndex: Int
+    ) {
+        guard currentPlayURL == nil, SupportDiagnosticContext.operationID != nil else { return }
+        SupportDiagnosticsService.shared.recordAction(
+            .playbackConfigured,
+            context: SupportDiagnosticActionContext.selection(
+                room: currentRoom,
+                lineIndex: cdnIndex,
+                lineName: cdn.displayName ?? cdn.cdn,
+                qualityIndex: qualityIndex,
+                qualityName: quality.title,
+                playerKernel: diagnosticPlayerKernel,
+                additional: ["selection": "automatic"]
+            )
+        )
+    }
+
+    private var diagnosticPlayerKernel: String? {
+        playerOption.playerTypes.first.map(playerTypeName(for:))
     }
 
     // MARK: - 播放器类型决策
@@ -412,8 +484,21 @@ final class RoomInfoViewModel {
         cdn: LiveQualityModel,
         cdnIndex: Int,
         urlIndex: Int,
-        debugContext: RoomPlaybackDebugContext
+        debugContext: RoomPlaybackDebugContext,
+        diagnosticOperationID: UUID? = nil
     ) {
+        if let diagnosticOperationID {
+            SupportDiagnosticContext.$operationID.withValue(diagnosticOperationID) {
+                applyPlayURL(
+                    quality: quality,
+                    cdn: cdn,
+                    cdnIndex: cdnIndex,
+                    urlIndex: urlIndex,
+                    debugContext: debugContext
+                )
+            }
+            return
+        }
         if RoomPlaybackResolver.shouldRefreshPlaybackOnSelection(quality, currentPlayURL: currentPlayURL) {
             fetchRefreshedPlayURL(
                 quality: quality,

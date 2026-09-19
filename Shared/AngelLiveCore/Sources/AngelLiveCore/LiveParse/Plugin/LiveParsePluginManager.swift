@@ -360,6 +360,9 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         let console = PluginConsoleService.shared
         let consoleEntryId: UUID?
         let consoleInvocationContext: PluginConsoleInvocationContext?
+        let consoleEntryKind = Self.consoleEntryKind(function: function)
+        let invocationTimestamp = Date()
+        let invocationDiagnosticSessionID = console.diagnosticSessionID
         if console.isEnabled {
             // 敏感调用默认整段省略；登录挑战只输出宿主定义的字段白名单摘要。
             // 绝不对任意插件 JSON 做“猜测式”放行。
@@ -379,12 +382,20 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             let entryId = await console.log(
                 tag: pluginId,
                 method: function,
+                kind: consoleEntryKind,
+                timestamp: invocationTimestamp,
                 pluginVersion: selectedPlugin.manifest.version,
-                operationID: SupportDiagnosticContext.operationID
+                diagnosticSessionID: invocationDiagnosticSessionID,
+                operationID: SupportDiagnosticContext.operationID,
+                captureCurrentDiagnosticSession: false
             )
-            await console.updateRequest(id: entryId, body: payloadStr)
             consoleEntryId = entryId
             consoleInvocationContext = await console.invocationContext(for: entryId)
+            let recordedPayload = consoleEntryKind == .highFrequency
+                    && consoleInvocationContext?.diagnosticSessionID != nil
+                ? Self.highFrequencyRequestSummary(function: function, payload: payload)
+                : payloadStr
+            await console.updateRequest(id: entryId, body: recordedPayload)
         } else {
             consoleEntryId = nil
             consoleInvocationContext = nil
@@ -477,6 +488,18 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                             policy: sensitiveConsolePolicy,
                             value: result
                         )
+                    } else if consoleEntryKind == .highFrequency,
+                              consoleInvocationContext?.diagnosticSessionID != nil {
+                        responseStr = Self.highFrequencyResponseSummary(
+                            function: function,
+                            value: result
+                        )
+                    } else if consoleInvocationContext?.diagnosticSessionID != nil,
+                              let string = result as? String {
+                        // A string result may itself be the wire HTML/JSON text.
+                        // Keep it verbatim for diagnostics instead of wrapping it
+                        // as an escaped JSON string.
+                        responseStr = string
                     } else {
                         let consoleResult = Self.redactedLoginTransactionConsoleValue(result)
                         let serialized = (try? String(
@@ -534,16 +557,21 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             }
 #endif
             if let consoleEntryId {
-                await console.updateStatus(
-                    id: consoleEntryId,
-                    status: .error,
-                    duration: elapsed,
-                    errorMessage: sensitivePluginCall
+                let errorMessage = consoleEntryKind == .highFrequency
+                        && consoleInvocationContext?.diagnosticSessionID != nil
+                        && !sensitivePluginCall
+                    ? "High-frequency plugin call failed [details omitted]"
+                    : sensitivePluginCall
                         ? Self.sensitiveErrorSummary(
                             policy: sensitiveConsolePolicy,
                             error: error
                         )
                         : error.localizedDescription
+                await console.updateStatus(
+                    id: consoleEntryId,
+                    status: .error,
+                    duration: elapsed,
+                    errorMessage: errorMessage
                 )
             }
             if let tokenSnapshot, tokenSnapshot.record?.deviceCredential == nil, self === LiveParsePlugins.shared,
@@ -558,6 +586,79 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             }
             throw tokenEnabled ? APITokenCallPolicy.safeError(error) : error
         }
+    }
+
+    private static func consoleEntryKind(function: String) -> PluginConsoleEntryKind {
+        switch function {
+        case "onDanmakuFrame", "onDanmakuTick":
+            return .highFrequency
+        default:
+            return .invocation
+        }
+    }
+
+    static func highFrequencyRequestSummary(
+        function: String,
+        payload: [String: Any]
+    ) -> String {
+        var summary: [String: Any] = [
+            "function": function,
+            "hasConnectionId": nonemptyString(payload["connectionId"])
+        ]
+        switch function {
+        case "onDanmakuFrame":
+            summary["frameType"] = allowedString(
+                payload["frameType"],
+                values: ["text", "binary", "http_response"]
+            ) ?? "unknown"
+            if let text = payload["text"] as? String {
+                summary["textByteCount"] = text.utf8.count
+            }
+            if let encoded = payload["bytesBase64"] as? String {
+                summary["binaryByteCount"] = decodedBase64ByteCount(encoded)
+            }
+            addBoundedInteger(payload["statusCode"], key: "statusCode", to: &summary)
+            if let headers = payload["responseHeaders"] as? [String: Any] {
+                summary["responseHeaderCount"] = headers.count
+            } else if let headers = payload["responseHeaders"] as? [String: String] {
+                summary["responseHeaderCount"] = headers.count
+            }
+        case "onDanmakuTick":
+            summary["reason"] = allowedString(
+                payload["reason"],
+                values: ["heartbeat", "polling"]
+            ) ?? "unknown"
+        default:
+            break
+        }
+        return consoleJSONString(summary)
+    }
+
+    static func highFrequencyResponseSummary(function: String, value: Any) -> String {
+        var summary: [String: Any] = ["function": function]
+        guard let response = value as? [String: Any] else {
+            summary["responseType"] = String(describing: type(of: value))
+            return consoleJSONString(summary)
+        }
+        if let ok = response["ok"] as? Bool {
+            summary["ok"] = ok
+        }
+        summary["messageCount"] = (response["messages"] as? [Any])?.count ?? 0
+        summary["writeCount"] = (response["writes"] as? [Any])?.count ?? 0
+        summary["hasTimer"] = response["timer"] != nil && !(response["timer"] is NSNull)
+        summary["hasPoll"] = response["poll"] != nil && !(response["poll"] is NSNull)
+        return consoleJSONString(summary)
+    }
+
+    private static func decodedBase64ByteCount(_ encoded: String) -> Int {
+        let characterCount = encoded.utf8.reduce(into: 0) { count, byte in
+            if byte != 0x0A, byte != 0x0D, byte != 0x20, byte != 0x09 {
+                count += 1
+            }
+        }
+        guard characterCount > 0 else { return 0 }
+        let padding = encoded.reversed().prefix(2).prefix { $0 == "=" }.count
+        return max(0, characterCount / 4 * 3 - padding)
     }
 
     static func sensitiveRequestSummary(

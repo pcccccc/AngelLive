@@ -140,21 +140,26 @@ struct ContentView: View {
                 if presentsFullUI {
                     TVFullPluginManagementView(
                         pluginSourceManager: appViewModel.pluginSourceManager,
-                        pluginAvailability: appViewModel.pluginAvailability
+                        pluginAvailability: appViewModel.pluginAvailability,
+                        onClose: { contentVM.showPluginManagement = false }
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.ultraThinMaterial)
+                    .environment(appViewModel)
+                    .environment(appViewModel.consentService)
                 } else {
                     TVPluginManagementView(
                         pluginSourceManager: appViewModel.pluginSourceManager,
                         pluginAvailability: appViewModel.pluginAvailability
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.ultraThinMaterial)
+                    .environment(appViewModel)
+                    .environment(appViewModel.consentService)
+                    .onExitCommand {
+                        contentVM.showPluginManagement = false
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
-            .environment(appViewModel)
-            .environment(appViewModel.consentService)
-            .onExitCommand {
-                contentVM.showPluginManagement = false
             }
         }
         .overlay {

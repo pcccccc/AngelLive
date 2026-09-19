@@ -277,9 +277,15 @@ struct PluginRuntimeDiagnosticsTests {
         let entries = PluginConsoleService.shared.snapshot(sessionID: fixture.sessionID)
         let longRecord = try #require(entries.first { $0.id == longContext.entryID }?.httpRecords.first)
         #expect(longRecord.responseBodyKind == .utf8)
-        #expect(longRecord.responseBodyByteCount == 20_000)
+        #expect(
+            longRecord.responseBodyByteCount
+                == SupportDiagnosticSanitizer.maximumBodyBytes + 1_024
+        )
         #expect(longRecord.responseBodyWasTruncated)
-        #expect((longRecord.responseBody?.utf8.count ?? 0) <= 16_500)
+        #expect(
+            (longRecord.responseBody?.utf8.count ?? 0)
+                <= SupportDiagnosticSanitizer.maximumBodyBytes
+        )
 
         let sensitiveRecord = try #require(entries.first { $0.id == sensitiveContext.entryID }?.httpRecords.first)
         #expect(sensitiveRecord.headers.isEmpty)
@@ -348,7 +354,10 @@ private final class RuntimeDiagnosticsURLProtocol: URLProtocol {
         }
         let data: Data
         if url.path == "/long" {
-            data = Data(repeating: 0x61, count: 20_000)
+            data = Data(
+                repeating: 0x61,
+                count: SupportDiagnosticSanitizer.maximumBodyBytes + 1_024
+            )
         } else {
             data = Data("{\"ok\":true}".utf8)
         }

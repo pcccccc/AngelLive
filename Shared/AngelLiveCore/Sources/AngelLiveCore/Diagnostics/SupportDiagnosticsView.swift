@@ -844,6 +844,9 @@ private struct SupportDiagnosticsSummaryView: View {
     let failureTitle: String?
     let failureMessage: String?
     let isErrorSnapshot: Bool
+    #if os(iOS)
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -856,6 +859,24 @@ private struct SupportDiagnosticsSummaryView: View {
                     .foregroundStyle(.green)
             }
 
+            #if os(iOS)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 16) {
+                    metadata
+                }
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 16, alignment: .leading),
+                        GridItem(.flexible(), spacing: nil, alignment: .leading)
+                    ],
+                    alignment: .leading,
+                    spacing: 16
+                ) {
+                    metadata
+                }
+            }
+            #else
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 24) {
                     metadata
@@ -864,6 +885,7 @@ private struct SupportDiagnosticsSummaryView: View {
                     metadata
                 }
             }
+            #endif
 
             if isErrorSnapshot, let failureTitle, let failureMessage {
                 VStack(alignment: .leading, spacing: 6) {
@@ -931,8 +953,15 @@ private struct SupportDiagnosticsMetadataItem<Content: View>: View {
                 .foregroundStyle(.secondary)
             content()
                 .font(.callout.weight(.medium))
+                #if os(iOS)
+                .fixedSize(horizontal: false, vertical: true)
+                #endif
         }
+        #if os(iOS)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        #else
         .frame(minWidth: 96, alignment: .leading)
+        #endif
     }
 }
 
@@ -980,9 +1009,19 @@ private struct SupportDiagnosticsDescriptionEditor: View {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Button(action: onSave) {
                     Label("保存补充", systemImage: "checkmark")
+                        #if os(iOS)
+                        .font(.subheadline)
+                        #endif
                         .frame(minHeight: 44)
+                        #if os(iOS)
+                        .contentShape(Rectangle())
+                        #endif
                 }
+                #if os(iOS)
+                .buttonStyle(.plain)
+                #else
                 .buttonStyle(.bordered)
+                #endif
                 .disabled(!isDirty)
 
                 Text(statusText)
@@ -1034,12 +1073,36 @@ private struct SupportDiagnosticsReportPhase: View {
 
             Button(action: onOpenPreview) {
                 Label("检查并分享报告", systemImage: "doc.text.magnifyingglass")
+                    #if os(iOS)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.black)
+                    .frame(maxWidth: .infinity)
+                    #else
                     .frame(maxWidth: .infinity, minHeight: 44)
+                    #endif
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
 
             HStack(spacing: 12) {
+                #if os(iOS)
+                Button(action: onRestart) {
+                    Text("重新记录")
+                        .font(.subheadline)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Button(role: .destructive, action: onClear) {
+                    Text("清除报告")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                #else
                 Button("重新记录", action: onRestart)
                     .frame(minHeight: 44)
                     .buttonStyle(.bordered)
@@ -1047,6 +1110,7 @@ private struct SupportDiagnosticsReportPhase: View {
                 Button("清除报告", role: .destructive, action: onClear)
                     .frame(minHeight: 44)
                     .buttonStyle(.bordered)
+                #endif
             }
         }
         .frame(maxWidth: 680, alignment: .leading)

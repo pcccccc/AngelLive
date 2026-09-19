@@ -132,7 +132,7 @@ struct SettingView: View {
                         supportDiagnosticsService.recordAction(.openedPluginManagement)
                     }
             }
-            .frame(minWidth: 600, minHeight: 480)
+            .frame(minWidth: 760, idealWidth: 820, minHeight: 580, idealHeight: 640)
         }
         .sheet(isPresented: $showOpenSourceList) {
             NavigationStack {

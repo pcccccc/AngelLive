@@ -3,19 +3,16 @@ import SwiftUI
 struct MacPluginManagementActions {
     let canUpdate: Bool
     let canCheck: Bool
+    let canAddSource: Bool
+    let canShowSources: Bool
     let update: () -> Void
     let check: () -> Void
-}
-
-private struct MacPluginManagementActionsKey: FocusedValueKey {
-    typealias Value = MacPluginManagementActions
+    let addSource: () -> Void
+    let showSources: () -> Void
 }
 
 extension FocusedValues {
-    var pluginManagementActions: MacPluginManagementActions? {
-        get { self[MacPluginManagementActionsKey.self] }
-        set { self[MacPluginManagementActionsKey.self] = newValue }
-    }
+    @Entry var pluginManagementActions: MacPluginManagementActions?
 }
 
 struct MacPluginManagementCommands: Commands {
@@ -24,6 +21,15 @@ struct MacPluginManagementCommands: Commands {
     var body: some Commands {
         if let actions {
             CommandMenu("插件") {
+                Button("添加订阅源", systemImage: "plus", action: actions.addSource)
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                    .disabled(!actions.canAddSource)
+
+                Button("订阅源", systemImage: "list.bullet.rectangle", action: actions.showSources)
+                    .disabled(!actions.canShowSources)
+
+                Divider()
+
                 Button("全部更新", action: actions.update)
                     .keyboardShortcut("u", modifiers: [.command, .shift])
                     .disabled(!actions.canUpdate)

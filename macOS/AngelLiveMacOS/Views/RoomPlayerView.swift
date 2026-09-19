@@ -102,6 +102,10 @@ struct RoomPlayerView: View {
             await viewModel.loadPlayURL()
         }
         .onDisappear {
+            SupportDiagnosticsService.shared.recordAction(
+                .closedRoom,
+                context: SupportDiagnosticActionContext.room(viewModel.currentRoom)
+            )
             playbackSession.invalidate()
             cleanupPlayer()
         }

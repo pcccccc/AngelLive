@@ -27,9 +27,11 @@ final class KSPlayerConsoleBridge: LogHandler, @unchecked Sendable {
     }
 
     func log(level: KSPlayer.LogLevel, message: CustomStringConvertible, file: String, function: String, line: UInt) {
+        let occurredAt = Date()
+        let diagnosticSessionID = PluginConsoleService.shared.diagnosticSessionID
         let text = message.description
         let location = "\(file):\(line) \(function)"
-        let timestamp = formatter.string(from: Date())
+        let timestamp = formatter.string(from: occurredAt)
 
         // 1) 输出到 Xcode 控制台 / OSLog,保持与默认 KSPlayer.OSLog 一致的可见性。
         switch level {
@@ -59,7 +61,15 @@ final class KSPlayerConsoleBridge: LogHandler, @unchecked Sendable {
 
         Task { @MainActor in
             let service = PluginConsoleService.shared
-            let id = service.log(tag: tag, method: method, status: status)
+            let id = service.log(
+                tag: tag,
+                method: method,
+                status: status,
+                kind: .playerLog,
+                timestamp: occurredAt,
+                diagnosticSessionID: diagnosticSessionID,
+                captureCurrentDiagnosticSession: false
+            )
             service.updateRequest(id: id, body: requestBody)
             service.updateStatus(
                 id: id,

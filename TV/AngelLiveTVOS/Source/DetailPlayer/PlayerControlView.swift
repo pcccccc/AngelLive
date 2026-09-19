@@ -208,7 +208,7 @@ struct PlayerControlView: View {
                             Spacer()
                             TVQualitySelectionPanel(
                                 onSelect: { cdnIndex, urlIndex in
-                                    roomInfoViewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                    roomInfoViewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
                                     hideQualityPanel()
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                         if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {

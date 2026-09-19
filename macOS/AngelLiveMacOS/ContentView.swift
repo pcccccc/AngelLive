@@ -178,16 +178,25 @@ struct ContentView: View {
         .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
         .onChange(of: selectedTab) { _, selection in
             guard pluginAvailability.hasAvailablePlugins else { return }
-            let action: SupportDiagnosticAction
             switch selection {
-            case .home: action = .openedHome
-            case .favorite: action = .openedFavorites
-            case .allPlatforms, .platform: action = .openedPlatform
-            case .history: action = .openedHistory
-            case .settings: action = .openedSettings
-            case .search: action = .openedSearch
+            case .home:
+                SupportDiagnosticsService.shared.recordAction(.openedHome)
+            case .favorite:
+                SupportDiagnosticsService.shared.recordAction(.openedFavorites)
+            case .allPlatforms:
+                SupportDiagnosticsService.shared.recordAction(.openedPlatform)
+            case .platform(let platform):
+                let context = LiveParseJSPlatformManager.platform(forPluginId: platform.pluginId).map {
+                    SupportDiagnosticActionContext.platform($0, additional: ["entryPoint": "tab"])
+                } ?? ["pluginID": platform.pluginId, "platform": platform.title, "entryPoint": "tab"]
+                SupportDiagnosticsService.shared.recordAction(.openedPlatform, context: context)
+            case .history:
+                SupportDiagnosticsService.shared.recordAction(.openedHistory)
+            case .settings:
+                SupportDiagnosticsService.shared.recordAction(.openedSettings)
+            case .search:
+                SupportDiagnosticsService.shared.recordAction(.openedSearch)
             }
-            SupportDiagnosticsService.shared.recordAction(action)
         }
         .environment(bookmarkService)
         .environment(pluginSourceManager)

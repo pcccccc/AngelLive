@@ -215,15 +215,23 @@ struct ContentView: View {
         .onChange(of: selectedTab) { _, newValue in
             hapticFeedback.selectionChanged()
             guard pluginAvailability.hasAvailablePlugins else { return }
-            let action: SupportDiagnosticAction
             switch newValue {
-            case .home: action = .openedHome
-            case .favorites: action = .openedFavorites
-            case .allPlatforms, .platform: action = .openedPlatform
-            case .settings: action = .openedSettings
-            case .search: action = .openedSearch
+            case .home:
+                SupportDiagnosticsService.shared.recordAction(.openedHome)
+            case .favorites:
+                SupportDiagnosticsService.shared.recordAction(.openedFavorites)
+            case .allPlatforms:
+                SupportDiagnosticsService.shared.recordAction(.openedPlatform)
+            case .platform(let pluginID):
+                let context = LiveParseJSPlatformManager.platform(forPluginId: pluginID).map {
+                    SupportDiagnosticActionContext.platform($0, additional: ["entryPoint": "tab"])
+                } ?? ["pluginID": pluginID, "entryPoint": "tab"]
+                SupportDiagnosticsService.shared.recordAction(.openedPlatform, context: context)
+            case .settings:
+                SupportDiagnosticsService.shared.recordAction(.openedSettings)
+            case .search:
+                SupportDiagnosticsService.shared.recordAction(.openedSearch)
             }
-            SupportDiagnosticsService.shared.recordAction(action)
         }
         .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
             selectedTab = .settings

@@ -285,7 +285,14 @@ class LiveViewModel {
         }
         do {
             let operationID = await MainActor.run {
-                SupportDiagnosticsService.shared.recordAction(.searched, context: ["kind": "keyword", "page": String(roomPage)])
+                SupportDiagnosticsService.shared.recordAction(
+                    .searched,
+                    context: SupportDiagnosticActionContext.search(
+                        keyword: text,
+                        page: roomPage,
+                        additional: ["searchKind": "keyword"]
+                    )
+                )
             }
             let newRooms = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
                 try await LiveService.searchRooms(keyword: text, page: roomPage)
@@ -321,10 +328,22 @@ class LiveViewModel {
         }
         do {
             let operationID = await MainActor.run {
-                SupportDiagnosticsService.shared.recordAction(.searched, context: ["kind": "share"])
+                SupportDiagnosticsService.shared.recordAction(.searched, context: SupportDiagnosticActionContext.shareSearch())
             }
             let room = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
-                try await LiveService.searchRoomWithShareCode(shareCode: text)
+                let room = try await LiveService.searchRoomWithShareCode(shareCode: text)
+                if let room {
+                    await MainActor.run {
+                        SupportDiagnosticsService.shared.recordAction(
+                            .searched,
+                            context: SupportDiagnosticActionContext.room(
+                                room,
+                                additional: ["searchKind": "share", "entryPoint": "searchResult"]
+                            )
+                        )
+                    }
+                }
+                return room
             }
             if let room {
                 await MainActor.run {

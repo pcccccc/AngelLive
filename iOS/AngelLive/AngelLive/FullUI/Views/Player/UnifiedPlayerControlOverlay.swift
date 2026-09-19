@@ -513,7 +513,7 @@ struct UnifiedPlayerControlOverlay: View {
                         ForEach(displayedQualityIndices(from: cdn), id: \.self) { urlIndex in
                             let quality = cdn.qualitys[urlIndex]
                             Button {
-                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
                             } label: {
                                 HStack {
                                     Text(RoomPlaybackResolver.qualityDisplayTitle(quality, in: playArgs))

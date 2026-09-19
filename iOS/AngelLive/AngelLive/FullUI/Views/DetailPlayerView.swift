@@ -393,6 +393,13 @@ struct DetailPlayerView: View {
         }
         .onDisappear {
             roomSwitchTask?.cancel()
+            SupportDiagnosticsService.shared.recordAction(
+                .closedRoom,
+                context: SupportDiagnosticActionContext.room(
+                    viewModel.currentRoom,
+                    additional: ["playerKernel": String(viewModel.selectedPlayerKernel.rawValue)]
+                )
+            )
             Logger.debug("[PlayerFlow] Detail onDisappear, roomId=\(viewModel.currentRoom.roomId), kernel=\(viewModel.selectedPlayerKernel.rawValue)", category: .player)
             viewModel.disconnectSocket()
             // 清除 Now Playing 信息(远程控制命令由 KSPlayer 在 stop() 时自行注销)

@@ -58,7 +58,7 @@ struct MoreActionsButton: View {
                         Menu(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn) {
                             ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
                                 Button {
-                                    viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                    viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
                                 } label: {
                                     HStack {
                                         Text(quality.title)

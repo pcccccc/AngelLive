@@ -633,6 +633,7 @@ public final class JSRuntime: @unchecked Sendable {
         let reject: JSValue
         let envelope: HostHTTPRequestEnvelope
         let requestHeaders: [String: String]
+        let actualRequest: URLRequest
         let parentSensitive: Bool
         let consoleContext: PluginConsoleHTTPContext
         let shouldLog: Bool
@@ -1431,6 +1432,7 @@ private extension JSRuntime {
                 reject: reject,
                 envelope: envelope,
                 requestHeaders: loggedRequestHeaders,
+                actualRequest: request,
                 parentSensitive: self.sensitiveLoggingDepth > 0,
                 consoleContext: consoleContext,
                 shouldLog: shouldLog,
@@ -2086,7 +2088,7 @@ private extension JSRuntime {
                 Self.logHTTPRecord(
                     pluginId: pluginId,
                     envelope: callback.envelope,
-                    requestHeaders: callback.requestHeaders,
+                    request: callback.actualRequest,
                     parentSensitive: callback.parentSensitive,
                     consoleContext: callback.consoleContext,
                     startedAt: Date(timeIntervalSinceReferenceDate: callback.startedAt),
@@ -2121,7 +2123,7 @@ private extension JSRuntime {
                 Self.logHTTPRecord(
                     pluginId: pluginId,
                     envelope: callback.envelope,
-                    requestHeaders: callback.requestHeaders,
+                    request: callback.actualRequest,
                     parentSensitive: callback.parentSensitive,
                     consoleContext: callback.consoleContext,
                     startedAt: Date(timeIntervalSinceReferenceDate: callback.startedAt),
@@ -2223,7 +2225,7 @@ private extension JSRuntime {
     private static func logHTTPRecord(
         pluginId: String,
         envelope: HostHTTPRequestEnvelope,
-        requestHeaders: [String: String],
+        request: URLRequest,
         parentSensitive: Bool,
         consoleContext: PluginConsoleHTTPContext,
         startedAt: Date,
@@ -2235,52 +2237,84 @@ private extension JSRuntime {
         duration: TimeInterval,
         diagnosticResponseBody: String? = nil
     ) {
+        let requestHeaders = request.allHTTPHeaderFields ?? [:]
         let hasProtectedHeader = requestHeaders.keys.contains { key in
             let lowered = key.lowercased()
             return lowered == "cookie" || lowered == "authorization" || lowered == "proxy-authorization"
         }
-        let sensitive = parentSensitive
-            || envelope.authMode == .loginTransaction
-            || envelope.authMode == .platformCookie
+        let credentialBearing = envelope.authMode == .platformCookie
             || !envelope.cookieInject.isEmpty
             || hasProtectedHeader
         let isDiagnostic = consoleContext.isDiagnosticCapture
-        let requestBody = consoleBodySnapshot(data: envelope.body, sensitive: sensitive)
+        let fullySensitive = parentSensitive
+            || envelope.authMode == .loginTransaction
+            || (!isDiagnostic && credentialBearing)
+        let hasInjectedBody = envelope.cookieInject.contains { $0.target == .body }
+        let credentialSecrets = isDiagnostic && credentialBearing && !fullySensitive
+            ? requestCredentialSecrets(request: request, envelope: envelope)
+            : []
+        let safeRequestBody = redactingCredentialLiterals(
+            in: request.httpBody,
+            secrets: credentialSecrets
+        )
+        let requestBody = consoleBodySnapshot(
+            data: safeRequestBody,
+            sensitive: fullySensitive || (isDiagnostic && hasInjectedBody),
+            originalByteCount: request.httpBody?.count
+        )
+        let safeResponseData = redactingCredentialLiterals(
+            in: responseData,
+            secrets: credentialSecrets
+        )
         let responseBody = consoleBodySnapshot(
-            data: responseData,
-            sensitive: sensitive,
+            data: safeResponseData,
+            sensitive: fullySensitive,
             sensitiveSummary: diagnosticResponseBody ?? SensitivePluginHTTPConsoleSummary.responseBody(
                 requestContainsCookieHeader: requestContainsCookieHeader
             ),
-            textLimit: isDiagnostic ? nil : 2_000
+            textLimit: isDiagnostic ? nil : 2_000,
+            originalByteCount: responseData?.count
         )
         let loggedURL: String
-        if sensitive {
+        if fullySensitive {
             var components = URLComponents()
-            components.scheme = envelope.url.scheme
-            components.host = envelope.url.host
-            components.port = envelope.url.port
-            loggedURL = components.string ?? envelope.url.host ?? "<redacted>"
+            components.scheme = request.url?.scheme
+            components.host = request.url?.host
+            components.port = request.url?.port
+            loggedURL = components.string ?? request.url?.host ?? "<redacted>"
         } else {
-            loggedURL = envelope.urlString
+            loggedURL = redactingInjectedQueryValues(
+                in: request.url?.absoluteString ?? envelope.urlString,
+                rules: envelope.cookieInject
+            )
+        }
+        var loggedRequestHeaders = fullySensitive ? [:] : requestHeaders
+        if isDiagnostic, !fullySensitive {
+            for rule in envelope.cookieInject where rule.target == .header {
+                guard let headerName = rule.headerName else { continue }
+                for key in loggedRequestHeaders.keys
+                    where key.caseInsensitiveCompare(headerName) == .orderedSame {
+                    loggedRequestHeaders[key] = "<redacted>"
+                }
+            }
         }
 
         let record = PluginConsoleHTTPRecord(
             url: loggedURL,
             method: envelope.method,
-            headers: sensitive ? [:] : requestHeaders,
+            headers: loggedRequestHeaders,
             startedAt: startedAt,
             body: requestBody.text,
             bodyKind: requestBody.kind,
             bodyByteCount: requestBody.byteCount,
             bodyWasTruncated: requestBody.wasTruncated,
             statusCode: statusCode,
-            responseHeaders: sensitive ? nil : responseHeaders,
+            responseHeaders: fullySensitive ? nil : responseHeaders,
             responseBody: responseBody.text,
             responseBodyKind: responseBody.kind,
             responseBodyByteCount: responseBody.byteCount,
             responseBodyWasTruncated: responseBody.wasTruncated,
-            error: sensitive && error != nil ? "Sensitive plugin request failed" : error,
+            error: fullySensitive && error != nil ? "Sensitive plugin request failed" : error,
             duration: duration,
             association: consoleContext.association,
             candidateEntryIDs: consoleContext.candidateEntryIDs,
@@ -2308,7 +2342,8 @@ private extension JSRuntime {
         data: Data?,
         sensitive: Bool,
         sensitiveSummary: String? = nil,
-        textLimit: Int? = nil
+        textLimit: Int? = nil,
+        originalByteCount: Int? = nil
     ) -> ConsoleBodySnapshot {
         guard let data else {
             return ConsoleBodySnapshot(
@@ -2322,7 +2357,7 @@ private extension JSRuntime {
             return ConsoleBodySnapshot(
                 text: sensitiveSummary,
                 kind: .omittedSensitive,
-                byteCount: data.count,
+                byteCount: originalByteCount ?? data.count,
                 wasTruncated: false
             )
         }
@@ -2330,7 +2365,7 @@ private extension JSRuntime {
             return ConsoleBodySnapshot(
                 text: "<binary body omitted: \(data.count) bytes>",
                 kind: .binary,
-                byteCount: data.count,
+                byteCount: originalByteCount ?? data.count,
                 wasTruncated: false
             )
         }
@@ -2338,9 +2373,85 @@ private extension JSRuntime {
         return ConsoleBodySnapshot(
             text: storedText,
             kind: .utf8,
-            byteCount: data.count,
-            wasTruncated: textLimit.map { text.count > $0 } ?? (data.count > 16_384)
+            byteCount: originalByteCount ?? data.count,
+            wasTruncated: textLimit.map { text.count > $0 }
+                ?? ((originalByteCount ?? data.count) > SupportDiagnosticSanitizer.maximumBodyBytes)
         )
+    }
+
+    private static func requestCredentialSecrets(
+        request: URLRequest,
+        envelope: HostHTTPRequestEnvelope
+    ) -> [String] {
+        let injectedHeaderNames = Set(envelope.cookieInject.compactMap { rule in
+            rule.target == .header ? rule.headerName?.lowercased() : nil
+        })
+        var secrets: [String] = []
+        for (name, value) in request.allHTTPHeaderFields ?? [:] {
+            let lowered = name.lowercased()
+            guard ["cookie", "authorization", "proxy-authorization"].contains(lowered)
+                    || injectedHeaderNames.contains(lowered) else { continue }
+            secrets.append(value)
+            if lowered == "cookie" {
+                secrets += value.split(separator: ";").compactMap { pair in
+                    let parts = pair.split(separator: "=", maxSplits: 1)
+                    return parts.count == 2 ? String(parts[1]).trimmingCharacters(in: .whitespaces) : nil
+                }
+            } else if let token = value.split(separator: " ").last {
+                secrets.append(String(token))
+            }
+        }
+        let injectedQueryNames = Set(envelope.cookieInject.compactMap { rule in
+            rule.target == .query ? rule.queryName?.lowercased() : nil
+        })
+        if !injectedQueryNames.isEmpty,
+           let components = URLComponents(url: request.url ?? envelope.url, resolvingAgainstBaseURL: false) {
+            secrets += (components.queryItems ?? []).compactMap { item in
+                injectedQueryNames.contains(item.name.lowercased()) ? item.value : nil
+            }
+        }
+        return Array(Set(secrets.filter { !$0.isEmpty }))
+    }
+
+    private static func redactingCredentialLiterals(
+        in data: Data?,
+        secrets: [String]
+    ) -> Data? {
+        guard let data,
+              !secrets.isEmpty,
+              var text = String(data: data, encoding: .utf8) else { return data }
+        for secret in secrets.sorted(by: { $0.count > $1.count }) where secret.count >= 4 {
+            text = text.replacingOccurrences(of: secret, with: "<redacted>")
+        }
+        return Data(text.utf8)
+    }
+
+    private static func redactingInjectedQueryValues(
+        in url: String,
+        rules: [CookieInjectRule]
+    ) -> String {
+        let injectedNames = Set(rules.compactMap { rule in
+            rule.target == .query ? rule.queryName?.lowercased() : nil
+        })
+        guard !injectedNames.isEmpty,
+              let questionMark = url.firstIndex(of: "?") else { return url }
+        let queryStart = url.index(after: questionMark)
+        let fragmentStart = url[queryStart...].firstIndex(of: "#") ?? url.endIndex
+        let query = url[queryStart..<fragmentStart]
+        let redacted = query.split(separator: "&", omittingEmptySubsequences: false)
+            .map { component -> String in
+                let pair = component.split(
+                    separator: "=",
+                    maxSplits: 1,
+                    omittingEmptySubsequences: false
+                )
+                let encodedName = String(pair[0])
+                let name = (encodedName.removingPercentEncoding ?? encodedName).lowercased()
+                guard injectedNames.contains(name) else { return String(component) }
+                return "\(encodedName)=<redacted>"
+            }
+            .joined(separator: "&")
+        return String(url[..<queryStart]) + redacted + String(url[fragmentStart...])
     }
 
     /// 按 key path 设置嵌套字典值，如 ["data","token"] → {"data":{"token":"xxx"}}

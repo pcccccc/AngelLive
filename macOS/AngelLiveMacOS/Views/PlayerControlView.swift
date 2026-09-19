@@ -316,7 +316,7 @@ struct PlayerControlView: View {
                                             ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
                                                 Button {
                                                     Task { @MainActor in
-                                                        viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                                        viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
                                                     }
                                                 } label: {
                                                     HStack {
