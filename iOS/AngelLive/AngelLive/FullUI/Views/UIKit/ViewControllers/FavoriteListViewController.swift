@@ -56,6 +56,12 @@ class FavoriteListViewController: UIViewController {
     private var skeletonHostingController: UIHostingController<FavoriteSkeletonView>?
     private var errorHostingController: UIHostingController<AnyView>?
     private var emptyHostingController: UIHostingController<AnyView>?
+    private var lastKnownCollectionWidth: CGFloat = 0
+    private var lastKnownHorizontalSizeClass: UIUserInterfaceSizeClass?
+
+    private var effectiveCollectionWidth: CGFloat {
+        max(0, collectionView.bounds.width - collectionView.adjustedContentInset.left - collectionView.adjustedContentInset.right)
+    }
 
     // MARK: - Initialization
 
@@ -82,6 +88,18 @@ class FavoriteListViewController: UIViewController {
         super.viewWillAppear(animated)
         // 确保导航栏大标题可以正常折叠
         navigationController?.navigationBar.prefersLargeTitles = true
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        let currentWidth = effectiveCollectionWidth
+        let currentHorizontalSizeClass = traitCollection.horizontalSizeClass
+        if abs(currentWidth - lastKnownCollectionWidth) > 1 || currentHorizontalSizeClass != lastKnownHorizontalSizeClass {
+            lastKnownCollectionWidth = currentWidth
+            lastKnownHorizontalSizeClass = currentHorizontalSizeClass
+            collectionView.collectionViewLayout.invalidateLayout()
+        }
     }
 
     // MARK: - Setup
@@ -117,13 +135,13 @@ class FavoriteListViewController: UIViewController {
     // MARK: - 正在直播：纵向网格布局
 
     private func createVerticalGridSection(environment: NSCollectionLayoutEnvironment) -> NSCollectionLayoutSection {
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        let containerWidth = environment.container.contentSize.width
+        let isRegularWidth = environment.traitCollection.horizontalSizeClass == .regular
+        let containerWidth = environment.container.effectiveContentSize.width
         let horizontalPadding: CGFloat = 20 // 与导航栏大标题对齐
         let itemSpacing: CGFloat = 15
 
-        // iPad 3列，iPhone 2列
-        let columns: CGFloat = isIPad ? 3 : 2
+        // regular 宽度 3 列，compact 宽度 2 列
+        let columns: CGFloat = isRegularWidth ? 3 : 2
         let totalSpacing = horizontalPadding * 2 + itemSpacing * (columns - 1)
         let itemWidth = (containerWidth - totalSpacing) / columns
         let itemHeight = itemWidth / AppConstants.AspectRatio.card(width: itemWidth)
@@ -166,15 +184,15 @@ class FavoriteListViewController: UIViewController {
     // MARK: - 其他分组：横向滚动布局
 
     private func createHorizontalSection(environment: NSCollectionLayoutEnvironment) -> NSCollectionLayoutSection {
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isRegularWidth = environment.traitCollection.horizontalSizeClass == .regular
 
         // 计算卡片尺寸
-        let containerWidth = environment.container.contentSize.width
+        let containerWidth = environment.container.effectiveContentSize.width
         let horizontalPadding: CGFloat = 20 // 与导航栏大标题对齐
         let itemSpacing: CGFloat = 15
 
-        // iPad显示3个卡片，iPhone显示2个卡片（可以看到下一个的一部分）
-        let visibleItems: CGFloat = isIPad ? 3.2 : 2.2
+        // regular 宽度显示 3 个卡片，compact 宽度显示 2 个卡片（可以看到下一个的一部分）
+        let visibleItems: CGFloat = isRegularWidth ? 3.2 : 2.2
         let totalSpacing = horizontalPadding * 2 + itemSpacing * (ceil(visibleItems) - 1)
         let itemWidth = (containerWidth - totalSpacing) / visibleItems
         let itemHeight = itemWidth / AppConstants.AspectRatio.card(width: itemWidth)
@@ -620,6 +638,8 @@ class FavoriteSectionHeaderView: UICollectionReusableView {
 // MARK: - Skeleton View
 
 struct FavoriteSkeletonView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
@@ -636,10 +656,9 @@ struct FavoriteSkeletonView: View {
 
     @ViewBuilder
     private func skeletonSection(geometry: GeometryProxy) -> some View {
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let horizontalPadding: CGFloat = 20
         let itemSpacing: CGFloat = 15
-        let visibleItems: CGFloat = isIPad ? 3.2 : 2.2
+        let visibleItems: CGFloat = horizontalSizeClass == .regular ? 3.2 : 2.2
         let totalSpacing = horizontalPadding * 2 + itemSpacing * (ceil(visibleItems) - 1)
         let itemWidth = (geometry.size.width - totalSpacing) / visibleItems
 

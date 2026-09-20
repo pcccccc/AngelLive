@@ -19,6 +19,11 @@ class HistoryListViewController: UIViewController {
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
     private var lastKnownCollectionWidth: CGFloat = 0
+    private var lastKnownHorizontalSizeClass: UIUserInterfaceSizeClass?
+
+    private var effectiveCollectionWidth: CGFloat {
+        max(0, collectionView.bounds.width - collectionView.adjustedContentInset.left - collectionView.adjustedContentInset.right)
+    }
     /// 由 SwiftUI wrapper 注入,用来弹 swiftui-toasts 的 toast。
     var toastPresenter: ((ToastValue) -> Void)?
 
@@ -69,9 +74,11 @@ class HistoryListViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        let currentWidth = collectionView.bounds.width
-        if abs(currentWidth - lastKnownCollectionWidth) > 1 {
+        let currentWidth = effectiveCollectionWidth
+        let currentHorizontalSizeClass = traitCollection.horizontalSizeClass
+        if abs(currentWidth - lastKnownCollectionWidth) > 1 || currentHorizontalSizeClass != lastKnownHorizontalSizeClass {
             lastKnownCollectionWidth = currentWidth
+            lastKnownHorizontalSizeClass = currentHorizontalSizeClass
             collectionView.collectionViewLayout.invalidateLayout()
         }
     }
@@ -114,8 +121,7 @@ class HistoryListViewController: UIViewController {
             return .zero
         }
 
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        var columns: CGFloat = isIPad ? 3 : 2
+        var columns: CGFloat = traitCollection.horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing = flowLayout.minimumInteritemSpacing
         let insets = flowLayout.sectionInset
 
@@ -363,6 +369,6 @@ extension HistoryListViewController: UICollectionViewDelegate {
 
 extension HistoryListViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return calculateItemSize(for: collectionView.bounds.width)
+        return calculateItemSize(for: effectiveCollectionWidth)
     }
 }

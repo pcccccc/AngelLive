@@ -93,7 +93,7 @@ private extension HomeView {
                 // up behind the status bar.
                 ZStack(alignment: .top) {
                     homeScrollView(
-                        containerWidth: geometry.size.width,
+                        containerSize: geometry.size,
                         topSafeAreaInset: geometry.safeAreaInsets.top
                     )
 
@@ -120,7 +120,8 @@ private extension HomeView {
         )
     }
 
-    func homeScrollView(containerWidth: CGFloat, topSafeAreaInset: CGFloat) -> some View {
+    func homeScrollView(containerSize: CGSize, topSafeAreaInset: CGFloat) -> some View {
+        let containerWidth = containerSize.width
         let featuredCardWidth = featuredRoomCardWidth(for: containerWidth)
         let compactCardWidth = compactRoomCardWidth(for: containerWidth)
         // Use the selection/catalog, not the number of completed requests, so
@@ -146,7 +147,7 @@ private extension HomeView {
                 if !viewModel.bannerEntries.isEmpty {
                     HomeHeroCarousel(
                         entries: viewModel.bannerEntries,
-                        containerWidth: containerWidth,
+                        containerSize: containerSize,
                         topSafeAreaInset: topSafeAreaInset,
                         metrics: homeNavigationModel,
                         onOpenRoom: { room in
@@ -155,7 +156,7 @@ private extension HomeView {
                     )
                 } else if isAwaitingFirstContent {
                     HomeHeroLoadingCard(
-                        containerWidth: containerWidth,
+                        containerSize: containerSize,
                         topSafeAreaInset: topSafeAreaInset
                     )
                 } else {
@@ -374,6 +375,13 @@ private enum HomeNavigationMetrics {
     /// Pull back 20 so the title groups remain distinct without leaving a
     /// large empty band below the banner.
     static let heroSectionSpacingAdjustment: CGFloat = -20
+}
+
+private enum HomeHeroLayout {
+    static func cardHeight(for containerSize: CGSize) -> CGFloat {
+        let preferredHeight = min(max(containerSize.width * 0.9, 336), 500)
+        return min(preferredHeight, max(180, containerSize.height * 0.5))
+    }
 }
 
 private enum HomeNavigationSectionID {
@@ -746,6 +754,7 @@ private struct HomeRoomSection<Trailing: View>: View {
             .padding(.horizontal, AppConstants.Spacing.xl)
         }
         .frame(minHeight: measuredRailHeight)
+        .clipped()
         .scrollIndicators(.hidden)
         .onChange(of: cardWidth) { _, _ in measuredRailHeight = 0 }
         .onChange(of: dynamicTypeSize) { _, _ in measuredRailHeight = 0 }
@@ -849,7 +858,7 @@ private struct HomeSeeAllLabel: View {
 
 private struct HomeHeroCarousel: View {
     let entries: [HomeBannerEntry]
-    let containerWidth: CGFloat
+    let containerSize: CGSize
     let topSafeAreaInset: CGFloat
     let metrics: HomeNavigationModel
     let onOpenRoom: (LiveModel) -> Void
@@ -870,7 +879,7 @@ private struct HomeHeroCarousel: View {
     private let autoplayInterval: TimeInterval = 6
 
     private var viewportWidth: CGFloat {
-        max(containerWidth, 280)
+        containerSize.width
     }
 
     private var cardWidth: CGFloat {
@@ -878,7 +887,7 @@ private struct HomeHeroCarousel: View {
     }
 
     private var cardHeight: CGFloat {
-        min(max(viewportWidth * 0.9, 336), 500)
+        HomeHeroLayout.cardHeight(for: containerSize)
     }
 
     private var viewportSize: CGSize {
@@ -938,6 +947,7 @@ private struct HomeHeroCarousel: View {
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .frame(width: viewportWidth, height: displayedCardHeight)
+            .clipped()
             .background(AppConstants.Colors.primaryBackground)
 
             if entries.count > 1 {
@@ -1566,18 +1576,18 @@ private extension View {
 }
 
 private struct HomeHeroLoadingCard: View {
-    let containerWidth: CGFloat
+    let containerSize: CGSize
     let topSafeAreaInset: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
     private var viewportWidth: CGFloat {
-        max(containerWidth, 280)
+        containerSize.width
     }
 
     private var cardHeight: CGFloat {
-        min(max(viewportWidth * 0.9, 336), 500)
+        HomeHeroLayout.cardHeight(for: containerSize)
     }
 
     var body: some View {
@@ -1676,6 +1686,7 @@ private struct HomeRoomSectionLoading: View {
             }
             .scrollDisabled(true)
             .scrollIndicators(.hidden)
+            .clipped()
         }
     }
 }

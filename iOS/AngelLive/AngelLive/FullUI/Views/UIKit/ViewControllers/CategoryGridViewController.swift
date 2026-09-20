@@ -19,6 +19,12 @@ class CategoryGridViewController: UIViewController, JXSegmentedListContainerView
     private weak var viewModel: PlatformDetailViewModel?
     private let mainCategoryIndex: Int
     private var onCategorySelected: ((Int, Int) -> Void)?
+    private var lastKnownCollectionWidth: CGFloat = 0
+    private var lastKnownHorizontalSizeClass: UIUserInterfaceSizeClass?
+
+    private var effectiveCollectionWidth: CGFloat {
+        max(0, collectionView.bounds.width - collectionView.adjustedContentInset.left - collectionView.adjustedContentInset.right)
+    }
 
     private lazy var collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
@@ -54,6 +60,18 @@ class CategoryGridViewController: UIViewController, JXSegmentedListContainerView
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        let currentWidth = effectiveCollectionWidth
+        let currentHorizontalSizeClass = traitCollection.horizontalSizeClass
+        if abs(currentWidth - lastKnownCollectionWidth) > 1 || currentHorizontalSizeClass != lastKnownHorizontalSizeClass {
+            lastKnownCollectionWidth = currentWidth
+            lastKnownHorizontalSizeClass = currentHorizontalSizeClass
+            collectionView.collectionViewLayout.invalidateLayout()
+        }
     }
 
     // MARK: - Setup
@@ -126,13 +144,12 @@ extension CategoryGridViewController: UICollectionViewDelegate {
 
 extension CategoryGridViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        let availableWidth = collectionView.bounds.width
+        let availableWidth = effectiveCollectionWidth
 
         // 根据可用宽度动态计算列数
         let columns: CGFloat
-        if isIPad {
-            // iPad: 根据宽度自适应列数
+        if traitCollection.horizontalSizeClass == .regular {
+            // regular 宽度：根据可用宽度自适应列数
             // 每个 cell 最小宽度约 100pt，最大宽度约 150pt
             if availableWidth > 1000 {
                 columns = 8  // 超宽屏（横屏无 sidebar）
@@ -144,7 +161,7 @@ extension CategoryGridViewController: UICollectionViewDelegateFlowLayout {
                 columns = 4  // 窄屏
             }
         } else {
-            columns = 4  // iPhone 固定 4 列
+            columns = 4  // compact 宽度固定 4 列
         }
 
         let padding: CGFloat = 16

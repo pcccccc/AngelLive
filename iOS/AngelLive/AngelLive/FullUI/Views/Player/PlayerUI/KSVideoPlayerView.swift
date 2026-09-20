@@ -75,6 +75,8 @@ public struct KSVideoPlayerView: View {
                         viewModel?.player(layer: layer, finish: error)
                     }
                 )
+                    .clipped()
+                    .ignoresSafeArea(isFullscreen || isVerticalLiveMode ? .container : [], edges: .all)
                     .onAppear {
                         liftCycleBlock?(model.config, false)
                     }
@@ -129,7 +131,6 @@ public struct KSVideoPlayerView: View {
 
                         DanmuView(
                             coordinator: viewModel.danmuCoordinator,
-                            displayHeight: config.height,
                             fontSize: CGFloat(viewModel.danmuSettings.danmuFontSize),
                             alpha: viewModel.danmuSettings.danmuAlpha,
                             showColorDanmu: viewModel.danmuSettings.showColorDanmu,
@@ -156,7 +157,6 @@ public struct KSVideoPlayerView: View {
             .toolbar(.hidden, for: .tabBar)
             .focusedObject(model.config)
             .statusBar(hidden: isFullscreen)
-            .ignoresSafeArea(isFullscreen ? .container : [], edges: .top)
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
                     model.focusableView = .slider

@@ -12,9 +12,6 @@ import AngelLiveCore
 /// 弹幕视图（飞过屏幕的弹幕效果）
 struct DanmuView: UIViewRepresentable {
     var coordinator: Coordinator
-    var displayHeight: CGFloat // 实际显示区域的高度
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     // 弹幕配置
     var fontSize: CGFloat = 16
@@ -23,10 +20,9 @@ struct DanmuView: UIViewRepresentable {
     var speed: CGFloat = 0.5
     var areaIndex: Int = 2 // 显示区域索引：0=顶部1/4, 1=顶部1/2, 2=全屏, 3=底部1/2, 4=底部1/4
 
-    func makeUIView(context: Context) -> DanmakuView {
-        let screenWidth = UIScreen.main.bounds.width
-
-        let view = DanmakuView(frame: CGRect(x: 0, y: 0, width: screenWidth, height: displayHeight))
+    func makeUIView(context: Context) -> DanmakuContainerView {
+        let container = DanmakuContainerView(frame: .zero)
+        let view = container.danmakuView
         view.playingSpeed = Float(speed)
         view.play()
         coordinator.uiView = view
@@ -35,20 +31,11 @@ struct DanmuView: UIViewRepresentable {
         view.trackHeight = fontSize * 1.35
 
 
-        return view
+        return container
     }
 
-    func updateUIView(_ uiView: DanmakuView, context: Context) {
-        // 根据设备和方向动态调整尺寸
-        let screenWidth = UIScreen.main.bounds.width
-
-        // §6.1 切字号:仅当 frame 真变化(旋转/尺寸变)时才重算轨道,避免无关刷新扰动在飞弹幕
-        let newFrame = CGRect(x: 0, y: 0, width: screenWidth, height: displayHeight)
-        if uiView.frame != newFrame {
-            uiView.frame = newFrame
-            uiView.recalculateTracks()
-        }
-
+    func updateUIView(_ container: DanmakuContainerView, context: Context) {
+        let uiView = container.danmakuView
         // 更新配置(trackHeight didSet 仅在字号真变化时重算,且只影响新发弹幕)
         uiView.trackHeight = fontSize * 1.35
         uiView.playingSpeed = Float(speed)
@@ -101,5 +88,28 @@ struct DanmuView: UIViewRepresentable {
             uiView?.stop()
             if resumeAfterClear { uiView?.play() }
         }
+    }
+}
+
+/// SwiftUI owns the outer frame; UIKit updates the inner tracks after layout.
+final class DanmakuContainerView: UIView {
+    let danmakuView = DanmakuView(frame: .zero)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        addSubview(danmakuView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let frame = CGRect(origin: .zero, size: bounds.size)
+        guard danmakuView.frame != frame else { return }
+        danmakuView.frame = frame
+        danmakuView.recalculateTracks()
     }
 }

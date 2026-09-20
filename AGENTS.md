@@ -219,6 +219,8 @@ Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不�
 
 2026-09-18 在 Xcode 27.0 RC（27A266a）实测：Device Interaction 仅支持 iOS/watchOS/tvOS 27 模拟器，`My Mac` 明确返回不支持。macOS UI 验收改用最后编辑后的 workspace MCP build、Xcode Run 和原生应用 UI 交互/截图，确认运行的是本次构建的应用路径；不得把已安装的同名旧应用或仅构建成功当作通过，也不得声称执行了 Mac `InstallAndRun`。同名应用有歧义时用当次 build log 中的完整产物路径定位。此限制以实际工具响应为准，后续 Xcode 版本须重新核验。
 
+2026-09-20 在 Xcode 27.1 Beta（27A9269）的 iPhone Duo 实测：`InstallAndRun` 成功后，设备交互截图仍可能返回 `Target device has invalid screen scale`。展开时默认 `simctl io screenshot` 可能抓到已关闭的外屏而输出黑图；先用该设备的 `simctl io enumerate` 确认内外屏及当前形态，再显式指定当前显示屏截图，不写死 screen ID。形态切换以 Device Hub 的 Closed / Book / Open 控件为准，不能用旋转代替。原生窗口交互由 session 唯一负责人执行；截图需视觉复核，不以黑图推断 App 崩溃，也不以全桌面截图成功推断捕获了 Device Hub。
+
 ### 模拟器选择与启动约束
 
 - 使用已经存在、保留 Xcode 标准名称的模拟器。用户指定设备时，选择对应的已有标准设备；不得自行创建、克隆或重命名模拟器，也不得创建带任务名、日期或测试标记的临时设备。用户指定设备不等于授权新建；没有对应可用设备时先说明情况。

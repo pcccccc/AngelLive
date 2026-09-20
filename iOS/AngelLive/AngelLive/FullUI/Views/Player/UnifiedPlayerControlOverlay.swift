@@ -14,7 +14,6 @@ struct UnifiedPlayerControlOverlay: View {
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
 
     let bridge: PlayerControlBridge
     @Binding var showVideoSetting: Bool
@@ -46,26 +45,12 @@ struct UnifiedPlayerControlOverlay: View {
         horizontalSizeClass == .regular && verticalSizeClass == .compact
     }
 
-    /// iPhone 横屏时需要忽略安全区
-    private var shouldIgnoreSafeArea: Bool {
-        isLandscape && !AppConstants.Device.isIPad
-    }
-
     /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
         if isLandscape {
             return AppConstants.Device.isIPad ? 20 : 16
         }
         return 12
-    }
-
-    /// 锁屏按钮单独按左侧安全区收进去，其余四角控制统一先试 25pt。
-    private var iPhoneLandscapeLockInset: CGFloat {
-        shouldIgnoreSafeArea ? safeAreaInsets.leading + 5 : 0
-    }
-
-    private var iPhoneLandscapeCornerInset: CGFloat {
-        shouldIgnoreSafeArea ? 25 : 0
     }
 
     /// 顶部一排控制的目标高度，和返回按钮的 50pt 点击区对齐。
@@ -76,40 +61,9 @@ struct UnifiedPlayerControlOverlay: View {
         isFullscreen
     }
 
-    /// iPadOS 26 窗口控制按钮的参考几何：x=20, y=20, width=38, height=20。
-    private var windowControlsFrame: CGRect? {
-        guard AppConstants.Device.isIPad else { return nil }
-        guard #available(iOS 26.0, *) else { return nil }
-        return CGRect(x: 20, y: 20, width: 38, height: 20)
-    }
-
-    /// 仅在 iPad 窗口化运行时，为左上返回按钮预留红绿灯空间。
-    private var shouldOffsetBackButtonForWindowControls: Bool {
-        guard windowControlsFrame != nil else { return false }
-        guard #available(iOS 26.0, *) else { return false }
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }) else {
-            return false
-        }
-
-        let sceneBounds = windowScene.effectiveGeometry.coordinateSpace.bounds
-        let screenBounds = windowScene.screen.coordinateSpace.bounds
-        let tolerance: CGFloat = 2
-
-        return abs(sceneBounds.width - screenBounds.width) > tolerance ||
-            abs(sceneBounds.height - screenBounds.height) > tolerance
-    }
-
-    private var windowControlsLeadingInset: CGFloat {
-        guard shouldOffsetBackButtonForWindowControls, let frame = windowControlsFrame else { return 0 }
-        return frame.maxX + 12
-    }
-
-    /// 顶部返回按钮与右上角控制层都使用 50pt 行高，统一下移 2pt 后继续保持 centerY 对齐。
+    /// 顶部返回按钮与右上角控制层都使用 50pt 行高。
     private var topControlPadding: CGFloat {
-        guard windowControlsFrame != nil else { return controlPadding }
-        return 7
+        controlPadding
     }
 
     private var centeredStatusBarTopPadding: CGFloat {
@@ -212,7 +166,6 @@ struct UnifiedPlayerControlOverlay: View {
             .padding(.bottom, controlPadding)
             .opacity(isMaskVisible ? 1 : 0)
             .allowsHitTesting(isMaskVisible)
-            .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
             // 触摸控制层时重置自动隐藏
             .simultaneousGesture(
                 TapGesture()
@@ -225,7 +178,6 @@ struct UnifiedPlayerControlOverlay: View {
             // 清晰度选择面板（右侧滑入）
             if showQualityPanel {
                 Color.black.opacity(0.001)
-                    .ignoresSafeArea()
                     .onTapGesture { showQualityPanel = false }
                 QualitySelectionPanel(isShowing: $showQualityPanel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -305,7 +257,6 @@ struct UnifiedPlayerControlOverlay: View {
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, iPhoneLandscapeLockInset)
                 Spacer()
             }
             Spacer()
@@ -330,7 +281,6 @@ struct UnifiedPlayerControlOverlay: View {
                 }
                 .padding(-10)
                 .buttonStyle(.plain)
-                .padding(.leading, windowControlsLeadingInset + iPhoneLandscapeCornerInset)
                 Spacer()
             }
             Spacer()
@@ -348,7 +298,6 @@ struct UnifiedPlayerControlOverlay: View {
                 .padding(.top, centeredStatusBarTopPadding)
             Spacer()
         }
-        .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
         .transition(.opacity)
     }
@@ -393,7 +342,6 @@ struct UnifiedPlayerControlOverlay: View {
                 .padding(.vertical, 4)
                 .background(.ultraThinMaterial, in: Capsule())
                 .frame(height: topControlRowHeight)
-                .padding(.trailing, iPhoneLandscapeCornerInset)
             }
             Spacer()
         }
@@ -432,7 +380,6 @@ struct UnifiedPlayerControlOverlay: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.ultraThinMaterial, in: Capsule())
-                .padding(.leading, iPhoneLandscapeCornerInset)
                 Spacer()
             }
         }
@@ -471,7 +418,6 @@ struct UnifiedPlayerControlOverlay: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.ultraThinMaterial, in: Capsule())
-                .padding(.trailing, iPhoneLandscapeCornerInset)
             }
         }
     }

@@ -25,7 +25,6 @@ struct VideoControllerView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
-    @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @State private var showDanmakuSettings = false
     @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
     @State private var isSettingsPopupOpen = false // SettingsButton 内部弹窗状态
@@ -48,26 +47,12 @@ struct VideoControllerView: View {
         horizontalSizeClass == .regular && verticalSizeClass == .compact
     }
 
-    /// iPhone 横屏时需要忽略安全区（刘海/指示器区域也覆盖控制层）
-    private var shouldIgnoreSafeArea: Bool {
-        isLandscape && !AppConstants.Device.isIPad
-    }
-
     /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
         if isLandscape {
             return AppConstants.Device.isIPad ? 20 : 16
         }
         return 12
-    }
-
-    /// 锁屏按钮单独按左侧安全区收进去，其余四角控制统一先试 25pt。
-    private var iPhoneLandscapeLockInset: CGFloat {
-        shouldIgnoreSafeArea ? safeAreaInsets.leading + 5 : 0
-    }
-
-    private var iPhoneLandscapeCornerInset: CGFloat {
-        shouldIgnoreSafeArea ? 25 : 0
     }
 
     /// 顶部一排控制的目标高度，和返回按钮的 50pt 点击区对齐。
@@ -78,40 +63,9 @@ struct VideoControllerView: View {
         isLandscape || isIPadFullscreen.wrappedValue
     }
 
-    /// iPadOS 26 窗口控制按钮的参考几何：x=20, y=20, width=38, height=20。
-    private var windowControlsFrame: CGRect? {
-        guard AppConstants.Device.isIPad else { return nil }
-        guard #available(iOS 26.0, *) else { return nil }
-        return CGRect(x: 20, y: 20, width: 38, height: 20)
-    }
-
-    /// 仅在 iPad 窗口化运行时，为左上返回按钮预留红绿灯空间。
-    private var shouldOffsetBackButtonForWindowControls: Bool {
-        guard windowControlsFrame != nil else { return false }
-        guard #available(iOS 26.0, *) else { return false }
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }) else {
-            return false
-        }
-
-        let sceneBounds = windowScene.effectiveGeometry.coordinateSpace.bounds
-        let screenBounds = windowScene.screen.coordinateSpace.bounds
-        let tolerance: CGFloat = 2
-
-        return abs(sceneBounds.width - screenBounds.width) > tolerance ||
-            abs(sceneBounds.height - screenBounds.height) > tolerance
-    }
-
-    private var windowControlsLeadingInset: CGFloat {
-        guard shouldOffsetBackButtonForWindowControls, let frame = windowControlsFrame else { return 0 }
-        return frame.maxX + 12
-    }
-
-    /// 顶部返回按钮与右上角控制层都使用 50pt 行高，统一下移 2pt 后继续保持 centerY 对齐。
+    /// 顶部返回按钮与右上角控制层都使用 50pt 行高。
     private var topControlPadding: CGFloat {
-        guard windowControlsFrame != nil else { return controlPadding }
-        return 7
+        controlPadding
     }
 
     private var centeredStatusBarTopPadding: CGFloat {
@@ -301,7 +255,6 @@ struct VideoControllerView: View {
                                     .adaptiveCircleGlassEffect()
                             }
                             .ksBorderlessButton()
-                            .padding(.leading, iPhoneLandscapeLockInset)
                             Spacer()
                         }
                         Spacer()
@@ -323,7 +276,6 @@ struct VideoControllerView: View {
                                         .contentShape(Rectangle())
                                 }
                                 .padding(-10)
-                                .padding(.leading, windowControlsLeadingInset + iPhoneLandscapeCornerInset)
                                 .ksBorderlessButton()
                                 Spacer()
                             }
@@ -341,7 +293,6 @@ struct VideoControllerView: View {
                                     .padding(.top, centeredStatusBarTopPadding)
                                 Spacer()
                             }
-                            .ignoresSafeArea(edges: .top)
                             .allowsHitTesting(false)
                             .transition(.opacity)
                         }
@@ -385,7 +336,6 @@ struct VideoControllerView: View {
                                 .padding(.vertical, 4)
                                 .adaptiveGlassEffect()
                                 .frame(height: topControlRowHeight)
-                                .padding(.trailing, iPhoneLandscapeCornerInset)
                             }
                             Spacer()
                         }
@@ -412,7 +362,6 @@ struct VideoControllerView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .adaptiveGlassEffect()
-                                .padding(.leading, iPhoneLandscapeCornerInset)
                                 Spacer()
                             }
                         }
@@ -445,7 +394,6 @@ struct VideoControllerView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .adaptiveGlassEffect()
-                                .padding(.trailing, iPhoneLandscapeCornerInset)
                             }
                         }
                     }
@@ -454,7 +402,6 @@ struct VideoControllerView: View {
                 .padding(.trailing, controlPadding)
                 .padding(.bottom, controlPadding)
                 .opacity(model.config.isMaskShow ? 1 : 0)
-                .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 // 捕获控制层上的任何触摸，重置自动隐藏计时器
                 .simultaneousGesture(
                     TapGesture()
@@ -480,18 +427,15 @@ struct VideoControllerView: View {
                                 }
                         )
                         .transition(.move(edge: .trailing).combined(with: .opacity))
-                        .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 }
 
                 // 清晰度选择面板（右侧滑入）
                 if showQualityPanel {
                     Color.black.opacity(0.001)
-                        .ignoresSafeArea()
                         .onTapGesture { showQualityPanel = false }
                     QualitySelectionPanel(isShowing: $showQualityPanel)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
-                        .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 }
             }
             .ksIsFocused($model.focusableView, equals: .controller)

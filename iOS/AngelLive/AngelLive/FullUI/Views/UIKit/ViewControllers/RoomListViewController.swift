@@ -62,6 +62,11 @@ class RoomListViewController: UIViewController {
     private var isLoadingMore = false
     private var isLoadingMoreStaticRooms = false
     private var lastKnownCollectionWidth: CGFloat = 0
+    private var lastKnownHorizontalSizeClass: UIUserInterfaceSizeClass?
+
+    private var effectiveCollectionWidth: CGFloat {
+        max(0, collectionView.bounds.width - collectionView.adjustedContentInset.left - collectionView.adjustedContentInset.right)
+    }
 
     // MARK: - Initialization
 
@@ -123,9 +128,11 @@ class RoomListViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        let currentWidth = collectionView.bounds.width
-        if abs(currentWidth - lastKnownCollectionWidth) > 1 {
+        let currentWidth = effectiveCollectionWidth
+        let currentHorizontalSizeClass = traitCollection.horizontalSizeClass
+        if abs(currentWidth - lastKnownCollectionWidth) > 1 || currentHorizontalSizeClass != lastKnownHorizontalSizeClass {
             lastKnownCollectionWidth = currentWidth
+            lastKnownHorizontalSizeClass = currentHorizontalSizeClass
             collectionView.collectionViewLayout.invalidateLayout()
         }
     }
@@ -169,8 +176,7 @@ class RoomListViewController: UIViewController {
             return .zero
         }
 
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
-        var columns: CGFloat = isIPad ? 3 : 2
+        var columns: CGFloat = traitCollection.horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing = flowLayout.minimumInteritemSpacing
         let insets = flowLayout.sectionInset
 
@@ -305,7 +311,7 @@ class RoomListViewController: UIViewController {
         view.setNeedsLayout()
         view.layoutIfNeeded()
 
-        let currentWidth = collectionView.bounds.width
+        let currentWidth = effectiveCollectionWidth
         guard currentWidth > 0 else { return }
         lastKnownCollectionWidth = currentWidth
         collectionView.collectionViewLayout.invalidateLayout()
@@ -571,7 +577,7 @@ extension RoomListViewController: UICollectionViewDelegate {
 
 extension RoomListViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return calculateItemSize(for: collectionView.bounds.width)
+        return calculateItemSize(for: effectiveCollectionWidth)
     }
 }
 

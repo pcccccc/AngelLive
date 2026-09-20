@@ -43,8 +43,10 @@ struct DetailPlayerView: View {
     @State private var verticalLiveControlsVisible = true
     @State private var verticalLiveControlPopupPresented = false
 
-    /// 当前是否 iPhone 横屏（用于禁用下滑手势）
-    @State private var isIPhoneLandscape: Bool = false
+    /// Only a vertically compact phone layout needs to hide the information panel.
+    private var isIPhoneLandscape: Bool {
+        !AppConstants.Device.isIPad && verticalSizeClass == .compact
+    }
 
     /// 进入后台前是否处于 iPhone 横屏全屏（用于回前台时保留用户主动触发的横屏）
     @State private var wasLandscapeBeforeBackground: Bool = false
@@ -131,22 +133,13 @@ struct DetailPlayerView: View {
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
-            let iPhoneLandscapeMode = !AppConstants.Device.isIPad && isLandscape
+            let iPhoneLandscapeMode = isIPhoneLandscape
             // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
             let showInfoPanel = isVerticalLiveMode ? false : !(iPhoneLandscapeMode || isIPadFullscreen)
 
-            // 获取安全区信息（在任何 edgesIgnoringSafeArea 之前）
-            let safeInsets = EdgeInsets(
-                top: geometry.safeAreaInsets.top,
-                leading: geometry.safeAreaInsets.leading,
-                bottom: geometry.safeAreaInsets.bottom,
-                trailing: geometry.safeAreaInsets.trailing
-            )
-
             // 计算播放器宽度
             let playerWidth: CGFloat = {
-                // iPhone 横屏时补回安全区宽度，确保实际绘制能覆盖左右刘海区域
-                let baseWidth = iPhoneLandscapeMode ? (geometry.size.width + safeInsets.leading + safeInsets.trailing) : geometry.size.width
+                let baseWidth = geometry.size.width
                 if isVerticalLiveMode {
                     return baseWidth // 竖屏直播占满宽度
                 } else if showInfoPanel && AppConstants.Device.isIPad && isLandscape {
@@ -155,9 +148,6 @@ struct DetailPlayerView: View {
                     return baseWidth
                 }
             }()
-
-            // 横屏时补回安全区高度，让内容也能覆盖上下刘海/指示器
-            let safeAdjustedHeight = iPhoneLandscapeMode ? (geometry.size.height + safeInsets.top + safeInsets.bottom) : geometry.size.height
 
             // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
             let playerHeight: CGFloat = {
@@ -237,14 +227,11 @@ struct DetailPlayerView: View {
                         .id("stable_player")
                         .environment(viewModel)
                         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
-                        .environment(\.safeAreaInsetsCustom, safeInsets)
                         .frame(
                             width: playerWidth,
-                            height: AppConstants.Device.isIPad ? playerHeight : (iPhoneLandscapeMode ? safeAdjustedHeight : nil)
+                            height: AppConstants.Device.isIPad ? playerHeight : (iPhoneLandscapeMode ? geometry.size.height : nil)
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        // iPhone 横屏时让播放器区域覆盖 Safe Area，避免控制层/统计被刘海遮挡
-                        .edgesIgnoringSafeArea(iPhoneLandscapeMode ? .all : [])
                         // 新画面手势桥接未启用的系统或内核，保留原有播放器手势处理。
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 1).onChanged { _ in },
@@ -271,7 +258,7 @@ struct DetailPlayerView: View {
                             // 竖屏：底部面板
                             informationArea
                             .frame(maxWidth: .infinity)
-                            .frame(height: geometry.size.height - playerHeight)
+                            .frame(height: max(0, geometry.size.height - playerHeight))
                             .offset(x: 0, y: playerHeight)
                         }
                     }
@@ -288,25 +275,13 @@ struct DetailPlayerView: View {
                         }
                         .frame(width: 20)
                         .frame(maxHeight: .infinity, alignment: .leading)
-                        .ignoresSafeArea()
                     }
                 }
 
                 if isRoomSwitcherPresented {
-                    roomSwitcherOverlay(
-                        availableSize: geometry.size,
-                        safeInsets: safeInsets
-                    )
+                    roomSwitcherOverlay(availableSize: geometry.size)
                     .zIndex(200)
                 }
-            }
-            .onChange(of: geometry.size) { _, newSize in
-                let isLandscape = newSize.width > newSize.height
-                isIPhoneLandscape = !AppConstants.Device.isIPad && isLandscape
-            }
-            .onAppear {
-                let isLandscape = geometry.size.width > geometry.size.height
-                isIPhoneLandscape = !AppConstants.Device.isIPad && isLandscape
             }
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
@@ -573,12 +548,10 @@ struct DetailPlayerView: View {
         }
     }
 
-    private func roomSwitcherOverlay(
-        availableSize: CGSize,
-        safeInsets: EdgeInsets
-    ) -> some View {
+    private func roomSwitcherOverlay(availableSize: CGSize) -> some View {
         ZStack(alignment: .trailing) {
             Color.black.opacity(0.46)
+                .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: dismissRoomSwitcher)
                 .accessibilityHidden(true)
@@ -599,9 +572,6 @@ struct DetailPlayerView: View {
                 onSelect: switchRoom,
                 onClose: dismissRoomSwitcher
             )
-            .padding(.top, safeInsets.top)
-            .padding(.trailing, safeInsets.trailing)
-            .padding(.bottom, safeInsets.bottom)
             .frame(width: roomSwitcherPanelWidth(for: availableSize))
             .frame(maxHeight: .infinity)
             .background {
@@ -625,11 +595,10 @@ struct DetailPlayerView: View {
             .transition(.move(edge: .trailing).combined(with: .opacity))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
     }
 
     private func roomSwitcherPanelWidth(for size: CGSize) -> CGFloat {
-        if AppConstants.Device.isIPad {
+        if horizontalSizeClass == .regular {
             return min(480, max(400, size.width * 0.46))
         }
         if size.width > size.height {

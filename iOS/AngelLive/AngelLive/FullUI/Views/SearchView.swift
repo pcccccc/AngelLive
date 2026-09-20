@@ -11,6 +11,7 @@ import AngelLiveCore
 
 struct SearchView: View {
     @Environment(SearchViewModel.self) private var viewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var searchResults: [LiveModel] = []
     @State private var isSearching = false
     @State private var searchError: Error?
@@ -158,8 +159,7 @@ struct SearchView: View {
 
     
     private func searchResultsGrid(geometry: GeometryProxy) -> some View {
-        let isIPad = AppConstants.Device.isIPad
-        let columns = isIPad ? 3 : 2
+        let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20
@@ -190,8 +190,7 @@ struct SearchView: View {
 
     @ViewBuilder
     private func searchSkeletonGrid(geometry: GeometryProxy) -> some View {
-        let isIPad = AppConstants.Device.isIPad
-        let columns = isIPad ? 3 : 2
+        let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20

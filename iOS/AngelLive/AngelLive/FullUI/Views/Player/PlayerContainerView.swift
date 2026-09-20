@@ -152,7 +152,6 @@ struct PlayerContentView: View {
                 presentRoomSwitcher()
             }
         }
-        .edgesIgnoringSafeArea(isVerticalLiveMode ? .all : [])
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // 记录进后台时刻,供回前台 watchdog 算后台时长。
             lastResignActiveAt = Date()
@@ -404,7 +403,6 @@ struct PlayerContentView: View {
                         // 使用异步任务定期检查视频尺寸
                         var retryCount = 0
                         let maxRetries = 40 // 最多重试 40 次（10 秒）
-                        let screenSize = await MainActor.run { UIScreen.main.bounds.size }
 
                         Logger.debug("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)", category: .player)
 
@@ -415,14 +413,14 @@ struct PlayerContentView: View {
                             if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
                                naturalSize.width > 1.0, naturalSize.height > 1.0 {
 
-                                // 排除屏幕/视图初始渲染尺寸：
-                                // 如果 naturalSize 和屏幕尺寸（或其翻转）完全一致，说明还没拿到真实视频尺寸
-                                let isScreenSize =
-                                    (naturalSize.width == screenSize.width && naturalSize.height == screenSize.height) ||
-                                    (naturalSize.width == screenSize.height && naturalSize.height == screenSize.width)
+                                // Read the current render surface on every attempt; it can resize while loading.
+                                let renderSize = playerCoordinator.playerLayer?.player.view.bounds.size ?? .zero
+                                let isRenderSize =
+                                    (naturalSize.width == renderSize.width && naturalSize.height == renderSize.height) ||
+                                    (naturalSize.width == renderSize.height && naturalSize.height == renderSize.width)
 
-                                if isScreenSize {
-                                    Logger.warning("视频尺寸为屏幕尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))", category: .player)
+                                if isRenderSize {
+                                    Logger.warning("视频尺寸为初始渲染尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))", category: .player)
                                 } else if !hasDetectedSize {
                                     let ratio = naturalSize.width / naturalSize.height
                                     let isPortrait = ratio < 1.0
@@ -528,7 +526,6 @@ struct PlayerContentView: View {
                 showsControlLayer: false
             )
             .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
-            .clipped()
             #else
             vlcPlayerView(playURL: playURL)
             #endif
@@ -572,6 +569,7 @@ struct PlayerContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
         .clipped()
+        .ignoresSafeArea(isFullscreen || isVerticalLiveMode ? .container : [], edges: .all)
     }
 
     private var shouldShowBuffering: Bool {

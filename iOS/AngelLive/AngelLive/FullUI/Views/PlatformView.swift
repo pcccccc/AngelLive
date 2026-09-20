@@ -12,6 +12,7 @@ import AngelLiveCore
 struct PlatformView: View {
     @Environment(PlatformViewModel.self) private var viewModel
     @Environment(SearchViewModel.self) private var searchViewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var navigationPath: [Platformdescription] = []
     @State private var showCapabilitySheet = false
     private let gridSpacing = AppConstants.Spacing.lg
@@ -72,16 +73,7 @@ struct PlatformView: View {
 
     private func columnCount(for size: CGSize) -> Int {
         guard size.width > 0 else { return 2 }
-
-        switch UIDevice.current.userInterfaceIdiom {
-        case .pad:
-            return 3
-        case .phone:
-            return 2
-        default:
-            let estimated = max(2, Int((size.width / 240).rounded(.down)))
-            return min(6, estimated)
-        }
+        return horizontalSizeClass == .regular ? 3 : 2
     }
 
     private func layoutMetrics(for size: CGSize) -> GridMetrics {

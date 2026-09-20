@@ -20,7 +20,6 @@ struct VerticalLiveControllerView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
-    @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.presentToast) private var presentToast
     @Environment(\.verticalLiveControlsVisible) private var controlsVisible
@@ -45,37 +44,16 @@ struct VerticalLiveControllerView: View {
         self.model = model
     }
 
-    /// iPadOS 26 窗口控制按钮的参考几何：x=20, y=20, width=38, height=20。
-    private var windowControlsFrame: CGRect? {
-        guard AppConstants.Device.isIPad else { return nil }
-        guard #available(iOS 26.0, *) else { return nil }
-        return CGRect(x: 20, y: 20, width: 38, height: 20)
-    }
-
-    private var windowControlsLeadingInset: CGFloat {
-        guard let frame = windowControlsFrame else { return 0 }
-        return frame.maxX + 12
-    }
-
-    /// 返回按钮当前布局尺寸为 40pt，按红绿灯中心线反推顶部 padding，再整体上移 5pt。
-    private var topBarTopPadding: CGFloat {
-        guard let frame = windowControlsFrame else { return safeAreaInsets.top }
-        return frame.midY - 25
-    }
-
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 ZStack {
                     topBar
-                        .padding(.top, topBarTopPadding)
 
                     bottomLeftArea
-                        .padding(.bottom, safeAreaInsets.bottom)
                         .allowsHitTesting(false)
 
                     bottomRightArea
-                        .padding(.bottom, safeAreaInsets.bottom)
                 }
                 .offset(x: controlsVisible.wrappedValue || reduceMotion ? 0 : -geometry.size.width)
                 .opacity(controlsVisible.wrappedValue ? 1 : 0)
@@ -85,11 +63,8 @@ struct VerticalLiveControllerView: View {
                 // 面板独立于清屏动画；展开时不接收底层清屏手势。
                 if showQualityPanel {
                     Color.black.opacity(0.001)
-                        .ignoresSafeArea()
                         .onTapGesture { showQualityPanel = false }
                     QualitySelectionPanel(isShowing: $showQualityPanel)
-                        .padding(.top, safeAreaInsets.top)
-                        .padding(.bottom, safeAreaInsets.bottom)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -126,7 +101,6 @@ struct VerticalLiveControllerView: View {
                         .contentShape(Rectangle())
                 }
                 .padding(-5)
-                .padding(.leading, windowControlsLeadingInset)
 
                 // 主播信息
                 HStack(spacing: 10) {
