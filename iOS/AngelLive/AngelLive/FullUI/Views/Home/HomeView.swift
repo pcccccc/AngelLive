@@ -926,8 +926,35 @@ private struct HomeHeroCarousel: View {
         return loopPages.first(where: { $0.id == selectedPageID })?.entry.id
     }
 
+    private var backdropEntry: HomeBannerEntry? {
+        if let selectedBannerID,
+           let entry = entries.first(where: { $0.id == selectedBannerID }) {
+            return entry
+        }
+        if let currentBannerID,
+           let entry = entries.first(where: { $0.id == currentBannerID }) {
+            return entry
+        }
+        return loopPages.first(where: { $0.id == 1 })?.entry
+    }
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
+            if #available(iOS 26.0, *), let backdropEntry {
+                HomeHeroBackdrop(
+                    preferredImageURL: backdropEntry.preferredHeroImageURL,
+                    fallbackImageURL: backdropEntry.fallbackHeroImageURL,
+                    cardWidth: viewportWidth,
+                    cardHeight: displayedCardHeight,
+                    imageDecodeHeight: cardHeight,
+                    presentationScale: reduceMotion ? 1 : 1.1
+                )
+                .frame(width: viewportWidth, height: displayedCardHeight)
+                .backgroundExtensionEffect()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+
             ScrollView(.horizontal) {
                 HStack(spacing: cardSpacing) {
                     ForEach(loopPages) { page in
@@ -948,7 +975,9 @@ private struct HomeHeroCarousel: View {
             .scrollIndicators(.hidden)
             .frame(width: viewportWidth, height: displayedCardHeight)
             .clipped()
-            .background(AppConstants.Colors.primaryBackground)
+            // Keep the opaque viewport fill from covering the artwork's
+            // background extension in the surrounding safe area.
+            .background(AppConstants.Colors.primaryBackground, ignoresSafeAreaEdges: [])
 
             if entries.count > 1 {
                 HomeHeroPageIndicator(
@@ -1178,8 +1207,8 @@ private struct HomeHeroCard: View {
 
         ZStack {
             HomeHeroRemoteImage(
-                url: preferredImageURL,
-                fallbackURL: fallbackImageURL,
+                url: entry.preferredHeroImageURL,
+                fallbackURL: entry.fallbackHeroImageURL,
                 // A stable decode size avoids a new image-processing cache key
                 // on every drag frame; only the presentation viewport grows.
                 targetSize: CGSize(width: cardWidth, height: imageDecodeHeight),
@@ -1201,20 +1230,7 @@ private struct HomeHeroCard: View {
                         .offset(x: animatesReveal ? (imagePosition - progress) * cardWidth : 0)
                 }
 
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.28), location: 0),
-                    .init(color: .clear, location: 0.34),
-                    .init(color: .clear, location: 0.54),
-                    .init(color: AppConstants.Colors.primaryBackground.opacity(0.12), location: 0.60),
-                    .init(color: AppConstants.Colors.primaryBackground.opacity(0.58), location: 0.73),
-                    .init(color: AppConstants.Colors.primaryBackground.opacity(0.94), location: 0.86),
-                    .init(color: AppConstants.Colors.primaryBackground, location: 0.96),
-                    .init(color: AppConstants.Colors.primaryBackground, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            HomeHeroGradient()
 
             VStack {
                 Spacer(minLength: 0)
@@ -1282,25 +1298,6 @@ private struct HomeHeroCard: View {
             .joined(separator: "，")
     }
 
-    /// Room feeds often expose a full-resolution live cover while their
-    /// promotional banner field is only a small web thumbnail. Prefer the room
-    /// cover and retain the promotional artwork as a network fallback.
-    private var preferredImageURL: URL? {
-        guard case .room(let room) = entry.banner.target,
-              !room.roomCover.isEmpty,
-              let roomCoverURL = URL(string: room.roomCover)
-        else {
-            return entry.banner.imageURL
-        }
-
-        return roomCoverURL
-    }
-
-    private var fallbackImageURL: URL? {
-        guard preferredImageURL != entry.banner.imageURL else { return nil }
-        return entry.banner.imageURL
-    }
-
     nonisolated private func pageProgress(
         for proxy: GeometryProxy,
         pageInset: CGFloat,
@@ -1313,6 +1310,71 @@ private struct HomeHeroCard: View {
             max(pageMinX / max(pageStride, 1), -1),
             1
         )
+    }
+}
+
+private struct HomeHeroBackdrop: View {
+    let preferredImageURL: URL?
+    let fallbackImageURL: URL?
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
+    let imageDecodeHeight: CGFloat
+    let presentationScale: CGFloat
+
+    var body: some View {
+        ZStack {
+            HomeHeroRemoteImage(
+                url: preferredImageURL,
+                fallbackURL: fallbackImageURL,
+                targetSize: CGSize(width: cardWidth, height: imageDecodeHeight),
+                presentationScale: presentationScale
+            )
+                .frame(width: cardWidth, height: cardHeight)
+                .scaleEffect(presentationScale)
+                .clipped()
+
+            HomeHeroGradient()
+        }
+    }
+}
+
+private struct HomeHeroGradient: View {
+    var body: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.28), location: 0),
+                .init(color: .clear, location: 0.34),
+                .init(color: .clear, location: 0.54),
+                .init(color: AppConstants.Colors.primaryBackground.opacity(0.12), location: 0.60),
+                .init(color: AppConstants.Colors.primaryBackground.opacity(0.58), location: 0.73),
+                .init(color: AppConstants.Colors.primaryBackground.opacity(0.94), location: 0.86),
+                .init(color: AppConstants.Colors.primaryBackground, location: 0.96),
+                .init(color: AppConstants.Colors.primaryBackground, location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+}
+
+private extension HomeBannerEntry {
+    /// Room feeds often expose a full-resolution live cover while their
+    /// promotional banner field is only a small web thumbnail. Prefer the room
+    /// cover and retain the promotional artwork as a network fallback.
+    var preferredHeroImageURL: URL? {
+        guard case .room(let room) = banner.target,
+              !room.roomCover.isEmpty,
+              let roomCoverURL = URL(string: room.roomCover)
+        else {
+            return banner.imageURL
+        }
+
+        return roomCoverURL
+    }
+
+    var fallbackHeroImageURL: URL? {
+        guard preferredHeroImageURL != banner.imageURL else { return nil }
+        return banner.imageURL
     }
 }
 
@@ -1573,6 +1635,7 @@ private extension View {
                 }
         }
     }
+
 }
 
 private struct HomeHeroLoadingCard: View {
