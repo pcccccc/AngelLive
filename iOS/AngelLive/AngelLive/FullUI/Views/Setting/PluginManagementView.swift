@@ -35,6 +35,16 @@ struct PluginManagementView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var showsUpdateOverview: Bool {
+        let batch = pluginSourceManager.updateBatch
+        return batch.isRunning
+            || !batch.pluginIds.isEmpty
+            || pluginSourceManager.isInstalling
+            || pluginSourceManager.installTotalCount > 0
+            || pluginAvailability.installedPluginIds.contains { pluginSourceManager.hasUpdate(for: $0) }
+            || pluginSourceManager.sourceURLs.contains { pluginSourceManager.health(for: $0).isFailed }
+    }
+
     private var isUninstallConfirmationPresented: Binding<Bool> {
         Binding(
             get: { pendingUninstallPluginID != nil },
@@ -46,13 +56,26 @@ struct PluginManagementView: View {
 
     var body: some View {
         List {
-            Section {
-                PluginUpdateOverview(
-                    manager: pluginSourceManager,
-                    installedPluginIds: pluginAvailability.installedPluginIds,
-                    update: updatePlugins,
-                    check: checkUpdates
-                )
+            PluginManagementScopeSection(selection: $selectedScope)
+
+            if showsUpdateOverview {
+                Section {
+                    if pluginSourceManager.isInstalling,
+                       pluginSourceManager.installTotalCount == 0 {
+                        HStack(spacing: 12) {
+                            ProgressView()
+                            Text("正在安装插件")
+                        }
+                        .frame(minHeight: 44)
+                    } else {
+                        PluginUpdateOverview(
+                            manager: pluginSourceManager,
+                            installedPluginIds: pluginAvailability.installedPluginIds,
+                            update: updatePlugins,
+                            check: checkUpdates
+                        )
+                    }
+                }
             }
 
             if pluginSourceManager.errorMessage != nil, !showAddSource {
@@ -69,27 +92,30 @@ struct PluginManagementView: View {
                 requestUninstall: { pendingUninstallPluginID = $0 },
                 addSource: { showAddSource = true }
             )
+
+            PluginManagementToolsSection(
+                installedPluginIDs: pluginAvailability.installedPluginIds,
+                showsCheckAction: !showsUpdateOverview,
+                check: checkUpdates
+            )
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(16)
+        .contentMargins(.top, 8, for: .scrollContent)
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: "搜索插件"
         )
         .navigationTitle("插件管理")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                NavigationLink {
-                    PluginSourceListView()
-                } label: {
-                    Label("订阅源", systemImage: "link")
-                }
-
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button("添加订阅源", systemImage: "plus") {
                     showAddSource = true
                 }
                 .disabled(pluginSourceManager.isManagementBusy)
+                .accessibilityIdentifier("plugins.addSource")
             }
         }
         .task { await reloadCatalog() }
@@ -171,6 +197,128 @@ struct PluginManagementView: View {
     }
 }
 
+private struct PluginManagementScopeSection: View {
+    @Binding var selection: PluginManagementScope
+
+    var body: some View {
+        Section {
+            Picker("插件范围", selection: $selection) {
+                ForEach(PluginManagementScope.allCases) { scope in
+                    Text(scope.title).tag(scope)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(minHeight: 44)
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityIdentifier("plugins.scope")
+        }
+    }
+}
+
+private struct PluginManagementToolsSection: View {
+    @Environment(PluginSourceManager.self) private var manager
+    let installedPluginIDs: [String]
+    let showsCheckAction: Bool
+    let check: () -> Void
+
+    private var updateSummary: LocalizedStringResource {
+        if manager.isFetchingIndex || manager.isCheckingUpdates {
+            return "正在检查更新…"
+        }
+        if manager.sourceURLs.isEmpty {
+            return "添加订阅源以获取更新"
+        }
+        if manager.sourceURLs.contains(where: { manager.health(for: $0).isFailed }) {
+            return "部分订阅源未能检查"
+        }
+        let allSourcesChecked = manager.sourceURLs.allSatisfy {
+            if case .healthy = manager.health(for: $0) { return true }
+            return false
+        }
+        guard allSourcesChecked else { return "尚未检查更新" }
+        guard !installedPluginIDs.isEmpty else { return "前往可安装列表选择插件" }
+        let allInstalledPluginsChecked = installedPluginIDs.allSatisfy {
+            manager.latestVersion(for: $0) != nil
+        }
+        return allInstalledPluginsChecked ? "插件均为最新版本" : "已完成检查"
+    }
+
+    var body: some View {
+        Section("管理") {
+            NavigationLink {
+                PluginSourceListView()
+            } label: {
+                PluginManagementToolLabel(content: .sources(count: manager.sourceURLs.count))
+            }
+            .accessibilityIdentifier("plugins.sources")
+
+            if showsCheckAction {
+                Button(action: check) {
+                    PluginManagementToolLabel(content: .updates(
+                        summary: updateSummary,
+                        isChecking: manager.isFetchingIndex || manager.isCheckingUpdates
+                    ))
+                }
+                .buttonStyle(.plain)
+                .disabled(manager.sourceURLs.isEmpty || manager.isManagementBusy)
+                .accessibilityIdentifier("plugins.checkUpdates")
+            }
+        }
+    }
+}
+
+private struct PluginManagementToolLabel: View {
+    enum Content {
+        case sources(count: Int)
+        case updates(summary: LocalizedStringResource, isChecking: Bool)
+    }
+
+    let content: Content
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                switch content {
+                case .sources(let count):
+                    Text("订阅源")
+                        .foregroundStyle(.primary)
+                    Text("\(count) 个订阅源")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .updates(let summary, _):
+                    Text("检查更新")
+                        .foregroundStyle(.primary)
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if case .updates(_, true) = content {
+                ProgressView()
+                    .accessibilityLabel("正在检查更新")
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var symbol: String {
+        switch content {
+        case .sources: "link"
+        case .updates: "arrow.clockwise"
+        }
+    }
+}
+
 private struct PluginManagementPluginListSection: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(PluginSourceManager.self) private var pluginSourceManager
@@ -218,13 +366,6 @@ private struct PluginManagementPluginListSection: View {
 
     var body: some View {
         Section {
-            Picker("插件范围", selection: $selectedScope) {
-                ForEach(PluginManagementScope.allCases) { scope in
-                    Text(scope.title).tag(scope)
-                }
-            }
-            .pickerStyle(.segmented)
-
             if selectedScope == .installed {
                 installedPluginRows
             } else {
@@ -232,7 +373,11 @@ private struct PluginManagementPluginListSection: View {
             }
         } header: {
             HStack {
-                Text(selectedScope.title)
+                if !normalizedSearch.isEmpty {
+                    Text("找到 \(visiblePluginCount) 个插件")
+                } else {
+                    Text("\(visiblePluginCount) 个插件")
+                }
                 Spacer()
                 if selectedScope == .available,
                    normalizedSearch.isEmpty,
@@ -241,19 +386,15 @@ private struct PluginManagementPluginListSection: View {
                         installAll()
                     }
                     .labelStyle(.titleAndIcon)
+                    .frame(minHeight: 44)
                     .disabled(pluginSourceManager.isManagementBusy)
                 }
             }
-        } footer: {
-            if !normalizedSearch.isEmpty {
-                switch selectedScope {
-                case .installed:
-                    Text("找到 \(filteredInstalledPluginIDs.count) 个匹配的插件")
-                case .available:
-                    Text("找到 \(availablePluginItems.count) 个匹配的插件")
-                }
-            }
         }
+    }
+
+    private var visiblePluginCount: Int {
+        selectedScope == .installed ? filteredInstalledPluginIDs.count : availablePluginItems.count
     }
 
     @ViewBuilder
@@ -261,7 +402,9 @@ private struct PluginManagementPluginListSection: View {
         if pluginAvailability.installedPluginIds.isEmpty {
             PluginManagementEmptyState(
                 title: "暂无已安装插件",
-                message: "安装完成的插件会显示在这里。"
+                message: "从订阅源中选择你需要的插件。",
+                actionTitle: "浏览可安装插件",
+                action: { selectedScope = .available }
             )
         } else if filteredInstalledPluginIDs.isEmpty {
             PluginManagementEmptyState(
@@ -277,13 +420,28 @@ private struct PluginManagementPluginListSection: View {
 
     @ViewBuilder
     private var availablePluginRows: some View {
-        if !hasAvailablePlugins {
+        if !hasAvailablePlugins,
+           pluginSourceManager.isFetchingIndex || pluginSourceManager.isCheckingUpdates {
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("正在获取插件…")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 76)
+        } else if !hasAvailablePlugins {
             if pluginSourceManager.sourceURLs.isEmpty {
                 PluginManagementEmptyState(
                     title: "暂无可安装插件",
                     message: "先添加订阅源以获取插件。",
                     actionTitle: "添加订阅源",
                     action: addSource
+                )
+            } else if pluginSourceManager.sourceURLs.contains(where: {
+                pluginSourceManager.health(for: $0).isFailed
+            }) {
+                PluginManagementEmptyState(
+                    title: "暂时无法获取插件",
+                    message: "部分订阅源未能加载，请检查订阅源状态后重试。"
                 )
             } else {
                 PluginManagementEmptyState(
@@ -304,24 +462,42 @@ private struct PluginManagementPluginListSection: View {
     }
 
     private func installedPluginRow(_ pluginID: String) -> some View {
-        managedPluginRow(pluginId: pluginID)
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    requestUninstall(pluginID)
-                } label: {
-                    Label("卸载", systemImage: "trash")
-                }
-                .disabled(pluginSourceManager.isManagementBusy)
-            }
-            .contextMenu {
+        HStack(alignment: .center, spacing: 8) {
+            managedPluginRow(pluginId: pluginID)
+            Menu {
                 Button("卸载插件", systemImage: "trash", role: .destructive) {
                     requestUninstall(pluginID)
                 }
-                .disabled(pluginSourceManager.isManagementBusy)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
-            .accessibilityAction(named: Text("卸载插件")) {
+            .buttonStyle(.borderless)
+            .tint(.secondary)
+            .disabled(pluginSourceManager.isManagementBusy)
+            .accessibilityLabel("管理 \(pluginSourceManager.managementDisplayName(for: pluginID))")
+        }
+        .frame(minHeight: 60)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                requestUninstall(pluginID)
+            } label: {
+                Label("卸载", systemImage: "trash")
+            }
+            .disabled(pluginSourceManager.isManagementBusy)
+        }
+        .contextMenu {
+            Button("卸载插件", systemImage: "trash", role: .destructive) {
                 requestUninstall(pluginID)
             }
+            .disabled(pluginSourceManager.isManagementBusy)
+        }
+        .accessibilityAction(named: Text("卸载插件")) {
+            requestUninstall(pluginID)
+        }
     }
 
     private func pluginMatchesSearch(name: String, pluginId: String) -> Bool {
@@ -410,13 +586,14 @@ private struct PluginSourceListView: View {
                             )
                         }
                     }
-                } header: {
-                    Text("已添加的订阅源")
                 }
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(16)
+        .contentMargins(.top, 16, for: .scrollContent)
         .navigationTitle("订阅源")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("添加订阅源", systemImage: "plus") {
@@ -439,29 +616,23 @@ private struct PluginSourceListRow: View {
     let health: PluginSourceHealth
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: sourceHealthSymbol(for: health))
-                .font(.title3)
-                .foregroundStyle(sourceHealthColor(for: health))
-                .frame(width: 28, height: 28)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(pluginSourceHost(sourceURL))
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                Text(sourceURL)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 8)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(pluginSourceHost(sourceURL))
+                .font(.body.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text(sourceURL)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
             PluginSourceHealthLabel(health: health)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(pluginSourceHost(sourceURL))，\(sourceHealthAccessibilityText(health))")
+        .accessibilityLabel("\(sourceURL)，\(sourceHealthAccessibilityText(health))")
     }
 }
 
@@ -480,35 +651,55 @@ private struct PluginSourceDetailView: View {
 
     var body: some View {
         List {
-            Section("订阅源") {
-                LabeledContent("主机", value: pluginSourceHost(sourceURL))
-                LabeledContent("地址") {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(pluginSourceHost(sourceURL))
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    PluginSourceHealthLabel(health: health)
+                    if case .failed(let reason) = health {
+                        Text(reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("订阅地址")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Text(sourceURL)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
-                        .multilineTextAlignment(.trailing)
-                }
-            }
-
-            Section("状态") {
-                HStack {
-                    Text("当前状态")
-                    Spacer()
-                    PluginSourceHealthLabel(health: health)
-                }
-
-                if case .failed(let reason) = health {
-                    Text(reason)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
 
                 Button {
                     refreshSource()
                 } label: {
-                    Label("刷新订阅源", systemImage: "arrow.clockwise")
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text(isRefreshing ? "正在刷新…" : "刷新订阅源")
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        if isRefreshing {
+                            ProgressView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .disabled(pluginSourceManager.isManagementBusy || isRefreshing)
             }
 
@@ -522,7 +713,10 @@ private struct PluginSourceDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .listSectionSpacing(16)
+        .contentMargins(.top, 16, for: .scrollContent)
         .navigationTitle("订阅源详情")
+        .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
             "删除订阅源？",
             isPresented: $showDeleteConfirmation,
@@ -639,13 +833,13 @@ private struct PluginSourceAddView: View {
 
 private struct PluginManagementEmptyState: View {
     let title: LocalizedStringKey
-    let message: String
+    let message: LocalizedStringResource
     let actionTitle: LocalizedStringKey?
     let action: (() -> Void)?
 
     init(
         title: LocalizedStringKey,
-        message: String,
+        message: LocalizedStringResource,
         actionTitle: LocalizedStringKey? = nil,
         action: (() -> Void)? = nil
     ) {
@@ -656,22 +850,28 @@ private struct PluginManagementEmptyState: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 8) {
+            Image(systemName: "puzzlepiece.extension")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             Text(title)
-                .font(.body.weight(.medium))
+                .font(.headline)
             Text(message)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
                     .padding(.top, 4)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
     }
 }
 
@@ -679,15 +879,30 @@ private struct PluginSourceHealthLabel: View {
     let health: PluginSourceHealth
 
     var body: some View {
+        HStack(spacing: 5) {
+            if case .checking = health {
+                ProgressView()
+                    .controlSize(.mini)
+            } else {
+                Image(systemName: sourceHealthSymbol(for: health))
+                    .foregroundStyle(sourceHealthColor(for: health))
+                    .accessibilityHidden(true)
+            }
+            Text(statusText)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(sourceHealthAccessibilityText(health))
+    }
+
+    private var statusText: LocalizedStringResource {
         switch health {
-        case .unknown:
-            Label("未检查", systemImage: "questionmark.circle")
-        case .checking:
-            Label("检查中", systemImage: "arrow.triangle.2.circlepath")
-        case .healthy(let count):
-            Label("\(count) 个插件", systemImage: "checkmark.circle")
-        case .failed:
-            Label("异常", systemImage: "exclamationmark.triangle")
+        case .unknown: "尚未检查"
+        case .checking: "正在检查…"
+        case .healthy(let count): "正常 · \(count) 个插件"
+        case .failed: "订阅源异常"
         }
     }
 }

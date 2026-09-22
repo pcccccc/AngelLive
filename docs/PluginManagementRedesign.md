@@ -1,5 +1,102 @@
 # 插件管理重构验收标准
 
+## 2026-09-22：订阅源列表与详情修订
+
+用户复核首轮后指出订阅源子页面仍然拥挤：列表域名被横向健康状态挤断，同一状态重复出现两个勾；详情的 `LabeledContent` 让完整地址右对齐折行，重复标题与异常分隔线削弱了阅读顺序。本轮只改 iOS FullUI 的订阅源展示，继续采用已读取的 SwiftUX `settings-list-with-sections` 分组结构，不重新检索组件。
+
+### 布局与验收标准
+
+适用 iPhone 竖屏，使用可用宽度和语义字号适配，以下为结构参考：
+
+```text
+订阅源                          ＋
+┌ source.example.invalid           › ┐
+│ https://…/index.json                │
+│ ✓ 正常 · 3 个插件                    │
+└────────────────────────────────────┘
+
+订阅源详情
+┌ source.example.invalid             ┐
+│ ✓ 正常 · 3 个插件                    │
+├────────────────────────────────────┤
+│ 订阅地址                            │
+│ https://source.example.invalid/    │
+│ subscriptions/index.json           │
+├────────────────────────────────────┤
+│ ↻ 刷新订阅源                        │
+└────────────────────────────────────┘
+┌ 删除订阅源                          ┐
+└────────────────────────────────────┘
+删除影响说明
+```
+
+- 列表不再显示“已添加的订阅源”标题。域名 body medium、地址 caption secondary、健康状态 caption 按垂直顺序排布，间距 6pt、上下内边距 8pt；域名和地址各单行中间省略，保留系统导航箭头。大字号自然增高，不以缩小字号容纳内容；完整地址在详情读取。
+- 详情首组包含身份、地址和刷新三行；域名 headline，状态只有一枚语义图标和文字，失败原因在其下换行。地址 label caption、完整 URL callout，始终左对齐、可选择、不限制行数。禁止让地址进入左右键值布局后挤压或右对齐折行。
+- 健康图标可用绿色，状态文字 secondary；失败以图标和文字共同表达。检查中使用进度指示，不把未知或失败写成正常。刷新使用整行按钮，最小内容高度 44pt，处理中显示进度并保留原有忙碌禁用条件。
+- 删除单独分组，保留具体源名称确认及关联插件影响说明；验收只打开并取消确认，不执行删除。安装、刷新、移除和凭证逻辑不变。
+- inline 导航标题、原生 inset-grouped 背景和分隔线，section 间距 16pt。对照用户两张截图核查域名可用宽度、地址换行、图标数量和分隔线对齐，并在最后编辑后的新包检查浅色、深色、辅助功能字号和导航/刷新/确认取消。
+
+### 本轮实际验收
+
+- Xcode 27.1 Beta（27A9269）当前 workspace `AngelLive` scheme，最后源码修改后 MCP `BuildProject` 成功（10.63 秒），Issue Navigator error 为 0；新 `DeviceInteractionInstallAndRun` 返回 `Application installed and running`，设备为已有 iPhone 18 Pro / iOS 27.0。
+- root 已复核新包浅色截图：列表域名完整显示、地址与唯一状态纵向排列；详情完整地址左对齐自然换行、分隔线边界一致、删除独立分组。
+- 本地证据位于当次 `ActionArtifacts/default/DeviceInteractionSynthesize/`：`Subscription Source Redesign Verification-11_20_13_281-screenshot.png`（列表）与 `Subscription Source Redesign Verification-11_20_53_474-screenshot.png`（详情），未纳入仓库。
+- 刷新交互已观察到检查中状态、禁用刷新行与进度，完成后恢复健康状态；删除具名确认及关联插件说明已展示并取消，未删除数据。列表与详情的深色及 accessibility-medium 字号均完成截图，root 复核详情完整地址未裁切、列表摘要按设计省略、分隔线对齐。对应同前缀截图时间分别为 `11_22_14_863`、`11_21_58_130`、`11_22_31_854`、`11_22_54_593`。
+- 本轮未运行单元测试；iPad、横屏、macOS、tvOS、实际删除和失败源状态未验证。格式检查和全仓平台标识扫描通过，未修改共享 Package 或 ShellUI。
+- 设备恢复原来的 light / large 设置；`DeviceInteractionEndSession` 返回 `Session stopped`，当轮 bridge 正常退出。
+
+## 2026-09-22：iOS FullUI 首屏重做
+
+本轮仅调整 iOS FullUI 的 `PluginManagementView`，以下标准取代本文旧版 iOS 首屏示意；macOS、tvOS、ShellUI 与共享服务契约沿用既有行为。
+
+用户明确选择原生分组列表。已调用 SwiftUX MCP 的 conventions、search、component 和 source，结构参考仍为 [Settings List with Sections](https://www.swiftux.app/uicomponents/settings-list-with-sections)。初次按插件范围检索没有可靠匹配，用户明确分组结构后才选用该组件。采用原生分组边界与统一状态行，不照搬示例颜色、固定字号或设置菜单数据。
+
+原页面的主要问题是大标题、常驻更新卡片与重复范围标题把插件挤到首屏下半部，分段控件被放进插件白色分组，管理入口仅靠图标表达。新页面优先呈现插件内容，低频管理操作使用明确文字。
+
+### 布局参考与尺寸
+
+适用 iPhone 竖屏及 iPad 可用窗口；尺寸以 pt 为单位，按容器适配，不按设备型号分支。
+
+```text
+返回                 插件管理                  ＋
+搜索插件
+[ 已安装                              可安装 ]  ← 独立范围控件
+（仅有更新、任务结果、进度或异常时显示状态区）
+1 个插件                             全部安装*
+┌ 图标   插件名称                         … ┐
+│        版本 / 登录要求 / 行状态             │
+└───────────────────────────────────────────┘
+管理
+┌ 链接   订阅源                    数量   › ┐
+├ 刷新   检查更新                            ┤
+│        当前真实检查状态                    │
+└───────────────────────────────────────────┘
+* 仅可安装范围、无搜索且存在可安装项目时展示。
+```
+
+- 导航使用 inline 标题、系统返回和添加订阅源按钮；搜索继续使用原生 searchable。范围控件在独立透明行中，不嵌入插件分组，不再重复显示“已安装”标题。
+- 使用 inset-grouped List 的原生背景、圆角与分隔线。范围控件、插件块和管理块左右对齐；移除多余 section 空白，不以大卡片或装饰补足单插件页面。
+- 插件图标沿用 46pt，图文间距 12pt、名称 body medium、元数据 caption secondary。普通行随原生内边距自然布局，本轮默认字号实测 90pt，辅助功能字号可自然增高；新增更多菜单为 44×44pt，管理行使用整行触控。分段控件和导航栏保留系统尺寸，不将外层容器尺寸当作按钮触控尺寸。
+- 已安装插件的行尾增加可见的更多菜单，卸载仍需具名确认；保留侧滑与辅助功能动作。插件整行不伪装成详情导航，也不将点击整行解释为卸载。
+- 订阅源使用原生 NavigationLink 行与数量；检查更新使用整行 Button 和状态副文。展开更新概况时避免重复检查更新按钮。
+
+### 状态与验收
+
+- 有候选更新、安装/更新进行中、批次结果或源失败时，保留原有更新概况、进度、全部更新和失败重试入口；正常健康无更新时使用下方紧凑管理行。
+- 检查中、未检查、无源、源异常与已是最新版本必须区分；不能把未知状态或网络失败写成“最新”。不改变 manager、consent、批次、安装、卸载和目录刷新业务。
+- 无已安装、无可安装、无源、搜索无结果分别描述。首次目录加载保留加载状态，错误不能只呈现为空列表；空态操作须对应真实的范围切换或添加流程。
+- 验收路径：已安装/可安装切换、搜索及清除、订阅源进入返回、添加取消、更多菜单与卸载确认取消、检查更新。不得实际卸载用户插件或删除源以制造测试数据。
+- 最后编辑后执行 workspace MCP build 与新包 InstallAndRun，核查浅色、深色、较大辅助功能字号和横向可用空间下的布局；记录实际完成项目及未覆盖状态，不以源码或构建代替设备证据。
+
+### 本轮实际验收
+
+- Xcode 27.1 Beta（27A9269），当前 workspace 的 `AngelLive` scheme；最后源码编辑后 MCP `BuildProject` 成功（11.453 秒），Issue Navigator error 为 0。随后新的 `DeviceInteractionInstallAndRun` 返回 `Application installed and running`。
+- 已有 iPhone 18 Pro / iOS 27.0 模拟器：已安装与可安装范围切换、可安装 0 项空态、搜索无结果及清除恢复、订阅源进入返回、添加取消、检查更新的加载反馈、更多菜单与具名卸载确认取消均已验证，未执行卸载。
+- root 复核最后新包的浅色、深色、深色加 accessibility-medium 字号截图：无文字裁切或控件重叠，行随字号自然增高。普通插件行 90pt，更多按钮 44×44pt，管理行默认字号 74pt。原生分段与导航栏的 AX 按钮子节点分别约 32/36pt，不将容器大小报告为触控尺寸。
+- Device Hub 证据存于当次 `ActionArtifacts/default/DeviceInteractionSynthesize/`：`Plugin Management Redesign Verification-11_06_03_429-screenshot.png`（浅色）、`11_09_41_529`（深色）、`11_09_59_622`（辅助功能字号）、`11_10_45_591`（卸载确认，同文件名前缀及后缀）。这些为本地临时验收产物，未纳入仓库。
+- 旋转后应用 UI 仍保持 Portrait，横屏布局未验证；iPad、macOS、tvOS、真实候选更新、失败/无源、实际安装与删除未验证。本轮未运行单元测试。
+- 已恢复设备原来的 light / large / portrait 设置，运行目标未改变，`DeviceInteractionEndSession` 返回 `Session stopped`。`git diff --check`、全仓具体内容平台标识扫描通过；测试中的 `liveType` / `siteId` 使用中性标识，未发现真实平台编号。
+
 ## 范围与依据
 
 2026-09-18：三端 FullUI 插件管理，包括插件列表、安装/更新状态、订阅源列表、添加订阅源和移除确认。保留现有 manager、consent、批次更新及 App Group 同步语义；ShellUI 入口与共享添加页的默认行为不变。
