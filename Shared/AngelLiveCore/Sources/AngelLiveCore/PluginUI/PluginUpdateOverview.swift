@@ -7,17 +7,20 @@ public struct PluginUpdateOverview: View {
     let installedPluginIds: [String]
     let update: ([String]) -> Void
     let check: () -> Void
+    let showsCheckAction: Bool
 
     public init(
         manager: PluginSourceManager,
         installedPluginIds: [String],
         update: @escaping ([String]) -> Void,
-        check: @escaping () -> Void
+        check: @escaping () -> Void,
+        showsCheckAction: Bool = true
     ) {
         self.manager = manager
         self.installedPluginIds = installedPluginIds
         self.update = update
         self.check = check
+        self.showsCheckAction = showsCheckAction
     }
 
     public var body: some View {
@@ -34,11 +37,15 @@ public struct PluginUpdateOverview: View {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     statusView(batch: batch, candidates: candidates, isInstalling: isInstalling)
                     Spacer(minLength: 8)
-                    checkButton
+                    if showsCheckAction {
+                        checkButton
+                    }
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     statusView(batch: batch, candidates: candidates, isInstalling: isInstalling)
-                    checkButton
+                    if showsCheckAction {
+                        checkButton
+                    }
                 }
             }
 

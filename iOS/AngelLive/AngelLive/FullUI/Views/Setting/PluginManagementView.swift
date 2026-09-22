@@ -45,6 +45,20 @@ struct PluginManagementView: View {
             || pluginSourceManager.sourceURLs.contains { pluginSourceManager.health(for: $0).isFailed }
     }
 
+    private var hasRunningPluginOperation: Bool {
+        pluginSourceManager.isInstalling
+            || pluginSourceManager.installTotalCount > 0
+            || pluginSourceManager.updateBatch.isRunning
+            || !pluginSourceManager.updatingPluginIds.isEmpty
+    }
+
+    private var installingPluginName: String? {
+        let installingPlugins = pluginSourceManager.remotePlugins.filter {
+            $0.installState == .installing
+        }
+        return installingPlugins.count == 1 ? installingPlugins.first?.displayName : nil
+    }
+
     private var isUninstallConfirmationPresented: Binding<Bool> {
         Binding(
             get: { pendingUninstallPluginID != nil },
@@ -58,23 +72,23 @@ struct PluginManagementView: View {
         List {
             PluginManagementScopeSection(selection: $selectedScope)
 
-            if showsUpdateOverview {
+            if pluginSourceManager.isInstalling || pluginSourceManager.installTotalCount > 0 {
                 Section {
-                    if pluginSourceManager.isInstalling,
-                       pluginSourceManager.installTotalCount == 0 {
-                        HStack(spacing: 12) {
-                            ProgressView()
-                            Text("正在安装插件")
-                        }
-                        .frame(minHeight: 44)
-                    } else {
-                        PluginUpdateOverview(
-                            manager: pluginSourceManager,
-                            installedPluginIds: pluginAvailability.installedPluginIds,
-                            update: updatePlugins,
-                            check: checkUpdates
-                        )
-                    }
+                    PluginInstallationProgressView(
+                        completedCount: pluginSourceManager.installCompletedCount,
+                        totalCount: pluginSourceManager.installTotalCount,
+                        currentPluginName: installingPluginName
+                    )
+                }
+            } else if showsUpdateOverview {
+                Section {
+                    PluginUpdateOverview(
+                        manager: pluginSourceManager,
+                        installedPluginIds: pluginAvailability.installedPluginIds,
+                        update: updatePlugins,
+                        check: checkUpdates,
+                        showsCheckAction: false
+                    )
                 }
             }
 
@@ -95,7 +109,7 @@ struct PluginManagementView: View {
 
             PluginManagementToolsSection(
                 installedPluginIDs: pluginAvailability.installedPluginIds,
-                showsCheckAction: !showsUpdateOverview,
+                showsCheckAction: !hasRunningPluginOperation,
                 check: checkUpdates
             )
         }
@@ -197,6 +211,62 @@ struct PluginManagementView: View {
     }
 }
 
+private struct PluginInstallationProgressView: View {
+    let completedCount: Int
+    let totalCount: Int
+    let currentPluginName: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("正在安装插件")
+                .font(.headline)
+
+            if let currentPluginName {
+                Text(currentPluginName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if totalCount > 0 {
+                ProgressView(
+                    value: Double(completedCount),
+                    total: Double(totalCount)
+                )
+                Text("\(completedCount) / \(totalCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            } else {
+                ProgressView()
+                    .accessibilityLabel("正在安装插件")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+}
+
+#Preview("插件安装进度") {
+    List {
+        Section("批量安装") {
+            PluginInstallationProgressView(
+                completedCount: 3,
+                totalCount: 18,
+                currentPluginName: nil
+            )
+        }
+        Section("单项安装") {
+            PluginInstallationProgressView(
+                completedCount: 0,
+                totalCount: 0,
+                currentPluginName: "示例插件"
+            )
+        }
+    }
+    .listStyle(.insetGrouped)
+}
+
 private struct PluginManagementScopeSection: View {
     @Binding var selection: PluginManagementScope
 
@@ -239,6 +309,8 @@ private struct PluginManagementToolsSection: View {
         }
         guard allSourcesChecked else { return "尚未检查更新" }
         guard !installedPluginIDs.isEmpty else { return "前往可安装列表选择插件" }
+        let updateCount = installedPluginIDs.filter { manager.hasUpdate(for: $0) }.count
+        if updateCount > 0 { return "\(updateCount) 个插件可更新" }
         let allInstalledPluginsChecked = installedPluginIDs.allSatisfy {
             manager.latestVersion(for: $0) != nil
         }
@@ -482,11 +554,12 @@ private struct PluginManagementPluginListSection: View {
         }
         .frame(minHeight: 60)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
+            Button {
                 requestUninstall(pluginID)
             } label: {
                 Label("卸载", systemImage: "trash")
             }
+            .tint(.red)
             .disabled(pluginSourceManager.isManagementBusy)
         }
         .contextMenu {
@@ -566,6 +639,7 @@ private struct PluginManagementPluginListSection: View {
 private struct PluginSourceListView: View {
     @Environment(PluginSourceManager.self) private var pluginSourceManager
     @State private var showAddSource = false
+    @State private var pendingRemovalSourceURL: String?
 
     var body: some View {
         List {
@@ -584,6 +658,22 @@ private struct PluginSourceListView: View {
                                 sourceURL: url,
                                 health: pluginSourceManager.health(for: url)
                             )
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            // This action only presents confirmation; a destructive role
+                            // makes List hide the row before the user confirms removal.
+                            Button {
+                                guard !pluginSourceManager.isManagementBusy else { return }
+                                pendingRemovalSourceURL = url
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                            .tint(.red)
+                            .disabled(pluginSourceManager.isManagementBusy)
+                        }
+                        .accessibilityAction(named: Text("删除订阅源")) {
+                            guard !pluginSourceManager.isManagementBusy else { return }
+                            pendingRemovalSourceURL = url
                         }
                     }
                 }
@@ -608,6 +698,7 @@ private struct PluginSourceListView: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .pluginSourceRemovalConfirmation(pendingSourceURL: $pendingRemovalSourceURL)
     }
 }
 
@@ -639,11 +730,10 @@ private struct PluginSourceListRow: View {
 private struct PluginSourceDetailView: View {
     let sourceURL: String
 
-    @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(PluginSourceManager.self) private var pluginSourceManager
     @Environment(\.dismiss) private var dismiss
     @State private var isRefreshing = false
-    @State private var showDeleteConfirmation = false
+    @State private var pendingRemovalSourceURL: String?
 
     private var health: PluginSourceHealth {
         pluginSourceManager.health(for: sourceURL)
@@ -705,7 +795,8 @@ private struct PluginSourceDetailView: View {
 
             Section {
                 Button("删除订阅源", role: .destructive) {
-                    showDeleteConfirmation = true
+                    guard !pluginSourceManager.isManagementBusy else { return }
+                    pendingRemovalSourceURL = sourceURL
                 }
                 .disabled(pluginSourceManager.isManagementBusy)
             } footer: {
@@ -717,17 +808,8 @@ private struct PluginSourceDetailView: View {
         .contentMargins(.top, 16, for: .scrollContent)
         .navigationTitle("订阅源详情")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(
-            "删除订阅源？",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("删除并卸载关联插件", role: .destructive) {
-                deleteSource()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将删除「\(pluginSourceHost(sourceURL))」，并卸载仅由它提供、未被其他订阅源覆盖的插件。")
+        .pluginSourceRemovalConfirmation(pendingSourceURL: $pendingRemovalSourceURL) {
+            dismiss()
         }
     }
 
@@ -741,16 +823,79 @@ private struct PluginSourceDetailView: View {
             isRefreshing = false
         }
     }
+}
 
-    private func deleteSource() {
+private struct PluginSourceRemovalConfirmationModifier: ViewModifier {
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @Environment(PluginSourceManager.self) private var pluginSourceManager
+    @Binding var pendingSourceURL: String?
+    let onRemoved: () -> Void
+
+    init(
+        pendingSourceURL: Binding<String?>,
+        onRemoved: @escaping () -> Void = {}
+    ) {
+        _pendingSourceURL = pendingSourceURL
+        self.onRemoved = onRemoved
+    }
+
+    private var isConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingSourceURL != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingSourceURL = nil
+                }
+            }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            "删除订阅源？",
+            isPresented: isConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            if let sourceURL = pendingSourceURL {
+                Button("删除并卸载关联插件", role: .destructive) {
+                    removeSource(sourceURL)
+                }
+                .disabled(pluginSourceManager.isManagementBusy)
+            }
+            Button("取消", role: .cancel) {
+                pendingSourceURL = nil
+            }
+        } message: {
+            if let sourceURL = pendingSourceURL {
+                Text("将删除「\(pluginSourceHost(sourceURL))」，并卸载仅由它提供、未被其他订阅源覆盖的插件。")
+            }
+        }
+    }
+
+    private func removeSource(_ sourceURL: String) {
         guard !pluginSourceManager.isManagementBusy else { return }
+        pendingSourceURL = nil
         Task {
             await pluginSourceManager.removeSourceAndAssociatedPlugins(sourceURL)
             await pluginAvailability.refresh()
             await pluginSourceManager.fetchAllSourceIndexes()
             await pluginSourceManager.refreshAvailableUpdates()
-            dismiss()
+            onRemoved()
         }
+    }
+}
+
+private extension View {
+    func pluginSourceRemovalConfirmation(
+        pendingSourceURL: Binding<String?>,
+        onRemoved: @escaping () -> Void = {}
+    ) -> some View {
+        modifier(
+            PluginSourceRemovalConfirmationModifier(
+                pendingSourceURL: pendingSourceURL,
+                onRemoved: onRemoved
+            )
+        )
     }
 }
 
