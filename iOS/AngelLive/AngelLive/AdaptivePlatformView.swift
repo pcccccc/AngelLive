@@ -77,7 +77,7 @@ struct AdaptivePlatformView: View {
                     .environment(PlatformDetailViewModel(platform: platform))
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationTitle(platform.title)
-                    .toolbar(.hidden, for: .tabBar)
+                    .fullUITabBarHidden()
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {

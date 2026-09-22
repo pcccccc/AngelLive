@@ -29,7 +29,7 @@ struct SettingView: View {
                     Section {
                         NavigationLink {
                             PlatformAccountLoginView()
-                                .toolbar(.hidden, for: .tabBar)
+                                .fullUITabBarHidden()
                                 .onAppear {
                                     guard supportDiagnosticsEnabled else { return }
                                     supportDiagnosticsService.recordAction(.openedAccountManagement)
@@ -61,7 +61,7 @@ struct SettingView: View {
                     Section {
                         NavigationLink {
                             PluginManagementView()
-                                .toolbar(.hidden, for: .tabBar)
+                                .fullUITabBarHidden()
                                 .onAppear {
                                     guard supportDiagnosticsEnabled else { return }
                                     supportDiagnosticsService.recordAction(.openedPluginManagement)
@@ -91,7 +91,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         GeneralSettingView()
-                            .toolbar(.hidden, for: .tabBar)
+                            .fullUITabBarHidden()
                     } label: {
                         HStack {
                             Image(systemName: "gearshape.fill")
@@ -104,7 +104,7 @@ struct SettingView: View {
 
                     NavigationLink {
                         DanmuSettingView()
-                            .toolbar(.hidden, for: .tabBar)
+                            .fullUITabBarHidden()
                     } label: {
                         HStack {
                             Image(systemName: "bubble.left.and.bubble.right.fill")
@@ -123,7 +123,7 @@ struct SettingView: View {
                     Section {
                         NavigationLink {
                             SyncView()
-                                .toolbar(.hidden, for: .tabBar)
+                                .fullUITabBarHidden()
                         } label: {
                             HStack {
                                 Image(systemName: "icloud.fill")
@@ -147,7 +147,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         HistoryListView()
-                            .toolbar(.hidden, for: .tabBar)
+                            .fullUITabBarHidden()
                     } label: {
                         HStack {
                             Image(systemName: "clock.fill")
@@ -224,7 +224,7 @@ struct SettingView: View {
                     Section {
                         NavigationLink {
                             SupportDiagnosticsView()
-                                .toolbar(.hidden, for: .tabBar)
+                                .fullUITabBarHidden()
                         } label: {
                             HStack {
                                 Image(systemName: "waveform.path.ecg")
@@ -253,7 +253,7 @@ struct SettingView: View {
                 Section {
                     NavigationLink {
                         OpenSourceListView()
-                            .toolbar(.hidden, for: .tabBar)
+                            .fullUITabBarHidden()
                     } label: {
                         HStack {
                             Image(systemName: "doc.text.fill")
@@ -266,7 +266,7 @@ struct SettingView: View {
 
                     NavigationLink {
                         AboutUSView()
-                            .toolbar(.hidden, for: .tabBar)
+                            .fullUITabBarHidden()
                     } label: {
                         HStack {
                             Image(systemName: "info.circle.fill")

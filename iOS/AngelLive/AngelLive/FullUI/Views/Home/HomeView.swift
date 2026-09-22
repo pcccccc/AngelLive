@@ -1895,7 +1895,7 @@ private struct HomeCategoryView: View {
         .navigationTitle(route.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .fullUITabBarHidden()
         .task { await model.load(refresh: true) }
     }
 
