@@ -75,6 +75,21 @@ class ContentProvider: TVTopShelfContentProvider {
     override func loadTopShelfContent() async -> (any TVTopShelfContent)? {
         Logger.debug("[TopShelf] loadTopShelfContent() called", category: .app)
 
+        // FullUI 使用宿主已刷新的展示快照。空快照同样是有效结果，不能回退
+        // 到云端旧收藏；未发布过快照的安装仍沿用原有扩展路径。
+        if let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: TopShelfSnapshotStore.appGroupIdentifier
+        ) {
+            do {
+                if let snapshot = try TopShelfSnapshotStore(containerURL: container).load() {
+                    return createTopShelfContent(from: snapshot)
+                }
+            } catch {
+                Logger.warning("[TopShelf] Favorite snapshot could not be read.", category: .app)
+                return nil
+            }
+        }
+
         // 打印 App Group 插件目录内容
         let fm = FileManager.default
         if let container = fm.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier) {
@@ -169,6 +184,26 @@ class ContentProvider: TVTopShelfContentProvider {
             Logger.warning("[TopShelf] Failed to fetch status for \(favorite.userName): \(error)", category: .app)
             return nil
         }
+    }
+
+    /// FullUI 快照只包含标题、图片和跳转地址，不在扩展中初始化插件或云同步。
+    private func createTopShelfContent(from snapshot: TopShelfSnapshot) -> TVTopShelfSectionedContent? {
+        guard !snapshot.items.isEmpty else { return nil }
+        let items = snapshot.items.map { entry in
+            let item = TVTopShelfSectionedItem(identifier: entry.identifier)
+            item.imageShape = .hdtv
+            item.title = entry.title
+            if let imageURL = entry.imageURL {
+                item.setImageURL(imageURL, for: .screenScale1x)
+                item.setImageURL(imageURL, for: .screenScale2x)
+            }
+            item.displayAction = TVTopShelfAction(url: entry.actionURL)
+            item.playAction = TVTopShelfAction(url: entry.actionURL)
+            return item
+        }
+        let section = TVTopShelfItemCollection(items: items)
+        section.title = "正在直播"
+        return TVTopShelfSectionedContent(sections: [section])
     }
 
     /// 创建 Top Shelf 内容

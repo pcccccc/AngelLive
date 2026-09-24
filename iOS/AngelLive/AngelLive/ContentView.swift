@@ -348,6 +348,7 @@ struct ContentView: View {
                 updateHomeRecommendationAvailability()
             }
         }
+        .fullUINavigationStyle(enabled: pluginAvailability.hasAvailablePlugins)
         .onChange(of: platformViewModel.platformInfo) { _, newPlatforms in
             // Tab 选择只保存稳定的 pluginId；标题或图标更新不应改变身份。
             // 仅在插件被移除后回退，避免 selection 指向已不存在的 Tab。

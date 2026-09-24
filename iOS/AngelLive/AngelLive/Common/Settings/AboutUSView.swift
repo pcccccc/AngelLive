@@ -9,7 +9,9 @@ import SwiftUI
 import AngelLiveCore
 
 struct AboutUSView: View {
-    @Environment(\.openURL) private var openURL
+    private static let qrGridColumns = [
+        GridItem(.adaptive(minimum: 140), spacing: AppConstants.Spacing.lg)
+    ]
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
@@ -24,15 +26,19 @@ struct AboutUSView: View {
             VStack(spacing: AppConstants.Spacing.xl) {
                 // 应用图标和名称
                 VStack(spacing: AppConstants.Spacing.md) {
-                    Image("icon")
+                    Image("about-collaboration")
                         .resizable()
+                        .scaledToFit()
                         .frame(width: 120, height: 120)
                         .cornerRadius(AppConstants.CornerRadius.xl)
                         .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
 
-                    Text("AngelLive")
+                    Text("AngelLive x 小声逼逼")
                         .font(.title.bold())
                         .foregroundStyle(AppConstants.Colors.primaryText)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity)
 
                     Text("版本 \(appVersion) (\(buildNumber))")
                         .font(.subheadline)
@@ -40,65 +46,34 @@ struct AboutUSView: View {
                 }
                 .padding(.top, AppConstants.Spacing.xl)
 
-                // 项目地址
+                // 交流与反馈
                 VStack(spacing: AppConstants.Spacing.md) {
-                    Text("项目地址 & 问题反馈")
+                    Text("交流与反馈")
                         .font(.headline)
                         .foregroundStyle(AppConstants.Colors.primaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    HStack(spacing: AppConstants.Spacing.lg) {
-                        // GitHub 二维码
-                        VStack(spacing: AppConstants.Spacing.sm) {
-                            Image("qrcode-github")
-                                .resizable()
-                                .interpolation(.none)
-                                .frame(width: 140, height: 140)
-                                .background(Color.white)
-                                .cornerRadius(AppConstants.CornerRadius.md)
-                                .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
+                    LazyVGrid(columns: Self.qrGridColumns, spacing: AppConstants.Spacing.lg) {
+                        AboutQRCodeCard(
+                            imageName: "qrcode-telegram",
+                            title: "Telegram",
+                            buttonTitle: "加入群组",
+                            url: URL(string: "https://t.me/angelliveapp")!
+                        )
 
-                            Text("GitHub")
-                                .font(.caption.bold())
-                                .foregroundStyle(AppConstants.Colors.primaryText)
+                        AboutQRCodeCard(
+                            imageName: "qrcode-community",
+                            title: "小声逼逼",
+                            buttonTitle: "访问小声逼逼",
+                            url: URL(string: "https://t.me/me888888888888/")!
+                        )
+                    }
 
-                            Button {
-                                if let url = URL(string: "https://github.com/pcccccc/AngelLive") {
-                                    openURL(url)
-                                }
-                            } label: {
-                                Text("访问项目")
-                                    .font(.caption)
-                                    .foregroundStyle(AppConstants.Colors.link)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        // Telegram 二维码
-                        VStack(spacing: AppConstants.Spacing.sm) {
-                            Image("qrcode-telegram")
-                                .resizable()
-                                .interpolation(.none)
-                                .frame(width: 140, height: 140)
-                                .background(Color.white)
-                                .cornerRadius(AppConstants.CornerRadius.md)
-                                .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
-
-                            Text("Telegram")
-                                .font(.caption.bold())
-                                .foregroundStyle(AppConstants.Colors.primaryText)
-
-                            Button {
-                                if let url = URL(string: "https://t.me/angelliveapp") {
-                                    openURL(url)
-                                }
-                            } label: {
-                                Text("加入群组")
-                                    .font(.caption)
-                                    .foregroundStyle(AppConstants.Colors.link)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
+                    Link(destination: URL(string: "https://github.com/pcccccc/AngelLive")!) {
+                        Label("GitHub 项目与反馈", systemImage: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundStyle(AppConstants.Colors.link)
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
                 }
                 .padding()
@@ -136,8 +111,49 @@ struct AboutUSView: View {
             .padding()
         }
         .scrollContentBackground(.hidden)
-        .navigationTitle("关于&问题反馈")
+        .navigationTitle("关于")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct AboutQRCodeCard: View {
+    @Environment(\.openURL) private var openURL
+
+    let imageName: String
+    let title: LocalizedStringKey
+    let buttonTitle: LocalizedStringKey
+    let url: URL
+
+    var body: some View {
+        VStack(spacing: AppConstants.Spacing.sm) {
+            Image(imageName)
+                .resizable()
+                .interpolation(.none)
+                .scaledToFit()
+                .frame(width: 140, height: 140)
+                .background(Color.white)
+                .clipShape(.rect(cornerRadius: AppConstants.CornerRadius.md))
+                .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
+                .accessibilityLabel("二维码")
+
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(AppConstants.Colors.primaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                openURL(url)
+            } label: {
+                Text(buttonTitle)
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.link)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

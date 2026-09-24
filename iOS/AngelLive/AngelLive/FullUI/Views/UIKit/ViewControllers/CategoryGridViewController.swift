@@ -34,6 +34,7 @@ class CategoryGridViewController: UIViewController, JXSegmentedListContainerView
         layout.sectionInset = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
 
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        FullUINavigationStyle.configure(collectionView)
         collectionView.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         collectionView.delegate = self
         collectionView.dataSource = self

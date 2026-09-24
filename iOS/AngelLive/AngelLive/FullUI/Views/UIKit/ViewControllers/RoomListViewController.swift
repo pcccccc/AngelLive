@@ -35,6 +35,7 @@ class RoomListViewController: UIViewController {
     private lazy var collectionView: UICollectionView = {
         let layout = createLayout()
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        FullUINavigationStyle.configure(cv)
         cv.backgroundColor = usesStaticRooms ? .clear : UIColor(AppConstants.Colors.primaryBackground)
         cv.delegate = self
         cv.dataSource = self

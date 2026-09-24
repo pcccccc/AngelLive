@@ -488,6 +488,7 @@ private struct PlatformLoginWebView: UIViewRepresentable {
         configuration.websiteDataStore = WKWebsiteDataStore.default()
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        FullUINavigationStyle.configure(webView.scrollView)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         if let userAgent = loginFlow.userAgent {

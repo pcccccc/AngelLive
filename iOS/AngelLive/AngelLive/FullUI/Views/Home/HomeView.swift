@@ -77,39 +77,53 @@ private extension HomeView {
                 }
         } else {
             homeNavigation
-                .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
         }
     }
 
     var homeNavigation: some View {
         NavigationStack {
             GeometryReader { geometry in
-                // The bar is a sibling of the feed, not an overlay on top of a
-                // view that already ignores the safe area. That keeps exactly
-                // one source for the top inset: the bar lays out at the safe
-                // area top on its own, and only its background reaches further
-                // up behind the status bar.
-                ZStack(alignment: .top) {
-                    homeScrollView(
-                        containerSize: geometry.size,
-                        topSafeAreaInset: geometry.safeAreaInsets.top
-                    )
-
-                    HomeNavigationOverlay(
-                        visibleSectionIDs: visibleSectionIDs,
-                        topSafeAreaInset: geometry.safeAreaInsets.top,
-                        model: homeNavigationModel
-                    )
-
-                    LiquidRefreshIndicator(
-                        pullDistance: homeNavigationModel.pullDistance,
-                        isRefreshing: isPullRefreshing,
-                        refreshCycle: refreshCycle
-                    )
+                homeNavigationContent(
+                    containerSize: geometry.size,
+                    topSafeAreaInset: geometry.safeAreaInsets.top
+                )
+                .overlay(alignment: .top) {
+                    if #available(iOS 26, *) {
+                        LiquidRefreshIndicator(
+                            pullDistance: homeNavigationModel.pullDistance,
+                            isRefreshing: isPullRefreshing,
+                            refreshCycle: refreshCycle
+                        )
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    func homeNavigationContent(containerSize: CGSize, topSafeAreaInset: CGFloat) -> some View {
+        let showsNavigationTitle = homeNavigationModel.scrollOffset > 0.5
+        let content = homeScrollView(
+            containerSize: containerSize,
+            topSafeAreaInset: topSafeAreaInset
+        )
+            .ignoresSafeArea(.container, edges: .top)
+            .navigationTitle(showsNavigationTitle ? "首页" : "")
+            .navigationBarTitleDisplayMode(.inline)
+            // Keep the native bar's geometry stable while its title/background
+            // change; hiding the bar itself would feed inset changes back into
+            // the scroll offset used to decide visibility.
+            .toolbar(.visible, for: .navigationBar)
+            .homeNavigationEdgeEffect(isScrolled: showsNavigationTitle)
+
+        if #available(iOS 18.0, *) {
+            content
+        } else {
+            content
+                .navigationDestination(isPresented: playerPresentedBinding) {
+                    playerDestination
+                        .toolbar(.hidden, for: .navigationBar)
+                }
         }
     }
 
@@ -248,21 +262,17 @@ private extension HomeView {
                 }
             }
             .padding(.bottom, 128)
-            .background(
+            .background {
                 HomeScrollOffsetProbe(onChange: homeNavigationModel.updateScrollMetrics,
                                       releaseGate: homeNavigationModel.refreshGate)
                     .frame(width: 0, height: 0)
-            )
+            }
         }
         .background(AppConstants.Colors.primaryBackground)
-        // A system toolbar creates a full-width Liquid Glass region on iOS 27
-        // even when its background is marked hidden. Keep the home screen's
-        // default state genuinely full-bleed and render only the controls we
-        // need in a lightweight overlay.
-        .toolbar(.hidden, for: .navigationBar)
-        .ignoresSafeArea(edges: .top)
         .refreshable {
-            guard await homeNavigationModel.refreshGate.waitForRelease() else { return }
+            if #available(iOS 26, *) {
+                guard await homeNavigationModel.refreshGate.waitForRelease() else { return }
+            }
             await refreshAll()
         }
         .navigationDestination(for: HomeCategoryRoute.self) { route in
@@ -1613,6 +1623,18 @@ private struct HomeHeroPageProgressCapsule: View {
 }
 
 private extension View {
+    @ViewBuilder
+    func homeNavigationEdgeEffect(isScrolled: Bool) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .scrollEdgeEffectHidden(!isScrolled, for: .top)
+                .toolbarBackground(isScrolled ? .automatic : .hidden, for: .navigationBar)
+        } else {
+            self
+                .toolbarBackground(isScrolled ? .visible : .hidden, for: .navigationBar)
+        }
+    }
+
     @ViewBuilder
     func homeNavigationBarGlass() -> some View {
         if #available(iOS 26.0, *) {

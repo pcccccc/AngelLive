@@ -24,16 +24,23 @@ struct ContentView: View {
     var appViewModel: AppState
     @State private var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var showPluginSyncPrompt = false
     @State private var showUpdateToast = false
     @State private var updateToastTitle = ""
     @State private var updateToastSuccess = true
     @State private var homeRecommendationAvailability = TVHomeRecommendationAvailability.unconfirmed
+    @State private var hasLoadedTopShelfFavorites = false
     private let updateToastOptions = SimpleToastOptions(alignment: .topLeading, hideAfter: 2.0)
 
     private var presentsFullUI: Bool {
         appViewModel.pluginAvailability.hasAvailablePlugins
+    }
+
+    private var topShelfRefreshIdentity: [String]? {
+        guard presentsFullUI, scenePhase == .active else { return nil }
+        return appViewModel.favoriteViewModel.roomList.map(\.id).sorted()
     }
 
     private var shouldShowHomeTab: Bool {
@@ -64,6 +71,39 @@ struct ContentView: View {
         .environment(appViewModel.consentService)
         .platformAPICredentialLifecycle(enabled: presentsFullUI)
         .supportDiagnosticsHost(enabled: presentsFullUI)
+        .task(id: topShelfRefreshIdentity) {
+            guard presentsFullUI, scenePhase == .active else { return }
+
+            // 本地缓存可在完整同步前恢复 Top Shelf；空缓存不应覆盖已有共享快照。
+            if appViewModel.favoriteViewModel.roomList.isEmpty {
+                let cachedFavorites = await FavoriteLocalStore.shared.load()
+                guard !Task.isCancelled, presentsFullUI, scenePhase == .active else { return }
+                if !cachedFavorites.isEmpty {
+                    TopShelfManager.publish(favorites: cachedFavorites)
+                }
+            } else {
+                TopShelfManager.publish(favorites: appViewModel.favoriteViewModel.roomList)
+            }
+
+            await appViewModel.favoriteViewModel.syncWithActor()
+            guard !Task.isCancelled, presentsFullUI, scenePhase == .active else { return }
+            hasLoadedTopShelfFavorites = true
+            TopShelfManager.publish(favorites: appViewModel.favoriteViewModel.roomList)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard presentsFullUI, hasLoadedTopShelfFavorites else { return }
+            guard newPhase == .inactive || newPhase == .background else { return }
+            TopShelfManager.publish(favorites: appViewModel.favoriteViewModel.roomList)
+        }
+        .onChange(of: presentsFullUI) { wasFullUI, isFullUI in
+            guard wasFullUI, !isFullUI else { return }
+            hasLoadedTopShelfFavorites = false
+            TopShelfManager.publish(favorites: [])
+        }
+        .onChange(of: appViewModel.favoriteViewModel.listVersion) { _, _ in
+            guard presentsFullUI, hasLoadedTopShelfFavorites else { return }
+            TopShelfManager.publish(favorites: appViewModel.favoriteViewModel.roomList)
+        }
         .onChange(of: appViewModel.selection) { _, selection in
             guard presentsFullUI else { return }
             let action: SupportDiagnosticAction

@@ -30,6 +30,7 @@ class HistoryListViewController: UIViewController {
     private lazy var collectionView: UICollectionView = {
         let layout = createLayout()
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        FullUINavigationStyle.configure(cv)
         cv.backgroundColor = .clear
         cv.delegate = self
         cv.dataSource = self

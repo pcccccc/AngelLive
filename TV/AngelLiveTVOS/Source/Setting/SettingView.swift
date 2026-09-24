@@ -123,9 +123,16 @@ struct SettingView: View {
     }
 
     // MARK: - 菜单列表
+    // 只调整 FullUI 的展示顺序，保留菜单索引与页面路由、焦点的对应关系。
+    private var menuItemIndices: [Int] {
+        let indices = Array(titles.indices)
+        guard appViewModel.pluginAvailability.hasAvailablePlugins else { return indices }
+        return indices.filter { $0 != 8 } + [8]
+    }
+
     private var menuListView: some View {
         VStack(spacing: 15) {
-            ForEach(titles.indices, id: \.self) { index in
+            ForEach(menuItemIndices, id: \.self) { index in
                 if shouldShowMenuItem(index) {
                     Button {
                         if index == 7 {
@@ -140,7 +147,7 @@ struct SettingView: View {
                         }
                     } label: {
                         HStack(spacing: 15) {
-                            Text(titles[index])
+                            Text(index == 8 && appViewModel.pluginAvailability.hasAvailablePlugins ? "关于" : titles[index])
                                 .foregroundColor(.primary)
                             Spacer()
                             menuTrailingStatus(for: index)

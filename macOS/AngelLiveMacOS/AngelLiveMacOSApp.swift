@@ -82,6 +82,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 struct AngelLiveMacOSApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.macHomeRefreshAction) private var macHomeRefreshAction
     #if !APPSTORE
     // Sparkle 更新管理器
@@ -110,6 +111,15 @@ struct AngelLiveMacOSApp: App {
         }
         .commands {
             MacPluginManagementCommands()
+            CommandGroup(replacing: .appInfo) {
+                Button("关于 AngelLive") {
+                    if !SandboxPluginCatalog.installedPluginIds().isEmpty {
+                        openWindow(id: "about")
+                    } else {
+                        NSApp.orderFrontStandardAboutPanel(nil)
+                    }
+                }
+            }
             CommandGroup(after: .appInfo) {
                 #if !APPSTORE
                 Button("检查更新...") {
@@ -135,6 +145,15 @@ struct AngelLiveMacOSApp: App {
             #endif
         }
         .defaultSize(width: 1024, height: 960)
+
+        Window("关于 AngelLive", id: "about") {
+            MacAboutView()
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        .commandsRemoved()
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
 
         #if DEBUG
         DevConsoleScene()
