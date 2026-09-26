@@ -318,9 +318,9 @@ struct DetailPlayerView: View {
             }
         }
         .onChange(of: isVerticalLiveMode) { _, isVertical in
-            // 竖屏直播模式下锁定竖屏，不允许自动横屏全屏
-            if !AppConstants.Device.isIPad && isVertical {
-                KSOptions.supportedInterfaceOrientations = .portrait
+            // 竖向直播锁定竖屏，切回普通画幅时恢复自由旋转。
+            if !AppConstants.Device.isIPad {
+                KSOptions.supportedInterfaceOrientations = isVertical ? .portrait : .allButUpsideDown
                 if let rootVC = UIApplication.shared.connectedScenes
                     .compactMap({ $0 as? UIWindowScene })
                     .first?.windows.first(where: { $0.isKeyWindow })?.rootViewController {

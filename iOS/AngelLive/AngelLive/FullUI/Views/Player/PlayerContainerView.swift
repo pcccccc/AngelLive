@@ -10,6 +10,7 @@ import AngelLiveCore
 import AngelLiveDependencies
 import UIKit
 import QuartzCore
+internal import AVFoundation
 
 // MARK: - Preference Key for Player Height
 
@@ -224,24 +225,11 @@ struct PlayerContentView: View {
             Logger.debug("[PlayerFlow] KS state changed -> \(state)", category: .player)
             switch state {
             case .readyToPlay:
-                // readyToPlay 是读取真实 naturalSize 的最可靠时机
-                if !hasDetectedSize,
-                   let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
-                   naturalSize.width > 1.0, naturalSize.height > 1.0 {
-                    let ratio = naturalSize.width / naturalSize.height
-                    let isPortrait = ratio < 1.0
-                    let isVerticalLive = isPortrait
-                    Logger.debug("📺 [readyToPlay] 视频尺寸: \(naturalSize.width) x \(naturalSize.height)", category: .player)
-                    Logger.debug("📐 [readyToPlay] 视频比例: \(ratio)", category: .player)
-                    Logger.debug("📱 [readyToPlay] 视频方向: \(isPortrait ? "竖屏" : "横屏")", category: .player)
-                    applyVideoFillMode(isVerticalLive: isVerticalLive)
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        videoAspectRatio = ratio
-                        isVideoPortrait = isPortrait
-                        isVerticalLiveMode = isVerticalLive
-                        hasDetectedSize = true
-                    }
+                #if canImport(KSPlayer)
+                if let expectedURL = viewModel.currentPlayURL {
+                    _ = detectVideoSizeIfReady(expectedURL: expectedURL)
                 }
+                #endif
             case .paused, .playedToTheEnd, .error:
                 viewModel.isPlaying = false
             case .initialized, .buffering:
@@ -379,13 +367,21 @@ struct PlayerContentView: View {
                     #endif
                 }
                 .animation(.easeInOut(duration: 0.3), value: showVideoSetting)
-                .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") {
+                .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") { @MainActor in
+                    guard !Task.isCancelled, viewModel.currentPlayURL == playURL else { return }
                     Logger.debug(
                         "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",
                         category: .player
                     )
                     if useKSPlayer {
                         #if canImport(KSPlayer)
+                        // Reset for every URL/kernel task before touching the player. The
+                        // layer can still expose the previous URL while the new one loads.
+                        videoAspectRatio = 16.0 / 9.0
+                        isVideoPortrait = false
+                        isVerticalLiveMode = false
+                        hasDetectedSize = false
+                        applyVideoFillMode(isVerticalLive: false)
                         configureModelIfNeeded(playURL: playURL)
 
                         // iPad 直接使用默认 16:9，不做尺寸探测，避免频繁重建
@@ -410,54 +406,30 @@ struct PlayerContentView: View {
                             // 已被 readyToPlay 回调提前设置，直接退出
                             if hasDetectedSize { break }
 
-                            if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
-                               naturalSize.width > 1.0, naturalSize.height > 1.0 {
-
-                                // Read the current render surface on every attempt; it can resize while loading.
-                                let renderSize = playerCoordinator.playerLayer?.player.view.bounds.size ?? .zero
-                                let isRenderSize =
-                                    (naturalSize.width == renderSize.width && naturalSize.height == renderSize.height) ||
-                                    (naturalSize.width == renderSize.height && naturalSize.height == renderSize.width)
-
-                                if isRenderSize {
-                                    Logger.warning("视频尺寸为初始渲染尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))", category: .player)
-                                } else if !hasDetectedSize {
-                                    let ratio = naturalSize.width / naturalSize.height
-                                    let isPortrait = ratio < 1.0
-                                    let isVerticalLive = isPortrait
-
-                                    Logger.debug("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)", category: .player)
-                                    Logger.debug("📐 视频比例: \(ratio)", category: .player)
-                                    Logger.debug("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")", category: .player)
-
-                                    await MainActor.run {
-                                        applyVideoFillMode(isVerticalLive: isVerticalLive)
-
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            videoAspectRatio = ratio
-                                            isVideoPortrait = isPortrait
-                                            isVerticalLiveMode = isVerticalLive
-                                            hasDetectedSize = true
-                                        }
-                                    }
-
-                                    break
-                                } else {
-                                    break
-                                }
+                            if detectVideoSizeIfReady(expectedURL: playURL) {
+                                break
                             }
 
                             retryCount += 1
-                            try? await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
+                            do {
+                                try await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
+                            } catch {
+                                return
+                            }
                         }
 
-                        // 超时后仍未获取到有效尺寸，强制显示（使用默认 16:9 比例）
-                        if retryCount >= maxRetries && !hasDetectedSize {
+                        // 超时只保留默认 16:9；不要把未确认尺寸标记为已检测，
+                        // 后续 readyToPlay 仍需有机会采信真实视频尺寸。
+                        if retryCount >= maxRetries {
                             await MainActor.run {
+                                guard !Task.isCancelled,
+                                      viewModel.currentPlayURL == playURL,
+                                      !hasDetectedSize else { return }
                                 applyVideoFillMode(isVerticalLive: false)
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    hasDetectedSize = true
-                                }
+                                Logger.warning(
+                                    "视频尺寸检测超时，保持默认 16:9: \(compactURL(playURL))",
+                                    category: .player
+                                )
                             }
                         }
                         #endif
@@ -699,6 +671,45 @@ struct PlayerContentView: View {
     private var shouldLimitWidth: Bool {
         isDeviceLandscape && isVideoPortrait
     }
+
+    #if canImport(KSPlayer)
+    /// KSMEPlayer 在媒体未就绪时会以窗口尺寸作为 naturalSize，不能据此决定直播画幅。
+    @MainActor
+    @discardableResult
+    private func detectVideoSizeIfReady(expectedURL: URL) -> Bool {
+        guard useKSPlayer,
+              !AppConstants.Device.isIPad,
+              viewModel.currentPlayURL == expectedURL,
+              let playerLayer = playerCoordinator.playerLayer,
+              playerLayer.url == expectedURL else { return false }
+        if hasDetectedSize { return true }
+
+        let player = playerLayer.player
+        guard player.isReadyToPlay,
+              let videoTrack = player.tracks(mediaType: .video).first(where: { $0.isEnabled }) else {
+            return false
+        }
+        let trackSize = videoTrack.naturalSize
+        let naturalSize = player.naturalSize
+        guard trackSize.width.isFinite, trackSize.height.isFinite,
+              trackSize.width > 1, trackSize.height > 1,
+              naturalSize.width.isFinite, naturalSize.height.isFinite,
+              naturalSize.width > 1, naturalSize.height > 1 else { return false }
+
+        // 轨道尺寸证明媒体信息已就绪；播放器尺寸保留内核对旋转元数据的处理。
+        let ratio = naturalSize.width / naturalSize.height
+        let isPortrait = ratio < 1
+        applyVideoFillMode(isVerticalLive: isPortrait)
+        withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            videoAspectRatio = ratio
+            isVideoPortrait = isPortrait
+            isVerticalLiveMode = isPortrait
+            hasDetectedSize = true
+        }
+        Logger.debug("视频画幅已确认: \(naturalSize.width) x \(naturalSize.height), vertical=\(isPortrait)", category: .player)
+        return true
+    }
+    #endif
 
     @MainActor
     private func applyVideoFillMode(isVerticalLive: Bool) {
