@@ -2078,9 +2078,16 @@ private extension JSRuntime {
                 statusCode: snapshot.statusCode, body: bodyText, secrets: loginDiagnosticSecrets + authorizationSecrets
             )
             Logger.debug(
-                "[JSRuntime][HTTP] pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) bytes=\(snapshot.data.count) duration=\(String(format: "%.3f", elapsed))s",
+                "[JSRuntime][HTTP] requestID=\(callbackID) pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) bytes=\(snapshot.data.count) duration=\(String(format: "%.3f", elapsed))s",
                 category: .plugin
             )
+            #if DEBUG
+            // 临时排障：直接输出原始响应，不脱敏、不截断；非 UTF-8 数据用 Base64 保留原始字节。
+            Logger.debug(
+                "[JSRuntime][HTTP][RESPONSE] requestID=\(callbackID) pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) \(bodyText == nil ? "bodyBase64" : "body")=\(bodyText ?? bodyBase64)",
+                category: .plugin
+            )
+            #endif
             if let loginErrorBody {
                 Logger.debug("[JSRuntime][HTTP][LOGIN] pluginId=\(pluginId) status=\(snapshot.statusCode) response=\(loginErrorBody)", category: .plugin)
             }

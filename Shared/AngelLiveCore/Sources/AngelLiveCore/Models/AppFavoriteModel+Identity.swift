@@ -109,6 +109,60 @@ extension AppFavoriteModel {
         return false
     }
 
+    /// 状态/详情刷新不拥有收藏成员关系，只能在当前成员槽位内更新信息。
+    /// 主身份按 manifest 契约保持非降级；若候选身份会命中另一收藏，则保留旧身份，
+    /// 但仍接受直播状态、标题、封面等非身份元数据。
+    static func mergingRefreshIdentity(
+        old: LiveModel,
+        incoming: LiveModel,
+        identityKey: FavoriteIdentityKey,
+        otherFavorites: [LiveModel]
+    ) -> LiveModel {
+        func replacement(userId: String, roomId: String) -> LiveModel {
+            LiveModel(
+                userName: incoming.userName,
+                roomTitle: incoming.roomTitle,
+                roomCover: incoming.roomCover,
+                userHeadImg: incoming.userHeadImg,
+                liveType: old.liveType,
+                liveState: incoming.liveState,
+                userId: userId,
+                roomId: roomId,
+                liveWatchedCount: incoming.liveWatchedCount,
+                identityUpdatedAt: old.identityUpdatedAt
+            )
+        }
+
+        let candidateUserId: String
+        let candidateRoomId: String
+
+        switch identityKey {
+        case .roomId:
+            // 有效 roomId 是稳定主键；只在旧值缺失时允许补全。
+            candidateRoomId = validIdentity(old.roomId) == nil
+                ? (validIdentity(incoming.roomId).map { _ in incoming.roomId } ?? old.roomId)
+                : old.roomId
+            // userId 是辅助维度，可以从成功详情中补全或更新，但不能降级。
+            candidateUserId = validIdentity(incoming.userId).map { _ in incoming.userId }
+                ?? old.userId
+
+        case .userId:
+            // userId 平台只有在稳定主身份有效时才接受身份变化；roomId 可随直播场次更新。
+            guard validIdentity(incoming.userId) != nil else {
+                return replacement(userId: old.userId, roomId: old.roomId)
+            }
+            candidateUserId = incoming.userId
+            candidateRoomId = validIdentity(incoming.roomId).map { _ in incoming.roomId }
+                ?? old.roomId
+        }
+
+        let candidate = replacement(userId: candidateUserId, roomId: candidateRoomId)
+        if otherFavorites.contains(where: { isSameStreamer($0, candidate) }) {
+            return replacement(userId: old.userId, roomId: old.roomId)
+        }
+        return candidate
+    }
+
     /// 按多维度身份去重(同平台 userId 或 roomId 任一有效维度相同即合并),保留先到的。
     static func deduplicated(_ rooms: [LiveModel]) -> [LiveModel] {
         var byUser: [String: Int] = [:]   // "liveType|userId" -> result 下标

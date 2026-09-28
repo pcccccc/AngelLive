@@ -38,9 +38,8 @@ struct ContentView: View {
         appViewModel.pluginAvailability.hasAvailablePlugins
     }
 
-    private var topShelfRefreshIdentity: [String]? {
-        guard presentsFullUI, scenePhase == .active else { return nil }
-        return appViewModel.favoriteViewModel.roomList.map(\.id).sorted()
+    private var shouldRefreshTopShelfFavorites: Bool {
+        presentsFullUI && scenePhase == .active
     }
 
     private var shouldShowHomeTab: Bool {
@@ -71,7 +70,8 @@ struct ContentView: View {
         .environment(appViewModel.consentService)
         .platformAPICredentialLifecycle(enabled: presentsFullUI)
         .supportDiagnosticsHost(enabled: presentsFullUI)
-        .task(id: topShelfRefreshIdentity) {
+        // 收藏增量结果只通过 listVersion 发布 Top Shelf，不能反过来重启网络同步。
+        .task(id: shouldRefreshTopShelfFavorites) {
             guard presentsFullUI, scenePhase == .active else { return }
 
             // 本地缓存可在完整同步前恢复 Top Shelf；空缓存不应覆盖已有共享快照。

@@ -58,6 +58,27 @@ struct FavoriteIdentityRulesTests {
     #expect(!AppFavoriteModel.favoriteIdentityChanged(old: old, new: refreshed))
   }
 
+  @Test("refresh identity merge preserves source and identity timestamp")
+  func refreshIdentityMergePreservesOwnedMetadata() {
+    let updatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    let old = room(
+      liveType: "source-a", roomTitle: "old", userId: "0", roomId: "room-1",
+      identityUpdatedAt: updatedAt)
+    let incoming = room(
+      liveType: "source-b", roomTitle: "new", liveState: "1", userId: "user-1",
+      roomId: "unexpected-room", identityUpdatedAt: Date(timeIntervalSince1970: 1_800_000_000))
+
+    let merged = AppFavoriteModel.mergingRefreshIdentity(
+      old: old, incoming: incoming, identityKey: .roomId, otherFavorites: [])
+
+    #expect(merged.liveType.rawValue == "source-a")
+    #expect(merged.roomId == "room-1")
+    #expect(merged.userId == "user-1")
+    #expect(merged.roomTitle == "new")
+    #expect(merged.liveState == "1")
+    #expect(merged.identityUpdatedAt == updatedAt)
+  }
+
   @Test("deduplication keeps first occurrence and does not collide on invalid identities")
   func deduplicatedKeepsFirstAndIgnoresInvalidDimensions() {
     let first = room(liveType: "source-a", userName: "first", userId: "u-1", roomId: "r-1")
