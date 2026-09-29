@@ -786,7 +786,7 @@ private struct HomeRoomSection<Trailing: View>: View {
             .environment(\.roomTransitionNamespace, namespace)
         }
         .buttonStyle(HomeCardButtonStyle())
-        .accessibilityLabel("\(item.room.roomTitle)，\(item.room.userName)")
+        .accessibilityLabel("\(RoomTitleTranslationService.shared.displayTitle(for: item.room.roomTitle))，\(item.room.userName)")
         .accessibilityHint("打开播放页")
     }
 }
@@ -1246,6 +1246,7 @@ private struct HomeHeroCard: View {
                 Spacer(minLength: 0)
                 HomeHeroContent(
                     title: heroTitle,
+                    originalRoomTitle: heroOriginalRoomTitle,
                     streamerName: streamerName,
                     pageIndicatorReservedWidth: pageIndicatorReservedWidth
                 )
@@ -1282,9 +1283,17 @@ private struct HomeHeroCard: View {
     private var heroTitle: String {
         if case .room(let room) = entry.banner.target,
            !room.roomTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return room.roomTitle
+            return RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle)
         }
         return entry.banner.title
+    }
+
+    private var heroOriginalRoomTitle: String? {
+        guard case .room(let room) = entry.banner.target,
+              !room.roomTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return room.roomTitle
     }
 
     private var streamerName: String? {
@@ -1390,12 +1399,19 @@ private extension HomeBannerEntry {
 
 private struct HomeHeroContent: View {
     let title: String
+    let originalRoomTitle: String?
     let streamerName: String?
     let pageIndicatorReservedWidth: CGFloat
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
+            Group {
+                if let originalRoomTitle {
+                    TranslatedRoomTitle(originalRoomTitle)
+                } else {
+                    Text(title)
+                }
+            }
                 .font(.title2.weight(.bold))
                 .foregroundStyle(AppConstants.Colors.primaryText)
                 .multilineTextAlignment(.leading)

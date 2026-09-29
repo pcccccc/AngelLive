@@ -66,6 +66,11 @@ struct PlayerControlView: View {
     private var hasMultiCamera: Bool {
         (roomInfoViewModel.currentRoomPlayArgs?.count ?? 0) > 1
     }
+
+    private var titleTranslationEnabled: Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins
+            && SandboxPluginCatalog.platform(for: roomInfoViewModel.currentRoom.liveType) != nil
+    }
     
     private func topTabLabel(_ title: String) -> some View {
         Text(title)
@@ -271,7 +276,11 @@ struct PlayerControlView: View {
                     VStack {
                         ZStack {
                             HStack {
-                                Text("\(roomInfoViewModel.currentRoom.userName) - \(roomInfoViewModel.currentRoom.roomTitle)")
+                                Text("\(roomInfoViewModel.currentRoom.userName) - \(titleTranslationEnabled ? RoomTitleTranslationService.shared.displayTitle(for: roomInfoViewModel.currentRoom.roomTitle) : roomInfoViewModel.currentRoom.roomTitle)")
+                                    .roomTitleTranslationTask(
+                                        roomInfoViewModel.currentRoom.roomTitle,
+                                        enabled: titleTranslationEnabled
+                                    )
                                     .font(.title3)
                                     .padding(.leading, 15)
                                     .foregroundStyle(.white)

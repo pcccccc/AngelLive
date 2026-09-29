@@ -15,6 +15,12 @@ struct StreamerInfoPopover: View {
     let room: LiveModel
     @Environment(\.openURL) private var openURL
     @Environment(ToastManager.self) private var toastManager: ToastManager?
+    @State private var translationSettings = RoomTranslationSettings.shared
+    @State private var translationService = RoomTitleTranslationService.shared
+
+    private var titleTranslationEnabled: Bool {
+        SandboxPluginCatalog.platform(for: room.liveType) != nil
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -69,7 +75,16 @@ struct StreamerInfoPopover: View {
 
     private var roomInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            infoRow(icon: "tv", title: "直播间标题", value: room.roomTitle.orDash)
+            infoRow(
+                icon: "tv",
+                title: titleTranslationEnabled ? "原始标题" : "直播间标题",
+                value: room.roomTitle.orDash
+            )
+
+            if translatedTitle != nil {
+                Divider()
+                translatedTitleRow
+            }
 
             Divider()
 
@@ -82,6 +97,32 @@ struct StreamerInfoPopover: View {
         }
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .roomTitleTranslationTask(room.roomTitle, enabled: titleTranslationEnabled)
+    }
+
+    private var translatedTitle: String? {
+        guard titleTranslationEnabled, translationSettings.isEnabled else { return nil }
+        let translated = translationService.displayTitle(for: room.roomTitle)
+        guard translated != room.roomTitle else { return nil }
+        return translated
+    }
+
+    private var translatedTitleRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Label("译文", systemImage: "character.book.closed")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .layoutPriority(0)
+
+            Spacer(minLength: 8)
+
+            TranslatedRoomTitle(room.roomTitle.orDash)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(3)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+        }
     }
 
     private func infoRow(icon: String, title: String, value: String) -> some View {

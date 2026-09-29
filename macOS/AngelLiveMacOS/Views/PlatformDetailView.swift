@@ -451,7 +451,13 @@ struct LiveRoomCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(room.roomTitle.orDash)
+                    Group {
+                        if SandboxPluginCatalog.platform(for: room.liveType) != nil {
+                            TranslatedRoomTitle(room.roomTitle.orDash)
+                        } else {
+                            Text(room.roomTitle.orDash)
+                        }
+                    }
                         .font(.subheadline.bold())
                         .foregroundColor(.primary)
                         .lineLimit(1)

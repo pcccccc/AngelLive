@@ -213,9 +213,15 @@ xcrun mcpbridge
 必须按 JSON-RPC `response.id` 等待当前请求的最终 `result`/`error`；进度通知、其他请求的响应或缺省的 `isError=false` 都不能证明当前请求成功。2026-09-17 已观察到安装响应晚于提前发出的截图响应，先收到 `NotRun`、后收到安装成功；此时应修正请求等待顺序，不要据此反复重装。
 Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不要用每调用一次工具就启动并终止 bridge 的短连接脚本。2026-09-17 的 iPad 验收中，此做法反复触发新 PID 授权，并伴随 `Automation Mode has been disabled` 和连接失效；这类工具生命周期问题应先修正，不能当作 App 启动失败。
 
-## 9. Device Hub / 模拟器 / 真机验收
+## 9. JEV / Device Hub / 模拟器 / 真机验收
 
-任何设备 UI 验证使用 `device-interaction` Skill。该 Skill 要求主代理把 Device Hub session 委派给子代理，并确保一个 session 只有一个代理操作。
+iOS 模拟器的常规 UI 交互与回归测试优先使用 JEV，先读 `.jev-ios/AGENT.md` 与 `.jev-ios/SKILL.md`；不必每次重新询问用户是否切换工具。JEV 尚未覆盖的操作或实际故障再使用 Device Hub，并说明原因。tvOS 继续使用 Device Hub；macOS 按下述原生应用流程验收，不推定 JEV 支持这两个平台。
+
+使用 Device Hub 时先读 `device-interaction` Skill。该 Skill 要求主代理把 Device Hub session 委派给子代理，并确保一个 session 只有一个代理操作。JEV 同样保持单一设备负责人；切换工具前结束旧 session，不让两个工具同时控制同一设备。
+
+JEV 沿用下述构建与新包门禁，不另建构建链路。最后编辑后已在同一设备成功安装的新包可以直接接管，无需仅为换工具重复构建安装。先观察当前截图与可访问性树，再编写小范围、有步骤及费用上限的场景；只能使用实际观察到的标签，不盲目重放结果未确认的操作。每次交互后核对结果状态，保留原始观察、截图及报告到被忽略的 `runs/`；语义断言通过不能代替视觉或后端验收。凭据不得写入场景、日志或提交文件，也不得发送给测试模型。未完成实际运行时，只能报告接入状态，不能声称测试通过或速度提升。
+
+2026-09-29 本机 JEV／AXe 验证中，系统标签栏 `RadioButton` 可被观察但未生成点击目标；空 `SecureField` 被报告为 `TextField / secure=false`。遇到这类工具限制先核对原始观察与截图，必要时用确定性输入，不修改产品语义来迎合工具；真实凭据不得进入尚未验证脱敏的观察链路。Apple 翻译在 iOS 27.0 模拟器显示系统“不支持模拟设备”提示，真实译文须另用真机验收。证据及适用范围见 `docs/RoomTitleTranslation.md`。
 
 2026-09-18 在 Xcode 27.0 RC（27A266a）实测：Device Interaction 仅支持 iOS/watchOS/tvOS 27 模拟器，`My Mac` 明确返回不支持。macOS UI 验收改用最后编辑后的 workspace MCP build、Xcode Run 和原生应用 UI 交互/截图，确认运行的是本次构建的应用路径；不得把已安装的同名旧应用或仅构建成功当作通过，也不得声称执行了 Mac `InstallAndRun`。同名应用有歧义时用当次 build log 中的完整产物路径定位。此限制以实际工具响应为准，后续 Xcode 版本须重新核验。
 
@@ -240,7 +246,7 @@ Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不�
 
 禁止仅因为 Simulator 或 Device Hub 已显示 AngelLive 就声称“已测试”。禁止复用最后一次成功 `InstallAndRun` 之前的截图。iOS 与 tvOS 同时运行时，也必须使用明确 UDID，不能模糊使用 `booted`。
 
-### 交互证据
+### Device Hub 交互证据
 
 - 新启动后先用空 interaction 的 `DeviceEventSynthesize` 获取截图和 hierarchy；仍在启动/加载则再次捕获。
 - 优先使用 hierarchy 的 `hitPoint`；只有 hitPoint 尝试失败并重新捕获后，才使用截图估算坐标。
@@ -252,7 +258,7 @@ Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不�
 - 交互问题必须验证结果状态；“发出了点击”不等于通过。
 - 完成后记录设备/OS、交互路径、观察结果和安装后的截图路径，并调用 `DeviceInteractionEndSession`。
 
-有效通过报告必须说明最后编辑后完成了新的 `DeviceInteractionInstallAndRun`。构建或安装没有完成时只能写“未运行/被阻塞”，不能从源码、旧进程、旧 build 或旧截图推断成功。用户说已经测试或要求停止时，立即停止，不再启动 Device Hub。
+有效通过报告必须说明最后编辑后完成了新的 `DeviceInteractionInstallAndRun`；JEV 接管时同时记录所复用的新包安装证据和本次 JEV 结果。构建或安装没有完成时只能写“未运行/被阻塞”，不能从源码、旧进程、旧 build 或旧截图推断成功。用户说已经测试或要求停止时，立即停止，不再启动 JEV 测试或 Device Hub。
 
 ## 10. Skill 路由
 
@@ -300,11 +306,13 @@ xcrun agent skills export --output-dir <confirmed-skills-directory> --replace-ex
 - 性能/卡顿/内存：先领域 Skill，再 `axiom-performance`
 - 无障碍/对比度/触控目标：`axiom-accessibility`
 - 单元测试/UI 测试：`axiom-testing`
-- 设备交互：`device-interaction`
+- iOS 模拟器交互：`.jev-ios/AGENT.md` 与 `.jev-ios/SKILL.md`；Device Hub 交互：`device-interaction`
 
 不要在本仓库使用 `impeccable` 前端设计 Skill，除非用户以后明确要求重新启用。使用 Skill 前按 Skill 规则完整读取必要文件，并在 Skill 导致行动或暂停时简短告知用户。
 
 用户指定「UX MCP」时，优先发现并调用已注册的 SwiftUX 工具，不要把它替换成 Figma MCP 或仅调用 Xcode MCP。遵循 SwiftUX 的单一组件／流程检索范围，先读取 conventions，再检索并读取匹配组件及源码；返回结果必须符合当前用途，不能因置信度高而硬套无关组件。参考结构仍须按三端 HIG、真实服务状态和本项目验收要求落地。
+
+JEV 的默认使用范围、设备接管、新包和证据要求见第 9 节；暂停请求优先于 Skill 中的场景执行要求。
 
 ## 11. 修改与交付纪律
 

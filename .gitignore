@@ -110,3 +110,6 @@ CLAUDE.md
 
 # Bugsnag API keys (per-platform). 占位 plist (BugsnagSecrets.plist) 仍会提交
 Shared/AngelLiveDependencies/Sources/Resources/BugsnagSecrets.local.plist
+
+# Local UI verification traces and screenshots
+/runs/

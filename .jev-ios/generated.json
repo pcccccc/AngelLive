@@ -1,0 +1,11 @@
+{
+  "schema": "jev-ios/generated/v1",
+  "hashes": {
+    "smoke.json": "cbc13f05758e9209e4aac38bb567e942b296b004fde1af7bcee39ee1b0fbef55",
+    "suite.json": "a0588bb8fa36577d4518532684e5fa167e270066a29705b7f639114bb268b18f",
+    "AGENT.md": "3a65212bf88b36aa8eb4844d9eeaa071cfe04e51c8e824c1c418642afba6afa6",
+    "SKILL.md": "2f07dfe369c3be3cfb7314f6f89bc58f9136a56daec8fb8c8ed021fa4994f01e",
+    "run-smoke.sh": "5808ba9177927d15f0fddaf00871aa4210dafba610545f2e5cf6ca2b24ec3165",
+    ".gitignore": "779cbd37c6e920ac925ffaef893ca98985ad8b50b1e3605891eb52c7b4b7d0d0"
+  }
+}

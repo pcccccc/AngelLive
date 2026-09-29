@@ -16,6 +16,8 @@ struct StreamerInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.presentToast) private var presentToast
     @Environment(\.openURL) private var openURL
+    @State private var translationSettings = RoomTranslationSettings.shared
+    @State private var translationService = RoomTitleTranslationService.shared
 
     var body: some View {
         NavigationStack {
@@ -111,8 +113,13 @@ struct StreamerInfoSheet: View {
 
     private var roomInfoSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // 直播间标题
-            infoRow(icon: "tv", title: "直播间标题", value: room.roomTitle.orDash)
+            // 原始标题始终保留，便于核对翻译结果。
+            infoRow(icon: "tv", title: "原始标题", value: room.roomTitle.orDash)
+
+            if let translatedTitle {
+                Divider()
+                translatedTitleRow
+            }
 
             Divider()
 
@@ -127,6 +134,14 @@ struct StreamerInfoSheet: View {
         }
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .roomTitleTranslationTask(room.roomTitle)
+    }
+
+    private var translatedTitle: String? {
+        guard translationSettings.isEnabled else { return nil }
+        let translated = translationService.displayTitle(for: room.roomTitle)
+        guard translated != room.roomTitle else { return nil }
+        return translated
     }
 
     private func infoRow(icon: String, title: String, value: String) -> some View {
@@ -138,6 +153,22 @@ struct StreamerInfoSheet: View {
             Spacer()
 
             Text(value)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private var translatedTitleRow: some View {
+        HStack {
+            Label("译文", systemImage: "character.book.closed")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            TranslatedRoomTitle(room.roomTitle.orDash)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(2)

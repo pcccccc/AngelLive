@@ -883,6 +883,14 @@ private struct TVHomeHeroContent: View {
 private struct TVHomeHeroCaption: View {
     let entry: HomeBannerEntry
 
+    private var originalRoomTitle: String? {
+        guard case .room(let room) = entry.banner.target else { return nil }
+        let title = room.roomTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bannerTitle = entry.banner.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, !bannerTitle.isEmpty, title == bannerTitle else { return nil }
+        return room.roomTitle
+    }
+
     private var detailText: String? {
         if case .room(let room) = entry.banner.target {
             let name = room.userName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -903,7 +911,13 @@ private struct TVHomeHeroCaption: View {
             .font(.system(size: 26, weight: .medium))
             .tvHomeHeroTextShadow()
 
-            Text(entry.banner.title.isEmpty ? entry.pluginDisplayName : entry.banner.title)
+            Group {
+                if let originalRoomTitle {
+                    TranslatedRoomTitle(originalRoomTitle)
+                } else {
+                    Text(entry.banner.title.isEmpty ? entry.pluginDisplayName : entry.banner.title)
+                }
+            }
                 .font(.system(size: 56, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(2)

@@ -15,7 +15,7 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈", "翻译与字幕"]
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @State private var lastFocusedIndex: Int?
@@ -30,7 +30,7 @@ struct SettingView: View {
     @State private var showClearCacheConfirm = false
 
     // 需要在右侧半屏显示的页面索引
-    private var halfScreenIndices: Set<Int> { [0, 2, 3, 4] } // 账号管理、通用设置、弹幕设置、数据同步
+    private var halfScreenIndices: Set<Int> { [0, 2, 3, 4, 10] } // 账号管理、通用设置、弹幕设置、数据同步、翻译与字幕
 
     private var canEnterPluginManagement: Bool {
         appViewModel.pluginAvailability.hasAvailablePlugins ||
@@ -97,6 +97,9 @@ struct SettingView: View {
             }
             // 数据同步现在走半屏(selectedIndex),失去插件后跟着关闭
             if selectedIndex == 4 {
+                selectedIndex = nil
+            }
+            if selectedIndex == 10 {
                 selectedIndex = nil
             }
         }
@@ -200,6 +203,9 @@ struct SettingView: View {
         if index == 9 {
             return supportDiagnosticsEnabled
         }
+        if index == 10 {
+            return appViewModel.pluginAvailability.hasAvailablePlugins
+        }
         if appViewModel.pluginAvailability.hasAvailablePlugins {
             // 已安装插件均无登录入口时,隐藏账号管理(0)
             if index == 0 {
@@ -246,6 +252,11 @@ struct SettingView: View {
             // 三端对齐:聚合 iCloud 同步 / 局域网同步 / Simple Live 老扫码同步入口。
             SyncManagementView()
                 .environment(appViewModel)
+                .onExitCommand {
+                    selectedIndex = nil
+                }
+        case 10: // 翻译与字幕
+            TranslationSettingView()
                 .onExitCommand {
                     selectedIndex = nil
                 }
@@ -356,6 +367,314 @@ struct SettingView: View {
             ImageCache.default.clearMemoryCache()
         }
     )
+}
+
+// MARK: - Room title translation
+
+struct TranslationSettingView: View {
+    private struct TargetLanguage: Identifiable {
+        let code: String
+        let name: String
+
+        var id: String { code }
+    }
+
+    private let targetLanguages = [
+        TargetLanguage(code: "zh-Hans", name: "中文简体"),
+        TargetLanguage(code: "zh-Hant", name: "中文繁体"),
+        TargetLanguage(code: "en", name: "英语"),
+        TargetLanguage(code: "ja", name: "日语"),
+        TargetLanguage(code: "ko", name: "韩语")
+    ]
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var settings = RoomTranslationSettings.shared
+    @State private var translationService = RoomTitleTranslationService.shared
+    @State private var baseURL = ""
+    @State private var model = ""
+    @State private var apiKey = ""
+    @State private var isSaving = false
+    @State private var isTesting = false
+    @State private var isDeletingKey = false
+    @State private var inlineMessage: String?
+    @State private var testResult: String?
+    @State private var activeTask: Task<Void, Never>?
+    @State private var testGeneration = UUID()
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case enabled
+        case targetLanguage
+        case baseURL
+        case model
+        case apiKey
+        case save
+        case delete
+        case test
+    }
+
+    private var configurationNeedsSave: Bool {
+        let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedBaseURL != settings.cloudBaseURL
+            || normalizedModel != settings.cloudModel
+            || !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canTest: Bool {
+        guard !isSaving, !isTesting, !isDeletingKey else { return false }
+        return !configurationNeedsSave
+            && settings.hasAPIKey
+            && !settings.cloudBaseURL.isEmpty
+            && !settings.cloudModel.isEmpty
+    }
+
+    var body: some View {
+        @Bindable var settings = settings
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                Toggle(isOn: $settings.isEnabled) {
+                    Text("自动翻译房间标题")
+                        .font(.system(size: 30, weight: .semibold))
+                }
+                .focused($focusedField, equals: .enabled)
+                .frame(height: 55)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("目标语言")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.secondary)
+
+                    Picker("目标语言", selection: $settings.targetLanguage) {
+                        ForEach(targetLanguages) { language in
+                            Text(language.name)
+                                .tag(language.code)
+                        }
+                    }
+                    .focused($focusedField, equals: .targetLanguage)
+                    .frame(height: 55)
+                }
+
+                Text("开启后自动翻译其他语言的房间标题。翻译不可用时显示原文。")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("翻译引擎")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("Apple TV 仅支持兼容 AI 接口。")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("服务地址")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    TextField("https://api.example.invalid/v1", text: $baseURL)
+                        .focused($focusedField, equals: .baseURL)
+                        .font(.system(size: 26))
+                        .frame(height: 55)
+                        .accessibilityLabel("服务地址")
+
+                    Text("模型")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    TextField("模型名称", text: $model)
+                        .focused($focusedField, equals: .model)
+                        .font(.system(size: 26))
+                        .frame(height: 55)
+                        .accessibilityLabel("模型")
+
+                    Text("API Key")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    SecureField(settings.hasAPIKey ? "留空保持已保存密钥" : "API Key", text: $apiKey)
+                        .focused($focusedField, equals: .apiKey)
+                        .font(.system(size: 26))
+                        .frame(height: 55)
+                        .accessibilityLabel("API Key")
+
+                    HStack(spacing: 18) {
+                        Button {
+                            saveConfiguration()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Text("保存配置")
+                                if isSaving {
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        .focused($focusedField, equals: .save)
+                        .disabled(isSaving || isTesting || isDeletingKey)
+
+                        if settings.hasAPIKey {
+                            Button("删除已保存密钥", role: .destructive) {
+                                deleteAPIKey()
+                            }
+                            .focused($focusedField, equals: .delete)
+                            .disabled(isSaving || isTesting || isDeletingKey)
+                        }
+                    }
+
+                    Text("标题会发送至你配置的服务，服务商可能按请求计费。API Key 只保存在本机安全存储中。")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if configurationNeedsSave {
+                    Text("请先保存接口配置，再测试翻译。")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    testTranslation()
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("测试翻译")
+                        if isTesting {
+                            ProgressView()
+                        }
+                    }
+                }
+                .focused($focusedField, equals: .test)
+                .disabled(!canTest)
+
+                if let inlineMessage {
+                    Text(inlineMessage)
+                        .font(.system(size: 22))
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let serviceError = translationService.lastErrorMessage {
+                    Text(serviceError)
+                        .font(.system(size: 22))
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let testResult {
+                    Text("结果：\(testResult)")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: 900, alignment: .leading)
+            .padding(.vertical, 45)
+            .padding(.horizontal, 60)
+        }
+        .scrollClipDisabled()
+        .onAppear {
+            if settings.engine != .llm {
+                settings.engine = .llm
+            }
+            baseURL = settings.cloudBaseURL
+            model = settings.cloudModel
+        }
+        .onChange(of: settings.targetLanguage) { _, _ in
+            resetTranslationFeedback()
+        }
+        .onDisappear {
+            testGeneration = UUID()
+            activeTask?.cancel()
+            activeTask = nil
+            isTesting = false
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .background, isTesting else { return }
+            testGeneration = UUID()
+            activeTask?.cancel()
+            activeTask = nil
+            isTesting = false
+            inlineMessage = nil
+            testResult = nil
+            translationService.clearError()
+        }
+    }
+
+    private func saveConfiguration() {
+        testGeneration = UUID()
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            isSaving = true
+            inlineMessage = nil
+            testResult = nil
+            defer { isSaving = false }
+
+            do {
+                try settings.saveCloudConfiguration(baseURL: baseURL, model: model, apiKey: apiKey)
+                baseURL = settings.cloudBaseURL
+                model = settings.cloudModel
+                apiKey = ""
+            } catch {
+                guard !Task.isCancelled else { return }
+                inlineMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func deleteAPIKey() {
+        testGeneration = UUID()
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            isDeletingKey = true
+            inlineMessage = nil
+            testResult = nil
+            defer { isDeletingKey = false }
+
+            do {
+                try settings.deleteAPIKey()
+            } catch {
+                guard !Task.isCancelled else { return }
+                inlineMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func testTranslation() {
+        let generation = UUID()
+        testGeneration = generation
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            guard !Task.isCancelled, testGeneration == generation else { return }
+            isTesting = true
+            inlineMessage = nil
+            testResult = nil
+            translationService.clearError()
+            defer {
+                if testGeneration == generation {
+                    isTesting = false
+                    activeTask = nil
+                }
+            }
+
+            do {
+                let result = try await translationService.testTranslation()
+                guard !Task.isCancelled, testGeneration == generation else { return }
+                testResult = result
+            } catch {
+                guard !Task.isCancelled, testGeneration == generation else { return }
+                inlineMessage = translationService.lastErrorMessage
+                    ?? (error as? LocalizedError)?.errorDescription
+                    ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func resetTranslationFeedback() {
+        testGeneration = UUID()
+        activeTask?.cancel()
+        isTesting = false
+        inlineMessage = nil
+        testResult = nil
+        translationService.clearError()
+    }
 }
 
 #Preview {

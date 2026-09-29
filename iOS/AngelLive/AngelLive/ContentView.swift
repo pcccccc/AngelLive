@@ -207,6 +207,7 @@ struct ContentView: View {
         }
         .environment(pluginAvailability)
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
+        .roomTitleTranslationHost(enabled: pluginAvailability.hasAvailablePlugins)
         .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
         .environment(bookmarkService)
         .environment(pluginSourceManager)

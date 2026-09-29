@@ -264,7 +264,7 @@ struct LiveRoomCard: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(room.roomTitle.orDash)
+                    TranslatedRoomTitle(room.roomTitle.orDash)
                         .font(.subheadline.bold())
                         .foregroundStyle(AppConstants.Colors.primaryText)
                         .lineLimit(presentation == .home ? 2 : 1)

@@ -27,6 +27,7 @@ struct RoomPlayerView: View {
     @State private var volume: Float = 1.0
     @State private var isMuted = false
     @State private var didCleanup = false
+    @State private var translationService = RoomTitleTranslationService.shared
     /// 首帧渲染粘性标志:state 第一次进入 .buffering / .bufferFinished 后置 true,
     /// 直播流 state 可能长期停留在 .buffering(KSPlayer 视为 isPlaying),
     /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
@@ -35,6 +36,10 @@ struct RoomPlayerView: View {
     init(room: LiveModel) {
         self.room = room
         self._viewModel = State(initialValue: RoomInfoViewModel(room: room))
+    }
+
+    private var titleTranslationEnabled: Bool {
+        SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType) != nil
     }
 
     var body: some View {
@@ -50,7 +55,11 @@ struct RoomPlayerView: View {
                 PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume, isMuted: $isMuted)
             }
         }
-        .navigationTitle(viewModel.currentRoom.roomTitle)
+        .navigationTitle(
+            titleTranslationEnabled
+                ? translationService.displayTitle(for: viewModel.currentRoom.roomTitle)
+                : viewModel.currentRoom.roomTitle
+        )
         .toolbar(.hidden, for: .windowToolbar)
         .ignoresSafeArea()
         .focusable()
@@ -101,6 +110,10 @@ struct RoomPlayerView: View {
         .task {
             await viewModel.loadPlayURL()
         }
+        .roomTitleTranslationTask(
+            viewModel.currentRoom.roomTitle,
+            enabled: titleTranslationEnabled
+        )
         .onDisappear {
             SupportDiagnosticsService.shared.recordAction(
                 .closedRoom,

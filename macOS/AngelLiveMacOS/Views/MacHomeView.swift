@@ -377,7 +377,7 @@ private struct MacHomeRoomTile: View {
         }
         .buttonStyle(MacRoomCardButtonStyle())
         .macRoomCardHoverEffect()
-        .accessibilityLabel("\(room.roomTitle)，\(room.userName)")
+        .accessibilityLabel("\(RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle))，\(room.userName)")
         .accessibilityHint("打开直播间")
     }
 }
@@ -638,6 +638,24 @@ private struct MacHomeHeroCard: View {
         meaningfulText(entry.banner.title)
     }
 
+    private var translatableBannerRoomTitle: String? {
+        guard let room,
+              let bannerTitle,
+              matchesVisibleText(room.roomTitle, bannerTitle) else {
+            return nil
+        }
+        return room.roomTitle
+    }
+
+    @ViewBuilder
+    private var bannerTitleView: some View {
+        if let roomTitle = translatableBannerRoomTitle {
+            TranslatedRoomTitle(roomTitle)
+        } else if let bannerTitle {
+            Text(bannerTitle)
+        }
+    }
+
     private var displayedRoomUserName: String? {
         guard let room, let value = meaningfulText(room.userName) else { return nil }
         guard !matchesVisibleText(value, bannerTitle) else { return nil }
@@ -736,7 +754,7 @@ private struct MacHomeHeroCard: View {
             VStack(alignment: .leading, spacing: 7) {
                 bannerBadge
                 if let bannerTitle {
-                    Text(bannerTitle)
+                    bannerTitleView
                         .font(.largeTitle.bold())
                         .lineLimit(2)
                 }
@@ -800,7 +818,7 @@ private struct MacHomeHeroCard: View {
             bannerBadge
 
             if let bannerTitle {
-                Text(bannerTitle)
+                bannerTitleView
                     .font(.title2.weight(.bold))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -998,7 +1016,7 @@ private struct MacHomeAllRoomsView: View {
                     }
                     .buttonStyle(MacRoomCardButtonStyle())
                     .macRoomCardHoverEffect()
-                    .accessibilityLabel("\(room.roomTitle)，\(room.userName)")
+                    .accessibilityLabel("\(RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle))，\(room.userName)")
                     .accessibilityHint("打开直播间")
                 }
             }

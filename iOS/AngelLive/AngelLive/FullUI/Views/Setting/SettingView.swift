@@ -114,6 +114,19 @@ struct SettingView: View {
                             Text("弹幕设置")
                         }
                     }
+
+                    NavigationLink {
+                        TranslationSettingView()
+                            .fullUITabBarHidden()
+                    } label: {
+                        HStack {
+                            Image(systemName: "character.book.closed.fill")
+                                .font(.title3)
+                                .foregroundStyle(Color.indigo.gradient)
+                                .frame(width: 32)
+                            Text("翻译与字幕")
+                        }
+                    }
                 } header: {
                     Text("设置")
                 }
@@ -336,6 +349,330 @@ struct SettingView: View {
             ImageCache.default.clearMemoryCache()
         }
     )
+}
+
+// MARK: - Room title translation
+
+struct TranslationSettingView: View {
+    private struct TargetLanguage: Identifiable {
+        let code: String
+        let name: String
+
+        var id: String { code }
+    }
+
+    private let targetLanguages = [
+        TargetLanguage(code: "zh-Hans", name: "中文简体"),
+        TargetLanguage(code: "zh-Hant", name: "中文繁体"),
+        TargetLanguage(code: "en", name: "英语"),
+        TargetLanguage(code: "ja", name: "日语"),
+        TargetLanguage(code: "ko", name: "韩语")
+    ]
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var settings = RoomTranslationSettings.shared
+    @State private var translationService = RoomTitleTranslationService.shared
+    @State private var baseURL = ""
+    @State private var model = ""
+    @State private var apiKey = ""
+    @State private var isSaving = false
+    @State private var isTesting = false
+    @State private var isDeletingKey = false
+    @State private var inlineMessage: String?
+    @State private var testResult: String?
+    @State private var activeTask: Task<Void, Never>?
+    @State private var testGeneration = UUID()
+
+    private var configurationNeedsSave: Bool {
+        let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalizedBaseURL != settings.cloudBaseURL
+            || normalizedModel != settings.cloudModel
+            || !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canTest: Bool {
+        guard !isSaving, !isTesting, !isDeletingKey else { return false }
+        guard settings.engine == .apple else {
+            return !configurationNeedsSave
+                && settings.hasAPIKey
+                && !settings.cloudBaseURL.isEmpty
+                && !settings.cloudModel.isEmpty
+        }
+        return true
+    }
+
+    var body: some View {
+        @Bindable var settings = settings
+
+        List {
+            Section {
+                Toggle(isOn: $settings.isEnabled) {
+                    TranslationSettingLabel(
+                        title: "自动翻译房间标题",
+                        systemImage: "character.book.closed.fill",
+                        tint: .indigo
+                    )
+                }
+                .tint(AppConstants.Colors.accent)
+
+                Picker(selection: $settings.targetLanguage) {
+                    ForEach(targetLanguages) { language in
+                        Text(language.name)
+                            .tag(language.code)
+                    }
+                } label: {
+                    TranslationSettingLabel(
+                        title: "目标语言",
+                        systemImage: "globe",
+                        tint: .blue
+                    )
+                }
+                .pickerStyle(.navigationLink)
+            } header: {
+                Text("标题翻译")
+            } footer: {
+                Text("开启后自动翻译其他语言的房间标题。翻译不可用时显示原文。")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
+
+            Section {
+                Picker(selection: $settings.engine) {
+                    ForEach(RoomTranslationEngine.allCases, id: \.self) { engine in
+                        Text(engine.displayName)
+                            .tag(engine)
+                    }
+                } label: {
+                    TranslationSettingLabel(
+                        title: "翻译引擎",
+                        systemImage: "cpu",
+                        tint: .purple
+                    )
+                }
+                .pickerStyle(.navigationLink)
+            } header: {
+                Text("引擎")
+            } footer: {
+                Text("Apple 原生翻译需要 iOS 18 或更高版本。")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
+
+            if settings.engine == .llm {
+                Section {
+                    TextField("https://api.example.invalid/v1", text: $baseURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .accessibilityLabel("服务地址")
+
+                    TextField("模型名称", text: $model)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("模型")
+
+                    SecureField(settings.hasAPIKey ? "留空保持已保存密钥" : "API Key", text: $apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("API Key")
+
+                    Button {
+                        saveConfiguration()
+                    } label: {
+                        HStack {
+                            Text("保存配置")
+                            Spacer()
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(isSaving || isTesting || isDeletingKey)
+
+                    if settings.hasAPIKey {
+                        Button("删除已保存密钥", role: .destructive) {
+                            deleteAPIKey()
+                        }
+                        .disabled(isSaving || isTesting || isDeletingKey)
+                    }
+                } header: {
+                    Text("兼容 AI 接口")
+                } footer: {
+                    Text("标题会发送至你配置的服务，服务商可能按请求计费。API Key 只保存在本机安全存储中。")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                }
+            }
+
+            Section {
+                Button {
+                    testTranslation()
+                } label: {
+                    HStack {
+                        Text("测试翻译")
+                        Spacer()
+                        if isTesting {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                    }
+                }
+                .disabled(!canTest)
+
+                if configurationNeedsSave, settings.engine == .llm {
+                    Text("请先保存接口配置，再测试翻译。")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                }
+
+                if let inlineMessage {
+                    Text(inlineMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else if let serviceError = translationService.lastErrorMessage {
+                    Text(serviceError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                if let testResult {
+                    LabeledContent("结果") {
+                        Text(testResult)
+                            .foregroundStyle(AppConstants.Colors.secondaryText)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+            } header: {
+                Text("连接测试")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("翻译与字幕")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            baseURL = settings.cloudBaseURL
+            model = settings.cloudModel
+        }
+        .onChange(of: settings.engine) { _, _ in
+            resetTranslationFeedback()
+        }
+        .onChange(of: settings.targetLanguage) { _, _ in
+            resetTranslationFeedback()
+        }
+        .onDisappear {
+            testGeneration = UUID()
+            activeTask?.cancel()
+            activeTask = nil
+            isTesting = false
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .background, isTesting else { return }
+            testGeneration = UUID()
+            activeTask?.cancel()
+            activeTask = nil
+            isTesting = false
+            inlineMessage = nil
+            testResult = nil
+            translationService.clearError()
+        }
+    }
+
+    private func saveConfiguration() {
+        testGeneration = UUID()
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            isSaving = true
+            inlineMessage = nil
+            testResult = nil
+            defer { isSaving = false }
+
+            do {
+                try settings.saveCloudConfiguration(baseURL: baseURL, model: model, apiKey: apiKey)
+                baseURL = settings.cloudBaseURL
+                model = settings.cloudModel
+                apiKey = ""
+            } catch {
+                guard !Task.isCancelled else { return }
+                inlineMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func deleteAPIKey() {
+        testGeneration = UUID()
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            isDeletingKey = true
+            inlineMessage = nil
+            testResult = nil
+            defer { isDeletingKey = false }
+
+            do {
+                try settings.deleteAPIKey()
+            } catch {
+                guard !Task.isCancelled else { return }
+                inlineMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func testTranslation() {
+        let generation = UUID()
+        testGeneration = generation
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            guard !Task.isCancelled, testGeneration == generation else { return }
+            isTesting = true
+            inlineMessage = nil
+            testResult = nil
+            translationService.clearError()
+            defer {
+                if testGeneration == generation {
+                    isTesting = false
+                    activeTask = nil
+                }
+            }
+
+            do {
+                let result = try await translationService.testTranslation()
+                guard !Task.isCancelled, testGeneration == generation else { return }
+                testResult = result
+            } catch {
+                guard !Task.isCancelled, testGeneration == generation else { return }
+                inlineMessage = translationService.lastErrorMessage
+                    ?? (error as? LocalizedError)?.errorDescription
+                    ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func resetTranslationFeedback() {
+        testGeneration = UUID()
+        activeTask?.cancel()
+        isTesting = false
+        inlineMessage = nil
+        testResult = nil
+        translationService.clearError()
+    }
+}
+
+private struct TranslationSettingLabel: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.title3)
+                .foregroundStyle(tint.gradient)
+                .frame(width: 30, height: 30)
+
+            Text(title)
+        }
+    }
 }
 
 // MARK: - CloudKit Status View

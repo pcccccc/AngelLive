@@ -1,0 +1,18 @@
+{
+  "schema": "jev-ios/scenario/v1",
+  "name": "LLM translation configuration form",
+  "goal": "Verify that the room-title translation screen exposes the required LLM configuration fields and connection-test control.",
+  "expect_labels": [
+    "兼容 AI 接口",
+    "服务地址",
+    "模型",
+    "API Key",
+    "保存配置",
+    "测试翻译"
+  ],
+  "allow_labels": [],
+  "allow_scroll": false,
+  "text_values": {},
+  "max_steps": 2,
+  "min_probability": 0.55
+}

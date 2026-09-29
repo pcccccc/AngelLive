@@ -175,6 +175,7 @@ struct ContentView: View {
         .environment(searchViewModel)
         .environment(pluginAvailability)
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
+        .roomTitleTranslationHost(enabled: pluginAvailability.hasAvailablePlugins)
         .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
         .onChange(of: selectedTab) { _, selection in
             guard pluginAvailability.hasAvailablePlugins else { return }

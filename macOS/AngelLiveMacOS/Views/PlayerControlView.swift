@@ -37,6 +37,17 @@ struct PlayerControlView: View {
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager: FullscreenPlayerManager?
     @Environment(ToastManager.self) private var toastManager: ToastManager?
 
+    private var titleTranslationEnabled: Bool {
+        SandboxPluginCatalog.platform(for: room.liveType) != nil
+    }
+
+    private var displayedRoomTitle: String {
+        let title = titleTranslationEnabled
+            ? RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle)
+            : room.roomTitle
+        return String(title.prefix(20)).orDash
+    }
+
     /// 判断是否已收藏
     private var isFavorited: Bool {
         favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
@@ -439,7 +450,8 @@ struct PlayerControlView: View {
                             .lineLimit(1)
 
                         // 房间标题
-                        Text(String(room.roomTitle.prefix(20)).orDash)
+                        Text(displayedRoomTitle)
+                            .roomTitleTranslationTask(room.roomTitle, enabled: titleTranslationEnabled)
                             .foregroundStyle(.white.opacity(0.8))
                             .font(.caption)
                             .lineLimit(1)

@@ -89,7 +89,13 @@ struct RoomSwitcherPanel: View {
 
                     playbackStatus
                 }
-                Text(failedRoomID == nil ? currentRoom.roomTitle.orDash : (failureMessage ?? "切换失败"))
+                Group {
+                    if failedRoomID == nil {
+                        TranslatedRoomTitle(currentRoom.roomTitle.orDash)
+                    } else {
+                        Text(failureMessage ?? "切换失败")
+                    }
+                }
                     .font(.caption)
                     .foregroundStyle(failedRoomID == nil ? Color.secondary : Color.red)
                     .lineLimit(1)

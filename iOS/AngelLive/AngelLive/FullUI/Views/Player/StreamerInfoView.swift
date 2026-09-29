@@ -54,6 +54,7 @@ struct StreamerInfoView: View {
     @Environment(\.presentToast) private var presentToast
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
+    @State private var translationService = RoomTitleTranslationService.shared
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
@@ -68,8 +69,14 @@ struct StreamerInfoView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 直播间标题（置顶，加大加粗）
-            RoomTitleLabel(text: viewModel.currentRoom.roomTitle)
+            let originalTitle = viewModel.currentRoom.roomTitle
+            RoomTitleLabel(
+                text: originalTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "-"
+                    : translationService.displayTitle(for: originalTitle)
+            )
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .roomTitleTranslationTask(originalTitle)
 
             // 主播信息行
             HStack(spacing: 12) {

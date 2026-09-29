@@ -12,8 +12,14 @@ import AngelLiveDependencies
 struct PlayerControlCardView: View {
     
     @Environment(PlayerControlCardViewModel.self) var playControlCardViewModel
+    @Environment(AppState.self) private var appViewModel
     @FocusState var topState: PlayControlTopField?
     let changeRoom: (LiveModel) -> Void
+
+    private var titleTranslationEnabled: Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins
+            && SandboxPluginCatalog.platform(for: playControlCardViewModel.liveModel.liveType) != nil
+    }
     
     let cardGradient = LinearGradient(stops: [
         .init(color: .black.opacity(0.5), location: 0.0),
@@ -117,7 +123,11 @@ struct PlayerControlCardView: View {
             .buttonStyle(.card)
             .focused($topState, equals: .list(playControlCardViewModel.cardIndex))
             .padding(.leading, 15)
-            Text("\(playControlCardViewModel.liveModel.userName) - \(playControlCardViewModel.liveModel.roomTitle)")
+            Text("\(playControlCardViewModel.liveModel.userName) - \(titleTranslationEnabled ? RoomTitleTranslationService.shared.displayTitle(for: playControlCardViewModel.liveModel.roomTitle) : playControlCardViewModel.liveModel.roomTitle)")
+                .roomTitleTranslationTask(
+                    playControlCardViewModel.liveModel.roomTitle,
+                    enabled: titleTranslationEnabled
+                )
                 .font(.system(size: 22))
                 .opacity(topState == .list(playControlCardViewModel.cardIndex) ? 1 : 0)
                 .transition(.opacity)

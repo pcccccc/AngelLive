@@ -70,6 +70,7 @@ struct ContentView: View {
         rootTabView(selection: tabSelection)
         .environment(appViewModel.consentService)
         .platformAPICredentialLifecycle(enabled: presentsFullUI)
+        .roomTitleTranslationHost(enabled: presentsFullUI)
         .supportDiagnosticsHost(enabled: presentsFullUI)
         .task(id: topShelfRefreshIdentity) {
             guard presentsFullUI, scenePhase == .active else { return }

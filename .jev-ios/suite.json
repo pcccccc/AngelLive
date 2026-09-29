@@ -1,0 +1,24 @@
+{
+  "schema": "jev-ios/suite/v1",
+  "name": "Room title translation settings",
+  "bundle_id": "dev.idog.AngelLive",
+  "fixture_isolation": "shared",
+  "start_labels": [
+    "翻译与字幕",
+    "兼容 AI 接口"
+  ],
+  "launch_args": [],
+  "cases": [
+    {
+      "id": "translation-llm-form",
+      "scenario": "smoke.json",
+      "critical": true,
+      "paths": [
+        "iOS/AngelLive/AngelLive/FullUI/Views/Setting/SettingView.swift"
+      ],
+      "tags": [
+        "smoke"
+      ]
+    }
+  ]
+}

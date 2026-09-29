@@ -45,6 +45,11 @@ struct LiveCardView: View {
         externalFocusState?.wrappedValue ?? internalFocusState
     }
 
+    private func titleTranslationEnabled(for room: LiveModel) -> Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins
+            && SandboxPluginCatalog.platform(for: room.liveType) != nil
+    }
+
     var body: some View {
         @Bindable var liveModel = liveViewModel
         @State var roomList = liveViewModel.roomList
@@ -164,7 +169,13 @@ struct LiveCardView: View {
                 Text(currentLiveModel.userName.orDash)
                     .font(.system(size: 20, weight: .semibold))
                     .lineLimit(1)
-                Text(currentLiveModel.roomTitle.orDash)
+                Group {
+                    if titleTranslationEnabled(for: currentLiveModel) {
+                        TranslatedRoomTitle(currentLiveModel.roomTitle.orDash)
+                    } else {
+                        Text(currentLiveModel.roomTitle.orDash)
+                    }
+                }
                     .font(.system(size: 15))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
