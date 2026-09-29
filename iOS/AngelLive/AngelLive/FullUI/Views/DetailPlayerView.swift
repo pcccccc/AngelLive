@@ -306,10 +306,15 @@ struct DetailPlayerView: View {
                     wasLandscapeBeforeBackground = false
                     reassertLandscapeOrientation()
                 }
-            case .inactive, .background:
+            case .background:
                 viewModel.pauseDanmuUpdatesForBackground()
                 // 只在「从活跃态离开」时记录:回前台路径是 background→inactive→active,
                 // 若在 inactive 也记录会被回程的 inactive 用已翻回竖屏的值覆盖,导致保留失效。
+                if oldPhase == .active && !AppConstants.Device.isIPad {
+                    wasLandscapeBeforeBackground = isIPhoneLandscape
+                }
+            case .inactive:
+                // 系统弹窗会短暂进入 inactive；保留横屏记录，但不要取消弹幕翻译。
                 if oldPhase == .active && !AppConstants.Device.isIPad {
                     wasLandscapeBeforeBackground = isIPhoneLandscape
                 }

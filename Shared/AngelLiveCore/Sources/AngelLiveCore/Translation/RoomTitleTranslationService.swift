@@ -12,6 +12,7 @@ public final class RoomTitleTranslationService {
     private let appleProvider: any RoomTranslationProvider
     private let llmProvider: any RoomTranslationProvider
     private let coordinator: TranslationWorkCoordinator
+    private let danmakuBroker: DanmakuTranslationBroker
     private let displayCacheCapacity: Int
     private var displayedTranslations: [RoomTranslationRequestIdentity: String] = [:]
     private var displayCacheOrder: [RoomTranslationRequestIdentity] = []
@@ -31,6 +32,7 @@ public final class RoomTitleTranslationService {
         appleProvider: any RoomTranslationProvider,
         llmProvider: any RoomTranslationProvider,
         coordinator: TranslationWorkCoordinator = TranslationWorkCoordinator(),
+        danmakuBroker: DanmakuTranslationBroker = .shared,
         displayCacheCapacity: Int = 200
     ) {
         self.settings = settings
@@ -38,6 +40,7 @@ public final class RoomTitleTranslationService {
         self.appleProvider = appleProvider
         self.llmProvider = llmProvider
         self.coordinator = coordinator
+        self.danmakuBroker = danmakuBroker
         self.displayCacheCapacity = max(1, displayCacheCapacity)
     }
 
@@ -99,6 +102,7 @@ public final class RoomTitleTranslationService {
         let request = try makeRequest(text: text, sourceLanguage: source)
         let provider = settings.engine == .apple ? appleProvider : llmProvider
         do {
+            await danmakuBroker.prepareForExplicitRetry(revision: revision)
             if let retrying = provider as? any RoomTranslationRetrying {
                 await retrying.prepareForExplicitRetry()
             }

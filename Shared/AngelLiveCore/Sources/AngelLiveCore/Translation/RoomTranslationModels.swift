@@ -51,6 +51,11 @@ public enum RoomTranslationError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
+enum RoomTranslationContentKind: Hashable, Sendable {
+    case roomTitle
+    case danmaku
+}
+
 struct RoomTranslationRequest: Sendable {
     let text: String
     let sourceLanguage: String
@@ -58,6 +63,25 @@ struct RoomTranslationRequest: Sendable {
     let baseURL: URL?
     let model: String?
     let apiKey: String?
+    let contentKind: RoomTranslationContentKind
+
+    init(
+        text: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        baseURL: URL?,
+        model: String?,
+        apiKey: String?,
+        contentKind: RoomTranslationContentKind = .roomTitle
+    ) {
+        self.text = text
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+        self.baseURL = baseURL
+        self.model = model
+        self.apiKey = apiKey
+        self.contentKind = contentKind
+    }
 }
 
 protocol RoomTranslationProvider: Sendable {
@@ -98,6 +122,27 @@ struct RoomTranslationCacheKey: Hashable, Sendable {
     let endpoint: String
     let model: String
     let configurationRevision: Int
+    let contentKind: RoomTranslationContentKind
+
+    init(
+        original: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        engine: RoomTranslationEngine,
+        endpoint: String,
+        model: String,
+        configurationRevision: Int,
+        contentKind: RoomTranslationContentKind = .roomTitle
+    ) {
+        self.original = original
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+        self.engine = engine
+        self.endpoint = endpoint
+        self.model = model
+        self.configurationRevision = configurationRevision
+        self.contentKind = contentKind
+    }
 }
 
 func roomTranslationLanguagesMatch(_ source: String, _ target: String) -> Bool {

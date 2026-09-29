@@ -67,6 +67,7 @@ public final class RoomTranslationSettings {
 
     private enum Keys {
         static let enabled = "roomTranslation.enabled"
+        static let danmakuEnabled = "roomTranslation.danmakuEnabled"
         static let engine = "roomTranslation.engine"
         static let targetLanguage = "roomTranslation.targetLanguage"
         static let cloudBaseURL = "roomTranslation.cloudBaseURL"
@@ -76,6 +77,16 @@ public final class RoomTranslationSettings {
 
     public var isEnabled: Bool {
         didSet { persistChange(oldValue: oldValue, newValue: isEnabled, key: Keys.enabled) }
+    }
+
+    public var isDanmakuEnabled: Bool {
+        didSet {
+            persistChange(
+                oldValue: oldValue,
+                newValue: isDanmakuEnabled,
+                key: Keys.danmakuEnabled
+            )
+        }
     }
 
     public var engine: RoomTranslationEngine {
@@ -107,6 +118,7 @@ public final class RoomTranslationSettings {
         self.defaults = defaults
         self.secretStorage = secretStorage
         isEnabled = defaults.object(forKey: Keys.enabled) as? Bool ?? false
+        isDanmakuEnabled = defaults.object(forKey: Keys.danmakuEnabled) as? Bool ?? false
 #if os(tvOS)
         let defaultEngine = RoomTranslationEngine.llm
 #else

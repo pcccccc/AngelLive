@@ -283,7 +283,26 @@ struct RoomTitleTranslationTests {
         #expect(json["stream"] as? Bool == false)
         let messages = try #require(json["messages"] as? [[String: String]])
         #expect(messages.map { $0["role"] } == ["system", "user"])
+        #expect(messages.first?["content"]?.contains("room title") == true)
         #expect(messages.last?["content"] == "A neutral room title")
+
+        let danmakuRequest = RoomTranslationRequest(
+            text: "A neutral chat message",
+            sourceLanguage: "en",
+            targetLanguage: "zh-Hans",
+            baseURL: request.baseURL,
+            model: request.model,
+            apiKey: request.apiKey,
+            contentKind: .danmaku
+        )
+        TranslationURLProtocol.reset(statusCode: 200, body: #"{"choices":[{"message":{"content":"弹幕译文"}}]}"#)
+        #expect(try await provider.translate(danmakuRequest) == "弹幕译文")
+        let danmakuBody = try #require(TranslationURLProtocol.captured?.body)
+        let danmakuJSON = try #require(JSONSerialization.jsonObject(with: danmakuBody) as? [String: Any])
+        let danmakuMessages = try #require(danmakuJSON["messages"] as? [[String: String]])
+        #expect(danmakuMessages.first?["content"]?.contains("live-chat message") == true)
+        #expect(danmakuMessages.first?["content"]?.contains("room title") == false)
+        #expect(danmakuMessages.last?["content"] == "A neutral chat message")
 
         for (status, expected) in [(401, RoomTranslationError.authentication), (429, .rateLimited)] {
             TranslationURLProtocol.reset(

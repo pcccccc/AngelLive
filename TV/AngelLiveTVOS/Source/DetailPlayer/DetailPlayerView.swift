@@ -21,9 +21,27 @@ struct DetailPlayerView: View {
     @State private var hasStartedStreamPlayback = false
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
+    @Environment(\.scenePhase) private var scenePhase
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
+        playerContent
+            .onChange(of: scenePhase) { _, phase in
+                switch phase {
+                case .active:
+                    roomInfoViewModel.resumeDanmakuTranslationAfterBackground()
+                case .background:
+                    roomInfoViewModel.suspendDanmakuTranslationForBackground()
+                case .inactive:
+                    break
+                @unknown default:
+                    break
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var playerContent: some View {
         if roomInfoViewModel.displayState == .streamerOffline {
             // 主播已下播页面
             VStack(spacing: 30) {

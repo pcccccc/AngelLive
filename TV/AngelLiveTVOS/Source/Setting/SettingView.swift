@@ -404,6 +404,7 @@ struct TranslationSettingView: View {
 
     private enum Field: Hashable {
         case enabled
+        case danmakuEnabled
         case targetLanguage
         case baseURL
         case model
@@ -441,6 +442,13 @@ struct TranslationSettingView: View {
                 .focused($focusedField, equals: .enabled)
                 .frame(height: 55)
 
+                Toggle(isOn: $settings.isDanmakuEnabled) {
+                    Text("自动翻译弹幕")
+                        .font(.system(size: 30, weight: .semibold))
+                }
+                .focused($focusedField, equals: .danmakuEnabled)
+                .frame(height: 55)
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text("目标语言")
                         .font(.system(size: 24, weight: .medium))
@@ -456,7 +464,7 @@ struct TranslationSettingView: View {
                     .frame(height: 55)
                 }
 
-                Text("开启后自动翻译其他语言的房间标题。翻译不可用时显示原文。")
+                Text("翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
                     .font(.system(size: 22))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -521,7 +529,7 @@ struct TranslationSettingView: View {
                         }
                     }
 
-                    Text("标题会发送至你配置的服务，服务商可能按请求计费。API Key 只保存在本机安全存储中。")
+                    Text("开启对应开关后，房间标题或弹幕文本会发送至你配置的服务。弹幕频率较高，可能增加用量或费用；不会发送用户名或图片 URL。API Key 只保存在本机安全存储中。")
                         .font(.system(size: 22))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

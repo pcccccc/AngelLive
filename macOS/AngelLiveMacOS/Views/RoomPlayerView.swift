@@ -16,6 +16,7 @@ import Kingfisher
 struct RoomPlayerView: View {
     let room: LiveModel
     @Environment(HistoryModel.self) private var historyModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: RoomInfoViewModel
     @StateObject private var coordinator = KSVideoPlayer.Coordinator()
     @StateObject private var playbackSession = KSPlayerPlaybackSession(
@@ -148,6 +149,18 @@ struct RoomPlayerView: View {
         .onChange(of: coordinator.state) { _, _ in
             playbackSession.attach(playerLayer: coordinator.playerLayer)
             disableWindowBackgroundDrag()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                viewModel.resumeDanmakuTranslationAfterBackground()
+            case .background:
+                viewModel.suspendDanmakuTranslationForBackground()
+            case .inactive:
+                break
+            @unknown default:
+                break
+            }
         }
         // VM observes Coordinator callbacks without replacing its layer delegate.
         // Keep a sticky first-play signal so later buffering does not look like startup.

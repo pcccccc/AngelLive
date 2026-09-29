@@ -142,6 +142,8 @@ final class RoomInfoViewModel {
     var danmuServerIsLoading = false
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
     let danmuShootScheduler = DanmakuShootScheduler() // §6.2 去突发:把批量弹幕摊开逐条发射
+    private let danmakuTranslationPipeline = DanmakuTranslationPipeline()
+    private var isDanmakuTranslationSuspended = false
     var danmuSettings = DanmuSettingModel() // 弹幕设置模型
     private var danmuConnectionIntent = DanmakuConnectionIntent()
     var supportsDanmu: Bool {
@@ -862,6 +864,7 @@ final class RoomInfoViewModel {
 
         // §6.2 清空去突发缓冲,避免陈旧弹幕在切房/断流后继续飞出
         danmuShootScheduler.reset()
+        danmakuTranslationPipeline.reset()
 
         danmuServerIsConnected = false
         danmuServerIsLoading = false
@@ -871,14 +874,27 @@ final class RoomInfoViewModel {
     @MainActor
     func pauseDanmuUpdatesForBackground() {
         danmuConnectionIntent.suspend()
+        suspendDanmakuTranslationForBackground()
         disconnectSocket(preservingIntent: true)
     }
 
     /// 回到前台时恢复弹幕连接（如果之前连接过）
     @MainActor
     func resumeDanmuUpdatesIfNeeded() {
+        resumeDanmakuTranslationAfterBackground()
         guard danmuConnectionIntent.resume() else { return }
         getDanmuInfo()
+    }
+
+    @MainActor
+    private func suspendDanmakuTranslationForBackground() {
+        isDanmakuTranslationSuspended = true
+        danmakuTranslationPipeline.reset()
+    }
+
+    @MainActor
+    private func resumeDanmakuTranslationAfterBackground() {
+        isDanmakuTranslationSuspended = false
     }
 
     /// 刷新当前播放流
@@ -996,7 +1012,22 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
 
     func webSocketDidReceiveMessage(_ message: DanmakuDisplayMessage) {
         // 屏蔽词作用于 text:图片弹幕的 text 是降级文案,语义与纯文本弹幕一致
-        guard !danmuSettings.shouldBlockDanmu(message.text) else { return }
+        let originalText = message.text
+        guard !danmuSettings.shouldBlockDanmu(originalText) else { return }
+        if isDanmakuTranslationSuspended {
+            deliverDanmakuMessage(message)
+            return
+        }
+        danmakuTranslationPipeline.enqueue(message) { [weak self] translatedMessage in
+            guard let self,
+                  !self.danmuSettings.shouldBlockDanmu(originalText)
+            else { return }
+            self.deliverDanmakuMessage(translatedMessage)
+        }
+    }
+
+    @MainActor
+    private func deliverDanmakuMessage(_ message: DanmakuDisplayMessage) {
         // 将弹幕消息添加到聊天列表（底部气泡）
         addDanmuMessage(
             text: message.text,
