@@ -452,7 +452,9 @@ public final class AppFavoriteModel {
         pendingRoomPatches.removeAll(keepingCapacity: true)
         var updated = roomList
         var identityChanges: [FavoriteIdentityChange] = []
-        var indexByKey = Dictionary(
+        // 必须固定使用本批补丁应用前的 oldKey 索引。若前一条补丁 re-key 后改写索引，
+        // 其 newKey 可能恰好等于后一条的 oldKey，导致补丁写入错误成员槽位。
+        let indexByKey = Dictionary(
             updated.indices.map { (favoriteKey(for: updated[$0]), $0) },
             uniquingKeysWith: { first, _ in first }
         )
@@ -461,12 +463,19 @@ public final class AppFavoriteModel {
         for (oldKey, incoming) in patches {
             guard let index = indexByKey[oldKey] else { continue }
             let old = updated[index]
-            var replacement = incoming
             let identityKey = favoriteIdentityKeysByLiveType[old.liveType.rawValue]
                 ?? .roomId
+            var replacement = AppFavoriteModel.mergingRefreshIdentity(
+                old: old,
+                incoming: incoming,
+                identityKey: identityKey,
+                otherFavorites: updated.enumerated().compactMap { offset, room in
+                    offset == index ? nil : room
+                }
+            )
             if AppFavoriteModel.favoriteIdentityChanged(
                 old: old,
-                new: incoming,
+                new: replacement,
                 identityKey: identityKey
             ) {
                 replacement.identityUpdatedAt = Date()
@@ -479,8 +488,10 @@ public final class AppFavoriteModel {
                 for: replacement,
                 identityKey: identityKey
             )
-            indexByKey[oldKey] = nil
-            indexByKey[newKey] = index
+            if newKey != oldKey {
+                refreshedRoomKeys?.remove(oldKey)
+                refreshedRoomKeys?.insert(newKey)
+            }
             let freshness = favoriteStatusFreshness.removeValue(forKey: oldKey)
                 ?? .fresh(updatedAt: Date())
             favoriteStatusFreshness[newKey] = freshness
@@ -494,7 +505,8 @@ public final class AppFavoriteModel {
 
         guard didApplyPatch else { return }
         hasFlushedFirstRoomPatch = true
-        applyRoomList(AppFavoriteModel.deduplicated(updated))
+        // 刷新只更新已有槽位，不拥有成员增删，也不能借身份碰撞折叠收藏。
+        applyRoomList(updated)
 
         guard favoriteICloudSyncEnabled, !identityChanges.isEmpty else {
             schedulePatchPersistence()

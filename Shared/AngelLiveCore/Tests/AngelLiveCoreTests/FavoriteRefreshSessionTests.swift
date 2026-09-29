@@ -492,6 +492,170 @@ struct FavoriteRefreshSessionTests {
         #expect(await harness.callCount("r2") == 1)
     }
 
+    @Test("refresh identity collisions preserve distinct favorite members")
+    @MainActor
+    func refreshIdentityCollisionPreservesMembership() async throws {
+        let harness = FavoriteSessionOperationHarness([
+            "room-1": [.replacement(userId: "0", roomId: "shared-placeholder", state: "1")],
+            "room-2": [.replacement(userId: "0", roomId: "shared-placeholder", state: "2")]
+        ])
+        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness))
+        model.favoriteICloudSyncEnabled = false
+        let first = sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "user-1")
+        let second = sessionRoom(plugin: "fixture.plugin", id: "room-2", userId: "user-2")
+        model.roomList = [first, second]
+
+        await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
+        try await waitUntil { model.lastFavoriteRefreshSummary != nil }
+
+        #expect(model.roomList.count == 2)
+        #expect(Set(model.roomList.map(\.roomId)) == ["room-1", "room-2"])
+        #expect(Set(model.roomList.compactMap(\.liveState)) == ["1", "2"])
+        #expect(!model.shouldSync())
+    }
+
+    @Test("valid user identity collisions preserve both favorite identities")
+    @MainActor
+    func validUserIdentityCollisionPreservesMembership() async throws {
+        let harness = FavoriteSessionOperationHarness([
+            "room-1": [.replacement(userId: "user-2", roomId: "room-new", state: "1")],
+            "room-2": [.replacement(userId: "user-new", roomId: "room-1", state: "2")]
+        ])
+        let resolver = FavoritePluginIDResolver(batch: { rooms in
+            rooms.map { _ in FavoriteResolvedPlugin(pluginId: "fixture.plugin", identityKey: .userId) }
+        })
+        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness, resolver: resolver))
+        model.favoriteICloudSyncEnabled = false
+        model.roomList = [
+            sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "user-1"),
+            sessionRoom(plugin: "fixture.plugin", id: "room-2", userId: "user-2")
+        ]
+
+        await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
+        try await waitUntil { model.lastFavoriteRefreshSummary != nil }
+
+        #expect(model.roomList.map(\.userId) == ["user-1", "user-2"])
+        #expect(model.roomList.map(\.roomId) == ["room-1", "room-2"])
+        #expect(model.roomList.compactMap(\.liveState) == ["1", "2"])
+    }
+
+    @Test("accepted favorite identity migration remains fresh for automatic callers")
+    @MainActor
+    func acceptedIdentityMigrationUpdatesRefreshBaseline() async throws {
+        let harness = FavoriteSessionOperationHarness([
+            "room-1": [.replacement(userId: "user-stable", roomId: "room-2", state: "1")]
+        ])
+        let resolver = FavoritePluginIDResolver(batch: { rooms in
+            rooms.map { _ in
+                FavoriteResolvedPlugin(
+                    pluginId: "fixture.plugin",
+                    identityKey: .userId
+                )
+            }
+        })
+        let model = AppFavoriteModel(
+            refreshSession: makeSession(harness: harness, resolver: resolver)
+        )
+        model.favoriteICloudSyncEnabled = false
+        let original = sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "0")
+        model.roomList = [original]
+
+        await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
+        try await waitUntil { model.lastFavoriteRefreshSummary != nil }
+
+        #expect(model.roomList.first?.userId == "user-stable")
+        #expect(model.roomList.first?.roomId == "room-2")
+        #expect(!model.shouldSync())
+        await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
+        #expect(await harness.totalCalls == 1)
+
+        let refreshed = try #require(model.roomList.first)
+        model.roomList = []
+        #expect(model.shouldSync())
+        model.roomList = [refreshed]
+        #expect(!model.shouldSync())
+        model.roomList.append(sessionRoom(plugin: "fixture.plugin", id: "room-3", userId: "user-3"))
+        #expect(model.shouldSync())
+    }
+
+    @Test("room identity keeps its stable key while accepting a valid user id")
+    @MainActor
+    func roomIdentityAcceptsUserIDCompletion() async throws {
+        let harness = FavoriteSessionOperationHarness([
+            "room-1": [.replacement(userId: "user-completed", roomId: "unexpected-room", state: "1")]
+        ])
+        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness))
+        model.favoriteICloudSyncEnabled = false
+        model.roomList = [sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "0")]
+
+        await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
+        try await waitUntil { model.lastFavoriteRefreshSummary != nil }
+
+        #expect(model.roomList.first?.roomId == "room-1")
+        #expect(model.roomList.first?.userId == "user-completed")
+        #expect(model.roomList.first?.liveState == "1")
+        #expect(!model.shouldSync())
+    }
+
+    @Test("preserve room info behavior only applies refreshed live state")
+    @MainActor
+    func preserveRoomInfoBehavior() async throws {
+        let harness = FavoriteSessionOperationHarness([
+            "room-1": [.replacement(userId: "user-new", roomId: "room-new", state: "1")]
+        ])
+        let resolver = FavoritePluginIDResolver(batch: { rooms in
+            rooms.map { _ in
+                FavoriteResolvedPlugin(
+                    pluginId: "fixture.plugin",
+                    identityKey: .userId,
+                    preserveFavoriteRoomInfoOnRefresh: true
+                )
+            }
+        })
+        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness, resolver: resolver))
+        model.favoriteICloudSyncEnabled = false
+        model.roomList = [sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "user-old")]
+
+        await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
+        try await waitUntil { model.lastFavoriteRefreshSummary != nil }
+
+        #expect(model.roomList.first?.roomId == "room-1")
+        #expect(model.roomList.first?.userId == "user-old")
+        #expect(model.roomList.first?.liveState == "1")
+    }
+
+    @Test("external membership changes during rekey remain refresh-invalidating", arguments: [false, true])
+    @MainActor
+    func externalMembershipDuringRekey(removeMember: Bool) async throws {
+        let harness = FavoriteSessionOperationHarness([
+            "room-1": [.gatedReplacement(userId: "user-stable", roomId: "room-2", state: "1")]
+        ])
+        let resolver = FavoritePluginIDResolver(batch: { rooms in
+            rooms.map { _ in FavoriteResolvedPlugin(pluginId: "fixture.plugin", identityKey: .userId) }
+        })
+        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness, resolver: resolver))
+        model.favoriteICloudSyncEnabled = false
+        let original = sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "0")
+        model.roomList = [original]
+
+        let refresh = Task { @MainActor in
+            await model.refreshStatesAndApply(members: [original], trigger: .automatic)
+        }
+        await harness.waitUntilStarted(1)
+        if removeMember {
+            model.roomList = []
+        } else {
+            model.roomList.append(
+                sessionRoom(plugin: "fixture.plugin", id: "room-3", userId: "user-3"))
+        }
+        await harness.release("room-1")
+        await refresh.value
+        try await waitUntil { model.lastFavoriteRefreshSummary != nil }
+
+        #expect(model.shouldSync())
+        #expect(model.roomList.count == (removeMember ? 0 : 2))
+    }
+
     @Test("identical catalog notifications are ignored and an actual plugin update refreshes")
     @MainActor
     func automaticRefreshCatalogChanges() async throws {
@@ -664,6 +828,8 @@ private actor FavoriteSessionOperationHarness {
     enum Behavior: Sendable {
         case success(String)
         case gatedSuccess(String)
+        case replacement(userId: String, roomId: String, state: String)
+        case gatedReplacement(userId: String, roomId: String, state: String)
         case failure(SessionFailure)
     }
 
@@ -733,6 +899,33 @@ private actor FavoriteSessionOperationHarness {
             var result = room
             result.liveState = state
             return result
+        case .replacement(let userId, let roomId, let state):
+            return LiveModel(
+                userName: room.userName,
+                roomTitle: room.roomTitle,
+                roomCover: room.roomCover,
+                userHeadImg: room.userHeadImg,
+                liveType: room.liveType,
+                liveState: state,
+                userId: userId,
+                roomId: roomId,
+                liveWatchedCount: room.liveWatchedCount,
+                identityUpdatedAt: room.identityUpdatedAt
+            )
+        case .gatedReplacement(let userId, let roomId, let state):
+            try await wait(room.roomId)
+            return LiveModel(
+                userName: room.userName,
+                roomTitle: room.roomTitle,
+                roomCover: room.roomCover,
+                userHeadImg: room.userHeadImg,
+                liveType: room.liveType,
+                liveState: state,
+                userId: userId,
+                roomId: roomId,
+                liveWatchedCount: room.liveWatchedCount,
+                identityUpdatedAt: room.identityUpdatedAt
+            )
         case .failure(let failure):
             throw failure.error(pluginId: pluginId)
         }
