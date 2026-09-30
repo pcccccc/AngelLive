@@ -464,7 +464,7 @@ struct TranslationSettingView: View {
                     .frame(height: 55)
                 }
 
-                Text("翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
+                Text("自动翻译仅处理英语、日语和韩语，其他语言保留原文。翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
                     .font(.system(size: 22))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

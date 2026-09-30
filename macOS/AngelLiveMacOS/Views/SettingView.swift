@@ -507,6 +507,10 @@ struct TranslationSettingView: View {
     @State private var testResult: String?
     @State private var activeTask: Task<Void, Never>?
     @State private var testGeneration = UUID()
+    @State private var isPreparingNativeLanguage = false
+    @State private var nativeLanguagePairID: String?
+    @State private var nativeLanguageGeneration = UUID()
+    @State private var nativeLanguageDownloadRequest: NativeTranslationLanguageDownloadRequest?
 
     private var configurationNeedsSave: Bool {
         let normalizedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -517,12 +521,16 @@ struct TranslationSettingView: View {
     }
 
     private var canTest: Bool {
-        guard !isSaving, !isTesting, !isDeletingKey else { return false }
+        guard !isSaving, !isTesting, !isDeletingKey, !isPreparingNativeLanguage else { return false }
         guard settings.engine == .llm else { return true }
         return !configurationNeedsSave
             && settings.hasAPIKey
             && !settings.cloudBaseURL.isEmpty
             && !settings.cloudModel.isEmpty
+    }
+
+    private var nativeLanguagePairs: [NativeTranslationLanguagePair] {
+        translationService.nativeLanguagePairs
     }
 
     var body: some View {
@@ -545,7 +553,7 @@ struct TranslationSettingView: View {
                     }
                 }
 
-                Text("翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
+                Text("自动翻译仅处理英语、日语和韩语，其他语言保留原文。翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -561,6 +569,61 @@ struct TranslationSettingView: View {
                 Text("Apple 原生翻译需要 macOS 15 或更高版本。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            if settings.engine == .apple {
+                Section("语言包") {
+                    ForEach(nativeLanguagePairs) { pair in
+                        HStack {
+                            Label(pair.displayName, systemImage: "globe")
+
+                            Spacer()
+
+                            if isPreparingNativeLanguage, nativeLanguagePairID == pair.id {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text("请在系统弹窗中下载")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("请在系统弹窗中下载 \(pair.displayName)")
+                            } else {
+                                switch translationService.nativeLanguageStatus(for: pair) {
+                                case .checking:
+                                    HStack(spacing: 6) {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("检查中")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .accessibilityElement(children: .combine)
+                                case .notDownloaded:
+                                    Button("下载") {
+                                        prepareNativeLanguages(pair)
+                                    }
+                                    .accessibilityLabel("下载 \(pair.displayName)")
+                                    .disabled(
+                                        isSaving
+                                            || isTesting
+                                            || isDeletingKey
+                                            || isPreparingNativeLanguage
+                                    )
+                                case .installed:
+                                    Text("已下载")
+                                        .foregroundStyle(.secondary)
+                                case .unsupported:
+                                    Text("当前系统不支持")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+
+                    Text("Apple 原生翻译需要先下载语言包。下载进度请查看系统弹窗。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if settings.engine == .llm {
@@ -594,7 +657,7 @@ struct TranslationSettingView: View {
                         Button("保存配置") {
                             saveConfiguration()
                         }
-                        .disabled(isSaving || isTesting || isDeletingKey)
+                        .disabled(isSaving || isTesting || isDeletingKey || isPreparingNativeLanguage)
 
                         if isSaving {
                             ProgressView()
@@ -607,7 +670,7 @@ struct TranslationSettingView: View {
                             Button("删除已保存密钥", role: .destructive) {
                                 deleteAPIKey()
                             }
-                            .disabled(isSaving || isTesting || isDeletingKey)
+                            .disabled(isSaving || isTesting || isDeletingKey || isPreparingNativeLanguage)
                         }
                     }
 
@@ -667,18 +730,34 @@ struct TranslationSettingView: View {
         .onChange(of: settings.targetLanguage) { _, _ in
             resetTranslationFeedback()
         }
+        .task(id: "\(settings.engine.rawValue)-\(settings.targetLanguage)") {
+            guard settings.engine == .apple else { return }
+            await translationService.refreshNativeLanguageStatuses()
+        }
+        .nativeTranslationLanguageDownloadTask(nativeLanguageDownloadRequest) { request, result in
+            await completeNativeLanguageDownload(request, result: result)
+        }
         .onDisappear {
             testGeneration = UUID()
+            nativeLanguageGeneration = UUID()
             activeTask?.cancel()
             activeTask = nil
             isTesting = false
+            isPreparingNativeLanguage = false
+            nativeLanguagePairID = nil
+            nativeLanguageDownloadRequest = nil
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .background, isTesting else { return }
+            guard phase == .background else { return }
+            guard isTesting || isPreparingNativeLanguage else { return }
             testGeneration = UUID()
+            nativeLanguageGeneration = UUID()
             activeTask?.cancel()
             activeTask = nil
             isTesting = false
+            isPreparingNativeLanguage = false
+            nativeLanguagePairID = nil
+            nativeLanguageDownloadRequest = nil
             inlineMessage = nil
             testResult = nil
             translationService.clearError()
@@ -687,7 +766,9 @@ struct TranslationSettingView: View {
 
     private func saveConfiguration() {
         testGeneration = UUID()
+        nativeLanguageGeneration = UUID()
         activeTask?.cancel()
+        nativeLanguageDownloadRequest = nil
         activeTask = Task { @MainActor in
             isSaving = true
             inlineMessage = nil
@@ -708,7 +789,9 @@ struct TranslationSettingView: View {
 
     private func deleteAPIKey() {
         testGeneration = UUID()
+        nativeLanguageGeneration = UUID()
         activeTask?.cancel()
+        nativeLanguageDownloadRequest = nil
         activeTask = Task { @MainActor in
             isDeletingKey = true
             inlineMessage = nil
@@ -727,7 +810,9 @@ struct TranslationSettingView: View {
     private func testTranslation() {
         let generation = UUID()
         testGeneration = generation
+        nativeLanguageGeneration = UUID()
         activeTask?.cancel()
+        nativeLanguageDownloadRequest = nil
         activeTask = Task { @MainActor in
             guard !Task.isCancelled, testGeneration == generation else { return }
             isTesting = true
@@ -754,10 +839,69 @@ struct TranslationSettingView: View {
         }
     }
 
-    private func resetTranslationFeedback() {
+    private func prepareNativeLanguages(_ pair: NativeTranslationLanguagePair) {
+        let generation = UUID()
+        nativeLanguageGeneration = generation
         testGeneration = UUID()
         activeTask?.cancel()
+        activeTask = nil
+        isPreparingNativeLanguage = true
+        nativeLanguagePairID = pair.id
+        inlineMessage = nil
+        testResult = nil
+        translationService.clearError()
+        nativeLanguageDownloadRequest = NativeTranslationLanguageDownloadRequest(
+            id: generation,
+            pair: pair
+        )
+    }
+
+    @MainActor
+    private func completeNativeLanguageDownload(
+        _ request: NativeTranslationLanguageDownloadRequest,
+        result: Result<Void, RoomTranslationError>
+    ) async {
+        guard
+            nativeLanguageGeneration == request.id,
+            nativeLanguagePairID == request.pair.id,
+            settings.engine == .apple,
+            settings.targetLanguage == request.pair.targetLanguage,
+            !Task.isCancelled
+        else { return }
+
+        defer {
+            if nativeLanguageGeneration == request.id {
+                isPreparingNativeLanguage = false
+                nativeLanguagePairID = nil
+                nativeLanguageDownloadRequest = nil
+            }
+        }
+
+        await translationService.refreshNativeLanguageStatuses()
+        guard
+            nativeLanguageGeneration == request.id,
+            nativeLanguagePairID == request.pair.id,
+            settings.engine == .apple,
+            settings.targetLanguage == request.pair.targetLanguage,
+            !Task.isCancelled
+        else { return }
+
+        switch result {
+        case .success:
+            testResult = "语言包已准备好"
+        case .failure(let error):
+            inlineMessage = error.localizedDescription
+        }
+    }
+
+    private func resetTranslationFeedback() {
+        testGeneration = UUID()
+        nativeLanguageGeneration = UUID()
+        activeTask?.cancel()
         isTesting = false
+        isPreparingNativeLanguage = false
+        nativeLanguagePairID = nil
+        nativeLanguageDownloadRequest = nil
         inlineMessage = nil
         testResult = nil
         translationService.clearError()

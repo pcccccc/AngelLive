@@ -89,15 +89,15 @@ struct RoomTitleTranslationTests {
     func sameLanguageAndUncertainTitlesNeverCallProvider() async {
         let fixture = SettingsFixture()
         fixture.settings.isEnabled = true
-        fixture.settings.targetLanguage = "zh-Hans"
+        fixture.settings.targetLanguage = "en-US"
         let provider = RecordingTranslationProvider(result: "不应调用")
         let sameLanguage = RoomTitleTranslationService(
             settings: fixture.settings,
-            languageDetector: FixedLanguageDetector(language: "zh-Hans"),
+            languageDetector: FixedLanguageDetector(language: "en-GB"),
             appleProvider: provider,
             llmProvider: provider
         )
-        await sameLanguage.translate("一个直播标题")
+        await sameLanguage.translate("A neutral live room title")
 
         let uncertain = RoomTitleTranslationService(
             settings: fixture.settings,
@@ -107,6 +107,173 @@ struct RoomTitleTranslationTests {
         )
         await uncertain.translate("2026 !!!")
         #expect(await provider.callCount == 0)
+    }
+
+    @Test @MainActor
+    func automaticTitlesRejectNonCommonSourcesForAppleAndLLM() async throws {
+        for engine in [RoomTranslationEngine.apple, .llm] {
+            let fixture = SettingsFixture()
+            fixture.settings.isEnabled = true
+            fixture.settings.engine = engine
+            if engine == .llm {
+                try fixture.settings.saveCloudConfiguration(
+                    baseURL: "https://api.example.invalid/v1",
+                    model: "fixture-model",
+                    apiKey: "fixture-secret"
+                )
+            }
+            let provider = RecordingTranslationProvider(result: "must not be used")
+            let service = RoomTitleTranslationService(
+                settings: fixture.settings,
+                languageDetector: FixedLanguageDetector(language: "fr-FR"),
+                appleProvider: provider,
+                llmProvider: provider
+            )
+
+            await service.translate("Un titre neutre")
+            #expect(await provider.callCount == 0)
+        }
+    }
+
+    @Test @MainActor
+    func commonSourceLanguageVariantsRemainEligible() async {
+        for language in ["en-US", "ja_JP", "ko-KR"] {
+            #expect(RoomTranslationLanguageCatalog.supportsAutomaticTranslation(from: language))
+        }
+        for language in ["fr", "de-DE", "zh-Hant"] {
+            #expect(!RoomTranslationLanguageCatalog.supportsAutomaticTranslation(from: language))
+        }
+
+        let fixture = SettingsFixture()
+        fixture.settings.isEnabled = true
+        let provider = RecordingTranslationProvider(result: "译文")
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en-US"),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+        await service.translate("A neutral room title")
+        #expect(await provider.callCount == 1)
+    }
+
+    @Test @MainActor
+    func nativeLanguagePairsAreFixedAndExcludeTargetLanguageVariants() {
+        let fixture = SettingsFixture()
+        let provider = NativeLanguageProvider()
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en"),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+        #expect(service.nativeLanguagePairs.map(\.sourceLanguage) == ["en", "ja", "ko"])
+        #expect(service.nativeLanguagePairs.allSatisfy { $0.targetLanguage == "zh-Hans" })
+
+        fixture.settings.targetLanguage = "en-US"
+        #expect(service.nativeLanguagePairs.map(\.sourceLanguage) == ["ja", "ko"])
+        #expect(service.nativeLanguagePairs.allSatisfy { $0.targetLanguage == "en-US" })
+    }
+
+    @Test @MainActor
+    func nativeLanguageStatusesRefreshFromProviderAndUnavailableProvider() async {
+        let fixture = SettingsFixture()
+        let pairs = RoomTranslationLanguageCatalog.nativePairs(targetLanguage: "zh-Hans")
+        let provider = NativeLanguageProvider(statuses: [
+            pairs[0]: .installed,
+            pairs[1]: .notDownloaded,
+            pairs[2]: .unsupported
+        ])
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en"),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+        #expect(service.nativeLanguageStatus(for: pairs[0]) == .checking)
+        await service.refreshNativeLanguageStatuses()
+        #expect(service.nativeLanguageStatus(for: pairs[0]) == .installed)
+        #expect(service.nativeLanguageStatus(for: pairs[1]) == .notDownloaded)
+        #expect(service.nativeLanguageStatus(for: pairs[2]) == .unsupported)
+
+        let unavailable = RecordingTranslationProvider(result: "unused")
+        let unavailableService = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en"),
+            appleProvider: unavailable,
+            llmProvider: unavailable
+        )
+        await unavailableService.refreshNativeLanguageStatuses()
+        #expect(pairs.allSatisfy {
+            unavailableService.nativeLanguageStatus(for: $0) == .unsupported
+        })
+    }
+
+    @Test @MainActor
+    func nativeLanguageRefreshCancellationDoesNotPublishPartialStatuses() async {
+        let fixture = SettingsFixture()
+        let provider = SuspendingNativeLanguageProvider()
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en"),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+        let pairs = service.nativeLanguagePairs
+        let task = Task { @MainActor in await service.refreshNativeLanguageStatuses() }
+        await provider.waitUntilCalled()
+        task.cancel()
+        provider.resume()
+        await task.value
+
+        #expect(pairs.allSatisfy { service.nativeLanguageStatus(for: $0) == .checking })
+    }
+
+    @Test @MainActor
+    func nativeLanguageRefreshSurvivesUnrelatedTranslationToggle() async {
+        let fixture = SettingsFixture()
+        let provider = SuspendingNativeLanguageProvider()
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en"),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+        let pairs = service.nativeLanguagePairs
+        let task = Task { @MainActor in await service.refreshNativeLanguageStatuses() }
+        await provider.waitUntilCalled()
+
+        fixture.settings.isEnabled.toggle()
+        provider.resume()
+        await provider.resumeEachSubsequentCall(until: pairs.count)
+        await task.value
+
+        #expect(pairs.allSatisfy { service.nativeLanguageStatus(for: $0) == .installed })
+    }
+
+    @Test @MainActor
+    func preparingNativeLanguageUpdatesInstalledOrActualFailureStatus() async throws {
+        let fixture = SettingsFixture()
+        let pair = RoomTranslationLanguageCatalog.nativePairs(targetLanguage: "zh-Hans")[0]
+        let provider = NativeLanguageProvider(
+            statuses: [pair: .notDownloaded],
+            prepareError: .serviceUnavailable
+        )
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: FixedLanguageDetector(language: "en"),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+
+        await #expect(throws: RoomTranslationError.serviceUnavailable) {
+            try await service.prepareNativeLanguages(pair)
+        }
+        #expect(service.nativeLanguageStatus(for: pair) == .notDownloaded)
+
+        provider.prepareError = nil
+        try await service.prepareNativeLanguages(pair)
+        #expect(service.nativeLanguageStatus(for: pair) == .installed)
     }
 
     @Test @MainActor
@@ -172,8 +339,11 @@ struct RoomTitleTranslationTests {
         #expect(try await service.testTranslation() == "Test title")
         let requests = await recorder.requests
         #expect(requests.count == 2)
-        #expect(requests.allSatisfy { $0.sourceLanguage == "zh-Hans" })
-        #expect(requests.allSatisfy { $0.text == "这是一个测试直播标题" })
+        #expect(requests.allSatisfy { $0.sourceLanguage == "ja" })
+        #expect(requests.allSatisfy { $0.text == "これは翻訳のテストです" })
+        #expect(requests.allSatisfy {
+            !roomTranslationLanguagesMatch($0.sourceLanguage, $0.targetLanguage)
+        })
 
         let delayed = ManualTranslationProvider()
         let staleService = makeService(fixture: fixture, provider: delayed)
@@ -436,6 +606,90 @@ private actor ManualTranslationProvider: RoomTranslationProvider {
         let pending = continuations
         continuations.removeAll()
         for continuation in pending { continuation.resume(throwing: error) }
+    }
+}
+
+@MainActor
+private final class NativeLanguageProvider:
+    RoomTranslationProvider,
+    RoomTranslationLanguagePreparing
+{
+    var statuses: [NativeTranslationLanguagePair: NativeTranslationLanguageStatus]
+    var prepareError: RoomTranslationError?
+
+    init(
+        statuses: [NativeTranslationLanguagePair: NativeTranslationLanguageStatus] = [:],
+        prepareError: RoomTranslationError? = nil
+    ) {
+        self.statuses = statuses
+        self.prepareError = prepareError
+    }
+
+    func translate(_ request: RoomTranslationRequest) async throws -> String {
+        "translated"
+    }
+
+    func prepareLanguages(sourceLanguage: String, targetLanguage: String) async throws {
+        if let prepareError { throw prepareError }
+    }
+
+    func nativeLanguageStatus(
+        for pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationLanguageStatus {
+        statuses[pair] ?? .unsupported
+    }
+}
+
+@MainActor
+private final class SuspendingNativeLanguageProvider:
+    RoomTranslationProvider,
+    RoomTranslationLanguagePreparing
+{
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var callCount = 0
+
+    func translate(_ request: RoomTranslationRequest) async throws -> String {
+        "translated"
+    }
+
+    func prepareLanguages(sourceLanguage: String, targetLanguage: String) async throws {}
+
+    func nativeLanguageStatus(
+        for pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationLanguageStatus {
+        callCount += 1
+        await withCheckedContinuation { continuation = $0 }
+        return .installed
+    }
+
+    func waitUntilCalled() async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while callCount == 0, clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        #expect(callCount == 1)
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func resumeEachSubsequentCall(until expected: Int) async {
+        while callCount < expected {
+            await waitForCallCount(callCount + 1)
+            resume()
+        }
+    }
+
+    private func waitForCallCount(_ expected: Int) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while callCount < expected, clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(2))
+        }
+        #expect(callCount >= expected)
     }
 }
 

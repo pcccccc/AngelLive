@@ -6,6 +6,13 @@ public final class RoomTitleTranslationService {
     public static let shared = RoomTitleTranslationService()
 
     public private(set) var lastErrorMessage: String?
+    private var nativeLanguageStatuses: [
+        NativeTranslationLanguagePair: NativeTranslationLanguageStatus
+    ] = [:]
+
+    public var nativeLanguagePairs: [NativeTranslationLanguagePair] {
+        RoomTranslationLanguageCatalog.nativePairs(targetLanguage: settings.targetLanguage)
+    }
 
     private let settings: RoomTranslationSettings
     private let languageDetector: any RoomTitleLanguageDetecting
@@ -97,9 +104,13 @@ public final class RoomTitleTranslationService {
         let endpoint = settings.cloudBaseURL
         let model = settings.cloudModel
         let targetsEnglish = target.lowercased().split(separator: "-").first == "en"
-        let text = targetsEnglish ? "这是一个测试直播标题" : "A neutral live room title"
-        let source = targetsEnglish ? "zh-Hans" : "en"
-        let request = try makeRequest(text: text, sourceLanguage: source)
+        let text = targetsEnglish ? "これは翻訳のテストです" : "A neutral live room title"
+        let source = targetsEnglish ? "ja" : "en"
+        let request = try makeRequest(
+            text: text,
+            sourceLanguage: source,
+            purpose: .explicitTest
+        )
         let provider = settings.engine == .apple ? appleProvider : llmProvider
         do {
             await danmakuBroker.prepareForExplicitRetry(revision: revision)
@@ -158,6 +169,80 @@ public final class RoomTitleTranslationService {
         lastErrorMessage = nil
     }
 
+    public func nativeLanguageStatus(
+        for pair: NativeTranslationLanguagePair
+    ) -> NativeTranslationLanguageStatus {
+        nativeLanguageStatuses[pair] ?? .checking
+    }
+
+    public func refreshNativeLanguageStatuses() async {
+        let engine = settings.engine
+        let target = settings.targetLanguage
+        let pairs = nativeLanguagePairs
+        let provider = appleProvider as? any RoomTranslationLanguagePreparing
+        nativeLanguageStatuses = Dictionary(uniqueKeysWithValues: pairs.map { ($0, .checking) })
+        var refreshed: [NativeTranslationLanguagePair: NativeTranslationLanguageStatus] = [:]
+        refreshed.reserveCapacity(pairs.count)
+
+        for pair in pairs {
+            guard !Task.isCancelled else { return }
+            if let provider {
+                refreshed[pair] = await provider.nativeLanguageStatus(for: pair)
+            } else {
+                refreshed[pair] = .unsupported
+            }
+        }
+        guard !Task.isCancelled,
+              settings.engine == engine,
+              settings.targetLanguage == target else {
+            return
+        }
+        nativeLanguageStatuses = refreshed
+    }
+
+    public func prepareNativeLanguages(_ pair: NativeTranslationLanguagePair) async throws {
+        guard let provider = appleProvider as? any RoomTranslationLanguagePreparing else {
+            throw RoomTranslationError.unavailable
+        }
+        let engine = settings.engine
+        let target = settings.targetLanguage
+        do {
+            try await provider.prepareLanguages(
+                sourceLanguage: pair.sourceLanguage,
+                targetLanguage: pair.targetLanguage
+            )
+            try Task.checkCancellation()
+            guard settings.engine == engine,
+                  settings.targetLanguage == target else {
+                throw CancellationError()
+            }
+            nativeLanguageStatuses[pair] = .installed
+            lastErrorMessage = nil
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as RoomTranslationError {
+            let status = await provider.nativeLanguageStatus(for: pair)
+            try Task.checkCancellation()
+            guard settings.engine == engine,
+                  settings.targetLanguage == target else {
+                throw CancellationError()
+            }
+            nativeLanguageStatuses[pair] = status
+            lastErrorMessage = error.localizedDescription
+            throw error
+        } catch {
+            let status = await provider.nativeLanguageStatus(for: pair)
+            try Task.checkCancellation()
+            guard settings.engine == engine,
+                  settings.targetLanguage == target else {
+                throw CancellationError()
+            }
+            nativeLanguageStatuses[pair] = status
+            lastErrorMessage = RoomTranslationError.serviceUnavailable.localizedDescription
+            throw RoomTranslationError.serviceUnavailable
+        }
+    }
+
     func requestIdentity(for original: String, lifecycleEnabled: Bool = true) -> RoomTranslationRequestIdentity {
         RoomTranslationRequestIdentity(
             original: original,
@@ -167,7 +252,10 @@ public final class RoomTitleTranslationService {
     }
 
     private func cacheKey(for original: String) -> RoomTranslationCacheKey? {
-        guard let sourceLanguage = languageDetector.sourceLanguage(for: original) else { return nil }
+        guard let sourceLanguage = languageDetector.sourceLanguage(for: original),
+              RoomTranslationLanguageCatalog.supportsAutomaticTranslation(from: sourceLanguage) else {
+            return nil
+        }
         return RoomTranslationCacheKey(
             original: original,
             sourceLanguage: sourceLanguage,
@@ -179,7 +267,11 @@ public final class RoomTitleTranslationService {
         )
     }
 
-    private func makeRequest(text: String, sourceLanguage: String) throws -> RoomTranslationRequest {
+    private func makeRequest(
+        text: String,
+        sourceLanguage: String,
+        purpose: RoomTranslationRequestPurpose = .automatic
+    ) throws -> RoomTranslationRequest {
         if settings.engine == .llm {
             let cloud = try settings.cloudConfiguration()
             return RoomTranslationRequest(
@@ -188,7 +280,8 @@ public final class RoomTitleTranslationService {
                 targetLanguage: settings.targetLanguage,
                 baseURL: cloud.baseURL,
                 model: cloud.model,
-                apiKey: cloud.apiKey
+                apiKey: cloud.apiKey,
+                purpose: purpose
             )
         }
         return RoomTranslationRequest(
@@ -197,7 +290,8 @@ public final class RoomTitleTranslationService {
             targetLanguage: settings.targetLanguage,
             baseURL: nil,
             model: nil,
-            apiKey: nil
+            apiKey: nil,
+            purpose: purpose
         )
     }
 

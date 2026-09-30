@@ -3,7 +3,6 @@ import Observation
 
 struct RoomTranslationHostOwnership {
     private var generations: [UUID: UUID] = [:]
-
     mutating func install(owner: UUID, generation: UUID) { generations[owner] = generation }
     func isCurrent(owner: UUID, generation: UUID) -> Bool { generations[owner] == generation }
     mutating func remove(owner: UUID) { generations.removeValue(forKey: owner) }
@@ -14,7 +13,6 @@ struct RoomTranslationNativeExecutionState {
         let owner: UUID
         let executionID: UUID
     }
-
     private var assignments: [UUID: Assignment] = [:]
 
     mutating func assign(requestID: UUID, owner: UUID) -> UUID {
@@ -22,23 +20,44 @@ struct RoomTranslationNativeExecutionState {
         assignments[requestID] = Assignment(owner: owner, executionID: executionID)
         return executionID
     }
-
     func isCurrent(requestID: UUID, executionID: UUID) -> Bool {
         assignments[requestID]?.executionID == executionID
     }
-
+    func firstCurrent(
+        in candidates: [(requestID: UUID, executionID: UUID)]
+    ) -> (requestID: UUID, executionID: UUID)? {
+        candidates.first {
+            isCurrent(requestID: $0.requestID, executionID: $0.executionID)
+        }
+    }
     mutating func retire(owner: UUID) -> [UUID] {
-        let requestIDs = assignments.compactMap { requestID, assignment in
-            assignment.owner == owner ? requestID : nil
-        }
-        for requestID in requestIDs {
-            assignments.removeValue(forKey: requestID)
-        }
+        let requestIDs = assignments.compactMap { $0.value.owner == owner ? $0.key : nil }
+        for requestID in requestIDs { assignments.removeValue(forKey: requestID) }
         return requestIDs
     }
+    mutating func remove(requestID: UUID) { assignments.removeValue(forKey: requestID) }
+}
 
-    mutating func remove(requestID: UUID) {
-        assignments.removeValue(forKey: requestID)
+struct RoomTranslationNativeBatchResponse: Sendable {
+    let clientIdentifier: String?
+    let targetText: String
+}
+
+enum RoomTranslationNativeBatchRouter {
+    static func results(
+        requestIDs: [UUID],
+        responses: [RoomTranslationNativeBatchResponse]
+    ) -> [UUID: String] {
+        let expected = Set(requestIDs)
+        var results: [UUID: String] = [:]
+        for response in responses {
+            guard let identifier = response.clientIdentifier,
+                  let requestID = UUID(uuidString: identifier),
+                  expected.contains(requestID),
+                  results[requestID] == nil else { continue }
+            results[requestID] = response.targetText
+        }
+        return results
     }
 }
 
@@ -61,55 +80,179 @@ private struct UnavailableAppleRoomTranslationProvider: RoomTranslationProvider 
 #if !os(tvOS)
 import Translation
 
+enum NativeTranslationAvailabilityStatus: Sendable {
+    case installed
+    case supported
+    case unsupported
+}
+
+private extension NativeTranslationAvailabilityStatus {
+    var publicStatus: NativeTranslationLanguageStatus {
+        switch self {
+        case .installed: .installed
+        case .supported: .notDownloaded
+        case .unsupported: .unsupported
+        }
+    }
+}
+
+@available(iOS 18.0, macOS 15.0, *)
+@MainActor
+protocol NativeTranslationAvailabilityChecking: AnyObject {
+    func status(for pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus
+}
+
+@available(iOS 18.0, macOS 15.0, *)
+@MainActor
+private final class SystemNativeTranslationAvailability: NativeTranslationAvailabilityChecking {
+    func status(for pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus {
+        let availability: LanguageAvailability
+        if #available(iOS 26.4, macOS 26.4, *) {
+            availability = LanguageAvailability(preferredStrategy: .lowLatency)
+        } else {
+            availability = LanguageAvailability()
+        }
+        let status = await availability.status(
+            from: Locale.Language(identifier: pair.sourceLanguage),
+            to: Locale.Language(identifier: pair.targetLanguage)
+        )
+        switch status {
+        case .installed: return .installed
+        case .supported: return .supported
+        case .unsupported: return .unsupported
+        @unknown default: return .unsupported
+        }
+    }
+}
+
 @available(iOS 18.0, macOS 15.0, *)
 @MainActor @Observable
-final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslationRetrying {
-    static let shared = AppleRoomTranslationProvider()
-
-    private struct LanguagePair: Hashable, Sendable {
-        let source: String
-        let target: String
+final class NativeTranslationResourcePolicy {
+    private struct InFlightCheck {
+        let id: UUID
+        let task: Task<NativeTranslationAvailabilityStatus, Never>
     }
+
+    @ObservationIgnored private let availability: any NativeTranslationAvailabilityChecking
+    @ObservationIgnored private var cachedStatuses: [NativeTranslationLanguagePair: NativeTranslationAvailabilityStatus] = [:]
+    @ObservationIgnored private var inFlightChecks: [NativeTranslationLanguagePair: InFlightCheck] = [:]
+
+    init(availability: any NativeTranslationAvailabilityChecking) {
+        self.availability = availability
+    }
+
+    func requireInstalled(_ pair: NativeTranslationLanguagePair) async throws {
+        switch await status(for: pair) {
+        case .installed: return
+        case .supported: throw RoomTranslationError.languageResourcesRequired
+        case .unsupported: throw RoomTranslationError.unavailable
+        }
+    }
+
+    func refresh(_ pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus {
+        invalidate(pair)
+        return await status(for: pair)
+    }
+
+    func markInstalled(_ pair: NativeTranslationLanguagePair) {
+        cachedStatuses[pair] = .installed
+    }
+
+    func invalidate(_ pair: NativeTranslationLanguagePair) {
+        cachedStatuses.removeValue(forKey: pair)
+        inFlightChecks.removeValue(forKey: pair)?.task.cancel()
+    }
+
+    func clearCachedStatuses() {
+        cachedStatuses.removeAll()
+        for check in inFlightChecks.values { check.task.cancel() }
+        inFlightChecks.removeAll()
+    }
+
+    private func status(for pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus {
+        if let cached = cachedStatuses[pair] { return cached }
+        if let existing = inFlightChecks[pair] { return await existing.task.value }
+
+        let checkID = UUID()
+        let availability = availability
+        let task = Task { @MainActor in await availability.status(for: pair) }
+        inFlightChecks[pair] = InFlightCheck(id: checkID, task: task)
+        let status = await task.value
+        guard inFlightChecks[pair]?.id == checkID else { return status }
+        inFlightChecks.removeValue(forKey: pair)
+        cachedStatuses[pair] = status
+        return status
+    }
+}
+
+@available(iOS 18.0, macOS 15.0, *)
+@MainActor @Observable
+final class AppleRoomTranslationProvider:
+    RoomTranslationProvider,
+    RoomTranslationRetrying,
+    RoomTranslationLanguagePreparing
+{
+    static let shared = AppleRoomTranslationProvider()
 
     private struct Job: Sendable {
         let requestID: UUID
         let executionID: UUID
         let text: String
+        let purpose: RoomTranslationRequestPurpose
     }
-
+    private enum HostWork: Sendable {
+        case translations([Job])
+        case prepareLanguages(Job)
+    }
     private struct Host {
         let id: UUID
-        let pair: LanguagePair
-        var waiter: CheckedContinuation<Job?, Never>?
+        let pair: NativeTranslationLanguagePair
+        var waiter: CheckedContinuation<HostWork?, Never>?
     }
-
     private struct Pending {
         let request: RoomTranslationRequest
         let continuation: CheckedContinuation<String, any Error>
     }
-
     private struct Active {
         let owner: UUID
-        let pair: LanguagePair
+        let pair: NativeTranslationLanguagePair
         let request: RoomTranslationRequest
         let continuation: CheckedContinuation<String, any Error>
     }
 
+    @ObservationIgnored private let resources: NativeTranslationResourcePolicy
     private(set) var configurationRevision = 0
     private var expectedHosts: Set<UUID> = []
     private var desiredSources: [String: String] = [:]
     private var ownership = RoomTranslationHostOwnership()
     private var executions = RoomTranslationNativeExecutionState()
     private var hosts: [UUID: Host] = [:]
-    private var suspendedPairs: Set<LanguagePair> = []
+    private var suspendedPairs: Set<NativeTranslationLanguagePair> = []
     private var pendingOrder: [UUID] = []
     private var pending: [UUID: Pending] = [:]
     private var active: [UUID: Active] = [:]
 
+    init(availability: (any NativeTranslationAvailabilityChecking)? = nil) {
+        resources = NativeTranslationResourcePolicy(
+            availability: availability ?? SystemNativeTranslationAvailability()
+        )
+    }
+
     func translate(_ request: RoomTranslationRequest) async throws -> String {
+        let pair = NativeTranslationLanguagePair(
+            sourceLanguage: request.sourceLanguage,
+            targetLanguage: request.targetLanguage
+        )
+        if request.purpose == .automatic {
+            try await resources.requireInstalled(pair)
+        }
         guard !expectedHosts.isEmpty else { throw RoomTranslationError.unavailable }
-        let pair = LanguagePair(source: request.sourceLanguage, target: request.targetLanguage)
-        guard !suspendedPairs.contains(pair) else { throw RoomTranslationError.unavailable }
+        if request.purpose == .prepareLanguages {
+            suspendedPairs.remove(pair)
+            resources.invalidate(pair)
+        } else {
+            guard !suspendedPairs.contains(pair) else { throw RoomTranslationError.unavailable }
+        }
 
         let requestID = UUID()
         return try await withTaskCancellationHandler(operation: {
@@ -120,8 +263,8 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
                 }
                 pendingOrder.append(requestID)
                 pending[requestID] = Pending(request: request, continuation: continuation)
-                if desiredSources[pair.target] == nil {
-                    desiredSources[pair.target] = pair.source
+                if desiredSources[pair.targetLanguage] == nil {
+                    desiredSources[pair.targetLanguage] = pair.sourceLanguage
                     configurationRevision &+= 1
                 }
                 drain()
@@ -129,6 +272,24 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
         }, onCancel: {
             Task { @MainActor [weak self] in self?.cancel(requestID) }
         })
+    }
+
+    func prepareLanguages(sourceLanguage: String, targetLanguage: String) async throws {
+        _ = try await translate(RoomTranslationRequest(
+            text: "",
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            baseURL: nil,
+            model: nil,
+            apiKey: nil,
+            purpose: .prepareLanguages
+        ))
+    }
+
+    func nativeLanguageStatus(
+        for pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationLanguageStatus {
+        await resources.refresh(pair).publicStatus
     }
 
     func setHostExpected(owner: UUID, expected: Bool) {
@@ -148,8 +309,8 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
     }
 
     func prepareForExplicitRetry() async {
-        guard !suspendedPairs.isEmpty else { return }
         suspendedPairs.removeAll()
+        resources.clearCachedStatuses()
         configurationRevision &+= 1
         drain()
     }
@@ -159,67 +320,153 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
         sourceLanguage: String,
         targetLanguage: String
     ) -> (TranslationSession) async -> Void {
-        { session in
+        { downloadCapableSession in
             let hostID = UUID()
-            await shared.registerHost(
-                owner: owner,
-                hostID: hostID,
-                source: sourceLanguage,
-                target: targetLanguage
+            let pair = NativeTranslationLanguagePair(
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage
             )
+            var installedOnlySession: TranslationSession?
+            await shared.registerHost(owner: owner, hostID: hostID, pair: pair)
+
             await withTaskCancellationHandler(operation: {
-                while let job = await shared.nextJob(owner: owner, hostID: hostID) {
-                    do {
-                        try Task.checkCancellation()
-                        let response = try await session.translate(job.text)
-                        try Task.checkCancellation()
-                        await shared.finish(
-                            job.requestID,
-                            executionID: job.executionID,
-                            result: .success(response.targetText),
-                            suspendPair: false
-                        )
-                    } catch is CancellationError {
-                        if Task.isCancelled {
-                            await shared.deactivate(owner: owner, matching: hostID)
-                            break
+                hostLoop: while let work = await shared.nextWork(owner: owner, hostID: hostID) {
+                    switch work {
+                    case .prepareLanguages(let job):
+                        do {
+                            try Task.checkCancellation()
+                            try await downloadCapableSession.prepareTranslation()
+                            try Task.checkCancellation()
+                            let status = await shared.refreshStatus(pair)
+                            await shared.finish(
+                                job.requestID,
+                                executionID: job.executionID,
+                                result: status == .installed
+                                    ? .success("")
+                                    : .failure(RoomTranslationError.languageResourcesRequired),
+                                suspendPair: false
+                            )
+                        } catch is CancellationError {
+                            if Task.isCancelled {
+                                await shared.deactivate(owner: owner, matching: hostID)
+                                break hostLoop
+                            }
+                            await shared.refreshResources(pair)
+                            await shared.finish(
+                                job.requestID,
+                                executionID: job.executionID,
+                                result: .failure(RoomTranslationError.unavailable),
+                                suspendPair: false
+                            )
+                        } catch {
+                            await shared.refreshResources(pair)
+                            await shared.finish(
+                                job.requestID,
+                                executionID: job.executionID,
+                                result: .failure(RoomTranslationError.unavailable),
+                                suspendPair: false
+                            )
                         }
-                        await shared.finish(
-                            job.requestID,
-                            executionID: job.executionID,
-                            result: .failure(RoomTranslationError.unavailable),
-                            suspendPair: true
-                        )
-                    } catch {
-                        await shared.finish(
-                            job.requestID,
-                            executionID: job.executionID,
-                            result: .failure(RoomTranslationError.unavailable),
-                            suspendPair: true
-                        )
+
+                    case .translations(let jobs):
+                        do {
+                            try Task.checkCancellation()
+                            let session: TranslationSession
+                            if jobs.first?.purpose == .automatic,
+                               #available(iOS 26.0, macOS 26.0, *) {
+                                if let installedOnlySession {
+                                    session = installedOnlySession
+                                } else {
+                                    let created: TranslationSession
+                                    if #available(iOS 26.4, macOS 26.4, *) {
+                                        created = TranslationSession(
+                                            installedSource: Locale.Language(identifier: sourceLanguage),
+                                            target: Locale.Language(identifier: targetLanguage),
+                                            preferredStrategy: .lowLatency
+                                        )
+                                    } else {
+                                        created = TranslationSession(
+                                            installedSource: Locale.Language(identifier: sourceLanguage),
+                                            target: Locale.Language(identifier: targetLanguage)
+                                        )
+                                    }
+                                    installedOnlySession = created
+                                    session = created
+                                }
+                            } else {
+                                session = downloadCapableSession
+                            }
+
+                            let responses = try await session.translations(from: jobs.map {
+                                TranslationSession.Request(
+                                    sourceText: $0.text,
+                                    clientIdentifier: $0.requestID.uuidString
+                                )
+                            })
+                            try Task.checkCancellation()
+                            let routed = RoomTranslationNativeBatchRouter.results(
+                                requestIDs: jobs.map(\.requestID),
+                                responses: responses.map {
+                                    RoomTranslationNativeBatchResponse(
+                                        clientIdentifier: $0.clientIdentifier,
+                                        targetText: $0.targetText
+                                    )
+                                }
+                            )
+                            await shared.markInstalled(pair)
+                            for job in jobs {
+                                await shared.finish(
+                                    job.requestID,
+                                    executionID: job.executionID,
+                                    result: routed[job.requestID].map(Result.success)
+                                        ?? .failure(RoomTranslationError.invalidResponse),
+                                    suspendPair: false
+                                )
+                            }
+                        } catch is CancellationError {
+                            if Task.isCancelled {
+                                await shared.deactivate(owner: owner, matching: hostID)
+                                break hostLoop
+                            }
+                            await shared.failTranslationWork(jobs, pair: pair)
+                        } catch {
+                            await shared.failTranslationWork(jobs, pair: pair)
+                        }
                     }
                 }
             }, onCancel: {
-                Task { @MainActor in
-                    shared.deactivate(owner: owner, matching: hostID)
-                }
+                Task { @MainActor in shared.deactivate(owner: owner, matching: hostID) }
             })
             await shared.deactivate(owner: owner, matching: hostID)
         }
     }
 
-    private func registerHost(owner: UUID, hostID: UUID, source: String, target: String) {
+    private func markInstalled(_ pair: NativeTranslationLanguagePair) {
+        resources.markInstalled(pair)
+    }
+
+    private func refreshResources(_ pair: NativeTranslationLanguagePair) async {
+        _ = await resources.refresh(pair)
+    }
+
+    private func refreshStatus(
+        _ pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationAvailabilityStatus {
+        await resources.refresh(pair)
+    }
+
+    private func registerHost(
+        owner: UUID,
+        hostID: UUID,
+        pair: NativeTranslationLanguagePair
+    ) {
         guard expectedHosts.contains(owner) else { return }
         deactivate(owner: owner, requeueActive: true)
         ownership.install(owner: owner, generation: hostID)
-        hosts[owner] = Host(
-            id: hostID,
-            pair: LanguagePair(source: source, target: target),
-            waiter: nil
-        )
+        hosts[owner] = Host(id: hostID, pair: pair, waiter: nil)
     }
 
-    private func nextJob(owner: UUID, hostID: UUID) async -> Job? {
+    private func nextWork(owner: UUID, hostID: UUID) async -> HostWork? {
         guard ownership.isCurrent(owner: owner, generation: hostID), hosts[owner] != nil else {
             return nil
         }
@@ -251,7 +498,7 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
                 request.continuation.resume(throwing: RoomTranslationError.unavailable)
             }
         }
-        advanceDesiredSource(for: host.pair.target)
+        advanceDesiredSource(for: host.pair.targetLanguage)
         drain()
     }
 
@@ -268,7 +515,7 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
         } else if let request = active.removeValue(forKey: requestID) {
             executions.remove(requestID: requestID)
             request.continuation.resume(throwing: CancellationError())
-            advanceDesiredSource(for: request.pair.target)
+            advanceDesiredSource(for: request.pair.targetLanguage)
             drain()
         }
     }
@@ -276,32 +523,84 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
     private func drain() {
         for owner in hosts.keys {
             guard var host = hosts[owner], let waiter = host.waiter else { continue }
-            guard let requestID = pendingOrder.first(where: { requestID in
+            guard let seedID = pendingOrder.first(where: { requestID in
                 guard let request = pending[requestID]?.request else { return false }
-                return request.sourceLanguage == host.pair.source
-                    && request.targetLanguage == host.pair.target
-            }), let request = pending.removeValue(forKey: requestID) else { continue }
+                return request.sourceLanguage == host.pair.sourceLanguage
+                    && request.targetLanguage == host.pair.targetLanguage
+            }), let seed = pending[seedID]?.request else { continue }
 
-            pendingOrder.removeAll { $0 == requestID }
+            let selectedIDs: [UUID]
+            if seed.purpose == .prepareLanguages {
+                selectedIDs = [seedID]
+            } else {
+                selectedIDs = Array(pendingOrder.lazy.filter { requestID in
+                    guard let request = self.pending[requestID]?.request else { return false }
+                    return request.sourceLanguage == host.pair.sourceLanguage
+                        && request.targetLanguage == host.pair.targetLanguage
+                        && request.purpose == seed.purpose
+                }.prefix(32))
+            }
+
+            var jobs: [Job] = []
+            for requestID in selectedIDs {
+                guard let request = pending.removeValue(forKey: requestID) else { continue }
+                pendingOrder.removeAll { $0 == requestID }
+                let executionID = executions.assign(requestID: requestID, owner: owner)
+                active[requestID] = Active(
+                    owner: owner,
+                    pair: host.pair,
+                    request: request.request,
+                    continuation: request.continuation
+                )
+                jobs.append(Job(
+                    requestID: requestID,
+                    executionID: executionID,
+                    text: request.request.text,
+                    purpose: request.request.purpose
+                ))
+            }
+            guard let firstJob = jobs.first else { continue }
             host.waiter = nil
             hosts[owner] = host
-            let executionID = executions.assign(requestID: requestID, owner: owner)
-            active[requestID] = Active(
-                owner: owner,
-                pair: host.pair,
-                request: request.request,
-                continuation: request.continuation
-            )
-            waiter.resume(returning: Job(
-                requestID: requestID,
-                executionID: executionID,
-                text: request.request.text
-            ))
+            waiter.resume(returning: firstJob.purpose == .prepareLanguages
+                ? .prepareLanguages(firstJob)
+                : .translations(jobs))
         }
 
         for target in Set(pending.values.map(\.request.targetLanguage)) {
             advanceDesiredSource(for: target)
         }
+    }
+
+    private func failTranslationWork(
+        _ jobs: [Job],
+        pair: NativeTranslationLanguagePair
+    ) async {
+        guard let first = jobs.first else { return }
+        let status = await resources.refresh(pair)
+        if first.purpose == .automatic, status != .installed {
+            let error: RoomTranslationError = status == .supported
+                ? .languageResourcesRequired
+                : .unavailable
+            for job in jobs {
+                finish(
+                    job.requestID,
+                    executionID: job.executionID,
+                    result: .failure(error),
+                    suspendPair: false
+                )
+            }
+            return
+        }
+        guard let representative = executions.firstCurrent(
+            in: jobs.map { (requestID: $0.requestID, executionID: $0.executionID) }
+        ) else { return }
+        finish(
+            representative.requestID,
+            executionID: representative.executionID,
+            result: .failure(RoomTranslationError.unavailable),
+            suspendPair: true
+        )
     }
 
     private func finish(
@@ -317,18 +616,16 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
             suspendedPairs.insert(request.pair)
             failQueuedRequests(for: request.pair)
         }
-        switch result {
-        case let .success(value): request.continuation.resume(returning: value)
-        case let .failure(error): request.continuation.resume(throwing: error)
-        }
-        advanceDesiredSource(for: request.pair.target)
+        request.continuation.resume(with: result)
+        advanceDesiredSource(for: request.pair.targetLanguage)
         drain()
     }
 
-    private func failQueuedRequests(for pair: LanguagePair) {
+    private func failQueuedRequests(for pair: NativeTranslationLanguagePair) {
         let pendingIDs = pendingOrder.filter { id in
             guard let request = pending[id]?.request else { return false }
-            return request.sourceLanguage == pair.source && request.targetLanguage == pair.target
+            return request.sourceLanguage == pair.sourceLanguage
+                && request.targetLanguage == pair.targetLanguage
         }
         for id in pendingIDs {
             guard let request = pending.removeValue(forKey: id) else { continue }
@@ -336,7 +633,7 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
         }
         pendingOrder.removeAll { pendingIDs.contains($0) }
 
-        let activeIDs = active.compactMap { id, request in request.pair == pair ? id : nil }
+        let activeIDs = active.compactMap { $0.value.pair == pair ? $0.key : nil }
         for id in activeIDs {
             guard let request = active.removeValue(forKey: id) else { continue }
             executions.remove(requestID: id)
@@ -349,7 +646,7 @@ final class AppleRoomTranslationProvider: RoomTranslationProvider, RoomTranslati
         let hasCurrentWork = pending.values.contains {
             $0.request.targetLanguage == target && $0.request.sourceLanguage == current
         } || active.values.contains {
-            $0.pair.target == target && $0.pair.source == current
+            $0.pair.targetLanguage == target && $0.pair.sourceLanguage == current
         }
         guard !hasCurrentWork,
               let next = pendingOrder.lazy.compactMap({ self.pending[$0]?.request }).first(where: {

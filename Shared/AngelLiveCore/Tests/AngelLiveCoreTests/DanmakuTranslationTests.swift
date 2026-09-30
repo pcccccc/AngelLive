@@ -99,6 +99,110 @@ struct DanmakuTranslationTests {
     }
 
     @Test @MainActor
+    func automaticDanmakuRejectsNonCommonSourcesForAppleAndLLM() async throws {
+        for engine in [RoomTranslationEngine.apple, .llm] {
+            let fixture = DanmakuSettingsFixture()
+            fixture.settings.isDanmakuEnabled = true
+            fixture.settings.engine = engine
+            if engine == .llm {
+                try fixture.settings.saveCloudConfiguration(
+                    baseURL: "https://api.example.invalid/v1",
+                    model: "fixture-model",
+                    apiKey: "fixture-secret"
+                )
+            }
+            let provider = DanmakuPrefixProvider()
+            let pipeline = makePipeline(
+                fixture: fixture,
+                provider: provider,
+                detector: DanmakuFixedLanguageDetector(language: "fr-FR")
+            )
+            let original = message("Un message neutre")
+
+            #expect(await deliveredMessage(from: pipeline, message: original) == original)
+            #expect(await provider.callCount == 0)
+        }
+    }
+
+    @Test @MainActor
+    func commonDanmakuLanguageVariantTranslatesAndSameBaseTargetSkips() async {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        let provider = DanmakuPrefixProvider()
+        let translatedPipeline = makePipeline(
+            fixture: fixture,
+            provider: provider,
+            detector: DanmakuFixedLanguageDetector(language: "ko-KR")
+        )
+        #expect(
+            await deliveredMessage(from: translatedPipeline, message: message("fixture message")).text
+                == "译:fixture message"
+        )
+
+        fixture.settings.targetLanguage = "en-US"
+        let sameLanguagePipeline = makePipeline(
+            fixture: fixture,
+            provider: provider,
+            detector: DanmakuFixedLanguageDetector(language: "en-GB")
+        )
+        let original = message("Same language message")
+        #expect(await deliveredMessage(from: sameLanguagePipeline, message: original) == original)
+        #expect(await provider.callCount == 1)
+    }
+
+    @Test @MainActor
+    func nativeBurstTranslatesFortyUniqueMessagesWhileCloudBudgetIsOccupied() async throws {
+        let broker = DanmakuTranslationBroker()
+
+        let cloudFixture = DanmakuSettingsFixture()
+        cloudFixture.settings.isDanmakuEnabled = true
+        try cloudFixture.settings.saveCloudConfiguration(
+            baseURL: "https://api.example.invalid/v1",
+            model: "fixture-model",
+            apiKey: "fixture-secret"
+        )
+        cloudFixture.settings.engine = .llm
+        let cloudProvider = DanmakuControlledProvider(
+            behaviors: ["Cloud first": .hold, "Cloud second": .value("云端第二条译文")]
+        )
+        let cloudPipeline = makePipeline(
+            fixture: cloudFixture,
+            provider: cloudProvider,
+            broker: broker
+        )
+        let cloudLog = DanmakuDeliveryLog()
+        cloudPipeline.enqueue(message("Cloud first")) { cloudLog.messages.append($0) }
+        cloudPipeline.enqueue(message("Cloud second")) { cloudLog.messages.append($0) }
+        await cloudProvider.waitForCallCount(1)
+
+        let nativeFixture = DanmakuSettingsFixture()
+        nativeFixture.settings.isDanmakuEnabled = true
+        nativeFixture.settings.engine = .apple
+        let nativeProvider = DanmakuPrefixProvider()
+        let nativePipeline = makePipeline(
+            fixture: nativeFixture,
+            provider: nativeProvider,
+            detector: DanmakuFixedLanguageDetector(language: "ko"),
+            broker: broker
+        )
+        let nativeLog = DanmakuDeliveryLog()
+        for index in 0..<40 {
+            nativePipeline.enqueue(message("Native message \(index)")) {
+                nativeLog.messages.append($0)
+            }
+        }
+        await waitForDeliveryCount(40, in: nativeLog)
+        #expect(nativeLog.messages.map(\.text) == (0..<40).map { "译:Native message \($0)" })
+        #expect(await nativeProvider.callCount == 40)
+        #expect(await cloudProvider.callCount == 1)
+
+        await cloudProvider.resume("Cloud first", returning: "云端第一条译文")
+        await waitForDeliveryCount(2, in: cloudLog)
+        #expect(cloudLog.messages.map(\.text) == ["云端第一条译文", "Cloud second"])
+        #expect(await cloudProvider.callCount == 1)
+    }
+
+    @Test @MainActor
     func timeoutPreservesArrivalOrderAndRetiredRateLimitFailureDoesNotSuppressNewWork() async {
         let fixture = DanmakuSettingsFixture()
         fixture.settings.isDanmakuEnabled = true
@@ -109,7 +213,10 @@ struct DanmakuTranslationTests {
                 "Third message": .value("第三条译文")
             ]
         )
-        let broker = DanmakuTranslationBroker(maximumConcurrent: 2, minimumRequestInterval: .zero)
+        let broker = DanmakuTranslationBroker(
+            nativeMaximumConcurrent: 2,
+            cloudMinimumRequestInterval: .zero
+        )
         let pipeline = makePipeline(
             fixture: fixture,
             provider: provider,
@@ -147,7 +254,10 @@ struct DanmakuTranslationTests {
         let pipeline = makePipeline(
             fixture: fixture,
             provider: provider,
-            broker: DanmakuTranslationBroker(maximumConcurrent: 2, minimumRequestInterval: .zero),
+            broker: DanmakuTranslationBroker(
+                nativeMaximumConcurrent: 2,
+                cloudMinimumRequestInterval: .zero
+            ),
             maximumPending: 2,
             messageTimeout: .seconds(1)
         )
@@ -175,7 +285,10 @@ struct DanmakuTranslationTests {
         let pipeline = makePipeline(
             fixture: fixture,
             provider: provider,
-            broker: DanmakuTranslationBroker(maximumConcurrent: 2, minimumRequestInterval: .zero),
+            broker: DanmakuTranslationBroker(
+                nativeMaximumConcurrent: 2,
+                cloudMinimumRequestInterval: .zero
+            ),
             messageTimeout: .seconds(1)
         )
         let log = DanmakuDeliveryLog()
@@ -204,7 +317,7 @@ struct DanmakuTranslationTests {
         let pipeline = makePipeline(
             fixture: fixture,
             provider: provider,
-            broker: DanmakuTranslationBroker(minimumRequestInterval: .zero)
+            broker: DanmakuTranslationBroker(cloudMinimumRequestInterval: .zero)
         )
         let log = DanmakuDeliveryLog()
         let pending = message("Pending message")
@@ -222,13 +335,19 @@ struct DanmakuTranslationTests {
     }
 
     @Test @MainActor
-    func sharedBrokerDeduplicatesCachesRateLimitsAndCapsProviderConcurrency() async {
+    func sharedBrokerDeduplicatesCachesRateLimitsAndCapsProviderConcurrency() async throws {
         let fixture = DanmakuSettingsFixture()
         fixture.settings.isDanmakuEnabled = true
+        try fixture.settings.saveCloudConfiguration(
+            baseURL: "https://api.example.invalid/v1",
+            model: "fixture-model",
+            apiKey: "fixture-secret"
+        )
+        fixture.settings.engine = .llm
         let provider = DanmakuControlledProvider(behaviors: ["Shared message": .hold])
         let broker = DanmakuTranslationBroker(
-            maximumConcurrent: 2,
-            minimumRequestInterval: .seconds(1)
+            cloudMaximumConcurrent: 2,
+            cloudMinimumRequestInterval: .seconds(1)
         )
         let pipeline = makePipeline(fixture: fixture, provider: provider, broker: broker)
         let log = DanmakuDeliveryLog()
@@ -254,7 +373,10 @@ struct DanmakuTranslationTests {
         let concurrencyPipeline = makePipeline(
             fixture: fixture,
             provider: concurrencyProvider,
-            broker: DanmakuTranslationBroker(maximumConcurrent: 2, minimumRequestInterval: .zero)
+            broker: DanmakuTranslationBroker(
+                cloudMaximumConcurrent: 2,
+                cloudMinimumRequestInterval: .zero
+            )
         )
         let concurrencyLog = DanmakuDeliveryLog()
         concurrencyPipeline.enqueue(message("Alpha message")) { concurrencyLog.messages.append($0) }
@@ -281,7 +403,7 @@ struct DanmakuTranslationTests {
                 .success("弹幕重试成功")
             ]
         )
-        let broker = DanmakuTranslationBroker(minimumRequestInterval: .zero)
+        let broker = DanmakuTranslationBroker(cloudMinimumRequestInterval: .zero)
         let firstKey = danmakuKey(text: "First message", revision: fixture.settings.revision)
         let firstRequest = danmakuRequest(text: "First message")
         await #expect(throws: RoomTranslationError.rateLimited) {
@@ -444,17 +566,27 @@ private func makePipeline(
     fixture: DanmakuSettingsFixture,
     provider: any RoomTranslationProvider,
     detector: any RoomTitleLanguageDetecting = DanmakuFixedLanguageDetector(language: "en"),
-    broker: DanmakuTranslationBroker = DanmakuTranslationBroker(minimumRequestInterval: .zero),
-    maximumPending: Int = 32,
+    broker: DanmakuTranslationBroker = DanmakuTranslationBroker(cloudMinimumRequestInterval: .zero),
+    maximumPending: Int? = nil,
     messageTimeout: Duration = .seconds(1)
 ) -> DanmakuTranslationPipeline {
-    DanmakuTranslationPipeline(
+    if let maximumPending {
+        return DanmakuTranslationPipeline(
+            settings: fixture.settings,
+            languageDetector: detector,
+            appleProvider: provider,
+            llmProvider: provider,
+            broker: broker,
+            maximumPending: maximumPending,
+            messageTimeout: messageTimeout
+        )
+    }
+    return DanmakuTranslationPipeline(
         settings: fixture.settings,
         languageDetector: detector,
         appleProvider: provider,
         llmProvider: provider,
         broker: broker,
-        maximumPending: maximumPending,
         messageTimeout: messageTimeout
     )
 }

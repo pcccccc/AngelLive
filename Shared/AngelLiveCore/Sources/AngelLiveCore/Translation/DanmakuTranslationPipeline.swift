@@ -22,23 +22,27 @@ actor DanmakuTranslationBroker {
     }
 
     private let cacheCapacity: Int
-    private let maximumConcurrent: Int
-    private let minimumRequestInterval: Duration
+    private let nativeMaximumConcurrent: Int
+    private let cloudMaximumConcurrent: Int
+    private let cloudMinimumRequestInterval: Duration
     private let clock = ContinuousClock()
     private var cache: [RoomTranslationCacheKey: String] = [:]
     private var cacheOrder: [RoomTranslationCacheKey] = []
     private var flights: [RoomTranslationCacheKey: Flight] = [:]
-    private var lastProviderStart: ContinuousClock.Instant?
-    private var suppressedFailure: (revision: Int, error: RoomTranslationError)?
+    private var lastCloudProviderStart: ContinuousClock.Instant?
+    private var nativeSuppressedFailure: (revision: Int, error: RoomTranslationError)?
+    private var cloudSuppressedFailure: (revision: Int, error: RoomTranslationError)?
 
     init(
         cacheCapacity: Int = 200,
-        maximumConcurrent: Int = 2,
-        minimumRequestInterval: Duration = .seconds(1)
+        nativeMaximumConcurrent: Int = 64,
+        cloudMaximumConcurrent: Int = 2,
+        cloudMinimumRequestInterval: Duration = .seconds(1)
     ) {
         self.cacheCapacity = max(1, cacheCapacity)
-        self.maximumConcurrent = max(1, maximumConcurrent)
-        self.minimumRequestInterval = minimumRequestInterval
+        self.nativeMaximumConcurrent = max(1, nativeMaximumConcurrent)
+        self.cloudMaximumConcurrent = max(1, cloudMaximumConcurrent)
+        self.cloudMinimumRequestInterval = cloudMinimumRequestInterval
     }
 
     func translate(
@@ -66,8 +70,12 @@ actor DanmakuTranslationBroker {
     }
 
     func prepareForExplicitRetry(revision: Int) {
-        guard suppressedFailure?.revision == revision else { return }
-        suppressedFailure = nil
+        if nativeSuppressedFailure?.revision == revision {
+            nativeSuppressedFailure = nil
+        }
+        if cloudSuppressedFailure?.revision == revision {
+            cloudSuppressedFailure = nil
+        }
     }
 
     private func register(
@@ -99,20 +107,24 @@ actor DanmakuTranslationBroker {
             return
         }
 
-        if let suppressedFailure, suppressedFailure.revision == key.configurationRevision {
+        if let suppressedFailure = suppressedFailure(for: key.engine),
+           suppressedFailure.revision == key.configurationRevision {
             continuation.resume(throwing: suppressedFailure.error)
             return
         }
-        guard flights.count < maximumConcurrent else {
+        guard activeFlightCount(for: key.engine) < maximumConcurrent(for: key.engine) else {
             continuation.resume(throwing: RoomTranslationError.busy)
             return
         }
 
         let now = clock.now
-        if let lastProviderStart,
-           lastProviderStart.duration(to: now) < minimumRequestInterval {
-            continuation.resume(throwing: RoomTranslationError.rateLimited)
-            return
+        if key.engine == .llm {
+            if let lastCloudProviderStart,
+               lastCloudProviderStart.duration(to: now) < cloudMinimumRequestInterval {
+                continuation.resume(throwing: RoomTranslationError.rateLimited)
+                return
+            }
+            lastCloudProviderStart = now
         }
 
         let flightID = UUID()
@@ -128,8 +140,6 @@ actor DanmakuTranslationBroker {
             consumers: [consumerID: consumer],
             acceptsConsumers: true
         )
-        lastProviderStart = now
-
         let task = Task { [provider] in
             let completion: Completion
             do {
@@ -208,7 +218,10 @@ actor DanmakuTranslationBroker {
             }
         case .failure(let error):
             if error == .authentication || error == .rateLimited {
-                suppressedFailure = (key.configurationRevision, error)
+                setSuppressedFailure(
+                    (key.configurationRevision, error),
+                    for: key.engine
+                )
             }
             result = .failure(error)
         case .cancelled:
@@ -226,6 +239,38 @@ actor DanmakuTranslationBroker {
         flight.acceptsConsumers = false
         flight.task?.cancel()
         flights[key] = flight
+    }
+
+    private func activeFlightCount(for engine: RoomTranslationEngine) -> Int {
+        flights.keys.reduce(into: 0) { count, key in
+            if key.engine == engine { count += 1 }
+        }
+    }
+
+    private func maximumConcurrent(for engine: RoomTranslationEngine) -> Int {
+        switch engine {
+        case .apple: nativeMaximumConcurrent
+        case .llm: cloudMaximumConcurrent
+        }
+    }
+
+    private func suppressedFailure(
+        for engine: RoomTranslationEngine
+    ) -> (revision: Int, error: RoomTranslationError)? {
+        switch engine {
+        case .apple: nativeSuppressedFailure
+        case .llm: cloudSuppressedFailure
+        }
+    }
+
+    private func setSuppressedFailure(
+        _ failure: (revision: Int, error: RoomTranslationError),
+        for engine: RoomTranslationEngine
+    ) {
+        switch engine {
+        case .apple: nativeSuppressedFailure = failure
+        case .llm: cloudSuppressedFailure = failure
+        }
     }
 
     private func touch(_ key: RoomTranslationCacheKey) {
@@ -287,7 +332,7 @@ public final class DanmakuTranslationPipeline {
     public convenience init() {
         self.init(
             settings: .shared,
-            languageDetector: NaturalRoomTitleLanguageDetector(),
+            languageDetector: NaturalDanmakuLanguageDetector(),
             appleProvider: liveAppleRoomTranslationProvider(),
             llmProvider: OpenAICompatibleTranslationProvider.live(),
             broker: .shared
@@ -300,7 +345,7 @@ public final class DanmakuTranslationPipeline {
         appleProvider: any RoomTranslationProvider,
         llmProvider: any RoomTranslationProvider,
         broker: DanmakuTranslationBroker,
-        maximumPending: Int = 32,
+        maximumPending: Int = 128,
         messageTimeout: Duration = .seconds(3)
     ) {
         self.settings = settings
@@ -390,6 +435,7 @@ public final class DanmakuTranslationPipeline {
             guard case .text(let text) = segment,
                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   let source = languageDetector.sourceLanguage(for: text),
+                  RoomTranslationLanguageCatalog.supportsAutomaticTranslation(from: source),
                   !roomTranslationLanguagesMatch(source, target) else {
                 return .unchanged(segment)
             }

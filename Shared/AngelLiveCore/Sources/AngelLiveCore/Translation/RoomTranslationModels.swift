@@ -24,6 +24,7 @@ public enum RoomTranslationError: Error, LocalizedError, Equatable, Sendable {
     case serviceUnavailable
     case invalidResponse
     case busy
+    case languageResourcesRequired
 
     public var errorDescription: String? {
         switch self {
@@ -47,13 +48,82 @@ public enum RoomTranslationError: Error, LocalizedError, Equatable, Sendable {
             "翻译服务返回了无法识别的结果。"
         case .busy:
             "等待翻译的标题较多，请稍后重试。"
+        case .languageResourcesRequired:
+            "请在翻译设置中下载所需语言包。"
         }
+    }
+}
+
+public struct NativeTranslationLanguagePair: Identifiable, Hashable, Sendable {
+    public let sourceLanguage: String
+    public let targetLanguage: String
+
+    public init(sourceLanguage: String, targetLanguage: String) {
+        self.sourceLanguage = sourceLanguage
+        self.targetLanguage = targetLanguage
+    }
+
+    public var id: String { "\(sourceLanguage)\u{0}\(targetLanguage)" }
+
+    public var displayName: String {
+        "\(Self.languageName(sourceLanguage)) → \(Self.languageName(targetLanguage))"
+    }
+
+    private static func languageName(_ identifier: String) -> String {
+        switch identifier {
+        case "en": "英语"
+        case "ja": "日语"
+        case "ko": "韩语"
+        case "zh-Hans": "中文简体"
+        case "zh-Hant": "中文繁体"
+        default: Locale(identifier: "zh-Hans").localizedString(forIdentifier: identifier) ?? identifier
+        }
+    }
+}
+
+public enum NativeTranslationLanguageStatus: Sendable, Equatable {
+    case checking
+    case notDownloaded
+    case installed
+    case unsupported
+}
+
+enum RoomTranslationLanguageCatalog {
+    static let commonSourceLanguages = ["en", "ja", "ko"]
+
+    static func supportsAutomaticTranslation(from language: String) -> Bool {
+        guard let base = baseLanguage(of: language) else { return false }
+        return commonSourceLanguages.contains(base)
+    }
+
+    static func nativePairs(targetLanguage: String) -> [NativeTranslationLanguagePair] {
+        commonSourceLanguages.compactMap { sourceLanguage in
+            guard !roomTranslationLanguagesMatch(sourceLanguage, targetLanguage) else { return nil }
+            return NativeTranslationLanguagePair(
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage
+            )
+        }
+    }
+
+    private static func baseLanguage(of language: String) -> String? {
+        language
+            .replacingOccurrences(of: "_", with: "-")
+            .split(separator: "-", maxSplits: 1)
+            .first
+            .map { $0.lowercased() }
     }
 }
 
 enum RoomTranslationContentKind: Hashable, Sendable {
     case roomTitle
     case danmaku
+}
+
+enum RoomTranslationRequestPurpose: Hashable, Sendable {
+    case automatic
+    case explicitTest
+    case prepareLanguages
 }
 
 struct RoomTranslationRequest: Sendable {
@@ -64,6 +134,7 @@ struct RoomTranslationRequest: Sendable {
     let model: String?
     let apiKey: String?
     let contentKind: RoomTranslationContentKind
+    let purpose: RoomTranslationRequestPurpose
 
     init(
         text: String,
@@ -72,7 +143,8 @@ struct RoomTranslationRequest: Sendable {
         baseURL: URL?,
         model: String?,
         apiKey: String?,
-        contentKind: RoomTranslationContentKind = .roomTitle
+        contentKind: RoomTranslationContentKind = .roomTitle,
+        purpose: RoomTranslationRequestPurpose = .automatic
     ) {
         self.text = text
         self.sourceLanguage = sourceLanguage
@@ -81,6 +153,7 @@ struct RoomTranslationRequest: Sendable {
         self.model = model
         self.apiKey = apiKey
         self.contentKind = contentKind
+        self.purpose = purpose
     }
 }
 
@@ -90,6 +163,14 @@ protocol RoomTranslationProvider: Sendable {
 
 protocol RoomTranslationRetrying: Sendable {
     func prepareForExplicitRetry() async
+}
+
+@MainActor
+protocol RoomTranslationLanguagePreparing: Sendable {
+    func prepareLanguages(sourceLanguage: String, targetLanguage: String) async throws
+    func nativeLanguageStatus(
+        for pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationLanguageStatus
 }
 
 protocol RoomTitleLanguageDetecting: Sendable {
