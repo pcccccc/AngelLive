@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import AngelLiveCore
 
-@Suite("Danmaku translation", .serialized)
+@Suite("Danmaku translation", .serialized, .timeLimit(.minutes(1)))
 struct DanmakuTranslationTests {
     @Test @MainActor
     func settingsDefaultOffAndIndependentFromRoomTitles() {
@@ -558,7 +558,35 @@ private actor DanmakuSequenceProvider: RoomTranslationProvider {
 
 @MainActor
 private final class DanmakuDeliveryLog {
-    var messages: [DanmakuDisplayMessage] = []
+    var messages: [DanmakuDisplayMessage] = [] {
+        didSet {
+            guard let waiter, messages.count >= waiter.count else { return }
+            self.waiter = nil
+            waiter.continuation.resume()
+        }
+    }
+
+    // Each log is awaited sequentially by its owning test.
+    private var waiter: (count: Int, continuation: CheckedContinuation<Void, Never>)?
+
+    func waitForCount(_ count: Int) async {
+        guard messages.count < count, !Task.isCancelled else { return }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume()
+                } else {
+                    waiter = (count, continuation)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in
+                let waiter = self.waiter
+                self.waiter = nil
+                waiter?.continuation.resume()
+            }
+        }
+    }
 }
 
 @MainActor
@@ -603,11 +631,7 @@ private func deliveredMessage(
 
 @MainActor
 private func waitForDeliveryCount(_ count: Int, in log: DanmakuDeliveryLog) async {
-    let clock = ContinuousClock()
-    let deadline = clock.now.advanced(by: .seconds(2))
-    while log.messages.count < count, clock.now < deadline {
-        try? await Task.sleep(for: .milliseconds(2))
-    }
+    await log.waitForCount(count)
     #expect(log.messages.count == count)
 }
 
