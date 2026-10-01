@@ -66,7 +66,7 @@ Apple 提供两条相关路径：
 
 - Core 全量 379 项／51 组通过，包含新增的独立字幕偏好测试；日志 `/tmp/angellive-subtitle-core-all-tests.log`。
 - Dependencies 常规运行报告 10 项／3 组通过，两个需外部前置条件的联调项跳过。新增 PCM 测试含 2 组交错／非交错复制和 6 组采样率／声道转换用例；日志 `/tmp/angellive-subtitle-dependencies-all-tests.log`。
-- 另行显式启用原生联调，使用 macOS 官方语音合成的中性视频，KSME 解码音频经生产 `LiveSubtitleSession` 送入 SpeechAnalyzer，识别出“Today we are checking the subtitle feature”。暂停后字幕清空，停止后任务正常退出并移除自身音频回调；1 项／1 组通过，耗时 6.788 秒。日志 `/tmp/angellive-subtitle-native-tests.log`。这证明真实识别链路，不等同于手机直播画面已经验收。
+- 另行显式启用原生联调，使用 macOS 官方语音合成的中性视频，KSME 解码音频经生产 `LiveSubtitleSession` 送入 SpeechAnalyzer，识别出“Today we are checking the subtitle feature”。暂停后字幕清空，停止后任务正常退出并移除自身音频回调；1 项／1 组通过，耗时 6.788 秒。之后将测试播放器静音，重新运行仍识别出同一句话，暂停和停止清理再次通过，耗时 6.733 秒；该测试最终保留静音模式。日志为 `/tmp/angellive-subtitle-native-tests.log` 和 `/tmp/angellive-subtitle-native-muted-tests.log`。这证明使用解码音频的真实识别链路，不等同于手机直播画面已经验收。
 
 该原生联调默认不运行，仅在设置 `ANGELLIVE_SUBTITLE_AUDIO_FIXTURE` 指向无敏感内容的合成视频时启用。需先在 App 中明确点击安装英语语音模型；独立测试进程先通过 `AssetInventory.reserve(locale:)` 登记所用语言，再查询资源。首次未登记时只读状态仍为 supported，测试按前置条件失败；登记后使用已安装资源成功，不触发自动下载。
 
@@ -74,7 +74,9 @@ macOS 27.0（26A428）：初版设置中点击英语模型下载，观察到真�
 
 iPhone 17／iOS 27.0 模拟器：最后源码后新的 `DeviceInteractionInstallAndRun` 成功，并捕获 Running 状态。首轮截图遇到一次 `Session not found`，单次重试后成功。结束 Device Hub 后由单一设备负责人使用 AXe，完成“设置 → 翻译与字幕 → 来源语言”的实际交互：四项可见、选日语后值更新、恢复英语、返回设置页。模拟器显示“当前设备不支持实时字幕”，开关保持关闭；原尺寸可见区域无明显裁切或重叠。当前环境没有 `jev-ios` CLI，因此本轮没有 JEV scenario 通过记录。报告与截图位于 `runs/live-subtitles-ios/`，所有 Device Hub session 已结束。
 
-仍未验证：iOS／tvOS 真机语音能力和真实直播中的字幕显示、字幕与控制区的画面关系、tvOS 安装及遥控器焦点、额外浅／深色组合。当前只证明 macOS 的真实转写链路和三端构建，不将这些结果扩大为三端真实字幕通过。
+Apple TV 4K（第 3 代）／tvOS 27.0 模拟器：最后源码后另建 workspace session，`DeviceInteractionInstallAndRun` 成功；随后捕获 Running 首页与“立即观看”焦点，证明新包启动。两次有效捕获后遥控器操作返回 `Session not found`。同一持续运行的 bridge 内进行一次完整重试，Start 返回新的 key，但紧接的 InstallAndRun 返回 `Session with that key doesn't exist`；已核对请求字段符合当次 schema，且使用的 key 与新返回值完全一致。停止交互，End 返回 session 已不存在，恢复 `AngelLive`／iPhone 17 运行目标。设置入口和字幕相关焦点仍被 session 故障阻塞，不能计作通过。原始响应为 `/tmp/angellive-subtitle-tvos-final-mcp-5.json` 至 `-13.json`；新包首页证据位于 `runs/live-subtitles-tvos/07-home.png`。
+
+仍未验证：iOS／tvOS 真机语音能力和真实直播中的字幕显示、字幕与控制区的画面关系、tvOS 设置及字幕交互、额外浅／深色组合。当前只证明 macOS 的真实转写链路、三端构建和上述实际交互，不将这些结果扩大为三端真实字幕通过。
 
 ## 官方参考
 
