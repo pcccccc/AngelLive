@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 import Kingfisher
 
 struct SettingView: View {
@@ -453,6 +454,8 @@ struct TranslationSettingView: View {
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
+
+            LiveSubtitleSettingsSection()
 
             Section {
                 Picker(selection: $settings.engine) {

@@ -153,6 +153,20 @@ struct DetailPlayerView: View {
                     }
                     .zIndex(2)
                 }
+
+                #if canImport(KSPlayer)
+                if let url = roomInfoViewModel.currentPlayURL {
+                    Color.clear
+                        .allowsHitTesting(false)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .liveSubtitleOverlay(
+                            coordinator: playerCoordinator,
+                            playbackIdentity: url.absoluteString,
+                            bottomPadding: 64
+                        )
+                        .zIndex(2.5)
+                }
+                #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
                 endPlay()

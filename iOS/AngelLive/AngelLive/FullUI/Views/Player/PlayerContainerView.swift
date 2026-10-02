@@ -329,6 +329,19 @@ struct PlayerContentView: View {
                         #endif
                     }
 
+                    #if canImport(KSPlayer)
+                    if useKSPlayer {
+                        Color.clear
+                            .allowsHitTesting(false)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .liveSubtitleOverlay(
+                                coordinator: playerCoordinator,
+                                playbackIdentity: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)",
+                                bottomPadding: isDeviceLandscape ? 48 : 16
+                            )
+                    }
+                    #endif
+
                     // 竖屏直播模式使用专用控制层，普通模式使用统一控制层
                     #if canImport(KSPlayer)
                     if isVerticalLiveMode && useKSPlayer {

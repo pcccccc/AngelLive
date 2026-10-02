@@ -118,6 +118,7 @@ enum RoomTranslationLanguageCatalog {
 enum RoomTranslationContentKind: Hashable, Sendable {
     case roomTitle
     case danmaku
+    case subtitle
 }
 
 enum RoomTranslationRequestPurpose: Hashable, Sendable {

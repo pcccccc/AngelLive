@@ -43,6 +43,15 @@ struct RoomPlayerView: View {
         SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType) != nil
     }
 
+    private var canShowLiveSubtitleSurface: Bool {
+        switch viewModel.displayState {
+        case .loading, .playing:
+            return true
+        case .error, .streamerOffline:
+            return false
+        }
+    }
+
     var body: some View {
         @Bindable var viewModel = viewModel
         GeometryReader { geometry in
@@ -51,6 +60,19 @@ struct RoomPlayerView: View {
                 playerSurface(for: viewModel)
 
                 danmuOverlay(for: geometry.size)
+
+                #if canImport(KSPlayer)
+                if canShowLiveSubtitleSurface, let url = viewModel.currentPlayURL {
+                    Color.clear
+                        .allowsHitTesting(false)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .liveSubtitleOverlay(
+                            coordinator: coordinator,
+                            playbackIdentity: url.absoluteString,
+                            bottomPadding: 64
+                        )
+                }
+                #endif
 
                 // 控制层
                 PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume, isMuted: $isMuted)

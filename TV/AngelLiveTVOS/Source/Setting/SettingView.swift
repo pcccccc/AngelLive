@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 import Kingfisher
 
 extension Int: @retroactive Identifiable {
@@ -468,6 +469,8 @@ struct TranslationSettingView: View {
                     .font(.system(size: 22))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                LiveSubtitleSettingsSection()
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("翻译引擎")

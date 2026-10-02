@@ -2,9 +2,9 @@
 
 ## 目标与第一版范围
 
-在 FullUI 的直播画面中显示主播语音的原文字幕，先采用 Apple 本机语音识别，不录制麦克风，不调用付费语音服务。字幕默认关闭，独立于房间标题和弹幕翻译开关。
+在 FullUI 的直播画面中采用 Apple 本机语音识别，并通过当前翻译引擎显示目标语言字幕；不录制麦克风。字幕默认关闭，独立于房间标题和弹幕翻译开关。
 
-设置复用现有“翻译与字幕”页面的分组、系统开关和选择器。固定提供英语、日语、韩语、中文普通话四种来源语言，由用户选择与主播一致的语言；是否可用及模型是否安装均查询系统真实状态。第一版不自动检测语音语言、不增加其他语言，也不将原文字幕自动翻译成中文。
+设置复用现有“翻译与字幕”页面的分组、系统开关和选择器。固定提供英语、日语、韩语、中文普通话四种来源语言，由用户选择与主播一致的语言；是否可用及模型是否安装均查询系统真实状态。不自动检测语音语言、不增加其他语言。字幕翻译复用现有目标语言、Apple／大模型引擎和安全凭据；默认目标为中文简体。等待或翻译失败时保留原文，同语言直接显示原文。
 
 语音模型与文字翻译语言包是两类资源，分别展示状态。模型仅在点击“下载”后安装，显示 Speech `AssetInstallationRequest.progress` 的真实百分比；打开直播或开启字幕不会自动下载。失败显示明确错误，不能把未完成安装当作就绪。
 
@@ -32,10 +32,11 @@ Apple 提供两条相关路径：
 ## 模块与凭据
 
 - `AngelLiveCore/Translation/LiveSubtitleSettings.swift`：本设备开关和来源语言，不影响标题／弹幕设置。
+- `AngelLiveCore/Translation/LiveSubtitleTranslationPipeline.swift`：字幕独立翻译，一个进行中的请求和一个可覆盖的最新待处理输入；来源遵守现有英语／日语／韩语范围，按 Speech 片段起始时间隔离迟到结果。
 - `AngelLiveDependencies/LiveSubtitleSession.swift`：播放器音频桥接、格式转换、模型状态、显式下载和 Speech 生命周期。
 - `AngelLiveDependencies/LiveSubtitleViews.swift`：共享设置行与字幕覆盖层，由三端 FullUI 页面使用。
 
-不需要 API Key，不改变插件协议，不将音频、字幕或账号凭据写入日志、仓库及同步数据。
+Apple 原生识别和翻译不需要 API Key；选择大模型翻译时沿用既有用户配置。大模型仅发送识别文本，不发送音频。不改变插件协议，不将音频、字幕或账号凭据写入日志、仓库及同步数据。
 
 ## 验收门禁与当前进度
 
@@ -77,6 +78,12 @@ iPhone 17／iOS 27.0 模拟器：最后源码后新的 `DeviceInteractionInstall
 Apple TV 4K（第 3 代）／tvOS 27.0 模拟器：最后源码后另建 workspace session，`DeviceInteractionInstallAndRun` 成功；随后捕获 Running 首页与“立即观看”焦点，证明新包启动。两次有效捕获后遥控器操作返回 `Session not found`。同一持续运行的 bridge 内进行一次完整重试，Start 返回新的 key，但紧接的 InstallAndRun 返回 `Session with that key doesn't exist`；已核对请求字段符合当次 schema，且使用的 key 与新返回值完全一致。停止交互，End 返回 session 已不存在，恢复 `AngelLive`／iPhone 17 运行目标。设置入口和字幕相关焦点仍被 session 故障阻塞，不能计作通过。原始响应为 `/tmp/angellive-subtitle-tvos-final-mcp-5.json` 至 `-13.json`；新包首页证据位于 `runs/live-subtitles-tvos/07-home.png`。
 
 仍未验证：iOS／tvOS 真机语音能力和真实直播中的字幕显示、字幕与控制区的画面关系、tvOS 设置及字幕交互、额外浅／深色组合。当前只证明 macOS 的真实转写链路、三端构建和上述实际交互，不将这些结果扩大为三端真实字幕通过。
+
+### 2026-10-02 翻译补齐与推送前状态
+
+macOS 实际直播播放器曾显示 Apple 识别的英语字幕，原图为 `runs/live-subtitles-mac/2026-10-02/live-caption-retry.png`；这张图仅证明原文识别和字幕覆盖层，未显示中文翻译。该播放源随后出现起播超时，稳定性未计作通过。
+
+随后增加字幕翻译 pipeline，复用既有 Apple／兼容 AI provider，自动翻译不触发语言包下载。Speech 结果携带片段 ID，同片段更新合并，换段／配置变化／退出取消旧任务；成功显示译文，等待或失败回退原文，错误复用原有短提示。Core 新增 5 项状态与取消测试已通过。用户要求停止截图并推送，因此最新字幕翻译尚无最终 workspace 三端构建及真实中文字幕画面证据，前述三端构建结果只对应翻译补齐前的源码。
 
 ## 官方参考
 
