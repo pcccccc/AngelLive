@@ -49,8 +49,8 @@ struct ContentView: View {
     // CloudKit 插件源同步
     @State private var pluginSourceSyncService = PluginSourceSyncService()
     @State private var showPluginSyncPrompt = false
-    @State private var showCloudInstallProgress = false
-    @State private var cloudInstallResult: CloudPluginInstallResult?
+    @State private var pluginInstallation = PluginInstallationCoordinator()
+    @State private var pendingPluginInstallationEntry: PluginInstallationEntry?
 
     // 插件订阅 / 安装确认请求器
     @State private var consentService = PluginInstallConsentService()
@@ -183,6 +183,7 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var manager = welcomeManager
+        @Bindable var installation = pluginInstallation
 
         Group {
             if #available(iOS 18.0, *) {
@@ -211,6 +212,8 @@ struct ContentView: View {
         .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
         .environment(bookmarkService)
         .environment(pluginSourceManager)
+        .environment(pluginInstallation)
+        .environment(consentService)
         .environment(shellHistoryService)
         .environment(platformViewModel)
         .environment(favoriteViewModel)
@@ -293,30 +296,30 @@ struct ContentView: View {
                 presentCloudPluginPromptIfNeeded()
             }
         }
-        .alert("检测到云端插件", isPresented: $showPluginSyncPrompt) {
-            Button("一键安装") {
-                startCloudPluginInstall()
+        .alert("发现 iCloud 订阅源", isPresented: $showPluginSyncPrompt) {
+            Button("查看插件") {
+                openPluginInstallation(.cloudSources(pluginSourceSyncService.syncedSourceURLs))
+                pluginSourceSyncService.dismissPrompt()
             }
             Button("取消", role: .cancel) {
                 pluginSourceSyncService.dismissPrompt()
             }
         } message: {
-            Text("检测到您已在其他设备安装过插件，是否一键安装？")
+            Text("iCloud 中保存了订阅源。查看其中的插件，选择需要安装的项目。")
         }
-        .alert(consentService.alertTitle, isPresented: $consentService.isPresenting) {
-            Button(consentService.continueButtonTitle) { consentService.resolve(true) }
-            Button("取消", role: .cancel) { consentService.resolve(false) }
-        } message: {
-            Text(consentService.alertMessage)
+        .sheet(item: $installation.presentation) { presentation in
+            NavigationStack {
+                PluginManagementView(entry: presentation.entry, isPresentedModally: true)
+            }
+            .id(presentation.id)
+            .environment(pluginAvailability)
+            .environment(pluginSourceManager)
+            .environment(pluginInstallation)
+            .environment(consentService)
         }
         .onOpenURL { url in
             guard let link = AngelLiveDeepLink.parse(url) else { return }
-            Task { await handleDeepLink(link) }
-        }
-        .overlay {
-            if showCloudInstallProgress {
-                cloudInstallProgressOverlay
-            }
+            handleDeepLink(link)
         }
         // 插件状态变化时刷新平台列表
         .onChange(of: pluginAvailability.installedPluginIds) { oldIds, newIds in
@@ -371,38 +374,28 @@ struct ContentView: View {
     // MARK: - Deep Link Handling
 
     @MainActor
-    private func handleDeepLink(_ link: AngelLiveDeepLink) async {
+    private func handleDeepLink(_ link: AngelLiveDeepLink) {
         switch link {
         case .installSource(let input):
-            presentToast(ToastValue(
-                icon: Image(systemName: "icloud.and.arrow.down"),
-                message: "正在添加订阅源..."
-            ))
-            let added = await pluginSourceManager.addSourceFromInput(input)
-            guard !added.isEmpty else {
-                let detail = pluginSourceManager.errorMessage ?? "无法识别的订阅源"
-                presentToast(ToastValue(
-                    icon: Image(systemName: "exclamationmark.triangle.fill"),
-                    message: "添加失败:\(detail)"
-                ))
-                return
-            }
-            await pluginSourceManager.fetchAllSourceIndexes()
-            let count = await pluginSourceManager.installAll()
-            if count > 0 {
-                await pluginAvailability.refresh()
-                updateHomeRecommendationAvailability()
-                presentToast(ToastValue(
-                    icon: Image(systemName: "checkmark.circle.fill"),
-                    message: "已通过 URL 安装 \(count) 个插件"
-                ))
-            } else {
-                presentToast(ToastValue(
-                    icon: Image(systemName: "info.circle"),
-                    message: "订阅源已添加,未安装新插件"
-                ))
-            }
+            openPluginInstallation(.sourceInput(input))
         }
+    }
+
+    @MainActor
+    private func openPluginInstallation(_ entry: PluginInstallationEntry) {
+        guard !welcomeManager.showWelcome else {
+            pendingPluginInstallationEntry = entry
+            return
+        }
+        guard !pluginInstallation.isPreparing, !pluginInstallation.isInstalling,
+              !pluginSourceManager.isManagementBusy else {
+            presentToast(ToastValue(
+                icon: Image(systemName: "info.circle"),
+                message: "正在处理插件，请完成后再打开安装入口"
+            ))
+            return
+        }
+        pluginInstallation.presentation = PluginInstallationPresentation(entry: entry)
     }
 
     @MainActor
@@ -458,97 +451,19 @@ struct ContentView: View {
         selectedTab = .home
     }
 
-    // MARK: - 云端一键安装进度
+    // MARK: - 云端订阅源入口
 
     private func presentCloudPluginPromptIfNeeded() {
+        if !welcomeManager.showWelcome, let entry = pendingPluginInstallationEntry {
+            pendingPluginInstallationEntry = nil
+            openPluginInstallation(entry)
+            return
+        }
         guard !welcomeManager.showWelcome,
               !pluginAvailability.hasAvailablePlugins,
               pluginSourceSyncService.hasSyncedSources,
-              !showCloudInstallProgress else { return }
+              pluginInstallation.presentation == nil else { return }
         showPluginSyncPrompt = true
-    }
-
-    private var cloudInstallProgressOverlay: some View {
-        CloudPluginInstallOverlay(
-            statusMessage: cloudInstallStatusMessage,
-            completedCount: pluginSourceManager.installCompletedCount,
-            totalCount: pluginSourceManager.installTotalCount,
-            result: cloudInstallResult,
-            onRetry: startCloudPluginInstall,
-            onDismiss: {
-                showCloudInstallProgress = false
-                cloudInstallResult = nil
-                pluginSourceSyncService.dismissPrompt()
-            }
-        )
-    }
-
-    private var cloudInstallStatusMessage: String {
-        if consentService.isPresenting {
-            return "请确认是否安装需要登录的插件"
-        }
-        if pluginSourceManager.isFetchingIndex {
-            return "正在获取插件列表…"
-        }
-        if pluginSourceManager.installTotalCount > 0 {
-            return "正在下载并启用插件…"
-        }
-        return pluginSourceSyncService.installStatusMessage ?? "正在准备安装…"
-    }
-
-    private func startCloudPluginInstall() {
-        guard !pluginSourceSyncService.isInstalling else { return }
-        // 点击即展示准备状态，结束后保留结果，直到用户主动继续或重试。
-        cloudInstallResult = nil
-        showCloudInstallProgress = true
-
-        Task { @MainActor in
-            await pluginSourceSyncService.performOneClickInstall(
-                pluginSourceManager: pluginSourceManager,
-                pluginAvailability: pluginAvailability,
-                consentRequester: consentService
-            )
-
-            var installedCount = 0
-            var failedCount = 0
-            var skippedCount = 0
-            var firstError: String?
-            for plugin in pluginSourceManager.remotePlugins {
-                switch plugin.installState {
-                case .installed:
-                    installedCount += 1
-                case .failed(let reason):
-                    failedCount += 1
-                    if firstError == nil {
-                        firstError = "\(plugin.displayName)：\(reason)"
-                    }
-                case .notInstalled:
-                    skippedCount += 1
-                case .installing:
-                    break
-                }
-            }
-
-            var sourceFailureCount = 0
-            for source in pluginSourceSyncService.syncedSourceURLs {
-                let sourceURL = source.trimmingCharacters(in: .whitespacesAndNewlines)
-                if case .failed(let reason) = pluginSourceManager.sourceHealth[sourceURL] {
-                    sourceFailureCount += 1
-                    if firstError == nil {
-                        firstError = reason
-                    }
-                }
-            }
-
-            cloudInstallResult = CloudPluginInstallResult(
-                installedCount: installedCount,
-                failedCount: failedCount,
-                skippedCount: skippedCount,
-                sourceFailureCount: sourceFailureCount,
-                firstError: firstError
-            )
-            updateHomeRecommendationAvailability()
-        }
     }
 
     // MARK: - iPad TabView (iOS 18+)

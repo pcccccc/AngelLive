@@ -1,8 +1,26 @@
 # 插件管理页面
 
+## 2026-10-03：统一 iOS 安装入口
+
+iOS 的安装交互统一复用新版 `PluginManagementView` 分组列表，包括用户授权纳入的无插件配置入口。设置页保留导航进入；配置页识别订阅后进入同一页面；URL Scheme 和 iCloud 来源通过同一页面的模态容器展示。视频地址收藏及其他 ShellUI 功能保持原行为。
+
+- 添加订阅源与安装分开：输入地址或兑换码后进入对应来源的可安装列表；外部链接和云端来源不再直接安装所有已保存源的插件。
+- 云端同步恢复的是订阅源地址，入口使用“查看插件”，安装前展示本次来源；无新插件、源已保存但读取失败分别反馈。
+- 单项、全部安装和失败重试统一调用显式插件 ID 与来源范围的安装批次；安装对象在开始前快照，来源外条目不进入队列。同一 ID 出现在多个来源时，使用所选来源的具体版本与下载地址。
+- 已知登录插件在安装前统一确认，取消则本次全部项目不开始。实际 manifest 才发现的登录要求仍在激活前确认，不省略原有回滚。
+- 进度与结果均使用新版页面内的分组行。结果保留成功、失败、取消数量及逐项错误，重试只提交失败项；目录刷新不清除本次结果。
+- 安装状态由根级协调对象及 source manager 持有，来源筛选与准备错误由各页面独立持有，返回下层页面不会串入另一个安装入口的范围。首次安装后从无插件界面进入完整界面时保留导航；离开确认页面会结束待确认请求，避免无界面的安装任务一直等待。
+- iOS 不再使用旧订阅内容安装面板、云端居中安装遮罩或 URL 安装完成 Toast。macOS、tvOS 的现有安装入口不变。
+
+本轮验证记录（不沿用下文历史版本的设备结论）：
+
+- Xcode 27.0 RC 工具链运行 `PluginInstallBatchTests`、`PluginUpdateBatchTests` 和 `RemotePluginCatalogActionStateTests`，17 项测试 / 3 个 suite 通过；覆盖来源隔离、整批取消、部分失败、去重和失败重试。
+- 最后源码修改后的 workspace MCP `BuildProject` 通过 iOS `AngelLive`、macOS `AngelLiveMacOS` 和 tvOS `AngelLiveTVOS`；三个 scheme 的 Issue Navigator error 级诊断均为 0。macOS、tvOS 本轮仅验证构建，未运行界面回归。
+- iPhone 18 Pro / iOS 27.0 两次完成最后源码版本的 `DeviceInteractionInstallAndRun`，首次启动截图返回 `Running`。当前环境没有 JEV 可执行程序，回退 Device Hub 后两次会话均返回 `Session not found`，因此未完成安装页面操作回归，也未验证真实 iCloud 恢复。本轮未手动更改设备既有订阅或插件，本机测试订阅未加入设备。
+
 ## 范围与结构
 
-本页优化仅作用于 FullUI。2026-09-18 的布局与验收标准见 [插件管理重构验收标准](PluginManagementRedesign.md)。分组行参考 SwiftUX MCP 的 [Settings List with Sections](https://www.swiftux.app/uicomponents/settings-list-with-sections)：同一插件行通过状态切换操作，分组容器负责层级，沿用宿主语义颜色和原生控件。tvOS 以宿主设置页的原生菜单行、双栏布局和遥控器导航为视觉依据。
+2026-09 的页面布局优化仅作用于 FullUI；2026-10-03 纳入的无插件安装入口以上节为准。2026-09-18 的布局与验收标准见 [插件管理重构验收标准](PluginManagementRedesign.md)。分组行参考 SwiftUX MCP 的 [Settings List with Sections](https://www.swiftux.app/uicomponents/settings-list-with-sections)：同一插件行通过状态切换操作，分组容器负责层级，沿用宿主语义颜色和原生控件。tvOS 以宿主设置页的原生菜单行、双栏布局和遥控器导航为视觉依据。
 
 - 2026-09-22 iOS FullUI 首屏改为紧凑导航、独立范围切换、插件分组及下方管理行，验收标准见同一文档的最新章节；其他平台不随本轮改动。
 - 更新概况呈现待更新、进行中和失败结果。iOS 检查更新统一使用下方管理行，安装/更新期间隐藏；安装使用纯进度区，其余更新/结果/异常按状态展示概况。其他平台保持原有置顶结构。无更新时避免突出一个无效的“全部更新”按钮。

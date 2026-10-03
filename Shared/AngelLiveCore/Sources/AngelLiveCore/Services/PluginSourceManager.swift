@@ -114,8 +114,13 @@ public final class PluginSourceManager: @unchecked Sendable {
     @ObservationIgnored @MainActor
     public private(set) lazy var updateBatch = PluginUpdateBatch()
 
+    /// Used by iOS management flows to keep explicit install progress alive
+    /// independently of any one page.
+    @ObservationIgnored @MainActor
+    public private(set) lazy var installBatch = PluginInstallBatch()
+
     @MainActor public var isManagementBusy: Bool {
-        updateBatch.isRunning || isFetchingIndex || isCheckingUpdates || isInstalling ||
+        installBatch.isRunning || updateBatch.isRunning || isFetchingIndex || isCheckingUpdates || isInstalling ||
         installTotalCount > 0 || !updatingPluginIds.isEmpty
     }
 
@@ -130,6 +135,12 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     /// 每个订阅源对应的插件 ID 集合（用于删除订阅源时联动删除插件）
     private var sourcePluginIds: [String: Set<String>] = [:]
+
+    /// Successful in-memory catalogs keyed by their exact source URL. Unlike
+    /// `remotePlugins`, these entries retain the concrete item from each source
+    /// when multiple sources publish the same plugin identifier.
+    @ObservationIgnored
+    private var sourceRemotePlugins: [String: [RemotePluginDisplayItem]] = [:]
 
     /// 是否有插件正在安装
     public var isInstalling: Bool {
@@ -283,6 +294,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     private func applyFetchedIndex(_ index: LiveParseRemotePluginIndex, sourceURL: String) {
         let trimmed = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
         sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
+        updateSourceCatalog(index.plugins, sourceURL: trimmed)
         saveSourcePluginIds()
         sourceHealth[trimmed] = .healthy(pluginCount: index.plugins.count)
         remotePlugins = index.plugins.map(makeRemoteDisplayItem)
@@ -297,11 +309,27 @@ public final class PluginSourceManager: @unchecked Sendable {
         return displayItem
     }
 
+    /// Refreshes one source's concrete catalog while retaining observable item
+    /// identity when the remote item itself has not changed.
+    private func updateSourceCatalog(
+        _ items: [LiveParseRemotePluginItem],
+        sourceURL: String
+    ) {
+        let existingItems = sourceRemotePlugins[sourceURL] ?? []
+        sourceRemotePlugins[sourceURL] = items.map { item in
+            if let existing = existingItems.first(where: { $0.item == item }) {
+                return existing
+            }
+            return makeRemoteDisplayItem(from: item)
+        }
+    }
+
     @MainActor
     public func removeSource(_ urlString: String) {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         sourceURLs.removeAll { $0 == trimmed }
         sourcePluginIds.removeValue(forKey: trimmed)
+        sourceRemotePlugins.removeValue(forKey: trimmed)
         sourceHealth.removeValue(forKey: trimmed)
         saveSourceURLs()
         saveSourcePluginIds()
@@ -397,6 +425,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         guard !sourceURLs.isEmpty else {
             latestRemoteItemsByPluginId = [:]
             sourcePluginIds = [:]
+            sourceRemotePlugins = [:]
             sourceHealth = [:]
             saveSourcePluginIds()
             return
@@ -417,6 +446,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
                 pluginIdsBySource[source] = Set(index.plugins.map(\.pluginId))
+                updateSourceCatalog(index.plugins, sourceURL: source)
                 sourceHealth[source] = .healthy(pluginCount: index.plugins.count)
                 for item in index.plugins {
                     guard let existing = latest[item.pluginId] else {
@@ -460,6 +490,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
                 sourcePluginIds[source] = Set(index.plugins.map(\.pluginId))
+                updateSourceCatalog(index.plugins, sourceURL: source)
                 sourceHealth[source] = .healthy(pluginCount: index.plugins.count)
                 for item in index.plugins {
                     if !seenPluginIds.contains(item.pluginId) {
@@ -495,6 +526,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         do {
             let index = try await fetchIndexWithTimeout(url: url)
             sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
+            updateSourceCatalog(index.plugins, sourceURL: trimmed)
             saveSourcePluginIds()
             sourceHealth[trimmed] = .healthy(pluginCount: index.plugins.count)
             mergeLatestRemoteItems(index.plugins)
@@ -509,6 +541,39 @@ public final class PluginSourceManager: @unchecked Sendable {
             sourceHealth[trimmed] = .failed(Self.detailedErrorDescription(error))
             return false
         }
+    }
+
+    /// Returns the concrete catalog for an explicit set of sources. Passing
+    /// `nil` retains the legacy all-source catalog. Explicit source scopes only
+    /// use their own latest successful, currently healthy indexes.
+    @MainActor
+    public func catalogPlugins(forSourceURLs sourceURLs: [String]?) -> [RemotePluginDisplayItem] {
+        Self.resolveCatalogPlugins(
+            sourceURLs: sourceURLs,
+            allPlugins: remotePlugins,
+            sourceHealth: sourceHealth,
+            sourceRemotePlugins: sourceRemotePlugins
+        )
+    }
+
+    static func resolveCatalogPlugins(
+        sourceURLs: [String]?,
+        allPlugins: [RemotePluginDisplayItem],
+        sourceHealth: [String: PluginSourceHealth],
+        sourceRemotePlugins: [String: [RemotePluginDisplayItem]]
+    ) -> [RemotePluginDisplayItem] {
+        guard let sourceURLs else { return allPlugins }
+
+        var seenPluginIds = Set<String>()
+        var result: [RemotePluginDisplayItem] = []
+        for sourceURL in sourceURLs {
+            let trimmed = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let health = sourceHealth[trimmed], case .healthy = health else { continue }
+            for item in sourceRemotePlugins[trimmed] ?? [] where seenPluginIds.insert(item.id).inserted {
+                result.append(item)
+            }
+        }
+        return result
     }
 
     @MainActor
@@ -552,6 +617,127 @@ public final class PluginSourceManager: @unchecked Sendable {
             )
             displayItem.installState = .failed(error.localizedDescription)
             return false
+        }
+    }
+
+    /// Installs an explicit set of currently uninstalled catalog entries.
+    /// The input order is retained after de-duplication; catalog entries not in
+    /// the requested scope, already-installed entries, and in-flight entries
+    /// are excluded before the first suspension.
+    @MainActor
+    @discardableResult
+    public func installPlugins(
+        pluginIds: [String],
+        sourceURLs: [String]? = nil
+    ) async -> Int {
+        guard !isManagementBusy else { return 0 }
+
+        let candidates = Self.installCandidates(
+            pluginIds: pluginIds,
+            remotePlugins: catalogPlugins(forSourceURLs: sourceURLs),
+            isInstalled: { [self] pluginId in installedVersion(for: pluginId) != nil }
+        )
+        guard !candidates.isEmpty else { return 0 }
+
+        let candidatesById = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id, $0) })
+        let displayNames = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id, $0.displayName) })
+        let knownLoginIds = Set(candidates.lazy.filter { $0.item.auth?.required == true }.map(\.id))
+        let preapprovedLoginIds = knownLoginIds
+
+        return await installBatch.run(
+            pluginIds: candidates.map(\.id),
+            displayNames: displayNames,
+            knownLoginPluginIds: knownLoginIds,
+            requestLoginConsent: { [consentRequester] ids in
+                guard let consentRequester else { return true }
+                let plugins = ids.map {
+                    LoginPluginEntry(
+                        pluginId: $0,
+                        displayName: displayNames[$0] ?? $0
+                    )
+                }
+                return await consentRequester.requestConsent(
+                    reason: .installingLoginPluginsBatch(plugins: plugins)
+                )
+            },
+            install: { [self] id in
+                guard let displayItem = candidatesById[id] else {
+                    return .failed("插件已移除，请重新加载订阅源。")
+                }
+                displayItem.installState = .installing
+                let displayName = displayItem.displayName
+                let consentHook: (@Sendable (LiveParsePluginManifest) async -> Bool)?
+                if let consentRequester {
+                    consentHook = { @Sendable manifest in
+                        guard manifest.requiresLogin else { return true }
+                        if preapprovedLoginIds.contains(manifest.pluginId) {
+                            return true
+                        }
+                        return await consentRequester.requestConsent(
+                            reason: .installingLoginPlugin(
+                                pluginId: manifest.pluginId,
+                                displayName: displayName
+                            )
+                        )
+                    }
+                } else {
+                    consentHook = nil
+                }
+
+                do {
+                    try await updater.installAndActivate(
+                        item: displayItem.item,
+                        manager: LiveParsePlugins.shared,
+                        afterInstallConsent: consentHook
+                    )
+                    displayItem.installState = .installed
+                    return .installed
+                } catch is PluginInstallConsentError {
+                    Logger.info("User declined login plugin install: \(id)", category: .plugin)
+                    displayItem.installState = .notInstalled
+                    return .cancelled
+                } catch is CancellationError {
+                    displayItem.installState = .notInstalled
+                    return .cancelled
+                } catch {
+                    if Task.isCancelled {
+                        displayItem.installState = .notInstalled
+                        return .cancelled
+                    }
+                    let message = Self.detailedErrorDescription(error)
+                    Logger.error(
+                        error,
+                        message: "安装插件失败: \(id)@\(displayItem.item.version)",
+                        category: .general
+                    )
+                    displayItem.installState = .failed(message)
+                    return .failed(message)
+                }
+            }
+        )
+    }
+
+    static func installCandidates(
+        pluginIds: [String],
+        remotePlugins: [RemotePluginDisplayItem],
+        isInstalled: (String) -> Bool
+    ) -> [RemotePluginDisplayItem] {
+        var firstItemById: [String: RemotePluginDisplayItem] = [:]
+        for item in remotePlugins where firstItemById[item.id] == nil {
+            firstItemById[item.id] = item
+        }
+
+        var seen = Set<String>()
+        return pluginIds.compactMap { pluginId in
+            guard seen.insert(pluginId).inserted,
+                  let item = firstItemById[pluginId],
+                  !isInstalled(pluginId) else { return nil }
+            switch item.installState {
+            case .notInstalled, .failed:
+                return item
+            case .installing, .installed:
+                return nil
+            }
         }
     }
 
@@ -809,6 +995,9 @@ public final class PluginSourceManager: @unchecked Sendable {
         PlatformCapability.invalidateCache()
 
         if let item = remotePlugins.first(where: { $0.id == pluginId }) {
+            item.installState = .notInstalled
+        }
+        for item in sourceRemotePlugins.values.flatMap({ $0 }) where item.id == pluginId {
             item.installState = .notInstalled
         }
         var responseLines = ["已驱逐插件: \(pluginId)", "状态文件已更新"]
