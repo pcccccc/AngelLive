@@ -16,7 +16,10 @@ iOS 的安装交互统一复用新版 `PluginManagementView` 分组列表，包�
 
 - Xcode 27.0 RC 工具链运行 `PluginInstallBatchTests`、`PluginUpdateBatchTests` 和 `RemotePluginCatalogActionStateTests`，17 项测试 / 3 个 suite 通过；覆盖来源隔离、整批取消、部分失败、去重和失败重试。
 - 最后源码修改后的 workspace MCP `BuildProject` 通过 iOS `AngelLive`、macOS `AngelLiveMacOS` 和 tvOS `AngelLiveTVOS`；三个 scheme 的 Issue Navigator error 级诊断均为 0。macOS、tvOS 本轮仅验证构建，未运行界面回归。
-- iPhone 18 Pro / iOS 27.0 两次完成最后源码版本的 `DeviceInteractionInstallAndRun`，首次启动截图返回 `Running`。当前环境没有 JEV 可执行程序，回退 Device Hub 后两次会话均返回 `Session not found`，因此未完成安装页面操作回归，也未验证真实 iCloud 恢复。本轮未手动更改设备既有订阅或插件，本机测试订阅未加入设备。
+- iPhone 18 Pro / iOS 27.0 两次完成最后源码版本的 `DeviceInteractionInstallAndRun`，首次启动截图返回 `Running`。当前环境没有 JEV 可执行程序，Device Hub MCP 交互曾返回 `Session not found`；随后通过 Device Hub 原生界面接管同一最终新包，完成设置进入插件管理、已安装/可安装切换、打开添加表单及取消返回。root 已复核本轮浅色截图，未见文字裁切或控件重叠。
+- 单项安装的登录确认取消通过：安装前出现统一登录确认，选择“取消安装”后页面保留 0 成功、0 失败、1 取消的结果，候选仍可安装，既有 6 个插件与 2 个订阅源保持不变。root 已复核确认弹窗、结果截图及完整可访问性树。
+- URL Scheme 错误与返回通过：使用经 Foundation 确认为无效 URL 的输入，经模拟器 Safari 打开安装链接后进入同一新版管理页，显示“准备安装失败 / 无效的 URL”。关闭后回到原管理页，原有可安装候选恢复；插件与源数量不变，没有保存无效来源。root 已复核进入与返回截图及完整可访问性树。
+- 当前设备未登录 iCloud，真实同步恢复未验证；实际下载安装、失败重试、首次安装后的 ShellUI 切换、深色和辅助功能字号也未覆盖。本轮未安装或移除设备既有插件，未更改既有订阅；本机测试订阅未加入设备。安装成功响应、截图及可访问性观察保存在本地忽略目录 `runs/plugin-installation-ui-20261003/`，不纳入仓库。
 
 ## 范围与结构
 
