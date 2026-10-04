@@ -15,7 +15,7 @@ import Foundation
 import CloudKit
 
 /// 同步过程中可展示给用户的结构化错误。
-public struct SyncError: Error, Sendable, Equatable {
+public struct SyncError: Error, Codable, Sendable, Equatable {
     /// 错误码。CKError 为其 `code.rawValue`(正数);账号状态/超时等为合成负数码。
     public let code: Int
     /// 错误大类,供调用方做重试判定 / 分支处理。
@@ -26,16 +26,26 @@ public struct SyncError: Error, Sendable, Equatable {
     public let advice: String?
     /// 原始错误描述,折叠展示 / 上报用。
     public let rawDescription: String
+    /// CloudKit 建议的最短重试间隔。独立存储，避免聚合或错误分类时丢失。
+    public let serverRetryAfter: TimeInterval?
 
-    public init(code: Int, kind: Kind, title: String, advice: String?, rawDescription: String) {
+    public init(
+        code: Int,
+        kind: Kind,
+        title: String,
+        advice: String?,
+        rawDescription: String,
+        serverRetryAfter: TimeInterval? = nil
+    ) {
         self.code = code
         self.kind = kind
         self.title = title
         self.advice = advice
         self.rawDescription = rawDescription
+        self.serverRetryAfter = serverRetryAfter
     }
 
-    public enum Kind: Sendable, Equatable {
+    public enum Kind: Codable, Sendable, Equatable {
         case notSignedIn          // 未登录 iCloud
         case iCloudRestricted     // 受家长控制 / 设备管理限制
         case accountUnavailable   // 账号暂时不可用 / 状态无法确定
@@ -63,8 +73,10 @@ public struct SyncError: Error, Sendable, Equatable {
 
     /// 限流场景下服务端建议的重试间隔(秒)。
     public var retryAfter: TimeInterval? {
-        if case let .rateLimited(seconds) = kind { return seconds }
-        return nil
+        serverRetryAfter ?? {
+            if case let .rateLimited(seconds) = kind { return seconds }
+            return nil
+        }()
     }
 
     /// 页面展示文案:标题 + 建议 +(正数)错误码。
@@ -119,12 +131,15 @@ public extension SyncError {
             return SyncError(code: code, kind: .networkBlocked,
                              title: "iCloud 连接失败", advice: proxyAdvice, rawDescription: raw)
         case .serviceUnavailable:
+            let retry = (error as NSError).userInfo[CKErrorRetryAfterKey] as? TimeInterval
             return SyncError(code: code, kind: .networkBlocked,
-                             title: "iCloud 服务暂不可用", advice: "请稍后再试。" , rawDescription: raw)
+                             title: "iCloud 服务暂不可用", advice: "请稍后再试。" , rawDescription: raw,
+                             serverRetryAfter: retry)
         case .requestRateLimited, .zoneBusy, .batchRequestFailed:
             let retry = (error as NSError).userInfo[CKErrorRetryAfterKey] as? TimeInterval
             return SyncError(code: code, kind: .rateLimited(retryAfter: retry),
-                             title: "iCloud 繁忙", advice: "操作过于频繁,请稍后再试。", rawDescription: raw)
+                             title: "iCloud 繁忙", advice: "操作过于频繁,请稍后再试。", rawDescription: raw,
+                             serverRetryAfter: retry)
         case .quotaExceeded:
             return SyncError(code: code, kind: .quotaExceeded,
                              title: "iCloud 空间已满", advice: "请在 系统设置 > Apple 账户 > iCloud 清理空间后重试。", rawDescription: raw)

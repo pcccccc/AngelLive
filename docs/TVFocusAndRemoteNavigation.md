@@ -146,3 +146,11 @@ root 独立比较了每轮快速操作前后的累计日志：每轮准确增加
 控件隐藏后的正常原生返回于 17:46:41 确认回到浏览首页，证据为 `/tmp/angellive_playerback_normal_exit.json`。控件可见时的返回补测因截图间隔超过 5 秒且缺少新增按键日志，无法排除自动隐藏，不计为通过；顶部标签聚焦后的单独 Escape 本轮未覆盖。旧包基线也未能确认原生按键送达，不计为复现证据。
 
 Workspace 与最后的非 workspace 检查 session 均已结束，响应分别为 `/tmp/angellive_playerback_end_session.json` 和 `/tmp/angellive_playerback_final_end_session.json`。新包留在浏览首页；Xcode 恢复原来的 `AngelLive` / `iPad Pro 13-inch (M5) (27.0)` 运行配置，本轮 relay 已关闭。实体 Apple TV、其他 tvOS 版本、iOS 与 macOS 未验证。
+
+### 2026-10-04 FullUI 半屏设置返回焦点修复
+
+旧包 ID372 在 FullUI 半屏设置的“翻译与字幕”页面按 Siri Remote Menu 返回后，焦点错误回到“插件管理”（`runs/live-subtitle-ui-2026-10-04/round2-id372-tvos-return-focus-hierarchy.txt`）。本次在 `TV/AngelLiveTVOS/Source/Setting/SettingView.swift` 现有 `fullScreenIndex` 监听相邻增加 8 行 `selectedIndex` `onChange`：仅在 FullUI、半屏项目收起且项目仍应显示时，把 `focusedIndex` 恢复为 `previousIndex`。
+
+最终源码的 tvOS workspace `BuildProject`（ID378）通过，耗时 44.182 秒；ID379 的 Issue Navigator error 数为 0；ID381 `DeviceInteractionInstallAndRun` 返回成功（`Application installed and running`），原始响应分别为 `runs/live-subtitle-ui-2026-10-04/response-378.json`、`response-379.json` 和 `response-381.json`。同一最终包随后完成三条 Device Hub Siri Remote Menu 路径：翻译与字幕返回后恢复“翻译与字幕”焦点（ID391）、Select 重新进入后再返回仍恢复该焦点（ID393）、通用设置返回后恢复“通用设置”焦点（ID396）。对应响应及其 `hierarchyPath` 保存在 `runs/live-subtitle-ui-2026-10-04/response-391.json`、`response-393.json` 和 `response-396.json`；设备为 Apple TV 4K（第 3 代）／tvOS 27.0 模拟器。
+
+root 独立核对上述 hierarchy 和 ID401 的稳定原尺寸截图：菜单实际停在“翻译与字幕”。ID391 的截图仍处于退出动画，不能作为返回后的视觉证据；本轮没有用原生 Escape 代替 Siri Remote Menu，也未覆盖实体 Apple TV。

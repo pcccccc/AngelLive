@@ -660,6 +660,7 @@ public final class JSRuntime: @unchecked Sendable {
     private let nativeStream: ManifestNativeStream?
     private let httpFlightCoordinator: PluginHTTPFlightCoordinator
     private let loginTransactionStore: LoginTransactionStore
+    let hostWebSocketOwner: UUID
     /// Manifest-declared platform hosts that may receive a committed or
     /// isolated credential through native Host.http injection.
     private let credentialDomains: [String]
@@ -675,6 +676,7 @@ public final class JSRuntime: @unchecked Sendable {
     /// Set only on the isolated runtime for manual API credential validation.
     private var loginDiagnosticSecrets: [String] = []
     private var credentialRetired = false
+    var hostWebSocketHandlers: [String: JSValue] = [:]
     /// 只允许在 `queue` 上读写；JSValue 永不跨出 JavaScriptCore 串行队列。
     private var hostHTTPCallbacks: [UUID: HostHTTPCallback] = [:]
     /// Retain cancellable host request tasks until their matching JS callback
@@ -687,6 +689,11 @@ public final class JSRuntime: @unchecked Sendable {
     /// Swift continuation 在取消时会从这里移除，避免永不 settle 的插件
     /// Promise 永久保留 continuation 和敏感调用生命周期。
     private var pendingPromiseCalls: [String: PendingPromiseCall] = [:]
+#if DEBUG
+    /// Deterministic test barrier resumed on the JavaScriptCore queue when a
+    /// plugin Promise has been registered. This avoids timing-based polling.
+    private var pendingPromiseCallWaitersForTesting: [CheckedContinuation<Void, Never>] = []
+#endif
     /// 仅在插件函数的同步 invoke 区间非空。异步 Promise reaction 不冒充
     /// 精确上下文，而是从 pendingPromiseCalls 生成候选集合。
     private var currentInvocationContext: PluginConsoleInvocationContext?
@@ -727,6 +734,7 @@ public final class JSRuntime: @unchecked Sendable {
         self.session = session
         self.nativeStream = nativeStream
         self.httpFlightCoordinator = PluginHTTPFlightCoordinator()
+        self.hostWebSocketOwner = HostWebSocketRegistry.registerOwner()
         self.loginTransactionStore = loginTransactionStore
         self.credentialDomains = credentialDomains
         self.platformSessionOverride = platformSessionOverride
@@ -747,13 +755,13 @@ public final class JSRuntime: @unchecked Sendable {
             Self.configureHostRuntime(in: context)
             Self.configureHostBootstrap(in: context)
             Self.configureHostNativeStream(in: context, queue: queue, nativeStream: nativeStream)
-            Self.configureHostWebSocket(
-                in: context,
-                queue: queue,
-                pluginId: pluginId,
-                credentialDomains: credentialDomains,
-                platformSessionOverride: platformSessionOverride
-            )
+            self.configureHostWebSocket(in: context)
+        }
+    }
+
+    deinit {
+        for session in HostWebSocketRegistry.invalidate(owner: hostWebSocketOwner) {
+            session.tearDown()
         }
     }
 
@@ -764,7 +772,10 @@ public final class JSRuntime: @unchecked Sendable {
                 completion.install(continuation)
                 queue.async {
                     guard !completion.isCompleted else { return }
-                    guard !self.credentialRetired else { completion.cancel(); return }
+                    guard !self.credentialRetired,
+                          HostWebSocketRegistry.isActive(owner: self.hostWebSocketOwner) else {
+                        completion.cancel(); return
+                    }
                     self.context.exception = nil
                     if let sourceURL {
                         self.context.evaluateScript(script, withSourceURL: sourceURL)
@@ -828,7 +839,10 @@ public final class JSRuntime: @unchecked Sendable {
                             guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
                                 throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
                             }
-                            guard !self.credentialRetired else { throw CancellationError() }
+                            guard !self.credentialRetired,
+                                  HostWebSocketRegistry.isActive(owner: self.hostWebSocketOwner) else {
+                                throw CancellationError()
+                            }
                             guard let fn = pluginObject.objectForKeyedSubscript(name), fn.isObject else {
                                 throw LiveParsePluginError.invalidReturnValue("Missing function: \(name)")
                             }
@@ -914,6 +928,20 @@ public final class JSRuntime: @unchecked Sendable {
         }
     }
 
+#if DEBUG
+    func waitForPendingPromiseCallForTesting() async {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                if self.pendingPromiseCalls.isEmpty {
+                    self.pendingPromiseCallWaitersForTesting.append(continuation)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+#endif
+
     /// 覆盖插件加载和函数调用的完整敏感区间。计数而非 Bool 是为了让同一
     /// runtime 的重叠调用保持保守静默，直到最后一个敏感调用结束。
     func beginSensitiveLoggingSuppression(apiTokenSession: Bool = false, deviceAuthSession: Bool = false, loginDiagnosticSecrets: [String] = []) async {
@@ -941,6 +969,7 @@ public final class JSRuntime: @unchecked Sendable {
     /// Dropping callbacks is intentional: the parent plugin continuation has
     /// already been cancelled, so there is no remaining JS consumer to notify.
     func abandonInFlightOperations() async {
+        invalidateOwnedResources()
         await httpFlightCoordinator.cancelAll()
         await withCheckedContinuation { continuation in
             queue.async {
@@ -954,8 +983,59 @@ public final class JSRuntime: @unchecked Sendable {
         }
     }
 
+    func invalidateOwnedResources() {
+        let sessions = HostWebSocketRegistry.invalidate(owner: hostWebSocketOwner)
+        for session in sessions { session.tearDown() }
+        queue.async {
+            self.hostWebSocketHandlers.removeAll()
+            for task in self.hostHTTPTasks.values { task.cancel() }
+            self.hostHTTPTasks.removeAll()
+            self.hostHTTPCallbacks.removeAll()
+            for callID in Array(self.pendingPromiseCalls.keys) {
+                self.pendingPromiseCalls[callID]?.completion.cancel()
+                self.cancelPendingPromise(callID: callID)
+            }
+        }
+        Task { await self.httpFlightCoordinator.cancelAll() }
+    }
+
+    func deliverHostWebSocketEvent(owner: UUID, sessionID: String, json: String, terminal: Bool) {
+        queue.async { [weak self] in
+            guard let self,
+                  owner == self.hostWebSocketOwner,
+                  HostWebSocketRegistry.isActive(owner: owner),
+                  let handler = self.hostWebSocketHandlers[sessionID] else { return }
+            handler.call(withArguments: [json])
+            self.context.evaluateScript("void(0)")
+            if terminal { self.hostWebSocketHandlers.removeValue(forKey: sessionID) }
+        }
+    }
+
+    var hostWebSocketPluginID: String { pluginId }
+    var hostWebSocketCredentialDomains: [String] { credentialDomains }
+    var hostWebSocketSessionOverride: LiveParsePlatformSession? { platformSessionOverride }
+
+    func resolveHostWebSocket(_ callback: JSValue) {
+        nonisolated(unsafe) let callback = callback
+        queue.async {
+            guard HostWebSocketRegistry.isActive(owner: self.hostWebSocketOwner) else { return }
+            callback.call(withArguments: [])
+            self.context.evaluateScript("void(0)")
+        }
+    }
+
+    func rejectHostWebSocket(_ callback: JSValue, message: String) {
+        nonisolated(unsafe) let callback = callback
+        queue.async {
+            guard HostWebSocketRegistry.isActive(owner: self.hostWebSocketOwner) else { return }
+            callback.call(withArguments: [message])
+            self.context.evaluateScript("void(0)")
+        }
+    }
+
     /// Retire a credential generation, including pending JS promises and late logs.
     func retireCredentialGeneration(resetDeviceAuth: Bool = false) async {
+        invalidateOwnedResources()
         await withCheckedContinuation { continuation in
             queue.async {
                 self.sensitiveLoggingDepth += 1
@@ -1298,7 +1378,8 @@ private extension JSRuntime {
                 reject.call(withArguments: ["Host HTTP runtime released"])
                 return
             }
-            guard !self.credentialRetired else {
+            guard !self.credentialRetired,
+                  HostWebSocketRegistry.isActive(owner: self.hostWebSocketOwner) else {
                 reject.call(withArguments: ["Credential generation retired"])
                 return
             }
@@ -2649,6 +2730,11 @@ private extension JSRuntime {
             completion: completion,
             consoleContext: consoleContext
         )
+#if DEBUG
+        let waiters = pendingPromiseCallWaitersForTesting
+        pendingPromiseCallWaitersForTesting.removeAll()
+        waiters.forEach { $0.resume() }
+#endif
         context.setObject(promise, forKeyedSubscript: key as NSString)
         context.evaluateScript("""
         globalThis.\(key).then(

@@ -19,22 +19,6 @@ enum PlayerDisplayState {
     case streamerOffline  // 主播已下播
 }
 
-/// 跨 @Sendable 闭包携带 Timer 弱引用的句柄。所有成员都收口 @MainActor,
-/// @unchecked Sendable 仅用于让句柄能被回调闭包捕获,不承载跨线程访问。
-private final class LiveFlagTimerHandle: @unchecked Sendable {
-    private weak var timer: Timer?
-
-    @MainActor
-    func attach(_ timer: Timer?) {
-        self.timer = timer
-    }
-
-    @MainActor
-    func invalidate() {
-        timer?.invalidate()
-    }
-}
-
 @Observable
 final class RoomInfoViewModel {
 
@@ -65,6 +49,52 @@ final class RoomInfoViewModel {
     /// 当前监视的 playerLayer,供 sample provider 读取 KSPlayer dynamicInfo。
     weak var watchedPlayerLayer: KSPlayerLayer?
     @ObservationIgnored private var _recoveryCoordinator: PlaybackRecoveryCoordinator?
+    private var _playbackDiagnostics: PlaybackDiagnosticsSession?
+    @ObservationIgnored private var playbackSelectionGeneration = UUID()
+    @ObservationIgnored private var playbackRequestGeneration = UUID()
+    @ObservationIgnored private var playbackDiagnosticsEnded = false
+    @ObservationIgnored private var playbackDiagnosticsSuspended = false
+    @ObservationIgnored private var hasSelectedInitialPlayback = false
+
+    @MainActor
+    var playbackDiagnostics: PlaybackDiagnosticsSession {
+        if let session = _playbackDiagnostics { return session }
+        let session = PlaybackDiagnosticsSession()
+        _playbackDiagnostics = session
+        return session
+    }
+
+    @MainActor var startupStage: PlaybackStartupStage { playbackDiagnostics.startupStage }
+    @MainActor var recoveryNotice: PlaybackRecoveryNotice? { playbackDiagnostics.recoveryNotice }
+    @MainActor var hasObservedPlaybackProgress: Bool { playbackDiagnostics.hasStartedPlayback }
+
+    @MainActor
+    func interruptPlaybackDiagnostics() {
+        playbackDiagnosticsSuspended = true
+        _playbackDiagnostics?.interruptStartup()
+    }
+
+    @MainActor
+    func endPlaybackDiagnostics() {
+        stopLiveStatusPolling()
+        playbackDiagnosticsEnded = true
+        playbackSelectionGeneration = UUID()
+        playbackRequestGeneration = UUID()
+        _playbackDiagnostics?.end()
+    }
+
+    @MainActor
+    private func recordAssignedSource() {
+        guard !playbackDiagnosticsEnded,
+              let args = currentRoomPlayArgs, args.indices.contains(currentCdnIndex) else { return }
+        playbackDiagnostics.sourceAssigned(
+            pluginID: SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId ?? currentRoom.liveType.rawValue,
+            lineID: args[currentCdnIndex].cdn,
+            line: currentCdnIndex,
+            quality: currentQualityIndex
+        )
+        if playbackDiagnosticsSuspended { playbackDiagnostics.interruptStartup() }
+    }
 
     /// 懒构造(协调器 init 为 @MainActor;@Observable 不支持 lazy 存储属性,故手写)。
     @MainActor
@@ -78,7 +108,7 @@ final class RoomInfoViewModel {
     @MainActor
     private func makeRecoveryCoordinator() -> PlaybackRecoveryCoordinator {
         // tvOS:起播 12s。stall 监控开启(KSAVPlayer 路径由采样源内部豁免 → 返回 nil)。
-        PlaybackRecoveryFactory.make(host: self, config: .desktopTV(stallMonitoringEnabled: true))
+        PlaybackRecoveryFactory.make(host: self, config: .desktopTV(stallMonitoringEnabled: true), diagnostics: playbackDiagnostics)
     }
 
     var isLoading = false
@@ -140,7 +170,8 @@ final class RoomInfoViewModel {
     var tipOptionSecond = 3
     var contolTimer: Timer? = nil
     var tipsTimer: Timer? = nil
-    var liveFlagTimer: Timer? = nil
+    private var liveFlagTimer: Timer? = nil
+    private var liveStatusPollingSession: LiveStatusPollingSession?
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
     /// 弹幕状态气泡文案;非空即显示,几秒后自动清空
@@ -184,6 +215,8 @@ final class RoomInfoViewModel {
         urlIndex: Int,
         selectionOrigin: PlaybackSelectionOrigin
     ) {
+        playbackSelectionGeneration = UUID()
+        playbackDiagnostics.interruptStartup()
         guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
               cdnIndex < playArgs.count else {
             isLoading = false
@@ -360,15 +393,20 @@ final class RoomInfoViewModel {
         logSelectedStreamBeforePlayback(url, source: source, debugContext: debugContext)
         if currentPlayURL == url {
             currentPlayURL = nil
+            let selectionGeneration = playbackSelectionGeneration
             Task { @MainActor [weak self] in
                 await Task.yield()
-                guard let self, self.currentPlayURL == nil else { return }
+                guard let self, !self.playbackDiagnosticsEnded,
+                      selectionGeneration == self.playbackSelectionGeneration,
+                      self.currentPlayURL == nil else { return }
+                self.recordAssignedSource()
                 self.currentPlayURL = url
                 self.recoveryCoordinator.urlChanged(url)
             }
             return
         }
 
+        recordAssignedSource()
         currentPlayURL = url
         // token 滚动等 URL 变化:仅更新协调器记录,不重置起播计时/熔断(修 Bug A)。
         recoveryCoordinator.urlChanged(url)
@@ -448,6 +486,7 @@ final class RoomInfoViewModel {
         isLoading = true
 
         let roomId = currentRoom.roomId
+        let selectionGeneration = playbackSelectionGeneration
         qualitySwitchTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -460,6 +499,8 @@ final class RoomInfoViewModel {
                 )
                 try Task.checkCancellation()
                 await MainActor.run {
+                    guard !Task.isCancelled, !self.playbackDiagnosticsEnded,
+                          selectionGeneration == self.playbackSelectionGeneration else { return }
                     self.applyPreparedPlayURL(
                         preparedQuality,
                         cdnIndex: cdnIndex,
@@ -472,6 +513,8 @@ final class RoomInfoViewModel {
                 // 忽略取消的切换任务
             } catch {
                 await MainActor.run {
+                    guard !Task.isCancelled, !self.playbackDiagnosticsEnded,
+                          selectionGeneration == self.playbackSelectionGeneration else { return }
                     self.applyPreparedPlayURL(
                         quality,
                         cdnIndex: cdnIndex,
@@ -519,7 +562,12 @@ final class RoomInfoViewModel {
      - Parameters:
        - silent: 已在播时的续播重取;不全屏 loading/错误页抢 UI。
     */
+    @MainActor
     func getPlayArgs(silent: Bool = false, diagnosticAction: SupportDiagnosticAction = .openedRoom) {
+        guard !playbackDiagnosticsEnded else { return }
+        let requestGeneration = UUID()
+        playbackRequestGeneration = requestGeneration
+        playbackDiagnostics.fetchingSource()
         if !silent {
             isLoading = true
         }
@@ -541,11 +589,14 @@ final class RoomInfoViewModel {
                         roomId: currentRoom.roomId,
                         userId: currentRoom.userId
                     )
-                    await MainActor.run {
-                        self.updateCurrentRoomPlayArgs(playArgs)
-                    }
+                    guard !Task.isCancelled, requestGeneration == playbackRequestGeneration,
+                          !playbackDiagnosticsEnded else { return }
+                    await self.updateCurrentRoomPlayArgs(playArgs)
                 }
             } catch {
+                guard !Task.isCancelled, requestGeneration == playbackRequestGeneration,
+                      !playbackDiagnosticsEnded else { return }
+                playbackDiagnostics.sourceUnavailable()
                 await MainActor.run {
                     isLoading = false
                     // 恢复过程中取参失败:交给协调器继续阶梯,不立刻进错误页
@@ -560,9 +611,26 @@ final class RoomInfoViewModel {
         }
     }
     
-    @MainActor func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel]) {
+    @MainActor func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel]) async {
+        guard !Task.isCancelled, !playbackDiagnosticsEnded else { return }
+        let selectionGeneration = playbackSelectionGeneration
+        let requestGeneration = playbackRequestGeneration
+        var preferredIndex = currentCdnIndex
+        if !hasSelectedInitialPlayback {
+            let pluginID = SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId ?? currentRoom.liveType.rawValue
+            if let learned = await CDNPreferenceStore.shared.preferredIndex(in: playArgs, pluginID: pluginID) {
+                preferredIndex = learned
+            }
+            guard !Task.isCancelled, !playbackDiagnosticsEnded,
+                  selectionGeneration == playbackSelectionGeneration,
+                  requestGeneration == playbackRequestGeneration else { return }
+            if preferredIndex != currentCdnIndex {
+                playbackDiagnostics.preferenceApplied(originalIndex: currentCdnIndex, chosenIndex: preferredIndex)
+            }
+        }
         self.currentRoomPlayArgs = playArgs
         if playArgs.count == 0 {
+            playbackDiagnostics.sourceUnavailable()
             self.isLoading = false
             if !isPlaybackRecovering {
                 showToast(false, title: "获取直播间信息失败")
@@ -574,7 +642,7 @@ final class RoomInfoViewModel {
         let firstLoad = currentPlayURL == nil
         let clamped = RoomPlaybackResolver.clampedSelection(
             in: playArgs,
-            preferredCdnIndex: currentCdnIndex,
+            preferredCdnIndex: preferredIndex,
             preferredQualityIndex: currentQualityIndex
         )
         self.changePlayUrl(
@@ -582,6 +650,7 @@ final class RoomInfoViewModel {
             urlIndex: clamped.qualityIndex,
             selectionOrigin: .automatic
         )
+        hasSelectedInitialPlayback = true
 
         // 开一个定时，检查主播是否已经下播(仅首次装表,避免续播重复挂 timer)
         if firstLoad,
@@ -590,25 +659,23 @@ final class RoomInfoViewModel {
                 let roomId = currentRoom.roomId
                 let userId = currentRoom.userId
                 let liveType = currentRoom.liveType
-                // 句柄先于计时器在主 actor 上创建,回调闭包只捕获 Sendable 的句柄,
-                // 避免非 Sendable 的 timer 参数跨 region 传递。
-                let timerHandle = LiveFlagTimerHandle()
-                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { _ in
+                stopLiveStatusPolling()
+                let polling = LiveStatusPollingSession(check: {
+                    try await ApiManager.getCurrentRoomLiveState(roomId: roomId, userId: userId, liveType: liveType)
+                }, onEnded: { [weak self] in
+                    guard let self else { return }
+                    self.stopLiveStatusPolling()
+                    NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
+                }, onFailure: { error in
+                    Logger.warning("检查直播状态失败:\(error)", category: .network)
+                })
+                liveStatusPollingSession = polling
+                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { [weak polling] _ in
                     // 线程前提:scheduledTimer 挂在当前(主)RunLoop,回调必在主线程,判断错误会 trap。
                     MainActor.assumeIsolated {
-                        _ = Task {
-                            do {
-                                let state = try await ApiManager.getCurrentRoomLiveState(roomId: roomId, userId: userId, liveType: liveType)
-                                guard state == .close || state == .unknow else { return }
-                                NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
-                                timerHandle.invalidate()
-                            } catch {
-                                print("检查直播状态失败:\(error)")
-                            }
-                        }
+                        polling?.poll()
                     }
                 }
-                timerHandle.attach(liveFlagTimer)
             }
         }
 
@@ -750,12 +817,14 @@ final class RoomInfoViewModel {
 
     @MainActor
     func suspendDanmakuTranslationForBackground() {
+        interruptPlaybackDiagnostics()
         isDanmakuTranslationSuspended = true
         danmakuTranslationPipeline.reset()
     }
 
     @MainActor
     func resumeDanmakuTranslationAfterBackground() {
+        playbackDiagnosticsSuspended = false
         isDanmakuTranslationSuspended = false
     }
 
@@ -852,21 +921,38 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         }
     }
     
-    @MainActor func reloadRoom(liveModel: LiveModel) {
+    @MainActor
+    func stopLiveStatusPolling() {
         liveFlagTimer?.invalidate()
         liveFlagTimer = nil
+        liveStatusPollingSession?.stop()
+        liveStatusPollingSession = nil
+    }
+
+    @MainActor func reloadRoom(liveModel: LiveModel) {
+        _playbackDiagnostics?.end()
+        _playbackDiagnostics = nil
+        _recoveryCoordinator?.stop()
+        _recoveryCoordinator = nil
+        playbackDiagnosticsEnded = false
+        hasSelectedInitialPlayback = false
+        playbackRequestGeneration = UUID()
+        playbackSelectionGeneration = UUID()
+        stopLiveStatusPolling()
         currentPlayURL = nil
         disConnectSocket()
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = liveModel
         getPlayArgs()
+        recoveryCoordinator.start()
     }
 }
 
 extension RoomInfoViewModel: KSPlayerLayerDelegate {
     
     func player(layer: KSPlayer.KSPlayerLayer, state: KSPlayer.KSPlayerState) {
+        playbackDiagnostics.engineStateChanged(mapKSPlayerEngineState(state), isPlaying: layer.player.isPlaying)
         isPlaying = layer.player.isPlaying
         userPaused = !layer.player.isPlaying
         self.dynamicInfo = layer.player.dynamicInfo

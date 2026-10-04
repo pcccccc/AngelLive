@@ -136,6 +136,23 @@ public actor PlatformLoginRegistry {
         availablePlatforms().first { $0.pluginId == pluginId }
     }
 
+    /// Resolves only host-trusted plugin identities. Unknown, unavailable, or
+    /// unsupported entries are omitted; an empty input never selects a default.
+    public func entries(
+        pluginIDs: [String],
+        for platform: LoginChallengeHostPlatform? = nil
+    ) -> [LoginPlatformEntry] {
+        guard !pluginIDs.isEmpty else { return [] }
+        let available = Dictionary(
+            uniqueKeysWithValues: availablePlatforms(for: platform).map { ($0.pluginId, $0) }
+        )
+        var seen = Set<String>()
+        return pluginIDs.compactMap { pluginID in
+            guard seen.insert(pluginID).inserted else { return nil }
+            return available[pluginID]
+        }
+    }
+
     // MARK: - 内部 manifest 发现
 
     private func discoverAllManifests() -> [LiveParsePluginManifest] {

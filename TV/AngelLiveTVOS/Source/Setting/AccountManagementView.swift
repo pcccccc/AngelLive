@@ -13,10 +13,13 @@ import AngelLiveDependencies
 // MARK: - 账号管理主视图
 
 struct AccountManagementView: View {
+    var recoveryPluginIDs: [String]? = nil
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
     @State private var platforms: [LoginPlatformEntry] = []
     @State private var currentPage: AccountPage = .main
+    @State private var didLoadRecovery = false
     /// 手动输入 Cookie 走全屏 cover,盖住 SettingView 半屏容器外侧的平台 logo,
     /// 让获取 Cookie 的步骤说明能完整铺开。
     @State private var manualInputEntry: LoginPlatformEntry?
@@ -35,6 +38,39 @@ struct AccountManagementView: View {
     }
 
     var body: some View {
+        VStack(spacing: 28) {
+            if recoveryPluginIDs != nil {
+                HStack {
+                    Text(recoveryTitle).font(.title2.bold())
+                    Spacer()
+                    Button("返回") { dismiss() }
+                }
+            }
+            accountContent
+        }
+        .task {
+            guard let recoveryPluginIDs, !didLoadRecovery else { return }
+            if recoveryPluginIDs.isEmpty {
+                platforms = await PlatformLoginRegistry.shared.availablePlatforms(for: .tvOS)
+            } else {
+                platforms = await PlatformLoginRegistry.shared.entries(pluginIDs: recoveryPluginIDs, for: .tvOS)
+            }
+            didLoadRecovery = true
+            if recoveryPluginIDs.count == 1, let entry = platforms.first {
+                currentPage = .platformDetail(entry)
+            }
+            await syncService.refreshAllLoginStatus()
+        }
+    }
+
+    private var recoveryTitle: String {
+        if case .platformDetail(let entry) = currentPage {
+            return "登录 \(entry.displayName)"
+        }
+        return "选择需要登录的平台"
+    }
+
+    private var accountContent: some View {
         ZStack {
             switch currentPage {
             case .main:
@@ -44,7 +80,11 @@ struct AccountManagementView: View {
                 PlatformDetailPageView(
                     entry: entry,
                     onBack: {
-                        currentPage = .main
+                        if recoveryPluginIDs?.count == 1 {
+                            dismiss()
+                        } else {
+                            currentPage = .main
+                        }
                     },
                     onManualInput: { e in
                         manualInputEntry = e
@@ -70,6 +110,15 @@ struct AccountManagementView: View {
         ScrollView {
             VStack(spacing: 15) {
                 sectionHeader("平台账号")
+
+                if recoveryPluginIDs != nil && platforms.isEmpty {
+                    if didLoadRecovery {
+                        Text("对应插件未安装，或未提供此设备支持的登录方式。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView("正在读取登录方式")
+                    }
+                }
 
                 // 平台列表
                 ForEach(platforms) { entry in
@@ -102,7 +151,9 @@ struct AccountManagementView: View {
             }
         }
         .scrollClipDisabled()
+        .onExitCommand(perform: recoveryPluginIDs == nil ? nil : { dismiss() })
         .task {
+            guard recoveryPluginIDs == nil else { return }
             platforms = await PlatformLoginRegistry.shared.availablePlatforms()
             await syncService.refreshAllLoginStatus()
         }

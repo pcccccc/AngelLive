@@ -47,6 +47,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     private static let reKeyRepairKey = "FavoriteSyncEngine.reKeyRepair.v1"
     private var repairInProgress = false
     private var repairCanonical: [String: String] = [:]   // 稳定 key -> 已保留的 recordName
+    private var pendingDeleteRevisions: [String: UUID] = [:]
 
     private init() {
         container = CKContainer(identifier: containerID)
@@ -100,6 +101,10 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         // 不确定点①(已主动处理):显式确保自定义 Zone 存在(幂等),不依赖隐式创建。
         // 若真机验证发现 CKSyncEngine 会自动建 Zone 导致重复,可移除此行。
         engine?.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
+        Task { @MainActor [weak self] in
+            let intents = PersistentSyncRetryCoordinator.shared.pendingFavoriteZoneDeleteIntents()
+            await self?.resumePendingDeletes(intents)
+        }
         Logger.info("FavoriteSyncEngine 已启动", category: .general)
     }
 
@@ -108,14 +113,34 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     public func enqueueSave(_ room: LiveModel) {
         guard let engine else { return }
         let key = AppFavoriteModel.favoriteUniqueKey(for: room)
+        engine.state.remove(pendingRecordZoneChanges: [.deleteRecord(recordID(forKey: key))])
         engine.state.add(pendingRecordZoneChanges: [.saveRecord(recordID(forKey: key))])
         Logger.info("⏱️ enqueueSave key=\(key) → 催 sendChanges", category: .general)
         kickSend()
     }
 
-    public func enqueueDelete(_ room: LiveModel) {
-        guard let engine else { return }
+    public func enqueueDelete(_ room: LiveModel, revision: UUID) {
         let key = AppFavoriteModel.favoriteUniqueKey(for: room)
+        enqueueDelete(stableKey: key, revision: revision)
+    }
+
+    func resumePendingDeletes(_ intents: [(stableKey: String, revision: UUID)]) async {
+        for intent in intents {
+            let isCurrent = await MainActor.run {
+                PersistentSyncRetryCoordinator.shared.favoriteRemovalIsCurrent(
+                    stableKey: intent.stableKey,
+                    revision: intent.revision
+                )
+            }
+            guard isCurrent else { continue }
+            enqueueDelete(stableKey: intent.stableKey, revision: intent.revision)
+        }
+    }
+
+    private func enqueueDelete(stableKey key: String, revision: UUID) {
+        guard let engine else { return }
+        pendingDeleteRevisions[key] = revision
+        engine.state.remove(pendingRecordZoneChanges: [.saveRecord(recordID(forKey: key))])
         engine.state.add(pendingRecordZoneChanges: [.deleteRecord(recordID(forKey: key))])
         Logger.info("⏱️ enqueueDelete key=\(key) → 催 sendChanges", category: .general)
         kickSend()
@@ -174,19 +199,41 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     /// 故下拉刷新/启动时做一次 authoritative 全量对账兜底。收藏量小(百级),成本极低。
     /// 只增不删:避免误删「本地刚加、尚未推上去」的记录;跨端删除仍走引擎正常路径。
     public func fullReconcile() async {
-        let serverModels = await fetchAllZoneRecords()
+        let membershipRevision = await MainActor.run {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
+        }
+        let fetchedModels = await fetchAllZoneRecords()
+        guard await MainActor.run(body: {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
+        }) else { return }
+        let serverModels = await filterPendingRemovals(fetchedModels)
         guard !serverModels.isEmpty else { return }   // 查询失败/空 → 不动本地
-        let local = await FavoriteLocalStore.shared.load()
+        let localSnapshot = await FavoriteLocalStore.shared.loadVersioned()
+        let local = localSnapshot.rooms
+        guard await MainActor.run(body: {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
+        }) else { return }
         // 拉:本地在前,多维度去重后本地优先保留、补入 server-only、合并已有重复。
         // 只增不删:本地里 server 没有的(刚加未推)会被保留(在 local 段、不会被丢)。
         let merged = AppFavoriteModel.deduplicated(local + serverModels)
 
         // 推:本地有、服务器任一维度都没有的记录 → 补推上云(只补缺口,已匹配的不重推,避免再造重复)。
         let localOnly = merged.filter { l in !serverModels.contains { AppFavoriteModel.isSameStreamer($0, l) } }
-        enqueueSaves(localOnly)
+        if merged.count != local.count || !localOnly.isEmpty {
+            guard await FavoriteLocalStore.shared.save(
+                merged,
+                ifRevisionMatches: localSnapshot.revision
+            ) else { return }
+            guard await MainActor.run(body: {
+                guard PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision) else {
+                    return false
+                }
+                enqueueSaves(localOnly)
+                return true
+            }) else { return }
+        }
 
         if merged.count != local.count {
-            await FavoriteLocalStore.shared.save(merged)
             if let onRemoteChange { await onRemoteChange() }
         }
         if merged.count != local.count || !localOnly.isEmpty {
@@ -267,13 +314,21 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     // MARK: - 应用云端变更到本地真相
 
     private func applyFetched(modifications: [CKRecord], deletions: [CKRecord.ID]) async {
-        var rooms = await FavoriteLocalStore.shared.load()
+        let membershipRevision = await MainActor.run {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
+        }
+        let localSnapshot = await FavoriteLocalStore.shared.loadVersioned()
+        var rooms = localSnapshot.rooms
         var byKey: [String: Int] = [:]
         for (i, r) in rooms.enumerated() { byKey[AppFavoriteModel.favoriteUniqueKey(for: r)] = i }
 
         for record in modifications {
             guard let remote = liveModel(from: record) else { continue }
             let key = AppFavoriteModel.favoriteUniqueKey(for: remote)
+            let removalPending = await MainActor.run {
+                PersistentSyncRetryCoordinator.shared.isFavoriteRemovalPending(stableKey: key)
+            }
+            guard !removalPending else { continue }
             if let idx = byKey[key] {
                 let local = rooms[idx]
                 // 身份合并按 identity_updated_at「新者胜」:远端更新时间不晚于本地 → 保留本地身份
@@ -291,12 +346,25 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         }
         if !deletions.isEmpty {
             let deleteKeys = Set(deletions.map { $0.recordName })
-            rooms.removeAll { deleteKeys.contains(AppFavoriteModel.favoriteUniqueKey(for: $0)) }
+            let pendingSaves = Set(engine?.state.pendingRecordZoneChanges.compactMap { change -> String? in
+                if case .saveRecord(let recordID) = change { return recordID.recordName }
+                return nil
+            } ?? [])
+            rooms.removeAll {
+                let key = AppFavoriteModel.favoriteUniqueKey(for: $0)
+                return deleteKeys.contains(key) && !pendingSaves.contains(key)
+            }
         }
 
         // 多维度去重:合并因 roomId 每场变而出现的同主播多条。
         rooms = AppFavoriteModel.deduplicated(rooms)
-        await FavoriteLocalStore.shared.save(rooms)
+        guard await MainActor.run(body: {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
+        }) else { return }
+        guard await FavoriteLocalStore.shared.save(
+            rooms,
+            ifRevisionMatches: localSnapshot.revision
+        ) else { return }
         if let onRemoteChange { await onRemoteChange() }
     }
 
@@ -306,20 +374,28 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     /// - 若 recordName ≠ 稳定 key:删旧记录 + 以稳定 key 存新记录(re-key);
     /// - 若同一稳定 key 已保留过一条:这条是同主播的重复,删掉(保留先到的)。
     /// 本地侧由 applyFetched 按稳定 key 自动去重,故本方法只负责让**服务器**收敛。
-    private func reKeyDuringRepair(records: [CKRecord]) {
+    private func reKeyDuringRepair(records: [CKRecord]) async {
         guard let engine else { return }
+        let membershipRevision = await MainActor.run {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
+        }
+        var nextCanonical = repairCanonical
         var changes: [CKSyncEngine.PendingRecordZoneChange] = []
         for record in records {
             guard let model = liveModel(from: record) else { continue }
             let newKey = AppFavoriteModel.favoriteUniqueKey(for: model)
+            let removalPending = await MainActor.run {
+                PersistentSyncRetryCoordinator.shared.isFavoriteRemovalPending(stableKey: newKey)
+            }
+            guard !removalPending else { continue }
             let oldName = record.recordID.recordName
-            if repairCanonical[newKey] != nil {
+            if nextCanonical[newKey] != nil {
                 // 同一主播的多余记录:删掉(但别删稳定 key 本体那条)
                 if oldName != newKey {
                     changes.append(.deleteRecord(record.recordID))
                 }
             } else {
-                repairCanonical[newKey] = oldName
+                nextCanonical[newKey] = oldName
                 if oldName != newKey {
                     changes.append(.deleteRecord(record.recordID))
                     changes.append(.saveRecord(recordID(forKey: newKey)))
@@ -327,7 +403,14 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
             }
         }
         if !changes.isEmpty {
-            engine.state.add(pendingRecordZoneChanges: changes)
+            guard await MainActor.run(body: {
+                guard PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision) else {
+                    return false
+                }
+                repairCanonical = nextCanonical
+                engine.state.add(pendingRecordZoneChanges: changes)
+                return true
+            }) else { return }
         }
     }
 
@@ -337,27 +420,50 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     public func migrateFromDefaultZoneIfNeeded() async {
         guard !UserDefaults.standard.bool(forKey: Self.migrationDoneKey) else { return }
         guard let engine else { return }
+        let membershipRevision = await MainActor.run {
+            PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
+        }
         do {
             let legacy = try await FavoriteService.searchRecord()  // 读旧默认 Zone
+            guard await MainActor.run(body: {
+                PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
+            }) else { return }
             guard !legacy.isEmpty else {
                 UserDefaults.standard.set(true, forKey: Self.migrationDoneKey)
                 return
             }
             // 合并进本地真相
-            var rooms = await FavoriteLocalStore.shared.load()
+            let localSnapshot = await FavoriteLocalStore.shared.loadVersioned()
+            var rooms = localSnapshot.rooms
             var keys = Set(rooms.map { AppFavoriteModel.favoriteUniqueKey(for: $0) })
             var newSaves: [CKSyncEngine.PendingRecordZoneChange] = []
             for room in legacy {
                 let key = AppFavoriteModel.favoriteUniqueKey(for: room)
+                let removalPending = await MainActor.run {
+                    PersistentSyncRetryCoordinator.shared.isFavoriteRemovalPending(stableKey: key)
+                }
+                guard !removalPending else { continue }
                 if !keys.contains(key) {
                     rooms.append(room)
                     keys.insert(key)
                 }
                 newSaves.append(.saveRecord(recordID(forKey: key)))
             }
-            await FavoriteLocalStore.shared.save(rooms)
-            engine.state.add(pendingRecordZoneChanges: newSaves)  // 推到自定义 Zone
-            UserDefaults.standard.set(true, forKey: Self.migrationDoneKey)
+            guard await MainActor.run(body: {
+                PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
+            }) else { return }
+            guard await FavoriteLocalStore.shared.save(
+                rooms,
+                ifRevisionMatches: localSnapshot.revision
+            ) else { return }
+            guard await MainActor.run(body: {
+                guard PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision) else {
+                    return false
+                }
+                engine.state.add(pendingRecordZoneChanges: newSaves)  // 推到自定义 Zone
+                UserDefaults.standard.set(true, forKey: Self.migrationDoneKey)
+                return true
+            }) else { return }
             Logger.info("已迁移 \(legacy.count) 条收藏到自定义 Zone", category: .general)
             if let onRemoteChange { await onRemoteChange() }
         } catch {
@@ -382,13 +488,24 @@ extension FavoriteSyncEngine: CKSyncEngineDelegate {
             let mods = changes.modifications.map { $0.record }
             let dels = changes.deletions.map { $0.recordID }
             Logger.info("⏱️ fetchedRecordZoneChanges: 改\(mods.count) 删\(dels.count)", category: .general)
-            if repairInProgress { reKeyDuringRepair(records: mods) }
+            if repairInProgress { await reKeyDuringRepair(records: mods) }
             await applyFetched(modifications: mods, deletions: dels)
 
         case .sentRecordZoneChanges(let sent):
             Logger.info("⏱️ sentRecordZoneChanges: 成功存\(sent.savedRecords.count) 删\(sent.deletedRecordIDs.count) 失败\(sent.failedRecordSaves.count)", category: .general)
             for failed in sent.failedRecordSaves {
                 Logger.warning("收藏记录上传失败: \(failed.record.recordID.recordName) - \(failed.error.localizedDescription)", category: .general)
+            }
+            for recordID in sent.deletedRecordIDs {
+                guard let revision = pendingDeleteRevisions.removeValue(forKey: recordID.recordName) else {
+                    continue
+                }
+                await MainActor.run {
+                    PersistentSyncRetryCoordinator.shared.markFavoriteZoneDeleteComplete(
+                        stableKey: recordID.recordName,
+                        revision: revision
+                    )
+                }
             }
 
         case .willSendChanges:
@@ -444,5 +561,18 @@ extension FavoriteSyncEngine: CKSyncEngineDelegate {
         @unknown default:
             break
         }
+    }
+
+    private func filterPendingRemovals(_ rooms: [LiveModel]) async -> [LiveModel] {
+        var filtered: [LiveModel] = []
+        filtered.reserveCapacity(rooms.count)
+        for room in rooms {
+            let key = AppFavoriteModel.favoriteUniqueKey(for: room)
+            let pending = await MainActor.run {
+                PersistentSyncRetryCoordinator.shared.isFavoriteRemovalPending(stableKey: key)
+            }
+            if !pending { filtered.append(room) }
+        }
+        return filtered
     }
 }

@@ -8,25 +8,23 @@ import os.lock
 /// 注册在 JS 侧的 message handler。
 final class HostWebSocketSession: NSObject, @unchecked Sendable {
     let id: String
+    let owner: UUID
 
     private let queue: DispatchQueue
-    private let handlerQueue: DispatchQueue
-    private let handler: @Sendable (String) -> Void
+    private let handler: @Sendable (String, Bool) -> Void
     private var socket: WebSocket?
-    private var pending: [String] = []
-    private var didOpen: Bool = false
-    private var didClose: Bool = false
-    private let lock = NSLock()
+    private var terminal = false
 
     init(
         id: String,
+        owner: UUID,
         request: URLRequest,
-        handlerQueue: DispatchQueue,
-        handler: @escaping @Sendable (String) -> Void
+        queue: DispatchQueue? = nil,
+        handler: @escaping @Sendable (String, Bool) -> Void
     ) {
         self.id = id
-        self.queue = DispatchQueue(label: "host.ws.session.\(id)")
-        self.handlerQueue = handlerQueue
+        self.owner = owner
+        self.queue = queue ?? DispatchQueue(label: "host.ws.session.\(id)")
         self.handler = handler
         super.init()
 
@@ -54,80 +52,135 @@ final class HostWebSocketSession: NSObject, @unchecked Sendable {
     }
 
     func close(code: UInt16, reason: String?) {
-        queue.async { [weak self] in
-            guard let self else { return }
-            self.lock.lock()
-            self.didClose = true
-            self.lock.unlock()
+        queue.async {
+            guard !self.terminal else { return }
+            self.terminal = true
             self.socket?.disconnect(closeCode: code)
+            self.finish(["type": "closed", "code": Int(code), "reason": reason ?? "closed"])
         }
     }
 
     func tearDown() {
-        queue.async { [weak self] in
-            self?.socket?.disconnect()
-            self?.socket?.delegate = nil
-            self?.socket = nil
+        queue.async {
+            self.socket?.delegate = nil
+            self.socket?.disconnect()
+            self.socket = nil
         }
     }
 
-    /// 把事件 JSON 透传给 JS handler。在事件抵达但 JS 那边的 handler 尚未挂上前(open Promise
-    /// resolve 前的极短窗口),先 buffer,JS 调 set_handler 时一次性 flush。
-    private func emit(_ payload: [String: Any]) {
+    func drainForTesting() async {
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume() }
+        }
+    }
+
+    /// 把事件 JSON 透传给 runtime；JS handler 只由对应 JS queue 持有和调用。
+    private func emit(_ payload: [String: Any], terminal: Bool = false) {
+        guard HostWebSocketRegistry.isActive(owner: owner) else { return }
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: []),
               let json = String(data: data, encoding: .utf8) else {
             return
         }
-        handlerQueue.async { [handler] in
-            handler(json)
-        }
+        handler(json, terminal)
+    }
+
+    private func finish(_ payload: [String: Any]) {
+        _ = HostWebSocketRegistry.remove(id, owner: owner)
+        emit(payload, terminal: true)
+        socket?.delegate = nil
+        socket = nil
     }
 }
 
 extension HostWebSocketSession: WebSocketDelegate {
     func didReceive(event: Starscream.WebSocketEvent, client _: any Starscream.WebSocketClient) {
-        switch event {
-        case .connected:
-            lock.lock()
-            didOpen = true
-            lock.unlock()
-            emit(["type": "open"])
-        case .binary(let data):
-            emit(["type": "binary", "bytesBase64": data.base64EncodedString()])
-        case .text(let text):
-            emit(["type": "text", "text": text])
-        case .disconnected(let reason, let code):
-            emit(["type": "closed", "code": Int(code), "reason": reason])
-        case .error(let error):
-            emit(["type": "error", "message": error?.localizedDescription ?? "unknown"])
-        case .cancelled:
-            emit(["type": "closed", "code": 0, "reason": "cancelled"])
-        case .peerClosed:
-            emit(["type": "closed", "code": 0, "reason": "peer closed"])
-        case .ping, .pong, .viabilityChanged, .reconnectSuggested:
-            break
+        receive(event)
+    }
+
+    func receive(_ event: Starscream.WebSocketEvent) {
+        nonisolated(unsafe) let event = event
+        queue.async {
+            guard !self.terminal else { return }
+            switch event {
+            case .connected:
+                self.emit(["type": "open"])
+            case .binary(let data):
+                self.emit(["type": "binary", "bytesBase64": data.base64EncodedString()])
+            case .text(let text):
+                self.emit(["type": "text", "text": text])
+            case .disconnected(let reason, let code):
+                self.terminal = true
+                self.finish(["type": "closed", "code": Int(code), "reason": reason])
+            case .error(let error):
+                self.terminal = true
+                self.finish(["type": "error", "message": error?.localizedDescription ?? "unknown"])
+            case .cancelled:
+                self.terminal = true
+                self.finish(["type": "closed", "code": 0, "reason": "cancelled"])
+            case .peerClosed:
+                self.terminal = true
+                self.finish(["type": "closed", "code": 0, "reason": "peer closed"])
+            case .ping, .pong, .viabilityChanged, .reconnectSuggested:
+                break
+            }
         }
     }
 }
 
 /// 全局会话注册表。pluginId 仅做调试日志追踪用,不参与隔离。
 enum HostWebSocketRegistry {
-    /// 会话表收进 `OSAllocatedUnfairLock` 的受保护状态里(原为 `NSLock` + `static var`)。
-    /// 语义与加锁范围完全不变,但存储变成 `let` 且类型自身 `Sendable`,
-    /// 因此不再是「nonisolated 全局可变状态」——Swift 6 下不需要逃生舱,调用点也无需改成 async。
-    private static let sessions = OSAllocatedUnfairLock<[String: HostWebSocketSession]>(initialState: [:])
+    private struct State: Sendable {
+        var activeOwners: Set<UUID> = []
+        var sessions: [String: HostWebSocketSession] = [:]
+    }
+    private static let state = OSAllocatedUnfairLock<State>(initialState: .init())
 
-    static func add(_ session: HostWebSocketSession) {
-        sessions.withLock { $0[session.id] = session }
+    static func registerOwner() -> UUID {
+        let owner = UUID()
+        _ = state.withLock { $0.activeOwners.insert(owner) }
+        return owner
     }
 
-    static func get(_ id: String) -> HostWebSocketSession? {
-        sessions.withLock { $0[id] }
+    static func isActive(owner: UUID) -> Bool {
+        state.withLock { $0.activeOwners.contains(owner) }
+    }
+
+    static func add(_ session: HostWebSocketSession, owner: UUID) -> Bool {
+        state.withLock {
+            guard $0.activeOwners.contains(owner), $0.sessions[session.id] == nil else { return false }
+            $0.sessions[session.id] = session
+            return true
+        }
+    }
+
+    static func get(_ id: String, owner: UUID) -> HostWebSocketSession? {
+        state.withLock {
+            guard $0.sessions[id]?.owner == owner else { return nil }
+            return $0.sessions[id]
+        }
     }
 
     @discardableResult
-    static func remove(_ id: String) -> HostWebSocketSession? {
-        sessions.withLock { $0.removeValue(forKey: id) }
+    static func remove(_ id: String, owner: UUID) -> HostWebSocketSession? {
+        state.withLock {
+            guard $0.sessions[id]?.owner == owner else { return nil }
+            return $0.sessions.removeValue(forKey: id)
+        }
+    }
+
+    static func invalidate(owner: UUID) -> [HostWebSocketSession] {
+        state.withLock {
+            $0.activeOwners.remove(owner)
+            let removed = $0.sessions.values.filter { $0.owner == owner }
+            for session in removed { $0.sessions.removeValue(forKey: session.id) }
+            return removed
+        }
+    }
+
+    static func sessionCount(owner: UUID) -> Int {
+        state.withLock { state in
+            state.sessions.values.count { $0.owner == owner }
+        }
     }
 }
 
@@ -137,14 +190,9 @@ extension JSRuntime {
     /// - `__lp_host_ws_send(sessionId, frameJSON, resolve, reject)`
     /// - `__lp_host_ws_close(sessionId, optionsJSON, resolve, reject)`
     /// - 不暴露 set_handler:open 时同步把 handler 闭包传进 native 端,事件直接回调。
-    static func configureHostWebSocket(
-        in context: JSContext,
-        queue: DispatchQueue,
-        pluginId: String,
-        credentialDomains: [String],
-        platformSessionOverride: LiveParsePlatformSession?
-    ) {
-        let openBlock: @convention(block) (String, JSValue) -> String = { optionsJSON, handler in
+    func configureHostWebSocket(in context: JSContext) {
+        let openBlock: @convention(block) (String, JSValue) -> String = { [weak self] optionsJSON, handler in
+            guard let self, HostWebSocketRegistry.isActive(owner: self.hostWebSocketOwner) else { return "" }
             let data = optionsJSON.data(using: .utf8) ?? Data()
             guard
                 let options = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -159,13 +207,13 @@ extension JSRuntime {
                 .lowercased()
             let usesPlatformCredential = authMode == "platform_cookie"
             if usesPlatformCredential {
-                let runtimePluginId = LiveParsePlatformSessionVault.canonicalPlatformId(pluginId)
+                let runtimePluginId = LiveParsePlatformSessionVault.canonicalPlatformId(self.hostWebSocketPluginID)
                 let requestedPluginId = LiveParsePlatformSessionVault.canonicalPlatformId(
-                    (options["platformId"] as? String) ?? pluginId
+                    (options["platformId"] as? String) ?? self.hostWebSocketPluginID
                 )
                 guard !runtimePluginId.isEmpty,
                       requestedPluginId == runtimePluginId,
-                      isAllowedCredentialWebSocketURL(url, domains: credentialDomains) else {
+                      Self.isAllowedCredentialWebSocketURL(url, domains: self.hostWebSocketCredentialDomains) else {
                     return ""
                 }
             }
@@ -185,8 +233,8 @@ extension JSRuntime {
             }
             if usesPlatformCredential,
                let cookie = LiveParsePlatformSessionVault.mergedCookieHeader(
-                   for: pluginId,
-                   sessionOverride: platformSessionOverride
+                   for: self.hostWebSocketPluginID,
+                   sessionOverride: self.hostWebSocketSessionOverride
                ) {
                 request.setValue(cookie, forHTTPHeaderField: "Cookie")
             }
@@ -196,43 +244,42 @@ extension JSRuntime {
             }
 
             let sessionId = UUID().uuidString
-            // handler 在另一个 thread 触发,要切回 JS queue 才能安全调 JS 函数。
-            nonisolated(unsafe) let capturedHandler = handler
+            self.hostWebSocketHandlers[sessionId] = handler
+            let owner = self.hostWebSocketOwner
             let session = HostWebSocketSession(
                 id: sessionId,
+                owner: owner,
                 request: request,
-                handlerQueue: queue
-            ) { json in
-                capturedHandler.call(withArguments: [json])
-                context.evaluateScript("void(0)")
+                handler: { [weak self] json, terminal in
+                    self?.deliverHostWebSocketEvent(owner: owner, sessionID: sessionId, json: json, terminal: terminal)
+                }
+            )
+            guard HostWebSocketRegistry.add(session, owner: owner) else {
+                self.hostWebSocketHandlers.removeValue(forKey: sessionId)
+                session.tearDown()
+                return ""
             }
-            HostWebSocketRegistry.add(session)
             session.connect()
             let loggedDestination = usesPlatformCredential
                 ? "\(url.scheme ?? "wss")://\(url.host ?? "")"
                 : urlString
-            Logger.debug("[Host.ws] open pluginId=\(pluginId) sessionId=\(sessionId) url=\(loggedDestination)", category: .plugin)
+            Logger.debug("[Host.ws] open pluginId=\(self.hostWebSocketPluginID) sessionId=\(sessionId) url=\(loggedDestination)", category: .plugin)
             return sessionId
         }
 
-        let sendBlock: @convention(block) (String, String, JSValue, JSValue) -> Void = { sessionId, frameJSON, resolve, reject in
+        let sendBlock: @convention(block) (String, String, JSValue, JSValue) -> Void = { [weak self] sessionId, frameJSON, resolve, reject in
+            guard let self else { return }
             nonisolated(unsafe) let resolve = resolve
             nonisolated(unsafe) let reject = reject
 
-            guard let session = HostWebSocketRegistry.get(sessionId) else {
-                queue.async {
-                    reject.call(withArguments: ["ws session not found: \(sessionId)"])
-                    context.evaluateScript("void(0)")
-                }
+            guard let session = HostWebSocketRegistry.get(sessionId, owner: self.hostWebSocketOwner) else {
+                self.rejectHostWebSocket(reject, message: "ws session not found: \(sessionId)")
                 return
             }
 
             let data = frameJSON.data(using: .utf8) ?? Data()
             guard let frame = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-                queue.async {
-                    reject.call(withArguments: ["ws send invalid frame json"])
-                    context.evaluateScript("void(0)")
-                }
+                self.rejectHostWebSocket(reject, message: "ws send invalid frame json")
                 return
             }
 
@@ -241,10 +288,7 @@ extension JSRuntime {
             case "binary":
                 guard let base64 = frame["bytesBase64"] as? String,
                       let bytes = Data(base64Encoded: base64) else {
-                    queue.async {
-                        reject.call(withArguments: ["ws send: missing bytesBase64"])
-                        context.evaluateScript("void(0)")
-                    }
+                    self.rejectHostWebSocket(reject, message: "ws send: missing bytesBase64")
                     return
                 }
                 session.send(binary: bytes)
@@ -252,44 +296,39 @@ extension JSRuntime {
                 let text = (frame["text"] as? String) ?? ""
                 session.send(text: text)
             default:
-                queue.async {
-                    reject.call(withArguments: ["ws send: unknown frame type \(type)"])
-                    context.evaluateScript("void(0)")
-                }
+                self.rejectHostWebSocket(reject, message: "ws send: unknown frame type \(type)")
                 return
             }
 
-            queue.async {
-                resolve.call(withArguments: [])
-                context.evaluateScript("void(0)")
-            }
+            self.resolveHostWebSocket(resolve)
         }
 
-        let closeBlock: @convention(block) (String, String, JSValue, JSValue) -> Void = { sessionId, optionsJSON, resolve, reject in
+        let closeBlock: @convention(block) (String, String, JSValue, JSValue) -> Void = { [weak self] sessionId, optionsJSON, resolve, reject in
+            guard let self else { return }
             nonisolated(unsafe) let resolve = resolve
             nonisolated(unsafe) let reject = reject
 
-            guard let session = HostWebSocketRegistry.remove(sessionId) else {
+            let data = optionsJSON.data(using: .utf8) ?? Data()
+            let options = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+            let requestedCode = (options["code"] as? Int) ?? 1000
+            guard (0...Int(UInt16.max)).contains(requestedCode) else {
+                self.rejectHostWebSocket(reject, message: "ws close: invalid close code")
+                return
+            }
+            let code = UInt16(requestedCode)
+            let reason = options["reason"] as? String
+
+            guard let session = HostWebSocketRegistry.remove(sessionId, owner: self.hostWebSocketOwner) else {
                 // 已不在注册表也算成功(幂等)。
-                queue.async {
-                    resolve.call(withArguments: [])
-                    context.evaluateScript("void(0)")
-                }
+                self.resolveHostWebSocket(resolve)
                 _ = reject  // suppress unused
                 return
             }
 
-            let data = optionsJSON.data(using: .utf8) ?? Data()
-            let options = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-            let code = UInt16((options["code"] as? Int) ?? 1000)
-            let reason = options["reason"] as? String
-
             session.close(code: code, reason: reason)
             session.tearDown()
-            queue.async {
-                resolve.call(withArguments: [])
-                context.evaluateScript("void(0)")
-            }
+            self.hostWebSocketHandlers.removeValue(forKey: sessionId)
+            self.resolveHostWebSocket(resolve)
         }
 
         context.setObject(openBlock, forKeyedSubscript: "__lp_host_ws_open" as NSString)

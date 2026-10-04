@@ -8,6 +8,11 @@
 import Foundation
 import Security
 
+public extension Notification.Name {
+    /// The object is a plugin ID. Posted only after a committed session mutation.
+    static let platformSessionMetadataDidChange = Notification.Name("AngelLive.platformSessionMetadataDidChange")
+}
+
 public enum PlatformSessionState: String, Codable, Sendable {
     case anonymous
     case authenticated
@@ -28,6 +33,11 @@ public enum PlatformSessionValidationResult: Sendable {
     case invalid(reason: String)
     case expired
     case networkError(String)
+}
+
+public enum ConditionalSessionLoginResult: Sendable {
+    case completed(PlatformSessionValidationResult)
+    case stale
 }
 
 /// 插件侧 `validateCredential` / `getCredentialStatus` 的标准返回结构。
@@ -162,6 +172,7 @@ public actor PlatformSessionManager {
     }
 
     private let store = SessionStore()
+    private let metadataRevisions = PlatformSessionMetadataRevisionStore()
     private var loginAttemptGenerations: [String: UInt] = [:]
     private var activeLoginAttempts: [String: LoginAttemptToken] = [:]
     private var credentialOperationOwners: Set<String> = []
@@ -171,6 +182,12 @@ public actor PlatformSessionManager {
 
     public func getSession(pluginId: String) -> PlatformSession? {
         store.loadSession(for: pluginId)
+    }
+
+    /// Includes explicit logout of an already absent session. Read-only hydration
+    /// does not change this persisted generation.
+    public func metadataRevision(pluginId: String) -> String {
+        metadataRevisions.revision(pluginId: pluginId)
     }
 
     /// Publish persisted state into the runtime vault under the same per-plugin
@@ -254,6 +271,56 @@ public actor PlatformSessionManager {
         validationTimeout: Duration?,
         runtimeLease: LiveParsePluginRuntimeLease?
     ) async -> PlatformSessionValidationResult {
+        let outcome = await performLoginWithCookie(
+            pluginId: pluginId, cookie: cookie, uid: uid, liveType: liveType,
+            source: source, validateBeforeSave: validateBeforeSave,
+            preserveExistingSessionOnFailure: preserveExistingSessionOnFailure,
+            requireExplicitValid: requireExplicitValid,
+            validationTimeout: validationTimeout, runtimeLease: runtimeLease,
+            expectedMetadataRevision: nil
+        )
+        switch outcome {
+        case .completed(let result): return result
+        case .stale: return .networkError("本地登录状态已变化")
+        }
+    }
+
+    /// A retry of a user-authorized download must not overwrite a later logout
+    /// or login. Validation and the final conditional commit share this actor.
+    public func loginWithCookieIfUnchanged(
+        pluginId: String,
+        cookie: String,
+        uid: String? = nil,
+        liveType: String? = nil,
+        source: PlatformSessionSource = .iCloud,
+        expectedMetadataRevision: String
+    ) async -> ConditionalSessionLoginResult {
+        await performLoginWithCookie(
+            pluginId: pluginId, cookie: cookie, uid: uid, liveType: liveType,
+            source: source, validateBeforeSave: true,
+            preserveExistingSessionOnFailure: true, requireExplicitValid: false,
+            validationTimeout: nil, runtimeLease: nil,
+            expectedMetadataRevision: expectedMetadataRevision
+        )
+    }
+
+    private func performLoginWithCookie(
+        pluginId: String,
+        cookie: String,
+        uid: String?,
+        liveType: String?,
+        source: PlatformSessionSource,
+        validateBeforeSave: Bool,
+        preserveExistingSessionOnFailure: Bool,
+        requireExplicitValid: Bool,
+        validationTimeout: Duration?,
+        runtimeLease: LiveParsePluginRuntimeLease?,
+        expectedMetadataRevision: String?
+    ) async -> ConditionalSessionLoginResult {
+        if let expectedMetadataRevision,
+           metadataRevision(pluginId: pluginId) != expectedMetadataRevision {
+            return .stale
+        }
         let normalizedCookie = cookie.trimmingCharacters(in: .whitespacesAndNewlines)
         let cookieLength = normalizedCookie.count
         guard !normalizedCookie.isEmpty else {
@@ -273,7 +340,7 @@ public actor PlatformSessionManager {
                 status: .error,
                 errorMessage: "Cookie 为空"
             )
-            return .invalid(reason: "Cookie 为空")
+            return .completed(.invalid(reason: "Cookie 为空"))
         }
 
         // 必须在第一个 await 之前登记。actor 方法可重入，较新的登录应使较旧
@@ -291,13 +358,13 @@ public actor PlatformSessionManager {
                 attempt,
                 shouldRestore: preserveExistingSessionOnFailure
             )
-            return .networkError("登录已取消或被新的操作替代")
+            return cancelledLoginResult(pluginId: pluginId, expectedRevision: expectedMetadataRevision)
         } catch {
             restoreAndFinishLoginAttemptIfCurrent(
                 attempt,
                 shouldRestore: preserveExistingSessionOnFailure
             )
-            return .networkError("扫码凭据校验超时")
+            return .completed(.networkError("扫码凭据校验超时"))
         }
         defer { releaseCredentialOperation(for: attempt.pluginKey) }
         let remainingValidationTimeout: Duration?
@@ -309,7 +376,7 @@ public actor PlatformSessionManager {
                     attempt,
                     shouldRestore: preserveExistingSessionOnFailure
                 )
-                return .networkError("扫码凭据校验超时")
+                return .completed(.networkError("扫码凭据校验超时"))
             }
             remainingValidationTimeout = remaining
         } else {
@@ -343,7 +410,7 @@ public actor PlatformSessionManager {
                 status: .error,
                 errorMessage: "登录已取消或被新的操作替代"
             )
-            return .networkError("登录已取消或被新的操作替代")
+            return cancelledLoginResult(pluginId: pluginId, expectedRevision: expectedMetadataRevision)
         }
 
         let validationResult: PlatformSessionValidationResult
@@ -374,7 +441,8 @@ public actor PlatformSessionManager {
 
         // 校验可能忽略协作式取消。持久化前必须重新检查，且下面直到
         // updateSession 之间没有 suspension point，避免已取消扫码覆盖旧账号。
-        guard isCurrentLoginAttempt(attempt), !Task.isCancelled else {
+        guard isCurrentLoginAttempt(attempt), !Task.isCancelled,
+              expectedMetadataRevision == nil || metadataRevision(pluginId: pluginId) == expectedMetadataRevision else {
             restoreAndFinishLoginAttemptIfCurrent(
                 attempt,
                 shouldRestore: preserveExistingSessionOnFailure
@@ -385,7 +453,7 @@ public actor PlatformSessionManager {
                 status: .error,
                 errorMessage: "登录已取消或被新的操作替代"
             )
-            return .networkError("登录已取消或被新的操作替代")
+            return cancelledLoginResult(pluginId: pluginId, expectedRevision: expectedMetadataRevision)
         }
 
         var committedResult = validationResult
@@ -445,7 +513,17 @@ public actor PlatformSessionManager {
             errorMessage: consoleStatus == .error ? consoleSummary : nil
         )
 
-        return committedResult
+        return .completed(committedResult)
+    }
+
+    private func cancelledLoginResult(
+        pluginId: String,
+        expectedRevision: String?
+    ) -> ConditionalSessionLoginResult {
+        if let expectedRevision, metadataRevision(pluginId: pluginId) != expectedRevision {
+            return .stale
+        }
+        return .completed(.networkError("登录已取消或被新的操作替代"))
     }
 
     public func updateSession(pluginId: String, data: PlatformSessionData) {
@@ -471,6 +549,7 @@ public actor PlatformSessionManager {
             updatedAt: Date()
         )
         try store.saveSession(session)
+        metadataRevisions.recordMutation(pluginId: pluginId)
         LiveParsePlatformSessionVault.update(
             platformId: pluginId,
             cookie: session.cookie ?? "",
@@ -480,16 +559,19 @@ public actor PlatformSessionManager {
             session,
             expectedVaultRevision: LiveParsePlatformSessionVault.revision(for: pluginId)
         )
+        NotificationCenter.default.post(name: .platformSessionMetadataDidChange, object: pluginId)
     }
 
     public func clearSession(pluginId: String) {
         invalidateLoginAttempts(pluginId: pluginId)
         store.clearSession(for: pluginId)
+        metadataRevisions.recordMutation(pluginId: pluginId)
         LiveParsePlatformSessionVault.clear(platformId: pluginId)
         PlatformSessionLiveParseBridge.clearForPlatform(
             pluginId: pluginId,
             expectedVaultRevision: LiveParsePlatformSessionVault.revision(for: pluginId)
         )
+        NotificationCenter.default.post(name: .platformSessionMetadataDidChange, object: pluginId)
         let snapshot = pluginId
         Task { @MainActor in
             let id = PluginConsoleService.shared.log(tag: "Credential", method: "logout", status: .loading)

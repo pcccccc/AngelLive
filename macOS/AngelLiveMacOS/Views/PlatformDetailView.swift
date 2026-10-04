@@ -19,6 +19,7 @@ struct PlatformDetailView: View {
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
     @State private var showCapabilityPopover = false
+    @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
 
     /// 根据平台类型生成登录相关的错误标题
     private var authErrorTitle: String {
@@ -44,7 +45,7 @@ struct PlatformDetailView: View {
             if let error = viewModel.categoryError {
                 ErrorView(
                     title: error.isAuthRequired ? authErrorTitle : "加载失败",
-                    message: error.liveParseMessage,
+                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
@@ -55,7 +56,10 @@ struct PlatformDetailView: View {
                         }
                     },
                     onLogin: error.isAuthRequired ? {
-                        NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                        authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                            pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+                                .map { [$0.pluginId] } ?? []
+                        )
                     } : nil
                 )
             } else if viewModel.isLoadingCategories && viewModel.categories.isEmpty {
@@ -191,6 +195,12 @@ struct PlatformDetailView: View {
                 await viewModel.loadCategories()
             }
         }
+        .sheet(item: $authenticationRecoveryRequest) { request in
+            NavigationStack {
+                MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                    .frame(minWidth: 620, minHeight: 420)
+            }
+        }
     }
 
     // MARK: - 一级分类导航
@@ -270,8 +280,7 @@ struct PlatformDetailView: View {
     // MARK: - 房间列表视图
     @ViewBuilder
     private var roomListView: some View {
-        let cacheKey = "\(viewModel.selectedMainCategoryIndex)-\(viewModel.selectedSubCategoryIndex)"
-        let rooms = viewModel.roomListCache[cacheKey] ?? []
+        let rooms = viewModel.roomList
 
         if viewModel.isLoadingRooms && rooms.isEmpty {
             ScrollView {
@@ -286,7 +295,7 @@ struct PlatformDetailView: View {
         } else if let error = viewModel.roomError, rooms.isEmpty {
             ErrorView(
                 title: error.isAuthRequired ? authErrorTitle : "加载失败",
-                message: error.liveParseMessage,
+                message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
                 detailMessage: error.liveParseDetail,
                 curlCommand: error.liveParseCurl,
                 showRetry: true,
@@ -297,7 +306,10 @@ struct PlatformDetailView: View {
                     }
                 },
                 onLogin: error.isAuthRequired ? {
-                    NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                    authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                        pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+                            .map { [$0.pluginId] } ?? []
+                    )
                 } : nil
             )
         } else if rooms.isEmpty {
@@ -377,6 +389,7 @@ struct LiveRoomCard: View {
     let room: LiveModel
     let showsCoverBadge: Bool
     private let isFavoritedOverride: Bool?
+    private let onRemoveFromHistory: (@MainActor () -> Void)?
 
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(ToastManager.self) private var toastManager
@@ -387,11 +400,13 @@ struct LiveRoomCard: View {
     init(
         room: LiveModel,
         showsCoverBadge: Bool = false,
-        isFavoritedOverride: Bool? = nil
+        isFavoritedOverride: Bool? = nil,
+        onRemoveFromHistory: (@MainActor () -> Void)? = nil
     ) {
         self.room = room
         self.showsCoverBadge = showsCoverBadge
         self.isFavoritedOverride = isFavoritedOverride
+        self.onRemoveFromHistory = onRemoveFromHistory
     }
 
     private var isFavorited: Bool {
@@ -488,6 +503,12 @@ struct LiveRoomCard: View {
         )
         .contextMenu {
             favoriteContextMenu
+            if let callback = onRemoveFromHistory {
+                Divider()
+                Button(role: .destructive, action: callback) {
+                    Label("删除历史记录", systemImage: "trash")
+                }
+            }
         }
     }
 

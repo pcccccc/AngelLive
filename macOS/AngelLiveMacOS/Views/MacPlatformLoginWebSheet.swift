@@ -12,6 +12,7 @@ import AngelLiveCore
 
 struct MacPlatformLoginWebSheet: View {
     let pluginId: String
+    let startsWithLogin: Bool
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
@@ -29,6 +30,11 @@ struct MacPlatformLoginWebSheet: View {
     @State private var isValidating = false
     @State private var validationMessage: String?
     @State private var userDisplayName: String?
+
+    init(pluginId: String, startsWithLogin: Bool = false) {
+        self.pluginId = pluginId
+        self.startsWithLogin = startsWithLogin
+    }
 
     var body: some View {
         NavigationStack {
@@ -58,7 +64,9 @@ struct MacPlatformLoginWebSheet: View {
             }
             .task {
                 entry = await PlatformLoginRegistry.shared.entry(pluginId: pluginId)
-                await reloadLoginStatus()
+                if !startsWithLogin {
+                    await reloadLoginStatus()
+                }
             }
             .onDisappear {
                 cookiePollingTimer?.invalidate()
@@ -176,6 +184,7 @@ struct MacPlatformLoginWebSheet: View {
         VStack(spacing: 0) {
             MacPlatformLoginWebView(
                 loginFlow: loginFlow,
+                usesEphemeralSession: startsWithLogin,
                 onWebViewCreated: { webView in
                     currentWebView = webView
                     startCookiePolling(entry: entry)
@@ -388,6 +397,7 @@ struct MacPlatformLoginWebSheet: View {
 
 private struct MacPlatformLoginWebView: NSViewRepresentable {
     let loginFlow: ManifestLoginFlow
+    let usesEphemeralSession: Bool
     let onWebViewCreated: (WKWebView) -> Void
     let onNavigationStateChange: (String?, URL?, Bool) -> Void
 
@@ -397,7 +407,9 @@ private struct MacPlatformLoginWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.websiteDataStore = usesEphemeralSession
+            ? WKWebsiteDataStore.nonPersistent()
+            : WKWebsiteDataStore.default()
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator

@@ -16,7 +16,7 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈", "翻译与字幕"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈", "翻译与字幕", "播放时间轴"]
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @State private var lastFocusedIndex: Int?
@@ -88,6 +88,14 @@ struct SettingView: View {
             guard newValue == nil, let lastFocusedIndex else { return }
             focusedIndex = lastFocusedIndex
         }
+        .onChange(of: selectedIndex) { previousIndex, newIndex in
+            guard appViewModel.pluginAvailability.hasAvailablePlugins,
+                  newIndex == nil,
+                  let previousIndex,
+                  halfScreenIndices.contains(previousIndex),
+                  shouldShowMenuItem(previousIndex) else { return }
+            focusedIndex = previousIndex
+        }
         .onChange(of: appViewModel.pluginAvailability.hasAvailablePlugins) { _, hasPlugins in
             guard !hasPlugins else { return }
             if selectedIndex == 0 {
@@ -131,38 +139,40 @@ struct SettingView: View {
     private var menuItemIndices: [Int] {
         let indices = Array(titles.indices)
         guard appViewModel.pluginAvailability.hasAvailablePlugins else { return indices }
-        return indices.filter { $0 != 8 } + [8]
+        return indices.filter { $0 != 8 && $0 != 11 } + [8, 11]
     }
 
     private var menuListView: some View {
-        VStack(spacing: 15) {
-            ForEach(menuItemIndices, id: \.self) { index in
-                if shouldShowMenuItem(index) {
-                    Button {
-                        if index == 7 {
-                            showClearCacheConfirm = true
-                        } else if index == 9 {
-                            lastFocusedIndex = focusedIndex ?? index
-                            fullScreenIndex = index
-                        } else if halfScreenIndices.contains(index) {
-                            selectedIndex = index
-                        } else {
-                            fullScreenIndex = index
-                        }
-                    } label: {
-                        HStack(spacing: 15) {
-                            Text(index == 8 && appViewModel.pluginAvailability.hasAvailablePlugins ? "关于" : titles[index])
-                                .foregroundColor(.primary)
-                            Spacer()
-                            menuTrailingStatus(for: index)
-                            if index != 7 {
-                                Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
+        ScrollView(.vertical) {
+            VStack(spacing: 15) {
+                ForEach(menuItemIndices, id: \.self) { index in
+                    if shouldShowMenuItem(index) {
+                        Button {
+                            if index == 7 {
+                                showClearCacheConfirm = true
+                            } else if index == 9 || index == 11 {
+                                lastFocusedIndex = focusedIndex ?? index
+                                fullScreenIndex = index
+                            } else if halfScreenIndices.contains(index) {
+                                selectedIndex = index
+                            } else {
+                                fullScreenIndex = index
+                            }
+                        } label: {
+                            HStack(spacing: 15) {
+                                Text(index == 8 && appViewModel.pluginAvailability.hasAvailablePlugins ? "关于" : titles[index])
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                menuTrailingStatus(for: index)
+                                if index != 7 {
+                                    Image(systemName: "chevron.right")
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                        .focused($focusedIndex, equals: index)
+                        .disabled(index == 7 && isClearingCache)
                     }
-                    .focused($focusedIndex, equals: index)
-                    .disabled(index == 7 && isClearingCache)
                 }
             }
         }
@@ -206,6 +216,9 @@ struct SettingView: View {
         }
         if index == 10 {
             return appViewModel.pluginAvailability.hasAvailablePlugins
+        }
+        if index == 11 {
+            return appViewModel.generalSettingsViewModel.developerModeEnabled
         }
         if appViewModel.pluginAvailability.hasAvailablePlugins {
             // 已安装插件均无登录入口时,隐藏账号管理(0)
@@ -322,6 +335,13 @@ struct SettingView: View {
                 SupportDiagnosticsView()
             }
             .preferredColorScheme(.dark)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
+        case 11: // 播放时间轴
+            NavigationStack {
+                PlaybackTimelineView(onClose: { fullScreenIndex = nil })
+                    .navigationTitle("播放时间轴")
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
         default:

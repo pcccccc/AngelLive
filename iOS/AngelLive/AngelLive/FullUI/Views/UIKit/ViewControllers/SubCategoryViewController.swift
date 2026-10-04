@@ -20,6 +20,7 @@ class SubCategoryViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
+    private let pluginAvailability: PluginAvailabilityService
     /// 透传给 RoomListViewController,用来弹收藏失败的 toast。
     var toastPresenter: ((ToastValue) -> Void)?
 
@@ -66,12 +67,20 @@ class SubCategoryViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
+    init(
+        viewModel: PlatformDetailViewModel,
+        mainCategoryIndex: Int,
+        navigationState: LiveRoomNavigationState,
+        namespace: Namespace.ID,
+        favoriteModel: AppFavoriteModel? = nil,
+        pluginAvailability: PluginAvailabilityService
+    ) {
         self.viewModel = viewModel
         self.mainCategoryIndex = mainCategoryIndex
         self.navigationState = navigationState
         self.namespace = namespace
         self.favoriteModel = favoriteModel
+        self.pluginAvailability = pluginAvailability
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -271,7 +280,8 @@ extension SubCategoryViewController: JXSegmentedListContainerViewDataSource {
             subCategoryIndex: index,
             navigationState: navigationState,
             namespace: namespace,
-            favoriteModel: favoriteModel
+            favoriteModel: favoriteModel,
+            pluginAvailability: pluginAvailability
         )
         vc.toastPresenter = toastPresenter
         return vc

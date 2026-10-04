@@ -138,16 +138,20 @@ struct DanmakuConnectionRecoveryTests {
         let gate = DeferredDanmakuResult()
         let connection = makeWebSocket()
         let engine = RecordingDanmakuEngine()
+        let delegate = RecordingDanmakuDelegate()
+        connection.delegate = delegate
         connection.makeDriver = { _, _, _, _ in FixtureDanmakuDriver(create: { await gate.value() }) }
         connection.makeSocket = { WebSocket(request: $0, engine: engine) }
         connection.connect()
         await gate.waitUntilStarted()
         let oldWork = connection.workQueue.tail
         connection.disconnect()
+        #expect(!connection.hasPendingConsoleEntry)
         await gate.resolve(try emptyResult())
         await oldWork?.value
         #expect(engine.starts == 0)
         #expect(connection.socket == nil)
+        #expect(delegate.disconnected == 0)
     }
 
     @Test func oldSocketEventsCannotDisconnectReplacement() async throws {
@@ -275,7 +279,10 @@ struct DanmakuConnectionRecoveryTests {
         #expect(engine.starts == 0)
         #expect(connection.socket == nil)
         #expect(delegate.disconnected == 1)
+        clock.advance(30)
         #expect(clock.entries.isEmpty)
+        #expect(engine.starts == 0)
+        #expect(delegate.disconnected == 1)
     }
 
     @Test func pollingSessionFailureRetriesAndExplicitDisconnectCancelsRetry() async {
@@ -305,6 +312,159 @@ struct DanmakuConnectionRecoveryTests {
         #expect(clock.entries.isEmpty)
     }
 
+    @Test func pollingDoesNotReportConnectedUntilHTTPResponseIsProcessed() async throws {
+        let clock = ManualDanmakuClock()
+        let requests = RecordingPollRequestExecutor()
+        let plan = LiveParseDanmakuPlan(
+            args: [:],
+            transport: .init(
+                kind: .httpPolling,
+                url: "https://poll.example.invalid",
+                polling: .init(sendOnConnect: true)
+            ),
+            runtime: .init(driver: .pluginJSV1)
+        )
+        let connection = HTTPPollingDanmakuConnection(
+            parameters: nil,
+            headers: nil,
+            liveType: "fixture.plugin",
+            pluginId: "fixture.plugin",
+            roomId: "room",
+            userId: nil,
+            danmakuPlan: plan
+        )
+        let delegate = RecordingDanmakuDelegate()
+        let initial = try decodeResult(#"{"poll":{"url":"https://poll.example.invalid"}}"#)
+        connection.delegate = delegate
+        connection.schedule = clock.schedule
+        connection.executeRequest = requests.execute
+        connection.makeDriver = { _, _, _, _ in
+            FixtureDanmakuDriver(create: { initial })
+        }
+
+        connection.connect()
+        await connection.workQueue.drain()
+        #expect(requests.pendingCount == 1)
+        #expect(delegate.connected == 0)
+
+        requests.failNext(URLError(.notConnectedToInternet))
+        #expect(delegate.connected == 0)
+        #expect(delegate.disconnected == 1)
+
+        clock.advance(3)
+        await connection.workQueue.drain()
+        #expect(requests.pendingCount == 1)
+        requests.failNext(URLError(.networkConnectionLost))
+        #expect(delegate.connected == 0)
+        #expect(delegate.disconnected == 1)
+
+        clock.advance(5)
+        await connection.workQueue.drain()
+        #expect(requests.pendingCount == 1)
+        requests.succeedNext(Data())
+        await connection.workQueue.drain()
+        #expect(delegate.connected == 1)
+        #expect(delegate.disconnected == 1)
+        connection.disconnect()
+    }
+
+    @Test func pollingDoesNotReportConnectedWhenFirstResponseParsingFails() async throws {
+        let clock = ManualDanmakuClock()
+        let requests = RecordingPollRequestExecutor()
+        let plan = LiveParseDanmakuPlan(
+            args: [:],
+            transport: .init(
+                kind: .httpPolling,
+                url: "https://poll.example.invalid",
+                polling: .init(sendOnConnect: true)
+            ),
+            runtime: .init(driver: .pluginJSV1)
+        )
+        let connection = HTTPPollingDanmakuConnection(
+            parameters: nil,
+            headers: nil,
+            liveType: "fixture.plugin",
+            pluginId: "fixture.plugin",
+            roomId: "room",
+            userId: nil,
+            danmakuPlan: plan
+        )
+        let delegate = RecordingDanmakuDelegate()
+        let initial = try decodeResult(#"{"poll":{"url":"https://poll.example.invalid"}}"#)
+        connection.delegate = delegate
+        connection.schedule = clock.schedule
+        connection.executeRequest = requests.execute
+        connection.makeDriver = { _, _, _, _ in
+            FixtureDanmakuDriver(
+                create: { initial },
+                onFrameAction: { throw URLError(.cannotParseResponse) }
+            )
+        }
+
+        connection.connect()
+        await connection.workQueue.drain()
+        requests.succeedNext(Data("invalid".utf8))
+        await connection.workQueue.drain()
+
+        #expect(delegate.connected == 0)
+        #expect(delegate.disconnected == 1)
+        connection.disconnect()
+    }
+
+    @Test func retiredDriverCleanupIsOwnedReplacedAndTimedOut() async {
+        let clock = ManualDanmakuClock()
+        let retirement = DanmakuDriverRetirement(timeout: 10, schedule: clock.schedule)
+        let first = CancellableDestroyProbe()
+        let second = CancellableDestroyProbe()
+
+        retirement.retire(
+            FixtureDanmakuDriver(destroyAction: { _ in await first.run() }),
+            reason: .reconnect
+        )
+        await first.waitUntilStarted()
+        #expect(retirement.hasPendingRetirement)
+
+        retirement.retire(
+            FixtureDanmakuDriver(destroyAction: { _ in await second.run() }),
+            reason: .error
+        )
+        await first.waitUntilCancelled()
+        await second.waitUntilStarted()
+        #expect(retirement.hasPendingRetirement)
+
+        clock.advance(10)
+        await second.waitUntilCancelled()
+        #expect(!retirement.hasPendingRetirement)
+        let firstSnapshot = await first.snapshot()
+        let secondSnapshot = await second.snapshot()
+        #expect(firstSnapshot == .init(started: 1, cancelled: 1, active: 0))
+        #expect(secondSnapshot == .init(started: 1, cancelled: 1, active: 0))
+    }
+
+    @Test func releasingConnectionDoesNotCancelDriverCleanupBeforeItStarts() async {
+        let clock = ManualDanmakuClock()
+        let destroy = CancellableDestroyProbe()
+        var connection: WebSocketConnection? = makeWebSocket()
+        weak let releasedConnection = connection
+        connection?.schedule = clock.schedule
+        connection?.makeDriver = { _, _, _, _ in
+            FixtureDanmakuDriver(destroyAction: { _ in await destroy.run() })
+        }
+        connection?.makeSocket = { WebSocket(request: $0, engine: RecordingDanmakuEngine()) }
+
+        connection?.connect()
+        await connection?.workQueue.drain()
+        connection?.disconnect()
+        connection = nil
+
+        #expect(releasedConnection == nil)
+        await destroy.waitUntilStarted()
+        clock.advance(30)
+        await destroy.waitUntilCancelled()
+        let snapshot = await destroy.snapshot()
+        #expect(snapshot == .init(started: 1, cancelled: 1, active: 0))
+    }
+
     private func makeWebSocket(url: String = "wss://socket.example.invalid") -> WebSocketConnection {
         let plan = LiveParseDanmakuPlan(args: [:], transport: .init(kind: .websocket, url: url), runtime: .init(driver: .pluginJSV1))
         return WebSocketConnection(parameters: nil, headers: nil, liveType: "fixture.plugin", pluginId: "fixture.plugin", roomId: "room", userId: nil, danmakuPlan: plan)
@@ -321,11 +481,86 @@ private struct FixtureDanmakuDriver: DanmakuRuntimeDriving {
     var create: @Sendable () async throws -> LiveParseDanmakuDriverResult = { try emptyResult() }
     var onOpen: @Sendable () async throws -> LiveParseDanmakuDriverResult = { try emptyResult() }
     var onTick: @Sendable (PluginJSDanmakuDriver.TickReason) async throws -> LiveParseDanmakuDriverResult = { _ in try emptyResult() }
+    var onFrameAction: @Sendable () async throws -> LiveParseDanmakuDriverResult = { try emptyResult() }
+    var destroyAction: @Sendable (PluginJSDanmakuDriver.DestroyReason) async -> Void = { _ in }
     func createSession() async throws -> LiveParseDanmakuDriverResult { try await create() }
     func onOpen() async throws -> LiveParseDanmakuDriverResult { try await onOpen() }
     func onTick(reason: PluginJSDanmakuDriver.TickReason) async throws -> LiveParseDanmakuDriverResult { try await onTick(reason) }
-    func onFrame(frameType: PluginJSDanmakuDriver.IncomingFrameType, text: String?, data: Data?, statusCode: Int?, responseHeaders: [String: String]?) async throws -> LiveParseDanmakuDriverResult { try emptyResult() }
-    func destroy(reason: PluginJSDanmakuDriver.DestroyReason) async {}
+    func onFrame(frameType: PluginJSDanmakuDriver.IncomingFrameType, text: String?, data: Data?, statusCode: Int?, responseHeaders: [String: String]?) async throws -> LiveParseDanmakuDriverResult { try await onFrameAction() }
+    func destroy(reason: PluginJSDanmakuDriver.DestroyReason) async { await destroyAction(reason) }
+}
+
+@MainActor
+private final class RecordingPollRequestExecutor {
+    private var completions: [@MainActor (DanmakuHTTPResponse) -> Void] = []
+    private(set) var cancellations = 0
+    var pendingCount: Int { completions.count }
+
+    func execute(
+        _ request: URLRequest,
+        completion: @escaping @MainActor (DanmakuHTTPResponse) -> Void
+    ) -> @MainActor () -> Void {
+        _ = request
+        completions.append(completion)
+        return { [weak self] in self?.cancellations += 1 }
+    }
+
+    func failNext(_ error: Error) {
+        completions.removeFirst()(.failure(error))
+    }
+
+    func succeedNext(_ data: Data) {
+        let response = HTTPURLResponse(
+            url: URL(string: "https://poll.example.invalid")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )
+        completions.removeFirst()(.success((data, response)))
+    }
+}
+
+private actor CancellableDestroyProbe {
+    struct Snapshot: Equatable {
+        let started: Int
+        let cancelled: Int
+        let active: Int
+    }
+
+    private var started = 0
+    private var cancelled = 0
+    private var active = 0
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private var cancellationWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func run() async {
+        started += 1
+        active += 1
+        startWaiters.forEach { $0.resume() }
+        startWaiters.removeAll()
+        do {
+            try await Task.sleep(for: .seconds(3_600))
+        } catch is CancellationError {
+            cancelled += 1
+        } catch {}
+        active -= 1
+        cancellationWaiters.forEach { $0.resume() }
+        cancellationWaiters.removeAll()
+    }
+
+    func waitUntilStarted() async {
+        if started > 0 { return }
+        await withCheckedContinuation { startWaiters.append($0) }
+    }
+
+    func waitUntilCancelled() async {
+        if cancelled > 0 { return }
+        await withCheckedContinuation { cancellationWaiters.append($0) }
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(started: started, cancelled: cancelled, active: active)
+    }
 }
 
 private actor FixtureHeartbeatWrites {

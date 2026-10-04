@@ -43,6 +43,27 @@ struct PlatformLoginRegistryTests {
         #expect(await registry.entry(pluginId: pluginId) == nil)
     }
 
+    @Test("trusted plugin ids resolve in request order without a default")
+    func trustedPluginIDsResolveInOrder() async throws {
+        let fixture = try PluginResolutionFixture()
+        defer { fixture.remove() }
+        let first = "first-\(UUID().uuidString.lowercased()).plugin"
+        let second = "second-\(UUID().uuidString.lowercased()).plugin"
+        try fixture.install(pluginId: first, version: "1.0.0", supportsQRCode: true)
+        try fixture.install(pluginId: second, version: "1.0.0", supportsQRCode: true)
+        let registry = PlatformLoginRegistry(
+            pluginManager: LiveParsePluginManager(storage: fixture.storage, bundle: .main)
+        )
+
+        let entries = await registry.entries(
+            pluginIDs: [second, "fixture.unknown", first, second],
+            for: .iOS
+        )
+        #expect(entries.map(\.pluginId) == [second, first])
+        let empty = await registry.entries(pluginIDs: [], for: .iOS)
+        #expect(empty.isEmpty)
+    }
+
     @Test("concurrent first resolve shares one runtime lease")
     func concurrentResolveSharesRuntime() async throws {
         let fixture = try PluginResolutionFixture()
@@ -125,7 +146,7 @@ struct PlatformLoginRegistryTests {
 
     @Test("runtime lease keeps an active login challenge on one plugin version")
     func runtimeLeaseSurvivesPluginSelectionChange() async throws {
-        struct Probe: Decodable { let version: String }
+        struct Probe: Decodable { let version: String; let count: Int? }
 
         let fixture = try PluginResolutionFixture()
         defer { fixture.remove() }
@@ -134,7 +155,7 @@ struct PlatformLoginRegistryTests {
             pluginId: pluginId,
             version: "1.0.0",
             supportsQRCode: true,
-            script: "globalThis.LiveParsePlugin = { apiVersion: 1, probe() { return { version: '1.0.0' }; } };"
+            script: "globalThis.leaseCount = 0; globalThis.LiveParsePlugin = { apiVersion: 1, probe() { globalThis.leaseCount += 1; return { version: '1.0.0', count: globalThis.leaseCount }; } };"
         )
         try fixture.install(
             pluginId: pluginId,
@@ -156,6 +177,12 @@ struct PlatformLoginRegistryTests {
             payload: [:],
             sensitive: true
         )
+        let leasedAgain: Probe = try await manager.callDecodable(
+            using: lease,
+            function: "probe",
+            payload: [:],
+            sensitive: true
+        )
         let current: Probe = try await manager.callDecodable(
             pluginId: pluginId,
             function: "probe"
@@ -163,7 +190,113 @@ struct PlatformLoginRegistryTests {
 
         #expect(lease.version == "1.0.0")
         #expect(leased.version == "1.0.0")
+        #expect(leased.count == 1)
+        #expect(leasedAgain.count == 2)
         #expect(current.version == "2.0.0")
+    }
+
+    @Test("reload cancels a pending ordinary call from the retired runtime", .timeLimit(.minutes(1)))
+    func reloadRejectsLateOrdinaryResult() async throws {
+        struct Receipt: Decodable, Sendable {}
+        let fixture = try PluginResolutionFixture()
+        defer { fixture.remove() }
+        let pluginId = "late-runtime-\(UUID().uuidString.lowercased()).plugin"
+        try fixture.install(
+            pluginId: pluginId,
+            version: "1.0.0",
+            supportsQRCode: false,
+            script: "globalThis.LiveParsePlugin = { apiVersion: 1, probe() { return new Promise(function () {}); } };"
+        )
+        let manager = LiveParsePluginManager(storage: fixture.storage, bundle: .main)
+        let runtime = try manager.resolve(pluginId: pluginId).runtime
+        let call = Task<Void, Error> {
+            let _: Receipt = try await manager.callDecodable(pluginId: pluginId, function: "probe")
+        }
+        while await runtime.pendingPromiseCallCountForTesting() == 0 { await Task.yield() }
+
+        try manager.reload()
+
+        await #expect(throws: CancellationError.self) { try await call.value }
+    }
+
+    @Test("selection changes for one plugin do not cancel another plugin", .timeLimit(.minutes(1)))
+    func perPluginRuntimeGate() async throws {
+        struct ProbeResponse: Decodable, Sendable { let ok: Bool }
+        let fixture = try PluginResolutionFixture()
+        defer { fixture.remove() }
+        let pluginA = "scope-a-\(UUID().uuidString.lowercased()).plugin"
+        let pluginB = "scope-b-\(UUID().uuidString.lowercased()).plugin"
+        try fixture.install(pluginId: pluginA, version: "1.0.0", supportsQRCode: false)
+        try fixture.install(
+            pluginId: pluginB,
+            version: "1.0.0",
+            supportsQRCode: false,
+            script: """
+            globalThis.releaseProbe = null;
+            globalThis.LiveParsePlugin = {
+              apiVersion: 1,
+              probe() { return new Promise(function(resolve) { globalThis.releaseProbe = resolve; }); }
+            };
+            """
+        )
+        let manager = LiveParsePluginManager(storage: fixture.storage, bundle: .main)
+        _ = try manager.resolve(pluginId: pluginA)
+        let runtimeB = try manager.resolve(pluginId: pluginB).runtime
+        let call = Task<Bool, Error> {
+            let value: ProbeResponse = try await manager.callDecodable(pluginId: pluginB, function: "probe")
+            return value.ok
+        }
+        while await runtimeB.pendingPromiseCallCountForTesting() == 0 { await Task.yield() }
+
+        try manager.setLastGoodVersion(pluginId: pluginA, version: "1.0.0")
+        try manager.pin(pluginId: pluginA, version: "1.0.0")
+        try manager.unpin(pluginId: pluginA)
+        try await runtimeB.evaluate(script: "globalThis.releaseProbe({ ok: true });")
+        #expect(try await call.value)
+    }
+
+    @Test("concurrent plugin loads evaluate the entry script once")
+    func concurrentLoadIsSingleFlight() async throws {
+        let fixture = try PluginResolutionFixture()
+        defer { fixture.remove() }
+        let pluginId = "load-flight-\(UUID().uuidString.lowercased()).plugin"
+        try fixture.install(
+            pluginId: pluginId,
+            version: "1.0.0",
+            supportsQRCode: false,
+            script: "globalThis.entryLoads = (globalThis.entryLoads || 0) + 1; globalThis.LiveParsePlugin = { apiVersion: 1, probe() { return { count: globalThis.entryLoads }; } };"
+        )
+        let plugin = try LiveParsePluginManager(storage: fixture.storage, bundle: .main).resolve(pluginId: pluginId)
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<32 { group.addTask { try await plugin.load() } }
+            try await group.waitForAll()
+        }
+
+        let result = try #require(try await plugin.runtime.callPluginFunction(name: "probe") as? [String: Any])
+        #expect(result["count"] as? Int == 1)
+    }
+
+    @Test("a failed plugin load can be retried")
+    func failedLoadCanRetry() async throws {
+        let fixture = try PluginResolutionFixture()
+        defer { fixture.remove() }
+        let pluginId = "load-retry-\(UUID().uuidString.lowercased()).plugin"
+        try fixture.install(
+            pluginId: pluginId,
+            version: "1.0.0",
+            supportsQRCode: false,
+            script: "globalThis.LiveParsePlugin = { apiVersion: 99 };"
+        )
+        let plugin = try LiveParsePluginManager(storage: fixture.storage, bundle: .main).resolve(pluginId: pluginId)
+        await #expect(throws: LiveParsePluginError.self) { try await plugin.load() }
+
+        let entryFileURL = await plugin.entryFileURL
+        try Data("globalThis.LiveParsePlugin = { apiVersion: 1, probe() { return { ok: true }; } };".utf8)
+            .write(to: entryFileURL, options: .atomic)
+        try await plugin.load()
+        let result = try #require(try await plugin.runtime.callPluginFunction(name: "probe") as? [String: Any])
+        #expect(result["ok"] as? Bool == true)
     }
 
     @Test(
@@ -209,9 +342,8 @@ struct PlatformLoginRegistryTests {
                 sensitive: true
             )
         }
-        #expect(await eventually {
-            await abandonedRuntime.pendingPromiseCallCountForTesting() == 1
-        })
+        await abandonedRuntime.waitForPendingPromiseCallForTesting()
+        #expect(await abandonedRuntime.pendingPromiseCallCountForTesting() == 1)
 
         call.cancel()
         guard case .failure(let error) = await call.result else {
@@ -222,18 +354,13 @@ struct PlatformLoginRegistryTests {
         let replacementRuntime = try manager.resolve(pluginId: pluginId).runtime
         #expect(replacementRuntime !== abandonedRuntime)
 
-        try await abandonedRuntime.evaluate(script: "globalThis.releaseAbandonedCall();")
+        await #expect(throws: CancellationError.self) {
+            try await abandonedRuntime.evaluate(script: "globalThis.releaseAbandonedCall();")
+        }
         await Task.yield()
         #expect(!messages.values.contains { $0.contains(secret) })
     }
 
-    private func eventually(_ predicate: () async -> Bool) async -> Bool {
-        for _ in 0..<1_000 {
-            if await predicate() { return true }
-            await Task.yield()
-        }
-        return false
-    }
 }
 
 private struct PluginResolutionFixture {

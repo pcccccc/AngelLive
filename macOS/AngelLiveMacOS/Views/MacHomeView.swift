@@ -6,6 +6,7 @@
 //
 
 import AngelLiveCore
+import Combine
 import Kingfisher
 import SwiftUI
 internal import Shimmer
@@ -55,6 +56,7 @@ struct MacHomeView: View {
     @Environment(\.openWindow) private var openWindow
 
     @State private var model = PluginHomeFeedModel()
+    @State private var credentialRevision = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -135,14 +137,38 @@ struct MacHomeView: View {
         .task(id: MacHomeRefreshTrigger(
             installedPluginIds: pluginAvailability.installedPluginIds,
             availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
-            catalogRevision: pluginAvailability.catalogRevision
+            catalogRevision: pluginAvailability.catalogRevision,
+            credentialRevision: credentialRevision
         )) {
+            let installedPluginIds = pluginAvailability.installedPluginIds
+            let availabilityConfirmed = pluginAvailability.hasCheckedAvailability
             model.selectPlatform(pluginId: nil)
+            let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+            guard !Task.isCancelled else { return }
             await model.refresh(
-                installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                installedPluginIds: installedPluginIds,
+                availabilityConfirmed: availabilityConfirmed,
+                context: context
             )
             await refreshFavoritesIfNeeded()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
+                .compactMap { $0.object as? String }
+                .receive(on: RunLoop.main)
+        ) { pluginId in
+            if pluginAvailability.installedPluginIds.contains(pluginId) {
+                credentialRevision &+= 1
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .platformAPICredentialChanged)
+                .compactMap { $0.object as? String }
+                .receive(on: RunLoop.main)
+        ) { pluginId in
+            if pluginAvailability.installedPluginIds.contains(pluginId) {
+                credentialRevision &+= 1
+            }
         }
     }
 
@@ -187,18 +213,28 @@ struct MacHomeView: View {
 
     private func refreshHome() {
         Task {
+            let installedPluginIds = pluginAvailability.installedPluginIds
+            let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+            guard !Task.isCancelled else { return }
             await model.refresh(
-                installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                installedPluginIds: installedPluginIds,
+                availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
+                context: context,
+                force: true
             )
         }
     }
 
     private func refreshAll() {
         Task {
+            let installedPluginIds = pluginAvailability.installedPluginIds
+            let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+            guard !Task.isCancelled else { return }
             await model.refresh(
-                installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                installedPluginIds: installedPluginIds,
+                availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
+                context: context,
+                force: true
             )
             await favoriteModel.pullToRefresh()
         }
@@ -209,6 +245,7 @@ private struct MacHomeRefreshTrigger: Hashable {
     let installedPluginIds: [String]
     let availabilityConfirmed: Bool
     let catalogRevision: UInt
+    let credentialRevision: Int
 }
 
 private enum MacHomeHeroMetrics {

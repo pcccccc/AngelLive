@@ -86,6 +86,16 @@ enum NativeTranslationAvailabilityStatus: Sendable {
     case unsupported
 }
 
+enum NativeTranslationStrategy: Hashable, Sendable {
+    case systemDefault
+    case lowLatency
+}
+
+enum NativeTranslationSessionSelection: Equatable, Sendable {
+    case installed(NativeTranslationStrategy)
+    case downloadCapable
+}
+
 private extension NativeTranslationAvailabilityStatus {
     var publicStatus: NativeTranslationLanguageStatus {
         switch self {
@@ -99,15 +109,21 @@ private extension NativeTranslationAvailabilityStatus {
 @available(iOS 18.0, macOS 15.0, *)
 @MainActor
 protocol NativeTranslationAvailabilityChecking: AnyObject {
-    func status(for pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus
+    func status(
+        for pair: NativeTranslationLanguagePair,
+        strategy: NativeTranslationStrategy
+    ) async -> NativeTranslationAvailabilityStatus
 }
 
 @available(iOS 18.0, macOS 15.0, *)
 @MainActor
 private final class SystemNativeTranslationAvailability: NativeTranslationAvailabilityChecking {
-    func status(for pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus {
+    func status(
+        for pair: NativeTranslationLanguagePair,
+        strategy: NativeTranslationStrategy
+    ) async -> NativeTranslationAvailabilityStatus {
         let availability: LanguageAvailability
-        if #available(iOS 26.4, macOS 26.4, *) {
+        if strategy == .lowLatency, #available(iOS 26.4, macOS 26.4, *) {
             availability = LanguageAvailability(preferredStrategy: .lowLatency)
         } else {
             availability = LanguageAvailability()
@@ -128,39 +144,92 @@ private final class SystemNativeTranslationAvailability: NativeTranslationAvaila
 @available(iOS 18.0, macOS 15.0, *)
 @MainActor @Observable
 final class NativeTranslationResourcePolicy {
+    private struct Key: Hashable {
+        let pair: NativeTranslationLanguagePair
+        let strategy: NativeTranslationStrategy
+    }
+
     private struct InFlightCheck {
         let id: UUID
         let task: Task<NativeTranslationAvailabilityStatus, Never>
     }
 
     @ObservationIgnored private let availability: any NativeTranslationAvailabilityChecking
-    @ObservationIgnored private var cachedStatuses: [NativeTranslationLanguagePair: NativeTranslationAvailabilityStatus] = [:]
-    @ObservationIgnored private var inFlightChecks: [NativeTranslationLanguagePair: InFlightCheck] = [:]
+    @ObservationIgnored private var cachedStatuses: [Key: NativeTranslationAvailabilityStatus] = [:]
+    @ObservationIgnored private var inFlightChecks: [Key: InFlightCheck] = [:]
 
     init(availability: any NativeTranslationAvailabilityChecking) {
         self.availability = availability
     }
 
-    func requireInstalled(_ pair: NativeTranslationLanguagePair) async throws {
-        switch await status(for: pair) {
-        case .installed: return
-        case .supported: throw RoomTranslationError.languageResourcesRequired
-        case .unsupported: throw RoomTranslationError.unavailable
+    func requireInstalled(
+        _ pair: NativeTranslationLanguagePair
+    ) async throws -> NativeTranslationStrategy {
+        var hasSupportedStrategy = false
+        for strategy in automaticStrategies {
+            switch await status(for: pair, strategy: strategy) {
+            case .installed:
+                return strategy
+            case .supported:
+                hasSupportedStrategy = true
+            case .unsupported:
+                break
+            }
+        }
+        throw hasSupportedStrategy
+            ? RoomTranslationError.languageResourcesRequired
+            : RoomTranslationError.unavailable
+    }
+
+    func sessionSelection(
+        for pair: NativeTranslationLanguagePair,
+        purpose: RoomTranslationRequestPurpose
+    ) async throws -> NativeTranslationSessionSelection {
+        switch purpose {
+        case .automatic:
+            return .installed(try await requireInstalled(pair))
+        case .explicitTest:
+            do {
+                return .installed(try await requireInstalled(pair))
+            } catch RoomTranslationError.languageResourcesRequired {
+                return .downloadCapable
+            }
+        case .prepareLanguages:
+            return .downloadCapable
         }
     }
 
-    func refresh(_ pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus {
+    func refreshAutomaticStatus(
+        _ pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationAvailabilityStatus {
         invalidate(pair)
-        return await status(for: pair)
+        var hasSupportedStrategy = false
+        for strategy in automaticStrategies {
+            switch await status(for: pair, strategy: strategy) {
+            case .installed:
+                return .installed
+            case .supported:
+                hasSupportedStrategy = true
+            case .unsupported:
+                break
+            }
+        }
+        return hasSupportedStrategy ? .supported : .unsupported
     }
 
-    func markInstalled(_ pair: NativeTranslationLanguagePair) {
-        cachedStatuses[pair] = .installed
+    func refreshDownloadStatus(
+        _ pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationAvailabilityStatus {
+        invalidate(pair)
+        return await status(for: pair, strategy: downloadStrategy)
     }
 
     func invalidate(_ pair: NativeTranslationLanguagePair) {
-        cachedStatuses.removeValue(forKey: pair)
-        inFlightChecks.removeValue(forKey: pair)?.task.cancel()
+        cachedStatuses = cachedStatuses.filter { $0.key.pair != pair }
+        let matchingKeys = inFlightChecks.keys.filter { $0.pair == pair }
+        for key in matchingKeys {
+            inFlightChecks.removeValue(forKey: key)?.task.cancel()
+        }
     }
 
     func clearCachedStatuses() {
@@ -169,18 +238,38 @@ final class NativeTranslationResourcePolicy {
         inFlightChecks.removeAll()
     }
 
-    private func status(for pair: NativeTranslationLanguagePair) async -> NativeTranslationAvailabilityStatus {
-        if let cached = cachedStatuses[pair] { return cached }
-        if let existing = inFlightChecks[pair] { return await existing.task.value }
+    private var automaticStrategies: [NativeTranslationStrategy] {
+        if #available(iOS 26.4, macOS 26.4, *) {
+            return [.lowLatency, .systemDefault]
+        }
+        return [.systemDefault]
+    }
+
+    private var downloadStrategy: NativeTranslationStrategy {
+        if #available(iOS 26.4, macOS 26.4, *) {
+            return .lowLatency
+        }
+        return .systemDefault
+    }
+
+    private func status(
+        for pair: NativeTranslationLanguagePair,
+        strategy: NativeTranslationStrategy
+    ) async -> NativeTranslationAvailabilityStatus {
+        let key = Key(pair: pair, strategy: strategy)
+        if let cached = cachedStatuses[key] { return cached }
+        if let existing = inFlightChecks[key] { return await existing.task.value }
 
         let checkID = UUID()
         let availability = availability
-        let task = Task { @MainActor in await availability.status(for: pair) }
-        inFlightChecks[pair] = InFlightCheck(id: checkID, task: task)
+        let task = Task { @MainActor in
+            await availability.status(for: pair, strategy: strategy)
+        }
+        inFlightChecks[key] = InFlightCheck(id: checkID, task: task)
         let status = await task.value
-        guard inFlightChecks[pair]?.id == checkID else { return status }
-        inFlightChecks.removeValue(forKey: pair)
-        cachedStatuses[pair] = status
+        guard inFlightChecks[key]?.id == checkID else { return status }
+        inFlightChecks.removeValue(forKey: key)
+        cachedStatuses[key] = status
         return status
     }
 }
@@ -244,7 +333,7 @@ final class AppleRoomTranslationProvider:
             targetLanguage: request.targetLanguage
         )
         if request.purpose == .automatic {
-            try await resources.requireInstalled(pair)
+            _ = try await resources.requireInstalled(pair)
         }
         guard !expectedHosts.isEmpty else { throw RoomTranslationError.unavailable }
         if request.purpose == .prepareLanguages {
@@ -289,7 +378,13 @@ final class AppleRoomTranslationProvider:
     func nativeLanguageStatus(
         for pair: NativeTranslationLanguagePair
     ) async -> NativeTranslationLanguageStatus {
-        await resources.refresh(pair).publicStatus
+        await resources.refreshAutomaticStatus(pair).publicStatus
+    }
+
+    func downloadLanguageStatus(
+        for pair: NativeTranslationLanguagePair
+    ) async -> NativeTranslationLanguageStatus {
+        await resources.refreshDownloadStatus(pair).publicStatus
     }
 
     func setHostExpected(owner: UUID, expected: Bool) {
@@ -326,7 +421,10 @@ final class AppleRoomTranslationProvider:
                 sourceLanguage: sourceLanguage,
                 targetLanguage: targetLanguage
             )
-            var installedOnlySession: TranslationSession?
+            var installedOnlySession: (
+                strategy: NativeTranslationStrategy,
+                session: TranslationSession
+            )?
             await shared.registerHost(owner: owner, hostID: hostID, pair: pair)
 
             await withTaskCancellationHandler(operation: {
@@ -337,7 +435,7 @@ final class AppleRoomTranslationProvider:
                             try Task.checkCancellation()
                             try await downloadCapableSession.prepareTranslation()
                             try Task.checkCancellation()
-                            let status = await shared.refreshStatus(pair)
+                            let status = await shared.refreshDownloadStatus(pair)
                             await shared.finish(
                                 job.requestID,
                                 executionID: job.executionID,
@@ -351,7 +449,7 @@ final class AppleRoomTranslationProvider:
                                 await shared.deactivate(owner: owner, matching: hostID)
                                 break hostLoop
                             }
-                            await shared.refreshResources(pair)
+                            await shared.refreshDownloadResources(pair)
                             await shared.finish(
                                 job.requestID,
                                 executionID: job.executionID,
@@ -359,7 +457,7 @@ final class AppleRoomTranslationProvider:
                                 suspendPair: false
                             )
                         } catch {
-                            await shared.refreshResources(pair)
+                            await shared.refreshDownloadResources(pair)
                             await shared.finish(
                                 job.requestID,
                                 executionID: job.executionID,
@@ -372,26 +470,38 @@ final class AppleRoomTranslationProvider:
                         do {
                             try Task.checkCancellation()
                             let session: TranslationSession
-                            if jobs.first?.purpose == .automatic,
+                            if let purpose = jobs.first?.purpose,
                                #available(iOS 26.0, macOS 26.0, *) {
-                                if let installedOnlySession {
-                                    session = installedOnlySession
-                                } else {
-                                    let created: TranslationSession
-                                    if #available(iOS 26.4, macOS 26.4, *) {
-                                        created = TranslationSession(
-                                            installedSource: Locale.Language(identifier: sourceLanguage),
-                                            target: Locale.Language(identifier: targetLanguage),
-                                            preferredStrategy: .lowLatency
-                                        )
+                                let selection = try await shared.sessionSelection(
+                                    for: pair,
+                                    purpose: purpose
+                                )
+                                try Task.checkCancellation()
+                                switch selection {
+                                case .installed(let strategy):
+                                    if let installedOnlySession,
+                                       installedOnlySession.strategy == strategy {
+                                        session = installedOnlySession.session
                                     } else {
-                                        created = TranslationSession(
-                                            installedSource: Locale.Language(identifier: sourceLanguage),
-                                            target: Locale.Language(identifier: targetLanguage)
-                                        )
+                                        let created: TranslationSession
+                                        if strategy == .lowLatency,
+                                           #available(iOS 26.4, macOS 26.4, *) {
+                                            created = TranslationSession(
+                                                installedSource: Locale.Language(identifier: sourceLanguage),
+                                                target: Locale.Language(identifier: targetLanguage),
+                                                preferredStrategy: .lowLatency
+                                            )
+                                        } else {
+                                            created = TranslationSession(
+                                                installedSource: Locale.Language(identifier: sourceLanguage),
+                                                target: Locale.Language(identifier: targetLanguage)
+                                            )
+                                        }
+                                        installedOnlySession = (strategy: strategy, session: created)
+                                        session = created
                                     }
-                                    installedOnlySession = created
-                                    session = created
+                                case .downloadCapable:
+                                    session = downloadCapableSession
                                 }
                             } else {
                                 session = downloadCapableSession
@@ -413,7 +523,6 @@ final class AppleRoomTranslationProvider:
                                     )
                                 }
                             )
-                            await shared.markInstalled(pair)
                             for job in jobs {
                                 await shared.finish(
                                     job.requestID,
@@ -441,18 +550,21 @@ final class AppleRoomTranslationProvider:
         }
     }
 
-    private func markInstalled(_ pair: NativeTranslationLanguagePair) {
-        resources.markInstalled(pair)
+    private func sessionSelection(
+        for pair: NativeTranslationLanguagePair,
+        purpose: RoomTranslationRequestPurpose
+    ) async throws -> NativeTranslationSessionSelection {
+        try await resources.sessionSelection(for: pair, purpose: purpose)
     }
 
-    private func refreshResources(_ pair: NativeTranslationLanguagePair) async {
-        _ = await resources.refresh(pair)
+    private func refreshDownloadResources(_ pair: NativeTranslationLanguagePair) async {
+        _ = await resources.refreshDownloadStatus(pair)
     }
 
-    private func refreshStatus(
+    private func refreshDownloadStatus(
         _ pair: NativeTranslationLanguagePair
     ) async -> NativeTranslationAvailabilityStatus {
-        await resources.refresh(pair)
+        await resources.refreshDownloadStatus(pair)
     }
 
     private func registerHost(
@@ -577,7 +689,7 @@ final class AppleRoomTranslationProvider:
         pair: NativeTranslationLanguagePair
     ) async {
         guard let first = jobs.first else { return }
-        let status = await resources.refresh(pair)
+        let status = await resources.refreshAutomaticStatus(pair)
         if first.purpose == .automatic, status != .installed {
             let error: RoomTranslationError = status == .supported
                 ? .languageResourcesRequired

@@ -13,6 +13,7 @@ struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var dragProgress: CGFloat = 0.0  // 拖动进度
+    @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
 
     /// 根据平台类型生成登录相关的错误标题
     private func authErrorTitle(for liveType: LiveType) -> String {
@@ -29,7 +30,7 @@ struct PlatformDetailView: View {
             if let error = viewModel.categoryError {
                 ErrorView(
                     title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
-                    message: error.liveParseMessage,
+                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
@@ -41,7 +42,10 @@ struct PlatformDetailView: View {
                         }
                     },
                     onLogin: error.isAuthRequired ? {
-                        NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                        authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                            pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+                                .map { [$0.pluginId] } ?? []
+                        )
                     } : nil
                 )
             } else {
@@ -89,6 +93,11 @@ struct PlatformDetailView: View {
         .task {
             await viewModel.loadCategories()
         }
+        .sheet(item: $authenticationRecoveryRequest) { request in
+            NavigationStack {
+                PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
+            }
+        }
     }
 
     // MARK: - 房间列表页面（用于 PageView）
@@ -108,7 +117,7 @@ struct PlatformDetailView: View {
                 // 如果当前页且加载房间列表失败，显示错误视图
                 ErrorView(
                     title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
-                    message: error.liveParseMessage,
+                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
@@ -120,7 +129,10 @@ struct PlatformDetailView: View {
                         }
                     },
                     onLogin: error.isAuthRequired ? {
-                        NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                        authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                            pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+                                .map { [$0.pluginId] } ?? []
+                        )
                     } : nil
                 )
             } else if rooms.isEmpty && !viewModel.isLoadingRooms && isCurrentPage {

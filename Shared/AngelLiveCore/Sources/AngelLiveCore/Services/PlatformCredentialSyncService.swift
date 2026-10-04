@@ -84,6 +84,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
     @Published public var iCloudSyncEnabled: Bool {
         didSet {
             UserDefaults.standard.set(iCloudSyncEnabled, forKey: Keys.iCloudSyncEnabled)
+            PersistentSyncRetryCoordinator.shared.setCredentialBackgroundRetriesEnabled(iCloudSyncEnabled)
         }
     }
     @Published public var lastICloudSyncTime: Date?
@@ -130,6 +131,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
             self.lastICloudSyncTime = Date(timeIntervalSince1970: oldTime)
             UserDefaults.standard.set(oldTime, forKey: Keys.lastICloudSyncTime)
         }
+        PersistentSyncRetryCoordinator.shared.setCredentialBackgroundRetriesEnabled(iCloudSyncEnabled)
 
         Task {
             await performLegacyMigrationIfNeeded()
@@ -173,6 +175,42 @@ public final class PlatformCredentialSyncService: ObservableObject {
     /// 返回明确结果(成功 / 部分失败 / 失败),并写入 `lastSyncError` 供页面展示。
     @discardableResult
     public func syncAllToICloud() async -> OperationOutcome {
+        guard PersistentSyncRetryCoordinator.shared.isFullUIEnabled else {
+            return await syncAllToICloudDirect()
+        }
+        isSyncing = true
+        defer { isSyncing = false }
+        let sessions = await PlatformSessionManager.shared.allSessions()
+        let sessionByID = Dictionary(sessions.map { ($0.pluginId, $0) }, uniquingKeysWith: { _, latest in latest })
+        let pluginIDs = Set(sessionByID.keys).union(await knownCloudPluginIds())
+        var revisions: [UUID] = []
+        var failures: [SyncError] = []
+        for pluginID in pluginIDs {
+            let session = sessionByID[pluginID]
+            let metadataRevision = await PlatformSessionManager.shared.metadataRevision(pluginId: pluginID)
+            let version = SyncSessionVersion(
+                metadataRevision: metadataRevision,
+                updatedAt: session?.updatedAt,
+                state: session?.state,
+                isPresent: session != nil
+            )
+            do {
+                revisions.append(try PersistentSyncRetryCoordinator.shared.enqueueCredentialUpload(
+                    pluginID: pluginID,
+                    version: version
+                ))
+            } catch {
+                failures.append(SyncError.from(error))
+            }
+        }
+        failures += await PersistentSyncRetryCoordinator.shared.runNowAndCollectFailures(revisions: revisions)
+        let outcome = makeOutcome(failures: failures, total: pluginIDs.count, failedTitle: "部分平台登录信息同步失败")
+        lastSyncError = outcome.error
+        if outcome.isSuccess { recordICloudSyncTime() }
+        return outcome
+    }
+
+    private func syncAllToICloudDirect() async -> OperationOutcome {
         isSyncing = true
         defer { isSyncing = false }
 
@@ -241,6 +279,43 @@ public final class PlatformCredentialSyncService: ObservableObject {
     /// 网络/权限等错误才计入。
     @discardableResult
     public func syncAllFromICloud() async -> OperationOutcome {
+        guard PersistentSyncRetryCoordinator.shared.isFullUIEnabled else {
+            return await syncAllFromICloudDirect()
+        }
+        isSyncing = true
+        defer { isSyncing = false }
+        let sessions = await PlatformSessionManager.shared.allSessions()
+        let sessionByID = Dictionary(sessions.map { ($0.pluginId, $0) }, uniquingKeysWith: { _, latest in latest })
+        let pluginIDs = await knownCloudPluginIds()
+        var revisions: [UUID] = []
+        var failures: [SyncError] = []
+        for pluginID in pluginIDs {
+            let session = sessionByID[pluginID]
+            let metadataRevision = await PlatformSessionManager.shared.metadataRevision(pluginId: pluginID)
+            let version = SyncSessionVersion(
+                metadataRevision: metadataRevision,
+                updatedAt: session?.updatedAt,
+                state: session?.state,
+                isPresent: session != nil
+            )
+            do {
+                revisions.append(try PersistentSyncRetryCoordinator.shared.enqueueCredentialDownload(
+                    pluginID: pluginID,
+                    version: version
+                ))
+            } catch {
+                failures.append(SyncError.from(error))
+            }
+        }
+        failures += await PersistentSyncRetryCoordinator.shared.runNowAndCollectFailures(revisions: revisions)
+        let outcome = makeOutcome(failures: failures, total: pluginIDs.count, failedTitle: "部分平台登录信息下载失败")
+        lastSyncError = outcome.error
+        if outcome.isSuccess { recordICloudSyncTime() }
+        await refreshAllLoginStatus()
+        return outcome
+    }
+
+    private func syncAllFromICloudDirect() async -> OperationOutcome {
         isSyncing = true
         defer { isSyncing = false }
 
@@ -295,6 +370,124 @@ public final class PlatformCredentialSyncService: ObservableObject {
         }
         await refreshAllLoginStatus()
         return outcome
+    }
+
+    static func executePersistentUpload(
+        pluginID: String,
+        expectedVersion: SyncSessionVersion
+    ) async throws -> PersistentSyncExecutionResult {
+        let manager = PlatformSessionManager.shared
+        guard await manager.metadataRevision(pluginId: pluginID) == expectedVersion.metadataRevision else {
+            return .paused
+        }
+        let session = await manager.getSession(pluginId: pluginID)
+        try Task.checkCancellation()
+        guard Self.matches(session, version: expectedVersion) else { return .paused }
+
+        let database = CKContainer(identifier: CloudCookieFields.containerIdentifier).privateCloudDatabase
+        let recordID = CKRecord.ID(recordName: CloudCookieFields.sessionRecordName(for: pluginID))
+        guard let session,
+              session.state == .authenticated,
+              let cookie = session.cookie,
+              !cookie.isEmpty else {
+            do {
+                try Task.checkCancellation()
+                try await database.deleteRecord(withID: recordID)
+            } catch let error as CKError where error.code == .unknownItem {
+                return .complete
+            }
+            guard await manager.metadataRevision(pluginId: pluginID) == expectedVersion.metadataRevision else {
+                return .paused
+            }
+            return .complete
+        }
+
+        let payload = SyncedCookieData(
+            cookie: cookie,
+            uid: session.uid,
+            timestamp: session.updatedAt,
+            source: .local,
+            deviceName: shared.getDeviceName(),
+            platformId: pluginID
+        )
+        let encoded = try JSONEncoder().encode(payload)
+        let record: CKRecord
+        do {
+            record = try await database.record(for: recordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            record = CKRecord(recordType: CloudCookieFields.recordType, recordID: recordID)
+        }
+        try Task.checkCancellation()
+        guard await manager.metadataRevision(pluginId: pluginID) == expectedVersion.metadataRevision else {
+            return .paused
+        }
+        try Task.checkCancellation()
+        record[CloudCookieFields.cookieDataField] = encoded as NSData
+        record[CloudCookieFields.platformIdField] = pluginID as NSString
+        record[CloudCookieFields.updatedAtField] = session.updatedAt as NSDate
+        _ = try await database.save(record)
+        try Task.checkCancellation()
+        guard await manager.metadataRevision(pluginId: pluginID) == expectedVersion.metadataRevision else {
+            return .paused
+        }
+        return .complete
+    }
+
+    static func executePersistentDownload(
+        pluginID: String,
+        expectedVersion: SyncSessionVersion
+    ) async throws -> PersistentSyncExecutionResult {
+        let manager = PlatformSessionManager.shared
+        guard await manager.metadataRevision(pluginId: pluginID) == expectedVersion.metadataRevision else {
+            return .paused
+        }
+        let current = await manager.getSession(pluginId: pluginID)
+        guard matches(current, version: expectedVersion) else { return .paused }
+        let database = CKContainer(identifier: CloudCookieFields.containerIdentifier).privateCloudDatabase
+        let recordID = CKRecord.ID(recordName: CloudCookieFields.sessionRecordName(for: pluginID))
+        let record: CKRecord
+        do {
+            record = try await database.record(for: recordID)
+        } catch let error as CKError where error.code == .unknownItem {
+            return .complete
+        }
+        try Task.checkCancellation()
+        guard let data = record[CloudCookieFields.cookieDataField] as? Data,
+              let synced = try? JSONDecoder().decode(SyncedCookieData.self, from: data),
+              !synced.cookie.isEmpty else {
+            return .complete
+        }
+        if let current, current.state == .authenticated, current.updatedAt >= synced.timestamp {
+            return .complete
+        }
+        let result = await manager.loginWithCookieIfUnchanged(
+            pluginId: pluginID,
+            cookie: synced.cookie,
+            uid: synced.uid,
+            source: .iCloud,
+            expectedMetadataRevision: expectedVersion.metadataRevision
+        )
+        switch result {
+        case .stale:
+            return .paused
+        case .completed(let validation):
+            switch validation {
+            case .valid:
+                return .complete
+            case .expired:
+                throw SyncError(code: -201, kind: .unknown, title: "云端登录已过期", advice: "请重新登录后再同步。", rawDescription: "expired")
+            case .invalid(let reason):
+                throw SyncError(code: -202, kind: .unknown, title: "云端登录无效", advice: "请重新登录后再同步。", rawDescription: reason)
+            case .networkError(let message):
+                throw SyncError(code: -203, kind: .networkBlocked, title: "登录信息校验失败", advice: "请检查网络后重试。", rawDescription: message)
+            }
+        }
+    }
+
+    private static func matches(_ session: PlatformSession?, version: SyncSessionVersion) -> Bool {
+        guard version.isPresent else { return session == nil }
+        guard let session else { return false }
+        return session.updatedAt == version.updatedAt && session.state == version.state
     }
 
     /// 把一批失败聚合成 OperationOutcome:无失败→success;全失败→failure;部分→partial。

@@ -15,17 +15,34 @@ struct DetailPlayerView: View {
 
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
     @State private var didCleanup = false
+    @State private var authenticationRecovery: AuthenticationRecoveryRequest?
     /// 标记 KSPlayer 是否曾进入实际渲染态(.buffering / .bufferFinished)。
     /// 直播流 state 在 KSPlayer 内可能长期停留在 .buffering(被视作 isPlaying),
     /// 不能再把 .buffering 当作"加载中"来盖 overlay,否则永不消失。
-    @State private var hasStartedStreamPlayback = false
+    @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
         playerContent
+            .fullScreenCover(item: $authenticationRecovery) { request in
+                AccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                    .frame(maxWidth: 1000)
+                    .padding(80)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.ultraThinMaterial)
+            }
+            .overlay(alignment: .top) {
+                if let notice = visibleRecoveryNotice {
+                    TVPlayerRecoveryNoticeBanner(notice: notice)
+                        .padding(.top, 48)
+                        .padding(.horizontal, 80)
+                        .transition(accessibilityReduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .active:
@@ -37,6 +54,14 @@ struct DetailPlayerView: View {
                 @unknown default:
                     break
                 }
+            }
+            .onChange(of: roomInfoViewModel.recoveryNotice) { _, notice in
+                showRecoveryNotice(notice)
+            }
+            .onDisappear {
+                // Presenting account recovery keeps this room alive for a manual retry.
+                guard authenticationRecovery == nil else { return }
+                cleanupPlayer()
             }
     }
 
@@ -64,7 +89,7 @@ struct DetailPlayerView: View {
         } else if roomInfoViewModel.hasError, let error = roomInfoViewModel.currentError {
             ErrorView(
                 title: error.isAuthRequired ? "播放失败-请登录\(LiveParseTools.getLivePlatformName(roomInfoViewModel.currentRoom.liveType))账号" : "播放失败",
-                message: error.liveParseMessage,
+                message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
                 detailMessage: error.liveParseDetail,
                 curlCommand: error.liveParseCurl,
                 showRetry: true,
@@ -75,7 +100,15 @@ struct DetailPlayerView: View {
                 onRetry: {
                     roomInfoViewModel.hasError = false
                     roomInfoViewModel.currentError = nil
-                    playerCoordinator.playerLayer?.play()
+                    if error.isAuthRequired || roomInfoViewModel.currentPlayURL == nil {
+                        roomInfoViewModel.getPlayArgs(diagnosticAction: .retriedPlayback)
+                    } else {
+                        playerCoordinator.playerLayer?.play()
+                    }
+                },
+                onLogin: {
+                    let pluginIDs = SandboxPluginCatalog.platform(for: roomInfoViewModel.currentRoom.liveType).map { [$0.pluginId] } ?? []
+                    authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: pluginIDs)
                 }
             )
         } else if roomInfoViewModel.currentPlayURL == nil {
@@ -99,7 +132,7 @@ struct DetailPlayerView: View {
                         Color.black.opacity(0.5)
                     }
 
-                TVStreamLoadingOverlay(dynamicInfo: nil)
+                TVStreamLoadingOverlay(dynamicInfo: nil, stage: roomInfoViewModel.startupStage)
             }
             .frame(width: 1920, height: 1080)
             .background(.black)
@@ -126,7 +159,8 @@ struct DetailPlayerView: View {
                 // 加载/缓冲指示器 - URL 已就绪但尚未开始播放，或播放中缓冲时显示
                 if shouldShowStreamLoading {
                     TVStreamLoadingOverlay(
-                        dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo
+                        dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo,
+                        stage: roomInfoViewModel.startupStage
                     )
                     .zIndex(4)
                 }
@@ -171,19 +205,11 @@ struct DetailPlayerView: View {
             .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
                 endPlay()
             }
-            .onDisappear {
-                cleanupPlayer()
-            }
             .onPlayPauseCommand {
                 roomInfoViewModel.togglePlayPause()
             }
             // Coordinator remains the sole layer delegate; the VM receives its forwarded callbacks.
             // Keep first playback sticky so a later pause or rebuffer does not look like startup.
-            .onChange(of: roomInfoViewModel.isPlaying) { _, isPlaying in
-                if isPlaying {
-                    hasStartedStreamPlayback = true
-                }
-            }
             .frame(width: 1920, height: 1080)
         }
     }
@@ -194,9 +220,25 @@ struct DetailPlayerView: View {
     }
 
     @MainActor
+    private func showRecoveryNotice(_ notice: PlaybackRecoveryNotice?) {
+        withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            visibleRecoveryNotice = notice
+        }
+        guard let notice else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard visibleRecoveryNotice?.id == notice.id else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                visibleRecoveryNotice = nil
+            }
+        }
+    }
+
+    @MainActor
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        roomInfoViewModel.endPlaybackDiagnostics()
         SupportDiagnosticsService.shared.recordAction(
             .closedRoom,
             context: SupportDiagnosticActionContext.room(roomInfoViewModel.currentRoom)
@@ -209,7 +251,7 @@ struct DetailPlayerView: View {
     /// 是否应展示加载层（缓冲或初次加载）。
     private var shouldShowStreamLoading: Bool {
         // 起播一次之后,只在用户主动 seek 时再现 overlay。直播流不会 seek,通常等于永不再现。
-        if hasStartedStreamPlayback {
+        if roomInfoViewModel.hasObservedPlaybackProgress {
             return playerCoordinator.playerLayer?.player.playbackState == .seeking
         }
         return isInitialStreamLoading
@@ -220,10 +262,10 @@ struct DetailPlayerView: View {
     /// 不能用 isPlaying 二次过滤，否则 .readyToPlay 与 .buffering 之间会闪一帧黑。
     private var isInitialStreamLoading: Bool {
         switch playerCoordinator.state {
-        case .initialized, .preparing, .readyToPlay:
-            return true
-        default:
+        case .paused, .playedToTheEnd, .error:
             return false
+        default:
+            return true
         }
     }
 }
@@ -234,17 +276,24 @@ struct DetailPlayerView: View {
 /// 网速订阅 KSPlayer 自带的 `DynamicInfo.networkSpeed`(@Published)。
 struct TVStreamLoadingOverlay: View {
     let dynamicInfo: DynamicInfo?
+    let stage: PlaybackStartupStage
 
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 24) {
             ArcSpinner(size: 64, lineWidth: 2.5)
-            if let info = dynamicInfo {
-                TVStreamSpeedText(info: info)
-            } else {
-                TVStreamPlaceholder()
+            VStack(spacing: 10) {
+                Text(stage.title)
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                if let info = dynamicInfo {
+                    TVStreamSpeedText(info: info)
+                }
             }
         }
         .shadow(color: .black.opacity(0.55), radius: 14, x: 0, y: 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(stage.title)
     }
 }
 
@@ -264,19 +313,24 @@ private struct TVStreamSpeedText: View {
                     .tracking(1)
                     .foregroundStyle(.white.opacity(0.55))
             }
-        } else {
-            TVStreamPlaceholder()
         }
     }
 }
 
-private struct TVStreamPlaceholder: View {
+private struct TVPlayerRecoveryNoticeBanner: View {
+    let notice: PlaybackRecoveryNotice
+
     var body: some View {
-        Text("connecting")
-            .font(.system(size: 18, weight: .medium))
-            .tracking(4)
-            .foregroundStyle(.white.opacity(0.45))
-            .textCase(.uppercase)
+        Text(notice.title)
+            .font(.title3.weight(.medium))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .frame(maxWidth: 800)
+            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .allowsHitTesting(false)
+            .accessibilityLabel(notice.title)
     }
 }
 

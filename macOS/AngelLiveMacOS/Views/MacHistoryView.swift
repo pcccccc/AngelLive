@@ -62,14 +62,13 @@ struct MacHistoryView: View {
         ) {
             ForEach(historyModel.watchList, id: \.id) { room in
                 HistoryRoomCardButton(room: room) {
-                    LiveRoomCard(room: room, showsCoverBadge: true)
-                }
-                .contextMenu {
-                    Button(role: .destructive) {
-                        historyModel.removeHistory(room: room)
-                    } label: {
-                        Label("删除", systemImage: "trash")
-                    }
+                    LiveRoomCard(
+                        room: room,
+                        showsCoverBadge: true,
+                        onRemoveFromHistory: {
+                            historyModel.removeHistory(room: room)
+                        }
+                    )
                 }
             }
         }

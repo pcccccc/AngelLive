@@ -25,6 +25,7 @@ struct ListMainView: View {
     @State private var showEmptyState: Bool = false
     @State private var pendingEmptyState: DispatchWorkItem?
     @State private var showCapabilitySheet: Bool = false
+    @State private var authenticationRecovery: AuthenticationRecoveryRequest?
     @State private var hasStartedInitialLoad = false
     private static let topId = "topIdHere"
     #if DEBUG
@@ -405,7 +406,7 @@ struct ListMainView: View {
 
         return ErrorView(
             title: authTitle,
-            message: error.liveParseMessage,
+            message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
@@ -417,7 +418,15 @@ struct ListMainView: View {
             onRetry: {
                 liveViewModel.hasError = false
                 liveViewModel.currentError = nil
-                liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+                if liveViewModel.categories.isEmpty {
+                    Task { await liveViewModel.getCategoryList() }
+                } else {
+                    liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+                }
+            },
+            onLogin: {
+                let pluginIDs = SandboxPluginCatalog.platform(for: liveViewModel.liveType).map { [$0.pluginId] } ?? []
+                authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: pluginIDs)
             }
         )
     }
@@ -517,6 +526,13 @@ struct ListMainView: View {
                     }
                 }
             }
+        }
+        .fullScreenCover(item: $authenticationRecovery) { request in
+            AccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                .frame(maxWidth: 1000)
+                .padding(80)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
         }
         .fullScreenCover(isPresented: $showCapabilitySheet) {
             TVPlatformCapabilitySheet(liveType: liveType)

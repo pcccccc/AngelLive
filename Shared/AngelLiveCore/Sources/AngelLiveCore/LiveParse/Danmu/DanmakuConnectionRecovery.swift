@@ -168,3 +168,67 @@ final class DanmakuConnectionWorkQueue {
         completion(result)
     }
 }
+
+/// Owns cleanup for the most recently retired driver without making a new
+/// connection wait for JavaScript cleanup. Replacing or timing out cleanup
+/// cancels the underlying plugin call; `JSRuntime` then removes any pending
+/// Promise continuation through its task-cancellation handler.
+@MainActor
+final class DanmakuDriverRetirement {
+    private let schedule: DanmakuSchedule
+    private let timeout: TimeInterval
+    private var token: UUID?
+    private var task: Task<Void, Never>?
+    private var cancelDeadline: (@MainActor () -> Void)?
+    // The transport can be released immediately after disconnect. Keep this
+    // bounded cleanup owner alive until destroy completes or its deadline fires.
+    private var cleanupLease: DanmakuDriverRetirement?
+
+    init(timeout: TimeInterval = 30, schedule: @escaping DanmakuSchedule = scheduleDanmakuWork) {
+        self.timeout = timeout
+        self.schedule = schedule
+    }
+
+    isolated deinit { cancel() }
+
+    var hasPendingRetirement: Bool { task != nil }
+
+    func retire(_ driver: any DanmakuRuntimeDriving, reason: PluginJSDanmakuDriver.DestroyReason) {
+        cancel()
+        let nextToken = UUID()
+        token = nextToken
+        let nextTask = Task { [weak self] in
+            await driver.destroy(reason: reason)
+            guard !Task.isCancelled else { return }
+            self?.finish(token: nextToken)
+        }
+        task = nextTask
+        cancelDeadline = schedule(timeout, false) { [weak self] in
+            self?.cancel(token: nextToken)
+        }
+        cleanupLease = self
+    }
+
+    func cancel() {
+        token = nil
+        task?.cancel()
+        task = nil
+        cancelDeadline?()
+        cancelDeadline = nil
+        cleanupLease = nil
+    }
+
+    private func cancel(token expected: UUID) {
+        guard token == expected else { return }
+        cancel()
+    }
+
+    private func finish(token expected: UUID) {
+        guard token == expected else { return }
+        token = nil
+        task = nil
+        cancelDeadline?()
+        cancelDeadline = nil
+        cleanupLease = nil
+    }
+}

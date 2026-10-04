@@ -7,7 +7,7 @@ import Observation
 ///
 /// AngelLiveCore 不依赖 KSPlayer/VLCKit,所以协调器用本枚举而非 `KSPlayerState`,
 /// 应用层在 delegate 回调里做一次映射。这样协调器可单测、可三端共享、并能同时容纳两套内核。
-public enum PlaybackEngineState: Sendable, Equatable {
+public enum PlaybackEngineState: String, Codable, Sendable, Equatable {
     case initialized
     case preparing
     case readyToPlay
@@ -34,7 +34,7 @@ public struct PlaybackSample: Sendable {
 }
 
 /// 升级阶梯的动作类型。
-public enum RecoveryActionKind: Sendable, Equatable, CustomStringConvertible {
+public enum RecoveryActionKind: String, Codable, Sendable, Equatable, CustomStringConvertible {
     case kickPipeline      // play-pause-play hack(可选首档)
     case refreshSameURL    // 同源重连
     case switchCDN         // 切到下一条 CDN(VM 内部 nextCdnIndex();无可切则回退 refresh)
@@ -105,6 +105,7 @@ public final class PlaybackRecoveryCoordinator {
     @ObservationIgnored private let actions: RecoveryActions
     @ObservationIgnored private let sampleProvider: () -> PlaybackSample?
     @ObservationIgnored private let ladder: [RecoveryActionKind]
+    @ObservationIgnored private let observation: ((PlaybackRecoveryObservation) -> Void)?
 
     // —— 会话状态 ——
     @ObservationIgnored private var streamKey: String?
@@ -124,11 +125,13 @@ public final class PlaybackRecoveryCoordinator {
     public init(
         config: RecoveryConfig,
         actions: RecoveryActions,
-        sample: @escaping () -> PlaybackSample?
+        sample: @escaping () -> PlaybackSample?,
+        observation: ((PlaybackRecoveryObservation) -> Void)? = nil
     ) {
         self.config = config
         self.actions = actions
         self.sampleProvider = sample
+        self.observation = observation
         // 优先重新拉取播放参数:短时效签名 URL 同源重连几乎必失败;
         // 再切线路;最后同源重连兜底。单 CDN 时 switchCDN 由 VM 回退 refresh。
         var l: [RecoveryActionKind] = []
@@ -237,7 +240,7 @@ public final class PlaybackRecoveryCoordinator {
             handleStreamEnd()
             return
         }
-        triggerRecovery(reason: error.localizedDescription)
+        triggerRecovery(reason: error.localizedDescription, startupFailure: .engineError)
     }
 
     /// 直播意外结束(endOfStream 的 finished(nil) 与 playedToTheEnd 的 .ended)。
@@ -261,6 +264,7 @@ public final class PlaybackRecoveryCoordinator {
 
     private func handleTick(sample: PlaybackSample?, delta: TimeInterval) {
         guard monitoring else { return }
+        if let sample { observation?(.sample(sample)) }
         guard let sample else {
             // 无字节采样内核(HLS/KSAVPlayer):卡顿由 EOF/error 经 finish 反馈,这里不判 stall。
             // 但恢复后仍需「持续在播 N 秒」清零熔断预算,否则反复 EOF(官方房每 ~2 分钟断一次)
@@ -313,7 +317,8 @@ public final class PlaybackRecoveryCoordinator {
                     startupBaselineBytes = sample.bytesRead
                     phase = .suspect
                 } else {
-                    triggerRecovery(reason: "起播超时 \(Int(config.startupTimeout))s 无进度")
+                    triggerRecovery(reason: "起播超时 \(Int(config.startupTimeout))s 无进度",
+                                    startupFailure: .timeout)
                 }
             }
         } else if config.stallMonitoringEnabled {
@@ -336,11 +341,12 @@ public final class PlaybackRecoveryCoordinator {
         return advanced || buffering
     }
 
-    private func triggerRecovery(reason: String) {
+    private func triggerRecovery(reason: String, startupFailure: PlaybackStartupFailureCode? = nil) {
         guard monitoring else { return }
         guard attempts < ladder.count else {
             phase = .failed(reason: reason)
             monitoring = false
+            observation?(.exhausted(startupFailure: startupFailure))
             log(action: nil, attempt: attempts, reason: "熔断预算用尽 · \(reason)")
             actions.reportFailed(reason)
             return
@@ -348,6 +354,8 @@ public final class PlaybackRecoveryCoordinator {
         let action = ladder[attempts]
         attempts += 1
         phase = .recovering(action: action, attempt: attempts, max: ladder.count)
+        observation?(.recovering(action: action, attempt: attempts, limit: ladder.count,
+                                startupFailure: startupFailure))
 
         // 给恢复动作时间:重置检测累计与起播计时;attempts 已累加,熔断不被复位。
         stallAccum = 0

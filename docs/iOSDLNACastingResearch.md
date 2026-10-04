@@ -201,7 +201,9 @@ DLNA 只传媒体，不传弹幕层。AngelLive 的弹幕、播放器叠加层�
 3. 检查 device description 中缺省端口、相对 URL、SOAP Fault 等电视差异。
 4. 只暴露 AngelLive 需要的 AVTransport API，隔离库的 Combine/HTTP server 细节。
 
-## 7. 分阶段计划
+## 7. 原分阶段计划与当前验收边界
+
+2026-10-04 对照当前源码：Core 领域模型、Dependencies 的 SSDP/设备描述/AVTransport/媒体代理、iOS 设备选择与会话已实现。下面保留原计划供核对；未逐项获得真实设备证据的行为仍不能标为设备通过。multicast App ID/profile、不同电视兼容性、本地网络权限与后台挂起继续属于真机矩阵。`RenderingControlClient` 未实现，不包含在“协议已实现”的当前范围内。后文 Phase 3 指设备矩阵；顶部“第三阶段”指媒体 Header 代理，二者编号不能互相当作完成依据。
 
 ### Phase 0: 配置和测试夹具
 

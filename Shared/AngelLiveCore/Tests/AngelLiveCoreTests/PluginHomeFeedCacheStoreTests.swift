@@ -139,4 +139,62 @@ struct PluginHomeFeedCacheStoreTests {
         let store = PluginHomeFeedCacheStore(fileURL: fileURL)
         #expect(await store.load().isEmpty)
     }
+
+    @Test("cache persists fetch time and per-plugin context revision")
+    func metadataRoundTrip() async throws {
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let store = PluginHomeFeedCacheStore(fileURL: directoryURL.appendingPathComponent("home-feed.json"))
+        let feed = makeFeed(pluginId: "fixture.plugin", revision: "content")
+        let fetchedAt = Date(timeIntervalSince1970: 1_700_000_000)
+
+        #expect(await store.save(
+            [feed],
+            contextRevisions: [feed.pluginId: "session-2"],
+            fetchedAtByPluginId: [feed.pluginId: fetchedAt]
+        ))
+        let entry = try #require(await store.loadSnapshot()?.entries.first)
+        #expect(entry.fetchedAt == fetchedAt)
+        #expect(entry.contextRevision == "session-2")
+    }
+
+    @Test("legacy cache loads but is marked stale")
+    func legacyCacheIsStale() async throws {
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let fileURL = directoryURL.appendingPathComponent("home-feed.json")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        let data = try encoder.encode(LegacyFixture(
+            schemaVersion: 1,
+            savedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            feeds: [makeFeed(pluginId: "fixture.plugin", revision: "legacy")]
+        ))
+        try data.write(to: fileURL)
+
+        let entry = try #require(await PluginHomeFeedCacheStore(fileURL: fileURL).loadSnapshot()?.entries.first)
+        #expect(entry.fetchedAt == .distantPast)
+        #expect(entry.contextRevision == nil)
+    }
+}
+
+private struct LegacyFixture: Codable {
+    let schemaVersion: Int
+    let savedAt: Date
+    let feeds: [PluginHomeFeed]
+}
+
+private func makeFeed(pluginId: String, revision: String) -> PluginHomeFeed {
+    PluginHomeFeed(
+        pluginId: pluginId,
+        pluginDisplayName: pluginId,
+        schemaVersion: PluginHomeFeedRequest.supportedSchemaVersion,
+        revision: revision,
+        generatedAt: nil,
+        ttlSeconds: 60,
+        banners: [],
+        sections: [],
+        diagnostics: .init(droppedBanners: 0, droppedSections: 0, droppedItems: 0)
+    )
 }

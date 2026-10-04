@@ -99,6 +99,9 @@ public final class AppFavoriteModel {
     @ObservationIgnored private var activeFavoriteForegroundCompletion: Task<Void, Never>?
     @ObservationIgnored private var patchFlushTask: Task<Void, Never>?
     @ObservationIgnored private var patchPersistenceTask: Task<Void, Never>?
+    @ObservationIgnored private var localPersistenceTask: Task<Void, Never>?
+    @ObservationIgnored private var localMembershipRevision: UInt64 = 0
+    @ObservationIgnored private var localMembershipRevisionByKey: [String: UInt64] = [:]
     @ObservationIgnored private var pendingRoomPatches: [String: LiveModel] = [:]
     @ObservationIgnored private var hasFlushedFirstRoomPatch = false
     @ObservationIgnored private var favoriteLastConfirmedAt: [String: Date] = [:]
@@ -141,7 +144,22 @@ public final class AppFavoriteModel {
     @MainActor
     private func persistLocal() {
         let snapshot = roomList
-        Task { await FavoriteLocalStore.shared.save(snapshot) }
+        enqueueLocalPersistence(snapshot)
+    }
+
+    @MainActor
+    private func enqueueLocalPersistence(_ snapshot: [LiveModel]) {
+        let previous = localPersistenceTask
+        localPersistenceTask = Task { @MainActor in
+            await previous?.value
+            await FavoriteLocalStore.shared.save(snapshot)
+        }
+    }
+
+    @MainActor
+    private func persistLocalAndWait(_ snapshot: [LiveModel]) async {
+        enqueueLocalPersistence(snapshot)
+        await localPersistenceTask?.value
     }
 
     /// 用给定列表重建排序与分组(与 FavoriteStateModel 分组规则一致)。
@@ -223,8 +241,16 @@ public final class AppFavoriteModel {
 
     /// 引擎拉到远端成员变更后:用本地真相刷新列表(直播状态下次刷新时更新)。
     @MainActor
-    private func reloadFromLocalAfterRemoteChange() async {
+    private func reloadFromLocalAfterRemoteChange(expectedCloudGeneration: UUID? = nil) async {
+        let localRevision = localMembershipRevision
+        await localPersistenceTask?.value
+        let membershipRevision = PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
         let local = await FavoriteLocalStore.shared.load()
+        if let expectedCloudGeneration {
+            guard cloudMembershipGeneration == expectedCloudGeneration else { return }
+        }
+        guard localMembershipRevision == localRevision else { return }
+        guard PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision) else { return }
         applyMembershipSnapshot(local)
     }
 
@@ -508,19 +534,37 @@ public final class AppFavoriteModel {
         // 刷新只更新已有槽位，不拥有成员增删，也不能借身份碰撞折叠收藏。
         applyRoomList(updated)
 
-        guard favoriteICloudSyncEnabled, !identityChanges.isEmpty else {
+        let guardedIdentityChanges = identityChanges.map { change in
+            let newKey = favoriteKey(for: change.newRoom)
+            let keys = Set([change.oldKey, newKey])
+            let revisions = Dictionary(uniqueKeysWithValues: keys.map { key in
+                (key, nextLocalMembershipRevision(for: key))
+            })
+            return (change: change, newKey: newKey, revisions: revisions)
+        }
+        if !guardedIdentityChanges.isEmpty {
+            // Identity re-key is a membership mutation even when cloud sync is off.
+            // It must invalidate remote snapshots captured with the old stable key.
+            localMembershipRevision &+= 1
+        }
+        guard favoriteICloudSyncEnabled, !guardedIdentityChanges.isEmpty else {
             schedulePatchPersistence()
             return
         }
         // 身份回写必须先把新 key 落入本地真相；普通直播状态则走下方防抖持久化。
         patchPersistenceTask?.cancel()
         patchPersistenceTask = nil
-        await FavoriteLocalStore.shared.save(roomList)
+        await persistLocalAndWait(roomList)
         await startCloudSyncIfNeeded()
-        for change in identityChanges {
+        for pending in guardedIdentityChanges {
+            guard pending.revisions.allSatisfy({ localMembershipRevisionByKey[$0.key] == $0.value }),
+                  let current = roomList.first(where: { favoriteKey(for: $0) == pending.newKey }),
+                  Self.hasSameFavoriteIdentity(current, pending.change.newRoom) else {
+                continue
+            }
             FavoriteSyncEngine.shared.enqueueIdentityMetadataRefresh(
-                oldKey: change.oldKey,
-                room: change.newRoom
+                oldKey: pending.change.oldKey,
+                room: pending.change.newRoom
             )
         }
     }
@@ -537,7 +581,7 @@ public final class AppFavoriteModel {
             guard let self else { return }
             let snapshot = self.roomList
             self.patchPersistenceTask = nil
-            await FavoriteLocalStore.shared.save(snapshot)
+            await self.persistLocalAndWait(snapshot)
         }
     }
 
@@ -695,9 +739,8 @@ public final class AppFavoriteModel {
             await FavoriteSyncEngine.shared.fullReconcile()
             guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
 
-            let membership = await FavoriteLocalStore.shared.load()
+            await self.reloadFromLocalAfterRemoteChange(expectedCloudGeneration: generation)
             guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
-            self.applyMembershipSnapshot(membership)
             self.syncProgressInfo = ("", "", "", 0, 0)
             let finalState = await self.actor.getState()
             guard !Task.isCancelled, self.cloudMembershipGeneration == generation else { return }
@@ -716,6 +759,15 @@ public final class AppFavoriteModel {
         let consoleEntryId = PluginConsoleService.shared.log(tag: "Favorite", method: "addFavorite", status: .loading)
         PluginConsoleService.shared.updateRequest(id: consoleEntryId, body: AppFavoriteModel.consoleRequestBody(for: room))
         let consoleStart = Date()
+
+        // FullUI 的持久删除屏障必须在本地成员变化前失效，避免旧删除的迟到结果
+        // 抹掉这次明确的新添加。ShellUI 未启用 coordinator 时保持原路径。
+        if favoriteICloudSyncEnabled {
+            try PersistentSyncRetryCoordinator.shared.recordFavoriteAddition(room)
+        }
+        localMembershipRevision &+= 1
+        let key = favoriteKey(for: room)
+        let membershipIntent = nextLocalMembershipRevision(for: key)
 
         // 本地优先:先更新内存与本地存储(立即成功),云端同步放最后且非阻塞。
         // 查找第一个非直播状态的房间位置
@@ -779,7 +831,10 @@ public final class AppFavoriteModel {
         // 云端同步(非阻塞):交给 CKSyncEngine 入队,引擎自带退避/续传。
         if favoriteICloudSyncEnabled {
             await startCloudSyncIfNeeded()
-            FavoriteSyncEngine.shared.enqueueSave(room)
+            if localMembershipRevisionByKey[key] == membershipIntent,
+               roomList.contains(where: { favoriteKey(for: $0) == key }) {
+                FavoriteSyncEngine.shared.enqueueSave(room)
+            }
             lastSyncError = nil
         }
 
@@ -797,8 +852,16 @@ public final class AppFavoriteModel {
         PluginConsoleService.shared.updateRequest(id: consoleEntryId, body: AppFavoriteModel.consoleRequestBody(for: room))
         let consoleStart = Date()
 
+        // 先让删除意图持久且对所有云端合并入口可见，再改变本地成员关系。
+        // 若落盘失败，保留本地收藏并把错误交给现有 throws 调用链展示。
+        let removalRevision = favoriteICloudSyncEnabled
+            ? try PersistentSyncRetryCoordinator.shared.recordFavoriteRemoval(room)
+            : nil
+        localMembershipRevision &+= 1
+
         // 本地优先:先从内存与本地删除(立即成功),云端删除放最后且非阻塞。
         let targetKey = favoriteKey(for: room)
+        let membershipIntent = nextLocalMembershipRevision(for: targetKey)
         // 从 roomList 中删除
         roomList.removeAll(where: { favoriteKey(for: $0) == targetKey })
 
@@ -813,7 +876,16 @@ public final class AppFavoriteModel {
         // 云端删除(非阻塞):交给 CKSyncEngine 入队。
         if favoriteICloudSyncEnabled {
             await startCloudSyncIfNeeded()
-            FavoriteSyncEngine.shared.enqueueDelete(room)
+            let key = AppFavoriteModel.favoriteUniqueKey(for: room)
+            if localMembershipRevisionByKey[targetKey] == membershipIntent,
+               !roomList.contains(where: { favoriteKey(for: $0) == targetKey }),
+               let removalRevision,
+               PersistentSyncRetryCoordinator.shared.favoriteRemovalIsCurrent(
+                   stableKey: key,
+                   revision: removalRevision
+               ) {
+                FavoriteSyncEngine.shared.enqueueDelete(room, revision: removalRevision)
+            }
             lastSyncError = nil
         }
 
@@ -823,6 +895,23 @@ public final class AppFavoriteModel {
             duration: Date().timeIntervalSince(consoleStart),
             responseBody: AppFavoriteModel.consoleSuccessSummary(verb: "已取消收藏", room: room, totalCount: roomList.count)
         )
+    }
+
+    @MainActor
+    private func nextLocalMembershipRevision(for key: String) -> UInt64 {
+        let revision = (localMembershipRevisionByKey[key] ?? 0) &+ 1
+        localMembershipRevisionByKey[key] = revision
+        return revision
+    }
+
+    private static func hasSameFavoriteIdentity(_ lhs: LiveModel, _ rhs: LiveModel) -> Bool {
+        lhs.liveType == rhs.liveType &&
+        lhs.roomId == rhs.roomId &&
+        lhs.userId == rhs.userId &&
+        lhs.userName == rhs.userName &&
+        lhs.roomTitle == rhs.roomTitle &&
+        lhs.userHeadImg == rhs.userHeadImg &&
+        lhs.identityUpdatedAt == rhs.identityUpdatedAt
     }
 
     @MainActor

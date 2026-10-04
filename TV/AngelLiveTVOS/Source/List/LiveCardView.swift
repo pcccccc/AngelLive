@@ -370,8 +370,12 @@ struct LiveCardView: View {
 
         liveViewModel.currentRoom = liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = focusedIndex
-        if liveViewModel.roomListType == .live || liveViewModel.roomListType == .search {
-            if focusedIndex >= liveViewModel.roomList.count - 4 && liveModel.wrappedValue.roomListType != .favorite && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
+        if liveViewModel.roomListType == .search {
+            if focusedIndex >= liveViewModel.roomList.count - 4 {
+                liveViewModel.searchRequest.loadMore()
+            }
+        } else if liveViewModel.roomListType == .live {
+            if focusedIndex >= liveViewModel.roomList.count - 4 && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
                 liveViewModel.roomPage += 1
             }
         }
@@ -398,12 +402,16 @@ struct LiveCardView: View {
                     liveType: room.liveType
                 )
                 await MainActor.run {
-                    liveViewModel.currentRoom?.liveState = state.rawValue
-                    if index < liveViewModel.roomList.count {
-                        liveViewModel.roomList[index].liveState = state.rawValue
+                    guard !Task.isCancelled, liveViewModel.currentRoom?.id == room.id else { return }
+                    var updatedRoom = room
+                    updatedRoom.liveState = state.rawValue
+                    if liveViewModel.roomListType == .search {
+                        liveViewModel.searchRequest.updateRoomLiveState(id: room.id, state: state.rawValue)
+                    } else if let roomIndex = liveViewModel.roomList.firstIndex(where: { $0.id == room.id }) {
+                        liveViewModel.roomList[roomIndex] = updatedRoom
                     }
-                    if let updated = liveViewModel.currentRoom,
-                       PlatformHostBehavior.isPlayableRoom(updated) {
+                    liveViewModel.currentRoom = updatedRoom
+                    if PlatformHostBehavior.isPlayableRoom(updatedRoom) {
                         proceedToPlayer()
                     } else {
                         liveViewModel.showToast(false, title: "主播已经下播")
@@ -411,6 +419,7 @@ struct LiveCardView: View {
                 }
             } catch {
                 await MainActor.run {
+                    guard !Task.isCancelled, liveViewModel.currentRoom?.id == room.id else { return }
                     liveViewModel.showToast(false, title: "状态获取失败,请稍后再试")
                 }
             }

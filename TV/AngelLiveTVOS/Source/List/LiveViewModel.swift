@@ -20,6 +20,7 @@ enum LiveRoomListType {
 
 
 @Observable
+@MainActor
 class LiveViewModel {
 
     // MARK: - Sidebar 相关常量和状态
@@ -64,13 +65,20 @@ class LiveViewModel {
     var hasMoreRooms = true
     var roomPage: Int = 1 {
         didSet {
-            if roomListType == .favorite || !hasMoreRooms {
+            if roomListType == .favorite || roomListType == .search || !hasMoreRooms {
                 return
             }
             getRoomList(index: selectedSubListIndex)
         }
     }
-    var roomList: [LiveModel] = []
+    private var storedRoomList: [LiveModel] = []
+    var roomList: [LiveModel] {
+        get { roomListType == .search ? searchRequest.rooms : storedRoomList }
+        set {
+            guard roomListType != .search else { return }
+            storedRoomList = newValue
+        }
+    }
     var favoriteRoomList: [LiveModel] = []
     var currentRoom: LiveModel? {
          didSet {
@@ -102,6 +110,11 @@ class LiveViewModel {
     var endFirstLoading = false
     var lodingTimer: Timer?
     private var roomRequestGeneration = UUID()
+    private var catalogRequestGeneration = UUID()
+    let searchRequest = SearchRequestModel(
+        fetchOutcome: LiveViewModel.fetchSearch,
+        onAccepted: LiveViewModel.recordAcceptedSearch
+    )
 
     
     init(roomListType: LiveRoomListType, liveType: LiveType, appViewModel: AppState, shouldLoadData: Bool = true) {
@@ -143,27 +156,33 @@ class LiveViewModel {
     //MARK: 获取相关
     
     func getCategoryList() async {
-        await MainActor.run {
-            livePlatformName = LiveParseTools.getLivePlatformName(liveType)
-            isLoading = true
+        let generation = UUID()
+        catalogRequestGeneration = generation
+        livePlatformName = LiveParseTools.getLivePlatformName(liveType)
+        isLoading = true
+        var handedLoadingToRoomRequest = false
+        defer {
+            if catalogRequestGeneration == generation, !handedLoadingToRoomRequest {
+                isLoading = false
+            }
         }
         do {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: liveType)
-            await MainActor.run {
-                self.categories = fetchedCategories
-                self.getRoomList(index: self.selectedSubListIndex)
-            }
+            guard !Task.isCancelled, catalogRequestGeneration == generation else { return }
+            categories = fetchedCategories
+            selectedMainListCategory = nil
+            selectedSubCategory = []
+            selectedSubListIndex = -1
+            getRoomList(index: selectedSubListIndex)
+            handedLoadingToRoomRequest = roomListType == .live
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
-                await MainActor.run {
-                    self.endFirstLoading = true
-                }
+                guard !Task.isCancelled, self.catalogRequestGeneration == generation else { return }
+                self.endFirstLoading = true
             }
         } catch {
-            await MainActor.run {
-                self.isLoading = false
-                self.handleError(error)
-            }
+            guard !Task.isCancelled, catalogRequestGeneration == generation else { return }
+            handleError(error)
         }
     }
 
@@ -183,17 +202,14 @@ class LiveViewModel {
     }
 
     func getRoomList(index: Int) {
+        if roomListType == .search {
+            return
+        }
         if roomPage == 1 {
             selectedRoomListIndex = 0
         }
         isLoading = true
-        if roomListType == .search {
-            Task {
-                await searchRoomWithText(text: searchText)
-            }
-            return
-        }
-        
+
         switch roomListType {
         case .live:
             fetchLiveRooms(index: index)
@@ -279,91 +295,40 @@ class LiveViewModel {
         }
     }
 
-    func searchRoomWithText(text: String) async {
-        await MainActor.run {
-            isLoading = true
-        }
+    func submitSearch(input: String, kind: RoomSearchKind) {
+        searchRequest.submit(input: input, kind: kind)
+    }
+
+    private static func fetchSearch(_ request: RoomSearchRequest) async throws -> RoomSearchOutcome {
+        let operationID = SupportDiagnosticsService.shared.recordAction(
+            .searched,
+            context: request.kind == .keyword
+                ? SupportDiagnosticActionContext.search(keyword: request.input, page: request.page, additional: ["searchKind": "keyword"])
+                : SupportDiagnosticActionContext.shareSearch(page: request.page)
+        )
         do {
-            let operationID = await MainActor.run {
-                SupportDiagnosticsService.shared.recordAction(
-                    .searched,
-                    context: SupportDiagnosticActionContext.search(
-                        keyword: text,
-                        page: roomPage,
-                        additional: ["searchKind": "keyword"]
-                    )
-                )
-            }
-            let newRooms = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
-                try await LiveService.searchRooms(keyword: text, page: roomPage)
-            }
-            await MainActor.run {
-                if roomPage == 1 {
-                    self.roomList = newRooms.removingDuplicates()
-                } else {
-                    self.roomList = self.roomList.appendingUnique(contentsOf: newRooms)
-                }
-                isLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                isLoading = false
-                // 检查是否是空结果错误（搜索时空结果是正常情况，不应显示错误）
-                if let liveParseError = error as? LiveParseError,
-                   liveParseError.detail.contains("返回结果为空") {
-                    // 空结果不是错误，只是没有搜索到内容，不设置 hasError
-                    self.roomList = []
-                } else {
-                    // 真正的错误才调用 handleError
-                    handleError(error)
+            return try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                switch request.kind {
+                case .keyword:
+                    return try await LiveService.searchRoomsWithOutcome(keyword: request.input, page: request.page)
+                case .share:
+                    return try await LiveService.searchRoomWithShareCodeWithOutcome(shareCode: request.input)
                 }
             }
+        } catch let error as LiveParseError where error.detail.contains("返回结果为空") {
+            return RoomSearchOutcome(rooms: [])
         }
     }
 
-    func searchRoomWithShareCode(text: String) async {
-        await MainActor.run {
-            isLoading = true
-            roomList.removeAll()
-        }
-        do {
-            let operationID = await MainActor.run {
-                SupportDiagnosticsService.shared.recordAction(.searched, context: SupportDiagnosticActionContext.shareSearch())
-            }
-            let room = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
-                let room = try await LiveService.searchRoomWithShareCode(shareCode: text)
-                if let room {
-                    await MainActor.run {
-                        SupportDiagnosticsService.shared.recordAction(
-                            .searched,
-                            context: SupportDiagnosticActionContext.room(
-                                room,
-                                additional: ["searchKind": "share", "entryPoint": "searchResult"]
-                            )
-                        )
-                    }
-                }
-                return room
-            }
-            if let room {
-                await MainActor.run {
-                    roomList.append(room)
-                }
-            }
-        } catch {
-            await MainActor.run {
-                isLoading = false
-                // 检查是否是空结果错误（搜索时空结果是正常情况，不应显示错误）
-                if let liveParseError = error as? LiveParseError,
-                   liveParseError.detail.contains("返回结果为空") {
-                    // 空结果不是错误，只是没有搜索到内容，不设置 hasError
-                    self.roomList = []
-                } else {
-                    // 真正的错误才调用 handleError
-                    handleError(error)
-                }
-            }
-        }
+    private static func recordAcceptedSearch(_ request: RoomSearchRequest, _ rooms: [LiveModel]) {
+        guard request.kind == .share, let room = rooms.first else { return }
+        SupportDiagnosticsService.shared.recordAction(
+            .searched,
+            context: SupportDiagnosticActionContext.room(
+                room,
+                additional: ["searchKind": "share", "entryPoint": "searchResult"]
+            )
+        )
     }
 
     /**

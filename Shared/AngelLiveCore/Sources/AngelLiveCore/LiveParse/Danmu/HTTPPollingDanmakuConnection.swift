@@ -1,6 +1,12 @@
 import Foundation
 @preconcurrency import Alamofire
 
+typealias DanmakuHTTPResponse = Result<(Data, HTTPURLResponse?), Error>
+typealias DanmakuHTTPRequestExecutor = @MainActor (
+    URLRequest,
+    @escaping @MainActor (DanmakuHTTPResponse) -> Void
+) -> (@MainActor () -> Void)
+
 /// 与 `WebSocketConnection` 同构:轮询 Timer 落在主 runloop,delegate 是 UI 层,
 /// 状态(isConnected / isRequestInFlight / pollingTimer 等)本就只在主线程读写。
 /// 标注 `@MainActor` 把这份既有约定交给编译器保证。
@@ -17,15 +23,27 @@ public final class HTTPPollingDanmakuConnection {
     private var pluginDriver: (any DanmakuRuntimeDriving)?
     var makeDriver: DanmakuDriverFactory = { PluginJSDanmakuDriver(pluginId: $0, roomId: $1, userId: $2, plan: $3) }
     var schedule: DanmakuSchedule = scheduleDanmakuWork
+    var executeRequest: DanmakuHTTPRequestExecutor = { request, completion in
+        let dataRequest = AF.request(request).responseData { response in
+            MainActor.assumeIsolated {
+                switch response.result {
+                case .success(let data): completion(.success((data, response.response)))
+                case .failure(let error): completion(.failure(error))
+                }
+            }
+        }
+        return { dataRequest.cancel() }
+    }
     private var roomId: String?
     private var userId: String?
     private let pollingTimer = DanmakuConnectionTimer()
     let workQueue = DanmakuConnectionWorkQueue()
+    private lazy var driverRetirement = DanmakuDriverRetirement(schedule: schedule)
     private var cancelReconnect: (@MainActor () -> Void)?
     private var reconnectPolicy = DanmakuReconnectPolicy()
     private var shouldReconnect = false
     private var hasNotifiedDisconnect = false
-    private var request: DataRequest?
+    private var cancelRequest: (@MainActor () -> Void)?
     private var pollingInterval: TimeInterval = 3.0
     private var pollingURL: String = ""
     private var pollingMethod: String = "POST"
@@ -83,24 +101,26 @@ public final class HTTPPollingDanmakuConnection {
         shouldReconnect = false
         cancelReconnect?()
         cancelReconnect = nil
-        tearDownAttempt()
+        tearDownAttempt(reason: .disconnect)
     }
 
-    private func tearDownAttempt() {
+    private func tearDownAttempt(reason: PluginJSDanmakuDriver.DestroyReason) {
         workQueue.invalidate()
         pollingTimer.stop()
         isConnected = false
         isRequestInFlight = false
-        request?.cancel()
-        request = nil
+        cancelRequest?()
+        cancelRequest = nil
         let oldDriver = pluginDriver
         pluginDriver = nil
-        Task { await oldDriver?.destroy(reason: .disconnect) }
+        if let oldDriver {
+            driverRetirement.retire(oldDriver, reason: reason)
+        }
     }
 
     private func startSession() {
         guard shouldReconnect else { return }
-        tearDownAttempt()
+        tearDownAttempt(reason: .reconnect)
         guard let pluginId, let roomId, let danmakuPlan, danmakuPlan.usesPluginRuntimeDriver,
               !pollingURL.isEmpty else {
             disconnect()
@@ -116,8 +136,6 @@ public final class HTTPPollingDanmakuConnection {
             switch outcome {
             case .success(let result):
                 self.isConnected = true
-                self.hasNotifiedDisconnect = false
-                self.delegate?.webSocketDidConnect()
                 self.applyDriverResult(result)
                 // Session creation is not proof that polling has recovered.
                 if danmakuPlan.transport?.polling?.sendOnConnect ?? true {
@@ -202,19 +220,14 @@ private extension HTTPPollingDanmakuConnection {
 
         isRequestInFlight = true
         let token = workQueue.generation
-        self.request = AF.request(request).responseData { [weak self] response in
-            // Alamofire 的 responseData 默认 `queue: DispatchQueue = .main`,此处未覆盖,
-            // 故回调必在主线程,直接复用主 actor 隔离即可,无需再跳一次。
-            MainActor.assumeIsolated {
-                guard let self, self.shouldReconnect, self.workQueue.generation == token else { return }
-                self.request = nil
-
-                switch response.result {
-                case .success(let data):
-                    self.handleHTTPResponse(data: data, response: response.response)
-                case .failure(let error):
-                    self.handleDriverFailure(error)
-                }
+        cancelRequest = executeRequest(request) { [weak self] response in
+            guard let self, self.shouldReconnect, self.workQueue.generation == token else { return }
+            self.cancelRequest = nil
+            switch response {
+            case .success(let (data, httpResponse)):
+                self.handleHTTPResponse(data: data, response: httpResponse)
+            case .failure(let error):
+                self.handleDriverFailure(error)
             }
         }
     }
@@ -293,6 +306,7 @@ private extension HTTPPollingDanmakuConnection {
                     self.reconnectPolicy.connected()
                     self.hasNotifiedDisconnect = false
                     self.hasReceivedResponse = true
+                    self.delegate?.webSocketDidConnect()
                 }
                 self.applyDriverResult(result)
                 if let poll = result.poll { self.executePoll(poll) }
@@ -304,7 +318,7 @@ private extension HTTPPollingDanmakuConnection {
 
     func handleDriverFailure(_ error: Error) {
         guard shouldReconnect else { return }
-        tearDownAttempt()
+        tearDownAttempt(reason: .error)
         if !hasNotifiedDisconnect {
             hasNotifiedDisconnect = true
             delegate?.webSocketDidDisconnect(error: error)

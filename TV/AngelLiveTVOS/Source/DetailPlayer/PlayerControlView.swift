@@ -591,8 +591,7 @@ struct PlayerControlView: View {
             }
         } else {
             logNavigation("endPlayback")
-            roomInfoViewModel.liveFlagTimer?.invalidate()
-            roomInfoViewModel.liveFlagTimer = nil
+            roomInfoViewModel.stopLiveStatusPolling()
             NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
         }
     }

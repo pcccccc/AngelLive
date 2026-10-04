@@ -10,6 +10,13 @@ import AngelLiveCore
 import AngelLiveDependencies
 import AVKit
 
+private enum MoreActionsSheet: String, Identifiable {
+    case streamerInfo
+    case subtitleTranslation
+
+    var id: String { rawValue }
+}
+
 /// 直播间功能按钮（清屏、主播详情等直播间相关功能）
 struct MoreActionsButton: View {
     let room: LiveModel
@@ -22,48 +29,58 @@ struct MoreActionsButton: View {
     var embeddedInDock: Bool = false
 
     @Environment(RoomInfoViewModel.self) private var viewModel
-    @State private var showStreamerInfo = false
+    @State private var presentedSheet: MoreActionsSheet?
     @State private var buttonPressed = false
 
     var body: some View {
-        Menu {
-            Button("主播详情") {
-                showStreamerInfo = true
-            }
-
-            if showQualityOption {
-                Button("清晰度 - \(viewModel.currentPlayQualityString)") {
-                    onShowQualityPanel?()
+        ZStack {
+            Menu {
+                Button("主播详情") {
+                    presentedSheet = .streamerInfo
                 }
-            }
 
-            if let onRefreshPlayback {
-                Button("刷新直播") {
-                    onRefreshPlayback()
+                if showQualityOption {
+                    Button("清晰度 - \(viewModel.currentPlayQualityString)") {
+                        onShowQualityPanel?()
+                    }
                 }
-                .disabled(viewModel.isLoading)
-            }
 
-            if supportsPictureInPicture, let onTogglePictureInPicture {
-                Button("画中画") {
-                    onTogglePictureInPicture()
+                if let onRefreshPlayback {
+                    Button("刷新直播") {
+                        onRefreshPlayback()
+                    }
+                    .disabled(viewModel.isLoading)
                 }
-            }
 
-            // MARK: - Legacy Quality Menu (commented out for rollback)
-            /*
-            if showQualityOption, let playArgs = viewModel.currentRoomPlayArgs {
-                Menu("清晰度 - \(viewModel.currentPlayQualityString)") {
-                    ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
-                        Menu(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn) {
-                            ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
-                                Button {
-                                    viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
-                                } label: {
-                                    HStack {
-                                        Text(quality.title)
-                                        if viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex {
-                                            Image(systemName: "checkmark")
+                if supportsPictureInPicture, let onTogglePictureInPicture {
+                    Button("画中画") {
+                        onTogglePictureInPicture()
+                    }
+                }
+
+                Menu("实时字幕") {
+                    LiveSubtitleQuickControls()
+
+                    Button("翻译与字幕设置…") {
+                        presentedSheet = .subtitleTranslation
+                    }
+                }
+
+                // MARK: - Legacy Quality Menu (commented out for rollback)
+                /*
+                if showQualityOption, let playArgs = viewModel.currentRoomPlayArgs {
+                    Menu("清晰度 - \(viewModel.currentPlayQualityString)") {
+                        ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
+                            Menu(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn) {
+                                ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
+                                    Button {
+                                        viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
+                                    } label: {
+                                        HStack {
+                                            Text(quality.title)
+                                            if viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex {
+                                                Image(systemName: "checkmark")
+                                            }
                                         }
                                     }
                                 }
@@ -71,34 +88,50 @@ struct MoreActionsButton: View {
                         }
                     }
                 }
-            }
-            */
+                */
 
-            Button("清屏") {
-                onClearChat()
+                Button("清屏") {
+                    onClearChat()
+                }
+            } label: {
+                Image(systemName: embeddedInDock ? "ellipsis" : "ellipsis.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(embeddedInDock ? Color.primary : Color.white)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        Circle()
+                            .fill(embeddedInDock ? AnyShapeStyle(.clear) : AnyShapeStyle(.ultraThinMaterial))
+                    )
+                    .shadow(
+                        color: .black.opacity(embeddedInDock ? 0 : 0.2),
+                        radius: 4,
+                        x: 0,
+                        y: 2
+                    )
             }
-        } label: {
-            Image(systemName: embeddedInDock ? "ellipsis" : "ellipsis.circle.fill")
-                .font(.title2)
-                .foregroundStyle(embeddedInDock ? Color.primary : Color.white)
-                .frame(width: 44, height: 44)
-                .background(
-                    Circle()
-                        .fill(embeddedInDock ? AnyShapeStyle(.clear) : AnyShapeStyle(.ultraThinMaterial))
-                )
-                .shadow(
-                    color: .black.opacity(embeddedInDock ? 0 : 0.2),
-                    radius: 4,
-                    x: 0,
-                    y: 2
-                )
+            .menuIndicator(.hidden)
+            .accessibilityLabel("更多直播间操作")
         }
-        .menuIndicator(.hidden)
-        .accessibilityLabel("更多直播间操作")
-        .sheet(isPresented: $showStreamerInfo) {
-            StreamerInfoSheet(room: room)
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .streamerInfo:
+                StreamerInfoSheet(room: room)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            case .subtitleTranslation:
+                NavigationStack {
+                    TranslationSettingView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完成") {
+                                    presentedSheet = nil
+                                }
+                            }
+                        }
+                }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+            }
         }
         .tint(.primary)
     }

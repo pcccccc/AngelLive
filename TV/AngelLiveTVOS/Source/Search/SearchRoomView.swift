@@ -6,11 +6,13 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 import AngelLiveDependencies
 
 struct SearchRoomView: View {
 
     @FocusState var focusState: Int?
+    @State private var authenticationRecovery: AuthenticationRecoveryRequest?
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(AppState.self) var appViewModel
 
@@ -35,17 +37,7 @@ struct SearchRoomView: View {
                     }
                     TextField("搜索", text: $appModel.searchViewModel.searchText)
                         .onSubmit {
-                            Task {
-                                await MainActor.run {
-                                    liveViewModel.roomPage = 1
-                                }
-
-                                if appModel.searchViewModel.searchTypeIndex == 1 {
-                                    await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
-                                } else {
-                                    await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
-                                }
-                            }
+                            submitSearch()
                         }
                 }
                 .frame(maxWidth: 1200, alignment: .leading)
@@ -59,31 +51,32 @@ struct SearchRoomView: View {
             Spacer()
 
             // 搜索结果区域（占满全宽）
-            if liveViewModel.hasError, let error = liveViewModel.currentError {
+            if let error = liveViewModel.searchRequest.error {
                 ErrorView(
-                    title: error.isAuthRequired ? "搜索失败-请登录相关账号并检查官方页面" : "搜索失败",
-                    message: error.liveParseMessage,
+                    title: error.isAuthRequired ? "搜索需要登录" : "搜索失败",
+                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
                     showLoginButton: error.isAuthRequired,
                     onDismiss: {
-                        liveViewModel.hasError = false
-                        liveViewModel.currentError = nil
+                        liveViewModel.searchRequest.dismissError()
                     },
                     onRetry: {
-                        liveViewModel.hasError = false
-                        liveViewModel.currentError = nil
-                        Task {
-                            if appModel.searchViewModel.searchTypeIndex == 1 {
-                                await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
-                            } else {
-                                await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
-                            }
-                        }
+                        submitSearch()
+                    },
+                    onLogin: {
+                        authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: error.authRequiredPluginIDs)
                     }
                 )
             } else {
+                if !liveViewModel.searchRequest.authenticationRequiredPluginIDs.isEmpty {
+                    Button("部分平台需要登录") {
+                        authenticationRecovery = AuthenticationRecoveryRequest(
+                            pluginIDs: liveViewModel.searchRequest.authenticationRequiredPluginIDs
+                        )
+                    }
+                }
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], alignment: .center, spacing: 50) {
                         ForEach(Array(liveViewModel.roomList.enumerated()), id: \.element.id) { index, room in
@@ -91,7 +84,7 @@ struct SearchRoomView: View {
                                 .environment(liveViewModel)
                                 .frame(width: 370, height: 280)
                         }
-                        if liveViewModel.isLoading {
+                        if liveViewModel.searchRequest.isLoading {
                             LoadingView()
                                 .frame(width: 370, height: 280)
                                 .cornerRadius(5)
@@ -102,6 +95,13 @@ struct SearchRoomView: View {
                     .safeAreaPadding(.top, 50)
                 }
             }
+        }
+        .fullScreenCover(item: $authenticationRecovery) { request in
+            AccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                .frame(maxWidth: 1000)
+                .padding(80)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
         }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
@@ -115,13 +115,29 @@ struct SearchRoomView: View {
             .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
-            liveViewModel.getRoomList(index: 1)
+            submitSearch()
         })
+        .onChange(of: appModel.searchViewModel.searchTypeIndex) { _, _ in
+            liveViewModel.searchRequest.clear()
+        }
+        .onChange(of: appModel.searchViewModel.searchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                liveViewModel.searchRequest.clear()
+            }
+        }
+        .onDisappear { liveViewModel.searchRequest.cancel() }
         .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
             guard let event = appViewModel.remoteInputService.lastEvent,
                   event.field == .search else { return }
             appModel.searchViewModel.searchText = event.value
         }
+    }
+
+    private func submitSearch() {
+        liveViewModel.submitSearch(
+            input: appViewModel.searchViewModel.searchText,
+            kind: appViewModel.searchViewModel.searchTypeIndex == 1 ? .keyword : .share
+        )
     }
 
     // MARK: - 搜索页远程输入二维码面板

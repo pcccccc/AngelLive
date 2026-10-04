@@ -1,6 +1,6 @@
 # 插件驱动 macOS 首页实施规划
 
-> 状态：首期实现完成，宿主构建验证受本机 FFmpegKit checkout 阻塞 · 2026-08-29
+> 状态：首期实现及共享首页缓存/刷新收尾已完成；2026-10-04 完成后续 TTL、revision context、播放控制台和根状态接线后的 workspace MCP macOS 构建、错误检查及新包启动。Mac 锁屏使本轮原生界面复核未执行；具体构建与覆盖见 [本轮验收记录](TODOProgress20261004.md)，不以构建替代交互验收。
 >
 > 范围：macOS FullUI 首页与必要的共享层抽取；不修改 `MacShell*`、iOS ShellUI 或 tvOS
 >
@@ -274,7 +274,7 @@ iOS target 可保留轻量 `typealias HomeViewModel = PluginHomeFeedModel` 作�
 MacHomeView 出现
   ├─ 固定选择聚合推荐（与 iPad usesPersistedPlatformSelection: false 一致）
   ├─ 并行执行
-  │   ├─ PluginHomeFeedModel：恢复缓存 -> 后台请求各内容源
+  │   ├─ PluginHomeFeedModel：恢复缓存 -> 后台请求 TTL 过期或版本标记变化的内容源
   │   └─ AppFavoriteModel：按 shouldSync() 刷新收藏
   └─ 每个结果按稳定 ID 原地更新
 
@@ -284,9 +284,9 @@ MacHomeView 出现
   └─ 强制刷新收藏状态
 ```
 
-- `.task(id:)` 的触发键包含 `installedPluginIds`、`hasCheckedAvailability` 和 `catalogRevision`。
-- 新触发开始时取消旧任务，防止旧插件请求在升级或卸载后回写。
-- 重复点击刷新不创建并行刷新任务。
+- `.task(id:)` 的触发键包含 `installedPluginIds`、`hasCheckedAvailability`、`catalogRevision` 和相关来源凭证变更计数；抓取前读取有效插件版本与不含凭据的会话标记。
+- 快照改变时取消旧刷新轮并等待其退出，旧 generation 不允许回写；取消一个界面调用方不会取消同快照的共用请求。
+- 重复点击刷新共用当前轮；空闲时手动刷新会跳过 TTL 强制获取。
 - App 进入后台或窗口关闭时取消 Banner 计时器和当前页面拥有的任务。
 
 ### 4.4 稳定身份

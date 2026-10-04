@@ -95,10 +95,12 @@ struct AngelLiveMacOSApp: App {
     @State private var historyViewModel = HistoryModel()
     @State private var toastManager = ToastManager()
     @State private var fullscreenPlayerManager = FullscreenPlayerManager()
+    @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(pluginAvailability)
                 .environment(welcomeManager)
                 .environment(favoriteViewModel)
                 .environment(historyViewModel)
@@ -156,12 +158,13 @@ struct AngelLiveMacOSApp: App {
         .restorationBehavior(.disabled)
 
         #if DEBUG
-        DevConsoleScene()
+        DevConsoleScene(pluginAvailability: pluginAvailability)
         #endif
 
         WindowGroup(for: LiveModel.self) { $room in
             if let room = room {
                 RoomPlayerView(room: room)
+                    .environment(pluginAvailability)
                     .environment(favoriteViewModel)
                     .environment(historyViewModel)
                     .environment(toastManager)

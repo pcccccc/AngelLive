@@ -21,6 +21,7 @@ struct PlayerControlView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var showSettings = false
     @State private var showDanmakuSettings = false
+    @State private var showSubtitleTranslationSettings = false
     @State private var showStreamerInfo = false
     @State private var isFavoriteAnimating = false
     @State private var isFavoriteLoading = false
@@ -126,16 +127,30 @@ struct PlayerControlView: View {
                             .contentShape(Rectangle())
 
                             // 设置按钮
-                            Button {
-                                showSettings.toggle()
+                            Menu {
+                                LiveSubtitleQuickControls()
+
+                                Button("翻译与字幕设置…") {
+                                    showSubtitleTranslationSettings = true
+                                }
+
+                                Divider()
+
+                                Button("视频信息统计") {
+                                    showSettings = true
+                                }
                             } label: {
-                                Image(systemName: "info.circle")
+                                Image(systemName: "gearshape")
                                     .frame(width: 30, height: 30)
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .contentShape(Rectangle())
                             }
+                            .menuStyle(.button)
+                            .menuIndicator(.hidden)
                             .buttonStyle(.plain)
+                            .accessibilityLabel("播放器设置")
+                            .help("播放器设置")
                             .contentShape(Rectangle())
                         }
                         .padding(.horizontal, 10)
@@ -411,6 +426,19 @@ struct PlayerControlView: View {
         }
         .sheet(isPresented: $showDanmakuSettings) {
             DanmakuSettingsPanel(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showSubtitleTranslationSettings) {
+            NavigationStack {
+                TranslationSettingView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showSubtitleTranslationSettings = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 480)
         }
         // 鼠标自动隐藏:绑在 NSView 生命周期上,视图析构时一定恢复
         .background(PlayerCursorAutoHide(hideDelay: 2.5))

@@ -1,20 +1,23 @@
 # AngelLive TODO
 
-> 汇总日期：2026-08-26
+> 最近核对：2026-10-04
 >
 > 范围：仓库内全部 Markdown 文档，以及文档中点名的当前代码入口。
 >
-> 规则：只收录仍未完成、未验证或需要产品确认的事项；已完成、已证伪、明确放弃和“首期不做”的方案不重新进入待办。
+> 规则：保留本轮完成项作为对照；未完成、未验证和需要产品确认的事项继续留空。已证伪、明确放弃和“首期不做”的方案不重新进入待办。
+>
+> 本轮实现、测试与设备证据见 [2026-10-04 实施与验收](docs/TODOProgress20261004.md)。
 
 ## P0：影响数据或核心播放稳定性
 
 ### 收藏同步：消除旧默认 Zone 的“删除后复活”风险
 
-- [ ] 删除收藏时，同时删除旧默认 Zone 中对应的 `favorite_streamers` 记录。
-- [ ] 默认 Zone 删除失败后进入持久重试，跨启动继续执行。
-- [ ] 增加迁移设备、未迁移旧设备、离线删除和 CloudKit 临时失败的回归测试。
+- [x] 删除收藏时，同时建立自定义 Zone 与旧默认 Zone 删除意图。
+- [x] 默认 Zone 删除失败进入按账号隔离的持久重试，跨启动继续；重新收藏使旧删除回执失效。
+- [x] 补齐本地调度、账号隔离、版本屏障及收藏快照 CAS 回归测试。
+- [ ] 用真实 iCloud 账号验收迁移设备、未迁移旧设备、离线删除和 CloudKit 临时失败。
 
-当前代码只向自定义 `FavoritesZone` 入队删除；默认 Zone 迁移记录仍保留。来源：[同步可靠性后续](docs/SyncReliabilityRoadmap.md)、`FavoriteSyncEngine.enqueueDelete`。
+代码已覆盖两条删除路径；真实账号、多设备及进程重启验收仍待完成。来源：[同步可靠性现状与后续](docs/SyncReliabilityRoadmap.md)、`FavoriteSyncEngine.enqueueDelete`。
 
 ### iOS 后台/前台快速切换导致 Metal 画面冻结
 
@@ -27,17 +30,19 @@
 
 来源：[后台/前台冻结 Bug2](docs/BackgroundForegroundFreezeBug2.md)。
 
-## P1：已规划但尚未实现的功能
+## P1：实现与验收中的功能
 
 ### 播放链路可观测性与恢复反馈
 
 实施顺序保持为“时间轴 → 恢复文案 → CDN 学习”：
 
-- [ ] 新增 `PlaybackEventLog` 与开发者控制台 Playback Timeline，事件环形上限 500，并支持 JSON 快照导出。
-- [ ] 记录 URL 变化、播放器状态、watchdog 采样、stall、CDN 切换、managed retry、错误和预算耗尽。
-- [ ] 在现有 `PlaybackStatusMachine` 上补齐 `fetchingPlayArgs`、`connecting`、`bufferingFirstFrame` 等细分状态。
-- [ ] 增加一次性的 `PlaybackRecoveryEvent`，三端展示“正在切换线路 / 正在重试”及尝试次数。
-- [ ] 新增 `CDNPreferenceStore`，按平台与 CDN host 学习成功率和首帧耗时；样本不足时保持插件原顺序，数据 7 天失效。
+- [x] 新增 `PlaybackEventLog` 与开发者控制台 Playback Timeline，事件环形上限 500；iOS/macOS 支持 JSON 导出，tvOS 提供本地浏览入口。
+- [x] 记录播放源、播放器状态、watchdog 采样、恢复动作、CDN 选择、错误和预算耗尽，不保存原始 URL、凭据或错误正文。
+- [x] 在既有恢复链路上补齐取参、连接、缓冲等启动阶段展示，以实际播放进度确认起播；不声称获得渲染首帧时间。
+- [x] 增加一次性的恢复提示，三端展示切换线路或重试动作及尝试次数。
+- [x] 新增 `CDNPreferenceStore`，按插件与稳定 CDN 标识学习成功率和起播耗时；样本不足时保持插件原顺序，数据 7 天失效。
+- [x] 完成播放改动的三端 workspace 构建及错误检查。
+- [ ] 完成三端交互与无障碍矩阵；iOS/tvOS 已有新包交互证据，macOS 原生界面受锁屏阻塞，具体覆盖见本轮验收记录。
 - [ ] 增加 `time_to_first_frame_ms`、watchdog 次数、failover 成功率、首选 CDN 命中率和 30 秒未起播退出率度量。
 - [ ] 用时间轴数据复核当前固定 12 秒 stall 阈值是否合理。
 
@@ -47,6 +52,7 @@
 
 开始编码前先完成产品与设计确认：
 
+- [x] 完成[结构化付费留言宿主接口提案](docs/StructuredPaidMessages.md)，明确可选字段、兼容、两种传输、翻译透传和 FullUI 边界；尚未实施。
 - [ ] 确认 `tier` 档位数量、各来源金额到档位的阈值责任方，以及 App 端 `tier → 配色`设计。
 - [ ] 确认 iOS、tvOS、macOS 的承载位置，是否允许点击展开、是否保留历史，以及缺省置顶时长。
 - [ ] 完成卡片、ticker、并发堆叠与退出动效设计稿。
@@ -64,24 +70,27 @@
 
 ### CloudKit 静默推送与通用持久重试
 
-- [ ] 为收藏自定义 Zone 创建并维护 `CKRecordZoneSubscription`。
-- [ ] App 存活时收到静默通知后触发 `CKSyncEngine` 拉取；终止状态继续由下次启动兜底。
-- [ ] 为凭证与插件订阅源的手动同步统一处理 `CKErrorRetryAfterKey`。
-- [ ] 将可重试操作持久化，跨启动继续；不可重试错误继续映射为具体 `SyncError`。
-- [ ] 覆盖限流、离线、账号切换、重复通知与幂等重放测试。
+- [ ] 核验 `CKSyncEngine` 自身订阅与真实设备通知到达行为，再判断是否需要宿主补充通知接线。
+- [ ] 实测 App 存活、后台及终止后重启的收藏变化到达情况。
+- [x] 为凭证与插件订阅源同步统一处理 `CKErrorRetryAfterKey`。
+- [x] 将可重试操作的元数据持久化，跨启动继续；不可重试错误保留具体 `SyncError`。
+- [x] 覆盖本地重试退避、账号切换、旧 revision 回执与幂等重放测试。
+- [ ] 用真实账号完成限流、离线、账号切换与多设备端到端验收。
 
-说明：收藏自定义 Zone 已由 `CKSyncEngine` 管理增量与退避；本项针对尚未接入的静默推送，以及凭证/订阅源的手动同步路径。来源：[同步可靠性后续](docs/SyncReliabilityRoadmap.md)。
+说明：收藏自定义 Zone 已由 `CKSyncEngine` 管理增量与退避；缺少手写 subscription 不能证明系统未订阅。凭证/订阅源持久重试已实现，最终构建与实际账号验证分开记录。来源：[同步可靠性现状与后续](docs/SyncReliabilityRoadmap.md)。
 
 ### 插件首页收尾
 
-首页协议、缓存、Banner、收藏摘要、插件推荐分区和 iOS 首页已经落地；剩余缺口：
+首页协议、缓存、Banner、收藏摘要、插件推荐分区和三端 FullUI 首页已经落地；代码收尾及三端构建已完成，设备覆盖分别记录：
 
-- [ ] 决定并实现“继续观看”和“我的平台”模块，或更新规划文档明确从首期删除。
-- [ ] 让 `ttlSeconds` 真正参与刷新决策；当前仅校验并保存，进入首页仍会直接刷新。
-- [ ] 接入插件升级、禁用、卸载和登录态变化时的定向缓存失效。
-- [ ] 将插件刷新并发限制为 3，并明确重复请求的合并/取消语义。
-- [ ] 把聚合的失败名单细化为每个来源独立的 cached/loading/refreshing/stale/failed 状态。
-- [ ] 补充首页 ViewModel/聚合规则测试：稳定顺序、平台过滤、部分失败、缓存恢复和选择持久化。
+- [x] 首期不加入“继续观看”和“我的平台”；继续使用已有历史记录和平台导航入口。
+- [x] `ttlSeconds` 已参与自动刷新决策，手动刷新可显式强制获取。
+- [x] 已按有效插件版本、Cookie 会话 revision 与 API 凭证 generation 做逐来源定向失效。
+- [x] 插件刷新并发上限为 3；同快照合并，快照变化时旧轮退役，调用方取消不取消共享任务。
+- [x] 已提供逐来源 cached/loading/refreshing/stale/failed 状态，并保留聚合失败名单兼容旧 UI。
+- [x] 已补首页缓存、TTL、并发、合并、旧结果门禁、部分失败和稳定顺序等定向测试。
+- [x] 完成共享首页改动的三端 workspace 构建及错误检查。
+- [ ] 完成三端首页交互矩阵；iOS 已观察到非空首页，macOS 本轮原生界面受锁屏阻塞，不将构建通过视为界面通过。
 - [ ] 真机验证首屏时间、滚动稳定性、图片内存、弱网、Dynamic Type、VoiceOver、减弱动态效果、深浅色和 iPad 分屏。
 - [ ] 验证首页“推荐 / 收藏 / 平台”胶囊互通、收藏大标题上拉折叠及 iOS 26+ 不出现双层玻璃。
 
@@ -139,11 +148,11 @@
 
 ### 文档维护
 
-- [ ] 更新根 `README.md`：workspace 名称应为 `AngelLive.xcworkspace`；Bugsnag 本地密钥路径应为 `Shared/AngelLiveDependencies/Sources/Resources/BugsnagSecrets.local.plist`。
-- [ ] 为当前为空的 `TV/README.md` 和 `TV/ARCHITECTURE.md` 补充有效内容，或删除空占位文件。
-- [ ] 更新 [插件驱动个性首页规划](docs/PluginDrivenHomePagePlan.md) 的状态与已落地清单；同步“推荐使用 SF Symbol”“首页可选推荐/收藏”等当前产品决策。
-- [ ] 将 [Swift 6 / Sendable 适配现状](docs/Swift6SendableAudit.md) 中已被顶部完成结论取代的旧基线明确标为历史记录，避免读者误认为 P0 尚未执行。
-- [ ] 将 [iOS DLNA 投屏调研](docs/iOSDLNACastingResearch.md) 的阶段描述与当前“协议、UI、Header 代理均已实现，仅待真机矩阵”状态统一。
+- [x] 核对根 `README.md`：workspace 为 `AngelLive.xcworkspace`；Bugsnag 本地密钥路径为 `Shared/AngelLiveDependencies/Sources/Resources/BugsnagSecrets.local.plist`，两项已正确。
+- [x] 为 `TV/README.md` 和 `TV/ARCHITECTURE.md` 补充宿主入口、共享层边界、scheme、焦点及新包验证要求。
+- [x] 更新 [插件驱动个性首页规划](docs/PluginDrivenHomePagePlan.md) 的状态、缓存实现与首期模块取舍。
+- [x] 将 [Swift 6 / Sendable 适配现状](docs/Swift6SendableAudit.md) 的旧基线明确标为历史记录。
+- [x] 将 [iOS DLNA 投屏调研](docs/iOSDLNACastingResearch.md) 的阶段描述与当前协议、UI、Header 代理实现对齐，并保留真实设备矩阵和未实现能力边界。
 
 ## 可选项（不阻塞当前发布）
 
@@ -163,18 +172,19 @@
 |---|---|
 | `PRODUCT.md` | 产品原则，无未完成实施项 |
 | `AGENTS.md` | 工程执行规范，不作为产品待办来源 |
-| `README.md` | 有两处环境配置说明过期，已列入“文档维护” |
+| `README.md` | workspace 与本地密钥路径已正确 |
 | `Shared/SharedAssets/README.md` | 使用说明与当前 Package 配置一致，无待办 |
-| `TV/README.md` | 空文件，待补写或删除 |
-| `TV/ARCHITECTURE.md` | 空文件，待补写或删除 |
+| `TV/README.md` | 已补开发与验证入口 |
+| `TV/ARCHITECTURE.md` | 已补当前模块及共享层边界 |
 | `docs/BackgroundForegroundFreezeBug2.md` | 有 P0 采证、修复和回归事项 |
 | `docs/DanmakuMixedContentProtocol.md` | 当前协议说明，无未完成项 |
 | `docs/DanmakuRenderingRoadmap.md` | SC 三层实现及 tvOS 真机验收未完成 |
-| `docs/PlaybackResilienceRoadmap.md` | Timeline、恢复反馈、CDN 学习未完成 |
-| `docs/PluginDrivenHomePagePlan.md` | 核心已实现，缓存策略、模块取舍和体验验收未收尾 |
-| `docs/Swift6SendableAudit.md` | 代码迁移完成，仅剩五组真机验收与历史段落整理 |
+| `docs/PlaybackResilienceRoadmap.md` | Timeline、恢复反馈、CDN 学习已实现，最终验收中 |
+| `docs/PluginDrivenHomePagePlan.md` | 缓存策略、模块取舍已收尾，最终验收中 |
+| `docs/Swift6SendableAudit.md` | 代码迁移与历史段落整理完成，五组真机验收待执行 |
 | `docs/SwiftUISpecialistAudit.md` | 两项低优先级机会性整理未完成 |
-| `docs/SyncReliabilityRoadmap.md` | 三组同步可靠性事项待实施 |
+| `docs/SyncReliabilityRoadmap.md` | 删除屏障与持久重试已实现，真实账号/通知生命周期待验收 |
+| `docs/StructuredPaidMessages.md` | 宿主接口提案完成，外部协议与渲染尚未实施 |
 | `docs/iOSDLNACastingResearch.md` | 实现已落地，真实设备、签名能力与兼容矩阵待验证 |
 | `iOS/.../Player/PlayerUI/README.md` | 来源与 fork 说明，无未完成项 |
 

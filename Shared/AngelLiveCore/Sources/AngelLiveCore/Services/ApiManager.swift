@@ -150,6 +150,63 @@ public enum ApiManager {
         throw lastError ?? NSError(domain: "解析房间号失败，请检查分享码/分享链接是否正确", code: -10000, userInfo: ["desc": "解析房间号失败，请检查分享码/分享链接是否正确"])
     }
 
+    public static func fetchSearchWithShareCodeOutcome(shareCode: String) async throws -> RoomSearchOutcome {
+        try await fetchSearchWithShareCodeOutcome(
+            shareCode: shareCode,
+            platforms: matchedShareResolvePlatforms(for: shareCode)
+        ) { platform, shareCode in
+            try await LiveParseJSPlatformManager.getRoomInfoFromShareCode(
+                platform: platform,
+                shareCode: shareCode
+            )
+        }
+    }
+
+    static func fetchSearchWithShareCodeOutcome(
+        shareCode: String,
+        platforms: [LiveParseJSPlatform],
+        fetch: @escaping (LiveParseJSPlatform, String) async throws -> LiveModel?
+    ) async throws -> RoomSearchOutcome {
+        guard !platforms.isEmpty else {
+            throw shareResolveFailure()
+        }
+
+        var lastError: Error?
+        var authenticationRequiredPluginIDs: [String] = []
+        for platform in platforms {
+            do {
+                if let room = try await fetch(platform, shareCode) {
+                    return RoomSearchOutcome(rooms: [room])
+                }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                try Task.checkCancellation()
+                if error.isAuthRequired {
+                    authenticationRequiredPluginIDs.append(platform.pluginId)
+                } else {
+                    lastError = error
+                }
+            }
+        }
+
+        if !authenticationRequiredPluginIDs.isEmpty {
+            return RoomSearchOutcome(
+                rooms: [],
+                authenticationRequiredPluginIDs: authenticationRequiredPluginIDs
+            )
+        }
+        throw lastError ?? shareResolveFailure()
+    }
+
+    private static func shareResolveFailure() -> NSError {
+        NSError(
+            domain: "解析房间号失败，请检查分享码/分享链接是否正确",
+            code: -10000,
+            userInfo: ["desc": "解析房间号失败，请检查分享码/分享链接是否正确"]
+        )
+    }
+
     private static func matchedShareResolvePlatforms(for text: String) -> [LiveParseJSPlatform] {
         let normalizedText = text.lowercased()
         let inputHosts = extractHosts(from: normalizedText)

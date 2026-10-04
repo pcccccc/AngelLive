@@ -22,8 +22,8 @@ struct GeneralSettingView: View {
         @Bindable var generalSettingModel = appViewModel.generalSettingsViewModel
         @Bindable var appIconSettings = appIconSettings
 
-        VStack(spacing: 50) {
-            Spacer()
+        ScrollView(.vertical) {
+            VStack(spacing: 50) {
 
             Toggle(isOn: $playerSettingModel.openExitPlayerViewWhenLiveEnd) {
                 Text("直播结束后自动退出直播间（不推荐）")
@@ -103,7 +103,18 @@ struct GeneralSettingView: View {
                 .foregroundColor(.secondary)
                 .frame(height: 45)
 
-            Spacer()
+                Toggle(isOn: $generalSettingModel.developerModeEnabled) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("开发者模式")
+                            .foregroundColor(.primary)
+                        Text("记录播放事件，并显示播放时间轴。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(minHeight: 72)
+            }
+            .padding(.vertical, 50)
         }
         .alert("无法更换应用图标", isPresented: $appIconSettings.isShowingError) {
             Button("好", role: .cancel) {}

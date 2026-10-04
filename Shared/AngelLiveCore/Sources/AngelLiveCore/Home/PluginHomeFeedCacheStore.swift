@@ -10,14 +10,28 @@ import Foundation
 public actor PluginHomeFeedCacheStore {
     public static let shared = PluginHomeFeedCacheStore()
 
-    private struct Snapshot: Codable, Sendable {
+    private struct LegacySnapshot: Codable, Sendable {
         let schemaVersion: Int
         let savedAt: Date
         let feeds: [PluginHomeFeed]
     }
 
+    struct Snapshot: Codable, Sendable {
+        struct Entry: Codable, Sendable {
+            let feed: PluginHomeFeed
+            let fetchedAt: Date
+            let contextRevision: String?
+        }
+
+        let schemaVersion: Int
+        let entries: [Entry]
+
+        var feeds: [PluginHomeFeed] { entries.map(\.feed) }
+    }
+
     private enum Constants {
-        static let schemaVersion = 1
+        static let schemaVersion = 2
+        static let legacySchemaVersion = 1
         static let maximumCacheBytes = 8 * 1_024 * 1_024
         static let directoryName = "AngelLive"
         static let fileName = "home-feed-v1.json"
@@ -30,44 +44,73 @@ public actor PluginHomeFeedCacheStore {
     }
 
     public func load() -> [PluginHomeFeed] {
+        loadSnapshot()?.feeds ?? []
+    }
+
+    func loadSnapshot() -> Snapshot? {
         let url = cacheURL()
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: url.path) else { return [] }
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
 
         do {
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
             guard data.count <= Constants.maximumCacheBytes else {
                 Logger.warning("首页缓存超过大小限制，已忽略", category: .plugin)
-                return []
+                return nil
             }
 
-            let snapshot = try decoder.decode(Snapshot.self, from: data)
-            guard snapshot.schemaVersion == Constants.schemaVersion else {
+            if let snapshot = try? decoder.decode(Snapshot.self, from: data),
+               snapshot.schemaVersion == Constants.schemaVersion {
+                return validated(snapshot)
+            }
+
+            let legacy = try decoder.decode(LegacySnapshot.self, from: data)
+            guard legacy.schemaVersion == Constants.legacySchemaVersion else {
                 Logger.warning(
-                    "首页缓存版本不兼容: \(snapshot.schemaVersion)",
+                    "首页缓存版本不兼容: \(legacy.schemaVersion)",
                     category: .plugin
                 )
-                return []
+                return nil
             }
-            return snapshot.feeds.filter {
-                $0.schemaVersion == PluginHomeFeedRequest.supportedSchemaVersion
-            }
+            return Snapshot(
+                schemaVersion: Constants.schemaVersion,
+                entries: legacy.feeds.filter {
+                    $0.schemaVersion == PluginHomeFeedRequest.supportedSchemaVersion
+                }.map {
+                    .init(feed: $0, fetchedAt: .distantPast, contextRevision: nil)
+                }
+            )
         } catch {
             Logger.warning(
                 "首页缓存读取失败: \(error.localizedDescription)",
                 category: .plugin
             )
-            return []
+            return nil
         }
     }
 
     @discardableResult
     public func save(_ feeds: [PluginHomeFeed]) -> Bool {
+        save(feeds, contextRevisions: [:], fetchedAtByPluginId: [:])
+    }
+
+    @discardableResult
+    func save(
+        _ feeds: [PluginHomeFeed],
+        contextRevisions: [String: String],
+        fetchedAtByPluginId: [String: Date],
+        defaultFetchedAt: Date = Date()
+    ) -> Bool {
         do {
             let snapshot = Snapshot(
                 schemaVersion: Constants.schemaVersion,
-                savedAt: Date(),
-                feeds: feeds
+                entries: feeds.map {
+                    .init(
+                        feed: $0,
+                        fetchedAt: fetchedAtByPluginId[$0.pluginId] ?? defaultFetchedAt,
+                        contextRevision: contextRevisions[$0.pluginId]
+                    )
+                }
             )
             let data = try encoder.encode(snapshot)
             guard data.count <= Constants.maximumCacheBytes else {
@@ -86,11 +129,32 @@ public actor PluginHomeFeedCacheStore {
     }
 
     public func remove(pluginId: String) {
-        save(load().filter { $0.pluginId != pluginId })
+        guard let snapshot = loadSnapshot() else { return }
+        let retained = snapshot.entries.filter { $0.feed.pluginId != pluginId }
+        save(
+            retained.map(\.feed),
+            contextRevisions: Dictionary(
+                uniqueKeysWithValues: retained.compactMap { entry in
+                    entry.contextRevision.map { (entry.feed.pluginId, $0) }
+                }
+            ),
+            fetchedAtByPluginId: Dictionary(
+                uniqueKeysWithValues: retained.map { ($0.feed.pluginId, $0.fetchedAt) }
+            )
+        )
     }
 }
 
 private extension PluginHomeFeedCacheStore {
+    func validated(_ snapshot: Snapshot) -> Snapshot {
+        Snapshot(
+            schemaVersion: snapshot.schemaVersion,
+            entries: snapshot.entries.filter {
+                $0.feed.schemaVersion == PluginHomeFeedRequest.supportedSchemaVersion
+            }
+        )
+    }
+
     var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .millisecondsSince1970

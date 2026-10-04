@@ -52,7 +52,8 @@ public enum PlaybackRecoveryFactory {
     @MainActor
     public static func make(
         host: PlaybackRecoveryHost,
-        config: RecoveryConfig
+        config: RecoveryConfig,
+        diagnostics: PlaybackDiagnosticsSession? = nil
     ) -> PlaybackRecoveryCoordinator {
         let actions = RecoveryActions(
             refreshSameURL: { [weak host] in
@@ -83,7 +84,18 @@ public enum PlaybackRecoveryFactory {
         return PlaybackRecoveryCoordinator(
             config: config,
             actions: actions,
-            sample: { [weak host] in host?.currentPlaybackSample() }
+            sample: { [weak host, weak diagnostics] in
+                guard let host else { return nil }
+                let recoverySample = host.currentPlaybackSample()
+                // KSAV remains exempt from recovery sampling. Its playhead is
+                // still useful for startup measurements without changing policy.
+                if recoverySample == nil, let diagnostics,
+                   let sample = host.currentPlaybackDiagnosticSample() {
+                    diagnostics.observe(.sample(sample))
+                }
+                return recoverySample
+            },
+            observation: { [weak diagnostics] in diagnostics?.observe($0) }
         )
     }
 }
@@ -91,6 +103,21 @@ public enum PlaybackRecoveryFactory {
 // MARK: - 采样 / 状态映射(内核绑定,VLC 模式降级)
 
 public extension PlaybackRecoveryHost {
+
+    func currentPlaybackDiagnosticSample() -> PlaybackSample? {
+        #if canImport(KSPlayer)
+        guard let player = watchedPlayerLayer?.player else { return nil }
+        let playhead = player.currentPlaybackTime
+        return PlaybackSample(
+            bytesRead: player.dynamicInfo.bytesRead,
+            playhead: playhead,
+            buffered: max(0, player.playableTime - playhead),
+            isPlaying: player.isPlaying
+        )
+        #else
+        return nil
+        #endif
+    }
 
     /// 协调器 1Hz 采样源。
     /// KSAVPlayer 返回 nil(bytesRead 仅 segment 边界跳变会误判,且出错有清晰 .failed 走 fallback),
@@ -139,4 +166,3 @@ public func mapKSPlayerEngineState(_ state: KSPlayerState) -> PlaybackEngineStat
     }
     #endif
 }
-

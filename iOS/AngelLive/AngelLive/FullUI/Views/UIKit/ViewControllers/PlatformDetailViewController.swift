@@ -19,6 +19,7 @@ class PlatformDetailViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
+    private let pluginAvailability: PluginAvailabilityService
     /// 透传给 SubCategoryViewController / RoomListViewController,用来弹收藏失败的 toast。
     var toastPresenter: ((ToastValue) -> Void)?
 
@@ -60,11 +61,18 @@ class PlatformDetailViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
+    init(
+        viewModel: PlatformDetailViewModel,
+        navigationState: LiveRoomNavigationState,
+        namespace: Namespace.ID,
+        favoriteModel: AppFavoriteModel? = nil,
+        pluginAvailability: PluginAvailabilityService
+    ) {
         self.viewModel = viewModel
         self.navigationState = navigationState
         self.namespace = namespace
         self.favoriteModel = favoriteModel
+        self.pluginAvailability = pluginAvailability
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -209,11 +217,15 @@ class PlatformDetailViewController: UIViewController {
         hideErrorView()
 
         let errorView = ErrorView(
-            title: "加载失败",
-            message: "无法获取分类列表",
-            detailMessage: error.localizedDescription,
+            title: error.isAuthRequired
+                ? "加载失败-请登录\(LiveParseTools.getLivePlatformName(viewModel.platform.liveType))账号"
+                : "加载失败",
+            message: error.isAuthRequired ? "请登录对应平台后重试" : "无法获取分类列表",
+            detailMessage: error.isAuthRequired ? error.liveParseDetail : error.localizedDescription,
             showDismiss: true,
             showRetry: true,
+            showLoginButton: error.isAuthRequired,
+            showDetailButton: error.liveParseDetail?.isEmpty == false,
             onDismiss: { [weak self] in
                 self?.navigationController?.popViewController(animated: true)
             },
@@ -221,10 +233,15 @@ class PlatformDetailViewController: UIViewController {
                 self?.hideErrorView()
                 self?.showSkeletonView()
                 self?.loadCategories()
-            }
+            },
+            onLogin: error.isAuthRequired ? { [weak self] in
+                self?.presentAuthenticationRecovery()
+            } : nil
         )
 
-        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled()))
+        let hostingController = UIHostingController(
+            rootView: AnyView(errorView.supportDiagnosticsEnabled().environment(pluginAvailability))
+        )
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
         addChild(hostingController)
@@ -243,6 +260,19 @@ class PlatformDetailViewController: UIViewController {
         // 隐藏实际内容
         mainCategorySegmentedView.alpha = 0
         mainListContainerView.alpha = 0
+    }
+
+    @MainActor
+    private func presentAuthenticationRecovery() {
+        let pluginIDs = SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+            .map { [$0.pluginId] } ?? []
+        let recoveryView = NavigationStack {
+            PlatformAccountLoginView(recoveryPluginIDs: pluginIDs)
+        }
+        .environment(pluginAvailability)
+        let hostingController = UIHostingController(rootView: recoveryView)
+        hostingController.modalPresentationStyle = .pageSheet
+        present(hostingController, animated: true)
     }
 
     private func hideErrorView() {
@@ -306,7 +336,8 @@ extension PlatformDetailViewController: JXSegmentedListContainerViewDataSource {
             mainCategoryIndex: index,
             navigationState: navigationState,
             namespace: namespace,
-            favoriteModel: favoriteModel
+            favoriteModel: favoriteModel,
+            pluginAvailability: pluginAvailability
         )
         vc.toastPresenter = toastPresenter
         return vc

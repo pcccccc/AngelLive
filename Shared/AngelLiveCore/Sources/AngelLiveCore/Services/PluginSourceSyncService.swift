@@ -22,6 +22,11 @@ private enum CloudPluginSourceFields {
     static let fixedRecordName = "user_plugin_sources"
 }
 
+private enum PluginSourcePersistenceFields {
+    static let urls = "AngelLive.PluginSource.URLs"
+    static let revision = "AngelLive.PluginSource.SyncRevision"
+}
+
 // MARK: - PluginSourceSyncService
 
 @Observable
@@ -51,6 +56,48 @@ public final class PluginSourceSyncService {
     /// 返回结构化结果(错误带码 + 建议),便于调用方/后续 UI 展示;失败不再被静默吞掉。
     @discardableResult
     public static func syncToCloudStatic(sourceURLs: [String]) async -> OperationOutcome {
+        do {
+            try await syncToCloud(sourceURLs: sourceURLs)
+            return .success
+        } catch {
+            let syncError = SyncError.from(error)
+            Logger.warning("同步插件源到 CloudKit 失败: \(syncError.displayText)", category: .plugin)
+            return .failure(syncError)
+        }
+    }
+
+    static func executePersistentSync(
+        expectedRevision: UInt64,
+        expectedDigest: String
+    ) async throws -> PersistentSyncExecutionResult {
+        let defaults = UserDefaults.standard
+        let currentRevision = UInt64(max(0, defaults.integer(forKey: PluginSourcePersistenceFields.revision)))
+        let urls = defaults.stringArray(forKey: PluginSourcePersistenceFields.urls) ?? []
+        guard currentRevision == expectedRevision,
+              PersistentSyncRetryCoordinator.pluginSourceDigest(urls) == expectedDigest else {
+            return .paused
+        }
+        try await syncToCloud(sourceURLs: urls) {
+            try Task.checkCancellation()
+            let latestRevision = UInt64(max(0, UserDefaults.standard.integer(forKey: PluginSourcePersistenceFields.revision)))
+            let latestURLs = UserDefaults.standard.stringArray(forKey: PluginSourcePersistenceFields.urls) ?? []
+            return latestRevision == expectedRevision
+                && PersistentSyncRetryCoordinator.pluginSourceDigest(latestURLs) == expectedDigest
+        }
+        try Task.checkCancellation()
+        let latestRevision = UInt64(max(0, defaults.integer(forKey: PluginSourcePersistenceFields.revision)))
+        let latestURLs = defaults.stringArray(forKey: PluginSourcePersistenceFields.urls) ?? []
+        guard latestRevision == expectedRevision,
+              PersistentSyncRetryCoordinator.pluginSourceDigest(latestURLs) == expectedDigest else {
+            return .paused
+        }
+        return .complete
+    }
+
+    private static func syncToCloud(
+        sourceURLs: [String],
+        shouldContinue: (@Sendable () throws -> Bool)? = nil
+    ) async throws {
         let container = CKContainer(identifier: CloudPluginSourceFields.containerIdentifier)
         let database = container.privateCloudDatabase
         let recordID = CKRecord.ID(recordName: CloudPluginSourceFields.fixedRecordName)
@@ -58,37 +105,28 @@ public final class PluginSourceSyncService {
         if sourceURLs.isEmpty {
             // 无源时删除云端记录
             do {
+                guard try shouldContinue?() ?? true else { return }
                 try await database.deleteRecord(withID: recordID)
             } catch let error as CKError where error.code == .unknownItem {
                 // 记录本就不存在，忽略
-            } catch {
-                let syncError = SyncError.from(error)
-                Logger.warning("删除云端插件源记录失败: \(syncError.displayText)", category: .plugin)
-                return .failure(syncError)
             }
-            return .success
+            return
         }
 
         // 尝试先获取已有记录（避免冲突），失败则新建
         let record: CKRecord
         do {
             record = try await database.record(for: recordID)
-        } catch {
+        } catch let error as CKError where error.code == .unknownItem {
             record = CKRecord(recordType: CloudPluginSourceFields.recordType, recordID: recordID)
         }
+        guard try shouldContinue?() ?? true else { return }
 
         record[CloudPluginSourceFields.urlsField] = sourceURLs as NSArray
         record[CloudPluginSourceFields.updatedAtField] = Date() as NSDate
 
-        do {
-            _ = try await database.save(record)
-            Logger.info("已同步 \(sourceURLs.count) 个插件源 URL 到 CloudKit", category: .plugin)
-            return .success
-        } catch {
-            let syncError = SyncError.from(error)
-            Logger.warning("同步插件源到 CloudKit 失败: \(syncError.displayText)", category: .plugin)
-            return .failure(syncError)
-        }
+        _ = try await database.save(record)
+        Logger.info("已同步 \(sourceURLs.count) 个插件源 URL 到 CloudKit", category: .plugin)
     }
 
     // MARK: - 从 CloudKit 检查（冷启动时，无本地插件时调用）

@@ -1,6 +1,28 @@
 import SwiftUI
 import AngelLiveCore
 
+/// Compact controls for enabling live subtitles and selecting the spoken language.
+@MainActor
+public struct LiveSubtitleQuickControls: View {
+    @Bindable private var settings = LiveSubtitleSettings.shared
+
+    public init() {}
+
+    public var body: some View {
+        Group {
+            Toggle("实时字幕", isOn: $settings.isEnabled)
+
+            Picker("主播语音语言", selection: $settings.sourceLanguage) {
+                ForEach(LiveSubtitleLanguage.allCases) { language in
+                    Text(language.displayName)
+                        .tag(language)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+}
+
 /// Shared settings rows for on-device live speech subtitles.
 @MainActor
 public struct LiveSubtitleSettingsSection: View {
@@ -22,6 +44,13 @@ public struct LiveSubtitleSettingsSection: View {
     private var needsDownload: Bool {
         if case .needsDownload? = resourceStatus { return true }
         return false
+    }
+
+    private var unavailableResourceMessage: String? {
+        if case .unavailable? = resourceStatus {
+            return "暂时无法准备语音模型，请稍后重试。"
+        }
+        return nil
     }
 
     #if os(tvOS)
@@ -60,6 +89,13 @@ public struct LiveSubtitleSettingsSection: View {
                 .font(.system(size: 22))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let unavailableResourceMessage {
+                Text(unavailableResourceMessage)
+                    .font(.system(size: 22))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .focusSection()
@@ -102,9 +138,15 @@ public struct LiveSubtitleSettingsSection: View {
         } header: {
             Text("实时字幕")
         } footer: {
-            Text("由 Apple 在本机识别主播语音，识别语言需与主播一致。部分播放源或设备可能不支持。实时字幕翻译使用当前目标语言和翻译引擎。")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("由 Apple 在本机识别主播语音，识别语言需与主播一致。部分播放源或设备可能不支持。实时字幕翻译使用当前目标语言和翻译引擎。")
+                if let unavailableResourceMessage {
+                    Text(unavailableResourceMessage)
+                }
+            }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .task(id: settings.sourceLanguage.rawValue) {
             await refreshResourceStatus()
@@ -136,6 +178,9 @@ public struct LiveSubtitleSettingsSection: View {
                     Text("当前设备不支持实时字幕")
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("实时字幕当前系统不支持")
+                case .unavailable:
+                    Text("暂时无法准备语音模型")
+                        .foregroundStyle(.secondary)
                 case .needsDownload:
                     Text("尚未下载")
                         .foregroundStyle(.secondary)
@@ -220,6 +265,9 @@ import KSPlayer
 
 @MainActor
 private struct LiveSubtitleOverlayModifier: ViewModifier {
+    private static let translationFailureStatusMessage = "翻译暂不可用，已保留原文。"
+    private static let preparingStatusMessage = "正在准备字幕…"
+
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
     let playbackIdentity: String
     let bottomPadding: CGFloat
@@ -230,6 +278,8 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
     @State private var session: LiveSubtitleSession?
     @State private var translation = LiveSubtitleTranslationPipeline()
     @State private var transientStatusMessage: String?
+    @State private var lastPresentedStatusMessage: String?
+    @State private var hasPresentedTranslationFailureHint = false
     @State private var statusGeneration = UUID()
     @State private var statusTask: Task<Void, Never>?
 
@@ -247,17 +297,33 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .bottom) {
-                subtitleBubble
-                    .padding(.bottom, bottomPadding)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .allowsHitTesting(false)
+                VStack(spacing: 6) {
+                    if let transientStatusMessage {
+                        Text(transientStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.black.opacity(0.68), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .padding(.horizontal, 16)
+                    }
+
+                    subtitleBubble
+                }
+                .padding(.bottom, bottomPadding)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .allowsHitTesting(false)
             }
             .task(id: taskIdentity) {
                 translation.reset()
                 session?.stop()
                 session = nil
-                statusTask?.cancel()
-                transientStatusMessage = nil
+                clearTransientStatus()
+                lastPresentedStatusMessage = nil
+                hasPresentedTranslationFailureHint = false
                 guard
                     settings.isEnabled,
                     scenePhase == .active,
@@ -265,6 +331,7 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
                     layer.player.isReadyToPlay
                 else { return }
 
+                showTransientStatus(Self.preparingStatusMessage)
                 let activeSession = LiveSubtitleSession()
                 session = activeSession
                 await activeSession.run(
@@ -283,25 +350,38 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
             .onChange(of: session?.statusMessage) { _, message in
                 showTransientStatus(message)
             }
-            .onChange(of: session?.text) { _, _ in
+            .onChange(of: session?.text) { _, text in
                 synchronizeTranslationWithCurrentSpeech()
+                if let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    clearPreparationHint()
+                }
             }
             .onChange(of: session?.segmentID) { _, _ in
                 synchronizeTranslationWithCurrentSpeech()
             }
             .onChange(of: translationSettings.revision) { _, _ in
+                clearTranslationFailureHint()
                 translation.reset()
                 synchronizeTranslationWithCurrentSpeech()
             }
+            .onChange(of: translation.text) { _, text in
+                guard
+                    !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    translation.errorMessage == nil
+                else { return }
+                clearTranslationFailureHint()
+            }
             .onChange(of: translation.errorMessage) { _, message in
-                showTransientStatus(message)
+                guard message != nil else { return }
+                showTranslationFailureHint()
             }
             .onDisappear {
-                statusTask?.cancel()
+                clearTransientStatus()
+                lastPresentedStatusMessage = nil
+                hasPresentedTranslationFailureHint = false
                 session?.stop()
                 session = nil
                 translation.reset()
-                transientStatusMessage = nil
             }
     }
 
@@ -318,22 +398,10 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
             .padding(.vertical, 8)
             .background(.black.opacity(0.68), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .padding(.horizontal, 16)
-        } else if let message = transientStatusMessage {
-            Text(message)
-                .font(.body.weight(.medium))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.68), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .padding(.horizontal, 16)
         }
     }
 
     private var subtitleText: String? {
-        if let transientStatusMessage { return transientStatusMessage }
         let translatedText = translation.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !translatedText.isEmpty { return translatedText }
 
@@ -361,10 +429,12 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
     private func showTransientStatus(_ message: String?) {
         let trimmedMessage = message?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let trimmedMessage, !trimmedMessage.isEmpty else { return }
+        guard lastPresentedStatusMessage != trimmedMessage else { return }
         statusTask?.cancel()
 
         let generation = UUID()
         statusGeneration = generation
+        lastPresentedStatusMessage = trimmedMessage
         transientStatusMessage = trimmedMessage
         statusTask = Task { @MainActor in
             do {
@@ -376,6 +446,37 @@ private struct LiveSubtitleOverlayModifier: ViewModifier {
             transientStatusMessage = nil
             statusTask = nil
         }
+    }
+
+    private func showTranslationFailureHint() {
+        guard !hasPresentedTranslationFailureHint else { return }
+        hasPresentedTranslationFailureHint = true
+        showTransientStatus(Self.translationFailureStatusMessage)
+    }
+
+    private func clearTranslationFailureHint() {
+        hasPresentedTranslationFailureHint = false
+        if transientStatusMessage == Self.translationFailureStatusMessage {
+            clearTransientStatus()
+        }
+        if lastPresentedStatusMessage == Self.translationFailureStatusMessage {
+            lastPresentedStatusMessage = nil
+        }
+    }
+
+    private func clearPreparationHint() {
+        guard transientStatusMessage == Self.preparingStatusMessage else { return }
+        clearTransientStatus()
+        if lastPresentedStatusMessage == Self.preparingStatusMessage {
+            lastPresentedStatusMessage = nil
+        }
+    }
+
+    private func clearTransientStatus() {
+        statusGeneration = UUID()
+        statusTask?.cancel()
+        statusTask = nil
+        transientStatusMessage = nil
     }
 }
 

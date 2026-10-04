@@ -32,7 +32,9 @@ struct RoomPlayerView: View {
     /// 首帧渲染粘性标志:state 第一次进入 .buffering / .bufferFinished 后置 true,
     /// 直播流 state 可能长期停留在 .buffering(KSPlayer 视为 isPlaying),
     /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
-    @State private var hasKSStartedPlayback = false
+    @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
+    @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     init(room: LiveModel) {
         self.room = room
@@ -76,6 +78,17 @@ struct RoomPlayerView: View {
 
                 // 控制层
                 PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume, isMuted: $isMuted)
+
+                if let notice = visibleRecoveryNotice {
+                    VStack {
+                        MacPlayerRecoveryNoticeBanner(notice: notice)
+                            .padding(.top, 16)
+                            .padding(.horizontal, 16)
+                            .transition(accessibilityReduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
+                }
             }
         }
         .navigationTitle(
@@ -168,6 +181,9 @@ struct RoomPlayerView: View {
             }
             disableWindowBackgroundDrag()
         }
+        .onChange(of: viewModel.recoveryNotice) { _, notice in
+            showRecoveryNotice(notice)
+        }
         .onChange(of: coordinator.state) { _, _ in
             playbackSession.attach(playerLayer: coordinator.playerLayer)
             disableWindowBackgroundDrag()
@@ -186,14 +202,15 @@ struct RoomPlayerView: View {
         }
         // VM observes Coordinator callbacks without replacing its layer delegate.
         // Keep a sticky first-play signal so later buffering does not look like startup.
-        .onChange(of: viewModel.isPlaying) { _, isPlaying in
-            if isPlaying {
-                hasKSStartedPlayback = true
-            }
-        }
         .onAppear {
             // 启动统一恢复协调器的 1Hz 采样;起播超时/stall/finish 全由它接管。
             viewModel.recoveryCoordinator.start()
+        }
+        .sheet(item: $authenticationRecoveryRequest) { request in
+            NavigationStack {
+                MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                    .frame(minWidth: 620, minHeight: 420)
+            }
         }
     }
 
@@ -215,6 +232,7 @@ struct RoomPlayerView: View {
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        viewModel.endPlaybackDiagnostics()
         viewModel.recoveryCoordinator.stop()
         coordinator.resetPlayer()
         viewModel.disconnectSocket()
@@ -269,9 +287,21 @@ private extension RoomPlayerView {
                     .font(.title2)
                     .foregroundColor(.white)
                 if let errorMsg = viewModel.playErrorMessage {
-                    Text(errorMsg)
+                    Text(viewModel.playError?.isAuthRequired == true ? "请登录对应平台后重试" : errorMsg)
                         .font(.subheadline)
                         .foregroundColor(.gray)
+                }
+                if viewModel.playError?.isAuthRequired == true {
+                    Button {
+                        let platform = SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)
+                        authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                            pluginIDs: platform.map { [$0.pluginId] } ?? []
+                        )
+                    } label: {
+                        let platformName = SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)?.displayName
+                        Text(platformName.map { "登录 \($0)" } ?? "选择登录平台")
+                    }
+                    .buttonStyle(.bordered)
                 }
                 Button("重试") {
                     viewModel.displayState = .loading
@@ -299,7 +329,8 @@ private extension RoomPlayerView {
 
                 if shouldShowStreamLoading(viewModel: viewModel) {
                     MacStreamLoadingOverlay(
-                        dynamicInfo: coordinator.playerLayer?.player.dynamicInfo
+                        dynamicInfo: coordinator.playerLayer?.player.dynamicInfo,
+                        stage: viewModel.startupStage
                     )
                 }
             }
@@ -322,9 +353,24 @@ private extension RoomPlayerView {
                     .overlay(Color.black.opacity(0.5))
                     .clipped()
 
-                MacStreamLoadingOverlay(dynamicInfo: nil)
+                MacStreamLoadingOverlay(dynamicInfo: nil, stage: viewModel.startupStage)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @MainActor
+    func showRecoveryNotice(_ notice: PlaybackRecoveryNotice?) {
+        withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            visibleRecoveryNotice = notice
+        }
+        guard let notice else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard visibleRecoveryNotice?.id == notice.id else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                visibleRecoveryNotice = nil
+            }
         }
     }
 
@@ -332,7 +378,7 @@ private extension RoomPlayerView {
     func shouldShowStreamLoading(viewModel: RoomInfoViewModel) -> Bool {
         // 已进入实际渲染态后,只在用户主动 seek 时再现 —— 直播流 KSPlayer.state 长期停留
         // 在 .buffering 是常态,不能以此判定"加载中",否则 overlay 永不消失。
-        if hasKSStartedPlayback {
+        if viewModel.hasObservedPlaybackProgress {
             return coordinator.playerLayer?.player.playbackState == .seeking
         }
         return isInitialStreamLoading(viewModel: viewModel)
@@ -342,12 +388,12 @@ private extension RoomPlayerView {
     /// 注意：.readyToPlay 是「准备好可以播」而非「已在播」，KSPlayer 此时尚未渲染帧。
     /// 不能用 viewModel.isPlaying 二次过滤，否则 .readyToPlay 与 .buffering 之间会闪一帧黑。
     func isInitialStreamLoading(viewModel: RoomInfoViewModel) -> Bool {
-        if hasKSStartedPlayback { return false }
+        if viewModel.hasObservedPlaybackProgress { return false }
         switch coordinator.state {
-        case .initialized, .preparing, .readyToPlay:
-            return true
-        default:
+        case .paused, .playedToTheEnd, .error:
             return false
+        default:
+            return true
         }
     }
 
@@ -414,17 +460,25 @@ private extension RoomPlayerView {
 /// 网速订阅 KSPlayer 自带的 `DynamicInfo.networkSpeed`(@Published)。
 struct MacStreamLoadingOverlay: View {
     let dynamicInfo: DynamicInfo?
+    let stage: PlaybackStartupStage
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 14) {
             ArcSpinner(size: 34, lineWidth: 1.5)
-            if let info = dynamicInfo {
-                MacStreamSpeedText(info: info)
-            } else {
-                MacStreamPlaceholder()
+            VStack(spacing: 6) {
+                Text(stage.title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                if let info = dynamicInfo {
+                    MacStreamSpeedText(info: info)
+                }
             }
         }
+        .padding(.horizontal, 20)
         .shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(stage.title)
     }
 }
 
@@ -446,19 +500,23 @@ private struct MacStreamSpeedText: View {
                     .tracking(0.5)
                     .foregroundStyle(.white.opacity(0.55))
             }
-        } else {
-            MacStreamPlaceholder()
         }
     }
 }
 
-private struct MacStreamPlaceholder: View {
+private struct MacPlayerRecoveryNoticeBanner: View {
+    let notice: PlaybackRecoveryNotice
+
     var body: some View {
-        Text("connecting")
-            .font(.system(size: 11, weight: .medium))
-            .tracking(2)
-            .foregroundStyle(.white.opacity(0.45))
-            .textCase(.uppercase)
+        Text(notice.title)
+            .font(.body.weight(.medium))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 420)
+            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityLabel(notice.title)
     }
 }
 

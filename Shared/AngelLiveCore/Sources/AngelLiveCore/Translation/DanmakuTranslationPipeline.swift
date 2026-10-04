@@ -25,6 +25,7 @@ actor DanmakuTranslationBroker {
     private let nativeMaximumConcurrent: Int
     private let cloudMaximumConcurrent: Int
     private let cloudMinimumRequestInterval: Duration
+    private let timeoutSleep: @Sendable (Duration) async throws -> Void
     private let clock = ContinuousClock()
     private var cache: [RoomTranslationCacheKey: String] = [:]
     private var cacheOrder: [RoomTranslationCacheKey] = []
@@ -37,12 +38,16 @@ actor DanmakuTranslationBroker {
         cacheCapacity: Int = 200,
         nativeMaximumConcurrent: Int = 64,
         cloudMaximumConcurrent: Int = 2,
-        cloudMinimumRequestInterval: Duration = .seconds(1)
+        cloudMinimumRequestInterval: Duration = .seconds(1),
+        timeoutSleep: @escaping @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        }
     ) {
         self.cacheCapacity = max(1, cacheCapacity)
         self.nativeMaximumConcurrent = max(1, nativeMaximumConcurrent)
         self.cloudMaximumConcurrent = max(1, cloudMaximumConcurrent)
         self.cloudMinimumRequestInterval = cloudMinimumRequestInterval
+        self.timeoutSleep = timeoutSleep
     }
 
     func translate(
@@ -163,9 +168,10 @@ actor DanmakuTranslationBroker {
         timeout: Duration,
         continuation: CheckedContinuation<String, any Error>
     ) -> Consumer {
+        let timeoutSleep = timeoutSleep
         let timeoutTask = Task {
             do {
-                try await Task.sleep(for: timeout)
+                try await timeoutSleep(timeout)
                 self.timeout(consumerID: id, key: key)
             } catch {
                 // Completion or caller cancellation owns the continuation.

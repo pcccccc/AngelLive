@@ -13,6 +13,7 @@ import AngelLiveCore
 import AngelLiveDependencies
 import Alamofire
 
+@MainActor
 @Observable
 class PlatformDetailViewModel {
     // 平台信息
@@ -43,19 +44,10 @@ class PlatformDetailViewModel {
         return "\(main.title) · \(sub.title)"
     }
 
-    // 房间列表 - 使用字典按分类索引缓存
-    var roomListCache: [String: [LiveModel]] = [:]
+    private var roomModels: [String: CategoryRoomListModel] = [:]
+    @ObservationIgnored private var catalogRequestID = UUID()
 
-    var roomList: [LiveModel] {
-        get {
-            let key = cacheKey
-            return roomListCache[key] ?? []
-        }
-        set {
-            let key = cacheKey
-            roomListCache[key] = newValue
-        }
-    }
+    var roomList: [LiveModel] { roomModels[cacheKey]?.rooms ?? [] }
 
     private var cacheKey: String {
         "\(selectedMainCategoryIndex)-\(selectedSubCategoryIndex)"
@@ -63,16 +55,14 @@ class PlatformDetailViewModel {
 
     // 加载状态
     var isLoadingCategories = false
-    var isLoadingRooms = false
+    var isLoadingRooms: Bool { roomModels[cacheKey]?.isLoading ?? false }
 
     // 错误状态
     var categoryError: Error?
-    var roomError: Error?
+    var roomError: Error? { roomModels[cacheKey]?.error }
 
     // 分页
-    var currentPage = 1
-    private let pageSize = 20
-    var hasMoreRooms = true
+    var hasMoreRooms: Bool { roomModels[cacheKey]?.hasMore ?? true }
 
     init(platform: Platformdescription) {
         self.platform = platform
@@ -82,13 +72,17 @@ class PlatformDetailViewModel {
 
     @MainActor
     func loadCategories() async {
+        let requestID = UUID()
+        catalogRequestID = requestID
         isLoadingCategories = true
         categoryError = nil
-        defer { isLoadingCategories = false }
+        defer { if catalogRequestID == requestID { isLoadingCategories = false } }
 
         do {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: platform.liveType)
+            guard !Task.isCancelled, catalogRequestID == requestID else { return }
             categories = fetchedCategories
+            roomModels.removeAll()
 
             // 自动加载第一个分类的房间列表
             if !categories.isEmpty {
@@ -99,6 +93,7 @@ class PlatformDetailViewModel {
                 }
             }
         } catch {
+            guard !Task.isCancelled, catalogRequestID == requestID else { return }
             Logger.warning("获取分类列表失败: \(error)", category: .network)
             categoryError = error
         }
@@ -110,17 +105,21 @@ class PlatformDetailViewModel {
     /// 尽量按标题保留用户当前选中的主/子分类,匹配不到再回退到第一个。
     @MainActor
     func refreshAll() async {
+        let requestID = UUID()
+        catalogRequestID = requestID
         // 记录当前选中分类的标题,用于刷新后恢复
         let previousMainTitle = currentMainCategory?.title
         let previousSubTitle = currentSubCategory?.title
 
         isLoadingCategories = true
         categoryError = nil
-        defer { isLoadingCategories = false }
+        defer { if catalogRequestID == requestID { isLoadingCategories = false } }
 
         do {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: platform.liveType)
+            guard !Task.isCancelled, catalogRequestID == requestID else { return }
             categories = fetchedCategories
+            roomModels.removeAll()
 
             guard !categories.isEmpty else { return }
 
@@ -145,6 +144,7 @@ class PlatformDetailViewModel {
                 await loadRoomList()
             }
         } catch {
+            guard !Task.isCancelled, catalogRequestID == requestID else { return }
             Logger.warning("刷新分类列表失败: \(error)", category: .network)
             categoryError = error
         }
@@ -155,60 +155,33 @@ class PlatformDetailViewModel {
     @MainActor
     func loadRoomList(refresh: Bool = true) async {
         guard let subCategory = currentSubCategory else { return }
-
-        if refresh {
-            currentPage = 1
-            hasMoreRooms = true
-            roomList.removeAll()
-            roomError = nil
-        }
-
-        isLoadingRooms = true
-        defer { isLoadingRooms = false }
-
-        do {
-            // 将父分类业务标识一并传给插件。
+        let key = cacheKey
+        let model: CategoryRoomListModel
+        if let cached = roomModels[key] {
+            model = cached
+        } else {
+            let liveType = platform.liveType
             let parentBiz = currentMainCategory?.biz
-
-            let fetchedRooms = try await LiveService.fetchRoomList(
-                liveType: platform.liveType,
-                category: subCategory,
-                parentBiz: parentBiz,
-                page: currentPage
-            )
-
-            if fetchedRooms.isEmpty {
-                hasMoreRooms = false
+            model = CategoryRoomListModel { page in
+                do {
+                    return try await LiveService.fetchRoomList(
+                        liveType: liveType, category: subCategory, parentBiz: parentBiz, page: page
+                    )
+                } catch {
+                    if (error as? AFError)?.isExplicitlyCancelledError == true {
+                        throw CancellationError()
+                    }
+                    // Preserve the existing plugin empty-result compatibility.
+                    if let parseError = error as? LiveParseError,
+                       parseError.detail.contains("返回结果为空") {
+                        return []
+                    }
+                    throw error
+                }
             }
-
-            if refresh {
-                roomList = fetchedRooms.removingDuplicates()
-            } else {
-                roomList = roomList.appendingUnique(contentsOf: fetchedRooms)
-            }
-            // 清除错误状态（加载成功）
-            roomError = nil
-        } catch {
-            // 检查是否是取消错误
-            let isCancelled = (error as? AFError)?.isExplicitlyCancelledError ?? false
-                || error is CancellationError
-                || (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled
-
-            if isCancelled {
-                return
-            }
-
-            // 插件抛 "返回结果为空" 不算错误:分页到底 / 当前分类无房间。
-            // 不挂 roomError,只置 hasMoreRooms=false;首页刷新场景 roomList 已在 refresh 入口清空。
-            if let liveParseError = error as? LiveParseError,
-               liveParseError.detail.contains("返回结果为空") {
-                hasMoreRooms = false
-                return
-            }
-
-            Logger.warning("获取房间列表失败: \(error)", category: .network)
-            roomError = error
+            roomModels[key] = model
         }
+        await model.load(refresh: refresh)
     }
 
     // MARK: - 加载更多
@@ -216,7 +189,6 @@ class PlatformDetailViewModel {
     @MainActor
     func loadMore() async {
         guard !isLoadingRooms, hasMoreRooms else { return }
-        currentPage += 1
         await loadRoomList(refresh: false)
     }
 

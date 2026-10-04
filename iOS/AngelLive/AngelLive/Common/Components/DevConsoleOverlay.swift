@@ -21,6 +21,7 @@ final class DevConsoleWindowManager {
     static let shared = DevConsoleWindowManager()
 
     private var overlayWindow: DevConsolePassthroughWindow?
+    private var presentsFullUI = false
 
     private init() {
         NotificationCenter.default.addObserver(
@@ -32,7 +33,12 @@ final class DevConsoleWindowManager {
         }
     }
 
-    func setup() {
+    func setup(presentsFullUI: Bool) {
+        let modeChanged = self.presentsFullUI != presentsFullUI
+        self.presentsFullUI = presentsFullUI
+        if modeChanged, overlayWindow != nil {
+            hide()
+        }
         syncVisibility()
     }
 
@@ -59,7 +65,7 @@ final class DevConsoleWindowManager {
         window.backgroundColor = .clear
         window.isHidden = false
 
-        let container = DevConsoleContainerView(frame: window.bounds)
+        let container = DevConsoleContainerView(frame: window.bounds, presentsFullUI: presentsFullUI)
         container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
         let rootVC = DevConsolePassthroughViewController()
@@ -116,8 +122,10 @@ private class DevConsoleContainerView: UIView {
 
     // iOS 26 Liquid Glass 效果层
     private var glassBackgroundView: UIView?
+    private let presentsFullUI: Bool
 
-    override init(frame: CGRect) {
+    init(frame: CGRect, presentsFullUI: Bool) {
+        self.presentsFullUI = presentsFullUI
         super.init(frame: frame)
         backgroundColor = .clear
         isUserInteractionEnabled = true
@@ -275,6 +283,7 @@ private class DevConsoleContainerView: UIView {
         // SwiftUI 面板 —— 内容跨端复用 AngelLiveCore.PluginConsoleView,
         // iOS 这一层只贴底部 sheet 外观(把手 + ultraThinMaterial 玻璃 + 拖拽下滑关闭)。
         let panel = ConsolePanel(
+            presentsFullUI: presentsFullUI,
             onDismiss: { [weak self] in self?.dismissPanel() }
         )
         let hosting = UIHostingController(rootView: AnyView(panel))
@@ -339,6 +348,7 @@ private class DevConsoleContainerView: UIView {
 /// iOS 专有的底部 sheet 外观:顶部把手(可下滑关闭) + ultraThinMaterial 玻璃背景。
 /// 内容部分直接复用 AngelLiveCore 里的 `PluginConsoleView`。
 private struct ConsolePanel: View {
+    let presentsFullUI: Bool
     let onDismiss: () -> Void
 
     @State private var dragOffset: CGFloat = 0
@@ -346,7 +356,11 @@ private struct ConsolePanel: View {
     var body: some View {
         VStack(spacing: 0) {
             panelHandle
-            PluginConsoleView(onClose: onDismiss)
+            if presentsFullUI {
+                DeveloperConsoleView(onClose: onDismiss)
+            } else {
+                PluginConsoleView(onClose: onDismiss)
+            }
         }
         .modifier(PanelBackgroundModifier())
         .offset(y: max(0, dragOffset))
@@ -397,9 +411,18 @@ private struct PanelBackgroundModifier: ViewModifier {
 // MARK: - SwiftUI 入口
 
 struct DevConsoleOverlay: View {
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
+
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
-            .onAppear { DevConsoleWindowManager.shared.setup() }
+            .onAppear {
+                DevConsoleWindowManager.shared.setup(
+                    presentsFullUI: pluginAvailability.hasAvailablePlugins
+                )
+            }
+            .onChange(of: pluginAvailability.hasAvailablePlugins) { _, presentsFullUI in
+                DevConsoleWindowManager.shared.setup(presentsFullUI: presentsFullUI)
+            }
     }
 }

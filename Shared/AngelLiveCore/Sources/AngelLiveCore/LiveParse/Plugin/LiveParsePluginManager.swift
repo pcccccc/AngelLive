@@ -29,6 +29,12 @@ final class LiveParsePluginVersionLeaseToken: @unchecked Sendable {
     }
 }
 
+final class LiveParsePluginRuntimeLeaseToken: @unchecked Sendable {
+    let runtime: JSRuntime
+    init(runtime: JSRuntime) { self.runtime = runtime }
+    deinit { runtime.invalidateOwnedResources() }
+}
+
 enum LiveParsePluginVersionLeaseRegistry {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var counts: [String: [String: Int]] = [:]
@@ -70,6 +76,7 @@ struct LiveParsePluginRuntimeLease: Sendable {
     let credentialKinds: Set<String>
     fileprivate let plugin: LiveParseLoadedPlugin
     fileprivate let versionLeaseToken: LiveParsePluginVersionLeaseToken
+    fileprivate let runtimeLeaseToken: LiveParsePluginRuntimeLeaseToken
 }
 
 public final class LiveParsePluginManager: @unchecked Sendable {
@@ -111,12 +118,14 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         // 在一次 pin 完成后反向覆盖内存中的新选择。
         state = storage.loadState()
         stateRevision &+= 1
+        let retired = Array(loadedPlugins.values)
         loadedPlugins.removeAll()
         lock.unlock()
+        retired.forEach { $0.runtime.invalidateOwnedResources() }
     }
 
     public func pin(pluginId: String, version: String) throws {
-        try lock.withLock {
+        let retired = try lock.withLock { () -> [LiveParseLoadedPlugin] in
             var nextState = state
             var record = nextState.plugins[pluginId] ?? .init()
             record.pinnedVersion = version
@@ -124,12 +133,13 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             try storage.saveState(nextState)
             state = nextState
             stateRevision &+= 1
-            loadedPlugins.removeAll()
+            return loadedPlugins.removeValue(forKey: pluginId).map { [$0] } ?? []
         }
+        retired.forEach { $0.runtime.invalidateOwnedResources() }
     }
 
     public func unpin(pluginId: String) throws {
-        try lock.withLock {
+        let retired = try lock.withLock { () -> [LiveParseLoadedPlugin] in
             var nextState = state
             var record = nextState.plugins[pluginId] ?? .init()
             record.pinnedVersion = nil
@@ -137,12 +147,13 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             try storage.saveState(nextState)
             state = nextState
             stateRevision &+= 1
-            loadedPlugins.removeAll()
+            return loadedPlugins.removeValue(forKey: pluginId).map { [$0] } ?? []
         }
+        retired.forEach { $0.runtime.invalidateOwnedResources() }
     }
 
     public func setLastGoodVersion(pluginId: String, version: String?) throws {
-        try lock.withLock {
+        let retired = try lock.withLock { () -> LiveParseLoadedPlugin? in
             var nextState = state
             var record = nextState.plugins[pluginId] ?? .init()
             record.lastGoodVersion = version
@@ -150,23 +161,24 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             try storage.saveState(nextState)
             state = nextState
             stateRevision &+= 1
-            loadedPlugins.removeValue(forKey: pluginId)
+            return loadedPlugins.removeValue(forKey: pluginId)
         }
+        retired?.runtime.invalidateOwnedResources()
     }
 
     public func evict(pluginId: String) {
-        lock.lock()
-        loadedPlugins.removeValue(forKey: pluginId)
-        lock.unlock()
+        let retired = lock.withLock { loadedPlugins.removeValue(forKey: pluginId) }
+        retired?.runtime.invalidateOwnedResources()
     }
 
     /// Evict only the runtime that produced a cancelled sensitive call. A
     /// replacement may already have won the cache lease and must not be lost.
     private func evict(pluginId: String, ifRuntime runtime: JSRuntime) {
-        lock.withLock {
-            guard loadedPlugins[pluginId]?.runtime === runtime else { return }
-            loadedPlugins.removeValue(forKey: pluginId)
+        let retired = lock.withLock { () -> LiveParseLoadedPlugin? in
+            guard loadedPlugins[pluginId]?.runtime === runtime else { return nil }
+            return loadedPlugins.removeValue(forKey: pluginId)
         }
+        retired?.runtime.invalidateOwnedResources()
     }
 
     public func invalidateHTTPFailureCaches() async {
@@ -232,7 +244,20 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     }
 
     func runtimeLease(pluginId: String) throws -> LiveParsePluginRuntimeLease {
-        let plugin = try resolve(pluginId: pluginId)
+        let selected = try resolve(pluginId: pluginId)
+        let plugin = LiveParseLoadedPlugin(
+            manifest: selected.manifest,
+            rootDirectory: selected.rootDirectory,
+            location: selected.location,
+            runtime: JSRuntime(
+                pluginId: selected.manifest.pluginId,
+                session: session,
+                nativeStream: selected.manifest.nativeStream,
+                loginTransactionStore: .shared,
+                credentialDomains: selected.manifest.hostManagedCredentialDomains,
+                logHandler: logHandler
+            )
+        )
         return LiveParsePluginRuntimeLease(
             pluginId: plugin.manifest.pluginId,
             version: plugin.manifest.version,
@@ -242,7 +267,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             versionLeaseToken: LiveParsePluginVersionLeaseToken(
                 pluginId: plugin.manifest.pluginId,
                 version: plugin.manifest.version
-            )
+            ),
+            runtimeLeaseToken: LiveParsePluginRuntimeLeaseToken(runtime: plugin.runtime)
         )
     }
 
@@ -326,6 +352,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
 
         var payload = payload
         let selectedPlugin = try runtimeLease?.plugin ?? resolve(pluginId: pluginId)
+        let requiresCacheRuntimeGate = runtimeLease == nil && isolatedPlatformSession == nil
         let tokenPlugin = selectedPlugin.manifest.auth?.credentialKinds?.contains(where: { ["token", "client_credentials", "oauth_device_code"].contains($0) }) == true
         let tokenFeatureEnabled = await apiTokenVault.isEnabled
         let tokenEnabled = tokenPlugin && (isolatedPlatformSession != nil || tokenFeatureEnabled)
@@ -409,11 +436,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 )
             }
 
-            let selected: LiveParseLoadedPlugin
-            if let runtimeLease {
-                selected = runtimeLease.plugin
-            } else {
-                selected = try resolve(pluginId: pluginId)
+            let selected = selectedPlugin
+            if requiresCacheRuntimeGate,
+               !isCurrentRuntime(selected.runtime, pluginId: pluginId) {
+                throw CancellationError()
             }
             let plugin: LiveParseLoadedPlugin
             if let isolatedPlatformSession {
@@ -446,12 +472,18 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     try await apiTokenVault.register(plugin.runtime, pluginId: pluginId, generation: tokenSnapshot.generation)
                 }
                 try await plugin.load()
+                try Task.checkCancellation()
+                if requiresCacheRuntimeGate,
+                   !isCurrentRuntime(selected.runtime, pluginId: pluginId) {
+                    throw CancellationError()
+                }
                 let result = try await plugin.runtime.callPluginFunction(
                     name: function,
                     payload: payload,
                     checkSynchronousException: tokenEnabled,
                     consoleContext: consoleInvocationContext
                 )
+                try Task.checkCancellation()
                 if tokenEnabled, !JSONSerialization.isValidJSONObject(result) {
                     throw LiveParsePluginError.invalidReturnValue("API 插件返回了无效响应。")
                 }
@@ -460,6 +492,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 }
                 if let tokenSnapshot {
                     try await apiTokenVault.check(pluginId: pluginId, generation: tokenSnapshot.generation)
+                }
+                if requiresCacheRuntimeGate,
+                   !isCurrentRuntime(selected.runtime, pluginId: pluginId) {
+                    throw CancellationError()
                 }
                 if sensitivePluginCall && !tokenEnabled {
                     await plugin.runtime.endSensitiveLoggingSuppression()
@@ -520,6 +556,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                         responseBody: responseStr
                     )
                 }
+                if requiresCacheRuntimeGate,
+                   !isCurrentRuntime(selected.runtime, pluginId: pluginId) {
+                    throw CancellationError()
+                }
                 return result
             } catch {
                 if tokenEnabled, isolatedPlatformSession != nil {
@@ -540,6 +580,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 throw error
             }
         } catch {
+            if requiresCacheRuntimeGate,
+               !isCurrentRuntime(selectedPlugin.runtime, pluginId: pluginId) {
+                throw CancellationError()
+            }
             let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 #if DEBUG
             if case .loginChallenge = sensitiveConsolePolicy {
@@ -595,6 +639,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         default:
             return .invocation
         }
+    }
+
+    private func isCurrentRuntime(_ runtime: JSRuntime, pluginId: String) -> Bool {
+        lock.withLock { loadedPlugins[pluginId]?.runtime === runtime }
     }
 
     static func highFrequencyRequestSummary(
@@ -938,6 +986,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             // instead of Foundation raising an uncaught Objective-C exception.
             let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
             return try decoder.decode(T.self, from: data)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as LiveParsePluginError {
             throw error
         } catch {
@@ -978,6 +1028,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             )
             let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
             return try decoder.decode(T.self, from: data)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as LiveParsePluginError {
             throw error
         } catch {
@@ -1010,6 +1062,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             )
             let data = try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
             return try decoder.decode(T.self, from: data)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as LiveParsePluginError {
             throw error
         } catch {
@@ -1022,16 +1076,24 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     /// A device attempt owns one isolated runtime from start through candidate
     /// validation. It cannot change the committed account's browsing caches.
     func deviceLoginRuntimeLease(pluginId: String) throws -> LiveParsePluginRuntimeLease {
-        let lease = try runtimeLease(pluginId: pluginId)
-        let selected = lease.plugin
+        let selected = try resolve(pluginId: pluginId)
         let isolated = LiveParseLoadedPlugin(manifest: selected.manifest, rootDirectory: selected.rootDirectory,
             location: selected.location, runtime: JSRuntime(pluginId: pluginId, session: session,
                 nativeStream: selected.manifest.nativeStream, loginTransactionStore: .shared,
                 credentialDomains: selected.manifest.hostManagedCredentialDomains,
                 platformSessionOverride: .init(cookie: "", uid: nil, updatedAt: .now), logHandler: logHandler))
-        return LiveParsePluginRuntimeLease(pluginId: pluginId, version: lease.version,
-            credentialDomains: lease.credentialDomains, credentialKinds: lease.credentialKinds,
-            plugin: isolated, versionLeaseToken: lease.versionLeaseToken)
+        return LiveParsePluginRuntimeLease(
+            pluginId: pluginId,
+            version: selected.manifest.version,
+            credentialDomains: selected.manifest.hostManagedCredentialDomains,
+            credentialKinds: Set(selected.manifest.auth?.credentialKinds ?? []),
+            plugin: isolated,
+            versionLeaseToken: LiveParsePluginVersionLeaseToken(
+                pluginId: pluginId,
+                version: selected.manifest.version
+            ),
+            runtimeLeaseToken: LiveParsePluginRuntimeLeaseToken(runtime: isolated.runtime)
+        )
     }
 
     /// This internal path deliberately bypasses Cookie mutator interception and

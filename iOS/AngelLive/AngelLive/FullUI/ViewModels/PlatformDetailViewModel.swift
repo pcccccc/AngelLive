@@ -64,6 +64,8 @@ class PlatformDetailViewModel {
 
     // 加载状态
     var isLoadingCategories = false
+    @ObservationIgnored private var catalogRequestID = UUID()
+    @ObservationIgnored private var catalogGeneration = UUID()
     private var loadingRoomKeys: Set<String> = []
 
     var isLoadingRooms: Bool {
@@ -127,13 +129,22 @@ class PlatformDetailViewModel {
 
     @MainActor
     func loadCategories() async {
+        let requestID = UUID()
+        catalogRequestID = requestID
         isLoadingCategories = true
         categoryError = nil
-        defer { isLoadingCategories = false }
+        defer { if catalogRequestID == requestID { isLoadingCategories = false } }
 
         do {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: platform.liveType)
+            guard !Task.isCancelled, catalogRequestID == requestID else { return }
+            catalogGeneration = UUID()
             categories = fetchedCategories
+            roomListCache.removeAll()
+            loadingRoomKeys.removeAll()
+            roomErrors.removeAll()
+            currentPages.removeAll()
+            hasMoreRoomsByKey.removeAll()
 
             // 自动加载第一个分类的房间列表
             if !categories.isEmpty {
@@ -144,6 +155,7 @@ class PlatformDetailViewModel {
                 }
             }
         } catch {
+            guard !Task.isCancelled, catalogRequestID == requestID else { return }
             Logger.warning("获取分类列表失败: \(error)", category: .network)
             categoryError = error
         }
@@ -167,6 +179,7 @@ class PlatformDetailViewModel {
         guard mainCategory.subList.indices.contains(subCategoryIndex) else { return }
 
         let subCategory = mainCategory.subList[subCategoryIndex]
+        let generation = catalogGeneration
         let requestKey = cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
         guard !loadingRoomKeys.contains(requestKey) else { return }
 
@@ -179,7 +192,7 @@ class PlatformDetailViewModel {
 
         let requestPage = currentPages[requestKey] ?? 1
         loadingRoomKeys.insert(requestKey)
-        defer { loadingRoomKeys.remove(requestKey) }
+        defer { if catalogGeneration == generation { loadingRoomKeys.remove(requestKey) } }
 
         do {
             // 将父分类业务标识一并传给插件。
@@ -191,6 +204,8 @@ class PlatformDetailViewModel {
                 parentBiz: parentBiz,
                 page: requestPage
             )
+            guard catalogGeneration == generation else { return }
+            try Task.checkCancellation()
 
             hasMoreRoomsByKey[requestKey] = !fetchedRooms.isEmpty
 
@@ -203,6 +218,7 @@ class PlatformDetailViewModel {
             // 清除错误状态（加载成功）
             roomErrors[requestKey] = nil
         } catch {
+            guard catalogGeneration == generation else { return }
             if !refresh {
                 currentPages[requestKey] = max(1, requestPage - 1)
             }

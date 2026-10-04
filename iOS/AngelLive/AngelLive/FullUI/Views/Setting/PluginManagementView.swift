@@ -462,10 +462,17 @@ private struct PluginInstallationResultSection: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(batch.displayNames[pluginID] ?? pluginID)
                             .foregroundStyle(.primary)
-                        Text(failureReason(for: pluginID))
+                        Text("安装失败，请重试。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        DisclosureGroup("技术详情") {
+                            Text(failureReason(for: pluginID))
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                        }
+                        .font(.caption)
                     }
                     .padding(.vertical, 4)
                 }
@@ -487,7 +494,7 @@ private struct PluginInstallationResultSection: View {
         guard case .failed(let reason) = batch.outcomes[pluginID] else {
             return "安装失败"
         }
-        return reason
+        return SupportDiagnosticSanitizer.text(reason)
     }
 
     private func resultCount(title: LocalizedStringKey, count: Int, color: Color) -> some View {

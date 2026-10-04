@@ -154,6 +154,9 @@ public final class PluginSourceManager: @unchecked Sendable {
     private let sourcePluginIdsKey = "AngelLive.PluginSource.PluginIds"
 
     @ObservationIgnored
+    private let sourceRevisionKey = "AngelLive.PluginSource.SyncRevision"
+
+    @ObservationIgnored
     private let updater: LiveParsePluginUpdater
 
     /// 网络请求超时时间（秒）
@@ -180,12 +183,26 @@ public final class PluginSourceManager: @unchecked Sendable {
         sourceURLs = UserDefaults.standard.stringArray(forKey: sourceURLsKey) ?? []
     }
 
+    @MainActor
     private func saveSourceURLs() {
         UserDefaults.standard.set(sourceURLs, forKey: sourceURLsKey)
-        // 同步到 CloudKit
         let urls = sourceURLs
-        Task {
-            await PluginSourceSyncService.syncToCloudStatic(sourceURLs: urls)
+        if PersistentSyncRetryCoordinator.shared.isFullUIEnabled {
+            let revision = UInt64(max(0, UserDefaults.standard.integer(forKey: sourceRevisionKey))) &+ 1
+            UserDefaults.standard.set(revision, forKey: sourceRevisionKey)
+            do {
+                try PersistentSyncRetryCoordinator.shared.enqueuePluginSources(
+                    revision: revision,
+                    digest: PersistentSyncRetryCoordinator.pluginSourceDigest(urls)
+                )
+            } catch {
+                errorMessage = SyncError.from(error).displayText
+            }
+        } else {
+            // ShellUI 保留既有一次性同步路径。
+            Task {
+                await PluginSourceSyncService.syncToCloudStatic(sourceURLs: urls)
+            }
         }
     }
 
@@ -279,6 +296,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         return [primary]
     }
 
+    @MainActor
     private func persistSourceIfNeeded(_ urlString: String) {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !sourceURLs.contains(trimmed) else { return }

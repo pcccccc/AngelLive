@@ -14,14 +14,29 @@ import AngelLiveCore
 /// 独立 NSWindow Scene。`Window(_:id:)` 保证全局唯一,反复触发只激活同一个窗口。
 struct DevConsoleScene: Scene {
     static let windowId = "dev-console"
+    let pluginAvailability: PluginAvailabilityService
 
     var body: some Scene {
         Window("插件控制台", id: Self.windowId) {
-            PluginConsoleView()
+            DevConsoleContent(pluginAvailability: pluginAvailability)
                 .frame(minWidth: 540, minHeight: 360)
         }
         .defaultSize(width: 760, height: 560)
         .commandsRemoved()
+    }
+}
+
+private struct DevConsoleContent: View {
+    let pluginAvailability: PluginAvailabilityService
+
+    var body: some View {
+        Group {
+            if pluginAvailability.hasAvailablePlugins {
+                DeveloperConsoleView()
+            } else {
+                PluginConsoleView()
+            }
+        }
     }
 }
 

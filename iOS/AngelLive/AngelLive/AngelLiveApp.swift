@@ -30,12 +30,14 @@ struct AngelLiveApp: App {
     // 首次启动管理器
     @State private var welcomeManager = WelcomeManager()
     @State private var favoriteViewModel = AppFavoriteModel()
+    @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
 
     var body: some Scene {
         WindowGroup {
             AngelLiveSceneView()
                 .environment(favoriteViewModel)
                 .developerModeConsoleOverlay()
+                .environment(pluginAvailability)
                 .environment(playerManager)
                 .environment(welcomeManager)
                 .installToast(position: .top)

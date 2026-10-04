@@ -12,28 +12,60 @@ import AngelLiveCore
 struct PlatformAccountLoginView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @Environment(\.dismiss) private var dismiss
+    private let recoveryPluginIDs: [String]?
     @State private var platforms: [LoginPlatformEntry] = []
+    @State private var platformsLoaded = false
     @State private var methodSelection: LoginPlatformEntry?
     @State private var selectedLogin: LoginPresentation?
     @State private var pendingLogin: LoginPresentation?
     @State private var accountSelection: LoginPlatformEntry?
     @State private var pendingMethodSelection: LoginPlatformEntry?
     @State private var openingAccount = false
+    @State private var didAutoOpenRecovery = false
 
     private struct LoginPresentation: Identifiable {
         let entry: LoginPlatformEntry
         let method: PlatformLoginMethod
+        let startsWithLogin: Bool
         var id: String { "\(entry.pluginId):\(method.rawValue)" }
+
+        init(entry: LoginPlatformEntry, method: PlatformLoginMethod, startsWithLogin: Bool = false) {
+            self.entry = entry
+            self.method = method
+            self.startsWithLogin = startsWithLogin
+        }
+    }
+
+    init(recoveryPluginIDs: [String]? = nil) {
+        self.recoveryPluginIDs = recoveryPluginIDs
     }
 
     var body: some View {
         List {
             Section {
-                ForEach(platforms) { entry in
+                if recoveryPluginIDs != nil, !platformsLoaded {
+                    ProgressView("正在读取登录方式…")
+                        .frame(maxWidth: .infinity, minHeight: 140)
+                } else if recoveryPluginIDs != nil, platforms.isEmpty {
+                    ErrorView.empty(
+                        title: "暂无可用登录方式",
+                        message: recoveryPluginIDs?.isEmpty == true
+                            ? "当前没有已安装且可登录的平台。"
+                            : "目标插件可能已卸载，或没有声明此设备可用的登录方式。",
+                        symbolName: "person.crop.circle.badge.xmark",
+                        tint: .secondary
+                    )
+                } else {
+                    ForEach(platforms) { entry in
                     Button {
                         openingAccount = true
                         Task {
-                            await openAccount(entry)
+                            if recoveryPluginIDs != nil {
+                                selectLoginMethod(entry)
+                            } else {
+                                await openAccount(entry)
+                            }
                             openingAccount = false
                         }
                     } label: {
@@ -54,7 +86,9 @@ struct PlatformAccountLoginView: View {
 
                             Spacer()
 
-                            if entry.supportsAPICredentials {
+                            if recoveryPluginIDs != nil {
+                                EmptyView()
+                            } else if entry.supportsAPICredentials {
                                 PlatformAPITokenStatusLabel(pluginId: entry.pluginId).font(.caption)
                             } else {
                                 let loggedIn = syncService.isLoggedIn(pluginId: entry.pluginId)
@@ -72,19 +106,40 @@ struct PlatformAccountLoginView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(openingAccount)
+                    }
                 }
             } header: {
-                Text("平台列表")
+                Text(recoveryPluginIDs == nil ? "平台列表" : "选择登录平台")
             } footer: {
-                Text("凭据由宿主安全保存，仅提供给对应插件用于登录验证和鉴权，不会与其他插件共享。")
+                if recoveryPluginIDs == nil {
+                    Text("凭据由宿主安全保存，仅提供给对应插件用于登录验证和鉴权，不会与其他插件共享。")
+                } else if recoveryPluginIDs?.isEmpty == true {
+                    Text("请选择需要恢复登录的平台。")
+                }
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("平台账号登录")
+        .navigationTitle(recoveryPluginIDs == nil ? "平台账号登录" : "登录平台")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if recoveryPluginIDs != nil {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
         .task {
             await loadPlatforms()
-            await syncService.refreshAllLoginStatus()
+            guard let recoveryPluginIDs else {
+                await syncService.refreshAllLoginStatus()
+                return
+            }
+            guard !didAutoOpenRecovery,
+                  recoveryPluginIDs.count == 1,
+                  platforms.count == 1,
+                  let entry = platforms.first else { return }
+            didAutoOpenRecovery = true
+            selectLoginMethod(entry)
         }
         .sheet(item: $methodSelection, onDismiss: {
             // Start the chosen flow after the selection panel has fully closed.
@@ -92,7 +147,11 @@ struct PlatformAccountLoginView: View {
             pendingLogin = nil
         }) { entry in
             LoginMethodSelectionSheet(entry: entry) { method in
-                pendingLogin = LoginPresentation(entry: entry, method: method)
+                pendingLogin = LoginPresentation(
+                    entry: entry,
+                    method: method,
+                    startsWithLogin: recoveryPluginIDs != nil
+                )
                 methodSelection = nil
             }
         }
@@ -103,7 +162,8 @@ struct PlatformAccountLoginView: View {
         }) { selection in
             PlatformLoginSheet(
                 entry: selection.entry,
-                method: selection.method
+                method: selection.method,
+                startsWithLogin: selection.startsWithLogin
             )
         }
         .sheet(item: $accountSelection, onDismiss: {
@@ -140,13 +200,24 @@ struct PlatformAccountLoginView: View {
         if methods.count > 1 {
             methodSelection = entry
         } else if let method = methods.first {
-            selectedLogin = LoginPresentation(entry: entry, method: method)
+            selectedLogin = LoginPresentation(
+                entry: entry,
+                method: method,
+                startsWithLogin: recoveryPluginIDs != nil
+            )
         }
     }
 
     private func loadPlatforms() async {
         let all = await PlatformLoginRegistry.shared.availablePlatforms()
-        platforms = all.filter { pluginAvailability.isPluginInstalled(for: $0.pluginId) }
+        let installed = all.filter { pluginAvailability.isPluginInstalled(for: $0.pluginId) }
+        if let recoveryPluginIDs, !recoveryPluginIDs.isEmpty {
+            let candidates = Set(recoveryPluginIDs)
+            platforms = installed.filter { candidates.contains($0.pluginId) }
+        } else {
+            platforms = installed
+        }
+        platformsLoaded = true
     }
 
     private func loginMethodDescription(for entry: LoginPlatformEntry) -> String {

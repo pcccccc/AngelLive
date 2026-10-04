@@ -7,6 +7,7 @@
 
 import UIKit
 import SwiftUI
+import Observation
 import AngelLiveCore
 import AngelLiveDependencies
 import JXSegmentedView
@@ -21,6 +22,7 @@ class RoomListViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState?
     private let namespace: Namespace.ID?
     private weak var favoriteModel: AppFavoriteModel?
+    private let pluginAvailability: PluginAvailabilityService?
     private var rooms: [LiveModel] = []
     private let usesStaticRooms: Bool
     private let canLoadMoreStaticRooms: (() -> Bool)?
@@ -71,13 +73,22 @@ class RoomListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, subCategoryIndex: Int, navigationState: LiveRoomNavigationState? = nil, namespace: Namespace.ID? = nil, favoriteModel: AppFavoriteModel? = nil) {
+    init(
+        viewModel: PlatformDetailViewModel,
+        mainCategoryIndex: Int,
+        subCategoryIndex: Int,
+        navigationState: LiveRoomNavigationState? = nil,
+        namespace: Namespace.ID? = nil,
+        favoriteModel: AppFavoriteModel? = nil,
+        pluginAvailability: PluginAvailabilityService
+    ) {
         self.viewModel = viewModel
         self.mainCategoryIndex = mainCategoryIndex
         self.subCategoryIndex = subCategoryIndex
         self.navigationState = navigationState
         self.namespace = namespace
         self.favoriteModel = favoriteModel
+        self.pluginAvailability = pluginAvailability
         self.usesStaticRooms = false
         self.canLoadMoreStaticRooms = nil
         self.onLoadMoreStaticRooms = nil
@@ -103,6 +114,7 @@ class RoomListViewController: UIViewController {
         self.navigationState = nil
         self.namespace = nil
         self.favoriteModel = favoriteModel
+        self.pluginAvailability = nil
         self.rooms = rooms
         self.usesStaticRooms = true
         self.canLoadMoreStaticRooms = canLoadMore
@@ -123,6 +135,7 @@ class RoomListViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        observeRoomState()
         loadData()
     }
 
@@ -217,11 +230,14 @@ class RoomListViewController: UIViewController {
 
         guard let viewModel = viewModel else { return }
 
-        let cacheKey = "\(mainCategoryIndex)-\(subCategoryIndex)"
         rooms = viewModel.rooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        updateRooms()
 
-        // 如果缓存中没有数据，则加载
-        if rooms.isEmpty {
+        // An existing request owns this key until it commits. The observation
+        // below will apply its final rooms/error state to this controller.
+        if rooms.isEmpty,
+           viewModel.roomError(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) == nil,
+           !viewModel.isLoadingRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) {
             Task { @MainActor in
                 await viewModel.loadRoomList(
                     mainCategoryIndex: mainCategoryIndex,
@@ -230,6 +246,30 @@ class RoomListViewController: UIViewController {
 
                 // 更新数据
                 updateRooms()
+            }
+        }
+    }
+
+    private func observeRoomState() {
+        guard !usesStaticRooms, let viewModel else { return }
+        withObservationTracking {
+            _ = viewModel.rooms(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+            _ = viewModel.roomError(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+            _ = viewModel.isLoadingRooms(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.updateRooms()
+                self.observeRoomState()
             }
         }
     }
@@ -379,7 +419,7 @@ class RoomListViewController: UIViewController {
 
         let errorView = ErrorView(
             title: authTitle,
-            message: error.liveParseMessage,
+            message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
@@ -389,8 +429,8 @@ class RoomListViewController: UIViewController {
                 self?.hideErrorView()
                 self?.handleRefresh()
             },
-            onLogin: error.isAuthRequired ? {
-                NotificationCenter.default.post(name: .switchToSettings, object: nil)
+            onLogin: error.isAuthRequired ? { [weak self] in
+                self?.presentAuthenticationRecovery()
             } : nil
         )
 
@@ -413,6 +453,20 @@ class RoomListViewController: UIViewController {
 
         // 隐藏 collectionView
         collectionView.isHidden = true
+    }
+
+    @MainActor
+    private func presentAuthenticationRecovery() {
+        guard let pluginAvailability else { return }
+        let pluginIDs = viewModel.flatMap { SandboxPluginCatalog.platform(for: $0.platform.liveType) }
+            .map { [$0.pluginId] } ?? []
+        let recoveryView = NavigationStack {
+            PlatformAccountLoginView(recoveryPluginIDs: pluginIDs)
+        }
+        .environment(pluginAvailability)
+        let hostingController = UIHostingController(rootView: recoveryView)
+        hostingController.modalPresentationStyle = .pageSheet
+        present(hostingController, animated: true)
     }
 
     private func hideErrorView() {

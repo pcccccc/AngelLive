@@ -45,6 +45,7 @@ public final class WebSocketConnection {
     var schedule: DanmakuSchedule = scheduleDanmakuWork
     private lazy var heartbeatTimer = DanmakuConnectionTimer(schedule: schedule)
     let workQueue = DanmakuConnectionWorkQueue()
+    private lazy var driverRetirement = DanmakuDriverRetirement(schedule: schedule)
     private var cancelReconnect: (@MainActor () -> Void)?
     private var shouldReconnect = false
     private var reconnectPolicy = DanmakuReconnectPolicy()
@@ -57,6 +58,7 @@ public final class WebSocketConnection {
     /// 仅在主队列回调链上读写,数据竞争可控。
     private var consoleEntryId: UUID?
     private var consoleConnectStart: Date?
+    var hasPendingConsoleEntry: Bool { consoleEntryId != nil }
 
     private var requestURL: URL? {
         if let raw = danmakuPlan?.transport?.url?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -125,6 +127,7 @@ public final class WebSocketConnection {
         shouldReconnect = false
         cancelReconnect?()
         cancelReconnect = nil
+        consoleFinishEntry(status: .error, message: "WebSocket 连接已取消")
         tearDownAttempt()
         retireDriver(reason: .disconnect)
     }
@@ -144,7 +147,9 @@ public final class WebSocketConnection {
     private func retireDriver(reason: PluginJSDanmakuDriver.DestroyReason) {
         let old = pluginDriver
         pluginDriver = nil
-        Task { await old?.destroy(reason: reason) }
+        if let old {
+            driverRetirement.retire(old, reason: reason)
+        }
     }
 
     private func connectSocket(url: URL) {
@@ -510,7 +515,11 @@ private extension WebSocketConnection {
     }
 
     func handleFatalDriverError(_ error: Error) {
-        disconnect()
+        shouldReconnect = false
+        cancelReconnect?()
+        cancelReconnect = nil
+        tearDownAttempt()
+        retireDriver(reason: .error)
         notifyDisconnected(error: error)
     }
 

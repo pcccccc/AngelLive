@@ -152,7 +152,14 @@ struct DanmakuTranslationTests {
 
     @Test @MainActor
     func nativeBurstTranslatesFortyUniqueMessagesWhileCloudBudgetIsOccupied() async throws {
-        let broker = DanmakuTranslationBroker()
+        let timeoutGate = DanmakuSuspendedTimeoutGate()
+        let broker = DanmakuTranslationBroker(
+            cloudMaximumConcurrent: 1,
+            cloudMinimumRequestInterval: .zero,
+            timeoutSleep: { duration in
+                try await timeoutGate.sleep(for: duration)
+            }
+        )
 
         let cloudFixture = DanmakuSettingsFixture()
         cloudFixture.settings.isDanmakuEnabled = true
@@ -163,7 +170,10 @@ struct DanmakuTranslationTests {
         )
         cloudFixture.settings.engine = .llm
         let cloudProvider = DanmakuControlledProvider(
-            behaviors: ["Cloud first": .hold, "Cloud second": .value("云端第二条译文")]
+            behaviors: [
+                "Cloud first": .cancellableHold,
+                "Cloud second": .value("云端第二条译文")
+            ]
         )
         let cloudPipeline = makePipeline(
             fixture: cloudFixture,
@@ -186,6 +196,10 @@ struct DanmakuTranslationTests {
             broker: broker
         )
         let nativeLog = DanmakuDeliveryLog()
+        defer {
+            cloudPipeline.reset()
+            nativePipeline.reset()
+        }
         for index in 0..<40 {
             nativePipeline.enqueue(message("Native message \(index)")) {
                 nativeLog.messages.append($0)
@@ -200,6 +214,10 @@ struct DanmakuTranslationTests {
         await waitForDeliveryCount(2, in: cloudLog)
         #expect(cloudLog.messages.map(\.text) == ["云端第一条译文", "Cloud second"])
         #expect(await cloudProvider.callCount == 1)
+        cloudPipeline.reset()
+        nativePipeline.reset()
+        await cloudProvider.finish()
+        await timeoutGate.finish()
     }
 
     @Test @MainActor
@@ -483,12 +501,24 @@ private actor DanmakuPrefixProvider: RoomTranslationProvider {
 private actor DanmakuControlledProvider: RoomTranslationProvider {
     enum Behavior: Sendable {
         case hold
+        case cancellableHold
         case value(String)
         case failure(RoomTranslationError)
     }
 
     private var behaviors: [String: Behavior]
-    private var continuations: [String: CheckedContinuation<String, any Error>] = [:]
+    private struct PendingRequest {
+        let text: String
+        let continuation: CheckedContinuation<String, any Error>
+    }
+
+    private struct CallWaiter {
+        let expected: Int
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
+    private var continuations: [UUID: PendingRequest] = [:]
+    private var callWaiters: [UUID: CallWaiter] = [:]
     private(set) var callCount = 0
 
     init(behaviors: [String: Behavior]) {
@@ -497,10 +527,30 @@ private actor DanmakuControlledProvider: RoomTranslationProvider {
 
     func translate(_ request: RoomTranslationRequest) async throws -> String {
         callCount += 1
+        resumeSatisfiedCallWaiters()
         switch behaviors[request.text] ?? .value("译:\(request.text)") {
         case .hold:
-            return try await withCheckedThrowingContinuation {
-                continuations[request.text] = $0
+            return try await withCheckedThrowingContinuation { continuation in
+                continuations[UUID()] = PendingRequest(
+                    text: request.text,
+                    continuation: continuation
+                )
+            }
+        case .cancellableHold:
+            let requestID = UUID()
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    if Task.isCancelled {
+                        continuation.resume(throwing: CancellationError())
+                    } else {
+                        continuations[requestID] = PendingRequest(
+                            text: request.text,
+                            continuation: continuation
+                        )
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelRequest(requestID) }
             }
         case .value(let value):
             return value
@@ -510,26 +560,110 @@ private actor DanmakuControlledProvider: RoomTranslationProvider {
     }
 
     func waitForCallCount(_ expected: Int) async {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
-        while callCount < expected, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(2))
+        guard callCount < expected, !Task.isCancelled else {
+            #expect(callCount >= expected)
+            return
+        }
+        let waiterID = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if callCount >= expected || Task.isCancelled {
+                    continuation.resume()
+                } else {
+                    callWaiters[waiterID] = CallWaiter(
+                        expected: expected,
+                        continuation: continuation
+                    )
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelCallWaiter(waiterID) }
         }
         #expect(callCount >= expected)
     }
 
     func resume(_ text: String, returning value: String) {
-        continuations.removeValue(forKey: text)?.resume(returning: value)
+        removeContinuation(for: text)?.resume(returning: value)
     }
 
     func resume(_ text: String, throwing error: any Error) {
-        continuations.removeValue(forKey: text)?.resume(throwing: error)
+        removeContinuation(for: text)?.resume(throwing: error)
     }
 
     func resumeAll(returning value: String) {
-        let pending = continuations.values
+        let pending = continuations.values.map(\.continuation)
         continuations.removeAll()
         for continuation in pending { continuation.resume(returning: value) }
+    }
+
+    func finish() {
+        let pending = continuations.values.map(\.continuation)
+        continuations.removeAll()
+        for continuation in pending {
+            continuation.resume(throwing: CancellationError())
+        }
+        let waiters = callWaiters.values.map(\.continuation)
+        callWaiters.removeAll()
+        for continuation in waiters { continuation.resume() }
+    }
+
+    private func removeContinuation(
+        for text: String
+    ) -> CheckedContinuation<String, any Error>? {
+        guard let entry = continuations.first(where: { $0.value.text == text }) else {
+            return nil
+        }
+        return continuations.removeValue(forKey: entry.key)?.continuation
+    }
+
+    private func cancelRequest(_ requestID: UUID) {
+        continuations.removeValue(forKey: requestID)?.continuation.resume(
+            throwing: CancellationError()
+        )
+    }
+
+    private func resumeSatisfiedCallWaiters() {
+        let satisfied = callWaiters.filter { $0.value.expected <= callCount }
+        for (id, waiter) in satisfied {
+            callWaiters.removeValue(forKey: id)
+            waiter.continuation.resume()
+        }
+    }
+
+    private func cancelCallWaiter(_ waiterID: UUID) {
+        callWaiters.removeValue(forKey: waiterID)?.continuation.resume()
+    }
+}
+
+private actor DanmakuSuspendedTimeoutGate {
+    private var continuations: [UUID: CheckedContinuation<Void, any Error>] = [:]
+
+    func sleep(for _: Duration) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, any Error>) in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    continuations[id] = continuation
+                }
+            }
+        } onCancel: {
+            Task { await self.cancel(id) }
+        }
+    }
+
+    func finish() {
+        let pending = continuations.values
+        continuations.removeAll()
+        for continuation in pending {
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+
+    private func cancel(_ id: UUID) {
+        continuations.removeValue(forKey: id)?.resume(throwing: CancellationError())
     }
 }
 

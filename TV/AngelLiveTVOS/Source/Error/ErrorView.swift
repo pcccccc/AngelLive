@@ -20,6 +20,7 @@ struct ErrorView: View {
     let showLoginButton: Bool
     let onDismiss: () -> Void
     let onRetry: (() -> Void)?
+    let onLogin: (() -> Void)?
 
     @State private var showDetailView = false
     @State private var showingSupportDiagnostics = false
@@ -47,7 +48,8 @@ struct ErrorView: View {
         showRetry: Bool = false,
         showLoginButton: Bool = false,
         onDismiss: @escaping () -> Void,
-        onRetry: (() -> Void)? = nil
+        onRetry: (() -> Void)? = nil,
+        onLogin: (() -> Void)? = nil
     ) {
         self.title = title
         self.message = message
@@ -60,6 +62,7 @@ struct ErrorView: View {
         self.showLoginButton = showLoginButton
         self.onDismiss = onDismiss
         self.onRetry = onRetry
+        self.onLogin = onLogin
     }
 
     var body: some View {
@@ -78,7 +81,7 @@ struct ErrorView: View {
                         .lineSpacing(6)
 
                     // 需要登录且已有平台登录时显示额外提示
-                    if showLoginButton && isAnyPlatformLoggedIn {
+                    if showLoginButton && onLogin == nil && isAnyPlatformLoggedIn {
                         Text("tvOS 用户如已经登录依旧报错，请等待几分钟后重试")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundColor(.yellow)
@@ -101,8 +104,12 @@ struct ErrorView: View {
                             }
                         }
 
-                        // FullUI 入口始终显示通用账号管理；旧环境继续沿用原有登录判断。
-                        if showLoginButton && supportDiagnosticsEnabled {
+                        if showLoginButton, let onLogin {
+                            Button(action: onLogin) {
+                                Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
+                                    .font(.caption)
+                            }
+                        } else if showLoginButton && supportDiagnosticsEnabled {
                             Button(action: {
                                 onDismiss()
                                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.navigateToSettings, object: nil)

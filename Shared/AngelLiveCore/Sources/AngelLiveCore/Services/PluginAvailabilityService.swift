@@ -56,6 +56,7 @@ public final class PluginAvailabilityService: @unchecked Sendable {
             PlatformAPICredentialHostPolicy.shared.initializeIfNeeded(
                 hasInstalledPlugins: hasAvailablePlugins
             )
+            PersistentSyncRetryCoordinator.shared.setFullUIEnabled(hasAvailablePlugins)
         }
     }
 
@@ -74,6 +75,7 @@ public final class PluginAvailabilityService: @unchecked Sendable {
         if managesAPICredentialPolicy {
             // Publish authorization policy before publishing a mode/catalog change.
             PlatformAPICredentialHostPolicy.shared.update(hasInstalledPlugins: !pluginMap.isEmpty)
+            PersistentSyncRetryCoordinator.shared.setFullUIEnabled(!pluginMap.isEmpty)
         }
         installedPluginIds = pluginMap.keys.sorted()
         // Keep Shell/Full UI availability driven strictly by sandbox presence,

@@ -65,6 +65,9 @@ public extension Error {
 
     /// 检查是否是需要登录的错误（通用，适用于所有平台）
     var isAuthRequired: Bool {
+        if self is PluginAuthenticationRequiredError {
+            return true
+        }
         if let pluginError = self as? LiveParsePluginError {
             switch pluginError {
             case .standardized(let error):
@@ -105,5 +108,10 @@ public extension Error {
                 options: [.regularExpression, .caseInsensitive]
             ) != nil
         }
+    }
+
+    /// Only host-created recovery errors carry a trusted plugin identity.
+    var authRequiredPluginIDs: [String] {
+        (self as? PluginAuthenticationRequiredError)?.pluginIDs ?? []
     }
 }

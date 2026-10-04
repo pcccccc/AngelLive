@@ -64,6 +64,7 @@ struct DetailPlayerView: View {
     @State private var roomSwitchTask: Task<Void, Never>?
     @State private var switcherCategoryRooms: [LiveModel]
     @State private var isLoadingMoreCategoryRooms = false
+    @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
 
     init(
         viewModel: RoomInfoViewModel,
@@ -94,6 +95,9 @@ struct DetailPlayerView: View {
     }
 
     private var playbackErrorMessage: String {
+        if currentPlaybackError?.isAuthRequired == true {
+            return "请登录对应平台后重试"
+        }
         if let error = currentPlaybackError {
             return error.liveParseMessage
         }
@@ -216,8 +220,10 @@ struct DetailPlayerView: View {
                             }
                         },
                         onLogin: shouldShowPlatformLoginPrompt ? {
-                            dismiss()
-                            NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                            authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                                pluginIDs: SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)
+                                    .map { [$0.pluginId] } ?? []
+                            )
                         } : nil
                     )
                     .zIndex(100)
@@ -373,6 +379,7 @@ struct DetailPlayerView: View {
         }
         .onDisappear {
             roomSwitchTask?.cancel()
+            viewModel.endPlaybackDiagnostics()
             SupportDiagnosticsService.shared.recordAction(
                 .closedRoom,
                 context: SupportDiagnosticActionContext.room(
@@ -411,6 +418,11 @@ struct DetailPlayerView: View {
                         Logger.error("[PlayerFlow] 强制竖屏失败: \(error.localizedDescription)", category: .player)
                     }
                 }
+            }
+        }
+        .sheet(item: $authenticationRecoveryRequest) { request in
+            NavigationStack {
+                PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
             }
         }
     }

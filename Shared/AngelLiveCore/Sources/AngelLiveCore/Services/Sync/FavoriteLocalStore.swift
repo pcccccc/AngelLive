@@ -18,6 +18,8 @@ public actor FavoriteLocalStore {
     public static let shared = FavoriteLocalStore()
 
     private let fileName = "favorites.json"
+    private let directoryOverride: URL?
+    private var revision: UInt64 = 0
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.withoutEscapingSlashes]
@@ -25,13 +27,25 @@ public actor FavoriteLocalStore {
     }()
     private let decoder = JSONDecoder()
 
-    public init() {}
+    public init() {
+        directoryOverride = nil
+    }
+
+    init(directory: URL) {
+        directoryOverride = directory
+    }
 
     // MARK: - 路径
 
     /// 存储目录:tvOS 用 Caches(唯一可写且不保证持久),其余用 Application Support。
     private func storeDirectory() -> URL {
         let fm = FileManager.default
+        if let directoryOverride {
+            if !fm.fileExists(atPath: directoryOverride.path) {
+                try? fm.createDirectory(at: directoryOverride, withIntermediateDirectories: true)
+            }
+            return directoryOverride
+        }
         #if os(tvOS)
         let base = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         #else
@@ -61,6 +75,10 @@ public actor FavoriteLocalStore {
         return rooms
     }
 
+    func loadVersioned() -> (rooms: [LiveModel], revision: UInt64) {
+        (load(), revision)
+    }
+
     /// 原子写入本地收藏快照。
     @discardableResult
     public func save(_ rooms: [LiveModel]) -> Bool {
@@ -68,6 +86,7 @@ public actor FavoriteLocalStore {
         do {
             let data = try encoder.encode(rooms)
             try data.write(to: url, options: [.atomic])
+            revision &+= 1
             return true
         } catch {
             Logger.warning("本地收藏写入失败: \(error.localizedDescription)", category: .general)
@@ -75,8 +94,16 @@ public actor FavoriteLocalStore {
         }
     }
 
+    /// Writes only when no other local mutation has happened since `loadVersioned()`.
+    @discardableResult
+    func save(_ rooms: [LiveModel], ifRevisionMatches expectedRevision: UInt64) -> Bool {
+        guard revision == expectedRevision else { return false }
+        return save(rooms)
+    }
+
     /// 清空本地收藏。
     public func clear() {
         try? FileManager.default.removeItem(at: storeURL())
+        revision &+= 1
     }
 }

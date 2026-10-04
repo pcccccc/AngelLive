@@ -92,29 +92,50 @@ public final class FavoriteService: NSObject {
     }
     
     public static func deleteRecord(liveModel: LiveModel) async throws {
-        let container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
-        let database = container.privateCloudDatabase
-        let trimmedUserId = liveModel.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let predicate: NSPredicate
-        if PlatformHostBehavior.favoriteIdentityKey(for: liveModel.liveType) == .userId, !trimmedUserId.isEmpty {
-            predicate = NSPredicate(
-                format: "%K = %@ AND %K = %@",
-                CloudFavoriteFields.userId, trimmedUserId,
-                CloudFavoriteFields.liveType, liveModel.liveType.rawValue
-            )
-        } else {
-            let trimmedRoomId = liveModel.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
-            predicate = NSPredicate(
-                format: "%K = %@",
-                CloudFavoriteFields.roomId, trimmedRoomId
-            )
-        }
+        try await deleteLegacyRecords(identity: LegacyFavoriteIdentity(room: liveModel)) { true }
+    }
+
+    /// 删除旧默认 Zone 中与 typed identity 精确匹配的全部记录。
+    /// 分页和逐条错误都必须完整处理；调用方可在每页和每条删除前撤销旧 revision。
+    public static func deleteLegacyRecords(
+        identity: LegacyFavoriteIdentity,
+        shouldContinue: @escaping @Sendable () async -> Bool
+    ) async throws {
+        guard !identity.namespace.isEmpty, !identity.value.isEmpty else { return }
+        let database = CKContainer(identifier: CloudFavoriteFields.containerIdentifier).privateCloudDatabase
+        let identityField = identity.field == .userID ? CloudFavoriteFields.userId : CloudFavoriteFields.roomId
+        let predicate = NSPredicate(
+            format: "%K = %@ AND %K = %@",
+            identityField, identity.value,
+            CloudFavoriteFields.liveType, identity.namespace
+        )
         let query = CKQuery(recordType: "favorite_streamers", predicate: predicate)
-        let recordArray = try await database.records(matching: query)
-        let recordsToDelete = recordArray.matchResults.compactMap { try? $0.1.get() }
-        for record in recordsToDelete {
-            try await database.deleteRecord(withID: record.recordID)
-        }
+        let defaultZoneID = CKRecordZone.default().zoneID
+        var cursor: CKQueryOperation.Cursor?
+
+        repeat {
+            guard await shouldContinue() else { throw CancellationError() }
+            let page: (matchResults: [(CKRecord.ID, Result<CKRecord, Error>)], queryCursor: CKQueryOperation.Cursor?)
+            if let cursor {
+                page = try await database.records(continuingMatchFrom: cursor)
+            } else {
+                page = try await database.records(
+                    matching: query,
+                    inZoneWith: defaultZoneID,
+                    resultsLimit: CKQueryOperation.maximumResults
+                )
+            }
+            for result in page.matchResults {
+                guard await shouldContinue() else { throw CancellationError() }
+                let record = try result.1.get()
+                do {
+                    try await database.deleteRecord(withID: record.recordID)
+                } catch let error as CKError where error.code == .unknownItem {
+                    continue
+                }
+            }
+            cursor = page.queryCursor
+        } while cursor != nil
     }
     
     public static func getCloudState() async -> String {

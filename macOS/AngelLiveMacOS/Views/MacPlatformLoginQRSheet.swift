@@ -15,6 +15,13 @@ struct MacPlatformLoginSheet: View {
     let entry: LoginPlatformEntry
 
     let method: PlatformLoginMethod
+    let startsWithLogin: Bool
+
+    init(entry: LoginPlatformEntry, method: PlatformLoginMethod, startsWithLogin: Bool = false) {
+        self.entry = entry
+        self.method = method
+        self.startsWithLogin = startsWithLogin
+    }
 
     var body: some View {
         switch method {
@@ -27,7 +34,7 @@ struct MacPlatformLoginSheet: View {
         case .qrCode:
             MacPlatformLoginQRSheet(entry: entry)
         case .web:
-            MacPlatformLoginWebSheet(pluginId: entry.pluginId)
+            MacPlatformLoginWebSheet(pluginId: entry.pluginId, startsWithLogin: startsWithLogin)
         }
     }
 }

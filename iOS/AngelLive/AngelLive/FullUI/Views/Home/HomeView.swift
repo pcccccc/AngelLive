@@ -7,6 +7,7 @@
 
 import AngelLiveCore
 import AngelLiveDependencies
+import Combine
 import SwiftUI
 import UIKit
 
@@ -25,6 +26,7 @@ struct HomeView: View {
     @State private var homeNavigationModel = HomeNavigationModel()
     @State private var isPullRefreshing = false
     @State private var refreshCycle = 0
+    @State private var credentialRevision = 0
     @Namespace private var roomTransitionNamespace
 
     init(usesPersistedPlatformSelection: Bool = true) {
@@ -36,14 +38,23 @@ struct HomeView: View {
             .task(id: HomeFeedRefreshTrigger(
                 installedPluginIds: pluginAvailability.installedPluginIds,
                 availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
-                catalogRevision: pluginAvailability.catalogRevision
+                catalogRevision: pluginAvailability.catalogRevision,
+                credentialRevision: credentialRevision
             )) {
+                let installedPluginIds = pluginAvailability.installedPluginIds
+                let availabilityConfirmed = pluginAvailability.hasCheckedAvailability
                 viewModel.selectPlatform(pluginId: persistedPluginId)
-                async let feedRefresh: Void = viewModel.refresh(
-                    installedPluginIds: pluginAvailability.installedPluginIds,
-                    availabilityConfirmed: pluginAvailability.hasCheckedAvailability
-                )
                 async let favoriteRefresh: Void = refreshFavoritesIfNeeded()
+                let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+                guard !Task.isCancelled else {
+                    _ = await favoriteRefresh
+                    return
+                }
+                async let feedRefresh: Void = viewModel.refresh(
+                    installedPluginIds: installedPluginIds,
+                    availabilityConfirmed: availabilityConfirmed,
+                    context: context
+                )
                 _ = await (feedRefresh, favoriteRefresh)
                 viewModel.selectPlatform(pluginId: persistedPluginId)
 
@@ -52,6 +63,24 @@ struct HomeView: View {
                     if normalizedPluginId != selectedPluginId {
                         selectedPluginId = normalizedPluginId
                     }
+                }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
+                    .compactMap { $0.object as? String }
+                    .receive(on: RunLoop.main)
+            ) { pluginId in
+                if pluginAvailability.installedPluginIds.contains(pluginId) {
+                    credentialRevision &+= 1
+                }
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .platformAPICredentialChanged)
+                    .compactMap { $0.object as? String }
+                    .receive(on: RunLoop.main)
+            ) { pluginId in
+                if pluginAvailability.installedPluginIds.contains(pluginId) {
+                    credentialRevision &+= 1
                 }
             }
             .onChange(of: selectedPluginId) { _, _ in
@@ -346,9 +375,14 @@ private extension HomeView {
 
     func refreshHome() {
         Task {
+            let installedPluginIds = pluginAvailability.installedPluginIds
+            let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+            guard !Task.isCancelled else { return }
             await viewModel.refresh(
-                installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                installedPluginIds: installedPluginIds,
+                availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
+                context: context,
+                force: true
             )
         }
     }
@@ -359,9 +393,14 @@ private extension HomeView {
         isPullRefreshing = true
         refreshCycle += 1
         defer { isPullRefreshing = false }
+        let installedPluginIds = pluginAvailability.installedPluginIds
+        let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+        guard !Task.isCancelled else { return }
         await viewModel.refresh(
-            installedPluginIds: pluginAvailability.installedPluginIds,
-            availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+            installedPluginIds: installedPluginIds,
+            availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
+            context: context,
+            force: true
         )
         await favoriteModel.pullToRefresh()
     }
@@ -376,6 +415,7 @@ private struct HomeFeedRefreshTrigger: Hashable {
     let installedPluginIds: [String]
     let availabilityConfirmed: Bool
     let catalogRevision: UInt
+    let credentialRevision: Int
 }
 
 private enum HomeNavigationMetrics {

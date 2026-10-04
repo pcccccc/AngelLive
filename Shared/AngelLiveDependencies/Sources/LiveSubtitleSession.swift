@@ -10,6 +10,7 @@ import Synchronization
 
 public enum LiveSubtitleResourceStatus: Sendable {
     case unsupported
+    case unavailable
     case needsDownload
     case downloading
     case ready
@@ -135,6 +136,20 @@ public final class LiveSubtitleSession {
             return .unsupported
         }
 
+        do {
+            return try await LiveSubtitleReservations.shared.withLease(locale: locale) { _ in
+                await reservedResourceStatus(locale: locale)
+            }
+        } catch {
+            return .unavailable
+        }
+        #endif
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private nonisolated static func reservedResourceStatus(
+        locale: Locale
+    ) async -> LiveSubtitleResourceStatus {
         let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
         switch await AssetInventory.status(forModules: [transcriber]) {
         case .unsupported:
@@ -149,7 +164,6 @@ public final class LiveSubtitleSession {
         @unknown default:
             return .unsupported
         }
-        #endif
     }
 
     public nonisolated static func downloadResources(
@@ -168,54 +182,49 @@ public final class LiveSubtitleSession {
             throw LiveSubtitleError.unsupported
         }
 
-        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
-        let status = await AssetInventory.status(forModules: [transcriber])
-        guard status != .unsupported else {
-            throw LiveSubtitleError.unsupported
-        }
-        if status == .installed {
-            let installedLocales = await SpeechTranscriber.installedLocales
-            if installedLocales.contains(locale) {
-                _ = try await AssetInventory.reserve(locale: locale)
-                await progress(1)
-                return
+        try await LiveSubtitleReservations.shared.withLease(locale: locale) { lease in
+            let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+            let status = await reservedResourceStatus(locale: locale)
+            guard status != .unsupported else {
+                throw LiveSubtitleError.unsupported
             }
-        }
-        guard let request = try await AssetInventory.assetInstallationRequest(
-            supporting: [transcriber]
-        ) else {
-            throw LiveSubtitleError.downloadUnavailable
-        }
-
-        try await withThrowingTaskGroup(of: DownloadEvent.self) { group in
-            group.addTask {
-                try await request.downloadAndInstall()
-                return .finished
-            }
-            group.addTask {
-                while !Task.isCancelled {
-                    let fraction = min(max(request.progress.fractionCompleted, 0), 1)
-                    await progress(fraction)
-                    try await Task.sleep(for: .milliseconds(250))
+            if status != .ready {
+                guard let request = try await AssetInventory.assetInstallationRequest(
+                    supporting: [transcriber]
+                ) else {
+                    throw LiveSubtitleError.downloadUnavailable
                 }
-                return .progressObserverStopped
-            }
 
-            while let event = try await group.next() {
-                if event == .finished {
-                    group.cancelAll()
-                    break
+                try await withThrowingTaskGroup(of: DownloadEvent.self) { group in
+                    group.addTask {
+                        try await request.downloadAndInstall()
+                        return .finished
+                    }
+                    group.addTask {
+                        while !Task.isCancelled {
+                            let fraction = min(max(request.progress.fractionCompleted, 0), 1)
+                            await progress(fraction)
+                            try await Task.sleep(for: .milliseconds(250))
+                        }
+                        return .progressObserverStopped
+                    }
+
+                    while let event = try await group.next() {
+                        if event == .finished {
+                            group.cancelAll()
+                            break
+                        }
+                    }
                 }
             }
-        }
 
-        let installedStatus = await AssetInventory.status(forModules: [transcriber])
-        let installedLocales = await SpeechTranscriber.installedLocales
-        guard installedStatus == .installed, installedLocales.contains(locale) else {
-            throw LiveSubtitleError.downloadDidNotInstall
+            guard await reservedResourceStatus(locale: locale) == .ready else {
+                throw LiveSubtitleError.downloadDidNotInstall
+            }
+            try Task.checkCancellation()
+            LiveSubtitleReservations.shared.retain(lease)
+            progress(1)
         }
-        _ = try await AssetInventory.reserve(locale: locale)
-        await progress(1)
         #endif
     }
 
@@ -230,9 +239,39 @@ public final class LiveSubtitleSession {
             return
         }
 
-        switch await Self.resourceStatus(sourceLanguage: sourceLanguage) {
+        guard let locale = await Self.supportedLocale(for: sourceLanguage) else {
+            setStatus("当前语言或设备不支持实时字幕。", generation: currentGeneration)
+            return
+        }
+        guard !Task.isCancelled, generation == currentGeneration else { return }
+
+        do {
+            try await LiveSubtitleReservations.shared.withLease(locale: locale) { _ in
+                await self.reservedRun(
+                    layer: layer,
+                    locale: locale,
+                    generation: currentGeneration
+                )
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            setStatus("暂时无法准备语音模型，请稍后重试。", generation: currentGeneration)
+        }
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private func reservedRun(
+        layer: KSPlayerLayer,
+        locale: Locale,
+        generation currentGeneration: UInt
+    ) async {
+        switch await Self.reservedResourceStatus(locale: locale) {
         case .unsupported:
             setStatus("当前语言或设备不支持实时字幕。", generation: currentGeneration)
+            return
+        case .unavailable:
+            setStatus("暂时无法准备语音模型，请稍后重试。", generation: currentGeneration)
             return
         case .needsDownload:
             setStatus("请先在设置中下载该语言的语音识别资源。", generation: currentGeneration)
@@ -242,12 +281,6 @@ public final class LiveSubtitleSession {
             return
         case .ready:
             break
-        }
-        guard !Task.isCancelled, generation == currentGeneration else { return }
-
-        guard let locale = await Self.supportedLocale(for: sourceLanguage) else {
-            setStatus("当前语言或设备不支持实时字幕。", generation: currentGeneration)
-            return
         }
         guard !Task.isCancelled, generation == currentGeneration else { return }
 

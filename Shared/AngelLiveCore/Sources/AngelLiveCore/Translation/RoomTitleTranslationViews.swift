@@ -124,7 +124,7 @@ private nonisolated func nativeTranslationLanguageDownloadAction(
             guard await isCurrent(request) else { return }
 
             let status = await AppleRoomTranslationProvider.shared
-                .nativeLanguageStatus(for: request.pair)
+                .downloadLanguageStatus(for: request.pair)
             try Task.checkCancellation()
             guard await isCurrent(request) else { return }
             result = status == .installed

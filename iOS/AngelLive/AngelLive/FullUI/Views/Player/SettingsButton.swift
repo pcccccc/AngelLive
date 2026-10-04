@@ -21,13 +21,15 @@ struct SettingsButton: View {
     @State private var showDLNAPicker = false
     @State private var showTimerPicker = false
     @State private var showPlayerSettings = false
+    @State private var showSubtitleSettings = false
     @State private var timerManager = TimerManager()
     @State private var playerSettingModel = PlayerSettingModel()
+    @Bindable private var subtitleSettings = LiveSubtitleSettings.shared
     @Environment(RoomInfoViewModel.self) private var viewModel
 
     /// 是否有任何弹窗展开
     private var isAnyPopupOpen: Bool {
-        showActionSheet || showAirPlayPicker || showDLNAPicker || showTimerPicker || showPlayerSettings
+        showActionSheet || showAirPlayPicker || showDLNAPicker || showTimerPicker || showPlayerSettings || showSubtitleSettings
     }
 
     var body: some View {
@@ -63,6 +65,14 @@ struct SettingsButton: View {
                 Button("弹幕设置") {
                     showDanmakuSettings = true
                 }
+            }
+
+            Button(subtitleSettings.isEnabled ? "关闭实时字幕" : "开启实时字幕") {
+                subtitleSettings.isEnabled.toggle()
+            }
+
+            Button("字幕语言与设置…") {
+                showSubtitleSettings = true
             }
 
             // 仅在 HLS 流时显示投屏选项（FLV 投屏只有音频）
@@ -137,6 +147,37 @@ struct SettingsButton: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSubtitleSettings) {
+            NavigationStack {
+                Form {
+                    Section {
+                        LiveSubtitleQuickControls()
+                    } footer: {
+                        Text("语音模型、目标语言和翻译引擎可在翻译与字幕设置中调整。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Section {
+                        NavigationLink("翻译与字幕设置") {
+                            TranslationSettingView()
+                        }
+                    }
+                }
+                .navigationTitle("字幕设置")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完成") {
+                            showSubtitleSettings = false
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .tint(.primary)
         }
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)

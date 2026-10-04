@@ -91,7 +91,6 @@ struct PlayerContentView: View {
     /// KSPlayer 路径首帧标志:state 第一次进入 .buffering / .bufferFinished 后置 true,
     /// 直播流 state 在 KSPlayer 内可能长期停留在 .buffering(KSPlayer 视为 isPlaying),
     /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
-    @State private var hasKSStartedPlayback = false
     /// VLC 模式下的控制层显示/隐藏状态
     @State private var vlcMaskShow: Bool = true
     /// VLC 模式下的锁定状态
@@ -102,6 +101,7 @@ struct PlayerContentView: View {
     @State private var lastResignActiveAt: Date?
     /// 进后台前的播放意图,用于区分 C 类自动暂停与用户本来就暂停。
     @State private var wasPlayingBeforeBackground: Bool?
+    @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
@@ -148,6 +148,14 @@ struct PlayerContentView: View {
             .background(AppConstants.Device.isIPad ? Color.black : (isDeviceLandscape ? Color.black : Color.clear))
             .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
             .preference(key: VerticalLiveModePreferenceKey.self, value: isVerticalLiveMode)
+            .overlay(alignment: .top) {
+                if let notice = visibleRecoveryNotice {
+                    PlayerRecoveryNoticeBanner(notice: notice)
+                        .padding(.top, 16)
+                        .padding(.horizontal, 16)
+                        .transition(accessibilityReduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                }
+            }
             .simultaneousGesture(roomSwitcherGesture(in: geometry.size))
             .accessibilityAction(named: Text("快速换台")) {
                 presentRoomSwitcher()
@@ -199,13 +207,8 @@ struct PlayerContentView: View {
                 vlcPlaybackController.becomeActive()
             }
         }
-        // VM observes the Coordinator callbacks without replacing its layer delegate.
-        // Keep a sticky first-play signal so later buffering does not look like startup.
-        .onChange(of: viewModel.isPlaying) { _, isPlaying in
-            guard useKSPlayer else { return }
-            if isPlaying {
-                hasKSStartedPlayback = true
-            }
+        .onChange(of: viewModel.recoveryNotice) { _, notice in
+            showRecoveryNotice(notice)
         }
         .onAppear {
             // KSPlayer 路径启动统一恢复协调器的 1Hz 采样;起播超时/stall/finish 全由它接管。
@@ -322,10 +325,11 @@ struct PlayerContentView: View {
                     if shouldShowLoading {
                         #if canImport(KSPlayer)
                         StreamLoadingOverlay(
-                            dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo
+                            dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo,
+                            stage: viewModel.startupStage
                         )
                         #else
-                        StreamLoadingOverlay(dynamicInfo: nil)
+                        StreamLoadingOverlay(dynamicInfo: nil, stage: viewModel.startupStage)
                         #endif
                     }
 
@@ -396,6 +400,7 @@ struct PlayerContentView: View {
                         hasDetectedSize = false
                         applyVideoFillMode(isVerticalLive: false)
                         configureModelIfNeeded(playURL: playURL)
+                        viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
 
                         // iPad 直接使用默认 16:9，不做尺寸探测，避免频繁重建
                         if AppConstants.Device.isIPad {
@@ -475,7 +480,7 @@ struct PlayerContentView: View {
             } else {
                 if viewModel.isLoading {
                     // 加载中 — 复用直播流加载层(Arc + "connecting")。
-                    StreamLoadingOverlay(dynamicInfo: nil)
+                    StreamLoadingOverlay(dynamicInfo: nil, stage: viewModel.startupStage)
                 } else {
                     // 封面图作为背景
                     KFImage(URL(string: viewModel.currentRoom.roomCover))
@@ -492,6 +497,21 @@ struct PlayerContentView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                 }
+            }
+        }
+    }
+
+    @MainActor
+    private func showRecoveryNotice(_ notice: PlaybackRecoveryNotice?) {
+        withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            visibleRecoveryNotice = notice
+        }
+        guard let notice else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard visibleRecoveryNotice?.id == notice.id else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                visibleRecoveryNotice = nil
             }
         }
     }
@@ -576,16 +596,16 @@ struct PlayerContentView: View {
             #if canImport(KSPlayer)
             // 已经渲染过帧后,初次加载层退场 — 直播流可能长期停在 .buffering / .readyToPlay,
             // 不靠粘性标志退场就会永远盖着。
-            if hasKSStartedPlayback { return false }
+            if viewModel.hasObservedPlaybackProgress { return false }
             // 按 KSPlayer 定义,state.isPlaying 仅 .buffering / .bufferFinished 为真;
             // .readyToPlay 是「准备好可以播」而非「已在播」,此时还没渲染过帧。
             // 必须把这三个 pre-play 状态都视为加载中,否则 .readyToPlay 一帧会撤掉 overlay
             // 暴露黑屏,紧接着 .buffering 又把 overlay 盖回来 —— 视觉上闪一下黑。
             switch playerCoordinator.state {
-            case .initialized, .preparing, .readyToPlay:
-                return true
-            default:
+            case .paused, .playedToTheEnd, .error:
                 return false
+            default:
+                return true
             }
             #else
             return false
@@ -941,21 +961,27 @@ struct StreamLoadingOverlay: View {
     #else
     let dynamicInfo: AnyObject?
     #endif
+    let stage: PlaybackStartupStage
 
     var body: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
             ArcSpinner(size: 42, lineWidth: 1.8)
-            #if canImport(KSPlayer)
-            if let info = dynamicInfo {
-                StreamSpeedText(info: info)
-            } else {
-                StreamPlaceholder()
+            VStack(spacing: 8) {
+                Text(stage.title)
+                    .font(.headline.weight(.medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                #if canImport(KSPlayer)
+                if let info = dynamicInfo {
+                    StreamSpeedText(info: info)
+                }
+                #endif
             }
-            #else
-            StreamPlaceholder()
-            #endif
         }
+        .padding(.horizontal, 20)
         .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(stage.title)
     }
 }
 
@@ -978,20 +1004,25 @@ private struct StreamSpeedText: View {
                     .tracking(0.6)
                     .foregroundStyle(.white.opacity(0.55))
             }
-        } else {
-            StreamPlaceholder()
         }
     }
 }
 #endif
 
-private struct StreamPlaceholder: View {
+private struct PlayerRecoveryNoticeBanner: View {
+    let notice: PlaybackRecoveryNotice
+
     var body: some View {
-        Text("connecting")
-            .font(.system(size: 12, weight: .medium))
-            .tracking(2.5)
-            .foregroundStyle(.white.opacity(0.45))
-            .textCase(.uppercase)
+        Text(notice.title)
+            .font(.body.weight(.medium))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 420)
+            .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .allowsHitTesting(false)
+            .accessibilityLabel(notice.title)
     }
 }
 

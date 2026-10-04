@@ -2,6 +2,7 @@ import AngelLiveCore
 import AngelLiveDependencies
 import SharedAssets
 import SwiftUI
+import Combine
 
 /// tvOS 的插件驱动首页。共享层负责内容、缓存和聚合，当前文件只拥有电视端布局、焦点和播放呈现。
 struct TVHomeView: View {
@@ -29,6 +30,7 @@ struct TVHomeView: View {
     @State private var artworkProgressOrigin: CGFloat = 0
     @State private var artworkPrefetcher: ImagePrefetcher?
     @State private var heroHasFocus = false
+    @State private var credentialRevision = 0
 
     init(appViewModel: AppState, enhancesArtwork: Bool) {
         self.appViewModel = appViewModel
@@ -111,9 +113,16 @@ struct TVHomeView: View {
         .preferredColorScheme(.dark)
         .tvHomePlaybackPresentation(playback)
         .task(id: refreshTrigger) {
+            let installedPluginIds = pluginAvailability.installedPluginIds
+            let availabilityConfirmed = pluginAvailability.hasCheckedAvailability
+            let context = await PluginHomeFeedRefreshContext.current(
+                for: installedPluginIds
+            )
+            guard !Task.isCancelled else { return }
             async let homeRefresh: Void = model.refresh(
-                installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                installedPluginIds: installedPluginIds,
+                availabilityConfirmed: availabilityConfirmed,
+                context: context
             )
             async let favoriteRefresh: Void = refreshFavoritesIfNeeded()
             _ = await (homeRefresh, favoriteRefresh)
@@ -135,6 +144,22 @@ struct TVHomeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { pendingBannerStep = nil }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
+                .compactMap { $0.object as? String }
+                .receive(on: RunLoop.main)
+        ) { pluginID in
+            guard pluginAvailability.installedPluginIds.contains(pluginID) else { return }
+            credentialRevision &+= 1
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .platformAPICredentialChanged)
+                .compactMap { $0.object as? String }
+                .receive(on: RunLoop.main)
+        ) { pluginID in
+            guard pluginAvailability.installedPluginIds.contains(pluginID) else { return }
+            credentialRevision &+= 1
         }
     }
 }
@@ -167,7 +192,8 @@ private extension TVHomeView {
         TVHomeRefreshTrigger(
             installedPluginIds: pluginAvailability.installedPluginIds,
             availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
-            catalogRevision: pluginAvailability.catalogRevision
+            catalogRevision: pluginAvailability.catalogRevision,
+            credentialRevision: credentialRevision
         )
     }
 
@@ -456,9 +482,15 @@ private extension TVHomeView {
 
     func refreshHome() {
         Task {
+            let installedPluginIds = pluginAvailability.installedPluginIds
+            let availabilityConfirmed = pluginAvailability.hasCheckedAvailability
+            let context = await PluginHomeFeedRefreshContext.current(for: installedPluginIds)
+            guard !Task.isCancelled else { return }
             await model.refresh(
-                installedPluginIds: pluginAvailability.installedPluginIds,
-                availabilityConfirmed: pluginAvailability.hasCheckedAvailability
+                installedPluginIds: installedPluginIds,
+                availabilityConfirmed: availabilityConfirmed,
+                context: context,
+                force: true
             )
         }
     }
@@ -1407,6 +1439,7 @@ private struct TVHomeRefreshTrigger: Hashable {
     let installedPluginIds: [String]
     let availabilityConfirmed: Bool
     let catalogRevision: UInt
+    let credentialRevision: Int
 }
 
 private struct TVHomeAutoplayTrigger: Hashable {
