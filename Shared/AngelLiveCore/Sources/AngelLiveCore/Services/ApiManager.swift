@@ -182,7 +182,7 @@ public enum ApiManager {
                 throw CancellationError()
             } catch {
                 try Task.checkCancellation()
-                if error.isAuthRequired {
+                if error.showsLoginAction {
                     authenticationRequiredPluginIDs.append(platform.pluginId)
                 } else {
                     lastError = error

@@ -10,6 +10,21 @@ import Foundation
 public extension Error {
     /// 从错误中提取用户友好的错误消息（带详细位置信息）
     var liveParseMessage: String {
+        if let standardError = standardizedPluginError {
+            switch standardError.code {
+            case .authRequired:
+                // 含非 ASCII 字符视为插件写给用户的文案（协议 v1）；纯英文多为旧插件的技术文案，走通用登录提示。
+                if standardError.message.unicodeScalars.contains(where: { !$0.isASCII }) {
+                    return standardError.message
+                }
+            case .notLive:
+                let message = standardError.message.trimmingCharacters(in: .whitespacesAndNewlines)
+                return message.isEmpty ? "主播当前未开播" : message
+            default:
+                break
+            }
+        }
+
         if isAuthRequired {
             return "当前内容需要登录账号后才能访问，请前往设置页登录后重试。"
         }
@@ -95,11 +110,7 @@ public extension Error {
             #"错误代码:\s*-?352"#,
             #"code\s*=\s*\"?-?352\"?"#,
             #"\"code\"\s*:\s*\"?-?352\"?"#,
-            #"AUTH_REQUIRED"#,
-            #"错误代码:\s*-?406"#,
-            #"code\s*=\s*\"?-?406\"?"#,
-            #"\"code\"\s*:\s*\"?-?406\"?"#,
-            #"\"httpCode\"\s*:\s*\"?-?406\"?"#
+            #"AUTH_REQUIRED"#
         ]
 
         return authRequiredPatterns.contains { pattern in
@@ -108,6 +119,29 @@ public extension Error {
                 options: [.regularExpression, .caseInsensitive]
             ) != nil
         }
+    }
+
+    /// 插件按错误协议抛出的标准错误；非标准错误返回 nil。
+    var standardizedPluginError: LiveParsePluginStandardError? {
+        guard let pluginError = self as? LiveParsePluginError,
+              case .standardized(let error) = pluginError else { return nil }
+        return error
+    }
+
+    /// 插件明确声明主播未开播 / 已下播（NOT_LIVE）。
+    var isNotLive: Bool {
+        standardizedPluginError?.code == .notLive
+    }
+
+    /// 风控类错误（BLOCKED）且插件标记登录后可能缓解（`loginMayHelp: "true"`）。
+    var isLoginSuggested: Bool {
+        guard let error = standardizedPluginError, error.code == .blocked else { return false }
+        return error.context["loginMayHelp"]?.lowercased() == "true"
+    }
+
+    /// 错误页是否展示「去登录」入口：硬性需要登录，或登录可能缓解风控。
+    var showsLoginAction: Bool {
+        isAuthRequired || isLoginSuggested
     }
 
     /// Only host-created recovery errors carry a trusted plugin identity.

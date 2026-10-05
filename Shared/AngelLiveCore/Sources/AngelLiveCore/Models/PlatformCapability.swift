@@ -66,6 +66,40 @@ public enum FeatureStatus: Sendable {
     }
 }
 
+// MARK: - 功能登录要求
+
+/// manifest `capabilities.<feature>.auth` 声明的登录要求（登录协议 v1）。
+public enum FeatureAuthLevel: String, Sendable, Equatable {
+    /// 不登录不能用
+    case required
+    /// 不登录能用，登录后更好（画质、稳定性、特定房间）
+    case enhances
+    /// 与登录无关 / 未声明
+    case none
+
+    /// 能力面板徽标文案；`none` 不显示徽标。
+    public var badgeTitle: String? {
+        switch self {
+        case .required: "需登录"
+        case .enhances: "登录增强"
+        case .none: nil
+        }
+    }
+}
+
+public struct FeatureAuthRequirement: Sendable, Equatable {
+    public let level: FeatureAuthLevel
+    /// 写给用户看的登录前后差别说明。
+    public let reason: String?
+
+    public init(level: FeatureAuthLevel, reason: String?) {
+        self.level = level
+        self.reason = reason
+    }
+
+    public static let none = FeatureAuthRequirement(level: .none, reason: nil)
+}
+
 // MARK: - 平台功能可用性配置
 
 public enum PlatformCapability {
@@ -77,6 +111,7 @@ public enum PlatformCapability {
     private struct PluginCapabilityCandidate {
         let version: String
         let capabilities: [PlatformFeature: FeatureStatus]
+        let authRequirements: [PlatformFeature: FeatureAuthRequirement]
     }
 
     // MARK: - Cache
@@ -105,6 +140,31 @@ public enum PlatformCapability {
     }
 
     private static let cache = Cache()
+
+    private final class AuthCache: @unchecked Sendable {
+        private var storage: [String: [PlatformFeature: FeatureAuthRequirement]] = [:]
+        private let lock = NSLock()
+
+        func get(_ key: String) -> [PlatformFeature: FeatureAuthRequirement]? {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage[key]
+        }
+
+        func set(_ key: String, value: [PlatformFeature: FeatureAuthRequirement]) {
+            lock.lock()
+            defer { lock.unlock() }
+            storage[key] = value
+        }
+
+        func clear() {
+            lock.lock()
+            defer { lock.unlock() }
+            storage.removeAll()
+        }
+    }
+
+    private static let authCache = AuthCache()
 
     private static let featureFunctionNames: [(PlatformFeature, [String])] = [
         (.categories, ["getCategories", "getCategoryList"]),
@@ -159,9 +219,37 @@ public enum PlatformCapability {
         status(for: feature, liveType: liveType).isSupported
     }
 
+    /// 功能的登录要求（manifest `capabilities.<feature>.auth`），未声明时为 `.none`。
+    public static func auth(
+        for feature: PlatformFeature,
+        liveType: LiveType
+    ) -> (level: FeatureAuthLevel, reason: String?) {
+        let requirement = authRequirements(for: liveType)[feature] ?? .none
+        return (requirement.level, requirement.reason)
+    }
+
+    private static func authRequirements(for liveType: LiveType) -> [PlatformFeature: FeatureAuthRequirement] {
+        let cacheKey = liveType.rawValue
+        if let cached = authCache.get(cacheKey) {
+            return cached
+        }
+
+        let result: [PlatformFeature: FeatureAuthRequirement]
+        if let platform = SandboxPluginCatalog.platform(for: liveType),
+           let candidate = loadSandboxPluginCapabilityCandidate(pluginId: platform.pluginId) {
+            result = candidate.authRequirements
+        } else {
+            result = [:]
+        }
+
+        authCache.set(cacheKey, value: result)
+        return result
+    }
+
     /// 清除缓存，在插件 reload 后调用
     public static func invalidateCache() {
         cache.clear()
+        authCache.clear()
     }
 
     private static func loadPluginCapabilities(pluginId: String) -> [PlatformFeature: FeatureStatus]? {
@@ -194,6 +282,10 @@ public enum PlatformCapability {
     }
 
     private static func loadSandboxPluginCapabilities(pluginId: String) -> [PlatformFeature: FeatureStatus]? {
+        loadSandboxPluginCapabilityCandidate(pluginId: pluginId)?.capabilities
+    }
+
+    private static func loadSandboxPluginCapabilityCandidate(pluginId: String) -> PluginCapabilityCandidate? {
         let versionDirectories = LiveParsePlugins.shared.storage.listInstalledVersions(pluginId: pluginId)
         var candidates: [PluginCapabilityCandidate] = []
 
@@ -201,28 +293,23 @@ public enum PlatformCapability {
             let manifestURL = versionDirectory.appendingPathComponent("manifest.json", isDirectory: false)
             guard let manifest = loadManifest(from: manifestURL),
                   manifest.pluginId == pluginId,
-                  let capabilities = parseCapabilities(from: manifestURL) else {
+                  let data = try? Data(contentsOf: manifestURL),
+                  let capabilities = parseCapabilities(from: data) else {
                 continue
             }
-            candidates.append(PluginCapabilityCandidate(version: manifest.version, capabilities: capabilities))
+            candidates.append(PluginCapabilityCandidate(
+                version: manifest.version,
+                capabilities: capabilities,
+                authRequirements: parseAuthRequirements(from: data)
+            ))
         }
 
-        guard let candidate = candidates.max(by: { semverCompare($0.version, $1.version) < 0 }) else {
-            return nil
-        }
-        return candidate.capabilities
+        return candidates.max(by: { semverCompare($0.version, $1.version) < 0 })
     }
 
     private static func loadManifest(from url: URL) -> LiveParsePluginManifest? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(LiveParsePluginManifest.self, from: data)
-    }
-
-    private static func parseCapabilities(from manifestURL: URL) -> [PlatformFeature: FeatureStatus]? {
-        guard let data = try? Data(contentsOf: manifestURL) else {
-            return nil
-        }
-        return parseCapabilities(from: data)
     }
 
     static func parseCapabilities(from data: Data) -> [PlatformFeature: FeatureStatus]? {
@@ -242,6 +329,36 @@ public enum PlatformCapability {
         }
 
         return result.isEmpty ? nil : result
+    }
+
+    /// 解析 `capabilities.<feature>.auth`（required / enhances / none，大小写不敏感）及其 `reason`。
+    /// 未声明或取值无法识别的功能不出现在结果中，调用方按 `.none` 处理。
+    static func parseAuthRequirements(from data: Data) -> [PlatformFeature: FeatureAuthRequirement] {
+        guard let jsonObject = try? JSONSerialization.jsonObject(with: data),
+              let json = jsonObject as? [String: Any],
+              let rawCapabilities = json["capabilities"] as? [String: Any] else {
+            return [:]
+        }
+
+        var result: [PlatformFeature: FeatureAuthRequirement] = [:]
+        for feature in PlatformFeature.allCases {
+            guard let dictionary = rawCapabilities[feature.rawValue] as? [String: Any],
+                  let rawAuth = dictionary["auth"] as? String else {
+                continue
+            }
+            let level: FeatureAuthLevel
+            switch rawAuth.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "required": level = .required
+            case "enhances": level = .enhances
+            default: continue
+            }
+            let reason = (dictionary["reason"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            result[feature] = FeatureAuthRequirement(
+                level: level,
+                reason: reason?.isEmpty == false ? reason : nil
+            )
+        }
+        return result
     }
 
     private static func parseFeatureStatus(_ raw: Any) -> FeatureStatus? {

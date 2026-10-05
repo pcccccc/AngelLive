@@ -53,6 +53,6 @@ public struct RequiresLoginTag: View {
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
             .background(Color.orange, in: Capsule())
-            .accessibilityLabel("需登录")
+            .accessibilityLabel(title)
     }
 }

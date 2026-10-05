@@ -145,11 +145,18 @@ struct PluginFavoriteLiveInfoFetcher: FavoriteLiveInfoFetching {
         guard let platform = SandboxPluginCatalog.platform(for: liveModel.liveType) else {
             throw LiveParseError.liveParseError("不支持的平台", "\(liveModel.liveType)")
         }
-        return try await LiveParseJSPlatformManager.getLiveLastestInfo(
-            platform: platform,
-            roomId: liveModel.roomId,
-            userId: liveModel.userId
-        )
+        do {
+            return try await LiveParseJSPlatformManager.getLiveLastestInfo(
+                platform: platform,
+                roomId: liveModel.roomId,
+                userId: liveModel.userId
+            )
+        } catch let error where error.isNotLive {
+            // NOT_LIVE 是明确的下播结果，按刷新成功处理：保留原房间信息，仅把状态置为已下播。
+            var offline = liveModel
+            offline.liveState = LiveState.close.rawValue
+            return offline
+        }
     }
 }
 
@@ -362,7 +369,8 @@ struct FavoriteLiveInfoRequestExecutor<Fetcher: FavoriteLiveInfoFetching, Timing
         case .rateLimited: kind = .rateLimited
         case .timeout: kind = .timeout
         case .parse, .invalidArgs, .invalidResponse, .unsupported: kind = .invalidResponse
-        case .upstream: kind = .upstream
+        // NOT_LIVE 正常已由 PluginFavoriteLiveInfoFetcher 转成下播结果；其他来源兜底按上游业务错误处理。
+        case .upstream, .notLive: kind = .upstream
         case .network:
             if let underlying {
                 kind = Self.kind(forDomain: underlying.domain, code: underlying.code)

@@ -119,7 +119,7 @@ public enum LiveService {
                     } catch {
                         try Task.checkCancellation()
                         Logger.warning("\(platform.displayName) 搜索失败: \(error)", category: .network)
-                        return (platform.pluginId, [], error.isAuthRequired)
+                        return (platform.pluginId, [], error.showsLoginAction)
                     }
                 }
             }

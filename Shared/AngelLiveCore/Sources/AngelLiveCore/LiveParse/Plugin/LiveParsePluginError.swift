@@ -32,6 +32,8 @@ public enum LiveParsePluginStandardErrorCode: String, Codable, Sendable {
     case invalidArgs = "INVALID_ARGS"
     case authRequired = "AUTH_REQUIRED"
     case notFound = "NOT_FOUND"
+    /// 主播未开播 / 已下播 / 暂无播放地址，宿主显示已下播状态而不是错误页。
+    case notLive = "NOT_LIVE"
     case blocked = "BLOCKED"
     case rateLimited = "RATE_LIMITED"
     case network = "NETWORK"
@@ -40,6 +42,35 @@ public enum LiveParsePluginStandardErrorCode: String, Codable, Sendable {
     case parse = "PARSE"
     case invalidResponse = "INVALID_RESPONSE"
     case upstream = "UPSTREAM"
+}
+
+public extension LiveParsePluginStandardErrorCode {
+    /// 旧版插件使用过的 code 别名（错误协议 v1 迁移前的写法），新插件一律使用标准枚举值。
+    static let legacyAliases: [String: LiveParsePluginStandardErrorCode] = [
+        "REQUIRES_AUTH": .authRequired,
+        "AUTH": .authRequired,
+        "AUTH_FAILED": .authRequired,
+        "INVALID_INPUT": .invalidArgs,
+        "INVALID_STATE": .invalidArgs,
+        "DECODE_FAILED": .parse,
+        "OFFLINE": .notLive,
+        "STREAM_UNAVAILABLE": .notLive,
+        "406": .blocked,
+        "UPSTREAM_RESTRICTED": .blocked,
+        "REQUEST_FAILED": .network,
+        "DEPRECATED": .unsupported,
+        "SIGNING_FAILED": .unsupported,
+        "SIGNING_UNAVAILABLE": .unsupported
+    ]
+
+    /// 解析插件上报的 code：先匹配标准值，再查旧别名，都不匹配时归为 `.unknown`。
+    static func resolve(_ rawCode: String) -> LiveParsePluginStandardErrorCode {
+        let trimmed = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let code = LiveParsePluginStandardErrorCode(rawValue: trimmed) {
+            return code
+        }
+        return legacyAliases[trimmed.uppercased()] ?? .unknown
+    }
 }
 
 public struct LiveParsePluginStandardError: Sendable, Codable, Equatable {
@@ -128,8 +159,10 @@ private extension LiveParsePluginError {
         guard !payloadText.isEmpty, let data = payloadText.data(using: .utf8) else { return nil }
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
 
-        let codeText = (object["code"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let code = LiveParsePluginStandardErrorCode(rawValue: codeText) ?? .unknown
+        // 旧插件可能把 code 写成数字（如 406），统一转成字符串再解析。
+        let rawCode = (object["code"] as? String) ?? (object["code"] as? NSNumber)?.stringValue ?? ""
+        let codeText = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = LiveParsePluginStandardErrorCode.resolve(codeText)
         let payloadMessage = (object["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         var context: [String: String] = [:]
 

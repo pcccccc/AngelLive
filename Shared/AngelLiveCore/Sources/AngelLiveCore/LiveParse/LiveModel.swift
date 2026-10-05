@@ -119,6 +119,46 @@ public enum LivePlaybackEngine: String, Codable, Sendable, Hashable {
     }
 }
 
+/// 画质锁原因（登录协议 v1 `playbackHints.authLimit.reason`）。
+public enum LivePlaybackAuthLimitReason {
+    /// 未登录拿不到该档：引导登录，登录后刷新播放信息。
+    public static let loginRequired = "login_required"
+    /// 已登录但需要会员：只展示提示，不切换。
+    public static let membershipRequired = "membership_required"
+}
+
+/// 插件标记当前用户拿不到的画质档（仍给出可播放的降级 url）。
+public struct LivePlaybackAuthLimit: Codable, Sendable, Equatable {
+    public var reason: String
+    /// 写给用户看的说明，例如「登录后可看原画」。
+    public var message: String?
+
+    public init(reason: String, message: String? = nil) {
+        self.reason = reason
+        self.message = message
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case reason
+        case message
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // reason 缺失时按最常见的未登录处理；message 类型不对时忽略。
+        let rawReason = (try? container.decode(String.self, forKey: .reason))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        reason = (rawReason?.isEmpty == false ? rawReason : nil) ?? LivePlaybackAuthLimitReason.loginRequired
+        let rawMessage = (try? container.decode(String.self, forKey: .message))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        message = rawMessage?.isEmpty == false ? rawMessage : nil
+    }
+
+    public var requiresLogin: Bool {
+        reason == LivePlaybackAuthLimitReason.loginRequired
+    }
+}
+
 public struct LivePlaybackHints: Codable, Sendable {
     /// 描述流本身的格式/语义，资源侧不需要知道宿主有哪些播放器。
     public var streamFormat: LivePlaybackStreamFormat?
@@ -134,6 +174,8 @@ public struct LivePlaybackHints: Codable, Sendable {
     public var selectionBehavior: LivePlaybackSelectionBehavior?
     /// 开播后需要跳转到的初始时间点（秒），用于回放/轮播类切片流。
     public var startPositionSeconds: Double?
+    /// 当前用户拿不到该档画质时由插件标记；宿主据此显示锁并在自动选择时跳过。
+    public var authLimit: LivePlaybackAuthLimit?
 
     public init(
         streamFormat: LivePlaybackStreamFormat? = nil,
@@ -142,7 +184,8 @@ public struct LivePlaybackHints: Codable, Sendable {
         isLive: Bool? = nil,
         requiresCustomSegmentLoader: Bool? = nil,
         selectionBehavior: LivePlaybackSelectionBehavior? = nil,
-        startPositionSeconds: Double? = nil
+        startPositionSeconds: Double? = nil,
+        authLimit: LivePlaybackAuthLimit? = nil
     ) {
         self.streamFormat = streamFormat
         self.latencyMode = latencyMode
@@ -151,6 +194,7 @@ public struct LivePlaybackHints: Codable, Sendable {
         self.requiresCustomSegmentLoader = requiresCustomSegmentLoader
         self.selectionBehavior = selectionBehavior
         self.startPositionSeconds = startPositionSeconds
+        self.authLimit = authLimit
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -161,6 +205,7 @@ public struct LivePlaybackHints: Codable, Sendable {
         case requiresCustomSegmentLoader
         case selectionBehavior
         case startPositionSeconds
+        case authLimit
     }
 
     public init(from decoder: Decoder) throws {
@@ -174,6 +219,7 @@ public struct LivePlaybackHints: Codable, Sendable {
         requiresCustomSegmentLoader = try? container.decode(Bool.self, forKey: .requiresCustomSegmentLoader)
         selectionBehavior = try? container.decode(LivePlaybackSelectionBehavior.self, forKey: .selectionBehavior)
         startPositionSeconds = try? container.decode(Double.self, forKey: .startPositionSeconds)
+        authLimit = try? container.decode(LivePlaybackAuthLimit.self, forKey: .authLimit)
     }
 }
 

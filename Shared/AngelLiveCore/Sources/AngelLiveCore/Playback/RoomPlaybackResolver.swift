@@ -68,6 +68,14 @@ public struct RoomPlaybackDebugContext: Sendable {
     }
 }
 
+/// 用户点击被锁定档位时宿主应做的事（登录协议 v1 `authLimit.reason`）。
+public enum PlaybackQualityLockAction: Sendable, Equatable {
+    /// 未登录：引导登录，登录后刷新播放信息。message 用于无法发起登录时兜底提示。
+    case requestLogin(message: String)
+    /// 会员等登录也解决不了的限制：只展示 message，不切换。
+    case showMessage(String)
+}
+
 public enum RoomPlaybackResolver {
     public static func isHLSQuality(_ quality: LiveQualityDetail) -> Bool {
         quality.liveCodeType == .hls || quality.url.lowercased().contains(".m3u8")
@@ -157,6 +165,76 @@ public enum RoomPlaybackResolver {
         guard !qualities.isEmpty else { return (cdnIndex, 0) }
         let qualityIndex = min(max(0, preferredQualityIndex), qualities.count - 1)
         return (cdnIndex, qualityIndex)
+    }
+
+    // MARK: - 画质锁（登录协议 v1 playbackHints.authLimit）
+
+    /// 插件对该档画质标记的登录/会员限制；nil 表示当前用户可用。
+    public static func authLimit(of quality: LiveQualityDetail) -> LivePlaybackAuthLimit? {
+        quality.playbackHints?.authLimit
+    }
+
+    /// 当前用户拿不到该档（插件仍给出降级 url），自动选择时应跳过。
+    public static func isLocked(_ quality: LiveQualityDetail) -> Bool {
+        authLimit(of: quality) != nil
+    }
+
+    /// 画质行上「锁」徽标的文案。
+    public static func lockBadgeTitle(for quality: LiveQualityDetail) -> String? {
+        guard let limit = authLimit(of: quality) else { return nil }
+        return limit.message ?? "登录后可用"
+    }
+
+    /// 用户点击该档位时的拦截动作；未锁定返回 nil，按原逻辑切换。
+    public static func lockAction(for quality: LiveQualityDetail) -> PlaybackQualityLockAction? {
+        guard let limit = authLimit(of: quality) else { return nil }
+        if limit.requiresLogin {
+            return .requestLogin(message: limit.message ?? "登录后可用")
+        }
+        return .showMessage(limit.message ?? "当前账号暂无法观看该画质")
+    }
+
+    /// 自动选择（进房 / 重新取参）使用的线路与清晰度：
+    /// 先按 `clampedSelection` 保持当前选择，命中被锁定的档位时改选最近的未锁定档位
+    /// （同线路内优先往后找更低档，再往前；同线路全锁时再看其他线路）。
+    /// 全部被锁定时退回 `clampedSelection` 的结果，保持原播放逻辑。
+    /// `allowsOtherCDN` 为 false 时只在偏好线路内挑选（恢复协调器切线路时使用，避免跳回原线路）。
+    public static func automaticSelection(
+        in playArgs: [LiveQualityModel],
+        preferredCdnIndex: Int,
+        preferredQualityIndex: Int,
+        allowsOtherCDN: Bool = true
+    ) -> (cdnIndex: Int, qualityIndex: Int) {
+        let clamped = clampedSelection(
+            in: playArgs,
+            preferredCdnIndex: preferredCdnIndex,
+            preferredQualityIndex: preferredQualityIndex
+        )
+        guard playArgs.indices.contains(clamped.cdnIndex) else { return clamped }
+        let preferredQualities = playArgs[clamped.cdnIndex].qualitys
+        guard preferredQualities.indices.contains(clamped.qualityIndex),
+              isLocked(preferredQualities[clamped.qualityIndex]) else {
+            return clamped
+        }
+
+        func nearestUnlockedIndex(in qualities: [LiveQualityDetail], around index: Int) -> Int? {
+            guard !qualities.isEmpty else { return nil }
+            let pivot = min(max(0, index), qualities.count - 1)
+            let after = qualities.indices.filter { $0 > pivot }
+            let before = qualities.indices.filter { $0 < pivot }.reversed()
+            return ([pivot] + after + before).first { !isLocked(qualities[$0]) }
+        }
+
+        if let qualityIndex = nearestUnlockedIndex(in: preferredQualities, around: clamped.qualityIndex) {
+            return (clamped.cdnIndex, qualityIndex)
+        }
+        guard allowsOtherCDN else { return clamped }
+        for (cdnIndex, cdn) in playArgs.enumerated() where cdnIndex != clamped.cdnIndex {
+            if let qualityIndex = nearestUnlockedIndex(in: cdn.qualitys, around: clamped.qualityIndex) {
+                return (cdnIndex, qualityIndex)
+            }
+        }
+        return clamped
     }
 
     public static func firstSelection(in playArgs: [LiveQualityModel]?) -> RoomPlaybackSelection? {
