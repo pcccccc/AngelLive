@@ -123,6 +123,7 @@ struct TVPlatformCapabilitySheet: View {
             let features = PlatformCapability.features(for: liveType)
             ForEach(features.indices, id: \.self) { index in
                 let (feature, status) = features[index]
+                let auth = PlatformCapability.auth(for: feature, liveType: liveType)
                 Button {} label: {
                     HStack(spacing: 16) {
                         Image(systemName: feature.iconName)
@@ -130,9 +131,22 @@ struct TVPlatformCapabilitySheet: View {
                             .foregroundStyle(.secondary)
                             .frame(width: 40)
 
-                        Text(feature.displayName)
-                            .font(.body)
-                            .foregroundStyle(.primary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 12) {
+                                Text(feature.displayName)
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                // manifest capabilities.<feature>.auth：需登录 / 登录增强
+                                if let badgeTitle = auth.level.badgeTitle {
+                                    RequiresLoginTag(badgeTitle, size: .regular)
+                                }
+                            }
+                            if auth.level != .none, let reason = auth.reason {
+                                Text(reason)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
                         Spacer()
 

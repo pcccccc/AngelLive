@@ -132,6 +132,12 @@ struct QualitySelectionPanel: View {
                                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
                                     .foregroundStyle(selected ? .white : .white.opacity(0.8))
 
+                                // 插件标记当前账号拿不到的档位（登录 / 会员）
+                                if let lockTitle = RoomPlaybackResolver.lockBadgeTitle(for: quality) {
+                                    RequiresLoginTag(lockTitle)
+                                        .lineLimit(1)
+                                }
+
                                 Spacer()
 
                                 if selected {

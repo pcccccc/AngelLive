@@ -24,14 +24,29 @@ struct PlatformCapabilityPopover: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(PlatformCapability.features(for: liveType), id: \.0) { feature, status in
+                        let auth = PlatformCapability.auth(for: feature, liveType: liveType)
                         HStack(spacing: 10) {
                             Image(systemName: feature.iconName)
                                 .font(.system(size: 13))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 20)
 
-                            Text(feature.displayName)
-                                .font(.body)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(feature.displayName)
+                                        .font(.body)
+                                    // manifest capabilities.<feature>.auth：需登录 / 登录增强
+                                    if let badgeTitle = auth.level.badgeTitle {
+                                        RequiresLoginTag(badgeTitle)
+                                    }
+                                }
+                                if auth.level != .none, let reason = auth.reason {
+                                    Text(reason)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
 
                             Spacer()
 

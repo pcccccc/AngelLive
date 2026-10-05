@@ -30,18 +30,18 @@ struct PlatformDetailView: View {
             if let error = viewModel.categoryError {
                 ErrorView(
                     title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
-                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+                    message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isAuthRequired,
+                    showLoginButton: error.showsLoginAction,
                     showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
                     onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
                     },
-                    onLogin: error.isAuthRequired ? {
+                    onLogin: error.showsLoginAction ? {
                         authenticationRecoveryRequest = AuthenticationRecoveryRequest(
                             pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
                                 .map { [$0.pluginId] } ?? []
@@ -117,18 +117,18 @@ struct PlatformDetailView: View {
                 // 如果当前页且加载房间列表失败，显示错误视图
                 ErrorView(
                     title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
-                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+                    message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isAuthRequired,
+                    showLoginButton: error.showsLoginAction,
                     showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
                     onRetry: {
                         Task {
                             await viewModel.loadRoomList()
                         }
                     },
-                    onLogin: error.isAuthRequired ? {
+                    onLogin: error.showsLoginAction ? {
                         authenticationRecoveryRequest = AuthenticationRecoveryRequest(
                             pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
                                 .map { [$0.pluginId] } ?? []

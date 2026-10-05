@@ -10,6 +10,7 @@ import SwiftUI
 import Observation
 import AngelLiveCore
 import AngelLiveDependencies
+import Combine
 import AppKit
 import Kingfisher
 
@@ -34,6 +35,7 @@ struct RoomPlayerView: View {
     /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
+    @State private var lockedQualityToast: ToastMessage?
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     init(room: LiveModel) {
@@ -212,6 +214,45 @@ struct RoomPlayerView: View {
                     .frame(minWidth: 620, minHeight: 420)
             }
         }
+        // 画质菜单点击「登录后可用」档位：复用登录恢复 sheet
+        .onChange(of: viewModel.pendingLoginRequest?.id) { _, _ in
+            guard let request = viewModel.pendingLoginRequest else { return }
+            viewModel.pendingLoginRequest = nil
+            authenticationRecoveryRequest = request
+        }
+        // 会员档位等只提示不切换；播放器窗口没有全局 toast 浮层，这里就地展示
+        .onChange(of: viewModel.lockedQualityNotice) { _, notice in
+            guard let notice else { return }
+            viewModel.lockedQualityNotice = nil
+            showLockedQualityToast(notice)
+        }
+        .overlay(alignment: .top) {
+            if let toast = lockedQualityToast {
+                ToastView(toast: toast)
+                    .padding(.top, 48)
+            }
+        }
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: lockedQualityToast)
+        // 当前平台登录状态变化后重新取流，让被锁定的画质解锁
+        .onReceive(
+            NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
+                .compactMap { $0.object as? String }
+                .receive(on: RunLoop.main)
+        ) { pluginId in
+            guard pluginId == SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)?.pluginId else { return }
+            viewModel.refreshPlayback()
+        }
+    }
+
+    private func showLockedQualityToast(_ message: String) {
+        let toast = ToastMessage(icon: "lock.fill", message: message, type: .info)
+        lockedQualityToast = toast
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            if lockedQualityToast == toast {
+                lockedQualityToast = nil
+            }
+        }
     }
 
     private func preventSleep() {
@@ -287,11 +328,11 @@ private extension RoomPlayerView {
                     .font(.title2)
                     .foregroundColor(.white)
                 if let errorMsg = viewModel.playErrorMessage {
-                    Text(viewModel.playError?.isAuthRequired == true ? "请登录对应平台后重试" : errorMsg)
+                    Text(viewModel.playError.map { $0.showsLoginAction ? $0.liveParseMessage : errorMsg } ?? errorMsg)
                         .font(.subheadline)
                         .foregroundColor(.gray)
                 }
-                if viewModel.playError?.isAuthRequired == true {
+                if viewModel.playError?.showsLoginAction == true {
                     Button {
                         let platform = SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)
                         authenticationRecoveryRequest = AuthenticationRecoveryRequest(

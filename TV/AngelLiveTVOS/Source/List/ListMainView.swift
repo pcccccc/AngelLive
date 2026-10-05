@@ -406,11 +406,11 @@ struct ListMainView: View {
 
         return ErrorView(
             title: authTitle,
-            message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+            message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
-            showLoginButton: error.isAuthRequired,
+            showLoginButton: error.showsLoginAction,
             onDismiss: {
                 liveViewModel.hasError = false
                 liveViewModel.currentError = nil

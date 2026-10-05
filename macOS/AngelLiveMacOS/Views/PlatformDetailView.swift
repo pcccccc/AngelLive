@@ -45,17 +45,17 @@ struct PlatformDetailView: View {
             if let error = viewModel.categoryError {
                 ErrorView(
                     title: error.isAuthRequired ? authErrorTitle : "加载失败",
-                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+                    message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isAuthRequired,
+                    showLoginButton: error.showsLoginAction,
                     onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
                     },
-                    onLogin: error.isAuthRequired ? {
+                    onLogin: error.showsLoginAction ? {
                         authenticationRecoveryRequest = AuthenticationRecoveryRequest(
                             pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
                                 .map { [$0.pluginId] } ?? []
@@ -295,17 +295,17 @@ struct PlatformDetailView: View {
         } else if let error = viewModel.roomError, rooms.isEmpty {
             ErrorView(
                 title: error.isAuthRequired ? authErrorTitle : "加载失败",
-                message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+                message: error.liveParseMessage,
                 detailMessage: error.liveParseDetail,
                 curlCommand: error.liveParseCurl,
                 showRetry: true,
-                showLoginButton: error.isAuthRequired,
+                showLoginButton: error.showsLoginAction,
                 onRetry: {
                     Task {
                         await viewModel.loadRoomList()
                     }
                 },
-                onLogin: error.isAuthRequired ? {
+                onLogin: error.showsLoginAction ? {
                     authenticationRecoveryRequest = AuthenticationRecoveryRequest(
                         pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
                             .map { [$0.pluginId] } ?? []

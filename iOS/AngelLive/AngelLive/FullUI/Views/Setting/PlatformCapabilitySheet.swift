@@ -30,14 +30,28 @@ struct PlatformCapabilitySheet: View {
                 }
 
                 ForEach(PlatformCapability.features(for: liveType), id: \.0) { feature, status in
+                    let auth = PlatformCapability.auth(for: feature, liveType: liveType)
                     HStack(spacing: 12) {
                         Image(systemName: feature.iconName)
                             .font(.system(size: 16))
                             .foregroundStyle(.secondary)
                             .frame(width: 24)
 
-                        Text(feature.displayName)
-                            .font(.body)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 6) {
+                                Text(feature.displayName)
+                                    .font(.body)
+                                // manifest capabilities.<feature>.auth：需登录 / 登录增强
+                                if let badgeTitle = auth.level.badgeTitle {
+                                    RequiresLoginTag(badgeTitle)
+                                }
+                            }
+                            if auth.level != .none, let reason = auth.reason {
+                                Text(reason)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
 
                         Spacer()
 

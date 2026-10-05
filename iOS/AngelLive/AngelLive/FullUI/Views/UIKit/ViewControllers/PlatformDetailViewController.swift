@@ -220,11 +220,11 @@ class PlatformDetailViewController: UIViewController {
             title: error.isAuthRequired
                 ? "加载失败-请登录\(LiveParseTools.getLivePlatformName(viewModel.platform.liveType))账号"
                 : "加载失败",
-            message: error.isAuthRequired ? "请登录对应平台后重试" : "无法获取分类列表",
-            detailMessage: error.isAuthRequired ? error.liveParseDetail : error.localizedDescription,
+            message: error.showsLoginAction ? error.liveParseMessage : "无法获取分类列表",
+            detailMessage: error.showsLoginAction ? error.liveParseDetail : error.localizedDescription,
             showDismiss: true,
             showRetry: true,
-            showLoginButton: error.isAuthRequired,
+            showLoginButton: error.showsLoginAction,
             showDetailButton: error.liveParseDetail?.isEmpty == false,
             onDismiss: { [weak self] in
                 self?.navigationController?.popViewController(animated: true)
@@ -234,7 +234,7 @@ class PlatformDetailViewController: UIViewController {
                 self?.showSkeletonView()
                 self?.loadCategories()
             },
-            onLogin: error.isAuthRequired ? { [weak self] in
+            onLogin: error.showsLoginAction ? { [weak self] in
                 self?.presentAuthenticationRecovery()
             } : nil
         )

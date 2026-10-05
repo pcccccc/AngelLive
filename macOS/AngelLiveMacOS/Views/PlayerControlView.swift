@@ -346,7 +346,13 @@ struct PlayerControlView: View {
                                                     }
                                                 } label: {
                                                     HStack {
-                                                        Text(quality.title)
+                                                        // 插件标记当前账号拿不到的档位：加锁并提示登录后可用
+                                                        if RoomPlaybackResolver.isLocked(quality) {
+                                                            Image(systemName: "lock.fill")
+                                                            Text("\(quality.title)（登录后可用）")
+                                                        } else {
+                                                            Text(quality.title)
+                                                        }
                                                         if viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex {
                                                             Image(systemName: "checkmark")
                                                         }

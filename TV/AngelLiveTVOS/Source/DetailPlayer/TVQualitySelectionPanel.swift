@@ -149,6 +149,12 @@ struct TVQualitySelectionPanel: View {
                                     .font(.system(size: 28, weight: (selected || isFocused) ? .semibold : .regular))
                                     .foregroundStyle(selected ? .white : .white.opacity(isFocused ? 0.95 : 0.8))
 
+                                // 插件标记当前账号拿不到的档位（登录 / 会员）
+                                if let lockTitle = RoomPlaybackResolver.lockBadgeTitle(for: quality) {
+                                    RequiresLoginTag(lockTitle, size: .regular)
+                                        .lineLimit(1)
+                                }
+
                                 Spacer()
 
                                 if selected {

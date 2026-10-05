@@ -166,13 +166,13 @@ struct SearchView: View {
     private func searchErrorState(error: Error) -> some View {
         ErrorView(
             title: error.isAuthRequired ? "搜索失败-请登录相关账号并检查官方页面" : "搜索失败",
-            message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+            message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
-            showLoginButton: error.isAuthRequired,
+            showLoginButton: error.showsLoginAction,
             onRetry: { performSearch() },
-            onLogin: error.isAuthRequired ? {
+            onLogin: error.showsLoginAction ? {
                 authenticationRecoveryRequest = AuthenticationRecoveryRequest(
                     pluginIDs: error.authRequiredPluginIDs
                 )

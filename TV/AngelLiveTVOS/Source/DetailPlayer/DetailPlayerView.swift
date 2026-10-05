@@ -8,6 +8,7 @@
 import SwiftUI
 import AVKit
 import AngelLiveDependencies
+import Combine
 import AngelLiveCore
 
 
@@ -58,6 +59,26 @@ struct DetailPlayerView: View {
             .onChange(of: roomInfoViewModel.recoveryNotice) { _, notice in
                 showRecoveryNotice(notice)
             }
+            // 画质面板点击「登录后可用」档位：复用登录恢复页
+            .onChange(of: roomInfoViewModel.pendingLoginRequest?.id) { _, _ in
+                guard let request = roomInfoViewModel.pendingLoginRequest else { return }
+                roomInfoViewModel.pendingLoginRequest = nil
+                authenticationRecovery = request
+            }
+            // 当前平台登录状态变化后重新取流，让被锁定的画质解锁
+            .onReceive(
+                NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
+                    .compactMap { $0.object as? String }
+                    .receive(on: RunLoop.main)
+            ) { pluginId in
+                guard pluginId == SandboxPluginCatalog.platform(for: roomInfoViewModel.currentRoom.liveType)?.pluginId else { return }
+                // 与错误页「重试」一致：先清掉错误态再重新取流
+                if roomInfoViewModel.hasError {
+                    roomInfoViewModel.hasError = false
+                    roomInfoViewModel.currentError = nil
+                }
+                roomInfoViewModel.refreshPlayback()
+            }
             .onDisappear {
                 // Presenting account recovery keeps this room alive for a manual retry.
                 guard authenticationRecovery == nil else { return }
@@ -89,18 +110,18 @@ struct DetailPlayerView: View {
         } else if roomInfoViewModel.hasError, let error = roomInfoViewModel.currentError {
             ErrorView(
                 title: error.isAuthRequired ? "播放失败-请登录\(LiveParseTools.getLivePlatformName(roomInfoViewModel.currentRoom.liveType))账号" : "播放失败",
-                message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+                message: error.liveParseMessage,
                 detailMessage: error.liveParseDetail,
                 curlCommand: error.liveParseCurl,
                 showRetry: true,
-                showLoginButton: error.isAuthRequired,
+                showLoginButton: error.showsLoginAction,
                 onDismiss: {
                     endPlay()
                 },
                 onRetry: {
                     roomInfoViewModel.hasError = false
                     roomInfoViewModel.currentError = nil
-                    if error.isAuthRequired || roomInfoViewModel.currentPlayURL == nil {
+                    if error.showsLoginAction || roomInfoViewModel.currentPlayURL == nil {
                         roomInfoViewModel.getPlayArgs(diagnosticAction: .retriedPlayback)
                     } else {
                         playerCoordinator.playerLayer?.play()

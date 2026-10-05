@@ -419,17 +419,17 @@ class RoomListViewController: UIViewController {
 
         let errorView = ErrorView(
             title: authTitle,
-            message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+            message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
-            showLoginButton: error.isAuthRequired,
+            showLoginButton: error.showsLoginAction,
             showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
             onRetry: { [weak self] in
                 self?.hideErrorView()
                 self?.handleRefresh()
             },
-            onLogin: error.isAuthRequired ? { [weak self] in
+            onLogin: error.showsLoginAction ? { [weak self] in
                 self?.presentAuthenticationRecovery()
             } : nil
         )

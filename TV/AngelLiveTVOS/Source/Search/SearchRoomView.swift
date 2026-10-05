@@ -54,11 +54,11 @@ struct SearchRoomView: View {
             if let error = liveViewModel.searchRequest.error {
                 ErrorView(
                     title: error.isAuthRequired ? "搜索需要登录" : "搜索失败",
-                    message: error.isAuthRequired ? "请登录对应平台后重试" : error.liveParseMessage,
+                    message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isAuthRequired,
+                    showLoginButton: error.showsLoginAction,
                     onDismiss: {
                         liveViewModel.searchRequest.dismissError()
                     },

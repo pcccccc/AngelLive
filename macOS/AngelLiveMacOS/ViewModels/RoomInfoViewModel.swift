@@ -36,6 +36,10 @@ final class RoomInfoViewModel {
     var playError: Error?
     var playErrorMessage: String?
     var displayState: PlayerDisplayState = .loading  // 播放器显示状态
+    /// 画质面板点击「登录后可用」档位后，请求外层播放页弹出登录（登录协议 v1 authLimit）
+    var pendingLoginRequest: AuthenticationRecoveryRequest?
+    /// 点击会员等无法切换的锁定档位时的提示，由播放页以 toast 展示后清空
+    var lockedQualityNotice: String?
     /// 防止并发/重复请求播放地址
     private var isFetchingPlayURL = false
     /// 是否已成功加载过当前房间的播放地址
@@ -223,6 +227,11 @@ final class RoomInfoViewModel {
                     Logger.warning("[PlayerFlow] silent getPlayArgs failed: \(error.localizedDescription)", category: .player)
                     return
                 }
+                // 插件明确返回 NOT_LIVE：显示已下播状态，而不是错误页
+                if error.isNotLive {
+                    self.displayState = .streamerOffline
+                    return
+                }
                 self.playError = error
                 self.playErrorMessage = "获取播放地址失败"
                 self.displayState = .error
@@ -260,7 +269,8 @@ final class RoomInfoViewModel {
         }
 
         // 重新取参后尽量保持当前线路/清晰度,避免无感续播跳回默认档
-        let clamped = RoomPlaybackResolver.clampedSelection(
+        // 自动选择跳过插件标记为登录/会员才能看的档位（全部被锁时保持原逻辑）
+        let clamped = RoomPlaybackResolver.automaticSelection(
             in: playArgs,
             preferredCdnIndex: preferredIndex,
             preferredQualityIndex: currentQualityIndex
@@ -309,9 +319,42 @@ final class RoomInfoViewModel {
     }
 
     // 切换清晰度
+    /// 用户点击被插件标记 authLimit 的档位：login_required 请求登录，其余只提示。
+    /// - Returns: true 表示已拦截，调用方不再切换。
+    @MainActor
+    private func interceptLockedQualitySelection(cdnIndex: Int, urlIndex: Int) -> Bool {
+        guard let selection = RoomPlaybackResolver.selection(
+            in: currentRoomPlayArgs,
+            cdnIndex: cdnIndex,
+            qualityIndex: urlIndex
+        ), let action = RoomPlaybackResolver.lockAction(for: selection.quality) else {
+            return false
+        }
+        switch action {
+        case .requestLogin(let message):
+            if let pluginId = SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId {
+                pendingLoginRequest = AuthenticationRecoveryRequest(pluginIDs: [pluginId])
+            } else {
+                lockedQualityNotice = message
+            }
+        case .showMessage(let message):
+            lockedQualityNotice = message
+        }
+        return true
+    }
+
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
-        changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .automatic)
+        // 恢复协调器的自动切换：同线路内跳过被锁定的档位
+        let target = currentRoomPlayArgs.map {
+            RoomPlaybackResolver.automaticSelection(
+                in: $0,
+                preferredCdnIndex: cdnIndex,
+                preferredQualityIndex: urlIndex,
+                allowsOtherCDN: false
+            )
+        } ?? (cdnIndex: cdnIndex, qualityIndex: urlIndex)
+        changePlayUrl(cdnIndex: target.cdnIndex, urlIndex: target.qualityIndex, selectionOrigin: .automatic)
     }
 
     @MainActor
@@ -320,6 +363,10 @@ final class RoomInfoViewModel {
         urlIndex: Int,
         selectionOrigin: PlaybackSelectionOrigin
     ) {
+        // 用户点击被锁定的档位：引导登录或提示，不切换
+        if selectionOrigin == .user, interceptLockedQualitySelection(cdnIndex: cdnIndex, urlIndex: urlIndex) {
+            return
+        }
         playbackSelectionGeneration = UUID()
         playbackDiagnostics.interruptStartup()
         guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
@@ -1018,6 +1065,9 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
                     playErrorMessage = error.localizedDescription
                     displayState = .error
                 }
+            } catch let statusError where statusError.isNotLive {
+                // 插件明确返回 NOT_LIVE，按已下播处理
+                displayState = .streamerOffline
             } catch {
                 // 检查状态失败，显示原始错误
                 playError = error

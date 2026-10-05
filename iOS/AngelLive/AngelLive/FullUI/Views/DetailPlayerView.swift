@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import Combine
 
 struct DetailPlayerView: View {
     @State var viewModel: RoomInfoViewModel
@@ -65,6 +66,7 @@ struct DetailPlayerView: View {
     @State private var switcherCategoryRooms: [LiveModel]
     @State private var isLoadingMoreCategoryRooms = false
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
+    @Environment(\.presentToast) private var presentToast
 
     init(
         viewModel: RoomInfoViewModel,
@@ -95,9 +97,6 @@ struct DetailPlayerView: View {
     }
 
     private var playbackErrorMessage: String {
-        if currentPlaybackError?.isAuthRequired == true {
-            return "请登录对应平台后重试"
-        }
         if let error = currentPlaybackError {
             return error.liveParseMessage
         }
@@ -105,7 +104,11 @@ struct DetailPlayerView: View {
     }
 
     private var shouldShowPlatformLoginPrompt: Bool {
-        currentPlaybackError?.isAuthRequired == true
+        currentPlaybackError?.showsLoginAction == true
+    }
+
+    private var currentPluginID: String? {
+        SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)?.pluginId
     }
 
     private var shouldHideSystemBackButton: Bool {
@@ -424,6 +427,26 @@ struct DetailPlayerView: View {
             NavigationStack {
                 PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
             }
+        }
+        // 画质面板点击「登录后可用」档位：复用登录恢复 sheet
+        .onChange(of: viewModel.pendingLoginRequest?.id) { _, _ in
+            guard let request = viewModel.pendingLoginRequest else { return }
+            viewModel.pendingLoginRequest = nil
+            authenticationRecoveryRequest = request
+        }
+        .onChange(of: viewModel.lockedQualityNotice) { _, notice in
+            guard let notice else { return }
+            viewModel.lockedQualityNotice = nil
+            presentToast(ToastValue(icon: Image(systemName: "lock.fill"), message: notice))
+        }
+        // 当前平台登录状态变化后重新取流，让被锁定的画质解锁
+        .onReceive(
+            NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
+                .compactMap { $0.object as? String }
+                .receive(on: RunLoop.main)
+        ) { pluginId in
+            guard pluginId == currentPluginID else { return }
+            viewModel.refreshPlayback()
         }
     }
 
