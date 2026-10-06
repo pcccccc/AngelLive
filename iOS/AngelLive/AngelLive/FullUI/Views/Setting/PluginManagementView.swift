@@ -87,8 +87,7 @@ struct PluginManagementView: View {
     }
 
     private var isNavigationLocked: Bool {
-        installationFlow.isPreparing
-            || installationFlow.isInstalling
+        installationFlow.isInstalling
             || pluginSourceManager.installBatch.isRunning
             || consentService.isPresenting(for: consentHostID)
     }
@@ -238,18 +237,17 @@ struct PluginManagementView: View {
                     batch: pluginSourceManager.installBatch,
                     retry: retryFailedInstallation
                 )
+                .disabled(installationFlow.isPreparing)
             }
 
             if showsUpdateOverview {
-                Section {
-                    PluginUpdateOverview(
-                        manager: pluginSourceManager,
-                        installedPluginIds: pluginAvailability.installedPluginIds,
-                        update: updatePlugins,
-                        check: checkUpdates,
-                        showsCheckAction: false
-                    )
-                }
+                PluginManagementUpdateSection(
+                    manager: pluginSourceManager,
+                    installedPluginIDs: pluginAvailability.installedPluginIds,
+                    update: updatePlugins,
+                    check: checkUpdates
+                )
+                .disabled(installationFlow.isPreparing)
             }
 
             if let errorMessage = installationContext.errorMessage {
@@ -284,6 +282,7 @@ struct PluginManagementView: View {
                     retry: retrySource,
                     showAll: showAllSources
                 )
+                .disabled(installationFlow.isPreparing)
             }
 
             PluginManagementPluginListSection(
@@ -292,20 +291,22 @@ struct PluginManagementView: View {
                 scopedSourceURLs: installationContext.sourceURLs,
                 update: updatePlugins,
                 install: installPlugins,
-                requestUninstall: { pendingUninstallPluginID = $0 },
+                requestUninstall: requestUninstall,
                 addSource: { showAddSource = true }
             )
+            .disabled(installationFlow.isPreparing)
 
             PluginManagementToolsSection(
                 installedPluginIDs: pluginAvailability.installedPluginIds,
                 showsCheckAction: !hasRunningPluginOperation,
                 check: checkUpdates
             )
+            .disabled(installationFlow.isPreparing)
         }
         .listStyle(.insetGrouped)
         .listSectionSpacing(16)
         .contentMargins(.top, 8, for: .scrollContent)
-        .disabled(installationFlow.isPreparing || installationFlow.isInstalling)
+        .disabled(installationFlow.isInstalling || pluginSourceManager.installBatch.isRunning)
     }
 
     // MARK: - Actions
@@ -317,7 +318,7 @@ struct PluginManagementView: View {
     }
 
     private func updatePlugins(_ ids: [String]) {
-        guard !ids.isEmpty, !pluginSourceManager.isManagementBusy else { return }
+        guard !ids.isEmpty, canPrepare else { return }
         Task {
             _ = await pluginSourceManager.updateAllPlugins(pluginIds: ids)
             await pluginAvailability.refresh()
@@ -369,8 +370,15 @@ struct PluginManagementView: View {
         Task { await reloadCatalog() }
     }
 
+    private func requestUninstall(_ pluginID: String) {
+        guard !pluginSourceManager.isManagementBusy,
+              !installationFlow.isPreparing,
+              !installationFlow.isInstalling else { return }
+        pendingUninstallPluginID = pluginID
+    }
+
     private func uninstallPlugin(_ pluginID: String) {
-        guard !pluginSourceManager.isManagementBusy else { return }
+        guard canPrepare else { return }
         _ = pluginSourceManager.uninstallPlugin(pluginId: pluginID)
         Task {
             await pluginAvailability.refresh()
@@ -380,18 +388,19 @@ struct PluginManagementView: View {
     }
 
     private func checkUpdates() {
-        guard !pluginSourceManager.isManagementBusy else { return }
+        guard canPrepare else { return }
         pluginSourceManager.updateBatch.clearResult()
         Task { await reloadCatalog() }
     }
 
     private func reloadCatalog() async {
-        guard !pluginSourceManager.isManagementBusy else { return }
+        guard canPrepare else { return }
         await pluginSourceManager.fetchAllSourceIndexes()
         await pluginSourceManager.refreshAvailableUpdates()
     }
 
     private func refreshCurrentScope() async {
+        guard canPrepare else { return }
         if let sourceURLs = installationContext.sourceURLs {
             await installationFlow.prepare(
                 .sources(sourceURLs),
@@ -402,6 +411,227 @@ struct PluginManagementView: View {
         } else {
             await reloadCatalog()
         }
+    }
+}
+
+private struct PluginManagementUpdateSection: View {
+    let manager: PluginSourceManager
+    let installedPluginIDs: [String]
+    let update: ([String]) -> Void
+    let check: () -> Void
+
+    private var batch: PluginUpdateBatch {
+        manager.updateBatch
+    }
+
+    private var candidatePluginIDs: [String] {
+        installedPluginIDs.filter { manager.hasUpdate(for: $0) }
+    }
+
+    private var retryableFailedPluginIDs: [String] {
+        batch.failedPluginIds.filter { manager.hasUpdate(for: $0) }
+    }
+
+    private var cancelledCount: Int {
+        batch.outcomes.values.filter { $0 == .cancelled }.count
+    }
+
+    private var hasCompletedBatch: Bool {
+        !batch.isRunning && !batch.pluginIds.isEmpty
+    }
+
+    private var statusTitle: LocalizedStringKey {
+        if batch.isRunning {
+            return "正在更新插件"
+        }
+        if hasCompletedBatch {
+            if !batch.failedPluginIds.isEmpty {
+                return "更新完成：\(batch.successCount) 个成功，\(batch.failedPluginIds.count) 个失败"
+            }
+            if cancelledCount > 0 {
+                return "更新已停止"
+            }
+            return "已更新 \(batch.successCount) 个插件"
+        }
+        if manager.isFetchingIndex || manager.isCheckingUpdates {
+            return "正在检查更新…"
+        }
+        if !candidatePluginIDs.isEmpty {
+            return "\(candidatePluginIDs.count) 个插件可更新"
+        }
+        if installedPluginIDs.isEmpty {
+            return "暂无已安装插件"
+        }
+        if manager.sourceURLs.contains(where: { manager.health(for: $0).isFailed }) {
+            return "部分订阅源未能检查"
+        }
+        if manager.sourceURLs.isEmpty {
+            return "添加订阅源以获取更新"
+        }
+        return "插件均为最新版本"
+    }
+
+    var body: some View {
+        Section {
+            statusRow
+
+            if batch.isRunning {
+                progressRow
+            } else if hasCompletedBatch {
+                ForEach(batch.failedPluginIds, id: \.self) { pluginID in
+                    failureRow(pluginID)
+                }
+
+                if !retryableFailedPluginIDs.isEmpty {
+                    retryButton
+                }
+                if !candidatePluginIDs.isEmpty,
+                   Set(candidatePluginIDs) != Set(retryableFailedPluginIDs) {
+                    updateAllButton
+                }
+                if !batch.failedPluginIds.isEmpty, candidatePluginIDs.isEmpty {
+                    recheckButton
+                }
+            } else if !candidatePluginIDs.isEmpty {
+                updateAllButton
+            }
+        }
+    }
+
+    private var statusRow: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(statusTitle)
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text("已安装 \(installedPluginIDs.count) 个 · \(manager.sourceURLs.count) 个订阅源")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var progressRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ProgressView(
+                value: Double(batch.completedCount),
+                total: Double(max(1, batch.pluginIds.count))
+            )
+
+            if let currentPluginID = batch.currentPluginId {
+                Text("\(batch.completedCount) / \(batch.pluginIds.count) · 正在更新 \(manager.managementDisplayName(for: currentPluginID))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("\(batch.completedCount) / \(batch.pluginIds.count)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
+    private func failureRow(_ pluginID: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(manager.managementDisplayName(for: pluginID))
+                .foregroundStyle(.primary)
+            Text("更新失败，请重试。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            DisclosureGroup("技术详情") {
+                Text(failureReason(for: pluginID))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .font(.caption)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
+    private var updateAllButton: some View {
+        Button {
+            update(candidatePluginIDs)
+        } label: {
+            PluginManagementListActionLabel(
+                title: "全部更新（\(candidatePluginIDs.count)）",
+                systemImage: "arrow.down.circle"
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(candidatePluginIDs.isEmpty || manager.isManagementBusy)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .accessibilityIdentifier("plugins.updateAll")
+        .accessibilityHint("更新全部已安装且有新版本的插件")
+    }
+
+    private var retryButton: some View {
+        Button {
+            update(retryableFailedPluginIDs)
+        } label: {
+            PluginManagementListActionLabel(
+                title: "重试失败项（\(retryableFailedPluginIDs.count)）",
+                systemImage: "arrow.clockwise"
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(manager.isManagementBusy)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .accessibilityIdentifier("plugins.retryUpdates")
+    }
+
+    private var recheckButton: some View {
+        Button(action: check) {
+            PluginManagementListActionLabel(
+                title: "重新检查更新",
+                systemImage: "arrow.clockwise"
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(manager.isManagementBusy)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .accessibilityIdentifier("plugins.recheckUpdates")
+    }
+
+    private func failureReason(for pluginID: String) -> String {
+        guard case .failed(let reason) = batch.outcomes[pluginID] else {
+            return "更新失败，请重新检查更新。"
+        }
+        return SupportDiagnosticSanitizer.text(reason)
+    }
+}
+
+private struct PluginManagementListActionLabel: View {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let title: LocalizedStringKey
+    let systemImage: String
+
+    @ViewBuilder
+    var body: some View {
+        if isEnabled {
+            content
+                .foregroundStyle(Color(uiColor: .systemBlue))
+        } else {
+            content
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .accessibilityHidden(true)
+            Text(title)
+        }
+        .font(.body)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -636,6 +866,7 @@ private struct PluginManagementToolsSection: View {
             } label: {
                 PluginManagementToolLabel(content: .sources(count: manager.sourceURLs.count))
             }
+            .disabled(manager.isManagementBusy)
             .accessibilityIdentifier("plugins.sources")
 
             if showsCheckAction {
@@ -729,22 +960,43 @@ private struct PluginManagementPluginListSection: View {
         }
     }
 
-    private var scopedAvailablePluginItems: [RemotePluginDisplayItem] {
-        pluginSourceManager.catalogPlugins(forSourceURLs: scopedSourceURLs).filter { item in
-            guard pluginSourceManager.installedVersion(for: item.id) == nil else { return false }
-            return true
+    private var scopedCatalogPluginItems: [RemotePluginDisplayItem] {
+        pluginSourceManager.catalogPlugins(forSourceURLs: scopedSourceURLs)
+    }
+
+    private var scopedUpdatablePluginItems: [RemotePluginDisplayItem] {
+        scopedCatalogPluginItems.filter { item in
+            pluginSourceManager.installedVersion(for: item.id) != nil
+                && pluginSourceManager.hasUpdate(for: item.id)
         }
     }
 
-    private var availablePluginItems: [RemotePluginDisplayItem] {
-        scopedAvailablePluginItems.filter { item in
+    private var scopedInstallablePluginItems: [RemotePluginDisplayItem] {
+        scopedCatalogPluginItems.filter { item in
+            pluginSourceManager.installedVersion(for: item.id) == nil
+        }
+    }
+
+    private var visibleUpdatablePluginItems: [RemotePluginDisplayItem] {
+        scopedUpdatablePluginItems.filter { item in
             guard !normalizedSearch.isEmpty else { return true }
             return pluginMatchesSearch(name: item.displayName, pluginId: item.id)
         }
     }
 
-    private var hasAvailablePlugins: Bool {
-        !scopedAvailablePluginItems.isEmpty
+    private var visibleInstallablePluginItems: [RemotePluginDisplayItem] {
+        scopedInstallablePluginItems.filter { item in
+            guard !normalizedSearch.isEmpty else { return true }
+            return pluginMatchesSearch(name: item.displayName, pluginId: item.id)
+        }
+    }
+
+    private var hasScopedAvailableActions: Bool {
+        !scopedUpdatablePluginItems.isEmpty || !scopedInstallablePluginItems.isEmpty
+    }
+
+    private var hasVisibleAvailableActions: Bool {
+        !visibleUpdatablePluginItems.isEmpty || !visibleInstallablePluginItems.isEmpty
     }
 
     private var relevantSourceURLs: [String] {
@@ -752,42 +1004,129 @@ private struct PluginManagementPluginListSection: View {
     }
 
     private var installablePluginIDs: [String] {
-        scopedAvailablePluginItems.compactMap { item in
+        scopedInstallablePluginItems.compactMap { item in
             pluginSourceManager.catalogActionState(for: item) == .install ? item.id : nil
         }
     }
 
+    @ViewBuilder
     var body: some View {
-        Section {
-            if selectedScope == .installed {
+        if selectedScope == .installed {
+            Section {
                 installedPluginRows
-            } else {
-                availablePluginRows
-            }
-        } header: {
-            HStack {
-                if !normalizedSearch.isEmpty {
-                    Text("找到 \(visiblePluginCount) 个插件")
+            } header: {
+                if normalizedSearch.isEmpty {
+                    Text("\(filteredInstalledPluginIDs.count) 个插件")
                 } else {
-                    Text("\(visiblePluginCount) 个插件")
+                    Text("找到 \(filteredInstalledPluginIDs.count) 个插件")
                 }
-                Spacer()
-                if selectedScope == .available,
-                   normalizedSearch.isEmpty,
-                   !installablePluginIDs.isEmpty {
-                    Button("全部安装（\(installablePluginIDs.count)）", systemImage: "arrow.down.circle") {
-                        install(installablePluginIDs)
+            }
+        } else {
+            availablePluginSections
+        }
+    }
+
+    @ViewBuilder
+    private var availablePluginSections: some View {
+        if !hasScopedAvailableActions,
+           pluginSourceManager.isFetchingIndex || pluginSourceManager.isCheckingUpdates {
+            Section {
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("正在获取插件…")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 76)
+            }
+        } else if !hasScopedAvailableActions {
+            Section {
+                availablePluginEmptyState
+            }
+        } else if !hasVisibleAvailableActions {
+            Section {
+                PluginManagementEmptyState(
+                    title: "没有匹配的插件",
+                    message: "请尝试其他搜索词。"
+                )
+            }
+        } else {
+            if !visibleUpdatablePluginItems.isEmpty {
+                Section {
+                    ForEach(visibleUpdatablePluginItems) { displayItem in
+                        managedPluginRow(pluginId: displayItem.id, remote: displayItem)
+                            .listRowInsets(
+                                EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)
+                            )
                     }
-                    .labelStyle(.titleAndIcon)
-                    .frame(minHeight: 44)
-                    .disabled(pluginSourceManager.isManagementBusy)
+                } header: {
+                    if normalizedSearch.isEmpty {
+                        Text("可更新（\(visibleUpdatablePluginItems.count)）")
+                    } else {
+                        Text("找到 \(visibleUpdatablePluginItems.count) 个可更新插件")
+                    }
+                }
+            }
+
+            if !visibleInstallablePluginItems.isEmpty {
+                Section {
+                    if normalizedSearch.isEmpty, !installablePluginIDs.isEmpty {
+                        installAllButton
+                    }
+
+                    ForEach(visibleInstallablePluginItems) { displayItem in
+                        managedPluginRow(pluginId: displayItem.id, remote: displayItem)
+                            .listRowInsets(
+                                EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)
+                            )
+                    }
+                } header: {
+                    if normalizedSearch.isEmpty {
+                        Text("可安装（\(visibleInstallablePluginItems.count)）")
+                    } else {
+                        Text("找到 \(visibleInstallablePluginItems.count) 个可安装插件")
+                    }
                 }
             }
         }
     }
 
-    private var visiblePluginCount: Int {
-        selectedScope == .installed ? filteredInstalledPluginIDs.count : availablePluginItems.count
+    @ViewBuilder
+    private var availablePluginEmptyState: some View {
+        if relevantSourceURLs.isEmpty {
+            PluginManagementEmptyState(
+                title: "暂无可安装或可更新插件",
+                message: "先添加订阅源以获取插件。",
+                actionTitle: "添加订阅源",
+                action: addSource
+            )
+        } else if relevantSourceURLs.contains(where: {
+            pluginSourceManager.health(for: $0).isFailed
+        }) {
+            PluginManagementEmptyState(
+                title: "暂时无法获取插件",
+                message: "部分订阅源未能加载，请检查订阅源状态后重试。"
+            )
+        } else {
+            PluginManagementEmptyState(
+                title: "暂无可安装或可更新插件",
+                message: "订阅源中暂时没有可安装或可更新的插件。"
+            )
+        }
+    }
+
+    private var installAllButton: some View {
+        Button {
+            install(installablePluginIDs)
+        } label: {
+            PluginManagementListActionLabel(
+                title: "全部安装（\(installablePluginIDs.count)）",
+                systemImage: "arrow.down.circle"
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(installablePluginIDs.isEmpty || pluginSourceManager.isManagementBusy)
+        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+        .accessibilityIdentifier("plugins.installAll")
     }
 
     @ViewBuilder
@@ -811,87 +1150,27 @@ private struct PluginManagementPluginListSection: View {
         }
     }
 
-    @ViewBuilder
-    private var availablePluginRows: some View {
-        if !hasAvailablePlugins,
-           pluginSourceManager.isFetchingIndex || pluginSourceManager.isCheckingUpdates {
-            HStack(spacing: 12) {
-                ProgressView()
-                Text("正在获取插件…")
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 76)
-        } else if !hasAvailablePlugins {
-            if relevantSourceURLs.isEmpty {
-                PluginManagementEmptyState(
-                    title: "暂无可安装插件",
-                    message: "先添加订阅源以获取插件。",
-                    actionTitle: "添加订阅源",
-                    action: addSource
-                )
-            } else if relevantSourceURLs.contains(where: {
-                pluginSourceManager.health(for: $0).isFailed
-            }) {
-                PluginManagementEmptyState(
-                    title: "暂时无法获取插件",
-                    message: "部分订阅源未能加载，请检查订阅源状态后重试。"
-                )
-            } else {
-                PluginManagementEmptyState(
-                    title: "暂无可安装插件",
-                    message: "订阅源中暂时没有可安装的插件。"
-                )
-            }
-        } else if availablePluginItems.isEmpty {
-            PluginManagementEmptyState(
-                title: "没有匹配的插件",
-                message: "请尝试其他搜索词。"
-            )
-        } else {
-            ForEach(availablePluginItems) { displayItem in
-                managedPluginRow(pluginId: displayItem.id, remote: displayItem)
-            }
-        }
-    }
-
     private func installedPluginRow(_ pluginID: String) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            managedPluginRow(pluginId: pluginID)
-            Menu {
+        managedPluginRow(pluginId: pluginID)
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    requestUninstall(pluginID)
+                } label: {
+                    Label("卸载", systemImage: "trash")
+                }
+                .tint(.red)
+                .disabled(pluginSourceManager.isManagementBusy)
+            }
+            .contextMenu {
                 Button("卸载插件", systemImage: "trash", role: .destructive) {
                     requestUninstall(pluginID)
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                .disabled(pluginSourceManager.isManagementBusy)
             }
-            .buttonStyle(.borderless)
-            .tint(.secondary)
-            .disabled(pluginSourceManager.isManagementBusy)
-            .accessibilityLabel("管理 \(pluginSourceManager.managementDisplayName(for: pluginID))")
-        }
-        .frame(minHeight: 60)
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {
-                requestUninstall(pluginID)
-            } label: {
-                Label("卸载", systemImage: "trash")
-            }
-            .tint(.red)
-            .disabled(pluginSourceManager.isManagementBusy)
-        }
-        .contextMenu {
-            Button("卸载插件", systemImage: "trash", role: .destructive) {
+            .accessibilityAction(named: Text("卸载插件")) {
                 requestUninstall(pluginID)
             }
-            .disabled(pluginSourceManager.isManagementBusy)
-        }
-        .accessibilityAction(named: Text("卸载插件")) {
-            requestUninstall(pluginID)
-        }
     }
 
     private func pluginMatchesSearch(name: String, pluginId: String) -> Bool {
@@ -935,6 +1214,7 @@ private struct PluginManagementPluginListSection: View {
         ) {
             performPluginAction(pluginId: pluginId, remote: remote)
         }
+        .tint(Color(uiColor: .systemBlue))
     }
 
     private func performPluginAction(

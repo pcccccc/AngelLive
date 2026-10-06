@@ -75,15 +75,15 @@ struct PluginErrorProtocolTests {
         let detailError = LiveParseError.liveParseError("请求失败", "错误代码: 406")
         #expect(!detailError.isAuthRequired)
         // -352 风控仍按需要登录处理
-        let biliError = LiveParseError.liveParseError("请求失败", "错误代码: -352")
-        #expect(biliError.isAuthRequired)
+        let legacyAuthError = LiveParseError.liveParseError("请求失败", "错误代码: -352")
+        #expect(legacyAuthError.isAuthRequired)
         // 旧 406 code 现在归为 BLOCKED，不再是登录错误
         #expect(!Self.pluginError("406").isAuthRequired)
     }
 
     @Test("BLOCKED with loginMayHelp suggests login")
     func loginSuggested() {
-        let suggested = Self.pluginError("BLOCKED", message: "快手暂时限制访问", context: ["loginMayHelp": "true"])
+        let suggested = Self.pluginError("BLOCKED", message: "上游暂时限制访问", context: ["loginMayHelp": "true"])
         #expect(suggested.isLoginSuggested)
         #expect(!suggested.isAuthRequired)
         #expect(suggested.showsLoginAction)

@@ -190,9 +190,17 @@ private struct PluginManagementRowAction: View {
                     Button(action: action) {
                         Text(actionTitle)
                             .font(.subheadline.weight(.semibold))
+                            #if os(iOS)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                            #endif
                     }
+                    #if os(iOS)
+                    .buttonStyle(.borderless)
+                    #else
                     .buttonStyle(.bordered)
                     .controlSize(.regular)
+                    #endif
                     .disabled(disabled)
                     .accessibilityLabel(actionAccessibilityLabel)
                     #endif
