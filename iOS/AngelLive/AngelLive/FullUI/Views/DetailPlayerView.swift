@@ -394,6 +394,8 @@ struct DetailPlayerView: View {
             viewModel.disconnectSocket()
             // 清除 Now Playing 信息(远程控制命令由 KSPlayer 在 stop() 时自行注销)
             NowPlayingManager.clear(surfaceID: playbackSession.surfaceID)
+            // 退出时沿用 representable 的拆除路径，立即清空 layer 并避免重复 stop。
+            playerCoordinator.resetPlayer()
             playbackSession.invalidate()
             viewModel.playbackSurfaceID = nil
             // iPhone 返回时强制竖屏
