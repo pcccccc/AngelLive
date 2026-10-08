@@ -12,7 +12,7 @@ private func resolveKSPlayerDependency() -> (package: Package.Dependency, target
     guard !useVLC else { return nil }
 
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "5.0.0"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", revision: "c166a4ec71c724c92001f43cd8f161af2a903375"),
         "KSPlayer"
     )
 }

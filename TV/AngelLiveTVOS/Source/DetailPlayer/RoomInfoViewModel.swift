@@ -407,6 +407,7 @@ final class RoomInfoViewModel {
             liveReconnectPolicy: .playerManaged
         )
         let plan = applied.plan
+        recoveryCoordinator.playbackConfigured(isLive: plan.isLive)
 
         return PlayerTypeResult(
             playerTypes: applied.playerTypes,
@@ -1029,9 +1030,13 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
-        // KSPlayer 内部无法恢复的 EOF 继续由应用层协调器重取播放地址托底。
+        // 直播 EOF 交给协调器恢复；点播正常结束不重取播放地址。
         guard let error else {
-            Logger.warning("========== 🔴 [EOF-RECOVER] 检测到直播流结束(EOF)→ 无感续签重取地址续播 · host=\(currentPlayURL?.host ?? "-") ==========", category: .player)
+            if recoveryCoordinator.isLive {
+                Logger.warning("[Playback] 直播流结束，交给恢复协调器处理", category: .player)
+            } else {
+                Logger.info("[Playback] 点播正常结束", category: .player)
+            }
             recoveryCoordinator.finished(error: nil)
             return
         }

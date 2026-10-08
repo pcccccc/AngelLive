@@ -922,7 +922,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     private static func isSensitivePluginFunction(_ function: String) -> Bool {
         switch function.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "setcredential", "clearcredential", "validatecredential", "getcredentialstatus",
-             "startdevicelogin", "polldevicelogin", "canceldevicelogin", "refreshdevicecredential", "resetdeviceauth":
+             "startdevicelogin", "polldevicelogin", "canceldevicelogin", "refreshdevicecredential", "resetdeviceauth",
+             // Playback retrieval can obtain keys before the host decodes the
+             // response. Suppress plugin/HTTP logs for the entire invocation.
+             "getplayback", "getplayargs", "refreshplayback":
             return true
         default:
             return false
@@ -960,7 +963,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             "transactionid", "challengeid", "qrcontent", "qrimage", "credential", "cookie", "set-cookie",
             "loginid", "usercode", "verificationuri", "device_code", "devicecode",
             "setcookies", "authorization", "location", "headers", "requestheaders",
-            "responseheaders", "body", "bodytext", "bodybase64", "requestbody", "responsebody"
+            "responseheaders", "body", "bodytext", "bodybase64", "requestbody", "responsebody",
+            "decryption", "decryption_key"
         ]
         return redactedKeys.contains(lowered)
             || lowered.contains("token")

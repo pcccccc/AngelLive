@@ -33,6 +33,9 @@ public enum KSPlayerSessionConfigurator {
         )
 
         options.userAgent = requestOptions.userAgent
+        // FFmpeg consumes this as an input option when opening the format context.
+        // Assignment also clears any prior stream's key when the next quality is unencrypted.
+        options.formatContextOptions["decryption_key"] = quality.decryption?.key
         options.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
         options.formatContextOptions["headers"] = nil
         if !requestOptions.headers.isEmpty {

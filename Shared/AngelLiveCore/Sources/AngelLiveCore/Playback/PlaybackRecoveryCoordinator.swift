@@ -100,6 +100,8 @@ public final class PlaybackRecoveryCoordinator {
 
     // 仅 phase 需要被 UI 观察;其余内部状态忽略观察,避免无谓视图失效。
     public private(set) var phase: RecoveryPhase = .idle
+    /// 资源的直播/点播语义;与引擎为缓冲或解码选用的 effective isLive 配置无关。
+    @ObservationIgnored public private(set) var isLive = true
 
     @ObservationIgnored private let config: RecoveryConfig
     @ObservationIgnored private let actions: RecoveryActions
@@ -111,6 +113,8 @@ public final class PlaybackRecoveryCoordinator {
     @ObservationIgnored private var streamKey: String?
     @ObservationIgnored private var currentURL: URL?
     @ObservationIgnored private var monitoring = false
+    @ObservationIgnored private var playbackCompleted = false
+    @ObservationIgnored private var driverRequested = false
     @ObservationIgnored private var attempts = 0                 // 当前会话已发起的恢复次数(熔断计数)
     @ObservationIgnored private var startedPlaying = false       // 是否已起播成功过
     @ObservationIgnored private var enginePlaying = false         // 引擎当前是否在播(供无字节采样内核判健康)
@@ -150,6 +154,12 @@ public final class PlaybackRecoveryCoordinator {
     /// 实际播放 URL 变化(可能只是 token 刷新)。★ 不重置熔断、不重置起播计时(修 Bug A)。
     public func urlChanged(_ url: URL) { advance(.url(url)) }
 
+    /// 播放计划的直播/点播语义。重新配置已播完的资源会重新武装监测,但保留会话恢复预算。
+    public func playbackConfigured(isLive: Bool) {
+        self.isLive = isLive
+        if playbackCompleted { resetMonitoring() }
+    }
+
     /// 引擎状态变化(应用层把 KSPlayerState/VLC 状态映射过来)。
     public func stateChanged(_ state: PlaybackEngineState) { advance(.state(state)) }
 
@@ -158,7 +168,14 @@ public final class PlaybackRecoveryCoordinator {
 
     /// 启动 1Hz 采样驱动(进入播放器时调)。
     public func start() {
+        driverRequested = true
+        guard !playbackCompleted else { return }
         monitoring = true
+        startDriverIfRequested()
+    }
+
+    private func startDriverIfRequested() {
+        guard driverRequested, monitoring else { return }
         guard driver == nil else { return }
         let nanos = UInt64(config.tickInterval * 1_000_000_000)
         driver = Task { @MainActor [weak self] in
@@ -172,9 +189,15 @@ public final class PlaybackRecoveryCoordinator {
 
     /// 停止采样驱动(离开播放器时调)。
     public func stop() {
+        driverRequested = false
+        playbackCompleted = false
+        stopDriver()
+        monitoring = false
+    }
+
+    private func stopDriver() {
         driver?.cancel()
         driver = nil
-        monitoring = false
     }
 
     // MARK: - 状态机(纯同步,可单测)
@@ -201,6 +224,11 @@ public final class PlaybackRecoveryCoordinator {
         guard key != streamKey else { return }   // 同会话(token 滚动等)不重置
         streamKey = key
         attempts = 0
+        resetMonitoring()
+    }
+
+    private func resetMonitoring() {
+        playbackCompleted = false
         startedPlaying = false
         enginePlaying = false
         startupElapsed = 0
@@ -210,9 +238,19 @@ public final class PlaybackRecoveryCoordinator {
         lastPlayhead = -1
         monitoring = true
         phase = .healthy
+        startDriverIfRequested()
+    }
+
+    private func rearmCompletedPlayback() {
+        guard playbackCompleted else { return }
+        resetMonitoring()
     }
 
     private func handleState(_ state: PlaybackEngineState) {
+        // 用户同 URL 重播可能直接 seek(0) 后回调 bufferFinished,不会重新配置播放计划。
+        if playbackCompleted, state == .preparing || state == .readyToPlay || state == .bufferFinished {
+            rearmCompletedPlayback()
+        }
         guard monitoring else { return }
         switch state {
         case .readyToPlay, .bufferFinished:
@@ -224,7 +262,6 @@ public final class PlaybackRecoveryCoordinator {
             stallAccum = 0
             if attempts == 0 { phase = .healthy }
         case .ended:
-            // Room 会话没有正常播完语义，内核未恢复的 EOF 仍需整会话重建。
             enginePlaying = false
             handleStreamEnd()
         case .error, .initialized, .preparing, .buffering, .paused:
@@ -234,6 +271,8 @@ public final class PlaybackRecoveryCoordinator {
     }
 
     private func handleFinished(_ error: Error?) {
+        // 真错误不能被先到达的 ended 吞掉;正常 EOF 的成对回调则保持完成终态。
+        if error != nil { rearmCompletedPlayback() }
         guard monitoring else { return }
         // error == nil: 直播流 endOfStream 常走这条,与 .ended 收口到同一处理。
         guard let error else {
@@ -243,11 +282,22 @@ public final class PlaybackRecoveryCoordinator {
         triggerRecovery(reason: error.localizedDescription, startupFailure: .engineError)
     }
 
-    /// 直播意外结束(endOfStream 的 finished(nil) 与 playedToTheEnd 的 .ended)。
-    /// 两者常成对到达:首个事件已进入恢复阶梯(并把 startedPlaying 复位),尾随事件在 .recovering
-    /// 下忽略——既避免连烧两档,也避免被误判为「从未起播」而错误地关掉监控。
+    /// 点播正常完成或直播意外结束(finished(nil) 与 .ended)。
+    /// 两者常成对到达:点播保持完成终态,直播在首个事件进入恢复阶梯后忽略尾随事件,
+    /// 避免连烧两档或误判为「从未起播」而关掉监控。
     private func handleStreamEnd() {
         guard monitoring else { return }
+        if !isLive {
+            // 真错误刚触发恢复后的尾随正常 EOF 不取消该恢复。
+            if !startedPlaying, isRecovering { return }
+            playbackCompleted = true
+            monitoring = false
+            enginePlaying = false
+            healthyAccum = 0
+            phase = .idle
+            stopDriver()
+            return
+        }
         if startedPlaying {
             triggerRecovery(reason: "stream ended")
         } else if !isRecovering {

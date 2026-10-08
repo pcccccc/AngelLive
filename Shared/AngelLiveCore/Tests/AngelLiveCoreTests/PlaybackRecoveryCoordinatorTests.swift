@@ -261,15 +261,19 @@ struct PlaybackRecoveryCoordinatorTests {
 
     // MARK: 11. endOfStream + playedToTheEnd 成对到达只烧一档,不误关监控
 
-    @Test("成对流结束事件只触发一次恢复,尾随事件不关监控")
-    func pairedStreamEndTriggersOnce() {
+    @Test("成对流结束事件只触发一次恢复,尾随事件不关监控", arguments: [false, true])
+    func pairedStreamEndTriggersOnce(endedFirst: Bool) {
         let r = ActionRecorder()
         let c = makeCoordinator(config: .phone(stallMonitoringEnabled: false), recorder: r)
         c.episodeChanged(streamKey: "k1")
         c.stateChanged(.readyToPlay)
-        // 日志顺序:endOfStream 的 finished(nil) 先到,playedToTheEnd 的 .ended 尾随。
-        c.finished(error: nil)                // 首档 reloadPlayArgs,triggerRecovery 复位 startedPlaying
-        c.stateChanged(.ended)                // 尾随:.recovering 中应被忽略,不能落 idle
+        if endedFirst {
+            c.stateChanged(.ended)
+            c.finished(error: nil)
+        } else {
+            c.finished(error: nil)
+            c.stateChanged(.ended)
+        }
         #expect(r.reload == 1)
         #expect(r.cdn == 0 && r.refresh == 0)
         if case .recovering = c.phase {} else {
@@ -304,5 +308,159 @@ struct PlaybackRecoveryCoordinatorTests {
         #expect(r.cdn == 0 && r.refresh == 0)
         #expect(r.failedReasons.isEmpty)
         #expect(c.phase == .healthy)
+    }
+
+    @Test("点播正常 EOF 两种顺序均终止,后续采样和 attach 不触发恢复",
+          arguments: [false, true], [false, true])
+    func vodCompletionStopsMonitoring(endedFirst: Bool, started: Bool) {
+        let r = ActionRecorder()
+        var samplesObserved = 0
+        let c = PlaybackRecoveryCoordinator(
+            config: RecoveryConfig(startupTimeout: 2, stallThresholdSeconds: 2,
+                                   stallMonitoringEnabled: true),
+            actions: r.make(), sample: { nil }, observation: {
+                if case .sample = $0 { samplesObserved += 1 }
+            }
+        )
+        #expect(c.isLive)
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: false)
+        #expect(!c.isLive)
+        if started { c.stateChanged(.readyToPlay) }
+        if endedFirst {
+            c.stateChanged(.ended)
+            c.finished(error: nil)
+        } else {
+            c.finished(error: nil)
+            c.stateChanged(.ended)
+        }
+        // attach 在每次引擎回调都会 start;这不能复活已完成资源。
+        c.start()
+        defer { c.stop() }
+        c.stateChanged(.buffering)
+        c.stateChanged(.paused)
+        for _ in 0..<30 {
+            tick(c, runningStall())
+            c.advance(.tick(sample: nil, delta: 1))
+        }
+        c.finished(error: nil)
+        c.stateChanged(.ended)
+        #expect(c.phase == .idle)
+        #expect(samplesObserved == 0)
+        #expect(r.reload == 0 && r.cdn == 0 && r.refresh == 0 && r.kick == 0)
+        #expect(r.failedReasons.isEmpty)
+    }
+
+    @Test("点播真实错误继续恢复,结束事件不吞掉恢复", arguments: [false, true])
+    func vodErrorRecovers(endedFirst: Bool) {
+        let r = ActionRecorder()
+        let c = makeCoordinator(config: RecoveryConfig(startupTimeout: 2, stallMonitoringEnabled: false), recorder: r)
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: false)
+        c.stateChanged(.readyToPlay)
+        if endedFirst { c.stateChanged(.ended) }
+        c.finished(error: TestError())
+        c.stateChanged(.ended)
+        c.finished(error: nil)
+        #expect(c.phase == .recovering(action: .reloadPlayArgs, attempt: 1, max: 3))
+        tick(c, startupStall(), delta: 2)
+        #expect(c.phase == .recovering(action: .switchCDN, attempt: 2, max: 3))
+        #expect(r.reload == 1 && r.cdn == 1)
+    }
+
+    @Test("完成后重新配置同会话恢复监测且保留预算,支持直播点播切换",
+          arguments: [false, true])
+    func configureCompletedPlaybackPreservesBudget(isLive: Bool) {
+        let r = ActionRecorder()
+        let c = makeCoordinator(config: RecoveryConfig(startupTimeout: 2, stallMonitoringEnabled: false), recorder: r)
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: false)
+        c.finished(error: TestError())
+        c.stateChanged(.readyToPlay)
+        c.finished(error: nil)
+        #expect(c.phase == .idle)
+        c.episodeChanged(streamKey: "episode-a")
+        c.urlChanged(URL(string: "https://media.example.invalid/video?token=next")!)
+        tick(c, startupStall(), delta: 30)
+        #expect(c.phase == .idle)
+        c.playbackConfigured(isLive: isLive)
+        #expect(c.isLive == isLive)
+        tick(c, startupStall(), delta: 2)
+        #expect(c.phase == .recovering(action: .switchCDN, attempt: 2, max: 3))
+        #expect(r.reload == 1 && r.cdn == 1)
+    }
+
+    @Test("同 URL 用户重播按真实起播状态重新武装,保留既有恢复预算",
+          arguments: [PlaybackEngineState.preparing, .readyToPlay, .bufferFinished])
+    func replayCompletedPlaybackRearms(state: PlaybackEngineState) {
+        let r = ActionRecorder()
+        let c = makeCoordinator(
+            config: RecoveryConfig(startupTimeout: 2, stallThresholdSeconds: 2,
+                                   stallMonitoringEnabled: true), recorder: r
+        )
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: false)
+        c.finished(error: TestError())
+        c.stateChanged(.readyToPlay)
+        c.stateChanged(.ended)
+        c.finished(error: nil)
+        c.stateChanged(.buffering)
+        tick(c, startupStall(), delta: 30)
+        #expect(c.phase == .idle)
+        c.stateChanged(state)
+        tick(c, startupStall(), delta: 2)
+        #expect(c.phase == .recovering(action: .switchCDN, attempt: 2, max: 3))
+        #expect(r.reload == 1 && r.cdn == 1)
+    }
+
+    @Test("完成后换新会话恢复监测并重置预算")
+    func newEpisodeAfterCompletionRearms() {
+        let r = ActionRecorder()
+        let c = makeCoordinator(config: RecoveryConfig(startupTimeout: 2, stallMonitoringEnabled: false), recorder: r)
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: false)
+        c.finished(error: TestError())
+        c.stateChanged(.readyToPlay)
+        c.finished(error: nil)
+        c.episodeChanged(streamKey: "episode-b")
+        tick(c, startupStall(), delta: 2)
+        #expect(c.phase == .recovering(action: .reloadPlayArgs, attempt: 1, max: 3))
+        #expect(r.reload == 2 && r.cdn == 0)
+    }
+
+    @Test("离开已完成播放器后旧引擎回调不能重新武装")
+    func stoppedCompletedPlaybackIgnoresLateCallbacks() {
+        let r = ActionRecorder()
+        let c = makeCoordinator(config: RecoveryConfig(startupTimeout: 2, stallMonitoringEnabled: false), recorder: r)
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: false)
+        c.finished(error: nil)
+        c.stop()
+        c.finished(error: TestError())
+        c.stateChanged(.readyToPlay)
+        c.stateChanged(.bufferFinished)
+        tick(c, startupStall(), delta: 30)
+        #expect(c.phase == .idle)
+        #expect(r.reload == 0 && r.cdn == 0 && r.refresh == 0)
+    }
+
+    @Test("播放计划配置与 token 刷新不清起播累计和恢复预算")
+    func activeConfigurationAndTokenRefreshPreserveBudget() {
+        let r = ActionRecorder()
+        let c = makeCoordinator(config: RecoveryConfig(startupTimeout: 2, stallMonitoringEnabled: false), recorder: r)
+        c.episodeChanged(streamKey: "episode-a")
+        c.playbackConfigured(isLive: true)
+        tick(c, startupStall())
+        c.playbackConfigured(isLive: false)
+        c.urlChanged(URL(string: "https://media.example.invalid/video?token=next")!)
+        c.episodeChanged(streamKey: "episode-a")
+        tick(c, startupStall())
+        #expect(c.phase == .recovering(action: .reloadPlayArgs, attempt: 1, max: 3))
+        tick(c, startupStall())
+        c.playbackConfigured(isLive: true)
+        c.urlChanged(URL(string: "https://media.example.invalid/video?token=latest")!)
+        tick(c, startupStall())
+        #expect(c.phase == .recovering(action: .switchCDN, attempt: 2, max: 3))
+        #expect(r.reload == 1 && r.cdn == 1)
     }
 }

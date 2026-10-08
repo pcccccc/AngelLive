@@ -239,6 +239,8 @@ public struct LiveQualityDetail: Codable, Sendable {
     public var requestContext: [String: String]?
     /// 资源侧声明的流特性/能力需求，宿主据此映射播放计划。
     public var playbackHints: LivePlaybackHints?
+    /// 资源侧声明的解密要求；缺省时按未加密流处理。
+    public var decryption: LivePlaybackDecryption? = nil
 }
 
 public struct LiveCategoryModel: Codable, Sendable {
