@@ -10,7 +10,41 @@ import AngelLiveCore
 import AngelLiveDependencies
 import Combine
 
+/// FullUI routes explicitly declared episodic content to its own player surface.
 struct DetailPlayerView: View {
+    let viewModel: RoomInfoViewModel
+    let categoryRooms: [LiveModel]
+    let canLoadMoreCategoryRooms: () -> Bool
+    let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
+
+    init(
+        viewModel: RoomInfoViewModel,
+        categoryRooms: [LiveModel] = [],
+        canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
+        onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil
+    ) {
+        self.viewModel = viewModel
+        self.categoryRooms = categoryRooms
+        self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
+        self.onLoadMoreCategoryRooms = onLoadMoreCategoryRooms
+    }
+
+    var body: some View {
+        if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
+            ShortDramaPlayerView(room: viewModel.currentRoom)
+                .id(viewModel.currentRoom.id)
+        } else {
+            LiveDetailPlayerView(
+                viewModel: viewModel,
+                categoryRooms: categoryRooms,
+                canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
+                onLoadMoreCategoryRooms: onLoadMoreCategoryRooms
+            )
+        }
+    }
+}
+
+struct LiveDetailPlayerView: View {
     @State var viewModel: RoomInfoViewModel
     let categoryRooms: [LiveModel]
     let canLoadMoreCategoryRooms: () -> Bool

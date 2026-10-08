@@ -428,6 +428,10 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
     public let externalRoomURLTemplate: String?
     /// 展示用主题色，格式如 #RRGGBB 或 #AARRGGBB。
     public let themeColor: String?
+    /// 内容类型；只有显式 shortDrama 声明才进入短剧播放页。
+    public let contentKind: String?
+    /// 分集来源；qualityList 表示单线路的 qualitys 数组承载分集。
+    public let episodeSelection: String?
 
     public init(
         favoriteIdentityKey: String? = nil,
@@ -436,7 +440,9 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
         supportsLiveEndPolling: Bool? = nil,
         playableLiveStates: [String]? = nil,
         externalRoomURLTemplate: String? = nil,
-        themeColor: String? = nil
+        themeColor: String? = nil,
+        contentKind: String? = nil,
+        episodeSelection: String? = nil
     ) {
         self.favoriteIdentityKey = favoriteIdentityKey
         self.preserveFavoriteRoomInfoOnRefresh = preserveFavoriteRoomInfoOnRefresh
@@ -445,6 +451,8 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
         self.playableLiveStates = playableLiveStates
         self.externalRoomURLTemplate = externalRoomURLTemplate
         self.themeColor = themeColor
+        self.contentKind = contentKind
+        self.episodeSelection = episodeSelection
     }
 }
 

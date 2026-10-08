@@ -205,6 +205,10 @@ struct LiveRoomCard: View {
     }
 
     private func handleTap() {
+        if ShortDramaRouting.isShortDrama(room) {
+            showPlayerBinding.wrappedValue = true
+            return
+        }
         switch liveCheckMode {
         case .none:
             // 房间列表：直接进入，不判断

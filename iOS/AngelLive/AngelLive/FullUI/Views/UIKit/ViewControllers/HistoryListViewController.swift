@@ -258,6 +258,11 @@ extension HistoryListViewController: UICollectionViewDelegate {
             return
         }
         let room = watchList[indexPath.item]
+        if ShortDramaRouting.isShortDrama(room) {
+            navigationState.navigate(to: room)
+            collectionView.deselectItem(at: indexPath, animated: true)
+            return
+        }
         // mode = .remote:异步请求 API 查询直播状态
         Task { @MainActor [weak self] in
             guard let self else { return }
