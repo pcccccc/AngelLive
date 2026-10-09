@@ -717,17 +717,7 @@ struct PlayerContentView: View {
               playerLayer.url == expectedURL else { return false }
         if hasDetectedSize { return true }
 
-        let player = playerLayer.player
-        guard player.isReadyToPlay,
-              let videoTrack = player.tracks(mediaType: .video).first(where: { $0.isEnabled }) else {
-            return false
-        }
-        let trackSize = videoTrack.naturalSize
-        let naturalSize = player.naturalSize
-        guard trackSize.width.isFinite, trackSize.height.isFinite,
-              trackSize.width > 1, trackSize.height > 1,
-              naturalSize.width.isFinite, naturalSize.height.isFinite,
-              naturalSize.width > 1, naturalSize.height > 1 else { return false }
+        guard let naturalSize = PlayerVideoGeometry.readyNaturalSize(of: playerLayer) else { return false }
 
         // 轨道尺寸证明媒体信息已就绪；播放器尺寸保留内核对旋转元数据的处理。
         let ratio = naturalSize.width / naturalSize.height

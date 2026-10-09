@@ -21,10 +21,17 @@ struct ShortDramaPlayerView: View {
     @State private var isPlaying = false
     @State private var currentTime = 0.0
     @State private var duration = 0.0
+    @State private var videoNaturalSize: CGSize?
     @State private var seekValue = 0.0
     @State private var isSeeking = false
     @State private var playbackRate: Float = 1
     @State private var panel: ShortDramaPanel?
+    @State private var latestPanelMetrics: ShortDramaPanelMetrics?
+    @State private var panelVisibleHeight: CGFloat = 0
+    @State private var panelPresentationOpacity = 0.0
+    @State private var panelTargetDetent: ShortDramaPanelDetent = .medium
+    @State private var panelDragStartHeight: CGFloat?
+    @State private var panelDragStartDetent: ShortDramaPanelDetent?
     @State private var resumeAfterPanel = false
     @State private var resumeSelectedEpisodeAfterPanel = false
     @State private var panelPlaybackID: UUID?
@@ -43,11 +50,10 @@ struct ShortDramaPlayerView: View {
     @State private var episodeSwipeToken = UUID()
     @State private var episodeSwipeHoldActive = false
     @State private var episodeSwipeHoldTask: Task<Void, Never>?
-    @State private var panelHeaderDragOffset: CGFloat = 0
-    @State private var panelHeaderDragActive = false
-    @State private var panelHeaderDismissalAnimating = false
     @State private var panelAnimationToken = UUID()
     @ScaledMetric(relativeTo: .headline) private var titleFontSize: CGFloat = 17
+    @ScaledMetric(relativeTo: .caption) private var quickRateDiameter: CGFloat = 44
+    @ScaledMetric(relativeTo: .caption) private var quickRateLabelSize: CGFloat = 13
     @AccessibilityFocusState private var accessibilityFocus: ShortDramaAccessibilityFocus?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -61,85 +67,61 @@ struct ShortDramaPlayerView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            let safeInsets = geometry.safeAreaInsets
+            let fullSize = CGSize(
+                width: geometry.size.width + safeInsets.leading + safeInsets.trailing,
+                height: geometry.size.height + safeInsets.top + safeInsets.bottom
+            )
+            let panelMetrics = ShortDramaPanelMetrics(
+                containerSize: CGSize(width: fullSize.width, height: geometry.size.height),
+                safeTop: safeInsets.top,
+                safeBottom: safeInsets.bottom,
+                isPad: UIDevice.current.userInterfaceIdiom == .pad
+            )
+
+            ZStack(alignment: .topLeading) {
                 Color.black.ignoresSafeArea()
 
-                playbackSurface
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .offset(y: playbackSurfaceOffset)
-                    .opacity(playbackSurfaceOpacity)
-                    .accessibilityHidden(panel != nil || panelTransitioning)
-
-                episodeInteractionLayer(availableHeight: geometry.size.height)
-                    .allowsHitTesting(
-                        panel == nil
-                            && !panelTransitioning
-                            && !episodeSwipeTransitioning
-                            && isCurrentPlaybackReady
-                    )
-                    .accessibilityHidden(
-                        panel != nil
-                            || panelTransitioning
-                            || !isCurrentPlaybackReady
-                    )
-
-                if model.errorMessage == nil,
-                   let playbackID = model.playback?.id,
-                   (!playerController.wantsPlayback || (readyPlaybackID == playbackID && !isPlaying)),
-                   !episodeSwipeHoldActive,
-                   !episodeSwipeTransitioning {
-                    if panel == nil && !panelTransitioning {
-                        Button(action: togglePlayback) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 21, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 56, height: 56)
-                                .background { controlGlassCircle }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(model.hasFinished ? "重播本集" : "继续播放")
-                        .accessibilityHint(model.hasFinished ? "双击从头重播本集" : "双击从当前进度继续播放")
-                        .zIndex(2)
-                        .accessibilityHidden(panel != nil || panelTransitioning)
+                VStack(spacing: 0) {
+                    GeometryReader { videoGeometry in
+                        videoRegion(
+                            size: videoGeometry.size,
+                            metrics: panelMetrics,
+                            safeInsets: safeInsets
+                        )
                     }
-                }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if let boundaryMessage {
-                    Text(boundaryMessage)
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(.black.opacity(0.66), in: Capsule())
-                        .accessibilityAddTraits(.updatesFrequently)
-                        .transition(reduceMotion ? .identity : .opacity)
-                        .zIndex(3)
+                    bottomControls(metrics: panelMetrics, safeInsets: safeInsets)
+                        .opacity(panel != nil || panelTransitioning ? 0 : 1)
+                        .allowsHitTesting(
+                            panel == nil
+                                && !panelTransitioning
+                                && !episodeSwipeHoldActive
+                                && !episodeSwipeTransitioning
+                        )
+                        .accessibilityHidden(
+                            panel != nil
+                                || panelTransitioning
+                                || episodeSwipeHoldActive
+                                || episodeSwipeTransitioning
+                        )
                 }
+                .frame(width: fullSize.width, height: fullSize.height, alignment: .topLeading)
+                .offset(x: -safeInsets.leading, y: -safeInsets.top)
+
+                panelOverlay(metrics: panelMetrics)
+                    .zIndex(10)
             }
-            .overlay(alignment: .top) {
-                topControls
-                    .padding(.top, max(8, geometry.safeAreaInsets.top + 4))
-                    .padding(.horizontal, 16)
-                    .allowsHitTesting(panel == nil && !panelTransitioning && !episodeSwipeHoldActive && !episodeSwipeTransitioning)
-                    .accessibilityHidden(panel != nil || panelTransitioning || episodeSwipeHoldActive || episodeSwipeTransitioning)
-            }
-            .overlay(alignment: .bottom) {
-                bottomControls(bottomInset: geometry.safeAreaInsets.bottom)
-                    .opacity(panel != nil || panelTransitioning ? 0 : 1)
-                    .allowsHitTesting(panel == nil && !panelTransitioning && !episodeSwipeHoldActive && !episodeSwipeTransitioning)
-                    .accessibilityHidden(panel != nil || panelTransitioning || episodeSwipeHoldActive || episodeSwipeTransitioning)
-            }
-            .overlay {
-                if let selectedPanel = panel {
-                    panelOverlay(selectedPanel, geometry: geometry)
-                        .zIndex(10)
-                }
-            }
-            .ignoresSafeArea()
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .background(Color.black)
+            .onAppear {
+                latestPanelMetrics = panelMetrics
+            }
             .onChange(of: geometry.size) { _, _ in
+                latestPanelMetrics = panelMetrics
                 cancelEpisodeSwipe()
-                cancelPanelHeaderDrag()
+                cancelPanelDetentDrag(using: panelMetrics)
             }
         }
         .background(Color.black.ignoresSafeArea())
@@ -149,7 +131,11 @@ struct ShortDramaPlayerView: View {
             guard let newValue else { return }
             Task { @MainActor in
                 await Task.yield()
-                accessibilityFocus = newValue == ShortDramaPanel.episodes.id ? .episodesTitle : .settingsTitle
+                switch newValue {
+                case ShortDramaPanel.episodes.id: accessibilityFocus = .episodesTitle
+                case ShortDramaPanel.settings.id: accessibilityFocus = .settingsTitle
+                default: break
+                }
             }
         }
         .task {
@@ -165,6 +151,9 @@ struct ShortDramaPlayerView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             handleScenePhase(phase)
+            if phase != .active, let latestPanelMetrics {
+                cancelPanelDetentDrag(using: latestPanelMetrics)
+            }
         }
         .onChange(of: episodeSwipeGesture) { oldValue, newValue in
             if !newValue.isVerticalLocked, episodeSwipeAwaitingGestureReset {
@@ -191,7 +180,10 @@ struct ShortDramaPlayerView: View {
                 )
             }
         }
-        .onChange(of: model.playback?.id) { _, newValue in
+        .onChange(of: model.playback?.id) { oldValue, newValue in
+            if oldValue != newValue {
+                videoNaturalSize = nil
+            }
             if readyPlaybackID != newValue {
                 readyPlaybackID = nil
                 isPlaying = false
@@ -204,8 +196,11 @@ struct ShortDramaPlayerView: View {
             isLeavingPage = true
             panelAnimationToken = UUID()
             panelTransitioning = false
-            panelHeaderDragOffset = 0
-            panelHeaderDragActive = false
+            panelDragStartHeight = nil
+            panelDragStartDetent = nil
+            panelVisibleHeight = 0
+            panelPresentationOpacity = 0
+            panelTargetDetent = .closed
             invalidateEpisodeSwipe()
             model.cancel()
             playerController.stop()
@@ -213,8 +208,88 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private var playbackSurface: some View {
+    private func videoRegion(
+        size: CGSize,
+        metrics: ShortDramaPanelMetrics,
+        safeInsets: EdgeInsets
+    ) -> some View {
         ZStack {
+            playbackSurface(in: size)
+                .offset(y: playbackSurfaceOffset)
+                .opacity(playbackSurfaceOpacity)
+                .accessibilityHidden(panel != nil || panelTransitioning)
+
+            episodeInteractionLayer(availableHeight: size.height)
+                .allowsHitTesting(
+                    panel == nil
+                        && !panelTransitioning
+                        && !episodeSwipeTransitioning
+                        && isCurrentPlaybackReady
+                )
+                .accessibilityHidden(
+                    panel != nil
+                        || panelTransitioning
+                        || !isCurrentPlaybackReady
+                )
+
+            if model.errorMessage == nil,
+               let playbackID = model.playback?.id,
+               (!playerController.wantsPlayback || (readyPlaybackID == playbackID && !isPlaying)),
+               !episodeSwipeHoldActive,
+               !episodeSwipeTransitioning,
+               panel == nil,
+               !panelTransitioning {
+                Button(action: togglePlayback) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 56, height: 56)
+                        .background { controlGlassCircle }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(model.hasFinished ? "重播本集" : "继续播放")
+                .accessibilityHint(model.hasFinished ? "双击从头重播本集" : "双击从当前进度继续播放")
+                .zIndex(2)
+            }
+
+            if let boundaryMessage {
+                Text(boundaryMessage)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.black.opacity(0.66), in: Capsule())
+                    .accessibilityAddTraits(.updatesFrequently)
+                    .transition(reduceMotion ? .identity : .opacity)
+                    .zIndex(3)
+            }
+        }
+        .overlay(alignment: .top) {
+            topControls(metrics: metrics)
+                .padding(.top, max(8, safeInsets.top + 4))
+                .padding(.leading, 16 + safeInsets.leading)
+                .padding(.trailing, 16 + safeInsets.trailing)
+                .allowsHitTesting(
+                    panel == nil
+                        && !panelTransitioning
+                        && !episodeSwipeHoldActive
+                        && !episodeSwipeTransitioning
+                )
+                .accessibilityHidden(
+                    panel != nil
+                        || panelTransitioning
+                        || episodeSwipeHoldActive
+                        || episodeSwipeTransitioning
+                )
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    private func playbackSurface(in viewport: CGSize) -> some View {
+        let fittedSize = fittedVideoSize(in: viewport)
+
+        return ZStack(alignment: .top) {
             coverBackground
 
             if let playback = model.playback {
@@ -226,13 +301,22 @@ struct ShortDramaPlayerView: View {
                     controller: playerController,
                     playbackSession: playbackSession,
                     onReady: handlePlaybackReady,
-                    onPlayingChanged: handlePlayingChanged
+                    onPlayingChanged: handlePlayingChanged,
+                    onVideoSize: { playbackID, size in
+                        guard model.playback?.id == playbackID,
+                              playerController.playbackID == playbackID else { return }
+                        if videoNaturalSize != size {
+                            videoNaturalSize = size
+                        }
+                    }
                 )
                 .id(playback.id)
-                .opacity(readyPlaybackID == playback.id ? 1 : 0)
+                .frame(width: fittedSize.width, height: fittedSize.height)
+                .opacity(readyPlaybackID == playback.id && videoNaturalSize != nil ? 1 : 0)
                 .transition(.opacity)
             }
-
+        }
+        .overlay {
             if model.errorMessage != nil {
                 loadState
                     .transition(.opacity)
@@ -244,17 +328,30 @@ struct ShortDramaPlayerView: View {
                     .transition(.opacity)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.black)
         .animation(.easeOut(duration: 0.15), value: model.playback?.id)
         .animation(.easeOut(duration: 0.15), value: readyPlaybackID)
+    }
+
+    private func fittedVideoSize(in viewport: CGSize) -> CGSize {
+        guard let videoNaturalSize,
+              videoNaturalSize.width.isFinite, videoNaturalSize.height.isFinite,
+              videoNaturalSize.width > 1, videoNaturalSize.height > 1 else {
+            return viewport
+        }
+
+        let aspectRatio = videoNaturalSize.width / videoNaturalSize.height
+        guard aspectRatio.isFinite, aspectRatio > 0 else { return viewport }
+        let width = min(viewport.width, viewport.height * aspectRatio)
+        return CGSize(width: width, height: width / aspectRatio)
     }
 
     private var isPreparingPlayback: Bool {
         guard model.errorMessage == nil else { return false }
         if model.isLoading { return true }
         guard let playbackID = model.playback?.id else { return false }
-        return readyPlaybackID != playbackID
+        return readyPlaybackID != playbackID || videoNaturalSize == nil
     }
 
     private var isCurrentPlaybackReady: Bool {
@@ -650,7 +747,7 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var topControls: some View {
+    private func topControls(metrics: ShortDramaPanelMetrics) -> some View {
         HStack {
             Button {
                 dismiss()
@@ -668,7 +765,7 @@ struct ShortDramaPlayerView: View {
             Spacer()
 
             Button {
-                present(.settings)
+                present(.settings, metrics: metrics)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 18, weight: .semibold))
@@ -683,67 +780,64 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private func bottomControls(bottomInset: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: .black.opacity(0.56), location: 0.42),
-                    .init(color: .black.opacity(0.92), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 180)
-            .overlay(alignment: .bottom) {
-                VStack(spacing: 5) {
-                    progressControl
-                    episodeMetadata
-                    episodeDock
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, max(bottomInset, 8))
+    private func bottomControls(metrics: ShortDramaPanelMetrics, safeInsets: EdgeInsets) -> some View {
+        VStack(spacing: 5) {
+            progressControl
+            episodeMetadata
+            HStack(spacing: 8) {
+                episodeDock(metrics: metrics)
+                quickRateButton
             }
         }
-        .ignoresSafeArea()
+        .padding(.leading, 16 + safeInsets.leading)
+        .padding(.trailing, 16 + safeInsets.trailing)
+        .padding(.bottom, max(metrics.safeBottom, 8))
+        .frame(maxWidth: .infinity)
+        .background(Color.black)
         .accessibilityElement(children: .contain)
     }
 
     private var progressControl: some View {
-        HStack(spacing: 8) {
-            if !isPlaying || isSeeking {
-                Text(formatTime(isSeeking ? seekValue : currentTime))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.84))
-                    .frame(minWidth: 34, alignment: .leading)
-                    .accessibilityHidden(true)
-            }
-
-            Slider(
+        ZStack(alignment: .bottom) {
+            ShortDramaProgressSlider(
                 value: $seekValue,
-                in: 0...max(duration, 1),
+                range: 0...max(duration, 1),
+                isEnabled: canSeek,
+                accessibilityLabel: "播放进度",
+                accessibilityValue: "\(formatTime(isSeeking ? seekValue : currentTime)) / \(formatTime(duration))",
                 onEditingChanged: { editing in
                     isSeeking = editing
-                    if !editing, canSeek {
-                        playerController.seek(to: min(max(seekValue, 0), duration), autoPlay: isPlaying)
-                    }
+                },
+                onCommit: { value in
+                    guard canSeek else { return }
+                    playerController.seek(to: min(max(value, 0), duration), autoPlay: isPlaying)
                 }
             )
-            .tint(.white)
             .frame(height: 44)
-            .accessibilityLabel("播放进度")
-            .accessibilityValue("\(formatTime(currentTime)) / \(formatTime(duration))")
-            .disabled(!canSeek)
 
             if !isPlaying || isSeeking {
-                Text(formatTime(duration))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.68))
-                    .frame(minWidth: 34, alignment: .trailing)
-                    .accessibilityHidden(true)
+                HStack(spacing: 8) {
+                    Text(formatTime(isSeeking ? seekValue : currentTime))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.84))
+                        .frame(minWidth: 34, alignment: .leading)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 0)
+                    Text(formatTime(duration))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.68))
+                        .frame(minWidth: 34, alignment: .trailing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .padding(.horizontal, 4)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
         .onChange(of: currentTime) { _, newValue in
             if !isSeeking { seekValue = min(max(newValue, 0), max(duration, 1)) }
         }
@@ -768,9 +862,9 @@ struct ShortDramaPlayerView: View {
         .frame(minHeight: 30)
     }
 
-    private var episodeDock: some View {
+    private func episodeDock(metrics: ShortDramaPanelMetrics) -> some View {
         Button {
-            present(.episodes)
+            present(.episodes, metrics: metrics)
         } label: {
             HStack(spacing: 8) {
                 Label("选集", systemImage: "list.bullet")
@@ -797,6 +891,33 @@ struct ShortDramaPlayerView: View {
         .accessibilityFocused($accessibilityFocus, equals: .episodesTrigger)
     }
 
+    private var quickRateButton: some View {
+        let rateText = ShortDramaRateLabel.text(for: playbackRate)
+        let nextRateText = ShortDramaRateLabel.text(for: ShortDramaRateLabel.nextCycleRate(after: playbackRate))
+        let diameter = min(60, max(44, quickRateDiameter))
+        let labelSize = min(quickRateLabelSize, 13 * diameter / 44)
+
+        return Button {
+            playbackRate = ShortDramaRateLabel.nextCycleRate(after: playbackRate)
+        } label: {
+            Text(rateText)
+                .font(.system(size: labelSize, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .contentTransition(.numericText())
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: playbackRate)
+                .padding(.horizontal, 4)
+                .frame(width: diameter, height: diameter)
+                .background { controlGlassCircle }
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("倍速，当前\(rateText)")
+        .accessibilityHint("点按切换倍速至\(nextRateText)")
+        .accessibilityFocused($accessibilityFocus, equals: .speedTrigger)
+    }
+
     private var episodeDockAccessibilityLabel: String {
         guard let episode = model.selectedEpisode else { return "选择剧集" }
         return "选集，第 \(episode.number) 集，可播 \(model.episodes.count) 集"
@@ -807,163 +928,165 @@ struct ShortDramaPlayerView: View {
     }
 
     @ViewBuilder
-    private func panelContent(
-        _ selectedPanel: ShortDramaPanel,
-        safeBottom: CGFloat,
-        panelHeight: CGFloat,
-        panelWidth: CGFloat
-    ) -> some View {
-        switch selectedPanel {
-        case .episodes:
-            ShortDramaEpisodesSheet(
-                room: room,
-                model: model,
-                onClose: dismissPanel,
-                onSelect: chooseEpisode,
-                onHeaderDragChanged: { updatePanelHeaderDrag($0) },
-                onHeaderDragEnded: { finishPanelHeaderDrag($0, panelHeight: panelHeight) },
-                availableWidth: panelWidth,
-                accessibilityFocus: $accessibilityFocus
-            )
-            .padding(.bottom, max(safeBottom, 12) + 12)
-        case .settings:
-            ShortDramaSettingsSheet(
-                playbackRate: $playbackRate,
-                autoplay: Binding(get: { model.autoplay }, set: { model.autoplay = $0 }),
-                onClose: dismissPanel,
-                onHeaderDragChanged: { updatePanelHeaderDrag($0) },
-                onHeaderDragEnded: { finishPanelHeaderDrag($0, panelHeight: panelHeight) },
-                accessibilityFocus: $accessibilityFocus
-            )
-            .padding(.bottom, max(safeBottom, 12) + 12)
-        }
-    }
-
-    private func panelOverlay(_ selectedPanel: ShortDramaPanel, geometry: GeometryProxy) -> some View {
-        let safeArea = geometry.safeAreaInsets
-        let screenHeight = geometry.size.height + safeArea.top + safeArea.bottom
-        let requestedHeight = dynamicTypeSize.isAccessibilitySize
-            ? screenHeight * 0.82
-            : max(420, screenHeight * 0.52)
-        let panelHeight = min(requestedHeight, max(0, screenHeight - safeArea.top - 12))
-        let panelWidth = UIDevice.current.userInterfaceIdiom == .pad
-            ? min(geometry.size.width, 560)
-            : geometry.size.width
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 28,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 28,
-            style: .continuous
-        )
-
-        return ZStack(alignment: .bottom) {
-            Color.black.opacity(0.28 * max(0, 1 - panelHeaderDragOffset / max(panelHeight, 1)))
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture(perform: dismissPanel)
-                .accessibilityHidden(true)
-                .transition(.opacity)
-
-            VStack(spacing: 0) {
-                Capsule()
-                    .fill(.white.opacity(0.34))
-                    .frame(width: 36, height: 4)
-                    .padding(.top, 10)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .panelHeaderDrag(onChanged: updatePanelHeaderDrag) {
-                        finishPanelHeaderDrag($0, panelHeight: panelHeight)
-                    }
-                    .accessibilityHidden(true)
-
-                panelContent(
-                    selectedPanel,
-                    safeBottom: safeArea.bottom,
-                    panelHeight: panelHeight,
-                    panelWidth: panelWidth
+    private func panelContent(metrics: ShortDramaPanelMetrics) -> some View {
+        if let selectedPanel = panel {
+            switch selectedPanel {
+            case .episodes:
+                ShortDramaEpisodesPanelContent(
+                    room: room,
+                    model: model,
+                    onSelect: chooseEpisode,
+                    onHeaderDragChanged: { updatePanelDetentDrag($0, metrics: metrics) },
+                    onHeaderDragEnded: { finishPanelDetentDrag($0, metrics: metrics) },
+                    onHeaderDragCancelled: { cancelActivePanelDetentDrag(using: metrics) },
+                    availableWidth: metrics.panelWidth,
+                    animateCurrentEpisode: resumeAfterPanel
+                        && !model.hasFinished
+                        && scenePhase == .active
+                        && !reduceMotion,
+                    accessibilityFocus: $accessibilityFocus
                 )
-                    .frame(maxHeight: .infinity, alignment: .top)
+                .padding(.bottom, max(metrics.safeBottom, 12) + 12)
+            case .settings:
+                ShortDramaSettingsPanelContent(
+                    playbackRate: $playbackRate,
+                    autoplay: Binding(get: { model.autoplay }, set: { model.autoplay = $0 }),
+                    availableWidth: metrics.panelWidth,
+                    onHeaderDragChanged: { updatePanelDetentDrag($0, metrics: metrics) },
+                    onHeaderDragEnded: { finishPanelDetentDrag($0, metrics: metrics) },
+                    onHeaderDragCancelled: { cancelActivePanelDetentDrag(using: metrics) },
+                    accessibilityFocus: $accessibilityFocus
+                )
+                .padding(.bottom, max(metrics.safeBottom, 12) + 12)
             }
-            .frame(width: panelWidth, height: panelHeight, alignment: .top)
-            .contentShape(shape)
-            .background {
-                if #available(iOS 26.0, *) {
-                    Color.clear.glassEffect(.regular, in: shape)
-                } else {
-                    shape.fill(.regularMaterial)
-                }
-            }
-            .clipShape(shape)
-            .offset(y: reduceMotion ? 0 : panelHeaderDragOffset)
-            .accessibilityElement(children: .contain)
-            .accessibilityAddTraits(.isModal)
-            .accessibilityAction(.escape) {
-                dismissPanel()
-            }
-            .onKeyPress(.escape) {
-                dismissPanel()
-                return .handled
-            }
-            .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .ignoresSafeArea()
     }
 
-    private func updatePanelHeaderDrag(_ value: DragGesture.Value) {
+    private func panelOverlay(metrics: ShortDramaPanelMetrics) -> some View {
+        let dimOpacity = panel == nil ? 0 : 0.28 * panelPresentationOpacity
+
+        return ShortDramaDetentPanel(
+            isPresented: panel != nil,
+            isInteractive: !panelTransitioning,
+            visibleHeight: panelVisibleHeight,
+            presentationOpacity: panelPresentationOpacity,
+            width: metrics.panelWidth,
+            dimOpacity: dimOpacity,
+            closeAccessibilityLabel: panel?.closeAccessibilityLabel ?? "关闭面板",
+            onDismiss: dismissPanel,
+            onToggleDetent: { togglePanelDetent(using: metrics) },
+            onDragChanged: { updatePanelDetentDrag($0, metrics: metrics) },
+            onDragEnded: { finishPanelDetentDrag($0, metrics: metrics) },
+            onDragCancelled: { cancelActivePanelDetentDrag(using: metrics) }
+        ) {
+            panelContent(metrics: metrics)
+        }
+    }
+
+    private func updatePanelDetentDrag(_ value: DragGesture.Value, metrics: ShortDramaPanelMetrics) {
         guard panel != nil,
               !panelTransitioning,
-              !isLeavingPage,
-              value.translation.height > 0,
-              abs(value.translation.height) > abs(value.translation.width) * 1.3 else { return }
-        panelHeaderDragActive = true
-        panelHeaderDragOffset = max(0, value.translation.height)
+              !isLeavingPage else { return }
+
+        if panelDragStartHeight == nil {
+            guard abs(value.translation.height) > abs(value.translation.width) * 1.3 else { return }
+            panelDragStartHeight = panelVisibleHeight
+            panelDragStartDetent = panelTargetDetent
+        }
+        guard let startHeight = panelDragStartHeight,
+              let startDetent = panelDragStartDetent else { return }
+        let minimumHeight = startDetent == .large && metrics.hasDistinctDetents ? metrics.mediumHeight : 0
+        let maximumHeight = metrics.largeHeight
+        withTransaction(Transaction(animation: nil)) {
+            panelVisibleHeight = min(maximumHeight, max(minimumHeight, startHeight - value.translation.height))
+        }
     }
 
-    private func finishPanelHeaderDrag(_ value: DragGesture.Value, panelHeight: CGFloat) {
-        guard panelHeaderDragActive,
+    private func finishPanelDetentDrag(_ value: DragGesture.Value, metrics: ShortDramaPanelMetrics) {
+        guard let startingDetent = panelDragStartDetent,
+              panel != nil,
+              !panelTransitioning,
+              !isLeavingPage else {
+            panelDragStartHeight = nil
+            panelDragStartDetent = nil
+            return
+        }
+
+        panelDragStartHeight = nil
+        panelDragStartDetent = nil
+        let translation = value.translation.height
+        let downwardFling = translation >= 24 && value.velocity.height >= 650
+        let upwardFling = translation <= -24 && value.velocity.height <= -650
+        let detentThreshold = min(100, max(1, (metrics.largeHeight - metrics.mediumHeight) * 0.35))
+
+        switch startingDetent {
+        case .medium:
+            if metrics.hasDistinctDetents && (translation <= -detentThreshold || upwardFling) {
+                settlePanel(at: .large, metrics: metrics)
+            } else if translation >= 80 || downwardFling {
+                dismissPanel()
+            } else {
+                settlePanel(at: .medium, metrics: metrics)
+            }
+        case .large:
+            if metrics.hasDistinctDetents && (translation >= detentThreshold || downwardFling) {
+                settlePanel(at: .medium, metrics: metrics)
+            } else if !metrics.hasDistinctDetents && (translation >= 80 || downwardFling) {
+                dismissPanel()
+            } else {
+                settlePanel(at: metrics.hasDistinctDetents ? .large : .medium, metrics: metrics)
+            }
+        case .closed:
+            panelVisibleHeight = 0
+        }
+    }
+
+    private func cancelPanelDetentDrag(using metrics: ShortDramaPanelMetrics) {
+        panelDragStartHeight = nil
+        panelDragStartDetent = nil
+        guard panel != nil, panelTargetDetent != .closed else { return }
+        withTransaction(Transaction(animation: nil)) {
+            panelVisibleHeight = panelTargetDetent.height(using: metrics)
+        }
+    }
+
+    private func cancelActivePanelDetentDrag(using metrics: ShortDramaPanelMetrics) {
+        guard let startingDetent = panelDragStartDetent,
               panel != nil,
               !panelTransitioning,
               !isLeavingPage else { return }
-        panelHeaderDragActive = false
-        let velocityCloses = value.translation.height > 0 && value.velocity.height >= 650
-        guard value.translation.height >= 80 || velocityCloses else {
-            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .spring(duration: 0.28, bounce: 0.08)) {
-                panelHeaderDragOffset = 0
-            }
-            return
-        }
-        if reduceMotion {
-            dismissPanel()
-            return
-        }
-        dismissPanelFromHeaderDrag(
-            panelHeight: panelHeight,
-            startingOffset: max(panelHeaderDragOffset, value.translation.height)
-        )
+        panelDragStartHeight = nil
+        panelDragStartDetent = nil
+        settlePanel(at: startingDetent, metrics: metrics)
     }
 
-    private func cancelPanelHeaderDrag() {
-        if panelHeaderDismissalAnimating {
-            panelAnimationToken = UUID()
-            panelHeaderDismissalAnimating = false
+    private func togglePanelDetent(using metrics: ShortDramaPanelMetrics) {
+        guard !panelTransitioning, metrics.hasDistinctDetents else { return }
+        settlePanel(at: panelTargetDetent == .large ? .medium : .large, metrics: metrics)
+    }
+
+    private func settlePanel(at detent: ShortDramaPanelDetent, metrics: ShortDramaPanelMetrics) {
+        guard panel != nil else { return }
+        panelTransitioning = true
+        panelTargetDetent = detent
+        panelAnimationToken = UUID()
+        let token = panelAnimationToken
+        withAnimation(panelDetentAnimation, completionCriteria: .logicallyComplete) {
+            panelVisibleHeight = detent.height(using: metrics)
+        } completion: {
+            guard panelAnimationToken == token, !isLeavingPage else { return }
             panelTransitioning = false
         }
-        guard panelHeaderDragActive || panelHeaderDragOffset != 0 else { return }
-        panelHeaderDragActive = false
-        withTransaction(Transaction(animation: nil)) {
-            panelHeaderDragOffset = 0
-        }
     }
 
-    private func present(_ selectedPanel: ShortDramaPanel) {
+    private func present(_ selectedPanel: ShortDramaPanel, metrics: ShortDramaPanelMetrics) {
         guard panel == nil,
               !panelTransitioning,
               !episodeSwipeHoldActive,
               !episodeSwipeTransitioning else { return }
         panelAnimationToken = UUID()
-        panelHeaderDragOffset = 0
+        panelDragStartHeight = nil
+        panelDragStartDetent = nil
         panelTransitioning = true
         resumeAfterPanel = playerController.wantsPlayback && scenePhase == .active
         panelPlaybackID = model.playback?.id
@@ -972,8 +1095,21 @@ struct ShortDramaPlayerView: View {
         Task { @MainActor in
             await model.setEpisodesPresented(true)
             guard !isLeavingPage, panelAnimationToken == token else { return }
-            withAnimation(panelOpenAnimation) {
-                panel = selectedPanel
+            let currentMetrics = latestPanelMetrics ?? metrics
+            panel = selectedPanel
+            panelTargetDetent = dynamicTypeSize.isAccessibilitySize && currentMetrics.hasDistinctDetents ? .large : .medium
+            if reduceMotion {
+                withTransaction(Transaction(animation: nil)) {
+                    panelVisibleHeight = panelTargetDetent.height(using: currentMetrics)
+                }
+            }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.28), completionCriteria: .logicallyComplete) {
+                if !reduceMotion {
+                    panelVisibleHeight = panelTargetDetent.height(using: currentMetrics)
+                }
+                panelPresentationOpacity = 1
+            } completion: {
+                guard panelAnimationToken == token, !isLeavingPage else { return }
                 panelTransitioning = false
             }
         }
@@ -982,38 +1118,22 @@ struct ShortDramaPlayerView: View {
     private func dismissPanel() {
         guard let closingPanel = panel, !panelTransitioning else { return }
         panelTransitioning = true
+        panelTargetDetent = .closed
+        panelDragStartHeight = nil
+        panelDragStartDetent = nil
         panelAnimationToken = UUID()
         let token = panelAnimationToken
-        withAnimation(
-            panelCloseAnimation,
-            completionCriteria: .removed
-        ) {
-            panel = nil
-        } completion: {
-            guard panelAnimationToken == token else { return }
-            Task { @MainActor in
-                await handlePanelDismissal(closedPanel: closingPanel)
+        let animation = reduceMotion ? Animation.easeOut(duration: 0.15) : .smooth(duration: 0.28)
+        withAnimation(animation, completionCriteria: .logicallyComplete) {
+            panelPresentationOpacity = 0
+            if !reduceMotion {
+                panelVisibleHeight = 0
             }
-        }
-    }
-
-    private func dismissPanelFromHeaderDrag(panelHeight: CGFloat, startingOffset: CGFloat) {
-        guard let closingPanel = panel, !panelTransitioning else { return }
-        panelTransitioning = true
-        panelHeaderDismissalAnimating = true
-        panelAnimationToken = UUID()
-        let token = panelAnimationToken
-        withTransaction(Transaction(animation: nil)) {
-            panelHeaderDragOffset = startingOffset
-        }
-        withAnimation(panelCloseAnimation, completionCriteria: .logicallyComplete) {
-            panelHeaderDragOffset = max(panelHeight, startingOffset)
         } completion: {
-            guard panelAnimationToken == token else { return }
-            panelHeaderDismissalAnimating = false
+            guard panelAnimationToken == token, !isLeavingPage else { return }
             withTransaction(Transaction(animation: nil)) {
+                panelVisibleHeight = 0
                 panel = nil
-                panelHeaderDragOffset = 0
             }
             Task { @MainActor in
                 await handlePanelDismissal(closedPanel: closingPanel)
@@ -1024,8 +1144,10 @@ struct ShortDramaPlayerView: View {
     private func handlePanelDismissal(closedPanel: ShortDramaPanel) async {
         guard !isLeavingPage else { return }
         await model.setEpisodesPresented(false)
-        panelHeaderDragOffset = 0
-        panelHeaderDragActive = false
+        panelVisibleHeight = 0
+        panelTargetDetent = .closed
+        panelDragStartHeight = nil
+        panelDragStartDetent = nil
         panelTransitioning = false
         guard !isLeavingPage else { return }
         if resumeSelectedEpisodeAfterPanel {
@@ -1067,7 +1189,10 @@ struct ShortDramaPlayerView: View {
     }
 
     private func restoreAccessibilityFocus(for closedPanel: ShortDramaPanel) {
-        accessibilityFocus = closedPanel == .episodes ? .episodesTrigger : .settingsTrigger
+        switch closedPanel {
+        case .episodes: accessibilityFocus = .episodesTrigger
+        case .settings: accessibilityFocus = .settingsTrigger
+        }
     }
 
     private func chooseEpisode(_ id: String) {
@@ -1088,12 +1213,8 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private var panelOpenAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.15) : .smooth(duration: 0.28)
-    }
-
-    private var panelCloseAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.15) : .easeOut(duration: 0.24)
+    private var panelDetentAnimation: Animation? {
+        reduceMotion ? nil : .smooth(duration: 0.28)
     }
 
     private func togglePlayback() {
@@ -1174,7 +1295,6 @@ struct ShortDramaPlayerView: View {
                 ? resumeAfterPanel || resumeSelectedEpisodeAfterPanel
                 : playerController.wantsPlayback
             cancelEpisodeSwipe()
-            cancelPanelHeaderDrag()
             playerController.pause()
         case .active:
             guard wasPlayingBeforeBackground else { return }
@@ -1223,18 +1343,26 @@ struct ShortDramaPlayerView: View {
     }
 }
 
-private enum ShortDramaAccessibilityFocus: Hashable {
+enum ShortDramaAccessibilityFocus: Hashable {
     case episodesTrigger
     case settingsTrigger
+    case speedTrigger
     case episodesTitle
     case settingsTitle
 }
 
-private enum ShortDramaPanel: String, Identifiable, Equatable {
+enum ShortDramaPanel: String, Identifiable, Equatable {
     case episodes
     case settings
 
     var id: String { rawValue }
+
+    var closeAccessibilityLabel: String {
+        switch self {
+        case .episodes: "关闭选集"
+        case .settings: "关闭播放设置"
+        }
+    }
 }
 
 private struct PlaybackObservationKey: Equatable {
@@ -1248,19 +1376,6 @@ private struct ShortDramaEpisodeSwipeGestureState: Equatable {
     var verticalOffset: CGFloat = 0
 
     static let zero = Self()
-}
-
-private extension View {
-    func panelHeaderDrag(
-        onChanged: @escaping (DragGesture.Value) -> Void,
-        onEnded: @escaping (DragGesture.Value) -> Void
-    ) -> some View {
-        simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged(onChanged)
-                .onEnded(onEnded)
-        )
-    }
 }
 
 @MainActor
@@ -1355,6 +1470,7 @@ private struct ShortDramaPlayerSurface: View {
     let playbackSession: KSPlayerPlaybackSession
     let onReady: (UUID) -> Void
     let onPlayingChanged: (UUID, Bool) -> Void
+    let onVideoSize: (UUID, CGSize) -> Void
 
     @StateObject private var coordinator = KSVideoPlayer.Coordinator()
     @State private var title = ""
@@ -1369,7 +1485,8 @@ private struct ShortDramaPlayerSurface: View {
         controller: ShortDramaPlayerController,
         playbackSession: KSPlayerPlaybackSession,
         onReady: @escaping (UUID) -> Void,
-        onPlayingChanged: @escaping (UUID, Bool) -> Void
+        onPlayingChanged: @escaping (UUID, Bool) -> Void,
+        onVideoSize: @escaping (UUID, CGSize) -> Void
     ) {
         self.playback = playback
         self.playbackRate = playbackRate
@@ -1379,6 +1496,7 @@ private struct ShortDramaPlayerSurface: View {
         self.playbackSession = playbackSession
         self.onReady = onReady
         self.onPlayingChanged = onPlayingChanged
+        self.onVideoSize = onVideoSize
 
         let options = KSOptions()
         options.isAutoPlay = desiredPlayback
@@ -1427,6 +1545,7 @@ private struct ShortDramaPlayerSurface: View {
         playbackSession.activate()
         layer.player.playbackRate = playbackRate
         controller.synchronize(layer: layer, state: state)
+        reportVideoSizeIfReady(from: layer)
         if !didReportReady && (
             state == .bufferFinished
                 || (state == .paused && layer.player.loadState == .playable)
@@ -1435,6 +1554,11 @@ private struct ShortDramaPlayerSurface: View {
             onReady(playback.id)
         }
         onPlayingChanged(playback.id, layer.player.isPlaying)
+    }
+
+    private func reportVideoSizeIfReady(from layer: KSPlayerLayer) {
+        guard let naturalSize = PlayerVideoGeometry.readyNaturalSize(of: layer) else { return }
+        onVideoSize(playback.id, naturalSize)
     }
 
     private func handlePlaybackFinished(_ layer: KSPlayerLayer, _ error: Error?) {
@@ -1448,237 +1572,6 @@ private struct ShortDramaPlayerSurface: View {
     }
 }
 
-private struct ShortDramaEpisodesSheet: View {
-    let room: LiveModel
-    let model: ShortDramaPlaybackModel
-    let onClose: () -> Void
-    let onSelect: (String) -> Void
-    let onHeaderDragChanged: (DragGesture.Value) -> Void
-    let onHeaderDragEnded: (DragGesture.Value) -> Void
-    let availableWidth: CGFloat
-    @AccessibilityFocusState.Binding var accessibilityFocus: ShortDramaAccessibilityFocus?
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private var columns: [GridItem] {
-        let interiorWidth = max(44, availableWidth - 40)
-        let widthBasedCount = max(1, Int((interiorWidth + 8) / 52))
-        let preferredCount = dynamicTypeSize.isAccessibilitySize ? 3 : 5
-        let count = min(preferredCount, widthBasedCount)
-        return Array(repeating: GridItem(.flexible(), spacing: 8), count: count)
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                poster
-                    .frame(width: 60, height: 84)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(room.roomTitle.isEmpty ? room.userName : room.roomTitle)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                        .accessibilityFocused($accessibilityFocus, equals: .episodesTitle)
-                    Text("可播 \(model.episodes.count) 集")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.68))
-                    if let providerName = model.selectedEpisode?.cdn.displayName?.trimmingCharacters(in: .whitespacesAndNewlines), !providerName.isEmpty {
-                        Text(providerName)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineLimit(1)
-                    } else if let note = model.selectionNote {
-                        Text(note)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.72))
-                            .lineLimit(1)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.86))
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.08), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("关闭选集")
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 20)
-            .panelHeaderDrag(onChanged: onHeaderDragChanged, onEnded: onHeaderDragEnded)
-
-            HStack(spacing: 8) {
-                Text("剧集列表")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Spacer()
-                Text("可播 \(model.episodes.count) 集")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.58))
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(model.episodes) { episode in
-                        episodeCell(episode)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-            }
-            .scrollIndicators(.hidden)
-        }
-        .frame(maxWidth: 560, maxHeight: .infinity, alignment: .top)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    @ViewBuilder
-    private var poster: some View {
-        if let url = URL(string: room.roomCover), !room.roomCover.isEmpty {
-            KFImage(url)
-                .resizable()
-                .scaledToFill()
-        } else {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.white.opacity(0.08))
-                .overlay {
-                    Image(systemName: "film")
-                        .font(.system(size: 22, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-        }
-    }
-
-    private func episodeCell(_ episode: ShortDramaEpisode) -> some View {
-        let isSelected = episode.id == model.selectedEpisodeID
-        return Button {
-            onSelect(episode.id)
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Text("\(episode.number)")
-                    .font(.body.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                if isSelected {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(5)
-                        .accessibilityHidden(true)
-                }
-            }
-            .frame(height: 48)
-            .background(isSelected ? .white.opacity(0.12) : .white.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(isSelected ? .white : .white.opacity(0.08), lineWidth: isSelected ? 1.5 : 1)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 10))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(isSelected ? "第 \(episode.number) 集，当前集" : "第 \(episode.number) 集")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-private struct ShortDramaSettingsSheet: View {
-    @Binding var playbackRate: Float
-    @Binding var autoplay: Bool
-    let onClose: () -> Void
-    let onHeaderDragChanged: (DragGesture.Value) -> Void
-    let onHeaderDragEnded: (DragGesture.Value) -> Void
-    @AccessibilityFocusState.Binding var accessibilityFocus: ShortDramaAccessibilityFocus?
-
-    private let rates: [Float] = [0.75, 1, 1.25, 1.5, 2]
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("播放设置")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityFocused($accessibilityFocus, equals: .settingsTitle)
-                Spacer()
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.86))
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.08), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("关闭播放设置")
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 20)
-            .panelHeaderDrag(onChanged: onHeaderDragChanged, onEnded: onHeaderDragEnded)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("播放速度")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.68))
-                        LazyVGrid(columns: columns, spacing: 8) {
-                            ForEach(rates, id: \.self) { rate in
-                                Button {
-                                    playbackRate = rate
-                                } label: {
-                                    Text(rateLabel(rate))
-                                        .font(.body.weight(playbackRate == rate ? .semibold : .regular))
-                                        .foregroundStyle(.white)
-                                        .frame(maxWidth: .infinity, minHeight: 44)
-                                        .background(playbackRate == rate ? .white.opacity(0.14) : .white.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
-                                        .overlay {
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .strokeBorder(playbackRate == rate ? .white.opacity(0.9) : .white.opacity(0.08), lineWidth: 1)
-                                        }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("\(rateLabel(rate)) 倍速")
-                                .accessibilityAddTraits(playbackRate == rate ? .isSelected : [])
-                            }
-                        }
-                    }
-
-                    Toggle(isOn: $autoplay) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("自动连播")
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(.white)
-                            Text("本集结束后播放下一集")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.62))
-                        }
-                    }
-                    .frame(minHeight: 52)
-                    .accessibilityHint("控制本集结束后是否自动播放下一集")
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-            }
-        }
-        .frame(maxWidth: 560, maxHeight: .infinity, alignment: .top)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private func rateLabel(_ rate: Float) -> String {
-        if rate == 1 { return "1×" }
-        return "\(rate)×"
-    }
-}
 #else
 struct ShortDramaPlayerView: View {
     let room: LiveModel

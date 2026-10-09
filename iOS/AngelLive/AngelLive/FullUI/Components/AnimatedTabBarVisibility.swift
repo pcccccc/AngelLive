@@ -50,10 +50,25 @@ private struct FullUITabBarVisibilityBridge: UIViewControllerRepresentable {
                 return
             }
 
-            setTabBarHidden(
+            Self.setTabBarHidden(
                 true,
                 in: context.navigationController,
                 animated: !UIAccessibility.isReduceMotionEnabled
+            )
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+
+            guard #available(iOS 18.0, *),
+                  let context = configureNavigationDestination() else {
+                return
+            }
+
+            Self.setTabBarHidden(
+                Self.containsNavigationMarker(in: context.navigationController.viewControllers),
+                in: context.navigationController,
+                animated: false
             )
         }
 
@@ -67,28 +82,27 @@ private struct FullUITabBarVisibilityBridge: UIViewControllerRepresentable {
 
             let coordinator = context.host.transitionCoordinator
                 ?? context.navigationController.transitionCoordinator
-            let shouldHide = shouldKeepTabBarHidden(
+            let shouldHide = Self.shouldKeepTabBarHidden(
                 in: context.navigationController,
                 coordinator: coordinator
             )
-            setTabBarHidden(
+            Self.setTabBarHidden(
                 shouldHide,
                 in: context.navigationController,
                 animated: !UIAccessibility.isReduceMotionEnabled
             )
 
-            coordinator?.animate(alongsideTransition: nil) { [weak self] transitionContext in
-                guard transitionContext.isCancelled,
-                      let self,
-                      let currentContext = self.navigationContext(),
-                      currentContext.navigationController === context.navigationController else {
+            coordinator?.animate(alongsideTransition: nil) { [weak navigationController = context.navigationController] _ in
+                guard let navigationController else {
                     return
                 }
 
-                self.setTabBarHidden(
-                    true,
-                    in: currentContext.navigationController,
-                    animated: !UIAccessibility.isReduceMotionEnabled
+                // A popped bridge may already be detached; resolve the completed
+                // or cancelled transition from the navigation controller's current stack.
+                Self.setTabBarHidden(
+                    Self.containsNavigationMarker(in: navigationController.viewControllers),
+                    in: navigationController,
+                    animated: false
                 )
             }
         }
@@ -123,7 +137,7 @@ private struct FullUITabBarVisibilityBridge: UIViewControllerRepresentable {
             return nil
         }
 
-        private func shouldKeepTabBarHidden(
+        private static func shouldKeepTabBarHidden(
             in navigationController: UINavigationController,
             coordinator: UIViewControllerTransitionCoordinator?
         ) -> Bool {
@@ -137,7 +151,7 @@ private struct FullUITabBarVisibilityBridge: UIViewControllerRepresentable {
             return containsNavigationMarker(in: stack)
         }
 
-        private func containsNavigationMarker(
+        private static func containsNavigationMarker(
             in stack: [UIViewController],
             through targetIndex: Int? = nil
         ) -> Bool {
@@ -153,14 +167,14 @@ private struct FullUITabBarVisibilityBridge: UIViewControllerRepresentable {
             return false
         }
 
-        private func containsNavigationMarker(in controller: UIViewController) -> Bool {
+        private static func containsNavigationMarker(in controller: UIViewController) -> Bool {
             controller.children.contains { child in
                 child is Controller || containsNavigationMarker(in: child)
             }
         }
 
         @available(iOS 18.0, *)
-        private func setTabBarHidden(
+        private static func setTabBarHidden(
             _ hidden: Bool,
             in navigationController: UINavigationController,
             animated: Bool
