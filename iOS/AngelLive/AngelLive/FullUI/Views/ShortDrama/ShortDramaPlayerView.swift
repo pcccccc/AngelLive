@@ -289,7 +289,7 @@ struct ShortDramaPlayerView: View {
     private func playbackSurface(in viewport: CGSize) -> some View {
         let fittedSize = fittedVideoSize(in: viewport)
 
-        return ZStack(alignment: .top) {
+        return ZStack(alignment: playbackSurfaceAlignment) {
             coverBackground
 
             if let playback = model.playback {
@@ -328,7 +328,7 @@ struct ShortDramaPlayerView: View {
                     .transition(.opacity)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: playbackSurfaceAlignment)
         .background(Color.black)
         .animation(.easeOut(duration: 0.15), value: model.playback?.id)
         .animation(.easeOut(duration: 0.15), value: readyPlaybackID)
@@ -345,6 +345,16 @@ struct ShortDramaPlayerView: View {
         guard aspectRatio.isFinite, aspectRatio > 0 else { return viewport }
         let width = min(viewport.width, viewport.height * aspectRatio)
         return CGSize(width: width, height: width / aspectRatio)
+    }
+
+    private var playbackSurfaceAlignment: Alignment {
+        guard let videoNaturalSize,
+              videoNaturalSize.width.isFinite, videoNaturalSize.height.isFinite,
+              videoNaturalSize.width > 1, videoNaturalSize.height > 1,
+              videoNaturalSize.width > videoNaturalSize.height else {
+            return .top
+        }
+        return .center
     }
 
     private var isPreparingPlayback: Bool {

@@ -204,3 +204,9 @@ JEV模型服务尚未就绪，使用原生AXe观察和确定性触摸。系统�
 最终两处源码编辑后，Xcode 27.0 RC workspace MCP `BuildProject`成功（17.365s），Issue Navigator error为0；已有iPhone 17／iOS 27.0上的`DeviceInteractionInstallAndRun`返回安装并运行成功。设备session结束后，原生AXe接管同一新包。三轮真实“列表 → 短剧播放器 → 按钮返回列表”均保持白色列表，底部Tab Bar缺席；返回配置根页后恢复，重新进入列表后隐藏。主代理独立检查安装响应、源码哈希、返回截图及连续录像的转场帧，未见基线中的整页闪黑，根页Tab Bar在页面转场期间渐显／渐隐。录像与截图保存在本轮临时证据目录，设备session及任务专用MCP bridge均已结束。
 
 验收过程中普通AXe tap返回成功却未切换系统标签页，曾误将收藏根页截图命名为列表；复核后改用physical touch并重新执行上述完整路径，早期无效操作不计通过。此轮仅报告三轮按钮返回和根页push/pop；交互式侧滑完成／取消、深色系统外观、普通直播和设置二级页没有在最终新包上重新验证。未重跑Core测试，macOS、tvOS及VLC未验证。
+
+## 横向媒体的竖屏布局
+
+横向视频在扣除底部控制栏后的视频区域居中，竖向及未就绪状态保持顶齐。复用既有`videoNaturalSize`和`fittedVideoSize`，只按媒体宽高选择播放容器对齐方式；不新增尺寸读取或缩放算法，顶部按钮及底部控制栏位置保持原布局。
+
+2026年10月10日，最后源码修改后workspace MCP构建成功（18.368s），Issue Navigator error为0，并在已有iPhone 17／iOS 27.0完成新的`DeviceInteractionInstallAndRun`。实际横向视频播放时，画面在高度712pt的视频区域约243–469pt，中心356pt，上下留黑对称；实际竖向视频仍从顶部显示，两者底部控制栏位置一致。主代理独立复核新包安装响应、源码哈希及原尺寸截图；返回列表无Tab Bar。设备session和bridge均已关闭，本轮未验证其他平台或VLC。
