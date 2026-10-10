@@ -54,7 +54,6 @@ struct PlatformDetailViewControllerWrapper: View {
                 onLoadMoreCategoryRooms: loadMoreCategoryRooms
             )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
-                .toolbar(.hidden, for: .tabBar)
         }
     }
 
@@ -90,7 +89,7 @@ struct PlatformDetailViewControllerWrapper: View {
         } else {
             baseView
                 .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination
+                    playerDestination.toolbar(.hidden, for: .tabBar)
                 }
         }
     }

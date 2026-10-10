@@ -125,7 +125,7 @@ struct ShortDramaPlayerView: View {
             }
         }
         .background(Color.black.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        .environment(\.colorScheme, .dark)
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: panel?.id) { _, newValue in
             guard let newValue else { return }
