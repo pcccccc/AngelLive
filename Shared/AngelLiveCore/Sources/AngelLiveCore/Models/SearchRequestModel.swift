@@ -10,11 +10,13 @@ public struct RoomSearchRequest: Sendable, Equatable {
     public let input: String
     public let kind: RoomSearchKind
     public let page: Int
+    public let pluginID: String?
 
-    public init(input: String, kind: RoomSearchKind, page: Int) {
+    public init(input: String, kind: RoomSearchKind, page: Int, pluginID: String? = nil) {
         self.input = input
         self.kind = kind
         self.page = page
+        self.pluginID = pluginID
     }
 }
 
@@ -57,7 +59,7 @@ public final class SearchRequestModel {
 
     isolated deinit { task?.cancel() }
 
-    public func submit(input: String, kind: RoomSearchKind) {
+    public func submit(input: String, kind: RoomSearchKind, pluginID: String? = nil) {
         let normalized = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else {
             clear()
@@ -72,14 +74,19 @@ public final class SearchRequestModel {
         authenticationRequiredPluginIDs = []
         currentPage = 0
         didLoadFirstPage = false
-        start(RoomSearchRequest(input: normalized, kind: kind, page: 1), appending: false)
+        start(RoomSearchRequest(input: normalized, kind: kind, page: 1, pluginID: pluginID), appending: false)
     }
 
     public func loadMore() {
         guard !isLoading, hasMore, didLoadFirstPage,
               let currentRequest, currentRequest.kind == .keyword else { return }
         start(
-            RoomSearchRequest(input: currentRequest.input, kind: .keyword, page: currentPage + 1),
+            RoomSearchRequest(
+                input: currentRequest.input,
+                kind: .keyword,
+                page: currentPage + 1,
+                pluginID: currentRequest.pluginID
+            ),
             appending: true
         )
     }

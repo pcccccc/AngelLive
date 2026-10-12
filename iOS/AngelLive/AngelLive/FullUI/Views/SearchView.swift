@@ -11,11 +11,14 @@ import AngelLiveCore
 
 struct SearchView: View {
     @Environment(SearchViewModel.self) private var viewModel
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var searchRequest = SearchRequestModel(
         fetchOutcome: SearchView.fetchOutcome,
         onAccepted: SearchView.recordAcceptedSearch
     )
+    @State private var selectedSearchPluginID: String?
+    @State private var searchPlatformOptions: [LiveParseJSPlatform] = []
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
 
     /// 共享导航状态 - 在旋转时保持稳定，避免重复请求API
@@ -59,6 +62,23 @@ struct SearchView: View {
         }
     }
 
+    private var searchPlatformFeature: PlatformFeature {
+        viewModel.searchTypeIndex == 1 ? .search : .shareResolve
+    }
+
+    private var searchPlatformSelection: Binding<String?> {
+        Binding(
+            get: { selectedSearchPluginID },
+            set: { updateSelectedSearchPlatform($0) }
+        )
+    }
+
+    private var selectedSearchPlatformName: String? {
+        guard let selectedSearchPluginID else { return nil }
+        return searchPlatformOptions.first { $0.pluginId == selectedSearchPluginID }?.displayName
+            ?? selectedSearchPluginID
+    }
+
     @ViewBuilder
     private var playerPresentation: some View {
         @Bindable var viewModel = viewModel
@@ -76,6 +96,11 @@ struct SearchView: View {
                     .padding(.horizontal)
                     .padding(.top, AppConstants.Spacing.sm)
                     .padding(.bottom, AppConstants.Spacing.md)
+
+                    SearchPlatformFilter(
+                        platforms: searchPlatformOptions,
+                        selection: searchPlatformSelection
+                    )
 
                     // 搜索结果
                     Group {
@@ -114,7 +139,14 @@ struct SearchView: View {
                     searchRequest.clear()
                 }
             }
-            .onChange(of: viewModel.searchTypeIndex) { _, _ in searchRequest.clear() }
+            .onChange(of: viewModel.searchTypeIndex) { _, _ in
+                searchRequest.clear()
+                refreshSearchPlatformOptions()
+            }
+            .onChange(of: pluginAvailability.catalogRevision) { _, _ in
+                refreshSearchPlatformOptions()
+            }
+            .onAppear { refreshSearchPlatformOptions() }
             .onDisappear { searchRequest.cancel() }
             .sheet(item: $authenticationRecoveryRequest) { request in
                 NavigationStack {
@@ -154,7 +186,7 @@ struct SearchView: View {
     private func searchNoResultsState() -> some View {
         ErrorView.empty(
             title: "暂无搜索结果",
-            message: "换个关键词试试，或者直接粘贴分享链接和房间号。",
+            message: searchNoResultsMessage,
             symbolName: "magnifyingglass.circle.fill",
             tint: .indigo
         )
@@ -162,6 +194,13 @@ struct SearchView: View {
         .onTapGesture {
             hideKeyboard()
         }
+    }
+
+    private var searchNoResultsMessage: String {
+        if let selectedSearchPlatformName {
+            return String(localized: "当前筛选平台：\(selectedSearchPlatformName)。换个关键词试试，或切换平台后重试。")
+        }
+        return String(localized: "换个关键词试试，或者直接粘贴分享链接和房间号，也可以切换平台筛选。")
     }
 
     
@@ -265,8 +304,34 @@ struct SearchView: View {
 
         searchRequest.submit(
             input: keyword,
-            kind: viewModel.searchTypeIndex == 1 ? .keyword : .share
+            kind: viewModel.searchTypeIndex == 1 ? .keyword : .share,
+            pluginID: selectedSearchPluginID
         )
+    }
+
+    private func updateSelectedSearchPlatform(_ pluginID: String?) {
+        guard selectedSearchPluginID != pluginID else { return }
+        selectedSearchPluginID = pluginID
+
+        guard searchRequest.hasSearched,
+              !viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        performSearch()
+    }
+
+    private func refreshSearchPlatformOptions() {
+        searchPlatformOptions = SandboxPluginCatalog.availablePlatforms().filter {
+            PlatformCapability.supports(searchPlatformFeature, for: $0.liveType)
+        }
+
+        guard let selectedSearchPluginID,
+              !searchPlatformOptions.contains(where: { $0.pluginId == selectedSearchPluginID }) else {
+            return
+        }
+
+        updateSelectedSearchPlatform(nil)
     }
 
     @MainActor
@@ -281,9 +346,16 @@ struct SearchView: View {
             return try await SupportDiagnosticContext.$operationID.withValue(operationID) {
                 switch request.kind {
                 case .keyword:
-                    return try await LiveService.searchRoomsWithOutcome(keyword: request.input, page: request.page)
+                    return try await LiveService.searchRoomsWithOutcome(
+                        keyword: request.input,
+                        page: request.page,
+                        pluginID: request.pluginID
+                    )
                 case .share:
-                    return try await LiveService.searchRoomWithShareCodeWithOutcome(shareCode: request.input)
+                    return try await LiveService.searchRoomWithShareCodeWithOutcome(
+                        shareCode: request.input,
+                        pluginID: request.pluginID
+                    )
                 }
             }
         } catch let error as LiveParseError where error.detail.contains("返回结果为空") {
@@ -306,6 +378,63 @@ struct SearchView: View {
 
     private func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+private struct SearchPlatformFilter: View {
+    let platforms: [LiveParseJSPlatform]
+    @Binding var selection: String?
+
+    private var selectedPlatformAccessibilityValue: String {
+        guard let selection else { return "全部平台" }
+        return platforms.first { $0.pluginId == selection }?.displayName ?? selection
+    }
+
+    @ViewBuilder
+    private var selectedPlatformLabel: some View {
+        if let selection {
+            Text(platforms.first { $0.pluginId == selection }?.displayName ?? selection)
+        } else {
+            Text("全部平台")
+        }
+    }
+
+    var body: some View {
+        HStack {
+            Text("平台")
+                .font(.body)
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 8)
+
+            Menu {
+                Picker("平台", selection: $selection) {
+                    Text("全部平台")
+                        .tag(String?.none)
+
+                    ForEach(platforms, id: \.pluginId) { platform in
+                        Text(platform.displayName)
+                            .tag(Optional(platform.pluginId))
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    selectedPlatformLabel
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                }
+                    .font(.subheadline)
+                    .foregroundStyle(.tint)
+                    .lineLimit(1)
+                    .frame(minHeight: 44, alignment: .trailing)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("平台")
+            .accessibilityValue(selectedPlatformAccessibilityValue)
+            .accessibilityHint("选择搜索平台")
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 44)
     }
 }
 

@@ -150,10 +150,14 @@ public enum ApiManager {
         throw lastError ?? NSError(domain: "解析房间号失败，请检查分享码/分享链接是否正确", code: -10000, userInfo: ["desc": "解析房间号失败，请检查分享码/分享链接是否正确"])
     }
 
-    public static func fetchSearchWithShareCodeOutcome(shareCode: String) async throws -> RoomSearchOutcome {
+    public static func fetchSearchWithShareCodeOutcome(
+        shareCode: String,
+        pluginID: String? = nil
+    ) async throws -> RoomSearchOutcome {
         try await fetchSearchWithShareCodeOutcome(
             shareCode: shareCode,
-            platforms: matchedShareResolvePlatforms(for: shareCode)
+            platforms: matchedShareResolvePlatforms(for: shareCode),
+            pluginID: pluginID
         ) { platform, shareCode in
             try await LiveParseJSPlatformManager.getRoomInfoFromShareCode(
                 platform: platform,
@@ -165,8 +169,10 @@ public enum ApiManager {
     static func fetchSearchWithShareCodeOutcome(
         shareCode: String,
         platforms: [LiveParseJSPlatform],
+        pluginID: String? = nil,
         fetch: @escaping (LiveParseJSPlatform, String) async throws -> LiveModel?
     ) async throws -> RoomSearchOutcome {
+        let platforms = platforms.filter { pluginID == nil || $0.pluginId == pluginID }
         guard !platforms.isEmpty else {
             throw shareResolveFailure()
         }

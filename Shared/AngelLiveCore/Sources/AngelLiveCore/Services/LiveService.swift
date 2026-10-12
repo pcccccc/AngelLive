@@ -87,11 +87,16 @@ public enum LiveService {
 
     /// FullUI opt-in search that preserves host-trusted authentication owners
     /// without changing the legacy aggregate search contract.
-    public static func searchRoomsWithOutcome(keyword: String, page: Int) async throws -> RoomSearchOutcome {
+    public static func searchRoomsWithOutcome(
+        keyword: String,
+        page: Int,
+        pluginID: String? = nil
+    ) async throws -> RoomSearchOutcome {
         try await searchRoomsWithOutcome(
             platforms: SandboxPluginCatalog.availablePlatforms(),
             keyword: keyword,
-            page: page
+            page: page,
+            pluginID: pluginID
         ) { platform, keyword, page in
             try await LiveParseJSPlatformManager.searchRooms(
                 platform: platform,
@@ -105,9 +110,11 @@ public enum LiveService {
         platforms: [LiveParseJSPlatform],
         keyword: String,
         page: Int,
+        pluginID: String? = nil,
         fetch: @escaping @Sendable (LiveParseJSPlatform, String, Int) async throws -> [LiveModel]
     ) async throws -> RoomSearchOutcome {
-        try await withThrowingTaskGroup(
+        let platforms = platforms.filter { pluginID == nil || $0.pluginId == pluginID }
+        return try await withThrowingTaskGroup(
             of: (pluginID: String, rooms: [LiveModel], authenticationRequired: Bool).self
         ) { group in
             for platform in platforms {
@@ -143,8 +150,11 @@ public enum LiveService {
         return try await ApiManager.fetchSearchWithShareCode(shareCode: shareCode)
     }
 
-    public static func searchRoomWithShareCodeWithOutcome(shareCode: String) async throws -> RoomSearchOutcome {
-        try await ApiManager.fetchSearchWithShareCodeOutcome(shareCode: shareCode)
+    public static func searchRoomWithShareCodeWithOutcome(
+        shareCode: String,
+        pluginID: String? = nil
+    ) async throws -> RoomSearchOutcome {
+        try await ApiManager.fetchSearchWithShareCodeOutcome(shareCode: shareCode, pluginID: pluginID)
     }
 
     public static func fetchCurrentRoomLiveState(roomId: String, userId: String, liveType: LiveType) async throws -> LiveState {

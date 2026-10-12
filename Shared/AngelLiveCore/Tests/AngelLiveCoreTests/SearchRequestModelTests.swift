@@ -4,6 +4,52 @@ import Testing
 @Suite("Search request ownership")
 @MainActor
 struct SearchRequestModelTests {
+    @Test func selectedPlatformIsRetainedAcrossPagination() async {
+        let gate = SearchRequestGate()
+        let model = SearchRequestModel(fetch: gate.fetch)
+        model.submit(input: "query", kind: .keyword, pluginID: "source-a")
+        let first = model.pendingTask
+        await gate.waitForStarted(1)
+        gate.finish(0, .success([room("one", plugin: "source-a")]))
+        await first?.value
+        model.loadMore()
+        let second = model.pendingTask
+        await gate.waitForStarted(2)
+        #expect(gate.requests == [
+            RoomSearchRequest(input: "query", kind: .keyword, page: 1, pluginID: "source-a"),
+            RoomSearchRequest(input: "query", kind: .keyword, page: 2, pluginID: "source-a")
+        ])
+        gate.finish(1, .success([room("two", plugin: "source-a")]))
+        await second?.value
+        #expect(model.rooms.map(\.roomId) == ["one", "two"])
+    }
+
+    @Test func platformChangeRejectsLateRoomsAndAuthenticationForSameQuery() async {
+        let gate = SearchOutcomeGate()
+        var accepted: [RoomSearchRequest] = []
+        let model = SearchRequestModel(fetchOutcome: gate.fetch) { request, _ in
+            accepted.append(request)
+        }
+        model.submit(input: "query", kind: .keyword, pluginID: "source-a")
+        let old = model.pendingTask
+        await gate.waitForStarted(1)
+        model.submit(input: "query", kind: .keyword, pluginID: "source-b")
+        let new = model.pendingTask
+        await gate.waitForStarted(2)
+        gate.finish(1, .success(RoomSearchOutcome(rooms: [room("new", plugin: "source-b")])))
+        await new?.value
+        gate.finish(0, .success(RoomSearchOutcome(
+            rooms: [room("old", plugin: "source-a")],
+            authenticationRequiredPluginIDs: ["source-a"]
+        )))
+        await old?.value
+        #expect(model.rooms == [room("new", plugin: "source-b")])
+        #expect(model.authenticationRequiredPluginIDs.isEmpty)
+        #expect(model.error == nil)
+        #expect(!model.isLoading)
+        #expect(accepted.map(\.pluginID) == ["source-b"])
+    }
+
     @Test func newerSuccessAndErrorWinOverOlderCompletions() async {
         let gate = SearchRequestGate()
         var accepted: [String] = []

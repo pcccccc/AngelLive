@@ -309,7 +309,7 @@ xcrun agent skills export --output-dir <confirmed-skills-directory> --replace-ex
 
 不要在本仓库使用 `impeccable` 前端设计 Skill，除非用户以后明确要求重新启用。使用 Skill 前按 Skill 规则完整读取必要文件，并在 Skill 导致行动或暂停时简短告知用户。
 
-用户指定「UX MCP」时，优先发现并调用已注册的 SwiftUX 工具，不要把它替换成 Figma MCP 或仅调用 Xcode MCP。遵循 SwiftUX 的单一组件／流程检索范围，先读取 conventions，再检索并读取匹配组件及源码；返回结果必须符合当前用途，不能因置信度高而硬套无关组件。参考结构仍须按三端 HIG、真实服务状态和本项目验收要求落地。
+新增一个具体 UI 组件或交互流程时，默认先发现并调用已注册的 SwiftUX MCP，无需用户再次提醒；先读取 conventions，再检索目标组件／流程，匹配时读取组件及源码后才定稿和分派 UI 实现。用户指定「UX MCP」时同样优先使用 SwiftUX，不要把它替换成 Figma MCP 或仅调用 Xcode MCP。遵循 SwiftUX 的单一组件／流程检索范围，不对已有页面审计、样式微调或非 UI 工作强行检索；返回 weak_match 时按其指南和项目现有样式实现，不硬套无关组件。参考结构仍须按三端 HIG、真实服务状态和本项目验收要求落地。
 
 JEV 的默认使用范围、设备接管、新包和证据要求见第 9 节；暂停请求优先于 Skill 中的场景执行要求。
 
