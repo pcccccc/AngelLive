@@ -84,6 +84,7 @@ struct FavoriteView: View {
     private var baseNavigation: some View {
         NavigationStack {
             favoriteList
+                .fullUITabBarVisibilityRoot()
         }
     }
 
@@ -155,7 +156,7 @@ struct FavoriteView: View {
                 categoryRooms: navigationState.categoryRooms
             )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
-                .toolbar(.hidden, for: .tabBar)
+                .fullUITabBarHidden()
         }
     }
 

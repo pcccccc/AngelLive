@@ -475,11 +475,13 @@ struct ContentView: View {
                 Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
                     HomeView(usesPersistedPlatformSelection: false)
                         .apiCredentialContentIdentity()
+                        .fullUITabBarSelection(tab: .home, selection: tabSelection)
                 }
             }
 
             Tab(value: TabSelection.favorites) {
                 AdaptiveFavoriteView()
+                    .fullUITabBarSelection(tab: .favorites, selection: tabSelection)
             } label: {
                 Label {
                     Text("收藏")
@@ -491,6 +493,7 @@ struct ContentView: View {
             TabSection(platformSectionTitle) {
                 Tab(value: TabSelection.allPlatforms) {
                     AdaptivePlatformView()
+                        .fullUITabBarSelection(tab: .allPlatforms, selection: tabSelection)
                 } label: {
                     Label {
                         Text("全部配置")
@@ -505,6 +508,10 @@ struct ContentView: View {
                     Tab(value: TabSelection.platform(platform.pluginId)) {
                         PlatformDetailTabContainer(platform: platform)
                             .apiCredentialContentIdentity(pluginId: platform.pluginId)
+                            .fullUITabBarSelection(
+                                tab: .platform(platform.pluginId),
+                                selection: tabSelection
+                            )
                     } label: {
                         Label {
                             Text(platform.title)
@@ -531,10 +538,12 @@ struct ContentView: View {
                 if #available(iOS 26.0, *) {
                     Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
                         AdaptiveSearchView()
+                            .fullUITabBarSelection(tab: .search, selection: tabSelection)
                     }
                 } else {
                     Tab(value: TabSelection.search) {
                         AdaptiveSearchView()
+                            .fullUITabBarSelection(tab: .search, selection: tabSelection)
                     } label: {
                         Label("搜索", systemImage: "magnifyingglass")
                     }
@@ -543,6 +552,7 @@ struct ContentView: View {
 
             Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
                 SettingView()
+                    .fullUITabBarSelection(tab: .settings, selection: tabSelection)
             }
         }
         .tabViewStyle(.sidebarAdaptable)
@@ -566,6 +576,7 @@ struct ContentView: View {
                 if pluginAvailability.hasAvailablePlugins {
                     Tab(value: TabSelection.home) {
                         preferredHomePage
+                            .fullUITabBarSelection(tab: .home, selection: tabSelection)
                     } label: {
                         Label {
                             Text(iPhoneHomeTabTitle)
@@ -576,21 +587,25 @@ struct ContentView: View {
                 } else {
                     Tab("收藏", systemImage: "bookmark.fill", value: TabSelection.home) {
                         preferredHomePage
+                            .fullUITabBarSelection(tab: .home, selection: tabSelection)
                     }
                 }
 
                 Tab("配置", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
                     AdaptivePlatformView()
+                        .fullUITabBarSelection(tab: .allPlatforms, selection: tabSelection)
                 }
 
                 if pluginAvailability.hasAvailablePlugins {
                     Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: iPhoneSearchTabRole) {
                         AdaptiveSearchView()
+                            .fullUITabBarSelection(tab: .search, selection: tabSelection)
                     }
                 }
 
                 Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
                     SettingView()
+                        .fullUITabBarSelection(tab: .settings, selection: tabSelection)
                 }
             }
             .tabViewStyle(.sidebarAdaptable)
@@ -600,6 +615,7 @@ struct ContentView: View {
                 if pluginAvailability.hasAvailablePlugins {
                     Tab(value: TabSelection.home) {
                         preferredHomePage
+                            .fullUITabBarSelection(tab: .home, selection: tabSelection)
                     } label: {
                         Label {
                             Text(iPhoneHomeTabTitle)
@@ -610,17 +626,20 @@ struct ContentView: View {
                 } else {
                     Tab("收藏", systemImage: "bookmark.fill", value: TabSelection.home) {
                         preferredHomePage
+                            .fullUITabBarSelection(tab: .home, selection: tabSelection)
                     }
                 }
 
                 Tab("配置", systemImage: "square.grid.2x2.fill", value: TabSelection.allPlatforms) {
                     AdaptivePlatformView()
+                        .fullUITabBarSelection(tab: .allPlatforms, selection: tabSelection)
                 }
 
                 if pluginAvailability.hasAvailablePlugins {
                     // iOS 18 不支持 search role
                     Tab(value: TabSelection.search) {
                         AdaptiveSearchView()
+                            .fullUITabBarSelection(tab: .search, selection: tabSelection)
                     } label: {
                         Label("搜索", systemImage: "magnifyingglass")
                     }
@@ -628,6 +647,7 @@ struct ContentView: View {
 
                 Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
                     SettingView()
+                        .fullUITabBarSelection(tab: .settings, selection: tabSelection)
                 }
             }
         }
@@ -743,6 +763,7 @@ private struct PlatformDetailTabContainer: View {
                         }
                     }
                 }
+                .fullUITabBarVisibilityRoot()
         }
         .sheet(isPresented: $showCapabilitySheet) {
             PlatformCapabilitySheet(liveType: platform.liveType)

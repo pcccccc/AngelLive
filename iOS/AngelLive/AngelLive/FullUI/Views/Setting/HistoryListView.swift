@@ -37,7 +37,7 @@ struct HistoryListView: View {
                 categoryRooms: navigationState.categoryRooms
             )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
-                .toolbar(.hidden, for: .tabBar)
+                .fullUITabBarHidden()
         }
     }
 

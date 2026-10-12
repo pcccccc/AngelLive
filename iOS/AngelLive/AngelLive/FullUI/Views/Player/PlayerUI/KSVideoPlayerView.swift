@@ -153,8 +153,8 @@ public struct KSVideoPlayerView: View {
             }
             .tint(.white)
             .persistentSystemOverlays(.hidden)
-            .toolbar(.hidden, for: .automatic)
-            .toolbar(.hidden, for: .tabBar)
+            .toolbar(.hidden, for: .navigationBar)
+            .fullUITabBarHidden()
             .focusedObject(model.config)
             .statusBar(hidden: isFullscreen)
             .onChange(of: model.config.isMaskShow) { newValue in

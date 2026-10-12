@@ -126,6 +126,7 @@ private extension HomeView {
                     }
                 }
             }
+            .fullUITabBarVisibilityRoot()
         }
     }
 
@@ -349,7 +350,7 @@ private extension HomeView {
                     namespace: roomTransitionNamespace
                 )
             )
-            .toolbar(.hidden, for: .tabBar)
+            .fullUITabBarHidden()
         }
     }
 

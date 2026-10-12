@@ -68,6 +68,7 @@ struct AdaptivePlatformView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        .fullUITabBarVisibilityRoot()
         .navigationTitle("配置")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

@@ -190,14 +190,14 @@ struct LiveRoomCard: View {
                         .fullScreenCover(isPresented: showPlayerBinding) {
                             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
-                                .toolbar(.hidden, for: .tabBar)
+                                .fullUITabBarHidden()
                         }
                 } else {
                     baseTappable
                         .navigationDestination(isPresented: showPlayerBinding) {
                             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
-                                .toolbar(.hidden, for: .tabBar)
+                                .fullUITabBarHidden()
                         }
                 }
             }

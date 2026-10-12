@@ -44,7 +44,7 @@ struct SearchView: View {
                 categoryRooms: navigationState.categoryRooms
             )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
-                .toolbar(.hidden, for: .tabBar)
+                .fullUITabBarHidden()
         }
     }
 
@@ -121,6 +121,7 @@ struct SearchView: View {
                     PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
                 }
             }
+            .fullUITabBarVisibilityRoot()
         }
         if #available(iOS 18.0, *) {
             baseView

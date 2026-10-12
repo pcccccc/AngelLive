@@ -295,6 +295,7 @@ struct SettingView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .fullUITabBarVisibilityRoot()
             .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.large)
             .task {

@@ -40,6 +40,7 @@ struct PlatformView: View {
                 .navigationTitle("配置")
                 .navigationBarTitleDisplayMode(.large)
             }
+            .fullUITabBarVisibilityRoot()
             .navigationDestination(for: Platformdescription.self) { platform in
                 PlatformDetailViewControllerWrapper()
                     .environment(PlatformDetailViewModel(platform: platform))
