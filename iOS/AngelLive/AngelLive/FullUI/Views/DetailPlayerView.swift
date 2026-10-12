@@ -266,10 +266,13 @@ struct LiveDetailPlayerView: View {
                     .zIndex(100)
                 } else {
                     // 播放器 - 始终在同一位置，只改变 frame，不会重建
-                    PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
+                    PlayerContentView(
+                        playerCoordinator: playerCoordinator,
+                        playerModel: playerModel,
+                        isVerticalLiveMode: $isVerticalLiveMode
+                    )
                         .id("stable_player")
                         .environment(viewModel)
-                        .environment(\.isVerticalLiveMode, isVerticalLiveMode)
                         .frame(
                             width: playerWidth,
                             height: AppConstants.Device.isIPad ? playerHeight : (iPhoneLandscapeMode ? geometry.size.height : nil)
@@ -284,9 +287,6 @@ struct LiveDetailPlayerView: View {
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height
                             }
-                        }
-                        .onPreferenceChange(VerticalLiveModePreferenceKey.self) { mode in
-                            isVerticalLiveMode = mode
                         }
 
                     // 信息面板 - 根据布局动态显示/隐藏
@@ -306,8 +306,8 @@ struct LiveDetailPlayerView: View {
                         }
                     }
 
-                    // iOS 18+ interactivePopGesture 被禁用，这里用独立的 20pt 左边缘视图补回返回手势。
-                    // 作为 ZStack 兄弟视图(而非 player 的 .overlay)，避免破坏 PreferenceKey 传递。
+                    // 用独立的 20pt 左边缘视图提供返回手势，竖屏清屏时让出触摸以恢复控制层。
+                    // 作为 ZStack 兄弟视图，独立于播放器控制层处理左边缘返回手势。
                     if #available(iOS 18.0, *), !iPhoneLandscapeMode, allowsEdgeDismiss {
                         EdgeSwipeDismissView(edgeWidth: 20) {
                             if AppConstants.Device.isIPad && isIPadFullscreen {
@@ -333,7 +333,8 @@ struct LiveDetailPlayerView: View {
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
-        .interactiveDismissDisabled(isIPhoneLandscape)
+        // 竖屏的左右滑动用于清屏/恢复，避免全屏 zoom 转场先接管右滑。
+        .interactiveDismissDisabled(isIPhoneLandscape || isVerticalLiveMode)
         .onChange(of: viewModel.currentRoom.id) { _, _ in
             verticalLiveControlsVisible = true
             verticalLiveControlPopupPresented = false
@@ -529,7 +530,11 @@ struct LiveDetailPlayerView: View {
 
     /// 全屏播放器布局（iPhone 横屏 或 iPad 全屏）
     private var fullscreenPlayerLayout: some View {
-        PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
+        PlayerContentView(
+            playerCoordinator: playerCoordinator,
+            playerModel: playerModel,
+            isVerticalLiveMode: $isVerticalLiveMode
+        )
             .id("stable_player") // 关键：所有布局使用相同的 id
             .environment(viewModel)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -540,7 +545,11 @@ struct LiveDetailPlayerView: View {
     private var iPadLandscapeLayout: some View {
         HStack(spacing: 0) {
             // 左侧：播放器
-            PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
+            PlayerContentView(
+                playerCoordinator: playerCoordinator,
+                playerModel: playerModel,
+                isVerticalLiveMode: $isVerticalLiveMode
+            )
                 .id("stable_player") // 关键：所有布局使用相同的 id
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)
@@ -554,7 +563,11 @@ struct LiveDetailPlayerView: View {
     private var portraitLayout: some View {
         VStack(spacing: 0) {
             // 播放器容器
-            PlayerContentView(playerCoordinator: playerCoordinator, playerModel: playerModel)
+            PlayerContentView(
+                playerCoordinator: playerCoordinator,
+                playerModel: playerModel,
+                isVerticalLiveMode: $isVerticalLiveMode
+            )
                 .id("stable_player") // 关键：所有布局使用相同的 id
                 .environment(viewModel)
                 .frame(maxWidth: .infinity)

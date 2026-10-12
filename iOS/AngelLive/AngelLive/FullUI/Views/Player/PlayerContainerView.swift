@@ -22,16 +22,6 @@ struct PlayerHeightPreferenceKey: PreferenceKey {
     }
 }
 
-// MARK: - Preference Key for Vertical Live Mode
-
-struct VerticalLiveModePreferenceKey: PreferenceKey {
-    static var defaultValue: Bool = false
-
-    static func reduce(value: inout Bool, nextValue: () -> Bool) {
-        value = nextValue()
-    }
-}
-
 // MARK: - Vertical Live Mode Environment Key
 
 struct VerticalLiveModeKey: EnvironmentKey {
@@ -56,6 +46,7 @@ struct PlayerContainerView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
     @ObservedObject var playerModel: KSVideoPlayerModel
+    @State private var isVerticalLiveMode = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -67,7 +58,11 @@ struct PlayerContainerView: View {
     }
 
     var body: some View {
-        PlayerContentView(playerCoordinator: coordinator, playerModel: playerModel)
+        PlayerContentView(
+            playerCoordinator: coordinator,
+            playerModel: playerModel,
+            isVerticalLiveMode: $isVerticalLiveMode
+        )
             .environment(viewModel)
     }
 }
@@ -77,10 +72,11 @@ struct PlayerContentView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
     @ObservedObject var playerModel: KSVideoPlayerModel
+    /// 与外层信息布局共用模式状态，控制层、弹幕和手势始终读取同一来源。
+    @Binding var isVerticalLiveMode: Bool
     @State private var videoAspectRatio: CGFloat = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
-    @State private var isVerticalLiveMode: Bool = false // 是否为竖屏直播模式
     @State private var vlcState: VLCPlaybackBridgeState = .buffering
     @State private var showVideoSetting = false
     @State private var showDanmakuSettings = false
@@ -147,7 +143,6 @@ struct PlayerContentView: View {
             )
             .background(AppConstants.Device.isIPad ? Color.black : (isDeviceLandscape ? Color.black : Color.clear))
             .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
-            .preference(key: VerticalLiveModePreferenceKey.self, value: isVerticalLiveMode)
             .overlay(alignment: .top) {
                 if let notice = visibleRecoveryNotice {
                     PlayerRecoveryNoticeBanner(notice: notice)
@@ -161,6 +156,7 @@ struct PlayerContentView: View {
                 presentRoomSwitcher()
             }
         }
+        .environment(\.isVerticalLiveMode, isVerticalLiveMode)
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // 记录进后台时刻,供回前台 watchdog 算后台时长。
             lastResignActiveAt = Date()
