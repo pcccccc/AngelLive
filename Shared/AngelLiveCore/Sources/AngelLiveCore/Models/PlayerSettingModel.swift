@@ -9,6 +9,21 @@ import Foundation
 import SwiftUI
 import Observation
 
+/// FullUI 首次进入房间时的默认画质偏好。
+public enum DefaultPlaybackQuality: Int, CaseIterable, Sendable {
+    case highest = 0
+    case balanced = 1
+    case dataSaver = 2
+
+    public var title: String {
+        switch self {
+        case .highest: return "最高画质"
+        case .balanced: return "均衡"
+        case .dataSaver: return "省流"
+        }
+    }
+}
+
 // MARK: - Video Scale Mode
 
 /// 视频缩放模式
@@ -58,8 +73,23 @@ public final class PlayerSettingModel {
     public static let globalEnableBackgroundAudio = "SimpleLive.Setting.EnableBackgroundAudio"
     public static let globalEnableAutoPiPOnBackground = "SimpleLive.Setting.EnableAutoPiPOnBackground"
     public static let globalPlayerKernel = "SimpleLive.Setting.PlayerKernel"
+    public static let globalDefaultPlaybackQuality = "AngelLive.Setting.DefaultPlaybackQuality"
 
     public init() {}
+
+    @ObservationIgnored
+    public var defaultPlaybackQuality: DefaultPlaybackQuality {
+        get {
+            access(keyPath: \.defaultPlaybackQuality)
+            let rawValue = UserDefaults.shared.value(forKey: Self.globalDefaultPlaybackQuality, synchronize: true) as? Int
+            return rawValue.flatMap(DefaultPlaybackQuality.init(rawValue:)) ?? .highest
+        }
+        set {
+            withMutation(keyPath: \.defaultPlaybackQuality) {
+                UserDefaults.shared.set(newValue.rawValue, forKey: Self.globalDefaultPlaybackQuality, synchronize: true)
+            }
+        }
+    }
 
     nonisolated public static let timeArray: [String] = ["1分钟", "2分钟", "3分钟", "5分钟", "10分钟"]
 

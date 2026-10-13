@@ -58,6 +58,17 @@ struct GeneralSettingView: View {
             }
                 .frame(height: 45)
 
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                Picker("默认画质", selection: $playerSettingModel.defaultPlaybackQuality) {
+                    ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
+                        Text(quality.title)
+                            .tag(quality)
+                    }
+                }
+                .frame(height: 45)
+                .accessibilityHint("进入直播间时按可用画质尽量匹配；网络较慢可选省流。")
+            }
+
             Toggle(isOn: $generalSettingModel.generalDisableMaterialBackground) {
                 Text("禁用渐变背景")
                     .foregroundColor(.primary)

@@ -9,7 +9,9 @@ import SwiftUI
 import AngelLiveCore
 
 struct GeneralSettingView: View {
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @State private var generalSettingModel = GeneralSettingModel()
+    @State private var playerSettingModel = PlayerSettingModel()
     @State private var appIconSettings = AppIconSettingsModel()
     @AppStorage(HomePagePreference.storageKey, store: .shared)
     private var homePagePreference = HomePagePreference.recommendations
@@ -17,6 +19,7 @@ struct GeneralSettingView: View {
     private var selectedHomePluginId = ""
 
     var body: some View {
+        @Bindable var playerSettingModel = playerSettingModel
         @Bindable var appIconSettings = appIconSettings
 
         List {
@@ -86,6 +89,22 @@ struct GeneralSettingView: View {
             }
 
             Section {
+                if pluginAvailability.hasAvailablePlugins {
+                    Picker(selection: $playerSettingModel.defaultPlaybackQuality) {
+                        ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
+                            Text(quality.title)
+                                .tag(quality)
+                        }
+                    } label: {
+                        GeneralSettingLabel(
+                            title: "默认画质",
+                            systemImage: "play.rectangle.fill",
+                            tint: .blue
+                        )
+                    }
+                    .pickerStyle(.navigationLink)
+                }
+
                 Toggle(isOn: $generalSettingModel.enablePlayerGesture) {
                     GeneralSettingLabel(
                         title: "播放层滑动手势",
@@ -97,9 +116,14 @@ struct GeneralSettingView: View {
             } header: {
                 Text("播放")
             } footer: {
-                Text("开启后，在播放器左侧上下滑动调节亮度，右侧上下滑动调节音量。")
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                VStack(alignment: .leading, spacing: 4) {
+                    if pluginAvailability.hasAvailablePlugins {
+                        Text("进入直播间时按可用画质尽量匹配；网络较慢可选省流。")
+                    }
+                    Text("开启后，在播放器左侧上下滑动调节亮度，右侧上下滑动调节音量。")
+                }
+                .font(.caption)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
             }
         }
         .listStyle(.insetGrouped)

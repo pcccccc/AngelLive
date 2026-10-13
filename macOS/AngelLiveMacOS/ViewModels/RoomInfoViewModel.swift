@@ -270,12 +270,21 @@ final class RoomInfoViewModel {
 
         // 重新取参后尽量保持当前线路/清晰度,避免无感续播跳回默认档
         // 自动选择跳过插件标记为登录/会员才能看的档位（全部被锁时保持原逻辑）
-        let clamped = RoomPlaybackResolver.automaticSelection(
-            in: playArgs,
-            preferredCdnIndex: preferredIndex,
-            preferredQualityIndex: currentQualityIndex
-        )
         let firstLoad = !hasLoadedPlayURL
+        // 与根页面的 FullUI/ShellUI 判定一样，仅已安装插件时应用该偏好。
+        let clamped = if firstLoad && !SandboxPluginCatalog.installedPluginIds().isEmpty {
+            RoomPlaybackResolver.initialSelection(
+                in: playArgs,
+                preferredCdnIndex: preferredIndex,
+                preference: PlayerSettingModel().defaultPlaybackQuality
+            )
+        } else {
+            RoomPlaybackResolver.automaticSelection(
+                in: playArgs,
+                preferredCdnIndex: preferredIndex,
+                preferredQualityIndex: currentQualityIndex
+            )
+        }
         self.changePlayUrl(
             cdnIndex: clamped.cdnIndex,
             urlIndex: clamped.qualityIndex,

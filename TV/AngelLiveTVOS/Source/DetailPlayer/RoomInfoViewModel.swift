@@ -686,11 +686,19 @@ final class RoomInfoViewModel {
         // 重新取参后尽量保持当前线路/清晰度,避免无感续播跳回默认档
         let firstLoad = currentPlayURL == nil
         // 自动选择跳过插件标记为登录/会员才能看的档位（全部被锁时保持原逻辑）
-        let clamped = RoomPlaybackResolver.automaticSelection(
-            in: playArgs,
-            preferredCdnIndex: preferredIndex,
-            preferredQualityIndex: currentQualityIndex
-        )
+        let clamped = if !hasSelectedInitialPlayback && appViewModel.pluginAvailability.hasAvailablePlugins {
+            RoomPlaybackResolver.initialSelection(
+                in: playArgs,
+                preferredCdnIndex: preferredIndex,
+                preference: appViewModel.playerSettingsViewModel.defaultPlaybackQuality
+            )
+        } else {
+            RoomPlaybackResolver.automaticSelection(
+                in: playArgs,
+                preferredCdnIndex: preferredIndex,
+                preferredQualityIndex: currentQualityIndex
+            )
+        }
         self.changePlayUrl(
             cdnIndex: clamped.cdnIndex,
             urlIndex: clamped.qualityIndex,

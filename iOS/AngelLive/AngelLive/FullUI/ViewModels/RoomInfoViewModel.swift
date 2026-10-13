@@ -279,11 +279,15 @@ final class RoomInfoViewModel {
         }
         try Task.checkCancellation()
 
-        // 与 updateCurrentRoomPlayArgs 的自动选择一致：跳过被锁定的档位
-        let automatic = RoomPlaybackResolver.automaticSelection(
+        // 准备与提交使用同一首次选择，避免先重取最高档、提交时又切到偏好档。
+        let preference = PlayerSettingModel().defaultPlaybackQuality
+        let pluginID = platform.pluginId
+        let preferredIndex = await CDNPreferenceStore.shared.preferredIndex(in: fetchedArgs, pluginID: pluginID) ?? 0
+        try Task.checkCancellation()
+        let automatic = RoomPlaybackResolver.initialSelection(
             in: fetchedArgs,
-            preferredCdnIndex: 0,
-            preferredQualityIndex: 0
+            preferredCdnIndex: preferredIndex,
+            preference: preference
         )
         guard let selection = RoomPlaybackResolver.selection(
             in: fetchedArgs,
@@ -342,7 +346,7 @@ final class RoomInfoViewModel {
         isLoading = true
 
         await SupportDiagnosticContext.$operationID.withValue(operationID) {
-            await updateCurrentRoomPlayArgs(stagedArgs)
+            await updateCurrentRoomPlayArgs(stagedArgs, initialSelection: automatic)
         }
         if !Task.isCancelled, !playbackDiagnosticsEnded {
             recoveryCoordinator.start()
@@ -390,12 +394,15 @@ final class RoomInfoViewModel {
     }
 
     @MainActor
-    func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel]) async {
+    func updateCurrentRoomPlayArgs(
+        _ playArgs: [LiveQualityModel],
+        initialSelection: (cdnIndex: Int, qualityIndex: Int)? = nil
+    ) async {
         guard !Task.isCancelled, !playbackDiagnosticsEnded else { return }
         let selectionGeneration = playbackSelectionGeneration
         let requestGeneration = playbackRequestGeneration
         var preferredIndex = currentCdnIndex
-        if !hasLoadedPlayURL {
+        if !hasLoadedPlayURL, initialSelection == nil {
             let pluginID = SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId ?? currentRoom.liveType.rawValue
             if let learned = await CDNPreferenceStore.shared.preferredIndex(in: playArgs, pluginID: pluginID) {
                 preferredIndex = learned
@@ -419,12 +426,20 @@ final class RoomInfoViewModel {
 
         // 重新取参后尽量保持当前线路/清晰度,避免无感续播跳回默认档
         // 自动选择跳过插件标记为登录/会员才能看的档位（全部被锁时保持原逻辑）
-        let clamped = RoomPlaybackResolver.automaticSelection(
-            in: playArgs,
-            preferredCdnIndex: preferredIndex,
-            preferredQualityIndex: currentQualityIndex
-        )
         let firstLoad = !hasLoadedPlayURL
+        let clamped = if firstLoad {
+            initialSelection ?? RoomPlaybackResolver.initialSelection(
+                in: playArgs,
+                preferredCdnIndex: preferredIndex,
+                preference: PlayerSettingModel().defaultPlaybackQuality
+            )
+        } else {
+            RoomPlaybackResolver.automaticSelection(
+                in: playArgs,
+                preferredCdnIndex: preferredIndex,
+                preferredQualityIndex: currentQualityIndex
+            )
+        }
         self.changePlayUrl(
             cdnIndex: clamped.cdnIndex,
             urlIndex: clamped.qualityIndex,

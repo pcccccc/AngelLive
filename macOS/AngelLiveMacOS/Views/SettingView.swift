@@ -19,6 +19,7 @@ struct SettingView: View {
     @AppStorage(MacDockIconPreference.storageKey)
     private var dockIconPreference = MacDockIconPreference.xiaoShengBiBi
 
+    @State private var playerSettingModel = PlayerSettingModel()
     @State private var showOpenSourceList = false
     @State private var showPluginManagement = false
     @State private var showDanmuSetting = false
@@ -65,6 +66,9 @@ struct SettingView: View {
             }
 
             Section("播放") {
+                if pluginAvailability.hasAvailablePlugins {
+                    defaultPlaybackQualityRow
+                }
                 danmuSettingRow
             }
 
@@ -266,7 +270,10 @@ struct SettingView: View {
                 }
             }
             .labelsHidden()
-            .frame(minWidth: 160)
+            .frame(
+                minWidth: 160,
+                alignment: pluginAvailability.hasAvailablePlugins ? .trailing : .center
+            )
             .onChange(of: dockIconPreference) { _, preference in
                 preference.apply()
             }
@@ -375,6 +382,30 @@ struct SettingView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var defaultPlaybackQualityRow: some View {
+        @Bindable var playerSettingModel = playerSettingModel
+
+        return PanelNavigationRow(
+            title: "默认画质",
+            subtitle: "进入直播间时按可用画质尽量匹配；网络较慢可选省流。",
+            showsChevron: false
+        ) {
+            Image(systemName: "play.rectangle.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.blue.gradient)
+        } trailing: {
+            Picker("默认画质", selection: $playerSettingModel.defaultPlaybackQuality) {
+                ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
+                    Text(quality.title)
+                        .tag(quality)
+                }
+            }
+            .labelsHidden()
+            .frame(minWidth: 160, alignment: .trailing)
+            .help("进入直播间时按可用画质尽量匹配；网络较慢可选省流。")
+        }
     }
 
     private var danmuSettingRow: some View {
