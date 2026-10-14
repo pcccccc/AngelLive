@@ -727,7 +727,10 @@ public final class JSRuntime: @unchecked Sendable {
         loginTransactionStore: LoginTransactionStore,
         credentialDomains: [String],
         platformSessionOverride: LiveParsePlatformSession?,
-        logHandler: LogHandler?
+        logHandler: LogHandler?,
+        mediaTransformVersionProvider: @escaping @Sendable () -> Int = {
+            LiveParseHostPlaybackCapabilities.mediaTransformVersion
+        }
     ) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
         self.pluginId = pluginId
@@ -753,7 +756,7 @@ public final class JSRuntime: @unchecked Sendable {
             self.configureHostSession(in: context)
             self.configureHostPromiseCallbacks(in: context)
             Self.configureHostRuntime(in: context)
-            Self.configureHostBootstrap(in: context)
+            Self.configureHostBootstrap(in: context, mediaTransformVersionProvider: mediaTransformVersionProvider)
             Self.configureHostNativeStream(in: context, queue: queue, nativeStream: nativeStream)
             self.configureHostWebSocket(in: context)
         }
@@ -1107,7 +1110,12 @@ private extension JSRuntime {
         )
     }
 
-    static func configureHostBootstrap(in context: JSContext) {
+    static func configureHostBootstrap(
+        in context: JSContext,
+        mediaTransformVersionProvider: @escaping @Sendable () -> Int
+    ) {
+        let mediaTransformVersion: @convention(block) () -> Int = { mediaTransformVersionProvider() }
+        context.setObject(mediaTransformVersion, forKeyedSubscript: "__lp_media_transform_version" as NSString)
         // 给插件提供一个稳定的 Host API 表层（底层由 __lp_* 提供）。
         let script = """
         (function () {
@@ -1195,6 +1203,14 @@ private extension JSRuntime {
           };
 
           Host.capabilities = Host.capabilities || {};
+          // Capture the native getter so plugin code cannot replace its global name.
+          var mediaTransformVersion = globalThis.__lp_media_transform_version;
+          delete globalThis.__lp_media_transform_version;
+          Object.defineProperty(Host.capabilities, "mediaTransform", {
+            enumerable: true,
+            configurable: false,
+            get: function () { return mediaTransformVersion(); }
+          });
           Host.capabilities.loginTransaction = true;
           Host.capabilities.loginChallengeProtocol = \(PlatformLoginChallengeProtocol.currentVersion);
           Host.capabilities.loginChallengePush = true;
@@ -2163,9 +2179,9 @@ private extension JSRuntime {
                 category: .plugin
             )
             #if DEBUG
-            // 临时排障：直接输出原始响应，不脱敏、不截断；非 UTF-8 数据用 Base64 保留原始字节。
+            // Keep media restoration key material out of diagnostic response text.
             Logger.debug(
-                "[JSRuntime][HTTP][RESPONSE] requestID=\(callbackID) pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) \(bodyText == nil ? "bodyBase64" : "body")=\(bodyText ?? bodyBase64)",
+                "[JSRuntime][HTTP][RESPONSE] requestID=\(callbackID) pluginId=\(pluginId) method=\(callback.envelope.method) status=\(snapshot.statusCode) \(bodyText == nil ? "bodyBase64" : "body")=\(bodyText.map(LiveParsePluginManager.redactedMediaTransformConsoleText) ?? bodyBase64)",
                 category: .plugin
             )
             #endif
@@ -2457,7 +2473,8 @@ private extension JSRuntime {
                 wasTruncated: false
             )
         }
-        let storedText = textLimit.map { String(text.prefix($0)) } ?? text
+        let safeText = LiveParsePluginManager.redactedMediaTransformConsoleText(text)
+        let storedText = textLimit.map { String(safeText.prefix($0)) } ?? safeText
         return ConsoleBodySnapshot(
             text: storedText,
             kind: .utf8,

@@ -535,7 +535,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                         // A string result may itself be the wire HTML/JSON text.
                         // Keep it verbatim for diagnostics instead of wrapping it
                         // as an escaped JSON string.
-                        responseStr = string
+                        responseStr = Self.redactedMediaTransformConsoleText(string)
                     } else {
                         let consoleResult = Self.redactedLoginTransactionConsoleValue(result)
                         let serialized = (try? String(
@@ -935,7 +935,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
     static func redactedLoginTransactionConsoleValue(_ value: Any, key: String? = nil) -> Any {
         if let key {
             let lowered = key.lowercased()
-            if isSensitiveConsoleKey(lowered) {
+            if lowered == "mediatransform" || isSensitiveConsoleKey(lowered) {
                 return "<redacted>"
             }
             if lowered == "url", let string = value as? String {
@@ -954,7 +954,25 @@ public final class LiveParsePluginManager: @unchecked Sendable {
         if let array = value as? [Any] {
             return array.map { redactedLoginTransactionConsoleValue($0) }
         }
+        if let text = value as? String {
+            return redactedMediaTransformConsoleText(text)
+        }
         return value
+    }
+
+    /// Diagnostic string results may themselves contain the playback wire JSON.
+    static func redactedMediaTransformConsoleText(_ text: String) -> String {
+        guard text.range(of: "mediaTransform", options: .caseInsensitive) != nil else { return text }
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              object is [String: Any] || object is [Any],
+              let redacted = try? JSONSerialization.data(
+                withJSONObject: redactedLoginTransactionConsoleValue(object),
+                options: [.fragmentsAllowed]
+              ), let output = String(data: redacted, encoding: .utf8) else {
+            return "<redacted media transform payload>"
+        }
+        return output
     }
 
     private static func isSensitiveConsoleKey(_ key: String) -> Bool {

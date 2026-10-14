@@ -1,0 +1,14 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:0
+#EXT-X-MEDIA-SEQUENCE:0
+#EXT-X-PLAYLIST-TYPE:VOD
+#EXTINF:0.500000,
+media-transform-plain-0.ts
+#EXTINF:0.500000,
+media-transform-plain-1.ts
+#EXTINF:0.500000,
+media-transform-plain-2.ts
+#EXTINF:0.500000,
+media-transform-plain-3.ts
+#EXT-X-ENDLIST

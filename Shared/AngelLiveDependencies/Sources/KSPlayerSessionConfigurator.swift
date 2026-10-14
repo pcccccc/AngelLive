@@ -26,7 +26,15 @@ public enum KSPlayerSessionConfigurator {
         liveReconnectPolicy: KSPlayerLiveReconnectPolicy
     ) -> KSPlayerAppliedSessionConfiguration {
         let plan = RoomPlaybackResolver.resolvePlan(selectedQuality: quality)
+        let mediaTransform = quality.playbackHints?.mediaTransform
+        #if canImport(KSPlayer)
+        let playerTypes: [MediaPlayerProtocol.Type] = mediaTransform == nil
+            ? plan.playerKinds.map(playerType(for:))
+            : [MediaTransformPlayer.self]
+        #else
         let playerTypes = plan.playerKinds.map(playerType(for:))
+        #endif
+        (options as? PlayerOptions)?.mediaTransform = mediaTransform
         let requestOptions = RoomPlaybackResolver.requestOptions(
             for: quality,
             fallbackUserAgent: fallbackUserAgent
@@ -45,7 +53,8 @@ public enum KSPlayerSessionConfigurator {
         let effectiveIsLive: Bool
         switch liveReconnectPolicy {
         case .playerManaged:
-            effectiveIsLive = plan.isLive
+            // The composed player must reopen through the transform factory after recovery.
+            effectiveIsLive = mediaTransform == nil && plan.isLive
         case .applicationManaged:
             // Some hosts may intentionally rebuild the entire session after an IO failure.
             effectiveIsLive = false

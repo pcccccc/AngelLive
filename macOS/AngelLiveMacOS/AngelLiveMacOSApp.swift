@@ -51,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        MediaTransformSupport.registerHostCapability()
         BugsnagBootstrap.start(platform: .macOS)
         KSOptions.logLevel = .error
         KSOptions.hudLog = false

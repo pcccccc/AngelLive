@@ -1508,7 +1508,7 @@ private struct ShortDramaPlayerSurface: View {
         self.onPlayingChanged = onPlayingChanged
         self.onVideoSize = onVideoSize
 
-        let options = KSOptions()
+        let options = PlayerOptions()
         options.isAutoPlay = desiredPlayback
         options.isLoopPlay = false
         options.registerRemoteControll = false

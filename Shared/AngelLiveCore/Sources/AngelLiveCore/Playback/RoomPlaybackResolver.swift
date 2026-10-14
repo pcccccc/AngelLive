@@ -503,7 +503,7 @@ public enum RoomPlaybackResolver {
         let isHLS = format == .hlsLive || format == .hlsVod
         let isLive = hints?.isLive ?? (format != .hlsVod)
 
-        if selectedQuality.decryption != nil || requiresCustomSegmentLoader {
+        if selectedQuality.decryption != nil || hints?.mediaTransform != nil || requiresCustomSegmentLoader {
             return RoomPlaybackPlan(
                 playerKinds: [.mePlayer],
                 isHLS: isHLS,

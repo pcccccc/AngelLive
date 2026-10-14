@@ -176,6 +176,8 @@ public struct LivePlaybackHints: Codable, Sendable {
     public var startPositionSeconds: Double?
     /// 当前用户拿不到该档画质时由插件标记；宿主据此显示锁并在自动选择时跳过。
     public var authLimit: LivePlaybackAuthLimit?
+    /// Declarative segment byte restoration; invalid parameters reject playback JSON.
+    public var mediaTransform: LiveMediaTransform?
 
     public init(
         streamFormat: LivePlaybackStreamFormat? = nil,
@@ -185,7 +187,8 @@ public struct LivePlaybackHints: Codable, Sendable {
         requiresCustomSegmentLoader: Bool? = nil,
         selectionBehavior: LivePlaybackSelectionBehavior? = nil,
         startPositionSeconds: Double? = nil,
-        authLimit: LivePlaybackAuthLimit? = nil
+        authLimit: LivePlaybackAuthLimit? = nil,
+        mediaTransform: LiveMediaTransform? = nil
     ) {
         self.streamFormat = streamFormat
         self.latencyMode = latencyMode
@@ -195,6 +198,7 @@ public struct LivePlaybackHints: Codable, Sendable {
         self.selectionBehavior = selectionBehavior
         self.startPositionSeconds = startPositionSeconds
         self.authLimit = authLimit
+        self.mediaTransform = mediaTransform
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -206,6 +210,7 @@ public struct LivePlaybackHints: Codable, Sendable {
         case selectionBehavior
         case startPositionSeconds
         case authLimit
+        case mediaTransform
     }
 
     public init(from decoder: Decoder) throws {
@@ -220,6 +225,15 @@ public struct LivePlaybackHints: Codable, Sendable {
         selectionBehavior = try? container.decode(LivePlaybackSelectionBehavior.self, forKey: .selectionBehavior)
         startPositionSeconds = try? container.decode(Double.self, forKey: .startPositionSeconds)
         authLimit = try? container.decode(LivePlaybackAuthLimit.self, forKey: .authLimit)
+        // Unlike advisory hints, restoration is required to produce playable bytes.
+        // Never silently ignore an invalid configuration or include wire key material in errors.
+        do {
+            mediaTransform = try container.decodeIfPresent(LiveMediaTransform.self, forKey: .mediaTransform)
+        } catch let error as LiveMediaTransformError {
+            throw error
+        } catch {
+            throw LiveMediaTransformError.invalidConfiguration
+        }
     }
 }
 
