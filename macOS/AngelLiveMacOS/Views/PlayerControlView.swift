@@ -19,7 +19,6 @@ struct PlayerControlView: View {
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
     @State private var isHovering = false
     @State private var hideTask: Task<Void, Never>?
-    @State private var showSettings = false
     @State private var showDanmakuSettings = false
     @State private var showSubtitleTranslationSettings = false
     @State private var showStreamerInfo = false
@@ -33,9 +32,12 @@ struct PlayerControlView: View {
     @State private var preMuteVolume: Float?
     @Binding var volume: Float  // 独立音量控制
     @Binding var isMuted: Bool      // 独立静音状态
+    @Binding var showSettings: Bool
+    var playerWindow: NSWindow? = nil
+    var onClose: (@MainActor () -> Void)? = nil
+    var onShowRoomSwitcher: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
-    @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager: FullscreenPlayerManager?
     @Environment(ToastManager.self) private var toastManager: ToastManager?
 
     private var titleTranslationEnabled: Bool {
@@ -51,7 +53,7 @@ struct PlayerControlView: View {
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
-        favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
+        favoriteModel.roomList.contains(room)
     }
 
     /// 流首次加载或缓冲中：避免在 loading overlay 之上又叠一个中间播放按钮。
@@ -111,6 +113,18 @@ struct PlayerControlView: View {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
+                            if let onShowRoomSwitcher {
+                                Button(action: onShowRoomSwitcher) {
+                                    Image(systemName: "rectangle.stack.fill")
+                                        .frame(width: 30, height: 30)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("快速换台")
+                                .help("快速换台")
+                            }
                             // 置顶按钮
                             Button {
                                 toggleWindowPin()
@@ -449,7 +463,18 @@ struct PlayerControlView: View {
         // 鼠标自动隐藏:绑在 NSView 生命周期上,视图析构时一定恢复
         .background(PlayerCursorAutoHide(hideDelay: 2.5))
         .onAppear {
-            syncPinnedState()
+            syncWindowState()
+        }
+        .onChange(of: playerWindow) { _, _ in
+            syncWindowState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
+            guard let window = notification.object as? NSWindow, window == playerWindow else { return }
+            syncWindowState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { notification in
+            guard let window = notification.object as? NSWindow, window == playerWindow else { return }
+            syncWindowState()
         }
         .onDisappear {
             hideTask?.cancel()
@@ -581,29 +606,29 @@ struct PlayerControlView: View {
     }
 
     private func toggleFullscreen() {
-        guard let window = NSApplication.shared.keyWindow else { return }
+        guard let window = playerWindow else { return }
         window.toggleFullScreen(nil)
-        isFullscreen.toggle()
     }
 
     private func closePlayer() {
         // 鼠标显示由 PlayerCursorAutoHide 视图的析构自动处理
-        if let manager = fullscreenPlayerManager, manager.showFullscreenPlayer {
-            manager.closeFullscreenPlayer()
+        if let onClose {
+            onClose()
         } else {
             dismiss()
         }
     }
 
     private func toggleWindowPin() {
-        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow else { return }
+        guard let window = playerWindow else { return }
         isPinned.toggle()
         window.level = isPinned ? .floating : .normal
     }
 
-    private func syncPinnedState() {
-        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow else { return }
+    private func syncWindowState() {
+        guard let window = playerWindow else { return }
         isPinned = window.level == .floating
+        isFullscreen = window.styleMask.contains(.fullScreen)
     }
 }
 
@@ -856,7 +881,7 @@ struct InfoRow: View {
 }
 
 // MARK: - Glass Effect Extension
-private extension View {
+extension View {
     @ViewBuilder
     func adaptiveGlassEffect() -> some View {
         if #available(macOS 26.0, *) {
@@ -885,6 +910,10 @@ private extension View {
         }
     }
 
+}
+
+// 播放器按钮与侧栏共用既有材质，供 FullUI 播放页面复用。
+extension View {
     @ViewBuilder
     func adaptiveGlassEffectRoundedRect(cornerRadius: CGFloat) -> some View {
         if #available(macOS 26.0, *) {
@@ -895,7 +924,7 @@ private extension View {
     }
 }
 
-private enum GlassEffectShape {
+enum GlassEffectShape {
     case capsule
     case circle
 }
@@ -940,7 +969,7 @@ private final class NoWindowDragSlider: NSSlider {
     }
 }
 
-private struct WindowDragArea: NSViewRepresentable {
+struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> DraggableView {
         DraggableView()
     }
@@ -948,7 +977,7 @@ private struct WindowDragArea: NSViewRepresentable {
     func updateNSView(_ nsView: DraggableView, context: Context) {}
 }
 
-private final class DraggableView: NSView {
+final class DraggableView: NSView {
     override var mouseDownCanMoveWindow: Bool {
         true
     }

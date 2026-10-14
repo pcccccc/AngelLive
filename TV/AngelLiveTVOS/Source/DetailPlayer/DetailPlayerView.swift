@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SharedAssets
 import AVKit
 import AngelLiveDependencies
 import Combine
@@ -302,6 +303,7 @@ struct TVStreamLoadingOverlay: View {
     var body: some View {
         VStack(spacing: 24) {
             ArcSpinner(size: 64, lineWidth: 2.5)
+                .tint(.white)
             VStack(spacing: 10) {
                 Text(stage.title)
                     .font(.title3.weight(.medium))
@@ -356,29 +358,6 @@ private struct TVPlayerRecoveryNoticeBanner: View {
 }
 
 // MARK: - 共享组件
-
-/// 极简旋转圆弧。
-private struct ArcSpinner: View {
-    let size: CGFloat
-    let lineWidth: CGFloat
-    @State private var rotation: Double = 0
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.22)
-            .stroke(
-                Color.white.opacity(0.9),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(rotation))
-            .onAppear {
-                withAnimation(.linear(duration: 0.95).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
-    }
-}
 
 /// 网速格式化:返回 (数字, 单位) 拆分。
 private enum SpeedFormatter {

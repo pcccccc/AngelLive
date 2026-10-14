@@ -7,6 +7,7 @@
 
 import UIKit
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -383,7 +384,7 @@ class FavoriteListViewController: UIViewController {
     }
 
     private func showStateView(_ view: AnyView, storeIn controller: inout UIHostingController<AnyView>?) {
-        let hostingController = UIHostingController(rootView: view)
+        let hostingController = UIHostingController(rootView: AnyView(view.fullUIArcLoadingStyle()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 

@@ -10,6 +10,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import SharedAssets
 
 // MARK: - 管理器：直接添加到 keyWindow 上
 // 注:整段代码常驻所有构建,运行时是否真的弹窗由 GeneralSettingModel.globalDeveloperMode 控制,
@@ -286,7 +287,7 @@ private class DevConsoleContainerView: UIView {
             presentsFullUI: presentsFullUI,
             onDismiss: { [weak self] in self?.dismissPanel() }
         )
-        let hosting = UIHostingController(rootView: AnyView(panel))
+        let hosting = UIHostingController(rootView: AnyView(panel.fullUIArcLoadingStyle(isEnabled: presentsFullUI)))
         hosting.view.backgroundColor = .clear
 
         let parentVC = findViewController()

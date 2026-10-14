@@ -103,8 +103,8 @@ struct PluginErrorProtocolTests {
 
     @Test("AUTH_REQUIRED shows Chinese plugin message, falls back for ASCII text")
     func authMessageBranches() {
-        let chinese = Self.pluginError("AUTH_REQUIRED", message: "B站房间列表需要登录后查看")
-        #expect(chinese.liveParseMessage == "B站房间列表需要登录后查看")
+        let chinese = Self.pluginError("AUTH_REQUIRED", message: "当前房间列表需要登录后查看")
+        #expect(chinese.liveParseMessage == "当前房间列表需要登录后查看")
 
         let ascii = Self.pluginError("AUTH_REQUIRED", message: "requires cookie")
         #expect(ascii.liveParseMessage == "当前内容需要登录账号后才能访问，请前往设置页登录后重试。")

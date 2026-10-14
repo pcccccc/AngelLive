@@ -7,6 +7,7 @@
 
 import UIKit
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -189,7 +190,7 @@ class HistoryListViewController: UIViewController {
             )
         )
 
-        let hostingController = UIHostingController(rootView: emptyView)
+        let hostingController = UIHostingController(rootView: AnyView(emptyView.fullUIArcLoadingStyle()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 

@@ -48,6 +48,7 @@ class PlatformDetailViewModel {
     @ObservationIgnored private var catalogRequestID = UUID()
 
     var roomList: [LiveModel] { roomModels[cacheKey]?.rooms ?? [] }
+    var currentRoomListModel: CategoryRoomListModel? { roomModels[cacheKey] }
 
     private var cacheKey: String {
         "\(selectedMainCategoryIndex)-\(selectedSubCategoryIndex)"

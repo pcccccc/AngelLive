@@ -1307,6 +1307,7 @@ private final class TVHomePlaybackCoordinator {
     private let appViewModel: AppState
 
     var roomInfoViewModel: RoomInfoViewModel?
+    var shortDramaRoom: LiveModel?
     var isPresented = false
     var showToast = false
     var toastTitle = ""
@@ -1318,6 +1319,10 @@ private final class TVHomePlaybackCoordinator {
     }
 
     func open(room: LiveModel, rooms: [LiveModel], mode: TVHomePlaybackMode) {
+        if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
+            present(room: room, rooms: rooms, mode: mode)
+            return
+        }
         if mode == .favorite, !PlatformHostBehavior.isPlayableRoom(room) {
             validateFavoriteAndOpen(room: room, rooms: rooms)
             return
@@ -1351,6 +1356,13 @@ private final class TVHomePlaybackCoordinator {
         if !appViewModel.historyViewModel.watchList.contains(room) {
             appViewModel.historyViewModel.watchList.insert(room, at: 0)
         }
+        if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
+            roomInfoViewModel = nil
+            shortDramaRoom = room
+            isPresented = true
+            return
+        }
+        shortDramaRoom = nil
         let roomType: LiveRoomListType = mode == .favorite ? .favorite : .live
         let infoModel = RoomInfoViewModel(
             currentRoom: room,
@@ -1378,7 +1390,13 @@ private struct TVHomePlaybackPresentationModifier: ViewModifier {
 
         content
             .fullScreenCover(isPresented: $coordinator.isPresented) {
-                if let roomInfoViewModel = coordinator.roomInfoViewModel {
+                if let room = coordinator.shortDramaRoom {
+                    TVShortDramaPlayerView(room: room) {
+                        coordinator.isPresented = false
+                        coordinator.shortDramaRoom = nil
+                    }
+                    .id(room.id)
+                } else if let roomInfoViewModel = coordinator.roomInfoViewModel {
                     DetailPlayerView { isPresented, _ in
                         coordinator.isPresented = isPresented
                     }

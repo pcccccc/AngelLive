@@ -7,6 +7,7 @@
 
 import UIKit
 import SwiftUI
+import SharedAssets
 import JXSegmentedView
 import AngelLiveCore
 import AngelLiveDependencies
@@ -240,7 +241,7 @@ class PlatformDetailViewController: UIViewController {
         )
 
         let hostingController = UIHostingController(
-            rootView: AnyView(errorView.supportDiagnosticsEnabled().environment(pluginAvailability))
+            rootView: AnyView(errorView.supportDiagnosticsEnabled().environment(pluginAvailability).fullUIArcLoadingStyle())
         )
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -270,6 +271,7 @@ class PlatformDetailViewController: UIViewController {
             PlatformAccountLoginView(recoveryPluginIDs: pluginIDs)
         }
         .environment(pluginAvailability)
+        .fullUIArcLoadingStyle()
         let hostingController = UIHostingController(rootView: recoveryView)
         hostingController.modalPresentationStyle = .pageSheet
         present(hostingController, animated: true)

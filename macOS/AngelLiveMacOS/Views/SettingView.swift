@@ -18,6 +18,8 @@ struct SettingView: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @AppStorage(MacDockIconPreference.storageKey)
     private var dockIconPreference = MacDockIconPreference.xiaoShengBiBi
+    @AppStorage(MacPlaybackPresentationPreference.singlePageModeKey)
+    private var singlePagePlayback = false
 
     @State private var playerSettingModel = PlayerSettingModel()
     @State private var showOpenSourceList = false
@@ -67,6 +69,7 @@ struct SettingView: View {
 
             Section("播放") {
                 if pluginAvailability.hasAvailablePlugins {
+                    singlePagePlaybackRow
                     defaultPlaybackQualityRow
                 }
                 danmuSettingRow
@@ -382,6 +385,23 @@ struct SettingView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var singlePagePlaybackRow: some View {
+        PanelNavigationRow(
+            title: "单页模式",
+            subtitle: "在主窗口内播放，关闭后返回浏览页面。",
+            showsChevron: false
+        ) {
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.blue.gradient)
+        } trailing: {
+            Toggle("单页模式", isOn: $singlePagePlayback)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .help("关闭时使用独立播放窗口；主窗口全屏时仍在原窗口播放。")
+        }
     }
 
     private var defaultPlaybackQualityRow: some View {

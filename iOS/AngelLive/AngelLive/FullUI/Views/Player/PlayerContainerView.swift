@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 import UIKit
@@ -951,7 +952,7 @@ struct StreamLoadingOverlay: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            ArcSpinner(size: 42, lineWidth: 1.8)
+            ArcSpinner(size: 42, lineWidth: 1.8).tint(.white)
             VStack(spacing: 8) {
                 Text(stage.title)
                     .font(.headline.weight(.medium))
@@ -1009,29 +1010,6 @@ private struct PlayerRecoveryNoticeBanner: View {
             .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .allowsHitTesting(false)
             .accessibilityLabel(notice.title)
-    }
-}
-
-/// 极简旋转圆弧。
-private struct ArcSpinner: View {
-    let size: CGFloat
-    let lineWidth: CGFloat
-    @State private var rotation: Double = 0
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.22)
-            .stroke(
-                Color.white.opacity(0.9),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(rotation))
-            .onAppear {
-                withAnimation(.linear(duration: 0.95).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
     }
 }
 

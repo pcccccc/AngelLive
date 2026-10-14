@@ -35,6 +35,7 @@ struct PluginManagementView: View {
     @State private var searchText = ""
     @State private var selectedScope: PluginManagementScope
     @State private var showAddSource = false
+    @State private var isPullRefreshing = false
     @State private var pendingUninstallPluginID: String?
     @State private var didPrepare = false
     @State private var consentHostID = UUID()
@@ -148,7 +149,11 @@ struct PluginManagementView: View {
                 guard isReady, !didPrepare else { return }
                 Task { await prepareIfNeeded() }
             }
-            .refreshable { await refreshCurrentScope() }
+            .refreshable {
+                isPullRefreshing = true
+                defer { isPullRefreshing = false }
+                await refreshCurrentScope()
+            }
             .sheet(isPresented: $showAddSource) {
                 NavigationStack {
                     PluginSourceAddView { addedURLs in
@@ -211,7 +216,11 @@ struct PluginManagementView: View {
 
     private var managementList: some View {
         List {
-            PluginManagementScopeSection(selection: $selectedScope)
+            PluginManagementScopeSection(
+                selection: $selectedScope,
+                usesArcRefreshIndicator: pluginAvailability.hasAvailablePlugins,
+                isRefreshing: isPullRefreshing
+            )
 
             if installationFlow.isPreparing {
                 Section {
@@ -811,6 +820,8 @@ private struct PluginInstallationSourcesSection: View {
 
 private struct PluginManagementScopeSection: View {
     @Binding var selection: PluginManagementScope
+    let usesArcRefreshIndicator: Bool
+    let isRefreshing: Bool
 
     var body: some View {
         Section {
@@ -825,6 +836,10 @@ private struct PluginManagementScopeSection: View {
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .accessibilityIdentifier("plugins.scope")
+            .background {
+                FullUIArcRefreshIndicator(isEnabled: usesArcRefreshIndicator, isRefreshing: isRefreshing)
+                    .frame(width: 0, height: 0)
+            }
         }
     }
 }

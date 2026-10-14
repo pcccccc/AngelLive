@@ -10,6 +10,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import SharedAssets
 
 /// 独立 NSWindow Scene。`Window(_:id:)` 保证全局唯一,反复触发只激活同一个窗口。
 struct DevConsoleScene: Scene {
@@ -37,6 +38,7 @@ private struct DevConsoleContent: View {
                 PluginConsoleView()
             }
         }
+        .fullUIArcLoadingStyle(isEnabled: pluginAvailability.hasAvailablePlugins)
     }
 }
 

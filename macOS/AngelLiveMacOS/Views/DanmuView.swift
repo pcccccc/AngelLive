@@ -59,6 +59,7 @@ struct DanmuView: NSViewRepresentable {
 
     final class Coordinator {
         private weak var view: DanmakuView?
+        @MainActor private var roomGeneration = UUID()
 
         func attach(view: DanmakuView) {
             self.view = view
@@ -67,6 +68,7 @@ struct DanmuView: NSViewRepresentable {
         /// 发射弹幕。共享工厂负责图文片段取图、局部降级、布局模型和样式。
         @MainActor
         func shoot(_ message: DanmakuDisplayMessage, showColorDanmu: Bool, alpha: CGFloat, font: CGFloat) {
+            let generation = roomGeneration
             Task { @MainActor [weak self] in
                 let model = await DanmakuDisplayModelFactory.makeModel(
                     for: message,
@@ -74,8 +76,17 @@ struct DanmuView: NSViewRepresentable {
                     alpha: alpha,
                     fontSize: font
                 )
-                self?.view?.shoot(danmaku: model)
+                guard let self, self.roomGeneration == generation else { return }
+                self.view?.shoot(danmaku: model)
             }
+        }
+
+        /// 换台时同步清空当前画面，并使仍在准备图文内容的旧房间消息失效。
+        @MainActor
+        func resetForRoomSwitch(showDanmu: Bool) {
+            roomGeneration = UUID()
+            view?.stop()
+            if showDanmu { view?.play() }
         }
 
         func play() {

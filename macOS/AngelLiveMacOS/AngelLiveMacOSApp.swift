@@ -95,7 +95,6 @@ struct AngelLiveMacOSApp: App {
     @State private var favoriteViewModel = AppFavoriteModel()
     @State private var historyViewModel = HistoryModel()
     @State private var toastManager = ToastManager()
-    @State private var fullscreenPlayerManager = FullscreenPlayerManager()
     @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
 
     var body: some Scene {
@@ -106,7 +105,6 @@ struct AngelLiveMacOSApp: App {
                 .environment(favoriteViewModel)
                 .environment(historyViewModel)
                 .environment(toastManager)
-                .environment(fullscreenPlayerManager)
                 #if !APPSTORE
                 .environmentObject(updaterViewModel)
                 #endif
@@ -164,7 +162,7 @@ struct AngelLiveMacOSApp: App {
 
         WindowGroup(for: LiveModel.self) { $room in
             if let room = room {
-                RoomPlayerView(room: room)
+                MacRoomPlaybackDestination(room: room, presentation: .playerWindow)
                     .environment(pluginAvailability)
                     .environment(favoriteViewModel)
                     .environment(historyViewModel)

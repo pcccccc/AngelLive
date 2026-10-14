@@ -7,6 +7,7 @@
 
 import UIKit
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -64,6 +65,7 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
 
     /// 复用已有 UIHostingController，避免滚动时反复创建/销毁的开销
     private func applyRootView(_ rootView: AnyView, interactive: Bool) {
+        let rootView = AnyView(rootView.fullUIArcLoadingStyle())
         if let hosting = hostingController {
             hosting.rootView = rootView
             hosting.view.isUserInteractionEnabled = interactive

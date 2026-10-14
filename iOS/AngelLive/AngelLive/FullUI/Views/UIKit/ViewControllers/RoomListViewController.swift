@@ -7,6 +7,7 @@
 
 import UIKit
 import SwiftUI
+import SharedAssets
 import Observation
 import AngelLiveCore
 import AngelLiveDependencies
@@ -53,6 +54,8 @@ class RoomListViewController: UIViewController {
         cv.alwaysBounceVertical = true
         return cv
     }()
+
+    private let refreshDecoration = ArcRefreshControlDecoration()
 
     private lazy var refreshControl: UIRefreshControl = {
         let rc = UIRefreshControl()
@@ -139,8 +142,19 @@ class RoomListViewController: UIViewController {
         loadData()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if !usesStaticRooms { refreshDecoration.attach(to: refreshControl) }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        refreshDecoration.detach()
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        if !usesStaticRooms, view.window != nil { refreshDecoration.attach(to: refreshControl) }
 
         let currentWidth = effectiveCollectionWidth
         let currentHorizontalSizeClass = traitCollection.horizontalSizeClass
@@ -277,8 +291,10 @@ class RoomListViewController: UIViewController {
     @objc private func handleRefresh() {
         guard let viewModel = viewModel else {
             refreshControl.endRefreshing()
+            refreshDecoration.update(isRefreshing: false)
             return
         }
+        refreshDecoration.update(isRefreshing: true)
 
         Task { @MainActor in
             await viewModel.loadRoomList(
@@ -288,6 +304,7 @@ class RoomListViewController: UIViewController {
 
             updateRooms()
             refreshControl.endRefreshing()
+            refreshDecoration.update(isRefreshing: false)
         }
     }
 
@@ -379,7 +396,7 @@ class RoomListViewController: UIViewController {
                 description: Text(emptyMessage)
             )
         )
-        let hostingController = UIHostingController(rootView: emptyView)
+        let hostingController = UIHostingController(rootView: AnyView(emptyView.fullUIArcLoadingStyle()))
         hostingController.view.backgroundColor = .clear
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -434,7 +451,7 @@ class RoomListViewController: UIViewController {
             } : nil
         )
 
-        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled()))
+        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled().fullUIArcLoadingStyle()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -464,6 +481,7 @@ class RoomListViewController: UIViewController {
             PlatformAccountLoginView(recoveryPluginIDs: pluginIDs)
         }
         .environment(pluginAvailability)
+        .fullUIArcLoadingStyle()
         let hostingController = UIHostingController(rootView: recoveryView)
         hostingController.modalPresentationStyle = .pageSheet
         present(hostingController, animated: true)

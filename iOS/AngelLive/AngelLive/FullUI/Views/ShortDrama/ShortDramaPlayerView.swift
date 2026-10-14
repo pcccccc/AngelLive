@@ -1,4 +1,5 @@
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 
 #if canImport(KSPlayer)
@@ -395,7 +396,7 @@ struct ShortDramaPlayerView: View {
 
     private var preparingOverlay: some View {
         VStack(spacing: 14) {
-            ProgressView().tint(.white)
+            ProgressView().tint(.white).fullUIArcLoadingStyle(size: 42, lineWidth: 1.8)
             Text(preparingEpisodeMessage)
                 .font(.callout)
                 .foregroundStyle(.white.opacity(0.9))
@@ -698,7 +699,7 @@ struct ShortDramaPlayerView: View {
     private var loadState: some View {
         if model.isLoading {
             VStack(spacing: 14) {
-                ProgressView().tint(.white)
+                ProgressView().tint(.white).fullUIArcLoadingStyle(size: 42, lineWidth: 1.8)
                 Text(model.selectedEpisode.map { "正在准备第 \($0.number) 集" } ?? "正在加载剧集")
                     .font(.callout)
                     .foregroundStyle(.white.opacity(0.82))

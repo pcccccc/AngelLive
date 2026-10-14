@@ -13,9 +13,14 @@ import AngelLiveDependencies
 import Combine
 import AppKit
 import Kingfisher
+import SharedAssets
 
 struct RoomPlayerView: View {
     let room: LiveModel
+    let onClose: (@MainActor () -> Void)?
+    let onExitFullscreen: (@MainActor () -> Bool)?
+    let onRouteShortDrama: ((LiveModel) -> Void)?
+    @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(HistoryModel.self) private var historyModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: RoomInfoViewModel
@@ -36,10 +41,26 @@ struct RoomPlayerView: View {
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
     @State private var lockedQualityToast: ToastMessage?
+    @State private var categoryRooms: CategoryRoomListModel?
+    @State private var showRoomSwitcher = false
+    @State private var showVideoSettings = false
+    @State private var roomSwitchTask: Task<Void, Never>?
+    @State private var switchingRoom: LiveModel?
+    @State private var roomSwitchFailure: String?
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
-    init(room: LiveModel) {
+    init(
+        room: LiveModel,
+        categoryRooms: CategoryRoomListModel? = nil,
+        onClose: (@MainActor () -> Void)? = nil,
+        onExitFullscreen: (@MainActor () -> Bool)? = nil,
+        onRouteShortDrama: ((LiveModel) -> Void)? = nil
+    ) {
         self.room = room
+        self.onClose = onClose
+        self.onExitFullscreen = onExitFullscreen
+        self.onRouteShortDrama = onRouteShortDrama
+        self._categoryRooms = State(initialValue: categoryRooms)
         self._viewModel = State(initialValue: RoomInfoViewModel(room: room))
     }
 
@@ -79,7 +100,17 @@ struct RoomPlayerView: View {
                 #endif
 
                 // 控制层
-                PlayerControlView(room: room, viewModel: viewModel, coordinator: coordinator, volume: $volume, isMuted: $isMuted)
+                PlayerControlView(
+                    room: viewModel.currentRoom,
+                    viewModel: viewModel,
+                    coordinator: coordinator,
+                    volume: $volume,
+                    isMuted: $isMuted,
+                    showSettings: $showVideoSettings,
+                    playerWindow: playerWindow,
+                    onClose: onClose,
+                    onShowRoomSwitcher: titleTranslationEnabled ? { showRoomSwitcher = true } : nil
+                )
 
                 if let notice = visibleRecoveryNotice {
                     VStack {
@@ -90,6 +121,27 @@ struct RoomPlayerView: View {
                         Spacer()
                     }
                     .allowsHitTesting(false)
+                }
+
+                if showRoomSwitcher {
+                    ZStack(alignment: .trailing) {
+                        Color.black.opacity(0.35)
+                            .contentShape(Rectangle())
+                            .onTapGesture { showRoomSwitcher = false }
+                            .accessibilityHidden(true)
+                        MacRoomSwitcherPanel(
+                            currentRoom: viewModel.currentRoom,
+                            favorites: favoriteModel.roomList,
+                            history: historyModel.watchList,
+                            category: categoryRooms,
+                            switchingRoom: switchingRoom,
+                            failureMessage: roomSwitchFailure,
+                            onSelect: switchRoom,
+                            onClose: { showRoomSwitcher = false }
+                        )
+                        .frame(width: min(380, geometry.size.width))
+                        .environment(\.colorScheme, .dark)
+                    }
                 }
             }
         }
@@ -121,19 +173,27 @@ struct RoomPlayerView: View {
             return .handled
         }
         .onKeyPress(.return) {
-            if let window = NSApplication.shared.keyWindow {
+            if let window = playerWindow {
                 window.toggleFullScreen(nil)
             }
             return .handled
         }
         .onTapGesture(count: 2) {
-            if let window = NSApplication.shared.keyWindow {
+            if let window = playerWindow {
                 window.toggleFullScreen(nil)
             }
         }
         .onKeyPress(.escape) {
-            if let window = NSApplication.shared.keyWindow, window.styleMask.contains(.fullScreen) {
-                window.toggleFullScreen(nil)
+            if showRoomSwitcher {
+                showRoomSwitcher = false
+            } else if titleTranslationEnabled, showVideoSettings {
+                showVideoSettings = false
+            } else if titleTranslationEnabled, onExitFullscreen?() == true {
+                // Keep playback until a subsequent Esc requests the destination's close action.
+            } else if let window = playerWindow, window.styleMask.contains(.fullScreen) {
+                if onExitFullscreen == nil { window.toggleFullScreen(nil) }
+            } else if titleTranslationEnabled {
+                onClose?()
             }
             return .handled
         }
@@ -148,11 +208,23 @@ struct RoomPlayerView: View {
         .task {
             await viewModel.loadPlayURL()
         }
+        .onChange(of: room) { _, newRoom in
+            guard titleTranslationEnabled, newRoom != viewModel.currentRoom else { return }
+            switchRoom(newRoom)
+        }
+        .onChange(of: MacPlayerCategoryHandoff.shared.requestID(for: room), initial: true) { _, requestID in
+            guard titleTranslationEnabled, requestID != nil,
+                  let entry = MacPlayerCategoryHandoff.shared.take(for: room) else { return }
+            categoryRooms = entry.model
+            // WindowGroup 会激活已有的同值窗口；它可能已在窗口内换到另一个房间。
+            if room != viewModel.currentRoom { switchRoom(room) }
+        }
         .roomTitleTranslationTask(
             viewModel.currentRoom.roomTitle,
             enabled: titleTranslationEnabled
         )
         .onDisappear {
+            roomSwitchTask?.cancel()
             SupportDiagnosticsService.shared.recordAction(
                 .closedRoom,
                 context: SupportDiagnosticActionContext.room(viewModel.currentRoom)
@@ -162,6 +234,12 @@ struct RoomPlayerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let closedWindow = notification.object as? NSWindow else { return }
+            if titleTranslationEnabled, closedWindow === playerWindow {
+                roomSwitchTask?.cancel()
+                playbackSession.invalidate()
+                cleanupPlayer()
+                return
+            }
             // 其他播放窗口关闭时，重新应用当前窗口的音频设置，避免状态被意外重置。
             guard closedWindow != playerWindow else { return }
             DispatchQueue.main.async {
@@ -244,6 +322,34 @@ struct RoomPlayerView: View {
         }
     }
 
+    private func switchRoom(_ room: LiveModel) {
+        if MacShortDramaRouting.isShortDrama(room), let onRouteShortDrama {
+            roomSwitchTask?.cancel()
+            showRoomSwitcher = false
+            onRouteShortDrama(room)
+            return
+        }
+        roomSwitchTask?.cancel()
+        switchingRoom = room
+        roomSwitchFailure = nil
+        roomSwitchTask = Task { @MainActor in
+            do {
+                try await viewModel.switchRoom(to: room)
+                try Task.checkCancellation()
+                historyModel.addHistory(room: room)
+                visibleRecoveryNotice = nil
+                lockedQualityToast = nil
+                switchingRoom = nil
+            } catch is CancellationError {
+                // 最新一次选择拥有切换状态。
+            } catch {
+                guard !Task.isCancelled, switchingRoom == room else { return }
+                switchingRoom = nil
+                roomSwitchFailure = "切换到 \(room.userName.orDash) 失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
     private func showLockedQualityToast(_ message: String) {
         let toast = ToastMessage(icon: "lock.fill", message: message, type: .info)
         lockedQualityToast = toast
@@ -302,6 +408,132 @@ struct RoomPlayerView: View {
     }
 }
 
+private struct MacRoomSwitcherPanel: View {
+    let currentRoom: LiveModel
+    let favorites: [LiveModel]
+    let history: [LiveModel]
+    let category: CategoryRoomListModel?
+    let switchingRoom: LiveModel?
+    let failureMessage: String?
+    let onSelect: (LiveModel) -> Void
+    let onClose: () -> Void
+    @State private var source: RoomSwitchSource = .favorite
+    @State private var loadMoreTask: Task<Void, Never>?
+
+    private var rooms: [LiveModel] {
+        RoomSwitchCandidates.rooms(
+            for: source,
+            currentRoom: currentRoom,
+            favorites: favorites,
+            history: history,
+            category: category?.rooms ?? []
+        )
+    }
+
+    private var emptyMessage: String {
+        switch source {
+        case .favorite: "收藏中没有其他正在直播的房间"
+        case .history: "还没有其他观看记录"
+        case .category: "此分区没有其他可切换的直播间"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(alignment: .top, spacing: 16) {
+                PanelCloseButton(closesOnEscape: true, action: onClose)
+                    .accessibilityLabel("关闭快速换台")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("快速换台")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("当前：\(currentRoom.userName.orDash)")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 12)
+            }
+
+            Picker("换台来源", selection: $source) {
+                Text("收藏").tag(RoomSwitchSource.favorite)
+                Text("历史").tag(RoomSwitchSource.history)
+                if category != nil {
+                    Text("分区").tag(RoomSwitchSource.category)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            if let switchingRoom {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在切换到 \(switchingRoom.userName.orDash)…")
+                        .font(.caption)
+                        .lineLimit(2)
+                }
+            }
+            if let failureMessage {
+                Text(failureMessage)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if rooms.isEmpty {
+                        ContentUnavailableView(
+                            "暂无可切换直播间",
+                            systemImage: "rectangle.stack",
+                            description: Text(emptyMessage)
+                        )
+                    }
+                    ForEach(rooms) { room in
+                        Button { onSelect(room) } label: {
+                            LiveRoomCard(
+                                room: room,
+                                isFavoritedOverride: favorites.contains(room)
+                            )
+                        }
+                        .buttonStyle(MacRoomCardButtonStyle())
+                        .frame(maxWidth: 260)
+                        .disabled(switchingRoom == room)
+                        .accessibilityLabel("切换到 \(room.userName.orDash)，\(room.roomTitle.orDash)")
+                    }
+                    if source == .category, let category {
+                        if let error = category.error {
+                            Text(error.localizedDescription)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if category.isLoading {
+                            ProgressView("加载更多…")
+                        } else if category.hasMore {
+                            Button(category.error == nil ? "加载更多" : "重试") {
+                                loadMoreTask?.cancel()
+                                loadMoreTask = Task { await category.loadMore() }
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(24)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .adaptiveGlassEffectRoundedRect(cornerRadius: 24)
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .onChange(of: category == nil) { _, missing in
+            if missing, source == .category { source = .favorite }
+        }
+        .onDisappear { loadMoreTask?.cancel() }
+    }
+}
+
 private extension RoomPlayerView {
     @ViewBuilder
     func playerSurface(for viewModel: RoomInfoViewModel) -> some View {
@@ -354,7 +586,7 @@ private extension RoomPlayerView {
             .background(Color.black)
         } else if let url = viewModel.currentPlayURL {
             ZStack {
-                KSVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
+                MacFullUIVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
                     .onAppear {
                         viewModel.setPlayerDelegate(playerCoordinator: coordinator)
                         applyAudioSettings()
@@ -505,7 +737,7 @@ struct MacStreamLoadingOverlay: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            ArcSpinner(size: 34, lineWidth: 1.5)
+            ArcSpinner(size: 34, lineWidth: 1.5).tint(.white)
             VStack(spacing: 6) {
                 Text(stage.title)
                     .font(.body.weight(.medium))
@@ -590,29 +822,6 @@ final class WindowReferenceView: NSView {
 }
 
 // MARK: - 共享组件
-
-/// 极简旋转圆弧。线宽 / 直径可配,默认白色 90%。
-private struct ArcSpinner: View {
-    let size: CGFloat
-    let lineWidth: CGFloat
-    @State private var rotation: Double = 0
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.22)
-            .stroke(
-                Color.white.opacity(0.9),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(rotation))
-            .onAppear {
-                withAnimation(.linear(duration: 0.95).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
-    }
-}
 
 /// 网速格式化:返回 (数字, 单位) 拆分,以便分别排版。
 private enum SpeedFormatter {

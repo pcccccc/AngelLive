@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SharedAssets
 import GameController
 import Network
 import Foundation
@@ -251,6 +252,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.navigateToSettings)) { _ in
             contentVM.selection = 3
         }
+        .fullUIArcLoadingStyle(isEnabled: presentsFullUI)
         
 //        .simpleToast(isPresented: $contentVM.showToast, options: appViewModel.toastOptions) {
 //            VStack(alignment: .leading) {
@@ -393,7 +395,8 @@ struct ContentView: View {
 
             VStack(spacing: 24) {
                 ProgressView()
-                    .scaleEffect(2)
+                    .fullUIArcLoadingStyle(isEnabled: presentsFullUI, size: 64, lineWidth: 2.5)
+                    .scaleEffect(presentsFullUI ? 1 : 2)
 
                 if let message = appViewModel.pluginSourceSyncService.installStatusMessage {
                     Text(message)

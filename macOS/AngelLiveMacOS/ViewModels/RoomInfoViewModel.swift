@@ -20,6 +20,18 @@ enum PlayerDisplayState {
     case streamerOffline  // 主播已下播
 }
 
+enum MacRoomSwitchError: LocalizedError {
+    case unsupportedPlatform
+    case noPlayableSource
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedPlatform: "此直播间的插件当前不可用"
+        case .noPlayableSource: "此直播间暂无可用的播放源"
+        }
+    }
+}
+
 // MARK: - 播放器常量配置
 private enum PlayerConstants {
     /// 弹幕消息最大数量限制
@@ -90,6 +102,7 @@ final class RoomInfoViewModel {
 
     @MainActor
     func endPlaybackDiagnostics() {
+        qualitySwitchTask?.cancel()
         playbackDiagnosticsEnded = true
         playbackSelectionGeneration = UUID()
         playbackRequestGeneration = UUID()
@@ -150,6 +163,10 @@ final class RoomInfoViewModel {
         let option = PlayerOptions()
         option.userAgent = PlayerConstants.defaultUserAgent
         option.registerRemoteControll = false
+        #if canImport(KSPlayer)
+        // FullUI owns window sizing; portrait media must not stretch the user's window.
+        option.automaticWindowResize = false
+        #endif
         // Rotate portrait streams during decoding. KSPlayer's macOS fallback rotates the
         // NSViewRepresentable root layer during layout, which can leave the video scaled
         // and offset after SwiftUI/AppKit relayouts.
@@ -172,8 +189,11 @@ final class RoomInfoViewModel {
         // 已经加载过且不强制刷新时直接返回
         guard force || !hasLoadedPlayURL else { return }
 
+        let loadingRoom = currentRoom
         isFetchingPlayURL = true
-        defer { isFetchingPlayURL = false }
+        defer {
+            if currentRoom == loadingRoom { isFetchingPlayURL = false }
+        }
 
         // 已在播时的强制刷新(含恢复阶梯 reloadPlayArgs):静默取新 URL,不全屏 loading/清错误态抢 UI
         let silentRefresh = force && hasLoadedPlayURL && currentPlayURL != nil
@@ -192,6 +212,96 @@ final class RoomInfoViewModel {
         )
         await SupportDiagnosticContext.$operationID.withValue(operationID) {
             await getPlayArgs(silent: silentRefresh)
+        }
+    }
+
+    /// 与 iOS 一致：目标房间的播放参数准备成功后才提交，失败继续播放原直播。
+    @MainActor
+    func switchRoom(to room: LiveModel) async throws {
+        guard room != currentRoom else { return }
+        guard let platform = SandboxPluginCatalog.platform(for: room.liveType) else {
+            throw MacRoomSwitchError.unsupportedPlatform
+        }
+        let operationID = SupportDiagnosticsService.shared.recordAction(
+            .openedRoom,
+            context: SupportDiagnosticActionContext.room(room, additional: ["switchRoom": "true"])
+        )
+        let fetchedArgs = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+            try await LiveParseJSPlatformManager.getPlayArgs(
+                platform: platform, roomId: room.roomId, userId: room.userId
+            )
+        }
+        try Task.checkCancellation()
+        let preferredIndex = await CDNPreferenceStore.shared.preferredIndex(
+            in: fetchedArgs, pluginID: platform.pluginId
+        ) ?? 0
+        try Task.checkCancellation()
+        let automatic = RoomPlaybackResolver.initialSelection(
+            in: fetchedArgs,
+            preferredCdnIndex: preferredIndex,
+            preference: PlayerSettingModel().defaultPlaybackQuality
+        )
+        guard let selection = RoomPlaybackResolver.selection(
+            in: fetchedArgs, cdnIndex: automatic.cdnIndex, qualityIndex: automatic.qualityIndex
+        ) ?? RoomPlaybackResolver.firstSelection(in: fetchedArgs) else {
+            throw MacRoomSwitchError.noPlayableSource
+        }
+        var stagedArgs = fetchedArgs
+        if RoomPlaybackResolver.requiresRefreshOnSelect(selection.quality) {
+            var preparedQuality = try await SupportDiagnosticContext.$operationID.withValue(operationID) {
+                try await RoomPlaybackPreparer.prepare(
+                    roomId: room.roomId,
+                    cdn: stagedArgs[selection.cdnIndex],
+                    quality: selection.quality,
+                    plugin: platform
+                )
+            }
+            try Task.checkCancellation()
+            var hints = preparedQuality.playbackHints ?? LivePlaybackHints()
+            hints.selectionBehavior = .direct
+            preparedQuality.playbackHints = hints
+            stagedArgs[selection.cdnIndex].qualitys[selection.qualityIndex] = preparedQuality
+        }
+        guard RoomPlaybackResolver.playableURL(
+            for: stagedArgs[selection.cdnIndex].qualitys[selection.qualityIndex]
+        ) != nil else {
+            throw MacRoomSwitchError.noPlayableSource
+        }
+        try Task.checkCancellation()
+        guard !playbackDiagnosticsEnded else { throw CancellationError() }
+
+        qualitySwitchTask?.cancel()
+        disconnectSocket()
+        danmuMessages.removeAll(keepingCapacity: true)
+        danmuCoordinator.resetForRoomSwitch(showDanmu: danmuSettings.showDanmu)
+        _recoveryCoordinator?.stop()
+        _recoveryCoordinator = nil
+        _playbackDiagnostics?.end()
+        _playbackDiagnostics = nil
+        playbackRequestGeneration = UUID()
+        playbackSelectionGeneration = UUID()
+        currentRoom = room
+        currentRoomPlayArgs = nil
+        currentCdnIndex = 0
+        currentQualityIndex = 0
+        currentPlayQualityString = "清晰度"
+        currentPlayQualityQn = 0
+        playError = nil
+        playErrorMessage = nil
+        pendingLoginRequest = nil
+        lockedQualityNotice = nil
+        displayState = .playing
+        isFetchingPlayURL = false
+        hasLoadedPlayURL = false
+        isLoading = true
+        await SupportDiagnosticContext.$operationID.withValue(operationID) {
+            await updateCurrentRoomPlayArgs(
+                stagedArgs,
+                initialSelection: (selection.cdnIndex, selection.qualityIndex)
+            )
+        }
+        if !Task.isCancelled, !playbackDiagnosticsEnded {
+            recoveryCoordinator.start()
         }
     }
 
@@ -240,12 +350,16 @@ final class RoomInfoViewModel {
     }
 
     @MainActor
-    func updateCurrentRoomPlayArgs(_ playArgs: [LiveQualityModel], silent: Bool = false) async {
+    func updateCurrentRoomPlayArgs(
+        _ playArgs: [LiveQualityModel],
+        silent: Bool = false,
+        initialSelection: (cdnIndex: Int, qualityIndex: Int)? = nil
+    ) async {
         guard !Task.isCancelled, !playbackDiagnosticsEnded else { return }
         let selectionGeneration = playbackSelectionGeneration
         let requestGeneration = playbackRequestGeneration
         var preferredIndex = currentCdnIndex
-        if !hasLoadedPlayURL {
+        if !hasLoadedPlayURL, initialSelection == nil {
             let pluginID = SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId ?? currentRoom.liveType.rawValue
             if let learned = await CDNPreferenceStore.shared.preferredIndex(in: playArgs, pluginID: pluginID) {
                 preferredIndex = learned
@@ -273,7 +387,7 @@ final class RoomInfoViewModel {
         let firstLoad = !hasLoadedPlayURL
         // 与根页面的 FullUI/ShellUI 判定一样，仅已安装插件时应用该偏好。
         let clamped = if firstLoad && !SandboxPluginCatalog.installedPluginIds().isEmpty {
-            RoomPlaybackResolver.initialSelection(
+            initialSelection ?? RoomPlaybackResolver.initialSelection(
                 in: playArgs,
                 preferredCdnIndex: preferredIndex,
                 preference: PlayerSettingModel().defaultPlaybackQuality
@@ -746,11 +860,14 @@ final class RoomInfoViewModel {
     func setPlayerDelegate(playerCoordinator: KSVideoPlayer.Coordinator) {
         // Keep the Coordinator as KSPlayerLayerDelegate. Business behavior hangs
         // off KSPlayer's Coordinator callbacks instead of stealing delegate ownership.
+        let room = currentRoom
         playerCoordinator.onStateChanged = { [weak self] layer, state in
-            self?.player(layer: layer, state: state)
+            guard let self, !self.playbackDiagnosticsEnded, self.currentRoom == room else { return }
+            self.player(layer: layer, state: state)
         }
         playerCoordinator.onFinish = { [weak self] layer, error in
-            self?.player(layer: layer, finish: error)
+            guard let self, !self.playbackDiagnosticsEnded, self.currentRoom == room else { return }
+            self.player(layer: layer, finish: error)
         }
         // 始终让 watchedPlayerLayer 指向当前活跃 layer,供协调器 sample provider 采样。
         watchedPlayerLayer = playerCoordinator.playerLayer
@@ -1063,13 +1180,17 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     func checkLiveStatusOnError(error: Error) {
         // 恢复阶梯未结束时不进错误页,避免无感续播被打断
         if isPlaybackRecovering { return }
+        let failedRoom = currentRoom
+        let requestGeneration = playbackRequestGeneration
         Task {
             do {
                 let state = try await ApiManager.getCurrentRoomLiveState(
-                    roomId: currentRoom.roomId,
-                    userId: currentRoom.userId,
-                    liveType: currentRoom.liveType
+                    roomId: failedRoom.roomId,
+                    userId: failedRoom.userId,
+                    liveType: failedRoom.liveType
                 )
+                guard !playbackDiagnosticsEnded, currentRoom == failedRoom,
+                      requestGeneration == playbackRequestGeneration else { return }
                 if state == .close || state == .unknow {
                     // 主播已下播
                     displayState = .streamerOffline
@@ -1080,9 +1201,13 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
                     displayState = .error
                 }
             } catch let statusError where statusError.isNotLive {
+                guard !playbackDiagnosticsEnded, currentRoom == failedRoom,
+                      requestGeneration == playbackRequestGeneration else { return }
                 // 插件明确返回 NOT_LIVE，按已下播处理
                 displayState = .streamerOffline
             } catch {
+                guard !playbackDiagnosticsEnded, currentRoom == failedRoom,
+                      requestGeneration == playbackRequestGeneration else { return }
                 // 检查状态失败，显示原始错误
                 playError = error
                 playErrorMessage = error.localizedDescription

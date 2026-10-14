@@ -4,6 +4,7 @@
 // 壳 UI 收藏页 - 卡片网格布局，适配 tvOS 大屏设计语言
 
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -60,6 +61,7 @@ struct TVShellFavoriteView: View {
         .fullScreenCover(item: $playingBookmark) { bookmark in
             if let url = URL(string: bookmark.url) {
                 TVDirectURLPlayerView(url: url, title: bookmark.title)
+                    .fullUIArcLoadingStyle(isEnabled: false)
             }
         }
         .fullScreenCover(isPresented: Binding(
@@ -68,6 +70,7 @@ struct TVShellFavoriteView: View {
         )) {
             if let url = playingHistoryURL {
                 TVDirectURLPlayerView(url: url, title: playingHistoryTitle)
+                    .fullUIArcLoadingStyle(isEnabled: false)
             }
         }
     }

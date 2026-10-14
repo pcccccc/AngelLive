@@ -29,7 +29,7 @@ struct LiveRoomCardButton<Content: View>: View {
 
     var body: some View {
         Button {
-            if isLive {
+            if MacShortDramaRouting.isShortDrama(room) || isLive {
                 fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
             } else {
                 toastManager.show(icon: "tv.slash", message: "主播已下播")

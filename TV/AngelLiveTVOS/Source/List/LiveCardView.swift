@@ -351,7 +351,13 @@ struct LiveCardView: View {
     /// 播放器全屏内容
     @ViewBuilder
     private var playerFullScreenContent: some View {
-        if liveViewModel.roomInfoViewModel != nil {
+        if let room = liveViewModel.shortDramaRoom {
+            TVShortDramaPlayerView(room: room) {
+                isLive = false
+                liveViewModel.shortDramaRoom = nil
+            }
+            .id(room.id)
+        } else if liveViewModel.roomInfoViewModel != nil {
             DetailPlayerView { isLive, hint in
                 self.isLive = isLive
             }
@@ -384,6 +390,12 @@ struct LiveCardView: View {
     private func enterDetailRoom() {
         liveViewModel.currentRoom = currentLiveModel ?? liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = index
+
+        if let room = liveViewModel.currentRoom,
+           TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
+            proceedToPlayer()
+            return
+        }
 
         let isPlayableRoom = liveViewModel.currentRoom.map(PlatformHostBehavior.isPlayableRoom) ?? false
 

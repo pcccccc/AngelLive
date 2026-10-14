@@ -16,6 +16,8 @@
 		FBF74A742EA1F9A400591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A732EA1F9A400591EEA /* AngelLiveCore */; };
 		FBF74A762EA1F9A400591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */; };
 		FBSPARKLE12EE8A0000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FBSPARKLE12EE8A0000000002 /* Sparkle */; };
+		7AE4CD6C6A064E2C92A97B4F /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = BD3882C465134EB3A5D66BD1 /* SharedAssets */; };
+		152172A986DF41C4AE9BCC31 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = B8B9B3E117FA428194A9E13A /* SharedAssets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +65,7 @@
 			files = (
 				4F76CB2F2FB1C4BF0019BDFF /* AngelLiveCore in Frameworks */,
 				4F76CB302FB1C4BF0019BDFF /* AngelLiveDependencies in Frameworks */,
+				152172A986DF41C4AE9BCC31 /* SharedAssets in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,6 +76,7 @@
 				FBSPARKLE12EE8A0000000001 /* Sparkle in Frameworks */,
 				FBF74A742EA1F9A400591EEA /* AngelLiveCore in Frameworks */,
 				FBF74A762EA1F9A400591EEA /* AngelLiveDependencies in Frameworks */,
+				7AE4CD6C6A064E2C92A97B4F /* SharedAssets in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +132,7 @@
 			packageProductDependencies = (
 				4F76CB282FB1C4BF0019BDFF /* AngelLiveCore */,
 				4F76CB292FB1C4BF0019BDFF /* AngelLiveDependencies */,
+				B8B9B3E117FA428194A9E13A /* SharedAssets */,
 			);
 			productName = AngelLiveMacOS;
 			productReference = 4F76CB372FB1C4BF0019BDFF /* Angel Live.app */;
@@ -152,6 +157,7 @@
 			packageProductDependencies = (
 				FBF74A732EA1F9A400591EEA /* AngelLiveCore */,
 				FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */,
+				BD3882C465134EB3A5D66BD1 /* SharedAssets */,
 				FBSPARKLE12EE8A0000000002 /* Sparkle */,
 			);
 			productName = AngelLiveMacOS;
@@ -641,6 +647,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FBSPARKLE12EE8A0000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		BD3882C465134EB3A5D66BD1 /* SharedAssets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SharedAssets;
+		};
+		B8B9B3E117FA428194A9E13A /* SharedAssets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SharedAssets;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

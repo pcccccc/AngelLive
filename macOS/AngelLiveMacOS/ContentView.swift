@@ -7,7 +7,9 @@
 //
 
 import SwiftUI
+import AppKit
 import AngelLiveCore
+import SharedAssets
 
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {
@@ -39,7 +41,8 @@ struct ContentView: View {
     // 从环境获取全局 ViewModels
     @Environment(AppFavoriteModel.self) private var favoriteViewModel
     @Environment(ToastManager.self) private var toastManager
-    @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
+    @State private var fullscreenPlayerManager = FullscreenPlayerManager()
+    @State private var mainWindow: NSWindow?
     // 插件与壳 UI 服务
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @State private var bookmarkService = StreamBookmarkService()
@@ -76,14 +79,8 @@ struct ContentView: View {
     var body: some View {
         @Bindable var manager = welcomeManager
 
-        Group {
-            if fullscreenPlayerManager.showFullscreenPlayer,
-               let room = fullscreenPlayerManager.currentRoom {
-                // 全屏播放器
-                RoomPlayerView(room: room)
-                    .background(Color.black)
-            } else {
-                // 正常内容
+        ZStack {
+                // 保留浏览页面身份，返回时仍处于原来的分区、滚动位置和导航层级。
                 NavigationStack {
                     TabView(selection: tabSelection) {
                         if shouldShowHomeTab {
@@ -102,6 +99,7 @@ struct ContentView: View {
                                 FavoriteView()
                             } else {
                                 MacShellFavoriteView()
+                                    .fullUIArcLoadingStyle(isEnabled: false)
                             }
                         } label: {
                             Label("收藏", systemImage: "heart.fill")
@@ -111,6 +109,7 @@ struct ContentView: View {
                             if !pluginAvailability.hasAvailablePlugins {
                                 Tab(value: TabSelection.allPlatforms) {
                                     MacShellConfigView()
+                                        .fullUIArcLoadingStyle(isEnabled: false)
                                 } label: {
                                     Label("配置", systemImage: "square.grid.2x2.fill")
                                 }
@@ -156,7 +155,7 @@ struct ContentView: View {
                     .tabViewStyle(.sidebarAdaptable)
                     .background(SidebarWidthEnforcer(min: 180, ideal: 200, max: 260))
                     .navigationDestination(for: LiveModel.self) { room in
-                        RoomPlayerView(room: room)
+                        MacRoomPlaybackDestination(room: room, presentation: .navigation)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
                         selectedTab = .settings
@@ -168,7 +167,24 @@ struct ContentView: View {
                         .presentationSizing(.page.fitted(horizontal: true, vertical: true))
                     }
                 }
+                .opacity(fullscreenPlayerManager.showFullscreenPlayer ? 0 : 1)
+                .allowsHitTesting(!fullscreenPlayerManager.showFullscreenPlayer)
+                .accessibilityHidden(fullscreenPlayerManager.showFullscreenPlayer)
+
+            if fullscreenPlayerManager.showFullscreenPlayer,
+               let room = fullscreenPlayerManager.currentRoom {
+                MacRoomPlaybackDestination(
+                    room: room,
+                    categoryRooms: fullscreenPlayerManager.categoryRooms,
+                    presentation: .embedded(close: fullscreenPlayerManager.closeFullscreenPlayer)
+                )
+                .id(room.id)
+                .background(Color.black)
             }
+        }
+        .background(PlayerWindowReferenceView(window: $mainWindow))
+        .onChange(of: mainWindow) { _, window in
+            fullscreenPlayerManager.mainWindow = window
         }
         .environment(platformViewModel)
         .environment(favoriteViewModel)
@@ -335,6 +351,7 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: toastManager.currentToast)
+        .fullUIArcLoadingStyle(isEnabled: pluginAvailability.hasAvailablePlugins)
     }
 
     @MainActor

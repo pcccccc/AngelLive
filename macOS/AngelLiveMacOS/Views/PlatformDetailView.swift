@@ -329,7 +329,11 @@ struct PlatformDetailView: View {
                 ) {
                     ForEach(rooms) { room in
                         Button {
-                            fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+                            fullscreenPlayerManager.openRoom(
+                                room,
+                                openWindow: openWindow,
+                                categoryRooms: viewModel.currentRoomListModel
+                            )
                         } label: {
                             LiveRoomCard(room: room)
                         }

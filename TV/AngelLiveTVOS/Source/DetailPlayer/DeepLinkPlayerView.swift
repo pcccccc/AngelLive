@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -14,6 +15,7 @@ struct DeepLinkPlayerView: View {
 
     var appViewModel: AppState
     @State private var roomInfoViewModel: RoomInfoViewModel?
+    @State private var shortDramaRoom: LiveModel?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
@@ -24,6 +26,9 @@ struct DeepLinkPlayerView: View {
                 loadingView
             } else if let error = errorMessage {
                 errorView(message: error)
+            } else if let room = shortDramaRoom {
+                TVShortDramaPlayerView(room: room, onExit: cleanupAndDismiss)
+                    .id(room.id)
             } else if let viewModel = roomInfoViewModel {
                 DetailPlayerView { _, _ in
                     cleanupAndDismiss()
@@ -34,18 +39,24 @@ struct DeepLinkPlayerView: View {
                 .frame(width: 1920, height: 1080)
             }
         }
+        .fullUIArcLoadingStyle(isEnabled: appViewModel.pluginAvailability.hasAvailablePlugins)
         .task {
             await loadRoomInfo()
         }
         .onExitCommand {
-            cleanupAndDismiss()
+            // The short-drama page owns its panel → controls → exit Menu state.
+            if shortDramaRoom == nil { cleanupAndDismiss() }
         }
     }
 
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .scaleEffect(2.0)
+                .fullUIArcLoadingStyle(
+                    isEnabled: appViewModel.pluginAvailability.hasAvailablePlugins,
+                    size: 64, lineWidth: 2.5
+                )
+                .scaleEffect(appViewModel.pluginAvailability.hasAvailablePlugins ? 1 : 2)
                 .tint(.white)
             Text("正在获取直播信息...")
                 .font(.headline)
@@ -88,9 +99,19 @@ struct DeepLinkPlayerView: View {
             return
         }
 
+        if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
+            if !appViewModel.historyViewModel.watchList.contains(room) {
+                appViewModel.historyViewModel.watchList.insert(room, at: 0)
+            }
+            shortDramaRoom = room
+            isLoading = false
+            return
+        }
+
         do {
             // 获取最新的直播间信息
             let latestInfo = try await ApiManager.fetchLastestLiveInfo(liveModel: room)
+            guard !Task.isCancelled else { return }
 
             // 检查是否正在直播
             guard latestInfo.liveState == "1" else {

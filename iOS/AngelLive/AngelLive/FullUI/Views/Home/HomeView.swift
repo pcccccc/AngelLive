@@ -297,6 +297,13 @@ private extension HomeView {
                                       releaseGate: homeNavigationModel.refreshGate)
                     .frame(width: 0, height: 0)
             }
+            .background {
+                FullUIArcRefreshIndicator(
+                    isEnabled: pluginAvailability.hasAvailablePlugins,
+                    isRefreshing: isPullRefreshing
+                )
+                .frame(width: 0, height: 0)
+            }
         }
         .background(AppConstants.Colors.primaryBackground)
         .refreshable {
@@ -1954,6 +1961,8 @@ private struct HomeCategoryView: View {
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
     @State private var model: PluginHomeCategoryModel
+    @State private var isPullRefreshing = false
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
     init(
         route: HomeCategoryRoute,
@@ -2012,6 +2021,13 @@ private struct HomeCategoryView: View {
                 }
             }
             .padding(AppConstants.Spacing.xl)
+            .background {
+                FullUIArcRefreshIndicator(
+                    isEnabled: pluginAvailability.hasAvailablePlugins,
+                    isRefreshing: isPullRefreshing
+                )
+                .frame(width: 0, height: 0)
+            }
 
             if model.isLoading {
                 ProgressView()
@@ -2026,7 +2042,11 @@ private struct HomeCategoryView: View {
                 .padding(.vertical, 80)
             }
         }
-        .refreshable { await model.load(refresh: true) }
+        .refreshable {
+            isPullRefreshing = true
+            defer { isPullRefreshing = false }
+            await model.load(refresh: true)
+        }
     }
 
     private func loadMoreIfNeeded(after room: LiveModel) {

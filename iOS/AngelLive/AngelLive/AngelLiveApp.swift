@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 import Kingfisher
@@ -45,6 +46,7 @@ struct AngelLiveApp: App {
                 .onAppear {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }
+                .fullUIArcLoadingStyle(isEnabled: pluginAvailability.hasAvailablePlugins)
         }
     }
 }

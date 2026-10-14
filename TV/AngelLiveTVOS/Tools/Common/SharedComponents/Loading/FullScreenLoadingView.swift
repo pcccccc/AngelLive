@@ -17,7 +17,7 @@ struct FullScreenLoadingView: View {
                 .edgesIgnoringSafeArea(.all)
             VStack(spacing: 20) {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .tint(.white)
                 Text(loadingText)
                     .font(.title)
             }

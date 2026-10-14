@@ -88,6 +88,7 @@ class LiveViewModel {
     
     //当前选择房间ViewModel
     var roomInfoViewModel: RoomInfoViewModel?
+    var shortDramaRoom: LiveModel?
 
     var isLeftFocused: Bool = false
     
@@ -371,6 +372,12 @@ class LiveViewModel {
     
     @MainActor func createCurrentRoomViewModel(enterFromLive: Bool) {
         guard let currentRoom = self.currentRoom else { return }
+        if TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel) {
+            roomInfoViewModel = nil
+            shortDramaRoom = currentRoom
+            return
+        }
+        shortDramaRoom = nil
         roomInfoViewModel = RoomInfoViewModel(currentRoom: currentRoom, appViewModel: appViewModel, enterFromLive: enterFromLive, roomType: roomListType)
         roomInfoViewModel?.roomList = roomList
     }
