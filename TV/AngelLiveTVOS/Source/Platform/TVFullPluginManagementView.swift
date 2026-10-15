@@ -10,7 +10,6 @@ struct TVFullPluginManagementView: View {
 
     @Environment(PluginInstallConsentService.self) private var consentService
     @Environment(AppState.self) private var appViewModel
-    @State private var focusedPluginID: String?
     @State private var selectedPlugin: TVFullPluginSelection?
     @State private var showSources = false
     @State private var focusToRestore: TVFullPluginFocus?
@@ -32,21 +31,16 @@ struct TVFullPluginManagementView: View {
         NavigationStack {
             TVFullDualColumnLayout {
                 TVFullPluginSummary(
-                    pluginID: focusedPluginID,
+                    pluginID: nil,
                     manager: pluginSourceManager,
                     availability: pluginAvailability
                 )
             } right: {
                 operationColumn
             }
-            .navigationTitle("插件管理")
+            .toolbar(.hidden, for: .navigationBar)
             .onExitCommand(perform: onClose)
-            .defaultFocus($focusedAction, .check)
-        }
-        .background {
-            Rectangle()
-                .fill(.background)
-                .ignoresSafeArea()
+            .defaultFocus($focusedAction, pluginSourceManager.sourceURLs.isEmpty ? .sources : .check)
         }
         .task {
             await reloadCatalog()
@@ -55,21 +49,7 @@ struct TVFullPluginManagementView: View {
                 await runAutoAction(action)
             }
         }
-        .onChange(of: focusedAction) { _, newFocus in
-            switch newFocus {
-            case .installed(let id), .available(let id):
-                focusedPluginID = id
-            default:
-                focusedPluginID = nil
-            }
-        }
-        .onChange(of: selectedPlugin) { _, value in
-            if value == nil {
-                focusedAction = focusToRestore ?? .check
-                focusToRestore = nil
-            }
-        }
-        .fullScreenCover(item: $selectedPlugin) { selection in
+        .fullScreenCover(item: $selectedPlugin, onDismiss: restoreManagementFocus) { selection in
             TVFullPluginDetailView(
                 pluginID: selection.id,
                 manager: pluginSourceManager,
@@ -78,8 +58,10 @@ struct TVFullPluginManagementView: View {
                 refreshAfterMutation: refreshAfterMutation,
                 onClose: { selectedPlugin = nil }
             )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
         }
-        .fullScreenCover(isPresented: $showSources) {
+        .fullScreenCover(isPresented: $showSources, onDismiss: restoreManagementFocus) {
             NavigationStack {
                 TVFullPluginSourcesView(
                     manager: pluginSourceManager,
@@ -88,6 +70,8 @@ struct TVFullPluginManagementView: View {
                     refreshAfterMutation: refreshAfterMutation
                 )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
             .environment(appViewModel)
         }
         .alert(
@@ -104,11 +88,20 @@ struct TVFullPluginManagementView: View {
         } message: {
             Text(consent.alertMessage)
         }
-        .onChange(of: showSources) { _, showing in
-            if !showing {
-                focusedAction = focusToRestore ?? .sources
-                focusToRestore = nil
-            }
+    }
+
+    private func restoreManagementFocus() {
+        let target = focusToRestore
+        focusToRestore = nil
+        switch target {
+        case .installed(let id) where installedIDs.contains(id):
+            focusedAction = target
+        case .available(let id) where availableItems.contains(where: { $0.id == id }):
+            focusedAction = target
+        case .addSource where pluginSourceManager.sourceURLs.isEmpty && availableItems.isEmpty:
+            focusedAction = target
+        default:
+            focusedAction = .sources
         }
     }
 
@@ -144,9 +137,7 @@ struct TVFullPluginManagementView: View {
             )
             .focused($focusedAction, equals: .sources)
 
-            Text("已安装")
-                .font(.headline)
-                .padding(.top, 15)
+            TVFullPluginSectionHeader(title: "已安装", count: installedIDs.count)
 
             if installedIDs.isEmpty {
                 Text("尚未安装插件")
@@ -156,9 +147,7 @@ struct TVFullPluginManagementView: View {
                 installedRows
             }
 
-            Text("可安装")
-                .font(.headline)
-                .padding(.top, 15)
+            TVFullPluginSectionHeader(title: "可安装", count: availableItems.count)
 
             if availableItems.isEmpty {
                 if pluginSourceManager.sourceURLs.isEmpty {
@@ -390,6 +379,10 @@ private enum TVFullPluginFocus: Hashable {
 }
 
 private struct TVFullOperationRow: View {
+    // Existing settings rows are 66 points: a 36-point content line plus the
+    // native button insets. Symbol typographic bounds must not enlarge that line.
+    @ScaledMetric(relativeTo: .body) private var symbolLineHeight = 36
+
     let title: String
     let symbol: String
     let trailing: String?
@@ -414,25 +407,47 @@ private struct TVFullOperationRow: View {
         Button(action: action) {
             HStack(spacing: 15) {
                 Text(title)
-                    .font(.body)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 44)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 15)
                 if let trailing {
                     Text(trailing)
-                        .font(.caption)
+                        .font(.system(size: 30))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.trailing, 44)
-            .overlay(alignment: .trailing) {
                 Image(systemName: symbol)
+                    .frame(height: symbolLineHeight)
+                    .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
         }
+        .buttonStyle(.bordered)
         .disabled(disabled)
         .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(trailing ?? ""))
+    }
+}
+
+private struct TVFullPluginSectionHeader: View {
+    let title: String
+    var count: Int? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 15) {
+            Text(title)
+            Spacer()
+            if let count {
+                Text(count, format: .number)
+                    .monospacedDigit()
+            }
+        }
+        .font(.system(size: 30, weight: .bold))
+        .foregroundStyle(.secondary)
+        // 与原生 bordered 按钮的内容边距对齐，而非胶囊外缘。
+        .padding(.horizontal, 30)
+        .padding(.top, 10)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -453,16 +468,16 @@ private struct TVFullDualColumnLayout<Left: View, Right: View>: View {
             HStack(spacing: 0) {
                 ScrollView(.vertical) {
                     left
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: max(0, geometry.size.height - 120), alignment: .center)
                         .padding(.horizontal, 90)
-                        .padding(.top, 60)
-                        .padding(.bottom, 60)
+                        .padding(.vertical, 60)
                 }
                 .frame(width: geometry.size.width / 2, height: geometry.size.height)
 
                 ScrollView(.vertical) {
                     right
-                        .padding(.top, 60)
-                        .padding(.bottom, 60)
+                        .padding(.vertical, 60)
                 }
                 .scrollClipDisabled()
                 .frame(
@@ -472,7 +487,6 @@ private struct TVFullDualColumnLayout<Left: View, Right: View>: View {
                 .padding(.trailing, 50)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(.background)
         }
     }
 }
@@ -493,7 +507,7 @@ private struct TVFullPluginSummary: View {
                     .accessibilityHidden(true)
                 Text("插件管理")
                     .font(.title2)
-                Text("选择右侧插件查看版本、状态和操作。")
+                Text("管理已安装的插件，或从订阅源获取新的插件。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -625,14 +639,9 @@ private struct TVFullPluginDetailView: View {
             } right: {
                 operationColumn
             }
-            .navigationTitle("插件详情")
+            .toolbar(.hidden, for: .navigationBar)
             .onExitCommand(perform: onClose)
             .defaultFocus($focusedAction, .detailBack)
-        }
-        .background {
-            Rectangle()
-                .fill(.background)
-                .ignoresSafeArea()
         }
         .confirmationDialog(
             "卸载插件",
@@ -752,6 +761,7 @@ private struct TVFullPluginSourcesView: View {
 
     @State private var selectedSource: TVFullSourceSelection?
     @State private var showAddSource = false
+    @State private var isRefreshingAfterAdd = false
     @State private var focusToRestore: TVFullPluginFocus?
     @FocusState private var focusedAction: TVFullPluginFocus?
 
@@ -761,10 +771,10 @@ private struct TVFullPluginSourcesView: View {
         } right: {
             sourceOperationColumn
         }
-        .navigationTitle("订阅源")
+        .toolbar(.hidden, for: .navigationBar)
         .onExitCommand(perform: onClose)
-        .defaultFocus($focusedAction, .sourceAdd)
-        .fullScreenCover(item: $selectedSource) { selection in
+        .defaultFocus($focusedAction, manager.isManagementBusy ? .sourceBack : .sourceAdd)
+        .fullScreenCover(item: $selectedSource, onDismiss: restoreSourceFocus) { selection in
             NavigationStack {
                 TVFullSourceDetailView(
                     sourceURL: selection.id,
@@ -774,23 +784,36 @@ private struct TVFullPluginSourcesView: View {
                     onClose: { selectedSource = nil }
                 )
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
         }
-        .fullScreenCover(isPresented: $showAddSource) {
+        .fullScreenCover(isPresented: $showAddSource, onDismiss: restoreSourceFocus) {
             NavigationStack {
-                TVFullPluginSourceInputView()
+                TVFullPluginSourceInputView(onAdded: refreshAfterAddingSource)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
             .environment(appViewModel)
         }
-        .onChange(of: selectedSource) { _, value in
-            if value == nil {
-                focusedAction = focusToRestore ?? .sourceAdd
-                focusToRestore = nil
-            }
+    }
+
+    private func restoreSourceFocus() {
+        let target = focusToRestore
+        focusToRestore = nil
+        if case .source(let url) = target, manager.sourceURLs.contains(url) {
+            focusedAction = target
+        } else {
+            // Adding a source refreshes the combined catalog. Keep an enabled
+            // target throughout that work, without moving focus again on completion.
+            focusedAction = manager.isManagementBusy || isRefreshingAfterAdd ? .sourceBack : .sourceAdd
         }
-        .onChange(of: showAddSource) { _, showing in
-            if !showing {
-                Task { await refreshCatalog() }
-            }
+    }
+
+    private func refreshAfterAddingSource() {
+        isRefreshingAfterAdd = true
+        Task {
+            await refreshCatalog()
+            isRefreshingAfterAdd = false
         }
     }
 
@@ -809,6 +832,8 @@ private struct TVFullPluginSourcesView: View {
                 }
             )
             .focused($focusedAction, equals: .sourceAdd)
+
+            TVFullPluginSectionHeader(title: "已添加", count: manager.sourceURLs.count)
 
             if manager.sourceURLs.isEmpty {
                 Text("尚未添加订阅源")
@@ -881,7 +906,7 @@ private struct TVFullSourceSummary: View {
                 .accessibilityHidden(true)
             Text("订阅源")
                 .font(.title2)
-            Text("管理插件目录的来源。选择右侧订阅源查看健康状态、刷新或删除。")
+            Text("添加和管理插件目录，查看订阅源的连接状态。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -913,7 +938,7 @@ private struct TVFullSourceDetailView: View {
         } right: {
             operationColumn
         }
-        .navigationTitle("订阅源详情")
+        .toolbar(.hidden, for: .navigationBar)
         .onExitCommand(perform: onClose)
         .defaultFocus($focusedAction, .sourceRefresh)
         .confirmationDialog("删除订阅源", isPresented: $showDeleteConfirmation) {
@@ -1003,6 +1028,8 @@ private struct TVFullSourceDetailView: View {
 }
 
 private struct TVFullPluginSourceInputView: View {
+    let onAdded: () -> Void
+
     @Environment(AppState.self) private var appViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var inputURL = ""
@@ -1020,7 +1047,7 @@ private struct TVFullPluginSourceInputView: View {
         } right: {
             inputColumn
         }
-        .navigationTitle("添加订阅源")
+        .toolbar(.hidden, for: .navigationBar)
         .onExitCommand { dismiss() }
         .defaultFocus($focusedField, .inputField)
         .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
@@ -1037,26 +1064,21 @@ private struct TVFullPluginSourceInputView: View {
     }
 
     private var explanationColumn: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Image(systemName: "link.badge.plus")
-                .font(.system(size: 72))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+        VStack(spacing: 24) {
             Text("添加订阅源")
                 .font(.title2)
-            Text("输入插件订阅地址或兑换码。添加后会刷新插件目录；暂时无法访问的地址也会保留并显示异常。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
             remoteInputQRPanel
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
     private var inputColumn: some View {
         VStack(alignment: .leading, spacing: 15) {
+            TVFullPluginSectionHeader(title: "订阅地址或兑换码")
             TextField("输入订阅地址或兑换码", text: $inputURL)
+                .accessibilityLabel("订阅地址或兑换码")
                 .focused($focusedField, equals: .inputField)
                 .onSubmit(handleAdd)
 
@@ -1098,7 +1120,7 @@ private struct TVFullPluginSourceInputView: View {
     private var remoteInputQRPanel: some View {
         let service = appViewModel.remoteInputService
         let url = "http://\(service.localIPAddress):\(service.port)/config"
-        return VStack(alignment: .leading, spacing: 12) {
+        return VStack(spacing: 16) {
             if service.isRunning && !service.localIPAddress.isEmpty {
                 Image(uiImage: Common.generateQRCode(from: url))
                     .interpolation(.none)
@@ -1131,6 +1153,7 @@ private struct TVFullPluginSourceInputView: View {
             isProcessing = false
             if !addedURLs.isEmpty {
                 inputURL = ""
+                onAdded()
                 dismiss()
             } else if appViewModel.pluginSourceManager.errorMessage == nil {
                 localErrorMessage = "无法解析为订阅源，请确认地址或兑换码有效。"

@@ -20,6 +20,7 @@ struct FavoriteMainView: View {
     @State var firstLoad = true
     @State private var isManualRefreshRunning = false
     @State private var refreshCycle = 0
+    @ScaledMetric(relativeTo: .body) private var emptyActionContentHeight = 36
 
     private var favoriteSections: [FavoriteLiveSectionModel] {
         let model = appViewModel.favoriteViewModel
@@ -36,62 +37,71 @@ struct FavoriteMainView: View {
     var body: some View {
         let sections = favoriteSections
         VStack {
-            // 本地优先(已迁到 Core 模型):有本地收藏、或非真错误时都展示内容(空/列表由内部分支处理)。
-            // 仅「真 iCloud 错误且本地无数据」才整页报错;cloudKitReady=false 在纯本地/未就绪时仍应显示本地收藏。
-            if !appViewModel.favoriteViewModel.cloudReturnError || !appViewModel.favoriteViewModel.roomList.isEmpty {
-                if sections.isEmpty && appViewModel.favoriteViewModel.isLoading == false {
-                    if appViewModel.favoriteViewModel.roomList.isEmpty {
-                        if appViewModel.favoriteViewModel.cloudReturnError {
-                            ErrorView(
-                                title: "iCloud同步失败",
-                                message: appViewModel.favoriteViewModel.cloudKitStateString,
-                                showDismiss: false,
-                                showRetry: true,
-                                onDismiss: {},
-                                onRetry: {
-                                    getViewStateAndFavoriteList(manual: true)
-                                }
-                            )
-                        }else {
-                            Text("暂无收藏")
-                                .font(.title3)
-                        }
-                    }else {
-                        Text(appViewModel.favoriteViewModel.cloudKitStateString)
-                            .font(.title3)
-                        Button {
-                            getViewStateAndFavoriteList(manual: true)
-                        } label: {
-                            Label("刷新", systemImage: "arrow.counterclockwise")
-                                .font(.headline.bold())
-                        }
-                    }
-                }else {
-                    ScrollView(.vertical) {
-                        // 按直播状态分组展示：正在直播用竖向列表，其他用横向列表
-                        ForEach(sections, id: \.id) { section in
-                            if section.title == "正在直播" {
-                                // 正在直播 - 竖向网格布局
-                                VStack(alignment: .leading, spacing: 20) {
-                                    // Section Header
-                                    FavoriteSectionHeader(
-                                        title: section.title,
-                                        count: section.roomList.count,
-                                        isLive: true,
-                                        showsRefreshHint: section.id == sections.first?.id
-                                    )
-                                        .padding(.leading, 50)
+            if appViewModel.favoriteViewModel.roomList.isEmpty {
+                emptyFavorites
+            } else if sections.isEmpty {
+                Text(appViewModel.favoriteViewModel.cloudKitStateString)
+                    .font(.title3)
+                Button {
+                    getViewStateAndFavoriteList(manual: true)
+                } label: {
+                    Label("刷新", systemImage: "arrow.counterclockwise")
+                }
+            } else {
+                ScrollView(.vertical) {
+                    // 按直播状态分组展示：正在直播用竖向列表，其他用横向列表
+                    ForEach(sections, id: \.id) { section in
+                        if section.title == "正在直播" {
+                            // 正在直播 - 竖向网格布局
+                            VStack(alignment: .leading, spacing: 20) {
+                                // Section Header
+                                FavoriteSectionHeader(
+                                    title: section.title,
+                                    count: section.roomList.count,
+                                    isLive: true,
+                                    showsRefreshHint: section.id == sections.first?.id
+                                )
+                                    .padding(.leading, 50)
 
-                                    LazyVGrid(
-                                        columns: [
-                                            GridItem(.fixed(380), spacing: 50),
-                                            GridItem(.fixed(380), spacing: 50),
-                                            GridItem(.fixed(380), spacing: 50),
-                                            GridItem(.fixed(380), spacing: 50)
-                                        ],
-                                        alignment: .center,
-                                        spacing: 50
-                                    ) {
+                                LazyVGrid(
+                                    columns: [
+                                        GridItem(.fixed(380), spacing: 50),
+                                        GridItem(.fixed(380), spacing: 50),
+                                        GridItem(.fixed(380), spacing: 50),
+                                        GridItem(.fixed(380), spacing: 50)
+                                    ],
+                                    alignment: .center,
+                                    spacing: 50
+                                ) {
+                                    ForEach(Array(section.roomList.enumerated()), id: \.element.id) { index, room in
+                                        LiveCardView(
+                                            index: index,
+                                            currentLiveModel: room,
+                                            contentRevision: appViewModel.favoriteViewModel.listVersion
+                                        )
+                                            .environment(liveViewModel)
+                                            .environment(appViewModel)
+                                            .frame(width: 370, height: 280)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .center)
+                            }
+                            .padding(.bottom, 40)
+                            .focusSection()
+                        } else {
+                            // 其他状态（已下播、回放/轮播、未知状态） - 横向滚动列表
+                            VStack(alignment: .leading, spacing: 20) {
+                                // Section Header
+                                FavoriteSectionHeader(
+                                    title: section.title,
+                                    count: section.roomList.count,
+                                    isLive: false,
+                                    showsRefreshHint: section.id == sections.first?.id
+                                )
+                                    .padding(.leading, 50)
+
+                                ScrollView(.horizontal) {
+                                    LazyHGrid(rows: [GridItem(.fixed(280), spacing: 50, alignment: .leading)], spacing: 50) {
                                         ForEach(Array(section.roomList.enumerated()), id: \.element.id) { index, room in
                                             LiveCardView(
                                                 index: index,
@@ -103,68 +113,27 @@ struct FavoriteMainView: View {
                                                 .frame(width: 370, height: 280)
                                         }
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .safeAreaPadding([.leading, .trailing], 50)
+                                    .padding(.vertical, 30) // 为焦点放大效果留出空间
                                 }
-                                .padding(.bottom, 40)
-                                .focusSection()
-                            } else {
-                                // 其他状态（已下播、回放/轮播、未知状态） - 横向滚动列表
-                                VStack(alignment: .leading, spacing: 20) {
-                                    // Section Header
-                                    FavoriteSectionHeader(
-                                        title: section.title,
-                                        count: section.roomList.count,
-                                        isLive: false,
-                                        showsRefreshHint: section.id == sections.first?.id
-                                    )
-                                        .padding(.leading, 50)
-
-                                    ScrollView(.horizontal) {
-                                        LazyHGrid(rows: [GridItem(.fixed(280), spacing: 50, alignment: .leading)], spacing: 50) {
-                                            ForEach(Array(section.roomList.enumerated()), id: \.element.id) { index, room in
-                                                LiveCardView(
-                                                    index: index,
-                                                    currentLiveModel: room,
-                                                    contentRevision: appViewModel.favoriteViewModel.listVersion
-                                                )
-                                                    .environment(liveViewModel)
-                                                    .environment(appViewModel)
-                                                    .frame(width: 370, height: 280)
-                                            }
-                                        }
-                                        .safeAreaPadding([.leading, .trailing], 50)
-                                        .padding(.vertical, 30) // 为焦点放大效果留出空间
-                                    }
-                                    .padding(.top, -30) // 抵消上方多余的 padding
-                                }
-                                .padding(.bottom, 20)
-                                .focusSection()
+                                .padding(.top, -30) // 抵消上方多余的 padding
                             }
+                            .padding(.bottom, 20)
+                            .focusSection()
                         }
-                        if appViewModel.favoriteViewModel.isLoading {
-                            HStack {
-                                LoadingView()
-                                    .frame(width: 370, height: 280)
-                                    .cornerRadius(5)
-                                    .shimmering(active: true)
-                                    .redacted(reason: .placeholder)
-                                Spacer()
-                            }
-                            .padding(.leading, 50)
+                    }
+                    if appViewModel.favoriteViewModel.isLoading {
+                        HStack {
+                            LoadingView()
+                                .frame(width: 370, height: 280)
+                                .cornerRadius(5)
+                                .shimmering(active: true)
+                                .redacted(reason: .placeholder)
+                            Spacer()
                         }
+                        .padding(.leading, 50)
                     }
                 }
-            }else {
-                ErrorView(
-                    title: "iCloud未就绪",
-                    message: appViewModel.favoriteViewModel.cloudKitStateString,
-                    showDismiss: false,
-                    showRetry: true,
-                    onDismiss: {},
-                    onRetry: {
-                        getViewStateAndFavoriteList(manual: true)
-                    }
-                )
             }
         }
         .overlay(alignment: .top) {
@@ -210,6 +179,53 @@ struct FavoriteMainView: View {
             if appViewModel.favoriteViewModel.roomList.count > 0 {
                 liveViewModel.roomList = appViewModel.favoriteViewModel.roomList
             }
+        }
+    }
+    // Keep real controls mounted while an empty collection refreshes. The system
+    // sidebar can then reclaim focus on Menu instead of exiting a focusless tab.
+    private var emptyFavorites: some View {
+        ContentUnavailableView {
+            Label(
+                appViewModel.favoriteViewModel.cloudReturnError ? "收藏同步失败" : "暂无收藏",
+                systemImage: appViewModel.favoriteViewModel.cloudReturnError ? "icloud.slash" : "star"
+            )
+        } description: {
+            if appViewModel.favoriteViewModel.cloudReturnError {
+                Text(appViewModel.favoriteViewModel.cloudKitStateString)
+            } else {
+                Text("观看直播时添加收藏，即可在这里快速找到。")
+            }
+            if appViewModel.favoriteViewModel.isLoading {
+                ProgressView("正在读取收藏…")
+            }
+        } actions: {
+            HStack(spacing: 30) {
+                Button {
+                    appViewModel.selection = 1
+                } label: {
+                    Label {
+                        Text("去观看")
+                    } icon: {
+                        Image(systemName: "play.fill")
+                    }
+                    .frame(height: emptyActionContentHeight)
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .accessibilityIdentifier("favorites.browse")
+
+                Button {
+                    getViewStateAndFavoriteList(manual: true)
+                } label: {
+                    Label {
+                        Text("刷新")
+                    } icon: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .frame(height: emptyActionContentHeight)
+                }
+                .accessibilityIdentifier("favorites.refresh")
+            }
+            .focusSection()
         }
     }
 }

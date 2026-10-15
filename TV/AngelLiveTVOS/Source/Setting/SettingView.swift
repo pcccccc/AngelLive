@@ -156,6 +156,9 @@ struct SettingView: View {
                             } else if halfScreenIndices.contains(index) {
                                 selectedIndex = index
                             } else {
+                                if index == 1, appViewModel.pluginAvailability.hasAvailablePlugins {
+                                    lastFocusedIndex = focusedIndex ?? index
+                                }
                                 fullScreenIndex = index
                             }
                         } label: {
@@ -176,6 +179,8 @@ struct SettingView: View {
                 }
             }
         }
+        // FullUI 的原生聚焦胶囊会超出滚动区域，保留两端放大后的完整轮廓。
+        .scrollClipDisabled(appViewModel.pluginAvailability.hasAvailablePlugins)
     }
 
     /// 菜单行尾部状态文案。抽成独立 @ViewBuilder,避免 menuListView 整体表达式过大导致编译器 type-check 超时。

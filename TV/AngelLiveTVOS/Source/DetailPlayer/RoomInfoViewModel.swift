@@ -182,6 +182,8 @@ final class RoomInfoViewModel {
     private var danmuHintHideTask: Task<Void, Never>? = nil
     /// 是否经历过断开(用于区分"首次连上"与"重连恢复",避免正常进房弹气泡)
     private var danmuHadDisconnected = false
+    /// 每次观看最多显示三次断开/重连提示；自动重连和手动重试不重置额度。
+    private var danmuFailureHintCount = 0
     var supportsDanmu: Bool {
         PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
     }
@@ -867,6 +869,9 @@ final class RoomInfoViewModel {
 
         danmuServerIsConnected = false
         danmuServerIsLoading = false
+        danmuHintHideTask?.cancel()
+        danmuHintHideTask = nil
+        danmuStatusHint = nil
     }
 
     @MainActor
@@ -949,19 +954,23 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         danmuServerIsLoading = false
         danmuHadDisconnected = true
         if let error {
-            showDanmuHint("弹幕连接已断开:\(error.localizedDescription)")
+            showDanmuHint("弹幕连接已断开:\(error.localizedDescription)", isFailure: true)
         }
     }
 
     func webSocketIsReconnecting(attempt: Int, maxAttempts: Int) {
         danmuServerIsLoading = true
         danmuHadDisconnected = true
-        showDanmuHint(maxAttempts > 0 ? "弹幕断开,正在重连… (\(attempt)/\(maxAttempts))" : "弹幕断开，正在重连…（第 \(attempt) 次）")
+        showDanmuHint(maxAttempts > 0 ? "弹幕断开,正在重连… (\(attempt)/\(maxAttempts))" : "弹幕断开，正在重连…（第 \(attempt) 次）", isFailure: true)
     }
 
     /// 显示左下角气泡并安排自动隐藏(默认 3 秒)。重复调用会重置计时。
     @MainActor
-    private func showDanmuHint(_ text: String, autoHideAfter seconds: Double = 3.0) {
+    private func showDanmuHint(_ text: String, autoHideAfter seconds: Double = 3.0, isFailure: Bool = false) {
+        if isFailure {
+            guard danmuFailureHintCount < 3 else { return }
+            danmuFailureHintCount += 1
+        }
         danmuHintHideTask?.cancel()
         withAnimation(.easeInOut(duration: 0.25)) {
             danmuStatusHint = text
@@ -995,6 +1004,8 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         stopLiveStatusPolling()
         currentPlayURL = nil
         disConnectSocket()
+        danmuFailureHintCount = 0
+        danmuHadDisconnected = false
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
         self.currentRoom = liveModel
