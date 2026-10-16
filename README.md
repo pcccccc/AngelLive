@@ -70,6 +70,10 @@ PackyCode 是一家稳定、高效的 API 中转服务商，提供 Claude Code�
 
    选择对应平台的 scheme，再选择模拟器或真机运行。
 
+## 项目文档
+
+架构、协议、设计与验收入口见[文档索引](docs/README.md)，未完成事项见[TODO](TODO.md)。旧回归记录集中在[历史目录](docs/archive/README.md)。
+
 ## 开源项目致谢
 
 感谢以下开源项目及其作者的贡献：

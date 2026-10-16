@@ -201,32 +201,9 @@ DLNA 只传媒体，不传弹幕层。AngelLive 的弹幕、播放器叠加层�
 3. 检查 device description 中缺省端口、相对 URL、SOAP Fault 等电视差异。
 4. 只暴露 AngelLive 需要的 AVTransport API，隔离库的 Combine/HTTP server 细节。
 
-## 7. 原分阶段计划与当前验收边界
+## 7. 当前实现与验收边界
 
-2026-10-04 对照当前源码：Core 领域模型、Dependencies 的 SSDP/设备描述/AVTransport/媒体代理、iOS 设备选择与会话已实现。下面保留原计划供核对；未逐项获得真实设备证据的行为仍不能标为设备通过。multicast App ID/profile、不同电视兼容性、本地网络权限与后台挂起继续属于真机矩阵。`RenderingControlClient` 未实现，不包含在“协议已实现”的当前范围内。后文 Phase 3 指设备矩阵；顶部“第三阶段”指媒体 Header 代理，二者编号不能互相当作完成依据。
-
-### Phase 0: 配置和测试夹具
-
-- 确认 multicast entitlement 已进入 App ID、profile 和 `.entitlements`。
-- 更新本地网络权限文案。
-- 增加 SSDP 响应、device description、AVTransport SOAP response 的离线 fixture。
-- 先不改变现有 AirPlay 行为。
-
-### Phase 1: DLNA 协议 PoC
-
-- 发现 `MediaRenderer` 并显示 friendly name。
-- 解析 `AVTransport:1` 的 control URL。
-- 对固定的公网 HLS/FLV/MP4 测试 URL 完成 SetURI、Play、Stop。
-- 记录设备名称、动作和错误类型，但对 URL query/token 做脱敏。
-
-### Phase 2: 播放器接入
-
-- 从 `RoomInfoViewModel` 生成 `DLNAMediaResource`。
-- 新增兼容性 gate：有必须 Header、未知格式、URL 不可公开访问时不显示 DLNA 或给出明确原因；FLV 作为实验格式始终允许进入投屏流程，即使声明了 Header。
-- 加入设备选择 sheet、当前设备标识、停止投屏和切换设备。
-- 本地播放和远程播放状态分开，避免远端状态影响现有播放恢复协调器。
-- 投屏成功后每 5 秒轮询 `GetTransportInfo`；`PLAYING`、`PAUSED_PLAYBACK`、`TRANSITIONING` 显示在设备状态中，`STOPPED`/`NO_MEDIA_PRESENT` 自动结束会话。
-- 轮询遇到超时、断网或 SOAP Fault 时取消任务并进入可重试错误态，不让旧设备任务覆盖新设备状态。
+共享投屏模型、SSDP/SOAP 协议、iOS 设备选择与播放入口、带请求头的媒体代理已存在。已落地的配置、PoC 和播放器接入阶段不再列作实施任务；音量控制等未实现能力仍遵循上文边界。剩余重点是真实设备、权限与后台行为验证。
 
 ### Phase 3: 稳定性和设备矩阵
 

@@ -1,27 +1,34 @@
 # AngelLive TODO
 
-> 最近核对：2026-10-04
+> 文档整理：2026-10-16；历史实施基线：2026-10-04。
 >
-> 范围：仓库内全部 Markdown 文档，以及文档中点名的当前代码入口。
+> 当前维护未完成事项；来源文档与历史验收通过[文档索引](docs/README.md)查阅。
 >
-> 规则：保留本轮完成项作为对照；未完成、未验证和需要产品确认的事项继续留空。已证伪、明确放弃和“首期不做”的方案不重新进入待办。
+> 已完成清单留在来源及归档，不在此重复；未完成、未验证和需产品确认的事项继续留空。归档不等于关闭问题。
 >
-> 本轮实现、测试与设备证据见 [2026-10-04 实施与验收](docs/TODOProgress20261004.md)。
+> 2026-10-04 的实现、测试与设备证据见 [2026-10-04 实施与验收](docs/archive/TODOProgress20261004.md)。
 
 ## P0：影响数据或核心播放稳定性
 
+### 三端共享状态与页面联动
+
+依据[2026-10-16 架构审查](docs/CrossPlatformArchitectureAudit20261016.md)，以下为静态确认问题及待动态验证项：
+
+- [ ] 修复 tvOS 收藏服务调用后的重复数组写入。
+- [ ] 统一历史的来源身份与保存入口，修复 tvOS 直接改数组绕过持久化。
+- [ ] 为 iOS/tvOS 播放错误状态查询补齐迟到结果归属门禁。
+- [ ] 统一分类分页，修复 tvOS 加载失败后可能跳页的问题。
+- [ ] 验证设置跨实例刷新、插件同 ID 升级后的平台页更新。
+
 ### 收藏同步：消除旧默认 Zone 的“删除后复活”风险
 
-- [x] 删除收藏时，同时建立自定义 Zone 与旧默认 Zone 删除意图。
-- [x] 默认 Zone 删除失败进入按账号隔离的持久重试，跨启动继续；重新收藏使旧删除回执失效。
-- [x] 补齐本地调度、账号隔离、版本屏障及收藏快照 CAS 回归测试。
 - [ ] 用真实 iCloud 账号验收迁移设备、未迁移旧设备、离线删除和 CloudKit 临时失败。
 
 代码已覆盖两条删除路径；真实账号、多设备及进程重启验收仍待完成。来源：[同步可靠性现状与后续](docs/SyncReliabilityRoadmap.md)、`FavoriteSyncEngine.enqueueDelete`。
 
 ### iOS 后台/前台快速切换导致 Metal 画面冻结
 
-- [ ] 将 KSPlayer Debug 诊断改动提交到可复现的分支或补丁，避免只存在于某台机器的未提交工作区。
+- [ ] 核验旧 KSPlayer Debug 诊断补丁的保存位置与适用 revision，确保当前问题能通过可复现分支或补丁采证。
 - [ ] 真机按“快速连续进出后台”步骤复现，采集 `[PlayerFlow]`、`[ForegroundTrace]` 与 GPU Frame Capture。
 - [ ] 先确认 `enterForeground` 后是否仍有 draw 回调，以及 `nextDrawable` 是 acquired 还是 unavailable。
 - [ ] 按证据从恢复阶梯实施：优先验证 Metal 路径对称重绘（档 1）和重建 `CADisplayLink`（档 1.5），再评估 drawable pool、display-layer 或 `MetalView` 重建。
@@ -34,47 +41,27 @@
 
 ### 播放链路可观测性与恢复反馈
 
-实施顺序保持为“时间轴 → 恢复文案 → CDN 学习”：
+时间轴、恢复文案与 CDN 学习已经实现，剩余工作为验收与度量：
 
-- [x] 新增 `PlaybackEventLog` 与开发者控制台 Playback Timeline，事件环形上限 500；iOS/macOS 支持 JSON 导出，tvOS 提供本地浏览入口。
-- [x] 记录播放源、播放器状态、watchdog 采样、恢复动作、CDN 选择、错误和预算耗尽，不保存原始 URL、凭据或错误正文。
-- [x] 在既有恢复链路上补齐取参、连接、缓冲等启动阶段展示，以实际播放进度确认起播；不声称获得渲染首帧时间。
-- [x] 增加一次性的恢复提示，三端展示切换线路或重试动作及尝试次数。
-- [x] 新增 `CDNPreferenceStore`，按插件与稳定 CDN 标识学习成功率和起播耗时；样本不足时保持插件原顺序，数据 7 天失效。
-- [x] 完成播放改动的三端 workspace 构建及错误检查。
-- [ ] 完成三端交互与无障碍矩阵；iOS/tvOS 已有新包交互证据，macOS 原生界面受锁屏阻塞，具体覆盖见本轮验收记录。
+- [ ] 完成三端交互与无障碍矩阵；2026-10-04 记录已有 iOS/tvOS 当时新包交互证据，macOS 当轮受锁屏阻塞，不能据此推断当前设备状态。
 - [ ] 增加 `time_to_first_frame_ms`、watchdog 次数、failover 成功率、首选 CDN 命中率和 30 秒未起播退出率度量。
 - [ ] 用时间轴数据复核当前固定 12 秒 stall 阈值是否合理。
 
 来源：[播放链路韧性路线图](docs/PlaybackResilienceRoadmap.md)。
 
-### SC / 付费置顶留言（三仓库链路）
+### 结构化付费留言
 
-开始编码前先完成产品与设计确认：
+接口方案已完成，外部协议及宿主渲染尚未实施。字段、兼容、生命周期和验收以[结构化付费留言方案](docs/StructuredPaidMessages.md)为准，不再使用旧路线图的三字段及重复实施清单。
 
-- [x] 完成[结构化付费留言宿主接口提案](docs/StructuredPaidMessages.md)，明确可选字段、兼容、两种传输、翻译透传和 FullUI 边界；尚未实施。
-- [ ] 确认 `tier` 档位数量、各来源金额到档位的阈值责任方，以及 App 端 `tier → 配色`设计。
-- [ ] 确认 iOS、tvOS、macOS 的承载位置，是否允许点击展开、是否保留历史，以及缺省置顶时长。
-- [ ] 完成卡片、ticker、并发堆叠与退出动效设计稿。
-
-协议与实现：
-
-- [ ] `LiveParsePlugins` 的付费留言事件输出 `superChat { priceText, tier, avatar?, durationSec? }`；普通弹幕不带该块，礼物仍不产生消息。
-- [ ] 更新 `DanmakuDriverAPI.md`，定义字段、档位范围、兼容规则和完整示例。
-- [ ] `AngelLiveCore` 解码可选 `superChat`，App 只按该块是否存在进行路由，不识别平台或币种。
-- [ ] 三端新增置顶 overlay，处理头像、昵称、金额、留言、档位配色、超时及多条并发。
-- [ ] 删除当前 `醒目留言` / `SC` 字符串嗅探和橙底特判。
-- [ ] 补协议兼容、普通弹幕、SC 路由、并发队列与三端 UI 验收。
-
-来源：[弹幕引擎评估与改造路线图](docs/DanmakuRenderingRoadmap.md)。
+- [ ] 确认档位与颜色、承载位置、展开交互、时长及并发设计。
+- [ ] 协调外部协议与插件输出，接入 WebSocket/HTTP polling 解码及翻译透传。
+- [ ] 实现去重、到期和三端 FullUI 展示，保持 ShellUI 边界；移除新 FullUI 路径的正文嗅探。
+- [ ] 完成兼容、取消、跨房间及三端视觉和交互验收。
 
 ### CloudKit 静默推送与通用持久重试
 
 - [ ] 核验 `CKSyncEngine` 自身订阅与真实设备通知到达行为，再判断是否需要宿主补充通知接线。
 - [ ] 实测 App 存活、后台及终止后重启的收藏变化到达情况。
-- [x] 为凭证与插件订阅源同步统一处理 `CKErrorRetryAfterKey`。
-- [x] 将可重试操作的元数据持久化，跨启动继续；不可重试错误保留具体 `SyncError`。
-- [x] 覆盖本地重试退避、账号切换、旧 revision 回执与幂等重放测试。
 - [ ] 用真实账号完成限流、离线、账号切换与多设备端到端验收。
 
 说明：收藏自定义 Zone 已由 `CKSyncEngine` 管理增量与退避；缺少手写 subscription 不能证明系统未订阅。凭证/订阅源持久重试已实现，最终构建与实际账号验证分开记录。来源：[同步可靠性现状与后续](docs/SyncReliabilityRoadmap.md)。
@@ -83,20 +70,29 @@
 
 首页协议、缓存、Banner、收藏摘要、插件推荐分区和三端 FullUI 首页已经落地；代码收尾及三端构建已完成，设备覆盖分别记录：
 
-- [x] 首期不加入“继续观看”和“我的平台”；继续使用已有历史记录和平台导航入口。
-- [x] `ttlSeconds` 已参与自动刷新决策，手动刷新可显式强制获取。
-- [x] 已按有效插件版本、Cookie 会话 revision 与 API 凭证 generation 做逐来源定向失效。
-- [x] 插件刷新并发上限为 3；同快照合并，快照变化时旧轮退役，调用方取消不取消共享任务。
-- [x] 已提供逐来源 cached/loading/refreshing/stale/failed 状态，并保留聚合失败名单兼容旧 UI。
-- [x] 已补首页缓存、TTL、并发、合并、旧结果门禁、部分失败和稳定顺序等定向测试。
-- [x] 完成共享首页改动的三端 workspace 构建及错误检查。
-- [ ] 完成三端首页交互矩阵；iOS 已观察到非空首页，macOS 本轮原生界面受锁屏阻塞，不将构建通过视为界面通过。
+- [ ] 完成三端首页交互矩阵；历史记录中 iOS 已观察到非空首页，macOS 当轮原生界面受锁屏阻塞，不将构建通过视为界面通过。
 - [ ] 真机验证首屏时间、滚动稳定性、图片内存、弱网、Dynamic Type、VoiceOver、减弱动态效果、深浅色和 iPad 分屏。
 - [ ] 验证首页“推荐 / 收藏 / 平台”胶囊互通、收藏大标题上拉折叠及 iOS 26+ 不出现双层玻璃。
 
 来源：[插件驱动个性首页规划](docs/PluginDrivenHomePagePlan.md)。当前实现入口：`HomeView.swift`、`HomeViewModel.swift`、`PluginHomeFeed.swift`、`PluginHomeFeedCacheStore.swift`。
 
 ## P2：实现已完成，但仍缺设备验收
+
+### 实时语音字幕
+
+- [ ] 完成最后 macOS 新包的菜单、历史删除、浅色界面和中文字幕画面验证。
+- [ ] 检查日语模型在 App 重启后的就绪状态。
+- [ ] 在可用真机上验证真实直播的原文、译文、持续更新、切房、前后台和退出清理。
+- [ ] 按实际设备与已安装资源验证语言、引擎及布局组合，未运行的组合继续标记未验证。
+
+来源：[实时语音字幕](docs/LiveSpeechSubtitles.md)。历史 macOS 合成视频证据不替代最后包与 iOS/tvOS 真机结果。
+
+### 历史故障的未决回归
+
+- [ ] 重新核对旧回归中的边缘返回、收藏标题晚回写及 iOS App on Mac 历史实际起播、长时播放场景。
+- [ ] 符号动画同系统 A/B 与真实 Apple TV 解码生命周期需独立采证；旧 KSPlayer revision 的结论不能直接应用到当前依赖。
+
+范围与证据入口见[历史索引](docs/archive/README.md)。本次归档不关闭线上分组，也不将未验证项标为完成。
 
 ### iOS DLNA 真实设备矩阵
 
@@ -124,7 +120,7 @@
 - [ ] 低密度顶部安全轨道复用正确，高密度不重叠、不追尾。
 - [ ] 切字号时在飞弹幕不跳行、不消失。
 - [ ] `MAX_FLOAT_X = 100000` 无异常位移或闪烁。
-- [ ] 现有 SC 橙底在结构化 SC 上线前不回归。
+- [ ] 现有 SC 橙底在结构化方案上线前不回归；新 FullUI 方案上线后改按结构化路由验收，不永久保留正文嗅探。
 - [ ] GIF 弹幕正常。
 
 来源：[弹幕引擎评估与改造路线图](docs/DanmakuRenderingRoadmap.md#9-待真机验收引擎单一化后的-tvos-观感)。
@@ -146,14 +142,6 @@
 
 来源：`LiveRoomCard.swift`、macOS `PlatformDetailView.swift`、tvOS `LiveCardView.swift`、`DanmakuTextCellModel.swift` 中的 `TODO` 注释。
 
-### 文档维护
-
-- [x] 核对根 `README.md`：workspace 为 `AngelLive.xcworkspace`；Bugsnag 本地密钥路径为 `Shared/AngelLiveDependencies/Sources/Resources/BugsnagSecrets.local.plist`，两项已正确。
-- [x] 为 `TV/README.md` 和 `TV/ARCHITECTURE.md` 补充宿主入口、共享层边界、scheme、焦点及新包验证要求。
-- [x] 更新 [插件驱动个性首页规划](docs/PluginDrivenHomePagePlan.md) 的状态、缓存实现与首期模块取舍。
-- [x] 将 [Swift 6 / Sendable 适配现状](docs/Swift6SendableAudit.md) 的旧基线明确标为历史记录。
-- [x] 将 [iOS DLNA 投屏调研](docs/iOSDLNACastingResearch.md) 的阶段描述与当前协议、UI、Header 代理实现对齐，并保留真实设备矩阵和未实现能力边界。
-
 ## 可选项（不阻塞当前发布）
 
 - [ ] DLNA 自有设备选择器稳定后，再评估 `AVCustomRoutingController` 统一 AirPlay/DLNA 路由 UI。
@@ -166,31 +154,9 @@
 - 用 Metal 重写当前直播弹幕引擎：现有 CALayer 架构已是 GPU 合成，当前没有足够收益证据。
 - 插件自定义布局、HTML/WebView 首页、远程 SwiftUI/JSON UI DSL、宿主跨插件画像和内置推荐算法：属于首页首期明确边界。
 
-## 文档审计覆盖
-
-| 文档 | 结论 |
-|---|---|
-| `PRODUCT.md` | 产品原则，无未完成实施项 |
-| `AGENTS.md` | 工程执行规范，不作为产品待办来源 |
-| `README.md` | workspace 与本地密钥路径已正确 |
-| `Shared/SharedAssets/README.md` | 使用说明与当前 Package 配置一致，无待办 |
-| `TV/README.md` | 已补开发与验证入口 |
-| `TV/ARCHITECTURE.md` | 已补当前模块及共享层边界 |
-| `docs/BackgroundForegroundFreezeBug2.md` | 有 P0 采证、修复和回归事项 |
-| `docs/DanmakuMixedContentProtocol.md` | 当前协议说明，无未完成项 |
-| `docs/DanmakuRenderingRoadmap.md` | SC 三层实现及 tvOS 真机验收未完成 |
-| `docs/PlaybackResilienceRoadmap.md` | Timeline、恢复反馈、CDN 学习已实现，最终验收中 |
-| `docs/PluginDrivenHomePagePlan.md` | 缓存策略、模块取舍已收尾，最终验收中 |
-| `docs/Swift6SendableAudit.md` | 代码迁移与历史段落整理完成，五组真机验收待执行 |
-| `docs/SwiftUISpecialistAudit.md` | 两项低优先级机会性整理未完成 |
-| `docs/SyncReliabilityRoadmap.md` | 删除屏障与持久重试已实现，真实账号/通知生命周期待验收 |
-| `docs/StructuredPaidMessages.md` | 宿主接口提案完成，外部协议与渲染尚未实施 |
-| `docs/iOSDLNACastingResearch.md` | 实现已落地，真实设备、签名能力与兼容矩阵待验证 |
-| `iOS/.../Player/PlayerUI/README.md` | 来源与 fork 说明，无未完成项 |
-
 ## 维护规则
 
-- 完成事项时，先更新来源文档的状态，再勾选本文件对应条目。
+- 完成事项时先更新来源文档及实际验证范围，再从本文件移除已完成项；未验证部分继续保留。
 - 方案发生变化时，在来源文档保留决策理由，本文件只保留当前执行方案。
 - 需要真机证据的事项不得用模拟器、旧安装包或静态代码检查标记完成。
 - 跨端共享层改动按受影响范围构建 iOS、macOS、tvOS；只记录实际运行过的测试和设备。

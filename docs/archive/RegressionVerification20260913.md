@@ -1,5 +1,7 @@
 # 2026-09-13 修复与验证状态
 
+> 历史记录：2026-10-16 归档，结论与验证只适用于文中基线。归档不代表未决问题已解决；当前入口见[文档索引](../README.md)与[待办清单](../../TODO.md)。
+
 本记录区分源码修复、构建／测试通过和设备交互通过。用户要求标记验证状态后提交，本轮停止继续设备验收；未执行的项目不标为通过。没有发布版本，也没有将 Bugsnag 分组标记为 resolved。
 
 ## 修改与验证矩阵
@@ -9,8 +11,8 @@
 | 插件返回 null／undefined 导致 JSON 序列化异常 | 已修复共享解码入口，必填结果转为可恢复错误，Optional 保留 nil | Core 全量 295 项测试、39 个 suite 通过；新增返回值测试含 18 个参数组合；iOS、macOS、tvOS CLI workspace 构建通过 | 未在设备上注入异常插件返回值；单元测试覆盖当前、租借和隔离凭据三个入口 |
 | iOS 首页“更多”列表卡片重叠 | 网格列宽与卡片使用同一容器尺寸计算 | 最后源码修改后 iOS CLI 与 MCP workspace 构建通过，Navigator error 为 0 | **已验证**：iPhone 18 Pro / iOS 27 新包进入更多列表并滚动，两列卡片、头像和文字无重叠；iPad 尺寸未验证 |
 | iOS FullUI 竖屏直播左滑清屏、右滑显示 | 已实现独立控制层状态、方向锁定、弹层手势保护和返回边缘协调 | iOS 构建通过 | **未验证完整交互**：本轮播放的是横向画幅直播，不能作为竖屏手势、旋转或弹层冲突通过证据 |
-| 无插件时默认进入 ShellUI 收藏 | 共享安装快照决定首帧模式，三端根导航选择回退收藏 | 阶段验证中 34 项 Core 测试通过，三端 MCP 构建通过；后续共享修复的 Core 全量与三端 CLI 构建也通过 | **部分已验证**：此前本项最后编辑后的 iPhone 17e / iOS 27、Apple TV 4K 第三代 / tvOS 27 新包，空 ShellUI 收藏与基础导航通过；macOS 空 ShellUI、iPad 和 iOS 17 分支未验证。详见[启动记录](StartupCachePresentation.md) |
-| tvOS FullUI 收藏刷新反馈 | 改为顶部悬浮圆环与结果提示；连续手动刷新合并，慢请求回写同步播放列表与 Top Shelf | 本项修改后的 tvOS MCP 构建通过、Navigator error 为 0；3 项相关 Core 测试通过；后续 tvOS CLI 构建通过 | **部分已验证**：此前新包安装、启动通过，但设备无收藏，带列表进度／慢请求结果／连续遥控器按键／焦点稳定未验证。本轮未启动 tvOS。详见[收藏刷新记录](FavoriteRefreshNetworkResiliencePlan.md) |
+| 无插件时默认进入 ShellUI 收藏 | 共享安装快照决定首帧模式，三端根导航选择回退收藏 | 阶段验证中 34 项 Core 测试通过，三端 MCP 构建通过；后续共享修复的 Core 全量与三端 CLI 构建也通过 | **部分已验证**：此前本项最后编辑后的 iPhone 17e / iOS 27、Apple TV 4K 第三代 / tvOS 27 新包，空 ShellUI 收藏与基础导航通过；macOS 空 ShellUI、iPad 和 iOS 17 分支未验证。详见[启动记录](../StartupCachePresentation.md) |
+| tvOS FullUI 收藏刷新反馈 | 改为顶部悬浮圆环与结果提示；连续手动刷新合并，慢请求回写同步播放列表与 Top Shelf | 本项修改后的 tvOS MCP 构建通过、Navigator error 为 0；3 项相关 Core 测试通过；后续 tvOS CLI 构建通过 | **部分已验证**：此前新包安装、启动通过，但设备无收藏，带列表进度／慢请求结果／连续遥控器按键／焦点稳定未验证。本轮未启动 tvOS。详见[收藏刷新记录](../FavoriteRefreshNetworkResiliencePlan.md) |
 | iPad Tab identity 与选择值不稳定 | 列表和选择统一使用 pluginId，元数据更新保持身份，插件移除回退有效选择 | 最后源码修改后 iOS CLI 与 MCP 构建通过 | **受阻**：iPad 首次安装会话初始化超时，第二次报模拟器无法连接；没有成功 InstallAndRun 或新包 UI 证据。同名插件、元数据更新、移除选中插件、冷启动及侧栏切换均未验证 |
 | SF Symbol 动画、iOS App 在 Mac 上的 HistoryModel／布局挂起、tvOS 解码上下文竞争 | 完成研究和文档更正；这些根因或触发路径尚未全部修复 | 现有构建／Core 测试不能证明这些线上问题消失 | **未验证／待复现**：iOS 26.0／26.0.1 同系统 A/B、iOS App 在 Mac 上运行、真实 Apple TV 重连与解码生命周期均未执行。详见[崩溃研究](BugsnagCrashResearch20260913.md) |
 

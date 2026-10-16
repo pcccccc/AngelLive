@@ -1,6 +1,6 @@
 # Bug2 修复文档:iOS 直播播放中「后台→前台」概率卡死
 
-> 2026-09-13 依赖核对更正：当前锁定的 KSPlayer 5.0.0（`93e942ae1f9dbdf8c2a4220ef2437073fdb575de`）没有实现本页历史 F5 所称的同步停止解码后再关闭上下文。Bugsnag 的 7 个 tvOS 事件同时命中旧解码器重建与读线程重连，当前依赖仍存在旧上下文提前释放风险；见 [本次崩溃研究](BugsnagCrashResearch20260913.md)。这与本页已采证的 iOS 渲染冻结不是同一结论，不能将一项的修复状态用于另一项。
+> 2026-10-16 文档校正：下述 2026-09-13 内核分析针对当时锁定的 `93e942ae1f9dbdf8c2a4220ef2437073fdb575de`，不是当前依赖。当前 manifest 固定为 `c166a4ec71c724c92001f43cd8f161af2a903375`；本轮没有重新审查该版本的解码生命周期，因此不能宣称同一内核风险仍存在或已消除。历史证据见[崩溃研究](archive/BugsnagCrashResearch20260913.md)。iOS 快速进出后台的 Metal 冻结仍需真机采证；下文旧行号、分支和本机路径只用于追溯，操作前须重新定位。
 
 > 2026-09-07 宿主接入核对：iOS FullUI 已将业务状态、结束事件接入 `KSCorePlayerView` 的统一回调，取消 `onAppear` 对同一 Coordinator 回调的覆盖。相同 URL 的 KSPlayer 重连改为显式替换媒体项并重新准备播放，不再通过 URL 临时置空等待 SwiftUI 拆建视图；保留活跃画中画控制器的 delegate。不同内核类型仍走 KSPlayer 的 `set(url:options:)`。这些是宿主接入修复，**不是后台冻结根因或修复成功的证据**；下述历史诊断需按当前 KSPlayer 版本和新安装包重新验证。
 > 验证：最后源码编辑后，Xcode MCP workspace `BuildProject` 成功，确认重新编译修改文件，Navigator error 为 0。iPhone 17 Pro Max 模拟器 / iOS 27.0（24A5423a）重新执行 `DeviceInteractionInstallAndRun` 成功；从已有收藏进入播放、暂停/恢复、手动重载、退出后重新进入播放均通过。同地址分支未独立证明，真机快速前后台与画中画未验证。`AngelLive` scheme 当前没有自动测试，未运行单元测试；macOS、tvOS 未验证。

@@ -1,36 +1,27 @@
 # PlayerUI
 
-本目录中的播放器 UI 组件源自 [KSPlayer](https://github.com/kingslay/KSPlayer)，并根据 AngelLive 项目的需求进行了修改和优化。
+本目录服务 iOS FullUI，播放器 UI 组件源自 [KSPlayer](https://github.com/kingslay/KSPlayer)，并按 AngelLive 的直播与控制层需求适配。页面状态和导航由宿主负责，播放器与第三方适配通过共享 Package 接入。
 
-## Fork 说明
+## 当前文件
 
-这些文件是从 KSPlayer 项目 fork 并修改而来：
+- `KSVideoPlayerView.swift`：播放器与覆盖层组合。
+- `KSVideoPlayerViewBuilder.swift`：播放器视图构建接口。
+- `VideoControllerView.swift`：常规直播控制层。
+- `VerticalLiveControllerView.swift`：竖屏直播控制层。
+- `GestureView.swift`：手势适配。
+- `ViewExtension.swift`：视图辅助扩展。
+- `KSVideoPlayerModelFallback.swift`：`!canImport(KSPlayer)` 条件下的模型兼容定义。
 
-- **CorePlayerView.swift** - 核心播放器视图组件
-- **VideoPlayerView.swift** - 完整视频播放器视图
-- **VideoPlayerViewBuilder.swift** - 播放器控件构建器
-- **VideoControllerView.swift** - 播放器控制层视图
-- **GestureView.swift** - 手势处理视图
-- **AirPlayView.swift** - AirPlay 支持
-- **ViewExtension.swift** - 视图扩展工具
+核心播放器桥接位于 `Common/PlayerCore/KSCorePlayerView.swift`；`AirPlayView.swift` 位于父目录 `FullUI/Views/Player/`，不是本目录文件。
 
-## 主要修改
+## 呈现边界
 
-1. **移除非 iOS 平台代码**：删除了 tvOS、macOS、visionOS 相关的条件编译代码，专注于 iOS 平台
-2. **优化播放控制层**：
-   - 采用 iOS 16+ 液态玻璃材质效果（`.ultraThinMaterial`）
-   - 重新设计按钮布局，适配直播场景
-   - 移除进度条和时间显示（直播不需要）
-   - 添加弹幕控制功能
+控制层沿用既有直播操作和弹幕能力。iOS 26 及以上按代码可用性使用 `glassEffect`，旧系统降级为 `.ultraThinMaterial`；普通材质不等于 Liquid Glass。短剧进度与选集界面由独立短剧页面承载。
 
-## 原始项目
+修改布局需遵循仓库现有页面尺寸、状态所有权与最后编辑后新包视觉验收要求。不要据本目录服务 iOS 的用途，推断所有来源代码的多平台条件编译都已删除。
 
-KSPlayer 是一个功能强大的 iOS/macOS/tvOS 视频播放器框架，支持多种格式和流媒体协议。
+## 来源与许可记录
 
-- **项目地址**：https://github.com/kingslay/KSPlayer
-- **原作者**：kintan, Ian Magallan Bosch
-- **许可证**： GPL-3.0 license
+原项目作者：kintan、Ian Magallan Bosch。原文档记录来源许可证为 GPL-3.0；此处保留来源与归属说明，本次文档清理未重新核验上游许可证，也不将该历史记录当作当前依赖整体许可结论。
 
-## 致谢
-
-感谢 KSPlayer 项目的作者和贡献者们提供了优秀的播放器基础框架。
+感谢 KSPlayer 作者及贡献者。

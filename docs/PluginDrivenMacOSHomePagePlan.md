@@ -1,6 +1,6 @@
-# 插件驱动 macOS 首页实施规划
+# macOS 插件首页交互与验收
 
-> 状态：首期实现及共享首页缓存/刷新收尾已完成；2026-10-04 完成后续 TTL、revision context、播放控制台和根状态接线后的 workspace MCP macOS 构建、错误检查及新包启动。Mac 锁屏使本轮原生界面复核未执行；具体构建与覆盖见 [本轮验收记录](TODOProgress20261004.md)，不以构建替代交互验收。
+> 状态：首期实现及共享首页缓存/刷新收尾已完成；2026-10-04 完成后续 TTL、revision context、播放控制台和根状态接线后的 workspace MCP macOS 构建、错误检查及新包启动。Mac 锁屏使本轮原生界面复核未执行；具体构建与覆盖见 [本轮验收记录](archive/TODOProgress20261004.md)，不以构建替代交互验收。
 >
 > 范围：macOS FullUI 首页与必要的共享层抽取；不修改 `MacShell*`、iOS ShellUI 或 tvOS
 >
@@ -317,86 +317,6 @@ MacHomeView 出现
 
 ---
 
-## 6. 分阶段实施
-
-### 阶段 0：冻结现状与静态原型
-
-- 记录当前 iOS 首页真实实现范围和 macOS 现有导航/播放行为。
-- 用中性 fixture 创建 Mac Preview：聚合、多来源、无收藏、部分失败、无缓存。
-- 验证最小窗口、默认窗口和宽窗口下的 Banner 高度、卡片宽度及工具栏密度。
-
-完成标准：确认首期只有“Banner + 收藏摘要 + 每来源一个推荐分区 + 分类查看全部”。
-
-### 阶段 1：抽取共享展示状态
-
-- 新增 `PluginHomeFeedModel` 和共享 Entry/Option 类型。
-- 抽取 `PluginHomeCategoryModel` 的分页业务。
-- iOS 改用共享模型，但不改变现有 iOS 视图和产品行为。
-- 为聚合顺序、iPhone 既有筛选归一、缓存恢复、部分失败和分类分页补充 Core 测试。
-
-完成标准：`AngelLiveCoreTests` 通过；iOS 首页展示与抽取前一致。
-
-### 阶段 2：接入 macOS 入口和页面
-
-- `TabSelection` 增加 `.home`，实现能力确认、出现和有序回退。
-- 新增 `MacHomeView`、Hero、分区、加载态和局部错误组件。
-- “查看全部收藏”切换 sidebar；房间复用 Mac 播放入口。
-- 首页结构、模块顺序和聚合展示与 iPad 对齐，不增加首期内容源筛选状态。
-
-完成标准：缓存内容可以首屏显示；收藏刷新和单一插件失败不阻塞首页。
-
-### 阶段 3：分类、键鼠与刷新命令
-
-- 接入 `MacHomeCategoryView` 和分页。
-- 完成 Banner Hover 箭头、触控板/键盘切页、自动轮播暂停条件。
-- 将 `⌘R` 路由到当前焦点窗口的首页刷新动作。
-- 验证右键收藏、VoiceOver、减弱动态效果、深浅色和窗口缩放。
-
-完成标准：所有首页动作可由鼠标和键盘完成，且不影响其他窗口。
-
-### 阶段 4：回归与稳定性
-
-- 验证插件安装、原地升级、卸载、登录态变化和 capability 变化。
-- 验证多窗口各自的 Banner 页码、刷新和导航状态。
-- 检查 Kingfisher 下采样、长列表懒加载、滚动稳定性和任务取消。
-- 根据实际测量调整 Banner 最大高度和卡片宽度，不修改协议限额。
-
-完成标准：macOS 首页达到本文件验收标准，iOS 首页和三端插件能力无回归。
-
----
-
-## 7. 预计文件边界
-
-建议新增：
-
-```text
-Shared/AngelLiveCore/Sources/AngelLiveCore/Home/PluginHomeFeedModel.swift
-Shared/AngelLiveCore/Sources/AngelLiveCore/Home/PluginHomeCategoryModel.swift
-macOS/AngelLiveMacOS/Views/Home/MacHomeView.swift
-macOS/AngelLiveMacOS/Views/Home/MacHomeHeroView.swift
-macOS/AngelLiveMacOS/Views/Home/MacHomeRoomSection.swift
-macOS/AngelLiveMacOS/Views/Home/MacHomeCategoryView.swift
-```
-
-预计修改：
-
-```text
-iOS/AngelLive/AngelLive/FullUI/ViewModels/HomeViewModel.swift
-iOS/AngelLive/AngelLive/FullUI/Views/Home/HomeView.swift
-macOS/AngelLiveMacOS/ContentView.swift
-macOS/AngelLiveMacOS/AngelLiveMacOSApp.swift
-Shared/AngelLiveCore/Tests/AngelLiveCoreTests/...
-```
-
-约束：
-
-- 不修改 `macOS/AngelLiveMacOS/Views/MacShell*`。
-- 不修改 `iOS/AngelLive/AngelLive/ShellUI/`。
-- 不让 `AngelLiveCore` 依赖 SwiftUI、AppKit、平台宿主或 `AngelLiveDependencies`。
-- 如 Xcode 工程不是 folder-synchronized group，新增 macOS Swift 文件时显式加入 macOS targets；先检查工程结构，不能假设自动收录。
-
----
-
 ## 8. 测试与验证计划
 
 ### 8.1 Core 自动测试
@@ -449,23 +369,3 @@ Shared/AngelLiveCore/Tests/AngelLiveCoreTests/...
 9. Core 测试、macOS workspace build 和受共享抽取影响的 iOS build 均实际通过。
 
 ---
-
-## 10. 最终实施顺序
-
-建议严格按以下顺序落地：
-
-```text
-共享 HomeFeedModel / CategoryModel
-        ↓
-iOS 无行为变化迁移并验证
-        ↓
-macOS 入口与静态页面
-        ↓
-真实 feed、收藏和播放
-        ↓
-分类、键鼠、焦点窗口刷新
-        ↓
-多窗口与异常状态回归
-```
-
-这样可以先固定跨端内容语义，再实现 macOS 表现层；后续规划 tvOS 时可以直接复用共享模型，只重新设计焦点和遥控器交互。

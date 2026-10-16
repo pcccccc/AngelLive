@@ -1,5 +1,7 @@
 # 2026-10-04 TODO 实施与验收
 
+> 历史记录：2026-10-16 归档，结论与验证只适用于文中基线。归档不代表未决问题已解决；当前入口见[文档索引](../README.md)与[待办清单](../../TODO.md)。
+
 本轮完成收藏同步可靠性、首页刷新策略、播放诊断与恢复反馈，并更新过期规划。iOS、macOS、tvOS 最终 workspace 构建均通过；设备验证只按下表的实际范围记录。
 
 ## 已实施
@@ -35,7 +37,7 @@ MCP 原始响应保存在本机忽略目录 `runs/live-subtitle-ui-2026-10-04/re
 - Apple TV 4K（第 3 代）／tvOS 27.0：最后源码后重新安装启动（847）。开发者模式显示时间轴入口，遥控焦点进入、空态展示（865）及 Menu 返回原焦点（866）通过。开发者模式和设备状态按测试前设置恢复。
 - macOS：最后源码的新包构建和启动通过。原生界面工具两次确认 Mac 处于锁屏状态，未执行本轮 UI 操作；历史菜单、浅色布局、日语模型重启持久性、最后包中文字幕画面和时间轴实际界面仍未验证。证据为 `runs/todo-2026-10-04/mac-ui-blocker.json`。
 
-详细交互、恢复与截图索引见本机 `runs/todo-2026-10-04/device-validation-result.md`。先前字幕实际识别和中文翻译证据仍按 [字幕记录](LiveSpeechSubtitles.md) 的对应包版本保留，不能冒充本轮最后包截图。
+详细交互、恢复与截图索引见本机 `runs/todo-2026-10-04/device-validation-result.md`。先前字幕实际识别和中文翻译证据仍按 [字幕记录](../LiveSpeechSubtitles.md) 的对应包版本保留，不能冒充本轮最后包截图。
 
 收尾时恢复模拟器原 `light / large`、开发者模式关闭、tvOS Shutdown、Xcode `AngelLive / LaoPC`，所有 Device Hub session 已结束。最终源码哈希在三端构建及交互后保持一致。
 
@@ -45,5 +47,5 @@ MCP 原始响应保存在本机忽略目录 `runs/live-subtitle-ui-2026-10-04/re
 - 真实 iCloud 账号的多设备删除、离线重启、账号切换与通知生命周期。
 - 解锁 Mac 后的上述原生界面验证。
 - 首次安装从 ShellUI 切入 FullUI：当前 iOS 模拟器已有用户插件，本轮未为覆盖此场景清空数据。
-- 结构化付费留言尚未实现；[接口提案](StructuredPaidMessages.md) 需与外部插件协议及三端视觉方案衔接。
+- 结构化付费留言尚未实现；[接口提案](../StructuredPaidMessages.md) 需与外部插件协议及三端视觉方案衔接。
 - 精确渲染首帧、30 秒未起播离开率和长期 CDN 学习效果仍未测量；现有 1 Hz playhead 采样不能替代这些指标。

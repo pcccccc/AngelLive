@@ -11,21 +11,9 @@
 
 ## 集成方式
 
-### 方法 1: 通过 Xcode 添加本地 Package
+本仓库已将 SharedAssets 集成到 `AngelLive.xcworkspace`。从仓库根目录打开 workspace，使用既有本地 Package 引用；不要另开单独工程或重复添加依赖来代替 workspace 构建。
 
-1. 打开你的 `.xcodeproj` 文件
-2. 选择项目 -> Package Dependencies 标签
-3. 点击 "+" 按钮
-4. 选择 "Add Local..."
-5. 导航到 `Shared/SharedAssets` 文件夹并选择
-6. 在你的 target 中添加 `SharedAssets` 依赖
-
-### 方法 2: 通过 Workspace 添加
-
-如果你使用 `.xcworkspace`：
-
-1. 将 `SharedAssets/Package.swift` 拖入 Xcode workspace
-2. 在各个项目的 target 设置中，添加 `SharedAssets` 到 Frameworks and Libraries
+外部项目需要单独复用时，可通过 Xcode 的 Add Local Package 选择本目录，并向使用资源的 target 链接 `SharedAssets` product。包自身最低系统版本以 `Package.swift` 为准，不替代宿主的最低版本。
 
 ## 使用方式
 
@@ -115,6 +103,8 @@ SharedAssets/
 └── Sources/
     └── SharedAssets/
         ├── SharedAssets.swift          # 资源访问器
+        ├── ArcSpinner.swift           # FullUI 加载样式
+        ├── ArcRefreshControlDecoration.swift # iOS 原生刷新装饰
         └── Resources/
             └── Assets.xcassets/         # 资源文件
                 ├── AppAccentColor.colorset/

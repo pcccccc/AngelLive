@@ -1,6 +1,6 @@
-# 插件驱动个性首页规划
+# 插件首页协议与宿主架构
 
-> 状态:三端 FullUI 已接入共享首页；2026-10-04 补充 TTL、定向失效、刷新合并、并发限制与 tvOS 失效事件接线。代码实现和三端构建通过，设备覆盖见 [本轮验收记录](TODOProgress20261004.md)。本文下方保留原规划，当前实现以本节和源码为准。
+> 状态:三端 FullUI 已接入共享首页；2026-10-04 补充 TTL、定向失效、刷新合并、并发限制与 tvOS 失效事件接线。代码实现和三端构建通过，设备覆盖见 [本轮验收记录](archive/TODOProgress20261004.md)。本文保留协议、产品边界与验收标准；已落地功能的旧实施阶段已于 2026-10-16 清理。
 >
 > 首期范围:iOS 首页、`AngelLiveCore` 首页数据协议与缓存；当前 macOS / tvOS 也已接入
 >
@@ -49,21 +49,6 @@
 ---
 
 ## 1. 为什么要改首页
-
-### 1.1 最初规划时的问题（历史背景）
-
-当前 iOS 首个 Tab 是“收藏”，启动后即进入 `AdaptiveFavoriteView`。收藏模型虽然已经采用本地优先策略，但后续仍要刷新云端成员和逐个直播状态；平台接口慢、收藏数量多或某个插件异常时，用户会持续感知“首页还没刷新完”。
-
-已确认的代码事实:
-
-| 事实 | 当前实现 |
-|---|---|
-| 默认入口是收藏 | `iOS/AngelLive/AngelLive/ContentView.swift` 中 `selectedTab = .favorite` |
-| 收藏会先显示本地数据 | `AppFavoriteModel.syncWithActor()` 先读取 `FavoriteLocalStore` |
-| 收藏仍需后台刷新状态 | `refreshStatesAndApply(members:)` 调用插件刷新各房间状态 |
-| 历史记录已经是本地数据 | `HistoryModel.watchList` 保存在共享 `UserDefaults`，最多 100 条 |
-| 当前插件协议没有首页能力 | `PlatformFeature` 只有分类、房间、播放、搜索、详情、状态、分享解析和弹幕 |
-| 插件运行时版本严格相等 | `LiveParseLoadedPlugin.load()` 要求插件 `apiVersion` 等于宿主支持版本 1 |
 
 ### 1.2 新首页要解决什么
 
@@ -363,26 +348,9 @@ public struct PluginHomeFeedDTO: Decodable, Sendable {
 
 ## 4. 宿主架构与数据流
 
-### 4.1 组件拆分
+### 4.1 当前组件边界
 
-```text
-HomeView (SwiftUI)
-    │ 只根据状态渲染
-    ▼
-@MainActor @Observable HomeViewModel
-    ├─ HomeComposer                 合并插件分区和本地模块
-    ├─ AppFavoriteModel             收藏快照/状态刷新
-    ├─ HistoryModel                 本地历史
-    └─ PluginHomeFeedService
-           ├─ LiveParse plugin call
-           ├─ tolerant decoder
-           └─ HomeFeedCache actor   每插件独立磁盘缓存
-```
-
-- `HomeViewModel` 只负责界面状态和用户动作，标记 `@MainActor`。
-- 插件调用、JSON 解码和磁盘缓存放到 actor / 后台任务，不占用主线程。
-- `HomeComposer` 只接收不可变快照，生成稳定的首页分区 ID。
-- 每个插件都有独立的加载、缓存、过期和错误状态，不设一个控制整页的 `isLoading`。
+共享 `PluginHomeFeedModel` 管理聚合展示状态、刷新和取消；`PluginHomeFeedCacheStore` 保存首页快照，`PluginHomeFeed` 定义协议与身份。iOS `HomeViewModel` 为共享模型的别名，macOS/tvOS 也消费该模型；布局、导航、焦点和图片呈现留在各自宿主。未采用早期单独的 `HomeComposer` 设计。
 
 ### 4.2 启动流程:缓存先行，后台更新
 
@@ -586,54 +554,6 @@ enum HomeSectionPhase {
 
 ---
 
-## 8. 实施阶段
-
-### 阶段 0:协议冻结与原型确认
-
-- 确认本文件中的定位文案、首页顺序和首期目标类型。
-- 用静态 SwiftUI Preview 验证 iPhone / iPad、浅色 / 深色和大字体布局。
-- 确认 Banner 与收藏模块在首屏的最终高度，不接真实平台数据。
-
-完成标准:产品边界、JSON 示例、缓存规则和交互动效不再有关键歧义。
-
-### 阶段 1:`AngelLiveCore` 协议层
-
-- `PlatformFeature` 增加 `.homeFeed` 和函数探测。
-- 增加首页请求/响应 DTO、容错解码和目标校验。
-- 增加 `PluginHomeFeedService`，统一调用 `getHomeFeed`。
-- 使用测试夹具覆盖旧插件、新插件、未知分区和坏元素；不加入真实平台插件。
-
-完成标准:旧插件测试全绿，新能力失败不会影响插件加载和播放。
-
-### 阶段 2:缓存与聚合
-
-- 实现每插件独立的 `HomeFeedCache` actor。
-- 实现 stale-while-revalidate、TTL 限制、请求合并和并发上限。
-- 实现 `HomeComposer`，合并 Banner、插件分区和本地模块。
-- 接入插件升级、卸载、禁用和会话变化的缓存失效。
-
-完成标准:离线可显示最近兼容缓存；一个来源失败不改变其他分区顺序。
-
-### 阶段 3:iOS 首页
-
-- 新建 `HomeView` / `HomeViewModel`，第一 Tab 改为“首页”。
-- 接入 Banner、收藏摘要与插件推荐；历史和平台继续使用现有独立入口。
-- “查看全部收藏”复用现有 `FavoriteView`，不复制收藏业务逻辑。
-- 播放入口复用 `LiveRoomNavigationState` 和现有播放器转场。
-
-完成标准:有缓存时无全屏 Loading；收藏刷新期间首页可正常浏览和播放。
-
-### 阶段 4:体验和稳定性
-
-- 真机验证首屏、滚动、图片内存、插件超时与弱网。
-- 验证 Dynamic Type、VoiceOver、减弱动态效果、深浅色和 iPad 分屏。
-- 根据真实数据调整 Banner/分区限额和缓存 TTL。
-- 由独立插件作者或测试夹具验证协议兼容；AngelLive 仓库仍不分发插件。
-
-完成标准:达到 §1.3 指标，且现有收藏、平台、搜索和播放链路无回归。
-
----
-
 ## 9. 测试清单
 
 ### 9.1 协议与兼容
@@ -666,34 +586,3 @@ enum HomeSectionPhase {
 - 有缓存情况下测量首个有意义内容时间，目标不超过 300 ms。
 
 ---
-
-## 10. 建议直接确认的产品决策
-
-| 决策 | 建议 |
-|---|---|
-| 默认入口 | iOS 第一 Tab 改为“首页” |
-| 收藏位置 | Banner 后第一模块，首屏附近可见 |
-| Banner 播放 | 支持手动翻页与 6 秒自动轮播，不自动播放视频；减弱动态效果下停止自动轮播和视差 |
-| 首期插件分区 | 只做标准房间横滑列表 |
-| Banner 目标 | 只允许房间和分类 |
-| 多插件排序 | 宿主固定骨架 + 来源轮询，保持上次稳定顺序 |
-| 推荐标签 | 插件明确 `personalized = true` 才显示“为你推荐” |
-| 默认缓存 TTL | 15 分钟，宿主限制 1 分钟至 24 小时 |
-| 全局插件 `apiVersion` | 保持 1；首页独立使用 `schemaVersion` |
-| 无插件首页 | 展示本地工具模块，不生成任何平台推荐 |
-
----
-
-## 11. 最终判断
-
-这个方案是可行的，而且比继续把收藏页当默认首页更符合 AngelLive 的工具定位:
-
-- **速度更合理:**插件首页聚合可以一次返回并缓存；收藏逐房间状态刷新退到后台，不再决定首屏速度。
-- **职责更清楚:**插件提供数据，AngelLive 提供统一、安全、原生的播放器体验。
-- **兼容成本可控:**不提升全局 `apiVersion`，旧插件无需修改，新能力按插件逐步加入。
-- **体验更稳定:**本地收藏和历史秒显，各分区独立刷新，失败和慢请求不再拖住整页。
-- **扩展不过度:**首期只定义 Banner、房间分区和两类原生目标，先把真正需要的首页能力做稳，再评估更多类型。
-
-实施时最重要的验收句只有一句:
-
-> **首页可以展示插件返回的内容，但 AngelLive 永远只是播放器宿主，不成为插件提供方或内容推荐方。**

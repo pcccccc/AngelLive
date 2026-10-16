@@ -43,4 +43,4 @@
 
 macOS SwiftPM helper 没有 CloudKit entitlement 时，构造 `CKContainer` 会触发系统断言。当前 executor 只在实际查询账号时创建 container，并在 macOS 检查本进程 entitlement 后执行；iOS/tvOS 保持原 CloudKit 账号查询路径。正式 macOS 宿主 entitlement 已与容器标识核对。
 
-三端 workspace 构建结果和本轮设备验证边界集中记录于 [2026-10-04 实施与验收](TODOProgress20261004.md)。
+三端 workspace 构建结果和本轮设备验证边界集中记录于 [2026-10-04 实施与验收](archive/TODOProgress20261004.md)。
