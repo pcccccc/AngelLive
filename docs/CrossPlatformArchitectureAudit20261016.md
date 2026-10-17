@@ -37,6 +37,10 @@ Package manifest 与源码 import 检查未发现 Core 反向依赖 Dependencies
 
 处理方向：收藏增删只通过共享服务，宿主保留提示及导航。验证添加一次仅有一个成员、分组与列表一致，以及跨来源同编号收藏互不影响。
 
+2026-10-17 实施：`LiveCardView.contextMenuContent` 已移除服务调用后的直接 `append` 和仅按 `roomId` 的 `removeAll`；同轮检索发现并移除了 `PlayerControlView.favoriteAction` 中相同的重复删除。成员、分组、版本与持久化仍统一由 `AppFavoriteModel` 更新。成功/失败提示、收藏按钮状态和 Top Shelf 通知保持既有流程；ShellUI 使用独立的书签与直链播放器路径。卡片、播放器增删与跨来源同编号场景仍待验收。
+
+本次验证：最后一次源码修改后，Xcode 27.0 RC（27A266a）的 workspace MCP 构建 `AngelLiveTVOS` 成功，目标为已有 Apple TV 4K（第 3 代，1080p）tvOS 17.5 模拟器；最终原始日志为 `BUILD SUCCEEDED`，Issue Navigator 的 error 数为 0。构建仍有既有 Top Shelf 扩展与宿主版本号不一致警告，本次未调整发行配置。该 scheme 的 `GetTestList` 返回 0 项，未运行单元测试或设备交互；`git diff --check`、tvOS 收藏直接数组写入检索、全仓常见内容平台标识及测试身份字段检查通过。
+
 ### A02 tvOS 历史入口绕过持久化
 
 以下入口直接修改 `historyViewModel.watchList`，没有调用 `addHistory/removeHistory`：
@@ -150,7 +154,7 @@ tvOS 失败分支没有回退页码，下一次触底继续递增，存在跳过
 
 ## 6. 后续处理清单
 
-- [ ] 修复 A01，收藏数组只由共享模型维护。
+- [ ] 验收 A01，确认收藏增删、分组一致性与跨来源同编号隔离；重复数组写入已修复。
 - [ ] 联合修复 A02、A03，统一历史身份、写入与持久化。
 - [ ] 修复 A04，验证迟到响应不会污染新播放会话。
 - [ ] 修复 A05，将分类分页收敛到已有共享模型。

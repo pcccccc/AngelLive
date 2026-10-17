@@ -303,7 +303,6 @@ struct LiveCardView: View {
                 Task {
                     do {
                         try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                        appViewModel.favoriteViewModel.roomList.removeAll(where: { $0.roomId == liveViewModel.currentRoom!.roomId })
                         liveViewModel.showToast(true, title: "取消收藏成功")
                         liveViewModel.currentRoomIsFavorited = false
                         TopShelfManager.notifyContentChanged()
@@ -327,7 +326,6 @@ struct LiveCardView: View {
                         }
                         try await appViewModel.favoriteViewModel.addFavorite(room: liveViewModel.currentRoom!)
                         liveViewModel.showToast(true, title: "收藏成功")
-                        appViewModel.favoriteViewModel.roomList.append(liveViewModel.currentRoom!)
                         liveViewModel.currentRoomIsFavorited = true
                         TopShelfManager.notifyContentChanged()
                     } catch {

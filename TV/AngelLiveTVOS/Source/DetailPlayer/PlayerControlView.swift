@@ -865,7 +865,6 @@ struct PlayerControlView: View {
                     roomInfoViewModel.showToast(true, title: "收藏成功")
                 } else {
                     try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: roomInfoViewModel.currentRoom)
-                    appViewModel.favoriteViewModel.roomList.removeAll(where: { $0.roomId == roomInfoViewModel.currentRoom.roomId })
                     roomInfoViewModel.currentRoomIsLiked = false
                     roomInfoViewModel.showToast(true, title: "取消收藏成功")
                 }
