@@ -87,6 +87,23 @@ struct PlayerControlView: View {
         @Bindable var roomInfoModel = roomInfoViewModel
         
         ZStack {
+            if roomInfoViewModel.showControl && !roomInfoViewModel.showTop {
+                // 遮罩独立贴住画面底边；按钮仍遵循原有安全区和焦点布局。
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.1), .black.opacity(0.5), .black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 150)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(.container, edges: [.horizontal, .bottom])
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
             if roomInfoViewModel.showTop {
                 VStack {
                     VStack(spacing: 105) {
@@ -282,6 +299,8 @@ struct PlayerControlView: View {
                                         enabled: titleTranslationEnabled
                                     )
                                     .font(.title3)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                     .padding(.leading, 15)
                                     .foregroundStyle(.white)
                                 Spacer()
@@ -461,19 +480,6 @@ struct PlayerControlView: View {
                         .frame(width: 40, height: 40)
                         .focused($state, equals: .right)
                     }
-                    .background {
-                        LinearGradient(colors: [
-                            .clear,
-                            .clear,
-                            .clear,
-                            .clear,
-                            .clear,
-                            .black.opacity(0.1),
-                            .black.opacity(0.5),
-                            .black
-                        ], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 150)
-                    }
                     .frame(height: 150)
                     }
                     .environment(\.colorScheme, .dark)
@@ -496,6 +502,14 @@ struct PlayerControlView: View {
         // HDMI-CEC 让电视自管音量时,系统不会回传给 App,这是平台限制。
         .onChange(of: systemVolumeObserver.changeTick) { _, _ in
             presentVolumeHUD()
+        }
+        .onChange(of: appViewModel.danmuSettingsViewModel.showDanmu) { _, isEnabled in
+            guard roomInfoViewModel.supportsDanmu else { return }
+            if isEnabled {
+                roomInfoViewModel.getDanmuInfo()
+            } else {
+                roomInfoViewModel.disConnectSocket()
+            }
         }
         .onChange(of: roomInfoViewModel.showControl) { oldValue, isVisible in
             if isVisible {
@@ -527,7 +541,7 @@ struct PlayerControlView: View {
             }
 
             if newValue == .left {
-                state = .danmu
+                state = roomInfoViewModel.supportsDanmu ? .danmu : .playQuality
             }else if newValue == .right {
                 state = .playPause
             }else if newValue == .list {
@@ -671,9 +685,11 @@ struct PlayerControlView: View {
                 VStack(spacing: 20) {
                     HStack(spacing: 0) {
                         hiddenControlAnchor(width: 150, height: 60, focus: .playQuality)
-                        Color.clear.frame(width: 15)
-                        hiddenControlAnchor(width: 50, height: 60, focus: .danmuSetting)
-                        hiddenControlAnchor(width: 50, height: 60, focus: .danmu)
+                        if roomInfoViewModel.supportsDanmu {
+                            Color.clear.frame(width: 15)
+                            hiddenControlAnchor(width: 50, height: 60, focus: .danmuSetting)
+                            hiddenControlAnchor(width: 50, height: 60, focus: .danmu)
+                        }
                     }
                     .padding(.leading, 15)
                     .padding(.vertical, 10)
@@ -795,7 +811,9 @@ struct PlayerControlView: View {
 
     private func resolvedVisibleControlFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
         switch candidate {
-        case .refresh, .favorite, .playQuality, .danmu, .danmuSetting, .left, .right:
+        case .danmu, .danmuSetting:
+            return roomInfoViewModel.supportsDanmu ? (candidate ?? .playQuality) : .playQuality
+        case .refresh, .favorite, .playQuality, .left, .right:
             return candidate ?? .playPause
         case .playPause:
             return .playPause
@@ -806,7 +824,9 @@ struct PlayerControlView: View {
 
     private func resolvedHiddenAnchorFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
         switch candidate {
-        case .playPause, .refresh, .favorite, .playQuality, .danmu, .list, .left, .right, .danmuSetting:
+        case .danmu, .danmuSetting:
+            return roomInfoViewModel.supportsDanmu ? (candidate ?? .playQuality) : .playQuality
+        case .playPause, .refresh, .favorite, .playQuality, .list, .left, .right:
             return candidate ?? .playPause
         default:
             return .playPause
@@ -832,7 +852,7 @@ struct PlayerControlView: View {
         case (.playQuality, .left):
             return .favorite
         case (.playQuality, .right):
-            return .danmuSetting
+            return roomInfoViewModel.supportsDanmu ? .danmuSetting : .right
         case (.danmuSetting, .left):
             return .playQuality
         case (.danmuSetting, .right):
@@ -842,7 +862,7 @@ struct PlayerControlView: View {
         case (.danmu, .right):
             return .right
         case (.right, .left):
-            return .danmu
+            return roomInfoViewModel.supportsDanmu ? .danmu : .playQuality
         default:
             return nil
         }
@@ -898,11 +918,6 @@ struct PlayerControlView: View {
         guard ensureControlVisible() else { return }
         guard roomInfoViewModel.supportsDanmu else { return }
         appViewModel.danmuSettingsViewModel.showDanmu.toggle()
-        if appViewModel.danmuSettingsViewModel.showDanmu == false {
-            roomInfoViewModel.disConnectSocket()
-        }else {
-            roomInfoViewModel.getDanmuInfo()
-        }
     }
 
     @discardableResult
