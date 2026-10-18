@@ -27,6 +27,8 @@ final class ShortDramaPlaybackModel {
     @ObservationIgnored private var completion = ShortDramaCompletionPolicy()
     @ObservationIgnored private var episodesPresented = false
     @ObservationIgnored private var episodeSwipeActive = false
+    @ObservationIgnored private var scrubbingPlaybackID: UUID?
+    @ObservationIgnored private var completionAllowsAutoplay = true
 
     var selectedEpisode: ShortDramaEpisode? {
         episodes.first { $0.id == selectedEpisodeID }
@@ -88,13 +90,20 @@ final class ShortDramaPlaybackModel {
 
     func playbackFinished(id: UUID, error: Error?) async {
         guard !cancelled, playback?.id == id else { return }
-        switch completion.finish(id: id, failed: error != nil) {
-        case .ignored: return
-        case .failed:
+        if let error {
+            // A player reopened at the beginning keeps its UUID. Its real error must still
+            // reach the UI when a natural EOF for this UUID was already recorded earlier.
+            _ = completion.finish(id: id, failed: true)
+            completion.invalidate()
+            scrubbingPlaybackID = nil
             playback = nil
-            errorMessage = error?.localizedDescription
+            hasFinished = false
+            errorMessage = error.localizedDescription
             selectionNote = nil
             return
+        }
+        switch completion.finish(id: id, failed: false) {
+        case .ignored, .failed: return
         case .deferred:
             hasFinished = true
             return
@@ -117,6 +126,45 @@ final class ShortDramaPlaybackModel {
         await updateCompletionHold()
     }
 
+    /// Establish the hold synchronously, before the player is paused or a seek task starts.
+    func beginScrubbing(playbackID: UUID) -> Bool {
+        guard !cancelled, playback?.id == playbackID, scrubbingPlaybackID == nil else { return false }
+        scrubbingPlaybackID = playbackID
+        _ = completion.setPresented(true)
+        return true
+    }
+
+    func completeScrubbing(
+        playbackID: UUID,
+        targetTime: Double?,
+        duration: Double,
+        seekSucceeded: Bool,
+        resumePlayback: Bool
+    ) async {
+        guard !cancelled, playback?.id == playbackID, scrubbingPlaybackID == playbackID else { return }
+
+        if seekSucceeded, let targetTime, targetTime.isFinite, duration.isFinite, duration > 0 {
+            // A seek starts a new completion cycle for this same player instance. Discard EOF
+            // captured at the old position, while retaining the independent sheet/swipe hold.
+            completion.startPlayback(id: playbackID)
+            hasFinished = false
+            selectionNote = nil
+            completionAllowsAutoplay = true
+            if targetTime >= duration {
+                completionAllowsAutoplay = resumePlayback
+                hasFinished = true
+                _ = completion.finish(id: playbackID, failed: false)
+            }
+        } else if hasFinished {
+            // Cancellation/failure retains a natural EOF observed during the scrub, together
+            // with the intent captured before dragging (a paused seek must not start playback).
+            completionAllowsAutoplay = resumePlayback
+        }
+
+        scrubbingPlaybackID = nil
+        await updateCompletionHold()
+    }
+
     func cancel() {
         cancelled = true
         generation = UUID()
@@ -125,6 +173,8 @@ final class ShortDramaPlaybackModel {
         playback = nil
         episodesPresented = false
         episodeSwipeActive = false
+        scrubbingPlaybackID = nil
+        completionAllowsAutoplay = true
         completion = ShortDramaCompletionPolicy()
         isLoading = false
     }
@@ -146,6 +196,9 @@ final class ShortDramaPlaybackModel {
         generation = UUID()
         playback = nil
         completion.invalidate()
+        scrubbingPlaybackID = nil
+        completionAllowsAutoplay = true
+        _ = completion.setPresented(episodesPresented || episodeSwipeActive)
         hasFinished = false
         errorMessage = nil
         selectionNote = nil
@@ -200,14 +253,16 @@ final class ShortDramaPlaybackModel {
     }
 
     private func updateCompletionHold() async {
-        guard let id = completion.setPresented(episodesPresented || episodeSwipeActive) else { return }
+        guard let id = completion.setPresented(
+            episodesPresented || episodeSwipeActive || scrubbingPlaybackID != nil
+        ) else { return }
         await continueAfterCompletion(id: id)
     }
 
     private func continueAfterCompletion(id: UUID) async {
         guard !cancelled, playback?.id == id, hasFinished,
               let selectedEpisodeID else { return }
-        guard autoplay else {
+        guard autoplay, completionAllowsAutoplay else {
             selectionNote = "本集已结束"
             return
         }
