@@ -14,7 +14,7 @@ struct ShortDramaPlayerView: View {
     let room: LiveModel
 
     @State private var model: ShortDramaPlaybackModel
-    @State private var playerController = ShortDramaPlayerController()
+    @State private var playerController = KSShortDramaPlayerController()
     @StateObject private var playbackSession = KSPlayerPlaybackSession(
         role: .primary,
         supportedGlobalCapabilities: [.audioFocus]
@@ -145,6 +145,10 @@ struct ShortDramaPlayerView: View {
                 }
 
                 panelOverlay(metrics: panelMetrics)
+                    // The panel width includes the horizontal safe areas, so its container
+                    // must share the video's full-window origin instead of the inset content origin.
+                    .frame(width: fullSize.width, height: fullSize.height, alignment: .bottom)
+                    .offset(x: -safeInsets.leading, y: -safeInsets.top)
                     .zIndex(10)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
@@ -195,6 +199,9 @@ struct ShortDramaPlayerView: View {
         }
         .onChange(of: isPlaying) { _, _ in showLandscapeControls() }
         .onChange(of: orientation.errorMessage) { _, message in
+            if let message { showBoundary(message) }
+        }
+        .onChange(of: model.progressWarning) { _, message in
             if let message { showBoundary(message) }
         }
         .task(id: controlsHideID) {
@@ -255,6 +262,7 @@ struct ShortDramaPlayerView: View {
             }
         }
         .onDisappear {
+            persistCurrentProgress()
             isLeavingPage = true
             seekRequestID = UUID()
             seekPreview.cancel()
@@ -764,6 +772,7 @@ struct ShortDramaPlayerView: View {
     private func handlePlaybackReady(_ playbackID: UUID) {
         guard model.playback?.id == playbackID,
               playerController.playbackID == playbackID else { return }
+        model.playbackReady(id: playbackID, duration: playerController.timeSample(for: playbackID)?.duration ?? 0)
         withAnimation(.easeOut(duration: 0.15)) {
             readyPlaybackID = playbackID
         }
@@ -773,6 +782,7 @@ struct ShortDramaPlayerView: View {
         guard model.playback?.id == playbackID,
               playerController.playbackID == playbackID else { return }
         self.isPlaying = isPlaying
+        if !isPlaying { persistCurrentProgress() }
     }
 
     @ViewBuilder
@@ -1128,6 +1138,7 @@ struct ShortDramaPlayerView: View {
                 seekSucceeded: succeeded, resumePlayback: canResume
             )
             guard !isLeavingPage, seekRequestID == token else { return }
+            if model.playback?.id == id, model.hasFinished { playerController.pause() }
             seekCommitInFlight = false
             isSeeking = false
             seekPlaybackID = nil
@@ -1159,6 +1170,7 @@ struct ShortDramaPlayerView: View {
                 seekSucceeded: false, resumePlayback: shouldResume
             )
             guard !isLeavingPage, seekRequestID == token else { return }
+            if model.playback?.id == id, model.hasFinished { playerController.pause() }
             seekCommitInFlight = false
             if shouldResume, scenePhase == .active, !model.hasFinished, panel == nil {
                 playerController.play()
@@ -1218,6 +1230,7 @@ struct ShortDramaPlayerView: View {
                     onHeaderDragEnded: { finishPanelDetentDrag($0, metrics: metrics) },
                     onHeaderDragCancelled: { cancelActivePanelDetentDrag(using: metrics) },
                     availableWidth: metrics.panelWidth,
+                    presentationSettled: !panelTransitioning,
                     animateCurrentEpisode: resumeAfterPanel
                         && !model.hasFinished
                         && scenePhase == .active
@@ -1556,19 +1569,27 @@ struct ShortDramaPlayerView: View {
             return
         }
         while !Task.isCancelled {
+            playerController.restoreIfPossible(model: model, onReady: handlePlaybackReady)
             if let sample = playerController.timeSample(for: model.playback?.id) {
+                if let id = model.playback?.id {
+                    model.playbackReady(id: id, duration: sample.duration)
+                }
                 let validDuration = sample.duration.isFinite && sample.duration > 0 ? sample.duration : 0
                 let validCurrent = model.hasFinished ? validDuration
                     : (sample.current.isFinite ? max(sample.current, 0) : 0)
                 duration = validDuration
                 currentTime = validDuration > 0 ? min(validCurrent, validDuration) : validCurrent
                 if !isSeeking { seekValue = min(currentTime, max(validDuration, 1)) }
+                if !isSeeking, let id = model.playback?.id {
+                    model.recordProgress(id: id, position: sample.current, duration: sample.duration)
+                }
             }
             try? await Task.sleep(nanoseconds: 300_000_000)
         }
     }
 
     private func handleScenePhase(_ phase: ScenePhase) {
+        if phase != .active { persistCurrentProgress() }
         switch phase {
         case .background:
             wasPlayingBeforeBackground = isSeeking ? resumeAfterSeek : (
@@ -1590,6 +1611,14 @@ struct ShortDramaPlayerView: View {
         @unknown default:
             break
         }
+    }
+
+    private func persistCurrentProgress() {
+        if !isSeeking, let id = model.playback?.id,
+           let sample = playerController.timeSample(for: id) {
+            model.recordProgress(id: id, position: sample.current, duration: sample.duration)
+        }
+        model.flushProgress()
     }
 
     private func formatTime(_ time: Double) -> String {
@@ -1662,213 +1691,12 @@ private struct ShortDramaEpisodeSwipeGestureState: Equatable {
     static let zero = Self()
 }
 
-@MainActor
-@Observable
-private final class ShortDramaPlayerController {
-    private(set) var coordinator: KSVideoPlayer.Coordinator?
-    private(set) var playbackID: UUID?
-    @ObservationIgnored private var resolvedURL: URL?
-    @ObservationIgnored private var pendingRestart: PendingRestart?
-    private var failedPlaybackID: UUID?
-
-    private struct PendingRestart {
-        let token: UUID
-        let playbackID: UUID
-        let layer: KSPlayerLayer
-        let continuation: CheckedContinuation<Bool, Never>
-        var didBecomeReady = false
-    }
-
-    enum PlaybackFinishDisposition {
-        case ignored
-        case forward(Error?)
-    }
-
-    func attach(_ coordinator: KSVideoPlayer.Coordinator, playbackID: UUID, url: URL) {
-        if self.playbackID != playbackID || self.coordinator !== coordinator {
-            completeRestart(succeeded: false)
-            failedPlaybackID = nil
-        }
-        self.coordinator = coordinator
-        self.playbackID = playbackID
-        resolvedURL = url
-    }
-
-    private(set) var wantsPlayback = true
-
-    func setDesiredPlayback(_ wantsPlayback: Bool, applyImmediately: Bool = true) {
-        self.wantsPlayback = wantsPlayback
-        guard applyImmediately else { return }
-        if wantsPlayback { play() } else { pause() }
-    }
-
-    func detach(playbackID: UUID) {
-        guard self.playbackID == playbackID else { return }
-        completeRestart(succeeded: false)
-        coordinator = nil
-        self.playbackID = nil
-        resolvedURL = nil
-        failedPlaybackID = nil
-    }
-
-    func pause() {
-        wantsPlayback = false
-        coordinator?.playerLayer?.pause()
-    }
-
-    func play() {
-        guard failedPlaybackID == nil else { return }
-        wantsPlayback = true
-        guard pendingRestart == nil else { return }
-        coordinator?.playerLayer?.play()
-    }
-
-    func stop() {
-        completeRestart(succeeded: false)
-        // resetPlayer releases its layer and stops it once; KSPlayer stop is not idempotent.
-        coordinator?.resetPlayer()
-        coordinator = nil
-        playbackID = nil
-        resolvedURL = nil
-        failedPlaybackID = nil
-        wantsPlayback = false
-    }
-
-    func setRate(_ rate: Float) {
-        coordinator?.playbackRate = rate
-    }
-
-    func seek(to time: Double, playbackID: UUID) async -> Bool {
-        guard self.playbackID == playbackID, pendingRestart == nil, failedPlaybackID == nil,
-              let layer = coordinator?.playerLayer,
-              layer.player.duration.isFinite,
-              layer.player.duration > 0,
-              layer.player.seekable else { return false }
-        // KSPlayerLayer skips seeks under one second. Exact endpoint requests must
-        // reach the player, including a seek from 00:00.5 back to zero.
-        let target = min(max(time, 0), layer.player.duration)
-        let succeeded = await withCheckedContinuation { continuation in
-            layer.player.seek(time: target) { finished in
-                continuation.resume(returning: finished)
-            }
-        }
-        guard !Task.isCancelled, self.playbackID == playbackID,
-              coordinator?.playerLayer === layer else { return false }
-        if succeeded { return true }
-        guard target == 0, layer.player is KSMEPlayer, let resolvedURL else { return false }
-
-        // The pinned ME seek path truncates subsecond timestamps before scaling them. A
-        // failed exact-zero seek can land before a valid HLS start; reopen this same resolved
-        // resource once, without changing its UUID, surface, options or episode selection.
-        let token = UUID()
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard !Task.isCancelled, self.playbackID == playbackID,
-                      coordinator?.playerLayer === layer else {
-                    continuation.resume(returning: false)
-                    return
-                }
-                pendingRestart = PendingRestart(
-                    token: token, playbackID: playbackID, layer: layer, continuation: continuation
-                )
-                layer.pause()
-                layer.options.startPlayTime = 0
-                layer.options.startPlayTimePercentage = 0
-                layer.replace(playerItem: MEPlayerItem(io: .left(resolvedURL), options: layer.options))
-                // replace resets the player's playback state; keep decoding paused from the
-                // new beginning until this request's ready + playable state has been observed.
-                layer.pause()
-                layer.prepareToPlay()
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.completeRestart(token: token, succeeded: false)
-            }
-        }
-    }
-
-    func isSeekable(for playbackID: UUID?) -> Bool {
-        guard let playbackID,
-              playbackID == self.playbackID,
-              failedPlaybackID == nil, pendingRestart == nil,
-              let player = coordinator?.playerLayer?.player else { return false }
-        return player.seekable && player.duration.isFinite && player.duration > 0
-    }
-
-    func synchronize(layer: KSPlayerLayer, state: KSPlayerState) {
-        if let pending = pendingRestart, pending.layer === layer, pending.playbackID == playbackID {
-            if state == .error {
-                failedPlaybackID = pending.playbackID
-                wantsPlayback = false
-                completeRestart(token: pending.token, succeeded: false)
-                layer.pause()
-                return
-            }
-            if state == .readyToPlay {
-                pendingRestart?.didBecomeReady = true
-            }
-            layer.pause()
-            if let current = pendingRestart, current.token == pending.token,
-               current.didBecomeReady, layer.player.loadState == .playable,
-               layer.player.playbackState == .paused {
-                completeRestart(token: current.token, succeeded: true)
-            }
-            return
-        }
-        guard failedPlaybackID == nil else { return }
-        if wantsPlayback {
-            if (state == .readyToPlay || state == .paused), !layer.player.isPlaying {
-                layer.play()
-            }
-        } else if layer.player.isPlaying {
-            layer.pause()
-        }
-    }
-
-    func playbackHasFailed(for playbackID: UUID) -> Bool {
-        failedPlaybackID == playbackID
-    }
-
-    func handlePlaybackFinished(
-        layer: KSPlayerLayer, playbackID: UUID, error: Error?
-    ) -> PlaybackFinishDisposition {
-        if let pending = pendingRestart, pending.layer === layer, pending.playbackID == playbackID {
-            // The old item's EOF may already be queued when replace detaches its delegate.
-            // A nil finish cannot identify a failure of the new item; keep waiting for its
-            // own ready/playable state instead of failing or completing the episode.
-            guard error != nil else {
-                layer.pause()
-                return .ignored
-            }
-            failedPlaybackID = playbackID
-            wantsPlayback = false
-            completeRestart(token: pending.token, succeeded: false)
-            layer.pause()
-        }
-        if failedPlaybackID == playbackID, error == nil { return .ignored }
-        return .forward(error)
-    }
-
-    private func completeRestart(token: UUID? = nil, succeeded: Bool) {
-        guard let pending = pendingRestart, token == nil || pending.token == token else { return }
-        pendingRestart = nil
-        pending.continuation.resume(returning: succeeded)
-    }
-
-    func timeSample(for playbackID: UUID?) -> (current: Double, duration: Double)? {
-        guard let playbackID,
-              playbackID == self.playbackID,
-              let player = coordinator?.playerLayer?.player else { return nil }
-        return (player.currentPlaybackTime, player.duration)
-    }
-}
-
 private struct ShortDramaPlayerSurface: View {
     let playback: ShortDramaPlayback
     let playbackRate: Float
     let desiredPlayback: Bool
     let model: ShortDramaPlaybackModel
-    let controller: ShortDramaPlayerController
+    let controller: KSShortDramaPlayerController
     let playbackSession: KSPlayerPlaybackSession
     let onReady: (UUID) -> Void
     let onPlayingChanged: (UUID, Bool) -> Void
@@ -1884,7 +1712,7 @@ private struct ShortDramaPlayerSurface: View {
         playbackRate: Float,
         desiredPlayback: Bool,
         model: ShortDramaPlaybackModel,
-        controller: ShortDramaPlayerController,
+        controller: KSShortDramaPlayerController,
         playbackSession: KSPlayerPlaybackSession,
         onReady: @escaping (UUID) -> Void,
         onPlayingChanged: @escaping (UUID, Bool) -> Void,
@@ -1901,7 +1729,7 @@ private struct ShortDramaPlayerSurface: View {
         self.onVideoSize = onVideoSize
 
         let options = PlayerOptions()
-        options.isAutoPlay = desiredPlayback
+        options.isAutoPlay = desiredPlayback && playback.resumePosition == nil
         options.isLoopPlay = false
         options.registerRemoteControll = false
         options.startPlayRate = playbackRate
@@ -1927,14 +1755,16 @@ private struct ShortDramaPlayerSurface: View {
         .background(Color.black)
         .onAppear {
             coordinator.playbackRate = playbackRate
-            controller.attach(coordinator, playbackID: playback.id, url: playback.url)
+            controller.attach(
+                coordinator, playbackID: playback.id, url: playback.url,
+                resumePosition: playback.resumePosition, desiredPlayback: desiredPlayback
+            )
         }
         .onChange(of: playbackRate) { _, newValue in
             coordinator.playbackRate = newValue
         }
         .onDisappear {
-            controller.detach(playbackID: playback.id)
-            coordinator.resetPlayer()
+            controller.release(coordinator, playbackID: playback.id)
         }
     }
 
@@ -1947,8 +1777,9 @@ private struct ShortDramaPlayerSurface: View {
         playbackSession.activate()
         layer.player.playbackRate = playbackRate
         controller.synchronize(layer: layer, state: state)
+        controller.restoreIfPossible(model: model, onReady: onReady)
         reportVideoSizeIfReady(from: layer)
-        if !didReportReady && (
+        if !didReportReady && !controller.isRestoring(for: playback.id) && (
             state == .bufferFinished
                 || (state == .paused && layer.player.loadState == .playable)
         ) {
@@ -1971,9 +1802,15 @@ private struct ShortDramaPlayerSurface: View {
         case .ignored:
             return
         case .forward(let playbackError):
+            if let sample = controller.timeSample(for: playback.id) {
+                model.recordProgress(id: playback.id, position: sample.current, duration: sample.duration)
+            }
             onPlayingChanged(playback.id, false)
             Task { @MainActor in
                 await model.playbackFinished(id: playback.id, error: playbackError)
+                guard model.playback?.id == playback.id, controller.playbackID == playback.id,
+                      layer === coordinator.playerLayer, model.hasFinished else { return }
+                controller.pause()
             }
         }
     }

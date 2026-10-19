@@ -32,6 +32,7 @@ struct LiveRoomCard: View {
     let subtitle: String?
     let presentation: Presentation
     let recommendationReason: String?
+    let transitionSourceID: String?
     /// 可选的删除回调（用于历史记录）
     var onDelete: (() -> Void)? = nil
     /// 是否禁用 SwiftUI 自身的 tap gesture(由 cell 设置为 true)。
@@ -57,6 +58,10 @@ struct LiveRoomCard: View {
     /// 使用外部 Namespace（如果有），否则使用本地
     private var namespace: Namespace.ID {
         externalNamespace ?? localNamespace
+    }
+
+    private var resolvedTransitionSourceID: String {
+        transitionSourceID ?? room.roomId
     }
 
     /// 是否使用外部导航（外部状态存在时使用外部导航）
@@ -100,7 +105,8 @@ struct LiveRoomCard: View {
         subtitle: String? = nil,
         presentation: Presentation = .standard,
         recommendationReason: String? = nil,
-        disableTapGesture: Bool = false
+        disableTapGesture: Bool = false,
+        transitionSourceID: String? = nil
     ) {
         self.room = room
         self.width = width
@@ -110,6 +116,7 @@ struct LiveRoomCard: View {
         self.presentation = presentation
         self.recommendationReason = recommendationReason
         self.disableTapGesture = disableTapGesture
+        self.transitionSourceID = transitionSourceID
     }
 
     // 判断是否已收藏
@@ -189,14 +196,14 @@ struct LiveRoomCard: View {
                     baseTappable
                         .fullScreenCover(isPresented: showPlayerBinding) {
                             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
+                                .modifier(ZoomTransitionModifier(sourceID: resolvedTransitionSourceID, namespace: namespace))
                                 .fullUITabBarHidden()
                         }
                 } else {
                     baseTappable
                         .navigationDestination(isPresented: showPlayerBinding) {
                             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
+                                .modifier(ZoomTransitionModifier(sourceID: resolvedTransitionSourceID, namespace: namespace))
                                 .fullUITabBarHidden()
                         }
                 }
@@ -259,7 +266,7 @@ struct LiveRoomCard: View {
 //                }
                 .cornerRadius(AppConstants.CornerRadius.lg)
                 .clipped()
-                .modifier(MatchedTransitionSourceModifier(id: room.roomId, namespace: namespace))
+                .modifier(MatchedTransitionSourceModifier(id: resolvedTransitionSourceID, namespace: namespace))
 
             // 主播信息
             HStack(alignment: presentation == .home ? .top : .center, spacing: 8) {

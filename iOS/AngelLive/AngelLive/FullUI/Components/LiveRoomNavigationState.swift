@@ -24,6 +24,9 @@ class LiveRoomNavigationState {
     /// 当前选中的房间
     var currentRoom: LiveModel?
 
+    /// Identifies a particular card when the same room appears in several home sections.
+    var transitionSourceID: String?
+
     /// 从分区列表进入时保留当时的房间快照，供播放页连续换台。
     var categoryRooms: [LiveModel] = []
 
@@ -34,11 +37,13 @@ class LiveRoomNavigationState {
     func navigate(
         to room: LiveModel,
         categoryRooms: [LiveModel] = [],
-        categoryContext: LiveRoomCategoryContext? = nil
+        categoryContext: LiveRoomCategoryContext? = nil,
+        transitionSourceID: String? = nil
     ) {
         currentRoom = room
         self.categoryRooms = categoryRooms
         self.categoryContext = categoryContext
+        self.transitionSourceID = transitionSourceID
         showPlayer = true
     }
 
@@ -48,6 +53,7 @@ class LiveRoomNavigationState {
         currentRoom = nil
         categoryRooms = []
         categoryContext = nil
+        transitionSourceID = nil
     }
 }
 

@@ -232,6 +232,255 @@ struct ShortDramaPlaybackModelTests {
         #expect(model.errorMessage == "Fixture refresh failed")
         #expect(fixture.preparedNumbers == [1])
     }
+
+    @Test("shared playback restores the last episode and each episode's own position")
+    func restoresEachEpisode() async throws {
+        let fixture = PlaybackFixture()
+        let model = fixture.model()
+        await model.load()
+        let firstID = try record(model, position: 48)
+        let firstEpisode = try #require(model.selectedEpisodeID)
+        let secondEpisode = model.episodes[1].id
+        await model.selectEpisode(id: secondEpisode)
+        _ = try record(model, position: 17)
+        model.cancel()
+
+        let reentryFixture = PlaybackFixture(progressStore: ShortDramaProgressStore(directory: fixture.directory))
+        let reentry = reentryFixture.model()
+        await reentry.load()
+        let restoredID = try #require(reentry.playback?.id)
+        #expect(reentry.selectedEpisodeID == secondEpisode)
+        #expect(reentry.playback?.resumePosition == 17)
+        reentry.recordProgress(id: restoredID, position: 0, duration: 100)
+        #expect(try reentryFixture.progressStore.load(for: fixture.progressKey).episodes[secondEpisode]?.position == 17)
+        await reentry.restorationCompleted(id: restoredID, position: 17, duration: 100,
+                                          succeeded: true, resumePlayback: false)
+        #expect(reentry.beginScrubbing(playbackID: restoredID))
+        await reentry.completeScrubbing(playbackID: restoredID, targetTime: 4, duration: 100,
+                                       seekSucceeded: true, resumePlayback: false)
+        #expect(try ShortDramaProgressStore(directory: fixture.directory).load(for: fixture.progressKey)
+            .episodes[secondEpisode]?.position == 4)
+        await reentry.selectEpisode(id: firstEpisode)
+        #expect(reentry.playback?.resumePosition == 48)
+        reentry.recordProgress(id: firstID, position: 99, duration: 100)
+        reentry.recordProgress(id: restoredID, position: 99, duration: 100)
+        #expect(try reentryFixture.progressStore.load(for: fixture.progressKey).episodes[firstEpisode]?.position == 48)
+    }
+
+    @Test("completed reentry starts at zero only after one valid readiness confirmation")
+    func completedReentryAndReadiness() async throws {
+        let fixture = PlaybackFixture()
+        let model = fixture.model()
+        await model.load()
+        let id = try record(model, position: 99)
+        let episode = try #require(model.selectedEpisodeID)
+        await model.setEpisodesPresented(true)
+        await model.playbackFinished(id: id, error: nil)
+        model.cancel()
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == true)
+
+        let reentry = fixture.model()
+        await reentry.load()
+        let replayID = try #require(reentry.playback?.id)
+        #expect(reentry.selectedEpisodeID == episode)
+        #expect(reentry.playback?.resumePosition == nil)
+        reentry.playbackReady(id: replayID, duration: 0)
+        reentry.recordProgress(id: replayID, position: 0, duration: 100)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == true)
+        reentry.playbackReady(id: replayID, duration: 100)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.position == 0)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == false)
+        reentry.autoplay = false
+        reentry.recordProgress(id: replayID, position: 99, duration: 100)
+        await reentry.playbackFinished(id: replayID, error: nil)
+        reentry.playbackReady(id: replayID, duration: 100)
+        reentry.recordProgress(id: replayID, position: 0, duration: 100)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == true)
+    }
+
+    @Test("a successful scrub cancels deferred EOF while failure keeps EOF and paused intent")
+    func scrubReconcilesCompletion() async throws {
+        let fixture = PlaybackFixture()
+        let model = fixture.model()
+        await model.load()
+        let id = try record(model, position: 60)
+        let episode = try #require(model.selectedEpisodeID)
+        #expect(model.beginScrubbing(playbackID: id))
+        await model.playbackFinished(id: id, error: nil)
+        #expect(model.hasFinished)
+        await model.completeScrubbing(playbackID: id, targetTime: 12, duration: 100,
+                                      seekSucceeded: true, resumePlayback: false)
+        #expect(!model.hasFinished)
+        #expect(model.playback?.id == id)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.position == 12)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == false)
+
+        #expect(model.beginScrubbing(playbackID: id))
+        await model.playbackFinished(id: id, error: nil)
+        await model.completeScrubbing(playbackID: id, targetTime: nil, duration: 100,
+                                      seekSucceeded: false, resumePlayback: false)
+        #expect(model.hasFinished)
+        #expect(model.playback?.id == id)
+        #expect(model.selectedEpisodeID == episode)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == true)
+        await model.playbackFinished(id: id, error: FixtureFailure.refresh)
+        #expect(model.playback == nil)
+        #expect(!model.hasFinished)
+        #expect(model.errorMessage == "Fixture refresh failed")
+    }
+
+    @Test("endpoint restoration respects paused intent and independent completion holds", arguments: [false, true])
+    func endpointRestoration(resumePlayback: Bool) async throws {
+        let fixture = PlaybackFixture()
+        let seed = fixture.model()
+        await seed.load()
+        _ = try record(seed, position: 100)
+        seed.cancel()
+        let model = fixture.model()
+        await model.load()
+        let id = try #require(model.playback?.id)
+        let episode = try #require(model.selectedEpisodeID)
+        #expect(model.playback?.resumePosition == 100)
+        await model.setEpisodesPresented(true)
+        await model.setEpisodeSwipeActive(true)
+        await model.restorationCompleted(id: id, position: 100, duration: 100,
+                                         succeeded: true, resumePlayback: resumePlayback)
+        #expect(model.hasFinished)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.completed == true)
+        await model.setEpisodesPresented(false)
+        #expect(model.playback?.id == id)
+        await model.setEpisodeSwipeActive(false)
+        #expect(model.selectedEpisode?.number == (resumePlayback ? 2 : 1))
+        await model.playbackFinished(id: id, error: nil)
+        #expect(fixture.preparedNumbers == (resumePlayback ? [1, 1, 2] : [1, 1]))
+    }
+
+    @Test("failed restoration preserves history for retry and stale confirmations are ignored")
+    func restorationFailureAndRetry() async throws {
+        let fixture = PlaybackFixture()
+        let seed = fixture.model()
+        await seed.load()
+        _ = try record(seed, position: 40)
+        seed.cancel()
+        let model = fixture.model()
+        await model.load()
+        let failedID = try #require(model.playback?.id)
+        let episode = try #require(model.selectedEpisodeID)
+        await model.restorationCompleted(id: failedID, position: 0, duration: 100,
+                                         succeeded: false, resumePlayback: true)
+        #expect(model.playback == nil)
+        #expect(model.errorMessage != nil)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.position == 40)
+        await model.selectEpisode(id: episode)
+        let retryID = try #require(model.playback?.id)
+        #expect(retryID != failedID)
+        #expect(model.playback?.resumePosition == 40)
+        await model.restorationCompleted(id: failedID, position: 90, duration: 100,
+                                         succeeded: true, resumePlayback: true)
+        #expect(model.playback?.id == retryID)
+        await model.restorationCompleted(id: retryID, position: 40, duration: 100,
+                                         succeeded: true, resumePlayback: false)
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).episodes[episode]?.position == 40)
+    }
+
+    @Test("two models merge different episode events and selection refreshes canonical progress")
+    func concurrentModelsRetainEachEpisode() async throws {
+        let fixture = PlaybackFixture()
+        let firstWindow = fixture.model(), secondWindow = fixture.model()
+        await firstWindow.load()
+        await secondWindow.load()
+        let firstID = try record(firstWindow, position: 30)
+        let firstEpisode = try #require(firstWindow.selectedEpisodeID)
+        let secondEpisode = secondWindow.episodes[1].id
+        await secondWindow.selectEpisode(id: secondEpisode)
+        let secondID = try record(secondWindow, position: 20)
+        firstWindow.recordProgress(id: firstID, position: 40, duration: 100)
+        secondWindow.recordProgress(id: secondID, position: 25, duration: 100)
+        firstWindow.flushProgress()
+        let disk = try ShortDramaProgressStore(directory: fixture.directory).load(for: fixture.progressKey)
+        #expect(disk.episodes[firstEpisode]?.position == 40)
+        #expect(disk.episodes[secondEpisode]?.position == 25)
+        #expect(disk.lastEpisodeID == secondEpisode)
+        await firstWindow.selectEpisode(id: secondEpisode)
+        #expect(firstWindow.playback?.resumePosition == 25)
+    }
+
+    @Test("a paused model's repeated sample and flush do not steal the last watched episode")
+    func pausedWindowDoesNotStealSelection() async throws {
+        let fixture = PlaybackFixture()
+        let pausedWindow = fixture.model(), activeWindow = fixture.model()
+        await pausedWindow.load()
+        await activeWindow.load()
+        let pausedID = try record(pausedWindow, position: 30)
+        await activeWindow.selectEpisode(id: activeWindow.episodes[1].id)
+        _ = try record(activeWindow, position: 20)
+        let activeEpisode = try #require(activeWindow.selectedEpisodeID)
+        for _ in 0..<4 {
+            pausedWindow.recordProgress(id: pausedID, position: 30, duration: 100)
+            pausedWindow.flushProgress()
+        }
+        #expect(try fixture.progressStore.load(for: fixture.progressKey).lastEpisodeID == activeEpisode)
+        pausedWindow.cancel()
+        #expect(try ShortDramaProgressStore(directory: fixture.directory).load(for: fixture.progressKey).lastEpisodeID == activeEpisode)
+    }
+
+    @Test("a failed shared save remains dirty and can be retried without another playback sample")
+    func failedSaveCanRetryUnchangedSample() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var failWrite = true
+        var attempts = 0
+        let store = ShortDramaProgressStore(directory: directory) { data, url in
+            attempts += 1
+            if failWrite { throw FixtureFailure.refresh }
+            try data.write(to: url, options: .atomic)
+        }
+        let fixture = PlaybackFixture(progressStore: store)
+        let model = fixture.model()
+        await model.load()
+        let id = try record(model, position: 30)
+        let episode = try #require(model.selectedEpisodeID)
+        #expect(attempts == 1)
+        #expect(model.progressWarning != nil)
+        #expect(try store.load(for: fixture.progressKey).episodes[episode]?.position == 30)
+        model.recordProgress(id: id, position: 30, duration: 100)
+        #expect(attempts == 1)
+        failWrite = false
+        model.flushProgress()
+        #expect(attempts == 2)
+        #expect(try ShortDramaProgressStore(directory: directory).load(for: fixture.progressKey).episodes[episode]?.position == 30)
+        model.flushProgress()
+        #expect(attempts == 2)
+    }
+
+    @Test("a corrupt shared record is retained while hosts report the storage failure")
+    func corruptStoreDoesNotGetOverwritten() async throws {
+        let fixture = PlaybackFixture()
+        try FileManager.default.createDirectory(at: fixture.directory, withIntermediateDirectories: true)
+        let file = fixture.directory.appendingPathComponent(fixture.progressKey.filename)
+        let damaged = Data("{invalid".utf8)
+        try damaged.write(to: file)
+        let model = fixture.model()
+        await model.load()
+        #expect(model.progressWarning != nil)
+        _ = try record(model, position: 25)
+        model.cancel()
+        #expect(try Data(contentsOf: file) == damaged)
+        #expect(throws: (any Error).self) {
+            try fixture.progressStore.updateEpisode(
+                ShortDramaEpisodeProgress(position: 1, duration: 100, completed: false, updatedAt: .now),
+                episodeID: "first", for: fixture.progressKey
+            )
+        }
+        #expect(try Data(contentsOf: file) == damaged)
+    }
+
+    private func record(_ model: ShortDramaPlaybackModel, position: Double) throws -> UUID {
+        let id = try #require(model.playback?.id)
+        model.playbackReady(id: id, duration: 100)
+        model.recordProgress(id: id, position: position, duration: 100)
+        return id
+    }
 }
 
 private enum FixtureFailure: LocalizedError {
@@ -242,6 +491,9 @@ private enum FixtureFailure: LocalizedError {
 @MainActor
 private final class PlaybackFixture {
     let numbers: [Int]
+    let directory: URL
+    let progressStore: ShortDramaProgressStore
+    let progressKey = ShortDramaProgressKey(pluginID: "fixture.plugin", roomID: "room")
     var heldNumbers = Set<Int>()
     var failNextNumbers = Set<Int>()
     private(set) var preparedNumbers: [Int] = []
@@ -249,9 +501,13 @@ private final class PlaybackFixture {
     private var pending: [Int: CheckedContinuation<LiveQualityDetail, any Error>] = [:]
     private var started: [Int: CheckedContinuation<Void, Never>] = [:]
 
-    init(numbers: [Int] = [1, 2, 4]) {
+    init(numbers: [Int] = [1, 2, 4], progressStore: ShortDramaProgressStore? = nil) {
         self.numbers = numbers
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        self.progressStore = progressStore ?? ShortDramaProgressStore(directory: directory)
     }
+
+    deinit { try? FileManager.default.removeItem(at: directory) }
 
     func model() -> ShortDramaPlaybackModel {
         let room = LiveModel(userName: "Fixture", roomTitle: "Fixture drama", roomCover: "",
@@ -275,7 +531,7 @@ private final class PlaybackFixture {
                 }
                 return quality(episode.number, resolved: true)
             }
-        ))
+        ), progressStore: progressStore)
     }
 
     func waitForPreparation(_ number: Int) async {

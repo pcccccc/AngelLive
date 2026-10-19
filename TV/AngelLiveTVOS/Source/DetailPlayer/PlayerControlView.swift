@@ -67,6 +67,10 @@ struct PlayerControlView: View {
         (roomInfoViewModel.currentRoomPlayArgs?.count ?? 0) > 1
     }
 
+    private var usesFullUIControlSpacing: Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins
+    }
+
     private var titleTranslationEnabled: Bool {
         appViewModel.pluginAvailability.hasAvailablePlugins
             && SandboxPluginCatalog.platform(for: roomInfoViewModel.currentRoom.liveType) != nil
@@ -76,8 +80,8 @@ struct PlayerControlView: View {
         Text(title)
             .font(.title3.bold())
             .foregroundStyle(.white)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 8)
+            .padding(.horizontal, usesFullUIControlSpacing ? 0 : 22)
+            .padding(.vertical, usesFullUIControlSpacing ? 0 : 8)
             .contentShape(Capsule())
     }
 
@@ -106,35 +110,40 @@ struct PlayerControlView: View {
 
             if roomInfoViewModel.showTop {
                 VStack {
-                    VStack(spacing: 105) {
-                        // 顶部 Tab 栏（固定 55pt）
+                    VStack(spacing: usesFullUIControlSpacing ? 32 : 105) {
+                        // FullUI uses the same capsule clearance as the bottom controls.
                         HStack {
                             Spacer()
-                            HStack(spacing: 12) {
+                            HStack(spacing: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.spacing : 12) {
                                 if showsFavoriteTopTab {
                                     Button(action: {}) {
                                         topTabLabel("收藏")
                                     }
+                                    .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                                 isFocused: topState == .section(0), shape: .capsule))
                                     .focused($topState, equals: .section(0))
                                 }
                                 Button(action: {}) {
                                     topTabLabel("历史")
                                 }
+                                .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                             isFocused: topState == .section(1), shape: .capsule))
                                 .focused($topState, equals: .section(1))
                                 if roomInfoModel.roomType == .live {
                                     Button(action: {}) {
                                         topTabLabel("分区")
                                     }
+                                    .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                                 isFocused: topState == .section(2), shape: .capsule))
                                     .focused($topState, equals: .section(2))
                                 }
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .adaptiveGlassEffectCapsule()
+                            .modifier(TVFullUIPlayerControlGroupModifier(enabled: usesFullUIControlSpacing,
+                                                                        legacyInsets: EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)))
                             Spacer()
                         }
                         .foregroundColor(.white)
-                        .frame(height: 55)
+                        .frame(height: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.height + 2 * TVFullUIPlayerControlMetrics.inset : 55)
                         .focusSection()
                         .onChange(of: topState) { oldValue, newValue in
                             switch newValue {
@@ -145,28 +154,37 @@ struct PlayerControlView: View {
                             }
                         }
                         
-                        // 卡片区域（占满剩余高度）
+                        // FullUI keeps the card row at its intrinsic height so its
+                        // title and focus growth are not compressed by the old shelf.
                         ScrollView(.horizontal) {
-                            LazyHGrid(rows: [GridItem(.flexible())], content: {
-                                ForEach(sectionList.indices, id: \.self) { index in
-                                    PlayerControlCardView() { liveModel in
-                                        changeRoom(liveModel)
-                                    }
-                                    .environment(PlayerControlCardViewModel(liveModel: sectionList[index], cardIndex: index, selectIndex: selectIndex))
+                            if usesFullUIControlSpacing {
+                                LazyHStack(alignment: .top) {
+                                    relatedRoomCards
                                 }
-                            })
-                            .padding()
+                                .padding()
+                            } else {
+                                LazyHGrid(rows: [GridItem(.flexible())]) {
+                                    relatedRoomCards
+                                }
+                                .padding()
+                            }
                         }
                         .padding([.leading, .trailing], 55)
-                        .padding(.top, 65)
+                        .padding(.top, usesFullUIControlSpacing ? 0 : 65)
+                        .fixedSize(horizontal: false, vertical: usesFullUIControlSpacing)
                         .scrollClipDisabled()
                         .focusSection()
                         
-                        Spacer()
+                        if !usesFullUIControlSpacing {
+                            Spacer()
+                        }
                     }
+                    .padding(.top, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.screenInset : 0)
+                    .padding(.bottom, usesFullUIControlSpacing ? 32 : 0)
                     .background(.black.opacity(0.6))
-                    .frame(width: 1920, height: 390)
-                    .padding(.top, 30)
+                    .frame(width: usesFullUIControlSpacing ? nil : 1920,
+                           height: usesFullUIControlSpacing ? nil : 390)
+                    .padding(.top, usesFullUIControlSpacing ? 0 : 30)
                     .transition(.move(edge: .top))
                     
                     Spacer()
@@ -282,7 +300,7 @@ struct PlayerControlView: View {
                     }
                     // 左下角,抬到底部控制带(高 150)之上;左边距与播放控制胶囊左缘对齐
                     // (HStack 起点 0 + 隐藏聚焦按钮 40 + spacing 15 ≈ 55)
-                    .padding(.leading, 55)
+                    .padding(.leading, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.screenInset : 55)
                     .padding(.bottom, 170)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
@@ -301,7 +319,7 @@ struct PlayerControlView: View {
                                     .font(.title3)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
-                                    .padding(.leading, 15)
+                                    .padding(.leading, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.screenInset : 15)
                                     .foregroundStyle(.white)
                                 Spacer()
                             }
@@ -323,6 +341,7 @@ struct PlayerControlView: View {
                         Spacer()
                         HStack(alignment: .center, spacing: 15) {
 
+                            if !usesFullUIControlSpacing {
                             Button(action: {}, label: {
 
                             })
@@ -330,9 +349,10 @@ struct PlayerControlView: View {
                             .clipShape(.circle)
                             .frame(width: 40, height: 40)
                             .focused($state, equals: .left)
+                            }
 
                         VStack {
-                            HStack(spacing: 0) {
+                            HStack(spacing: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.spacing : 0) {
                                 Button(action: {
                                     guard ensureControlVisible() else { return }
                                     roomInfoViewModel.togglePlayPause()
@@ -342,7 +362,8 @@ struct PlayerControlView: View {
                                         .foregroundColor(.white)
                                         .frame(width: 40, height: 40)
                                 })
-                                .clipShape(.circle)
+                                .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                             isFocused: state == .playPause, shape: .circle, legacyShape: .circle))
                                 .contextMenu(menuItems: {
                                     Button {
                                         showStatisticsAction()
@@ -360,7 +381,8 @@ struct PlayerControlView: View {
                                         .font(.system(size: 30, weight: .bold))
                                         .frame(width: 40, height: 40)
                                 })
-                                .clipShape(.circle)
+                                .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                             isFocused: state == .refresh, shape: .circle, legacyShape: .circle))
                                 .focused($state, equals: .refresh)
 
                                 Button(action: {
@@ -375,10 +397,11 @@ struct PlayerControlView: View {
                                             .foregroundColor(roomInfoModel.currentRoomIsLiked ? .red : .white)
                                             .font(.system(size: 30, weight: .bold))
                                             .frame(width: 40, height: 40)
-                                            .padding(.top, 3)
+                                            .padding(.top, usesFullUIControlSpacing ? 0 : 3)
                                     }
                                 })
-                                .clipShape(.circle)
+                                .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                             isFocused: state == .favorite, shape: .circle, legacyShape: .circle))
                                 .focused($state, equals: .favorite)
                                 .changeEffect(
                                     .spray(origin: UnitPoint(x: 0.25, y: 0.5)) {
@@ -386,22 +409,23 @@ struct PlayerControlView: View {
                                         .foregroundStyle(.red)
                                     }, value: roomInfoModel.currentRoomIsLiked)
                             }
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 10)
-                            .adaptiveGlassEffectCapsule()
+                            .modifier(TVFullUIPlayerControlGroupModifier(enabled: usesFullUIControlSpacing,
+                                                                        legacyInsets: EdgeInsets(top: 10, leading: 5, bottom: 10, trailing: 5)))
 
+                            if !usesFullUIControlSpacing {
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
                                     .frame(width: 150, height: 40)
                             })
                             .focused($state, equals: .list)
                             .opacity(0.01)
+                            }
                         }
-                        .padding(.top, 60)
+                        .padding(.top, usesFullUIControlSpacing ? 0 : 60)
                        
                         Spacer()
                         VStack {
-                            HStack(spacing: 0) {
+                            HStack(spacing: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.spacing : 0) {
                                 if roomInfoViewModel.showControl {
                                     Button {
                                         showQualityAction()
@@ -409,8 +433,9 @@ struct PlayerControlView: View {
                                         qualityLabel()
                                     }
                                     .focused($state, equals: .playQuality)
-                                    .frame(height: 60)
-                                    .clipShape(.capsule)
+                                    .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                                 isFocused: state == .playQuality, shape: .capsule,
+                                                                                 legacyShape: .capsule, legacyHeight: 60))
                                 } else {
                                     Button(action: {
                                         roomInfoViewModel.showControl = true
@@ -418,16 +443,19 @@ struct PlayerControlView: View {
                                         qualityLabel()
                                     })
                                     .focused($state, equals: .playQuality)
-                                    .frame(height: 60)
-                                    .clipShape(.capsule)
+                                    .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                                 isFocused: state == .playQuality, shape: .capsule,
+                                                                                 legacyShape: .capsule, legacyHeight: 60))
                                 }
 //                                .popoverTip(multiCameraTip, arrowEdge: .top) { _ in
 //                                    // 点击 Tip 后关闭
 //                                }
 
                                 if roomInfoViewModel.supportsDanmu {
+                                    if !usesFullUIControlSpacing {
                                     Text("")
                                         .frame(width: 15)
+                                    }
 
                                     Button(action: {
                                         guard ensureControlVisible() else { return }
@@ -440,7 +468,8 @@ struct PlayerControlView: View {
                                             .resizable()
                                             .frame(width: 40, height: 40)
                                     })
-                                    .clipShape(.circle)
+                                    .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                                 isFocused: state == .danmuSetting, shape: .circle, legacyShape: .circle))
                                     .focused($state, equals: .danmuSetting)
 
                                     Button(action: {
@@ -450,28 +479,31 @@ struct PlayerControlView: View {
                                             .resizable()
                                             .frame(width: 40, height: 40)
                                     })
-                                    .clipShape(.circle)
+                                    .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
+                                                                                 isFocused: state == .danmu, shape: .circle, legacyShape: .circle))
                                     .focused($state, equals: .danmu)
                                 }
                             }
-                            .padding(.leading, 15)
-                            .padding(.vertical, 10)
-                            .adaptiveGlassEffectCapsule()
+                            .modifier(TVFullUIPlayerControlGroupModifier(enabled: usesFullUIControlSpacing,
+                                                                        legacyInsets: EdgeInsets(top: 10, leading: 15, bottom: 10, trailing: 0)))
                             .onAppear {
                                 if !hasMultiCamera {
                                     multiCameraTip.invalidate(reason: .actionPerformed)
                                 }
                             }
 
+                            if !usesFullUIControlSpacing {
                             Button(action: /*@START_MENU_TOKEN@*/{}/*@END_MENU_TOKEN@*/, label: {
                                 Text("")
                                     .frame(width: 150, height: 40)
                             })
                             .focused($state, equals: .list)
                             .opacity(0.01)
+                            }
                         }
-                        .padding(.top, 60)
+                        .padding(.top, usesFullUIControlSpacing ? 0 : 60)
                         
+                        if !usesFullUIControlSpacing {
                         Button(action: {}, label: {
                             
                         })
@@ -479,8 +511,12 @@ struct PlayerControlView: View {
                         .clipShape(.circle)
                         .frame(width: 40, height: 40)
                         .focused($state, equals: .right)
+                        }
                     }
-                    .frame(height: 150)
+                    .frame(height: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.height + 2 * TVFullUIPlayerControlMetrics.inset : 150)
+                    .padding(.horizontal, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.screenInset : 0)
+                    .padding(.bottom, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.screenInset : 0)
+                    .modifier(TVFullUIControlMoveModifier(enabled: usesFullUIControlSpacing, action: handleFullUIControlMove))
                     }
                     .environment(\.colorScheme, .dark)
                     .focusSection()
@@ -560,6 +596,15 @@ struct PlayerControlView: View {
                 handleBackCommand()
             }
             return .handled
+        }
+    }
+
+    private var relatedRoomCards: some View {
+        ForEach(sectionList.indices, id: \.self) { index in
+            PlayerControlCardView { liveModel in
+                changeRoom(liveModel)
+            }
+            .environment(PlayerControlCardViewModel(liveModel: sectionList[index], cardIndex: index, selectIndex: selectIndex))
         }
     }
 
@@ -662,6 +707,43 @@ struct PlayerControlView: View {
 
     @ViewBuilder
     private var hiddenControlAnchorOverlay: some View {
+        if usesFullUIControlSpacing {
+            fullUIHiddenControlAnchorOverlay
+        } else {
+            legacyHiddenControlAnchorOverlay
+        }
+    }
+
+    private var fullUIHiddenControlAnchorOverlay: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 15) {
+                HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
+                    hiddenControlAnchor(width: 70, height: 70, focus: .playPause)
+                    hiddenControlAnchor(width: 70, height: 70, focus: .refresh)
+                    hiddenControlAnchor(width: 70, height: 70, focus: .favorite)
+                }
+                .padding(TVFullUIPlayerControlMetrics.inset)
+
+                Spacer()
+
+                HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
+                    hiddenControlAnchor(width: 150, height: 70, focus: .playQuality)
+                    if roomInfoViewModel.supportsDanmu {
+                        hiddenControlAnchor(width: 70, height: 70, focus: .danmuSetting)
+                        hiddenControlAnchor(width: 70, height: 70, focus: .danmu)
+                    }
+                }
+                .padding(TVFullUIPlayerControlMetrics.inset)
+            }
+            .frame(height: TVFullUIPlayerControlMetrics.height + 2 * TVFullUIPlayerControlMetrics.inset)
+            .padding(.horizontal, TVFullUIPlayerControlMetrics.screenInset)
+            .padding(.bottom, TVFullUIPlayerControlMetrics.screenInset)
+        }
+        .focusSection()
+    }
+
+    private var legacyHiddenControlAnchorOverlay: some View {
         VStack {
             Spacer()
             HStack(alignment: .bottom, spacing: 15) {
@@ -669,21 +751,23 @@ struct PlayerControlView: View {
                     .padding(.leading, -80)
 
                 VStack(spacing: 20) {
-                    HStack(spacing: 0) {
-                        hiddenControlAnchor(width: 50, height: 60, focus: .playPause)
-                        hiddenControlAnchor(width: 50, height: 60, focus: .refresh)
-                        hiddenControlAnchor(width: 50, height: 60, focus: .favorite)
+                    HStack(spacing: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.spacing : 0) {
+                        hiddenControlAnchor(width: usesFullUIControlSpacing ? 70 : 50, height: usesFullUIControlSpacing ? 70 : 60, focus: .playPause)
+                        hiddenControlAnchor(width: usesFullUIControlSpacing ? 70 : 50, height: usesFullUIControlSpacing ? 70 : 60, focus: .refresh)
+                        hiddenControlAnchor(width: usesFullUIControlSpacing ? 70 : 50, height: usesFullUIControlSpacing ? 70 : 60, focus: .favorite)
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.inset : 5)
+                    .padding(.vertical, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.inset : 10)
 
+                    if !usesFullUIControlSpacing {
                     hiddenControlAnchor(width: 150, height: 40, focus: .list)
+                    }
                 }
 
                 Spacer()
 
                 VStack(spacing: 20) {
-                    HStack(spacing: 0) {
+                    HStack(spacing: usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.spacing : 0) {
                         hiddenControlAnchor(width: 150, height: 60, focus: .playQuality)
                         if roomInfoViewModel.supportsDanmu {
                             Color.clear.frame(width: 15)
@@ -691,10 +775,13 @@ struct PlayerControlView: View {
                             hiddenControlAnchor(width: 50, height: 60, focus: .danmu)
                         }
                     }
-                    .padding(.leading, 15)
-                    .padding(.vertical, 10)
+                    .padding(.leading, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.inset : 15)
+                    .padding(.trailing, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.inset : 0)
+                    .padding(.vertical, usesFullUIControlSpacing ? TVFullUIPlayerControlMetrics.inset : 10)
 
+                    if !usesFullUIControlSpacing {
                     hiddenControlAnchor(width: 150, height: 40, focus: .list)
+                    }
                 }
 
                 hiddenControlAnchor(width: 40, height: 40, focus: .right)
@@ -711,11 +798,19 @@ struct PlayerControlView: View {
             pendingVisibleFocusAfterReveal = resolvedVisibleControlFocus(from: focus)
             roomInfoViewModel.showControl = true
         }) {
-            Color.clear
-                .frame(width: width, height: height)
-                .contentShape(Rectangle())
+            if usesFullUIControlSpacing, focus == .playQuality {
+                qualityLabel()
+                    .padding(.horizontal, 24)
+                    .frame(height: TVFullUIPlayerControlMetrics.height)
+                    .hidden()
+                    .contentShape(Rectangle())
+            } else {
+                Color.clear
+                    .frame(width: width, height: height)
+                    .contentShape(Rectangle())
+            }
         }
-        .buttonStyle(.plain)
+        .modifier(TVFullUIHiddenAnchorStyleModifier(enabled: usesFullUIControlSpacing, focus: focus))
         .focused($state, equals: focus)
         .onMoveCommand { direction in
             handleHiddenAnchorMove(from: focus, direction: direction)
@@ -810,6 +905,13 @@ struct PlayerControlView: View {
     }
 
     private func resolvedVisibleControlFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
+        if usesFullUIControlSpacing {
+            if candidate == .left { return roomInfoViewModel.supportsDanmu ? .danmu : .playQuality }
+            if candidate == .right { return .playPause }
+            if !roomInfoViewModel.supportsDanmu, candidate == .danmu || candidate == .danmuSetting {
+                return .playQuality
+            }
+        }
         switch candidate {
         case .danmu, .danmuSetting:
             return roomInfoViewModel.supportsDanmu ? (candidate ?? .playQuality) : .playQuality
@@ -822,7 +924,23 @@ struct PlayerControlView: View {
         }
     }
 
+    private func handleFullUIControlMove(_ direction: MoveCommandDirection) {
+        switch direction {
+        case .down:
+            showRelatedRoomsPanel()
+        case .left where state == .playPause:
+            state = roomInfoViewModel.supportsDanmu ? .danmu : .playQuality
+        case .right where state == (roomInfoViewModel.supportsDanmu ? .danmu : .playQuality):
+            state = .playPause
+        default:
+            break
+        }
+    }
+
     private func resolvedHiddenAnchorFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
+        if usesFullUIControlSpacing {
+            return resolvedVisibleControlFocus(from: candidate)
+        }
         switch candidate {
         case .danmu, .danmuSetting:
             return roomInfoViewModel.supportsDanmu ? (candidate ?? .playQuality) : .playQuality
@@ -834,6 +952,21 @@ struct PlayerControlView: View {
     }
 
     private func nextVisibleFocus(from focus: PlayControlFocusableField, direction: MoveCommandDirection) -> PlayControlFocusableField? {
+        if usesFullUIControlSpacing {
+            var controls: [PlayControlFocusableField] = [.playPause, .refresh, .favorite, .playQuality]
+            if roomInfoViewModel.supportsDanmu {
+                controls.append(contentsOf: [.danmuSetting, .danmu])
+            }
+            guard let index = controls.firstIndex(of: resolvedVisibleControlFocus(from: focus)) else { return nil }
+            switch direction {
+            case .left:
+                return controls[(index + controls.count - 1) % controls.count]
+            case .right:
+                return controls[(index + 1) % controls.count]
+            default:
+                return nil
+            }
+        }
         switch (focus, direction) {
         case (.left, .right):
             return .playPause
@@ -1004,7 +1137,12 @@ struct PlayerControlView: View {
 
     @ViewBuilder
     private func qualityLabel() -> some View {
-        if #available(tvOS 26.0, *) {
+        if usesFullUIControlSpacing {
+            Text(roomInfoViewModel.currentPlayQualityString)
+                .font(.system(size: 30, weight: .bold))
+                .lineLimit(1)
+                .foregroundStyle(.white)
+        } else if #available(tvOS 26.0, *) {
             Text(roomInfoViewModel.currentPlayQualityString)
                 .font(.system(size: 30, weight: .bold))
                 .frame(height: 50, alignment: .center)
@@ -1058,4 +1196,42 @@ struct PlayerControlView: View {
         }
     }
     
+}
+
+private struct TVFullUIControlMoveModifier: ViewModifier {
+    let enabled: Bool
+    let action: (MoveCommandDirection) -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled { content.onMoveCommand(perform: action) }
+        else { content }
+    }
+}
+
+private struct TVFullUIHiddenAnchorStyleModifier: ViewModifier {
+    let enabled: Bool
+    let focus: PlayControlFocusableField
+
+    private var accessibilityLabel: String {
+        switch focus {
+        case .playPause: "显示播放控制，播放与暂停"
+        case .refresh: "显示播放控制，刷新"
+        case .favorite: "显示播放控制，收藏"
+        case .playQuality: "显示播放控制，清晰度"
+        case .danmuSetting: "显示播放控制，弹幕设置"
+        case .danmu: "显示播放控制，弹幕开关"
+        default: "显示播放控制"
+        }
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .buttonStyle(TVFullUIHiddenControlButtonStyle())
+                .accessibilityLabel(accessibilityLabel)
+        }
+        else { content.buttonStyle(.plain) }
+    }
 }

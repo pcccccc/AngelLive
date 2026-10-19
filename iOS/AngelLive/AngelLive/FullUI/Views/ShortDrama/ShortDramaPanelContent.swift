@@ -11,9 +11,23 @@ struct ShortDramaEpisodesPanelContent: View {
     let onHeaderDragEnded: (DragGesture.Value) -> Void
     let onHeaderDragCancelled: () -> Void
     let availableWidth: CGFloat
+    let presentationSettled: Bool
     let animateCurrentEpisode: Bool
     @AccessibilityFocusState.Binding var accessibilityFocus: ShortDramaAccessibilityFocus?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var browseGroupID: String?
+    @State private var positionedLayout: EpisodeGridLayout?
+
+    private var episodeGroups: [ShortDramaEpisodeGroup] {
+        ShortDramaEpisodeGroup.make(from: model.episodes)
+    }
+
+    private var browsedGroup: ShortDramaEpisodeGroup? {
+        let groups = episodeGroups
+        return groups.first { $0.id == browseGroupID }
+            ?? groups.first { $0.contains(episodeID: model.selectedEpisodeID) }
+            ?? groups.first
+    }
 
     private var columns: [GridItem] {
         let interiorWidth = max(44, availableWidth - 40)
@@ -24,34 +38,132 @@ struct ShortDramaEpisodesPanelContent: View {
     }
 
     var body: some View {
+        let group = browsedGroup
+        let visibleEpisodes = group?.episodes ?? []
+        let scrollEpisodeID = group?.contains(episodeID: model.selectedEpisodeID) == true
+            ? model.selectedEpisodeID : visibleEpisodes.first?.id
         VStack(spacing: 0) {
             episodeHeader
 
+            episodeListHeader
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+
+            GeometryReader { viewport in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(visibleEpisodes) { episode in
+                                episodeCell(episode)
+                                    .id(episode.id)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 24)
+                    }
+                    .scrollIndicators(.hidden)
+                    .task(id: EpisodeScrollTarget(
+                        episodeID: scrollEpisodeID,
+                        layout: EpisodeGridLayout(
+                            groupID: group?.id,
+                            episodeIDs: visibleEpisodes.map(\.id),
+                            width: viewport.size.width,
+                            columnCount: columns.count
+                        ),
+                        presentationSettled: presentationSettled
+                    )) {
+                        guard presentationSettled, viewport.size.height > 0,
+                              let id = scrollEpisodeID else { return }
+                        let layout = EpisodeGridLayout(
+                            groupID: group?.id,
+                            episodeIDs: visibleEpisodes.map(\.id),
+                            width: viewport.size.width,
+                            columnCount: columns.count
+                        )
+                        // A detent's settlement is only the initial positioning gate. Once
+                        // positioned, only changing the browsed group, its contents or its
+                        // layout repositions the grid; playback samples never change browsing.
+                        guard positionedLayout != layout else { return }
+                        // Let the lazy grid register stable targets after insertion/reflow.
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        withTransaction(Transaction(animation: nil)) {
+                            proxy.scrollTo(id, anchor: .center)
+                        }
+                        positionedLayout = layout
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: 560, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onChange(of: episodeGroups.map(\.id), initial: true) { _, groupIDs in
+            // Pin the initial choice for this presentation. If the directory removes it,
+            // browsedGroup already resolves to the current episode's group or the first.
+            if browseGroupID == nil || !groupIDs.contains(where: { $0 == browseGroupID }) {
+                browseGroupID = browsedGroup?.id
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var episodeListHeader: some View {
+        if episodeGroups.count > 1 {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    episodeGroupMenu.fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 8)
+                    episodeCount.fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    episodeGroupMenu
+                    episodeCount
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else {
             HStack(spacing: 8) {
                 Text("剧集列表")
                     .font(.headline)
                     .foregroundStyle(.white)
                 Spacer()
-                Text("可播 \(model.episodes.count) 集")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.58))
+                episodeCount
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(model.episodes) { episode in
-                        episodeCell(episode)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-            }
-            .scrollIndicators(.hidden)
         }
-        .frame(maxWidth: 560, maxHeight: .infinity, alignment: .top)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private var episodeCount: some View {
+        Text("可播 \(model.episodes.count) 集")
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.58))
+    }
+
+    private var episodeGroupMenu: some View {
+        Menu {
+            Picker("集数区间", selection: Binding(
+                get: { browsedGroup?.id ?? "" },
+                set: { browseGroupID = $0 }
+            )) {
+                ForEach(episodeGroups) { group in
+                    Text(group.title).tag(group.id)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(browsedGroup?.title ?? "剧集列表")
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(.white)
+            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("集数区间")
+        .accessibilityValue(browsedGroup?.title ?? "")
     }
 
     private var episodeHeader: some View {
@@ -149,6 +261,19 @@ struct ShortDramaEpisodesPanelContent: View {
         .accessibilityLabel(isSelected ? "第 \(episode.number) 集，当前集" : "第 \(episode.number) 集")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
+
+private struct EpisodeScrollTarget: Equatable {
+    let episodeID: String?
+    let layout: EpisodeGridLayout
+    let presentationSettled: Bool
+}
+
+private struct EpisodeGridLayout: Equatable {
+    let groupID: String?
+    let episodeIDs: [String]
+    let width: CGFloat
+    let columnCount: Int
 }
 
 struct ShortDramaSettingsPanelContent: View {

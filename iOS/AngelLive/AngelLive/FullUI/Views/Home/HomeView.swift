@@ -234,8 +234,8 @@ private extension HomeView {
                         cardWidth: pluginCardWidth,
                         gridColumnCount: gridColumnCount,
                         namespace: roomTransitionNamespace,
-                        onSelect: { room, rooms in
-                            openRoom(room, rooms: rooms, mode: .direct)
+                        onSelect: { room, rooms, sourceID in
+                            openRoom(room, rooms: rooms, mode: .direct, transitionSourceID: sourceID)
                         }
                     )
                     .padding(
@@ -257,8 +257,8 @@ private extension HomeView {
                         cardWidth: pluginCardWidth,
                         gridColumnCount: gridColumnCount,
                         namespace: roomTransitionNamespace,
-                        onSelect: { room, rooms in
-                            openRoom(room, rooms: rooms, mode: .direct)
+                        onSelect: { room, rooms, sourceID in
+                            openRoom(room, rooms: rooms, mode: .direct, transitionSourceID: sourceID)
                         }
                     )
                     .trackHomeNavigationSection(
@@ -353,7 +353,7 @@ private extension HomeView {
             )
             .modifier(
                 ZoomTransitionModifier(
-                    sourceID: room.roomId,
+                    sourceID: navigationState.transitionSourceID ?? room.roomId,
                     namespace: roomTransitionNamespace
                 )
             )
@@ -361,15 +361,15 @@ private extension HomeView {
         }
     }
 
-    func openRoom(_ room: LiveModel, rooms: [LiveModel], mode: HomeRoomOpenMode) {
+    func openRoom(_ room: LiveModel, rooms: [LiveModel], mode: HomeRoomOpenMode, transitionSourceID: String? = nil) {
         switch mode {
         case .direct:
-            navigationState.navigate(to: room, categoryRooms: rooms)
+            navigationState.navigate(to: room, categoryRooms: rooms, transitionSourceID: transitionSourceID)
         case .local:
             if room.liveState == LiveState.close.rawValue {
                 presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
             } else {
-                navigationState.navigate(to: room, categoryRooms: rooms)
+                navigationState.navigate(to: room, categoryRooms: rooms, transitionSourceID: transitionSourceID)
             }
         }
     }
@@ -633,11 +633,13 @@ private struct HomeRoomPresentation: Identifiable {
     let id: String
     let room: LiveModel
     let reason: String?
+    let transitionSourceID: String?
 
-    init(id: String? = nil, room: LiveModel, reason: String? = nil) {
+    init(id: String? = nil, room: LiveModel, reason: String? = nil, transitionSourceID: String? = nil) {
         self.id = id ?? room.id
         self.room = room
         self.reason = reason
+        self.transitionSourceID = transitionSourceID
     }
 }
 
@@ -664,7 +666,7 @@ private struct HomeFavoriteSection: View {
                     HomeSeeAllLabel()
                 }
             },
-            onSelect: { room in onSelect(room, rooms) },
+            onSelect: { item in onSelect(item.room, rooms) },
             namespace: namespace
         )
     }
@@ -675,7 +677,7 @@ private struct HomePluginRoomSection: View {
     let cardWidth: CGFloat
     let gridColumnCount: Int?
     let namespace: Namespace.ID
-    let onSelect: (LiveModel, [LiveModel]) -> Void
+    let onSelect: (LiveModel, [LiveModel], String?) -> Void
 
     private var rooms: [LiveModel] {
         entry.section.items.map(\.room)
@@ -710,7 +712,8 @@ private struct HomePluginRoomSection: View {
                 HomeRoomPresentation(
                     id: $0.id,
                     room: $0.room,
-                    reason: $0.reason
+                    reason: $0.reason,
+                    transitionSourceID: "home-item:\($0.id)"
                 )
             },
             cardWidth: cardWidth,
@@ -722,7 +725,7 @@ private struct HomePluginRoomSection: View {
                     }
                 }
             },
-            onSelect: { room in onSelect(room, rooms) },
+            onSelect: { item in onSelect(item.room, rooms, item.transitionSourceID) },
             namespace: namespace
         )
     }
@@ -740,7 +743,7 @@ private struct HomeRoomSection<Trailing: View>: View {
     let emptyMessage: String?
     let emptySystemImage: String
     let trailing: Trailing
-    let onSelect: (LiveModel) -> Void
+    let onSelect: (HomeRoomPresentation) -> Void
     let namespace: Namespace.ID
 
     init(
@@ -752,7 +755,7 @@ private struct HomeRoomSection<Trailing: View>: View {
         emptyMessage: String? = nil,
         emptySystemImage: String = "rectangle.stack",
         @ViewBuilder trailing: () -> Trailing,
-        onSelect: @escaping (LiveModel) -> Void,
+        onSelect: @escaping (HomeRoomPresentation) -> Void,
         namespace: Namespace.ID
     ) {
         self.title = title
@@ -821,7 +824,7 @@ private struct HomeRoomSection<Trailing: View>: View {
 
     private func roomButton(for item: HomeRoomPresentation) -> some View {
         Button {
-            onSelect(item.room)
+            onSelect(item)
         } label: {
             LiveRoomCard(
                 room: item.room,
@@ -829,7 +832,8 @@ private struct HomeRoomSection<Trailing: View>: View {
                 liveCheckMode: .none,
                 presentation: .home,
                 recommendationReason: item.reason,
-                disableTapGesture: true
+                disableTapGesture: true,
+                transitionSourceID: item.transitionSourceID
             )
             .environment(\.roomTransitionNamespace, namespace)
         }

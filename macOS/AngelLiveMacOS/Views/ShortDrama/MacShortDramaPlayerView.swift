@@ -14,7 +14,7 @@ struct MacShortDramaPlayerView: View {
     let onClose: (@MainActor () -> Void)?
     let onExitFullscreen: (@MainActor () -> Bool)?
     @State private var model: ShortDramaPlaybackModel
-    @State private var controller = MacShortDramaPlayerController()
+    @State private var controller = KSShortDramaPlayerController()
     @StateObject private var playbackSession = KSPlayerPlaybackSession(role: .primary, supportedGlobalCapabilities: [.audioFocus])
     @State private var playerWindow: NSWindow?
     @State private var isPlaying = false
@@ -23,7 +23,12 @@ struct MacShortDramaPlayerView: View {
     @State private var duration = 0.0
     @State private var seekValue = 0.0
     @State private var isSeeking = false
+    @State private var seekCommitInFlight = false
     @State private var resumeAfterSeek = false
+    @State private var seekPlaybackID: UUID?
+    @State private var seekTask: Task<Void, Never>?
+    @State private var feedbackToast: ToastMessage?
+    @State private var feedbackTask: Task<Void, Never>?
     @State private var playbackRate: Float = 1
     @State private var volume: Float = 1
     @State private var showsEpisodes = false
@@ -42,6 +47,7 @@ struct MacShortDramaPlayerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(HistoryModel.self) private var historyModel
 
     init(room: LiveModel, onClose: (@MainActor () -> Void)? = nil, onExitFullscreen: (@MainActor () -> Bool)? = nil) {
@@ -80,11 +86,9 @@ struct MacShortDramaPlayerView: View {
                 if let playback = model.playback {
                     MacShortDramaPlayerSurface(
                         playback: playback, playbackRate: playbackRate, volume: volume,
+                        desiredPlayback: controller.wantsPlayback,
                         model: model, controller: controller, playbackSession: playbackSession,
-                        onReady: { id in
-                            guard model.playback?.id == id, !isLeaving else { return }
-                            isReady = true
-                        },
+                        onReady: playbackReady,
                         onPlayingChanged: { id, playing in
                             guard model.playback?.id == id, !isLeaving else { return }
                             isPlaying = playing
@@ -140,15 +144,26 @@ struct MacShortDramaPlayerView: View {
         .task(id: model.playback?.id) {
             let id = model.playback?.id
             while !Task.isCancelled, !isLeaving, model.playback?.id == id {
+                controller.restoreIfPossible(model: model, onReady: playbackReady)
                 if let sample = controller.timeSample(for: id) {
                     currentTime = sample.current.isFinite ? max(0, sample.current) : 0
                     duration = sample.duration.isFinite ? max(0, sample.duration) : 0
-                    if !isSeeking { seekValue = currentTime }
+                    if !isSeeking {
+                        seekValue = currentTime
+                        if let id {
+                            model.playbackReady(id: id, duration: sample.duration)
+                            model.recordProgress(id: id, position: sample.current, duration: sample.duration)
+                        }
+                    }
                 }
                 do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
             }
         }
         .onChange(of: model.playback?.id) { _, _ in
+            seekTask?.cancel()
+            seekTask = nil
+            seekPlaybackID = nil
+            seekCommitInFlight = false
             isReady = false
             isPlaying = false
             currentTime = 0
@@ -163,6 +178,21 @@ struct MacShortDramaPlayerView: View {
             revealControls()
         }
         .onChange(of: controlsHeld) { _, _ in revealControls() }
+        .onChange(of: controller.wantsPlayback) { _, wantsPlayback in
+            if !wantsPlayback { persistCurrentProgress() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { persistCurrentProgress() }
+        }
+        .onChange(of: model.progressWarning) { _, message in
+            if let message { showFeedback(message) }
+        }
+        .overlay(alignment: .top) {
+            if let toast = feedbackToast {
+                ToastView(toast: toast).padding(.top, 48)
+            }
+        }
+        .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.7), value: feedbackToast)
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
             guard playerWindow?.isKeyWindow == true else { return }
             menuTrackingCount += 1
@@ -175,6 +205,9 @@ struct MacShortDramaPlayerView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let window = notification.object as? NSWindow, window === playerWindow else { return }
             cleanup()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            persistCurrentProgress()
         }
         .onDisappear { cleanup() }
         .focusable()
@@ -291,7 +324,7 @@ struct MacShortDramaPlayerView: View {
                 Text(timeLabel(isSeeking ? seekValue : currentTime))
                 MacShortDramaSlider(
                     value: $seekValue, maximum: max(1, duration),
-                    isEnabled: isSeekable && !model.isLoading && !model.hasFinished,
+                    isEnabled: isSeekable && !seekCommitInFlight && !model.isLoading,
                     label: "播放进度", valueDescription: timeLabel(seekValue),
                     onEditingChanged: seekEditingChanged
                 )
@@ -453,7 +486,7 @@ struct MacShortDramaPlayerView: View {
     }
 
     private func togglePlayback() {
-        guard !showsEpisodes else { return }
+        guard !showsEpisodes, !isSeeking else { return }
         revealControls()
         if model.hasFinished, let id = model.selectedEpisodeID {
             controller.setDesiredPlayback(true)
@@ -472,7 +505,7 @@ struct MacShortDramaPlayerView: View {
     }
 
     private func openEpisodes() {
-        guard !showsEpisodes else { return }
+        guard !showsEpisodes, !isSeeking else { return }
         resumeAfterPanel = controller.wantsPlayback
         controller.setDesiredPlayback(false)
         showsEpisodes = true
@@ -493,6 +526,7 @@ struct MacShortDramaPlayerView: View {
     }
 
     private func selectEpisode(_ id: String) {
+        persistCurrentProgress()
         let changesPlayback = id != model.selectedEpisodeID || model.hasFinished || model.playback == nil
         showsEpisodes = false
         controller.setDesiredPlayback(changesPlayback || resumeAfterPanel)
@@ -520,23 +554,80 @@ struct MacShortDramaPlayerView: View {
     }
 
     private func adjacentEpisode(_ offset: Int) {
-        guard !showsEpisodes else { return }
+        guard !showsEpisodes, !isSeeking else { return }
         revealControls()
         guard let index = model.episodes.firstIndex(where: { $0.id == model.selectedEpisodeID }), canMove(offset) else { return }
         controller.setDesiredPlayback(true)
+        persistCurrentProgress()
         let id = model.episodes[index + offset].id
         run { await model.selectEpisode(id: id) }
     }
 
     private func seekEditingChanged(_ editing: Bool) {
         if editing {
+            guard !isSeeking, let id = model.playback?.id, isSeekable,
+                  model.beginScrubbing(playbackID: id) else { return }
+            seekPlaybackID = id
+            resumeAfterSeek = controller.wantsPlayback && !model.hasFinished
             isSeeking = true
-            resumeAfterSeek = controller.wantsPlayback
-            controller.setDesiredPlayback(false)
+            controller.pause()
         } else {
-            controller.seek(to: seekValue, autoPlay: resumeAfterSeek)
-            controller.setDesiredPlayback(resumeAfterSeek, applyImmediately: false)
-            isSeeking = false
+            guard isSeeking, !seekCommitInFlight, let id = seekPlaybackID else { return }
+            let target = min(max(0, seekValue), duration)
+            let sampledDuration = duration
+            let shouldResume = resumeAfterSeek
+            seekCommitInFlight = true
+            seekTask = Task { @MainActor in
+                let succeeded = await controller.seek(to: target, playbackID: id)
+                guard !Task.isCancelled, !isLeaving, model.playback?.id == id else { return }
+                let canResume = shouldResume && !controller.playbackHasFailed(for: id)
+                controller.setDesiredPlayback(canResume && !showsEpisodes, applyImmediately: false)
+                // Core may select the next episode here. Its playback-ID change must not
+                // cancel this task and, through it, the next episode's preparation request.
+                seekTask = nil
+                await model.completeScrubbing(
+                    playbackID: id, targetTime: target, duration: sampledDuration,
+                    seekSucceeded: succeeded, resumePlayback: canResume
+                )
+                guard !Task.isCancelled, !isLeaving, model.playback?.id == id else { return }
+                if model.hasFinished { controller.pause() }
+                seekTask = nil
+                seekPlaybackID = nil
+                seekCommitInFlight = false
+                isSeeking = false
+                if succeeded {
+                    currentTime = target
+                    seekValue = target
+                } else {
+                    seekValue = currentTime
+                    showFeedback("未能调整播放进度，请重试")
+                }
+                if canResume, !showsEpisodes, !model.hasFinished { controller.play() }
+                revealControls()
+            }
+        }
+    }
+
+    private func playbackReady(_ id: UUID) {
+        guard model.playback?.id == id, !isLeaving else { return }
+        model.playbackReady(id: id, duration: controller.timeSample(for: id)?.duration ?? 0)
+        isReady = true
+    }
+
+    private func persistCurrentProgress() {
+        if !isSeeking, let id = model.playback?.id, let sample = controller.timeSample(for: id) {
+            model.recordProgress(id: id, position: sample.current, duration: sample.duration)
+        }
+        model.flushProgress()
+    }
+
+    private func showFeedback(_ message: String) {
+        feedbackTask?.cancel()
+        let toast = ToastMessage(icon: "exclamationmark.triangle.fill", message: message, type: .info)
+        feedbackToast = toast
+        feedbackTask = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(2)) } catch { return }
+            if feedbackToast == toast { feedbackToast = nil }
         }
     }
 
@@ -547,7 +638,13 @@ struct MacShortDramaPlayerView: View {
 
     private func cleanup() {
         guard !isLeaving else { return }
+        persistCurrentProgress()
         isLeaving = true
+        seekTask?.cancel()
+        seekTask = nil
+        feedbackTask?.cancel()
+        feedbackTask = nil
+        feedbackToast = nil
         hideControlsTask?.cancel()
         hideControlsTask = nil
         operation?.cancel()
@@ -749,6 +846,36 @@ private struct MacShortDramaEpisodesPanel: View {
     let model: ShortDramaPlaybackModel
     let onSelect: (String) -> Void
     let onClose: () -> Void
+    @State private var browseGroupID: String?
+
+    private struct GridPosition: Equatable {
+        let groupID: String?
+        let episodeIDs: [String]
+        let width: CGFloat
+    }
+
+    init(room: LiveModel, model: ShortDramaPlaybackModel,
+         onSelect: @escaping (String) -> Void, onClose: @escaping () -> Void) {
+        self.room = room
+        self.model = model
+        self.onSelect = onSelect
+        self.onClose = onClose
+        let groups = ShortDramaEpisodeGroup.make(from: model.episodes)
+        _browseGroupID = State(initialValue: groups.first { $0.contains(episodeID: model.selectedEpisodeID) }?.id
+            ?? groups.first?.id)
+    }
+
+    private var groups: [ShortDramaEpisodeGroup] { ShortDramaEpisodeGroup.make(from: model.episodes) }
+    private var selectedGroup: ShortDramaEpisodeGroup? {
+        groups.first { $0.id == browseGroupID }
+            ?? groups.first { $0.contains(episodeID: model.selectedEpisodeID) }
+            ?? groups.first
+    }
+    private var visibleEpisodes: [ShortDramaEpisode] { selectedGroup?.episodes ?? [] }
+    private var scrollEpisodeID: String? {
+        selectedGroup?.contains(episodeID: model.selectedEpisodeID) == true
+            ? model.selectedEpisodeID : visibleEpisodes.first?.id
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -760,46 +887,73 @@ private struct MacShortDramaEpisodesPanel: View {
                 }
                 Spacer(minLength: 12)
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    HStack(alignment: .top, spacing: 12) {
-                        KFImage(URL(string: room.roomCover)).resizable().scaledToFill()
-                            .frame(width: 60, height: 84).clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(room.roomTitle.isEmpty ? room.userName.orDash : room.roomTitle)
-                                .font(.headline).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                            if let name = model.selectedEpisode?.cdn.displayName, !name.isEmpty {
-                                Text(name).font(.caption).foregroundStyle(.white.opacity(0.72)).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: 8)], spacing: 8) {
-                        ForEach(model.episodes) { episode in
-                            let selected = episode.id == model.selectedEpisodeID
-                            Button { onSelect(episode.id) } label: {
-                                ZStack(alignment: .topTrailing) {
-                                    Text("\(episode.number)")
-                                        .font(.body.weight(selected ? .semibold : .regular))
-                                        .frame(maxWidth: .infinity, minHeight: 48)
-                                    if selected {
-                                        Image(systemName: "play.fill").font(.system(size: 10)).padding(5)
+            if groups.count > 1 {
+                HStack(spacing: 8) {
+                    Text("剧集区间").accessibilityHidden(true)
+                    MacShortDramaGroupPicker(groups: groups, selection: Binding(
+                        get: { selectedGroup?.id ?? "" },
+                        set: { browseGroupID = $0 }
+                    ))
+                    .fixedSize()
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.white)
+            }
+            GeometryReader { geometry in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            HStack(alignment: .top, spacing: 12) {
+                                KFImage(URL(string: room.roomCover)).resizable().scaledToFill()
+                                    .frame(width: 60, height: 84).clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(room.roomTitle.isEmpty ? room.userName.orDash : room.roomTitle)
+                                        .font(.headline).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
+                                    if let name = model.selectedEpisode?.cdn.displayName, !name.isEmpty {
+                                        Text(name).font(.caption).foregroundStyle(.white.opacity(0.72)).fixedSize(horizontal: false, vertical: true)
                                     }
                                 }
-                                .foregroundStyle(.white)
-                                .background(.white.opacity(selected ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 10))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? .white : .white.opacity(0.08), lineWidth: selected ? 1.5 : 1)
+                            }
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 48), spacing: 8)], spacing: 8) {
+                                ForEach(visibleEpisodes) { episode in
+                                    let selected = episode.id == model.selectedEpisodeID
+                                    Button { onSelect(episode.id) } label: {
+                                        ZStack(alignment: .topTrailing) {
+                                            Text("\(episode.number)")
+                                                .font(.body.weight(selected ? .semibold : .regular))
+                                                .frame(maxWidth: .infinity, minHeight: 48)
+                                            if selected {
+                                                Image(systemName: "play.fill").font(.system(size: 10)).padding(5)
+                                            }
+                                        }
+                                        .foregroundStyle(.white)
+                                        .background(.white.opacity(selected ? 0.12 : 0.045), in: RoundedRectangle(cornerRadius: 10))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 10).strokeBorder(selected ? .white : .white.opacity(0.08), lineWidth: selected ? 1.5 : 1)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .id(episode.id)
+                                    .accessibilityLabel("第 \(episode.number) 集\(selected ? "，当前集" : "")")
+                                    .accessibilityAddTraits(selected ? .isSelected : [])
                                 }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("第 \(episode.number) 集\(selected ? "，当前集" : "")")
-                            .accessibilityAddTraits(selected ? .isSelected : [])
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .task(id: GridPosition(groupID: selectedGroup?.id,
+                                           episodeIDs: visibleEpisodes.map(\.id), width: geometry.size.width)) {
+                        // Browsing ranges and resizing reveal current or first within this range.
+                        // Playback sampling and manual scrolling never change this key.
+                        guard let id = scrollEpisodeID else { return }
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        proxy.scrollTo(id, anchor: .center)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(24)
@@ -807,6 +961,100 @@ private struct MacShortDramaEpisodesPanel: View {
         .adaptiveGlassEffectRoundedRect(cornerRadius: 24)
         .overlay { RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12), lineWidth: 1) }
         .shadow(color: .black.opacity(0.22), radius: 22, y: 12)
+        .onChange(of: model.episodes.map(\.id)) { _, _ in
+            guard !groups.contains(where: { $0.id == browseGroupID }) else { return }
+            browseGroupID = groups.first { $0.contains(episodeID: model.selectedEpisodeID) }?.id
+                ?? groups.first?.id
+        }
+    }
+}
+
+/// Keep the native popup's intrinsic bezel while making its surrounding row a 44pt target.
+private struct MacShortDramaGroupPicker: NSViewRepresentable {
+    let groups: [ShortDramaEpisodeGroup]
+    @Binding var selection: String
+
+    func makeNSView(context: Context) -> MacShortDramaGroupPickerView {
+        MacShortDramaGroupPickerView()
+    }
+
+    func updateNSView(_ view: MacShortDramaGroupPickerView, context: Context) {
+        view.onSelect = { selection = $0 }
+        view.update(groups: groups, selectedID: selection)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: MacShortDramaGroupPickerView, context: Context) -> CGSize? {
+        nsView.intrinsicContentSize
+    }
+}
+
+private final class MacShortDramaGroupPickerView: NSView {
+    private let popup = MacShortDramaGroupPopUpButton(frame: .zero, pullsDown: false)
+    var onSelect: ((String) -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setAccessibilityElement(false)
+        popup.font = .systemFont(ofSize: 15, weight: .medium)
+        popup.controlSize = .regular
+        popup.autoenablesItems = false
+        popup.setAccessibilityLabel("剧集区间")
+        popup.target = self
+        popup.action = #selector(selectionChanged)
+        addSubview(popup)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: popup.intrinsicContentSize.width, height: 44)
+    }
+
+    override func layout() {
+        super.layout()
+        let height = popup.intrinsicContentSize.height
+        popup.frame = NSRect(x: 0, y: (bounds.height - height) / 2, width: bounds.width, height: height)
+    }
+
+    func update(groups: [ShortDramaEpisodeGroup], selectedID: String) {
+        let items = popup.itemArray
+        if items.count != groups.count || zip(items, groups).contains(where: {
+            $0.0.representedObject as? String != $0.1.id || $0.0.title != $0.1.title
+        }) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            menu.font = popup.font
+            for group in groups {
+                let item = NSMenuItem(title: group.title, action: nil, keyEquivalent: "")
+                item.representedObject = group.id
+                menu.addItem(item)
+            }
+            popup.menu = menu
+            invalidateIntrinsicContentSize()
+            needsLayout = true
+        }
+        if popup.selectedItem?.representedObject as? String != selectedID {
+            popup.select(popup.itemArray.first { $0.representedObject as? String == selectedID })
+        }
+    }
+
+    // The child handles its normal bezel. Only clicks in this view's own padding
+    // arrive here; NSView's hit testing confines the extension to the 44pt bounds.
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(popup)
+        popup.performClick(nil)
+    }
+
+    @objc private func selectionChanged() {
+        guard let id = popup.selectedItem?.representedObject as? String else { return }
+        onSelect?(id)
+    }
+}
+
+private final class MacShortDramaGroupPopUpButton: NSPopUpButton {
+    override func accessibilityFrame() -> NSRect {
+        guard let superview, let window else { return super.accessibilityFrame() }
+        return window.convertToScreen(superview.convert(superview.bounds, to: nil))
     }
 }
 #endif

@@ -29,7 +29,7 @@ struct TVShortDramaPlayerView: View {
     let onExit: () -> Void
 
     @State private var model: ShortDramaPlaybackModel
-    @State private var controller = TVShortDramaPlayerController()
+    @State private var controller = KSShortDramaPlayerController()
     @StateObject private var playbackSession = KSPlayerPlaybackSession(
         role: .primary, supportedGlobalCapabilities: [.audioFocus]
     )
@@ -37,12 +37,21 @@ struct TVShortDramaPlayerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focusedControl: Control?
     @State private var panel: TVShortDramaPanelKind?
+    @State private var showsEpisodeGroups = false
     @State private var panelGeneration = UUID()
+    @State private var isClosingPanel = false
     @State private var showsControls = true
     @State private var playbackRate: Float = 1
+    @State private var didLoadInitialCatalog = false
     @State private var isPreparing = true
+    @State private var wantsPreparedPlayback = true
     @State private var currentTime = 0.0
     @State private var duration = 0.0
+    @State private var isSeeking = false
+    @State private var resumeAfterSeek = false
+    @State private var seekTask: Task<Void, Never>?
+    @State private var showsFeedback = false
+    @State private var feedbackMessage = ""
     @State private var resumeAfterPanel = false
     @State private var resumeAfterBackground = false
     @State private var isSuspended = false
@@ -52,7 +61,7 @@ struct TVShortDramaPlayerView: View {
     @State private var hideTask: Task<Void, Never>?
 
     private enum Control: Hashable {
-        case reveal, playPause, previous, next, backward, forward, episodes, settings
+        case reveal, playPause, previous, next, backward, forward, episodes, settings, retry, exit
     }
 
     init(room: LiveModel, onExit: @escaping () -> Void) {
@@ -67,19 +76,17 @@ struct TVShortDramaPlayerView: View {
                 Color.black
                 if let playback = model.playback {
                     TVShortDramaPlayerSurface(
-                        playback: playback, rate: playbackRate, model: model,
+                        playback: playback, rate: playbackRate, desiredPlayback: shouldPlayPreparedMedia, model: model,
                         controller: controller, playbackSession: playbackSession,
-                        onReady: { id in
-                            guard model.playback?.id == id else { return }
-                            isPreparing = false
-                        }
+                        onReady: playbackReady,
+                        onCompleted: { wantsPreparedPlayback = true }
                     )
                     .id(playback.id)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 }
 
-                if model.isLoading || (model.playback != nil && isPreparing) {
+                if !didLoadInitialCatalog || model.isLoading || (model.playback != nil && isPreparing) {
                     VStack(spacing: 22) {
                         ProgressView()
                             .fullUIArcLoadingStyle(size: 64, lineWidth: 2.5)
@@ -90,23 +97,19 @@ struct TVShortDramaPlayerView: View {
                     .allowsHitTesting(false)
                 }
 
-                if let message = model.errorMessage {
-                    statusView(title: "播放失败", message: message, retry: true)
-                        .disabled(panel != nil).accessibilityHidden(panel != nil)
-                } else if !model.isLoading, model.episodes.isEmpty {
-                    statusView(title: "暂无可播放剧集", message: "插件尚未提供分集内容", retry: true)
-                        .disabled(panel != nil).accessibilityHidden(panel != nil)
-                }
-
-                if panel == nil {
-                    if showsControls {
+                if panel == nil, !isClosingPanel {
+                    if let message = model.errorMessage {
+                        statusView(title: "播放失败", message: message)
+                    } else if showsStatus {
+                        statusView(title: "暂无可播放剧集", message: "插件尚未提供分集内容")
+                    } else if showsControls {
                         controls
                     } else {
                         Button { revealControls() } label: {
                             Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(TVFullUIHiddenControlButtonStyle())
                         .focused($focusedControl, equals: .reveal)
                         .accessibilityLabel("显示播放控制")
                         .onMoveCommand { _ in revealControls() }
@@ -118,6 +121,7 @@ struct TVShortDramaPlayerView: View {
                         Spacer()
                         TVShortDramaSelectionPanel(
                             kind: panel, model: model, rate: $playbackRate,
+                            showsEpisodeGroups: $showsEpisodeGroups,
                             onSelect: selectEpisode, onClose: closePanel
                         )
                         .frame(width: min(geometry.size.width * 0.4, 640), height: max(0, geometry.size.height - 80))
@@ -131,21 +135,49 @@ struct TVShortDramaPlayerView: View {
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
-        .task { await model.load() }
+        .task {
+            await model.load()
+            guard !Task.isCancelled, !didCleanup else { return }
+            didLoadInitialCatalog = true
+        }
         .task(id: model.playback?.id) { await observeTime() }
         .onAppear {
             playbackSession.register()
-            focusedControl = .playPause
+            focusedControl = defaultControl
             scheduleHide()
         }
         .onChange(of: model.playback?.id) { _, _ in
+            seekTask?.cancel()
+            seekTask = nil
+            isSeeking = false
             currentTime = 0
             duration = 0
             isPreparing = true
             if model.playback != nil {
-                controller.setDesiredPlayback(scenePhase == .active && panel == nil)
+                controller.setDesiredPlayback(shouldPlayPreparedMedia,
+                                              applyImmediately: controller.playbackID == model.playback?.id)
+                if panel == nil, !isClosingPanel, showsControls {
+                    focusedControl = .playPause
+                }
                 scheduleHide()
             }
+        }
+        .onChange(of: controller.wantsPlayback) { _, wantsPlayback in
+            if !wantsPlayback { persistCurrentProgress() }
+        }
+        .onChange(of: model.progressWarning) { _, message in
+            if let message { showFeedback(message) }
+        }
+        .simpleToast(isPresented: $showsFeedback,
+                     options: SimpleToastOptions(alignment: .topLeading, hideAfter: 1.5)) {
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: "xmark.circle").font(.headline.bold())
+                Text(feedbackMessage)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(.white)
+            .cornerRadius(10)
         }
         .onChange(of: model.hasFinished) { _, finished in
             if finished { revealControls() }
@@ -153,34 +185,39 @@ struct TVShortDramaPlayerView: View {
         .onChange(of: model.errorMessage) { _, message in
             if message != nil { revealControls() }
         }
+        .onChange(of: showsStatus) { _, visible in
+            if visible { revealControls() }
+            else if panel == nil, !isClosingPanel, showsControls { focusedControl = defaultControl }
+        }
         .onChange(of: playbackRate) { _, rate in controller.setRate(rate) }
         .onChange(of: focusedControl) { _, control in
             if control != .reveal { scheduleHide() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
+                persistCurrentProgress()
                 if !isSuspended {
-                    resumeAfterBackground = panel == nil ? controller.wantsPlayback : resumeAfterPanel
+                    resumeAfterBackground = isSeeking ? resumeAfterSeek : (panel == nil ? controller.wantsPlayback : resumeAfterPanel)
                     isSuspended = true
                 }
                 controller.setDesiredPlayback(false)
                 hideTask?.cancel()
             } else {
                 isSuspended = false
-                if panel == nil, !model.hasFinished {
+                if panel == nil, !isClosingPanel, !isSeeking, !model.hasFinished {
                     controller.setDesiredPlayback(resumeAfterBackground)
                 }
                 scheduleHide()
             }
         }
-        .onExitCommand {
-            if panel != nil { closePanel() }
-            else if showsControls, model.errorMessage == nil, !model.episodes.isEmpty {
-                hideControls()
-            } else { exit() }
+        .onExitCommand(perform: handleBackCommand)
+        .onKeyPress(.escape, phases: .all) { press in
+            // Consume down/repeat as well, so one native key cannot return twice.
+            if press.phase == .up { handleBackCommand() }
+            return .handled
         }
         .onPlayPauseCommand {
-            guard panel == nil else { return }
+            guard panel == nil, !isClosingPanel else { return }
             togglePlayback()
         }
         .onDisappear { cleanup() }
@@ -220,7 +257,7 @@ struct TVShortDramaPlayerView: View {
                 .foregroundStyle(.white.opacity(0.8))
 
                 HStack(spacing: 24) {
-                    HStack(spacing: 0) {
+                    HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
                         controlButton("上一集", symbol: "backward.end.fill", control: .previous) { moveEpisode(-1) }
                             .disabled(adjacentEpisode(-1) == nil)
                         controlButton("后退15秒", symbol: "gobackward.15", control: .backward) { seek(-15) }
@@ -234,32 +271,36 @@ struct TVShortDramaPlayerView: View {
                         controlButton("下一集", symbol: "forward.end.fill", control: .next) { moveEpisode(1) }
                             .disabled(adjacentEpisode(1) == nil)
                     }
-                    .padding(.horizontal, 5).padding(.vertical, 10)
-                    .adaptiveGlassEffectCapsule()
+                    .modifier(TVFullUIPlayerControlGroupModifier(enabled: true, legacyInsets: EdgeInsets()))
                     .focusSection()
 
                     Spacer()
 
-                    HStack(spacing: 15) {
+                    HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
                         Button { presentPanel(.episodes) } label: {
                             Label("选集", systemImage: "list.bullet")
                                 .font(.system(size: 28, weight: .semibold))
-                                .frame(height: 40).padding(.horizontal, 15)
+                                .lineLimit(1)
                         }
+                        .modifier(TVFullUIPlayerControlButtonModifier(enabled: true,
+                                                                     isFocused: focusedControl == .episodes, shape: .capsule))
                         .focused($focusedControl, equals: .episodes)
+                        .disabled(model.episodes.isEmpty)
                         Button { presentPanel(.settings) } label: {
                             Text("\(rateLabel(playbackRate)) · 设置")
                                 .font(.system(size: 28, weight: .semibold))
-                                .frame(height: 40).padding(.horizontal, 15)
+                                .lineLimit(1)
                         }
+                        .modifier(TVFullUIPlayerControlButtonModifier(enabled: true,
+                                                                     isFocused: focusedControl == .settings, shape: .capsule))
                         .focused($focusedControl, equals: .settings)
                     }
-                    .padding(.horizontal, 5).padding(.vertical, 10)
-                    .adaptiveGlassEffectCapsule()
+                    .modifier(TVFullUIPlayerControlGroupModifier(enabled: true, legacyInsets: EdgeInsets()))
                     .focusSection()
                 }
             }
-            .padding(.horizontal, 70).padding(.bottom, 70).padding(.top, 60)
+            .padding(.horizontal, TVFullUIPlayerControlMetrics.screenInset)
+            .padding(.bottom, TVFullUIPlayerControlMetrics.screenInset).padding(.top, 60)
             .background(LinearGradient(colors: [.clear, .black.opacity(0.85)], startPoint: .top, endPoint: .bottom))
         }
         .foregroundStyle(.white)
@@ -271,20 +312,40 @@ struct TVShortDramaPlayerView: View {
             Image(systemName: symbol).font(.system(size: 30, weight: .bold))
                 .frame(width: 40, height: 40)
         }
-        .clipShape(.circle)
+        .modifier(TVFullUIPlayerControlButtonModifier(enabled: true,
+                                                     isFocused: focusedControl == control, shape: .circle))
         .focused($focusedControl, equals: control)
         .accessibilityLabel(title)
     }
 
-    private func statusView(title: String, message: String, retry: Bool) -> some View {
+    private var showsStatus: Bool {
+        model.errorMessage != nil || (didLoadInitialCatalog && !model.isLoading && model.episodes.isEmpty)
+    }
+
+    private var shouldPlayPreparedMedia: Bool {
+        wantsPreparedPlayback && scenePhase == .active && panel == nil && !isClosingPanel
+    }
+
+    private var defaultControl: Control {
+        if showsStatus { return .retry }
+        return model.playback == nil ? .settings : .playPause
+    }
+
+    private func statusView(title: String, message: String) -> some View {
         VStack(spacing: 30) {
             Image(systemName: "tv.slash").font(.system(size: 80)).foregroundStyle(.gray)
             Text(title).font(.title).foregroundStyle(.white)
             Text(message).font(.headline).foregroundStyle(.gray)
                 .multilineTextAlignment(.center).frame(maxWidth: 900)
             HStack(spacing: 30) {
-                if retry { Button("重试", action: retryPlayback) }
+                Button("重试", action: retryPlayback)
+                    .focused($focusedControl, equals: .retry)
+                if !model.episodes.isEmpty {
+                    Button("选集") { presentPanel(.episodes) }
+                        .focused($focusedControl, equals: .episodes)
+                }
                 Button("返回", action: exit)
+                    .focused($focusedControl, equals: .exit)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -292,12 +353,39 @@ struct TVShortDramaPlayerView: View {
     }
 
     private var canSeek: Bool {
-        controller.isSeekable(playbackID: model.playback?.id) && !model.hasFinished
+        !isSeeking && controller.isSeekable(for: model.playback?.id)
     }
 
     private func seek(_ delta: Double) {
-        guard canSeek else { return }
-        controller.seek(to: currentTime + delta)
+        guard canSeek, let id = model.playback?.id,
+              model.beginScrubbing(playbackID: id) else { return }
+        let target = min(max(0, currentTime + delta), duration)
+        let sampledDuration = duration
+        resumeAfterSeek = controller.wantsPlayback && !model.hasFinished
+        let shouldResume = resumeAfterSeek
+        isSeeking = true
+        controller.pause()
+        seekTask = Task { @MainActor in
+            let succeeded = await controller.seek(to: target, playbackID: id)
+            guard !Task.isCancelled, !didCleanup, model.playback?.id == id else { return }
+            let canResume = shouldResume && !controller.playbackHasFailed(for: id)
+            controller.setDesiredPlayback(canResume && shouldPlayPreparedMedia, applyImmediately: false)
+            // Core owns any next-episode request started by settlement. A playback-ID
+            // change must no longer cancel the task that is awaiting that request.
+            seekTask = nil
+            await model.completeScrubbing(
+                playbackID: id, targetTime: target, duration: sampledDuration,
+                seekSucceeded: succeeded, resumePlayback: canResume
+            )
+            guard !Task.isCancelled, !didCleanup, model.playback?.id == id else { return }
+            if model.hasFinished { controller.pause() }
+            isSeeking = false
+            seekTask = nil
+            if succeeded { currentTime = target }
+            else { showFeedback("未能调整播放进度，请重试") }
+            if canResume, shouldPlayPreparedMedia, !model.hasFinished { controller.play() }
+            scheduleHide()
+        }
         scheduleHide()
     }
 
@@ -313,14 +401,20 @@ struct TVShortDramaPlayerView: View {
     }
 
     private func selectEpisode(_ id: String) {
+        // The model deliberately keeps the existing request for the loading target.
+        // Do not cancel its parent task before taking that same-target no-op path.
+        guard !didCleanup, !isClosingPanel,
+              !(model.isLoading && model.selectedEpisodeID == id) else { return }
+        persistCurrentProgress()
         let changesPlayback = id != model.selectedEpisodeID || model.hasFinished || model.playback == nil
         let selectedPanel = panel
         let presentationToken = panelGeneration
         operation?.cancel()
         operation = Task { @MainActor in
-            guard !didCleanup else { return }
+            guard !Task.isCancelled, !didCleanup else { return }
             if changesPlayback {
-                controller.setDesiredPlayback(scenePhase == .active, applyImmediately: false)
+                wantsPreparedPlayback = true
+                controller.setDesiredPlayback(scenePhase == .active && panel == nil, applyImmediately: false)
                 await model.selectEpisode(id: id)
             }
             guard !Task.isCancelled, !didCleanup else { return }
@@ -332,22 +426,31 @@ struct TVShortDramaPlayerView: View {
     }
 
     private func togglePlayback() {
+        guard !isSeeking else { return }
         if model.hasFinished, let id = model.selectedEpisodeID { selectEpisode(id); return }
-        guard model.playback != nil else { return }
-        controller.setDesiredPlayback(!controller.wantsPlayback)
-        scheduleHide()
+        guard model.playback != nil || model.isLoading else { return }
+        wantsPreparedPlayback = model.isLoading ? !wantsPreparedPlayback : !controller.wantsPlayback
+        controller.setDesiredPlayback(wantsPreparedPlayback)
+        revealControls()
     }
 
     private func retryPlayback() {
+        guard !didCleanup, !model.isLoading else { return }
         operation?.cancel()
         operation = Task { @MainActor in
+            guard !Task.isCancelled, !didCleanup else { return }
+            wantsPreparedPlayback = true
             controller.setDesiredPlayback(scenePhase == .active, applyImmediately: false)
             if let id = model.selectedEpisodeID { await model.selectEpisode(id: id) }
             else { await model.load() }
+            guard !Task.isCancelled, !didCleanup else { return }
+            revealControls()
         }
     }
 
     private func presentPanel(_ kind: TVShortDramaPanelKind) {
+        guard !didCleanup, panel == nil, !isClosingPanel, !isSeeking else { return }
+        showsEpisodeGroups = false
         hideTask?.cancel()
         panelOperation?.cancel()
         panelGeneration = UUID()
@@ -363,6 +466,7 @@ struct TVShortDramaPlayerView: View {
     }
 
     private func closePanel() {
+        guard panel != nil, !isClosingPanel else { return }
         panelOperation?.cancel()
         panelGeneration = UUID()
         let token = panelGeneration
@@ -374,6 +478,7 @@ struct TVShortDramaPlayerView: View {
     private func dismissPanel(resuming: Bool, generation: UUID) async {
         guard !Task.isCancelled, !didCleanup, generation == panelGeneration else { return }
         let closedPanel = panel
+        isClosingPanel = true
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
             panel = nil
             showsControls = true
@@ -383,16 +488,28 @@ struct TVShortDramaPlayerView: View {
             try? await Task.sleep(for: .milliseconds(280))
         }
         guard !Task.isCancelled, !didCleanup, generation == panelGeneration, panel == nil else { return }
-        await model.setEpisodesPresented(false)
-        guard !Task.isCancelled, !didCleanup, generation == panelGeneration, panel == nil else { return }
         controller.setDesiredPlayback(resuming && scenePhase == .active && !model.hasFinished)
-        focusedControl = closedPanel == .settings ? .settings : .episodes
+        isClosingPanel = false
+        focusedControl = showsStatus ? .retry : closedPanel == .settings ? .settings : .episodes
         scheduleHide()
+        // Releasing a held EOF may await the next episode's network request. Restore
+        // controls first, and don't let a later panel opening cancel that request.
+        panelOperation = nil
+        await model.setEpisodesPresented(false)
+    }
+
+    private func handleBackCommand() {
+        guard !isClosingPanel, !didCleanup else { return }
+        if panel == .episodes, showsEpisodeGroups { showsEpisodeGroups = false }
+        else if panel != nil { closePanel() }
+        else if showsControls, !showsStatus, model.playback != nil { hideControls() }
+        else { exit() }
     }
 
     private func revealControls() {
+        guard panel == nil, !isClosingPanel, !didCleanup else { return }
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { showsControls = true }
-        focusedControl = .playPause
+        focusedControl = defaultControl
         scheduleHide()
     }
 
@@ -404,7 +521,7 @@ struct TVShortDramaPlayerView: View {
 
     private func scheduleHide() {
         hideTask?.cancel()
-        guard panel == nil, controller.wantsPlayback, !model.hasFinished,
+        guard panel == nil, !isClosingPanel, !isPreparing, controller.wantsPlayback, !model.hasFinished,
               model.errorMessage == nil, model.playback != nil, scenePhase == .active else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(5))
@@ -416,17 +533,44 @@ struct TVShortDramaPlayerView: View {
     private func observeTime() async {
         let id = model.playback?.id
         while !Task.isCancelled, !didCleanup, id == model.playback?.id {
-            if let sample = controller.timeSample(playbackID: id) {
+            controller.restoreIfPossible(model: model, onReady: playbackReady)
+            if let sample = controller.timeSample(for: id) {
                 currentTime = sample.current.isFinite ? max(0, sample.current) : 0
                 duration = sample.duration.isFinite ? max(0, sample.duration) : 0
+                if !isSeeking, let id {
+                    model.playbackReady(id: id, duration: sample.duration)
+                    model.recordProgress(id: id, position: sample.current, duration: sample.duration)
+                }
             }
             try? await Task.sleep(for: .milliseconds(250))
         }
     }
 
+    private func playbackReady(_ id: UUID) {
+        guard model.playback?.id == id, !didCleanup else { return }
+        model.playbackReady(id: id, duration: controller.timeSample(for: id)?.duration ?? 0)
+        isPreparing = false
+        scheduleHide()
+    }
+
+    private func persistCurrentProgress() {
+        if !isSeeking, let id = model.playback?.id, let sample = controller.timeSample(for: id) {
+            model.recordProgress(id: id, position: sample.current, duration: sample.duration)
+        }
+        model.flushProgress()
+    }
+
+    private func showFeedback(_ message: String) {
+        feedbackMessage = message
+        showsFeedback = true
+    }
+
     private func cleanup() {
         guard !didCleanup else { return }
+        persistCurrentProgress()
         didCleanup = true
+        seekTask?.cancel()
+        seekTask = nil
         hideTask?.cancel()
         operation?.cancel()
         panelOperation?.cancel()
@@ -444,12 +588,55 @@ private struct TVShortDramaSelectionPanel: View {
     let kind: TVShortDramaPanelKind
     let model: ShortDramaPlaybackModel
     @Binding var rate: Float
+    @Binding var showsEpisodeGroups: Bool
     let onSelect: (String) -> Void
     let onClose: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focus: Item?
-    private enum Item: Hashable { case close, episode(String), rate(Float), autoplay }
+    @State private var browseGroupID: String?
+    @State private var didChooseGroup = false
+    @State private var requestedFocus: Item?
+    @State private var focusRequest = UUID()
+    private enum Item: Hashable { case close, groupPicker, group(String), episode(String), rate(Float), autoplay }
     private let rates: [Float] = [0.75, 1, 1.25, 1.5, 2, 3]
+
+    init(kind: TVShortDramaPanelKind, model: ShortDramaPlaybackModel, rate: Binding<Float>,
+         showsEpisodeGroups: Binding<Bool>, onSelect: @escaping (String) -> Void, onClose: @escaping () -> Void) {
+        self.kind = kind
+        self.model = model
+        _rate = rate
+        _showsEpisodeGroups = showsEpisodeGroups
+        self.onSelect = onSelect
+        self.onClose = onClose
+        let groups = ShortDramaEpisodeGroup.make(from: model.episodes)
+        _browseGroupID = State(initialValue: groups.first { $0.contains(episodeID: model.selectedEpisodeID) }?.id
+            ?? groups.first?.id)
+    }
+
+    private var groups: [ShortDramaEpisodeGroup] { ShortDramaEpisodeGroup.make(from: model.episodes) }
+    private var selectedGroup: ShortDramaEpisodeGroup? {
+        groups.first { $0.id == browseGroupID }
+            ?? groups.first { $0.contains(episodeID: model.selectedEpisodeID) }
+            ?? groups.first
+    }
+    private var visibleEpisodes: [ShortDramaEpisode] { selectedGroup?.episodes ?? [] }
+    private var initialFocus: Item {
+        guard kind == .episodes else { return .rate(rate) }
+        if selectedGroup?.contains(episodeID: model.selectedEpisodeID) == true,
+           let id = model.selectedEpisodeID { return .episode(id) }
+        return visibleEpisodes.first.map { .episode($0.id) } ?? .close
+    }
+
+    private func requestFocus(_ item: Item) {
+        requestedFocus = item
+        focusRequest = UUID()
+    }
+
+    private func chooseGroup(_ group: ShortDramaEpisodeGroup) {
+        browseGroupID = group.id
+        didChooseGroup = true
+        showsEpisodeGroups = false
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -459,31 +646,51 @@ private struct TVShortDramaSelectionPanel: View {
                         .font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
                     Text(subtitle)
                         .font(.system(size: 24, weight: .medium)).foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
                 Button(action: onClose) {
                     Image(systemName: "xmark").font(.system(size: 22, weight: .bold))
                         .foregroundStyle(.white).frame(width: 50, height: 50)
-                        .background(.white.opacity(focus == .close ? 0.3 : 0.1), in: Circle())
                 }
-                .buttonStyle(.plain).focused($focus, equals: .close)
-                .scaleEffect(!reduceMotion && focus == .close ? 1.1 : 1)
+                .buttonStyle(TVPanelCloseButtonStyle(isFocused: focus == .close, reduceMotion: reduceMotion))
+                .focused($focus, equals: .close)
                 .accessibilityLabel("关闭\(kind == .episodes ? "选集" : "播放设置")")
+            }
+            if kind == .episodes, groups.count > 1, !showsEpisodeGroups, let group = selectedGroup {
+                option("区间：\(group.title)", item: .groupPicker, selected: false) {
+                    didChooseGroup = false
+                    showsEpisodeGroups = true
+                }
+                .padding(.horizontal, 10)
+                .accessibilityLabel("选择剧集区间")
+                .accessibilityValue("当前浏览\(group.title)")
             }
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 4) {
                         if kind == .episodes {
-                            ForEach(model.episodes) { episode in
-                                let selected = model.selectedEpisodeID == episode.id
-                                let item = Item.episode(episode.id)
-                                option(episode.title, item: item, selected: selected,
-                                       lockTitle: RoomPlaybackResolver.lockBadgeTitle(for: episode.quality)) {
-                                    onSelect(episode.id)
+                            if showsEpisodeGroups {
+                                ForEach(groups) { group in
+                                    let selected = group.id == selectedGroup?.id
+                                    option(group.title, item: .group(group.id), selected: selected) {
+                                        chooseGroup(group)
+                                    }
+                                    .id("group:\(group.id)")
+                                    .accessibilityValue(selected ? "当前浏览区间" : group.title)
                                 }
-                                .id(episode.id)
-                                .accessibilityValue(selected ? "当前集" : "第\(episode.number)集")
+                            } else {
+                                ForEach(visibleEpisodes) { episode in
+                                    let selected = model.selectedEpisodeID == episode.id
+                                    let item = Item.episode(episode.id)
+                                    option(episode.title, item: item, selected: selected,
+                                           lockTitle: RoomPlaybackResolver.lockBadgeTitle(for: episode.quality)) {
+                                        onSelect(episode.id)
+                                    }
+                                    .id(episode.id)
+                                    .accessibilityValue(selected ? "当前集" : "第\(episode.number)集")
+                                }
                             }
                         } else {
                             ForEach(rates, id: \.self) { value in
@@ -494,13 +701,20 @@ private struct TVShortDramaSelectionPanel: View {
                         }
                     }
                     .padding(10)
-                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18))
+                    .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
-                .onAppear {
-                    if kind == .episodes, let id = model.selectedEpisodeID {
-                        proxy.scrollTo(id, anchor: .center)
-                        focus = .episode(id)
-                    } else { focus = kind == .settings ? .rate(rate) : .close }
+                .task(id: focusRequest) {
+                    let target = requestedFocus ?? initialFocus
+                    switch target {
+                    case .episode(let id): proxy.scrollTo(id, anchor: .center)
+                    case .group(let id): proxy.scrollTo("group:\(id)", anchor: .center)
+                    default: break
+                    }
+                    // Preserve the existing scroll -> layout yield -> focus ordering.
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    focus = target
                 }
             }
             Spacer(minLength: 0)
@@ -509,12 +723,27 @@ private struct TVShortDramaSelectionPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .adaptiveGlassEffectRoundedRect(cornerRadius: 28)
         .overlay {
-            RoundedRectangle(cornerRadius: 28).stroke(.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(.white.opacity(0.12), lineWidth: 1)
                 .allowsHitTesting(false)
         }
         .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
         .focusSection()
-        .onExitCommand(perform: onClose)
+        .onChange(of: showsEpisodeGroups) { _, presented in
+            if presented, let id = selectedGroup?.id { requestFocus(.group(id)) }
+            else {
+                requestFocus(didChooseGroup || groups.count <= 1 ? initialFocus : .groupPicker)
+                didChooseGroup = false
+            }
+        }
+        .onChange(of: model.episodes.map(\.id)) { _, _ in
+            if !groups.contains(where: { $0.id == browseGroupID }) {
+                browseGroupID = groups.first { $0.contains(episodeID: model.selectedEpisodeID) }?.id
+                    ?? groups.first?.id
+                if showsEpisodeGroups, let id = selectedGroup?.id { requestFocus(.group(id)) }
+                else { requestFocus(initialFocus) }
+            }
+            if groups.count <= 1 { showsEpisodeGroups = false }
+        }
     }
 
     private var subtitle: String {
@@ -544,85 +773,38 @@ private struct TVShortDramaSelectionPanel: View {
             .padding(.horizontal, 20).padding(.vertical, 16)
             .contentShape(Rectangle())
             .background(selected ? Color.accentColor.opacity(0.2) : focused ? .white.opacity(0.25) : .clear,
-                        in: RoundedRectangle(cornerRadius: 14))
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain).focused($focus, equals: item)
-        .scaleEffect(!reduceMotion && focused ? 1.03 : 1)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: focused)
-    }
-}
-
-@MainActor
-@Observable
-private final class TVShortDramaPlayerController {
-    private(set) var coordinator: KSVideoPlayer.Coordinator?
-    private(set) var playbackID: UUID?
-    private(set) var wantsPlayback = true
-
-    func attach(_ coordinator: KSVideoPlayer.Coordinator, id: UUID) {
-        self.coordinator = coordinator
-        playbackID = id
-    }
-    func setDesiredPlayback(_ desired: Bool, applyImmediately: Bool = true) {
-        wantsPlayback = desired
-        guard applyImmediately else { return }
-        if desired { coordinator?.playerLayer?.play() } else { coordinator?.playerLayer?.pause() }
-    }
-    func synchronize(layer: KSPlayerLayer, state: KSPlayerState) {
-        if wantsPlayback {
-            if (state == .readyToPlay || state == .paused), !layer.player.isPlaying { layer.play() }
-        } else if layer.player.isPlaying { layer.pause() }
-    }
-    func setRate(_ rate: Float) { coordinator?.playbackRate = rate }
-    func timeSample(playbackID: UUID?) -> (current: Double, duration: Double)? {
-        guard playbackID == self.playbackID, let player = coordinator?.playerLayer?.player else { return nil }
-        return (player.currentPlaybackTime, player.duration)
-    }
-    func isSeekable(playbackID: UUID?) -> Bool {
-        guard playbackID == self.playbackID, let player = coordinator?.playerLayer?.player else { return false }
-        return player.seekable && player.duration.isFinite && player.duration > 0
-    }
-    func seek(to time: Double) {
-        guard let layer = coordinator?.playerLayer, isSeekable(playbackID: playbackID) else { return }
-        layer.seek(time: min(max(0, time), layer.player.duration), autoPlay: wantsPlayback)
-    }
-    func release(_ coordinator: KSVideoPlayer.Coordinator, id: UUID) {
-        // An outgoing surface can disappear after the next coordinator has attached.
-        // Reset its own layer without clearing the new surface's controller identity.
-        if coordinator.playerLayer != nil { coordinator.resetPlayer() }
-        guard self.coordinator === coordinator, playbackID == id else { return }
-        self.coordinator = nil
-        playbackID = nil
-    }
-    func stop() {
-        // Surface disappearance and page cleanup share one reset owner.
-        coordinator?.resetPlayer()
-        coordinator = nil
-        playbackID = nil
+        .buttonStyle(TVQualityItemButtonStyle(isFocused: focused, reduceMotion: reduceMotion))
+        .focused($focus, equals: item)
     }
 }
 
 private struct TVShortDramaPlayerSurface: View {
     let playback: ShortDramaPlayback
     let rate: Float
+    let desiredPlayback: Bool
     let model: ShortDramaPlaybackModel
-    let controller: TVShortDramaPlayerController
+    let controller: KSShortDramaPlayerController
     let playbackSession: KSPlayerPlaybackSession
     let onReady: (UUID) -> Void
+    let onCompleted: () -> Void
     @StateObject private var coordinator = KSVideoPlayer.Coordinator()
     @State private var options: KSOptions
 
-    init(playback: ShortDramaPlayback, rate: Float, model: ShortDramaPlaybackModel,
-         controller: TVShortDramaPlayerController, playbackSession: KSPlayerPlaybackSession,
-         onReady: @escaping (UUID) -> Void) {
+    init(playback: ShortDramaPlayback, rate: Float, desiredPlayback: Bool, model: ShortDramaPlaybackModel,
+         controller: KSShortDramaPlayerController, playbackSession: KSPlayerPlaybackSession,
+         onReady: @escaping (UUID) -> Void, onCompleted: @escaping () -> Void) {
         self.playback = playback
         self.rate = rate
+        self.desiredPlayback = desiredPlayback
         self.model = model
         self.controller = controller
         self.playbackSession = playbackSession
         self.onReady = onReady
+        self.onCompleted = onCompleted
         let options = PlayerOptions()
-        options.isAutoPlay = controller.wantsPlayback
+        options.isAutoPlay = desiredPlayback && playback.resumePosition == nil
         options.isLoopPlay = false
         options.registerRemoteControll = false
         options.startPlayRate = rate
@@ -641,23 +823,40 @@ private struct TVShortDramaPlayerSurface: View {
                 playbackSession.activate()
                 layer.player.playbackRate = rate
                 controller.synchronize(layer: layer, state: state)
-                if state == .bufferFinished || (state == .paused && layer.player.loadState == .playable) {
+                controller.restoreIfPossible(model: model, onReady: onReady)
+                if !controller.isRestoring(for: playback.id) && (
+                    state == .bufferFinished || (state == .paused && layer.player.loadState == .playable)
+                        || (state == .readyToPlay && layer.player.isReadyToPlay && !controller.wantsPlayback)
+                ) {
                     onReady(playback.id)
                 }
             }
             .onFinish { layer, error in
                 guard model.playback?.id == playback.id, controller.playbackID == playback.id,
                       layer === coordinator.playerLayer else { return }
-                // Completion owns the next decision; a later paused callback must not restart this layer.
-                controller.setDesiredPlayback(false, applyImmediately: false)
-                Task { @MainActor in await model.playbackFinished(id: playback.id, error: error) }
+                switch controller.handlePlaybackFinished(layer: layer, playbackID: playback.id, error: error) {
+                case .ignored:
+                    return
+                case .forward(let playbackError):
+                    if let sample = controller.timeSample(for: playback.id) {
+                        model.recordProgress(id: playback.id, position: sample.current, duration: sample.duration)
+                    }
+                    // Completion owns the next decision after restore-related EOF is consumed.
+                    controller.setDesiredPlayback(false, applyImmediately: false)
+                    if playbackError == nil { onCompleted() }
+                    Task { @MainActor in await model.playbackFinished(id: playback.id, error: playbackError) }
+                }
             }
             .onAppear {
-                controller.attach(coordinator, id: playback.id)
+                guard model.playback?.id == playback.id else { return }
                 coordinator.playbackRate = rate
+                controller.attach(
+                    coordinator, playbackID: playback.id, url: playback.url,
+                    resumePosition: playback.resumePosition, desiredPlayback: desiredPlayback
+                )
             }
             .onChange(of: rate) { _, rate in coordinator.playbackRate = rate }
-            .onDisappear { controller.release(coordinator, id: playback.id) }
+            .onDisappear { controller.release(coordinator, playbackID: playback.id) }
     }
 }
 

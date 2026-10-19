@@ -243,19 +243,31 @@ struct TVQualitySelectionPanel: View {
 // MARK: - tvOS Button Styles
 
 /// 清晰度选项按钮样式：聚焦时微缩放 + 高亮
-private struct TVQualityItemButtonStyle: ButtonStyle {
+struct TVQualityItemButtonStyle: ButtonStyle {
     let isFocused: Bool
+    let reduceMotion: Bool
+
+    init(isFocused: Bool, reduceMotion: Bool = false) {
+        self.isFocused = isFocused
+        self.reduceMotion = reduceMotion
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(isFocused ? 1.03 : 1.0)
-            .animation(.easeInOut(duration: 0.18), value: isFocused)
+            .scaleEffect(!reduceMotion && isFocused ? 1.03 : 1.0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
     }
 }
 
 /// 关闭按钮样式：圆形 glass 背景 + 聚焦缩放
-private struct TVPanelCloseButtonStyle: ButtonStyle {
+struct TVPanelCloseButtonStyle: ButtonStyle {
     let isFocused: Bool
+    let reduceMotion: Bool
+
+    init(isFocused: Bool, reduceMotion: Bool = false) {
+        self.isFocused = isFocused
+        self.reduceMotion = reduceMotion
+    }
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -263,8 +275,8 @@ private struct TVPanelCloseButtonStyle: ButtonStyle {
                 Circle()
                     .fill(.white.opacity(isFocused ? 0.3 : 0.1))
             }
-            .scaleEffect(isFocused ? 1.1 : 1.0)
-            .animation(.easeInOut(duration: 0.18), value: isFocused)
+            .scaleEffect(!reduceMotion && isFocused ? 1.1 : 1.0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
     }
 }
 
@@ -280,5 +292,88 @@ private struct TVCdnHeaderButtonStyle: ButtonStyle {
             )
             .scaleEffect(isFocused ? 1.02 : 1.0)
             .animation(.easeInOut(duration: 0.18), value: isFocused)
+    }
+}
+
+/// Explicit FullUI control geometry. A square capsule is the same circle used by
+/// the panel close button; text capsules keep the identical height and shell inset.
+enum TVFullUIPlayerControlMetrics {
+    static let height: CGFloat = 70
+    static let spacing: CGFloat = 16
+    static let inset: CGFloat = 14
+    static let screenInset: CGFloat = 70
+    static let focusOutset: CGFloat = 2
+}
+
+enum TVPlayerControlShape { case circle, capsule }
+
+/// Invisible focus targets must not acquire tvOS's system button material or scale.
+/// Used only by FullUI; Select and remote commands remain owned by the host views.
+struct TVFullUIHiddenControlButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
+struct TVFullUIPlayerControlButtonModifier: ViewModifier {
+    let enabled: Bool
+    let isFocused: Bool
+    let shape: TVPlayerControlShape
+    var legacyShape: TVPlayerControlShape? = nil
+    var legacyHeight: CGFloat? = nil
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.buttonStyle(TVFullUIPlayerControlButtonStyle(isFocused: isFocused, shape: shape))
+        } else {
+            switch legacyShape {
+            case .circle:
+                content.frame(height: legacyHeight).clipShape(.circle)
+            case .capsule:
+                content.frame(height: legacyHeight).clipShape(.capsule)
+            case nil:
+                content
+            }
+        }
+    }
+}
+
+struct TVFullUIPlayerControlGroupModifier: ViewModifier {
+    let enabled: Bool
+    let legacyInsets: EdgeInsets
+
+    func body(content: Content) -> some View {
+        content
+            .padding(enabled ? EdgeInsets(top: TVFullUIPlayerControlMetrics.inset,
+                                          leading: TVFullUIPlayerControlMetrics.inset,
+                                          bottom: TVFullUIPlayerControlMetrics.inset,
+                                          trailing: TVFullUIPlayerControlMetrics.inset) : legacyInsets)
+            .adaptiveGlassEffectCapsule()
+    }
+}
+
+private struct TVFullUIPlayerControlButtonStyle: ButtonStyle {
+    let isFocused: Bool
+    let shape: TVPlayerControlShape
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        let focusGrowth = isFocused && !reduceMotion ? TVFullUIPlayerControlMetrics.focusOutset * 2 : 0
+        return configuration.label
+            .padding(.horizontal, shape == .capsule ? 24 : 0)
+            .frame(width: shape == .circle ? TVFullUIPlayerControlMetrics.height : nil,
+                   height: TVFullUIPlayerControlMetrics.height)
+            .background(.white.opacity(isFocused ? 0.3 : 0.1), in: Capsule())
+            .contentShape(Capsule())
+            .visualEffect { content, geometry in
+                // Fixed edge growth keeps long text buttons inside the same shell
+                // clearance as circular buttons; proportional scaling would not.
+                content.scaleEffect(x: 1 + focusGrowth / max(geometry.size.width, 1),
+                                    y: 1 + focusGrowth / max(geometry.size.height, 1))
+            }
+            .opacity(isEnabled ? configuration.isPressed ? 0.8 : 1 : 0.35)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
     }
 }

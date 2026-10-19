@@ -117,6 +117,7 @@ public final class PluginHomeFeedModel {
     @ObservationIgnored private var fetchedAtByPluginId: [String: Date] = [:]
     @ObservationIgnored private var cachedRevisionByPluginId: [String: String] = [:]
     @ObservationIgnored private var platformOrder: [String] = []
+    @ObservationIgnored private var shortDramaPluginIds: Set<String> = []
     @ObservationIgnored private var cacheRestoreTask: Task<PluginHomeFeedCacheStore.Snapshot?, Never>?
     @ObservationIgnored private var activeRefresh: (identity: RefreshIdentity, task: Task<Void, Never>)?
     @ObservationIgnored private var retirementBarrier: Task<Void, Never>?
@@ -125,6 +126,7 @@ public final class PluginHomeFeedModel {
     @ObservationIgnored private var refreshGeneration: UInt64 = 0
     @ObservationIgnored private let now: @MainActor @Sendable () -> Date
     @ObservationIgnored private let platformProvider: @MainActor @Sendable ([String]) -> [LiveParseJSPlatform]
+    @ObservationIgnored private let contentKindProvider: @MainActor @Sendable (String) -> String?
 
     public init(
         service: PluginHomeFeedService = PluginHomeFeedService(),
@@ -137,18 +139,25 @@ public final class PluginHomeFeedModel {
             SandboxPluginCatalog.availablePlatforms(installedPluginIds: $0)
                 .filter { PlatformCapability.supports(.homeFeed, for: $0.liveType) }
         }
+        contentKindProvider = {
+            try? LiveParsePlugins.shared.resolve(pluginId: $0).manifest.hostBehavior?.contentKind
+        }
     }
 
     init(
         service: PluginHomeFeedService,
         cacheStore: PluginHomeFeedCacheStore,
         now: @escaping @MainActor @Sendable () -> Date,
-        platformProvider: @escaping @MainActor @Sendable ([String]) -> [LiveParseJSPlatform]
+        platformProvider: @escaping @MainActor @Sendable ([String]) -> [LiveParseJSPlatform],
+        contentKindProvider: @escaping @MainActor @Sendable (String) -> String? = {
+            try? LiveParsePlugins.shared.resolve(pluginId: $0).manifest.hostBehavior?.contentKind
+        }
     ) {
         self.service = service
         self.cacheStore = cacheStore
         self.now = now
         self.platformProvider = platformProvider
+        self.contentKindProvider = contentKindProvider
     }
 
     public func refresh(
@@ -246,6 +255,7 @@ public final class PluginHomeFeedModel {
 private extension PluginHomeFeedModel {
     func applyPlatforms(_ platforms: [LiveParseJSPlatform]) {
         let activePluginIds = Set(platforms.map(\.pluginId))
+        updateContentKinds(pluginIds: activePluginIds)
         platformOptions = platforms.map {
             HomePlatformOption(pluginId: $0.pluginId, displayName: $0.displayName, liveType: $0.liveType)
         }
@@ -402,6 +412,7 @@ private extension PluginHomeFeedModel {
             pluginStates[feed.pluginId] = .cached
         }
         platformOrder = cachedEntries.map(\.feed.pluginId)
+        updateContentKinds(pluginIds: Set(platformOrder))
         platformOptions = cachedEntries.map {
             let feed = $0.feed
             return HomePlatformOption(
@@ -440,25 +451,35 @@ private extension PluginHomeFeedModel {
         return retained + current.filter { !retainedSet.contains($0) }
     }
 
+    func updateContentKinds(pluginIds: Set<String>) {
+        shortDramaPluginIds = Set(pluginIds.filter { contentKindProvider($0) == "shortDrama" })
+    }
+
     func rebuildEntries() {
         let allFeeds = platformOrder.compactMap { feedsByPluginId[$0] }
         let feeds = selectedPluginId.map { id in allFeeds.filter { $0.pluginId == id } } ?? allFeeds
         bannerEntries = fairBannerEntries(from: feeds)
 
-        sectionEntries = feeds.compactMap { feed -> HomeSectionEntry? in
+        sectionEntries = feeds.flatMap { feed -> [HomeSectionEntry] in
             let fallbackLiveType = LiveParseJSPlatformManager.platform(forPluginId: feed.pluginId)?.liveType
                 ?? LiveType(rawValue: feed.pluginId)
                 ?? .placeholder
-            let section = feed.sections.first(where: { $0.personalized && !$0.items.isEmpty })
-                ?? feed.sections.first
-            guard let section, !section.items.isEmpty else { return nil }
-
-            return HomeSectionEntry(
-                section: section,
-                pluginId: feed.pluginId,
-                pluginDisplayName: feed.pluginDisplayName,
-                liveType: section.items.first?.room.liveType ?? fallbackLiveType
-            )
+            let sections: [PluginHomeSection]
+            if shortDramaPluginIds.contains(feed.pluginId) {
+                sections = feed.sections.filter { !$0.items.isEmpty }
+            } else {
+                let primary = feed.sections.first(where: { $0.personalized && !$0.items.isEmpty })
+                    ?? feed.sections.first
+                sections = primary.map { $0.items.isEmpty ? [] : [$0] } ?? []
+            }
+            return sections.map { section in
+                HomeSectionEntry(
+                    section: section,
+                    pluginId: feed.pluginId,
+                    pluginDisplayName: feed.pluginDisplayName,
+                    liveType: section.items.first?.room.liveType ?? fallbackLiveType
+                )
+            }
         }
     }
 

@@ -137,7 +137,7 @@ struct LiveCardView: View {
             Text("确认取消收藏吗")
         }
         .contextMenu { contextMenuContent }
-        .fullScreenCover(isPresented: $isLive) {
+        .fullScreenCover(isPresented: $isLive, onDismiss: restoreShortDramaCardFocus) {
             playerFullScreenContent
         }
     }
@@ -352,7 +352,6 @@ struct LiveCardView: View {
         if let room = liveViewModel.shortDramaRoom {
             TVShortDramaPlayerView(room: room) {
                 isLive = false
-                liveViewModel.shortDramaRoom = nil
             }
             .id(room.id)
         } else if liveViewModel.roomInfoViewModel != nil {
@@ -367,6 +366,18 @@ struct LiveCardView: View {
     }
 
     // MARK: - 事件处理
+
+    private func restoreShortDramaCardFocus() {
+        // Keep the FullUI short-drama content alive through cover dismissal;
+        // clearing it in onExit removes its focused view before the transition ends.
+        guard liveViewModel.shortDramaRoom != nil else { return }
+        liveViewModel.shortDramaRoom = nil
+        if let externalFocusState {
+            externalFocusState.wrappedValue = .mainContent(index)
+        } else {
+            internalFocusState = .mainContent(index)
+        }
+    }
 
     private func handleFocusChange(newValue: FocusableField?, liveModel: Bindable<LiveViewModel>) {
         guard case .mainContent(let focusedIndex) = newValue, focusedIndex == index else { return }
