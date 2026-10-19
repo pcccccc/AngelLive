@@ -33,7 +33,7 @@
 - 分类选择曾同时通过 `roomPage` 的观察器和显式调用发出两次请求。模型现在提供单一分类选择入口，重置选中房间并只请求一次；请求快照固定分类和页码，旧响应不再覆盖当前分类，也不能结束当前请求的加载状态。自动分页在加载中不重复递增页码。
 - 房间请求的 `index` 是子分类下标，不能据此判断是否归零房间焦点。默认分类下标为 `-1`、第二个子分类下标为 `1`，两者此前都会在加载后续页时错误清零；归零应依据实际第一页或明确的分类切换。
 - 分类切换原来固定等待 0.2 秒就把焦点写到第一张卡片，与请求完成、空结果或卡片挂载没有关联。焦点恢复应在当前内容已挂载后进行，目标必须是实际存在的首张卡片或空态；用户继续操作遥控器时，应取消未完成的自动焦点恢复。
-- 分类栏应由第一列房间、平台信息或空态上的明确左键进入，右键收起。不要用透明全高按钮意外获得默认焦点来表示用户要求展开菜单。
+- 分类栏支持第一列房间、平台信息或空态上的左键，以及滑向左缘透明焦点入口；右键收起。透明入口只在内容已经持有焦点后启用，不能成为初始默认焦点，也不能在关闭侧栏的焦点恢复期间自行展开。
 - 分类菜单展开时隐藏左下角的刷新提示，避免它覆盖子分类条目。
 - 播放器隐藏焦点按钮原来的 primary action 为空，因此确定键不会显示控件。该动作应只进入控件显示状态。
 - 播放器的关联房间菜单、设置面板和整个控制层分别注册返回处理。将优先级集中到控制层的一处入口，避免一次按键在菜单关闭后继续按页面退出状态处理。面板的显式关闭按钮仍复用各自关闭动作。
@@ -161,3 +161,53 @@ Workspace 与最后的非 workspace 检查 session 均已结束，响应分别�
 最终源码的 tvOS workspace `BuildProject`（ID378）通过，耗时 44.182 秒；ID379 的 Issue Navigator error 数为 0；ID381 `DeviceInteractionInstallAndRun` 返回成功（`Application installed and running`），原始响应分别为 `runs/live-subtitle-ui-2026-10-04/response-378.json`、`response-379.json` 和 `response-381.json`。同一最终包随后完成三条 Device Hub Siri Remote Menu 路径：翻译与字幕返回后恢复“翻译与字幕”焦点（ID391）、Select 重新进入后再返回仍恢复该焦点（ID393）、通用设置返回后恢复“通用设置”焦点（ID396）。对应响应及其 `hierarchyPath` 保存在 `runs/live-subtitle-ui-2026-10-04/response-391.json`、`response-393.json` 和 `response-396.json`；设备为 Apple TV 4K（第 3 代）／tvOS 27.0 模拟器。
 
 root 独立核对上述 hierarchy 和 ID401 的稳定原尺寸截图：菜单实际停在“翻译与字幕”。ID391 的截图仍处于退出动画，不能作为返回后的视觉证据；本轮没有用原生 Escape 代替 Siri Remote Menu，也未覆盖实体 Apple TV。
+
+### 2026-10-19 分类侧栏快速再次展开丢失左键
+
+在 Xcode 27.1（27A9269）、既有 Apple TV 4K（第 3 代）／tvOS 27.0 模拟器的新包上，单次首列左键正常，但 `r left r right r left` 复现再次展开失败。`runs/tvos-sidebar-2026-10-19/32-logsPath.txt` 记录最后一个左键来自 `cardIndex=0`，处理时 `focus=nil expanded=false`，没有再次执行 `openSidebar`。卡片已经收到事件，问题在于列表仅按暂时为空的 `FocusState` 分派动作。
+
+`ListMainView.handleMoveCommand` 现在仅在焦点为空时，使用卡片闭包明确传入的下标作为事件来源；非空焦点、首列判断、分类非空及展开状态的检查保持原有语义。不增加延时、重复设焦点或平台特例，不修改布局和 ShellUI。实现由 `gpt-6.1-sol / high` 完成，root 独立复核代码与运行证据。
+
+最终源代码保存后，workspace `BuildProject`（响应 34）成功，Issue Navigator（35）错误数为 0；旧设备会话明确过期后重新建立会话，`DeviceInteractionInstallAndRun`（38）成功。原始响应与截图位于 `runs/tvos-sidebar-2026-10-19/`。最终包三轮相同快速操作（44、46、48）均重新展开且分类持有焦点；46 的日志再次捕获 `cardIndex=0 focus=nil`，随后立即执行 `openSidebar`，直接覆盖修复前的失败条件。root 核对三轮命令、hierarchy、日志及稳定展开截图 `54-screenshotPath.png`；现有分类行、文字、图标、间距与背景遮罩保持一致。
+
+最终包还验证了非首列左移（50–51）、第二行首列左键展开（52）、子分类选择（55）及加载结束后的 Menu 收起恢复（57）；57 的日志明确记录 `loading=false pendingCategory=false`，随后只关闭菜单并恢复首卡焦点。
+
+本次设备覆盖仅限 tvOS 模拟器及实际加载的运行时插件；未验证实体 Apple TV、其他系统版本、iOS 或 macOS。上述输入均为 `r left/right/menu` 方向键／按钮命令，**不包含 Siri Remote 触控板真实左滑验证**。不能用方向键通过证明滑动手势通过；界面提示虽写左滑，仍须取得实际触控手势证据。当前 [Device Hub 官方 tvOS 操作说明](https://developer.apple.com/documentation/xcode/interacting-with-your-app-in-device-hub) 列出的是方向键、Return 和 Escape，不能把其他平台的坐标滑动直接当成 tvOS 遥控器手势。
+
+用户要求改用传统模拟器后，关闭 Device Hub，使用本机 Xcode 26.6 附带的 Simulator.app 前端连接同一个 tvOS 27.0 设备；未启动旧版 Xcode，也未更换 27.1 构建的新包。已启用 Show Apple TV Remote，菜单状态变为 Hide Apple TV Remote，并在传统模拟器中进入指定运行时插件的房间列表。普通横向滚动未改变画面，但没有证明已发送遥控器触控手势；当前电脑控制接口不能执行按住 Option 同时移动鼠标，真实左滑仍未验证。实际列表截图为 `runs/tvos-sidebar-2026-10-19/legacy-simulator/room-list.png`。前端首次打开自动启动的无关手机模拟器已关闭，未清理设备数据。
+
+### 2026-10-19 恢复触控滑动的左缘焦点入口（验证中）
+
+用户在传统模拟器中确认触控左滑无法展开分类侧栏。历史实现 `89537e36^` 使用宽 1pt、全高透明按钮和 `.leftTrigger`，焦点到达后调用 `openSidebar()`；`89537e36` 删除了该入口，仅保留 `onMoveCommand`。方向命令通过不能证明触控滑动通过。按用户指出的原有实现恢复焦点入口，沿用当前侧栏开关及焦点交接，不回退旧版固定延迟、分类请求或返回处理。验收覆盖首列滑动、非首列移动、启动不自动展开、关闭后不自动重开、分类切换和弹层隔离；本节在新包验证前不表示通过。
+
+本轮实现最后保存于 21:36:23 +08:00，Xcode 27.1 workspace MCP `BuildProject` 成功（17.9 秒），Navigator error 为 0。随后通过传统模拟器安装并重新启动同一设备的新包，进程 5069；没有调用 Device Hub。证据目录 `runs/tvos-sidebar-swipe-2026-10-19/`：构建与错误检查 `response-5.json` / `response-6.json`，安装启动 `install-launch.json`，初始列表 `initial-room-list.png`，稳定侧栏 `sidebar-stable.png`，导航日志 `navigation.log`。
+
+- 通过：启动加载后焦点进入首张卡片、侧栏保持关闭；首列方向左键展开；右键收起后恢复首卡且未自动重开；第二列左键仅回第一列。稳定列表与侧栏截图沿用原有卡片尺寸、网格间距、分类行高和标题结构，未见额外透明按钮高亮。
+- 未验证：真实触控左滑到透明入口、弹层及分类切换中的触控隔离。现有电脑接口不能合成遥控器 Option＋鼠标移动，不能以方向键结果代替。
+- 快速连续左右左检查：最后一次左键没有出现在应用日志，不能计作通过，也不足以判定应用处理失败；稳定焦点恢复后再按左已可展开。
+- 不适用：其他平台、横屏/分屏及动态字体矩阵，本次仅恢复 tvOS 无可见布局的焦点入口。
+- 全仓平台标识与测试数字映射扫描：722 个 UTF-8 文件、93 个二进制文件，文本命中为 0；`git diff --check` 通过。Xcode 恢复原来的 `AngelLiveMacOS / My Mac`。
+
+### 初始空列表与已确认空态的焦点门禁
+
+进一步审查确认：分类先返回、房间仍为空且正在加载时，标题信息按钮可能先获得系统焦点；只凭 `.platformInfo` 就启用左缘按钮过早。透明入口现要求已有房间，或请求结束且空态已显示；信息按钮只有在非空列表中才是有效触发来源，空结果由 `.emptyContent` 接管。列表非空时加载更多仍允许正常首列导航。`endFirstLoading` 实际由分类返回后固定 1.5 秒任务置真，不是房间请求结束信号，因此本次不依赖它。
+
+使用从当前源文件原样抽取的两段焦点资格函数运行 19 项 Swift 状态检查（模型和焦点类型为桩，非设备 UI 测试）。修改前初始加载/残留入口/空态挂载过渡共 3 项失败，修改后 19 项通过。脚本与结果保存在 `runs/tvos-sidebar-initial-focus-2026-10-19/`。实际触控滑动验证仍单独记录，不将此状态检查视为遥控器验收。
+
+最终源码保存于 21:43:21 +08:00；本轮 Xcode 27.1 workspace MCP 构建成功（15.235 秒），Navigator error 为 0，传统模拟器新安装启动的进程为 7039。`navigation.log` 记录：21:45:30 初入页面 `roomCount=0 loading=true triggerEnabled=false`；21:45:31 房间返回、首卡获得焦点时入口启用。21:46:05 返回收起侧栏后的 `focus=nil` 阶段入口禁用，恢复首卡后才启用，未出现自动重开。单次返回停留在房间列表。`initial-list.png`、`sidebar-open.png`、`sidebar-closed.png` 已检查标题、卡片及分类行布局保持原样。真实左滑及真实空结果页面仍未完成设备验收；19 项状态检查覆盖其资格逻辑，不能代替设备结果。最终全仓文本扫描 722 个文件无平台标识或测试真实编号命中，93 个二进制文件单独计数；Xcode 已恢复 `AngelLiveMacOS / My Mac`，未使用 Device Hub。
+
+### 真实滑动失败后的焦点候选修正（待验证）
+
+用户实际触控滑动仍未展开。`runs/tvos-sidebar-real-swipe-2026-10-19/navigation-live.log` 的 22:04–22:05 记录显示卡片焦点可横向移动并返回首列，首列 `triggerEnabled=true`，但始终没有 `.leftTrigger` 或 `openSidebar`。由此只能确认左缘焦点候选未被选中，不能将条件判断通过当作候选存在，也不能据此认定某个透明度阈值是根因。
+
+对比 `89537e36^` 确认恢复时遗漏了透明按钮外层 `.focusable(...)`。本轮在 `.disabled` 后、焦点绑定前恢复 `.focusable(canFocusSidebarTrigger)`，继续使用真实加载状态门禁，不恢复固定等待。该修饰器恢复历史外层焦点区域；普通 Button 本身具有焦点能力，不能把本次结论泛化为所有按钮都需要额外 `.focusable`。最终须由真实滑动产生 `mainContent → leftTrigger → openSidebar → leftMenu` 记录验证。
+
+补回 `.focusable` 后的包通过 workspace 构建并安装，进程 11014 的真实触控日志首次出现 `mainContent(0) → leftTrigger → openSidebar`，用户确认菜单已能打开。但随后出现 `leftTrigger → nil → mainContent(0)`，用户确认焦点未进入分类；这是独立的交接失败，不能计为完整通过。展开同一事务会移除入口并禁用当前焦点源，而菜单尚未接焦。下一轮保留透明入口及其可聚焦性，直到焦点离开 `.leftTrigger`；此后按原规则移除，不改变加载或弹层门禁。抽取资格函数的状态检查扩展为 21 项并通过，仍须由新包真实滑动验收交接。
+
+焦点交接修正保存于 22:12:05 +08:00，workspace MCP 构建成功（14.735 秒，`runs/tvos-sidebar-focus-target-2026-10-19/response-9.json`），Navigator error 为 0（10），随后安装并启动进程 11543。初入列表日志在 22:13:43–44 记录加载时入口禁用、房间返回后首卡接焦；`handoff-initial.png` 的标题、网格和左缘提示沿用原样，未自动展开侧栏。真实滑动后的菜单接焦及关闭重开仍等待验证，不能把本次构建和初始截图算作交接通过。Xcode 已恢复 `AngelLiveMacOS / My Mac`（11）。
+
+### 最终真实触控验收：首次与关闭重开通过
+
+用户在传统 Simulator 的同一新包中完成真实左滑、关闭及再次左滑，并明确确认“两次都能操作分类”。root 独立核对进程 11543 的 22:32:29–42 日志：三次均由 `mainContent(0) → leftTrigger → openSidebar → leftMenu(0, 0)` 完成交接，没有先掉回背景卡片；关闭后恢复首卡，下一次滑动再次进入分类。22:32:41 还记录分类内 `leftMenu(0, 0) → leftMenu(0, 1)`，22:32:42 返回仅收起侧栏并恢复首卡。
+
+本次明确通过：首次真实左滑、关闭后真实左滑重开、分类内焦点移动、返回恢复列表；用户确认与应用日志相符。最终日志副本 `runs/tvos-sidebar-focus-target-2026-10-19/verified-real-swipe.log`，新包初始及用户操作结束后的列表截图为 `handoff-initial.png`、`real-swipe-final.png`，列表标题、网格间距及左缘提示未见样式变化。未保存本轮手势过程中展开侧栏的截图，故不另宣称新包展开态截图验收；未验证实体设备或真实空结果页面，空态资格逻辑由上述 21 项状态检查覆盖。未增加新的代码修改或使用 Device Hub，结束本轮日志采集和 MCP bridge，保留模拟器现场。

@@ -12,6 +12,7 @@ enum FocusableField: Hashable {
     case leftFavorite(Int, Int)
     case platformInfo
     case emptyContent
+    case leftTrigger
 }
 
 struct ListMainView: View {
@@ -100,7 +101,8 @@ struct ListMainView: View {
         logNavigation("move direction=\(direction) cardIndex=\(String(describing: cardIndex)) selectedIndex=\(liveViewModel.selectedRoomListIndex)")
         cancelPendingFocus()
 
-        switch focusState {
+        // 侧栏收起重建时焦点可能暂时为空，卡片闭包仍明确提供事件来源。
+        switch focusState ?? cardIndex.map({ FocusableField.mainContent($0) }) {
         case .leftMenu, .leftFavorite:
             if direction == .right {
                 closeSidebar()
@@ -183,6 +185,55 @@ struct ListMainView: View {
         }
     }
 
+    private func isSidebarTriggerSource(_ focus: FocusableField?) -> Bool {
+        switch focus {
+        case .mainContent(let index):
+            return liveViewModel.roomList.indices.contains(index) && index % gridColumnCount == 0
+        case .emptyContent:
+            return liveViewModel.roomList.isEmpty && showEmptyState && !liveViewModel.isLoading
+        case .platformInfo:
+            // 初次加载时信息按钮可能先获得焦点，不能据此启用左缘入口。
+            return !liveViewModel.roomList.isEmpty
+        default:
+            return false
+        }
+    }
+
+    private var canFocusSidebarTrigger: Bool {
+        guard !liveViewModel.categories.isEmpty,
+              !liveViewModel.roomList.isEmpty || (showEmptyState && !liveViewModel.isLoading),
+              !liveViewModel.isSidebarExpanded || focusState == .leftTrigger,
+              !liveViewModel.hasError,
+              !showCapabilitySheet,
+              authenticationRecovery == nil,
+              !liveViewModel.showAlert,
+              !pendingCategoryFocus,
+              pendingSidebarFocus == nil else { return false }
+        // 焦点移入透明按钮后，保持可聚焦直到侧栏接管，避免回调前先失焦。
+        return focusState == .leftTrigger || isSidebarTriggerSource(focusState)
+    }
+
+    private var leftSidebarTrigger: some View {
+        Button {
+            guard canFocusSidebarTrigger else { return }
+            openSidebar()
+        } label: {
+            Rectangle()
+                .fill(Color.clear)
+        }
+        .frame(width: 1)
+        .frame(maxHeight: .infinity)
+        .opacity(0.001)
+        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .disabled(!canFocusSidebarTrigger)
+        // 保留透明 label 外层的焦点区域，供左缘方向搜索使用。
+        .focusable(canFocusSidebarTrigger)
+        .focusEffectDisabled()
+        .focused($focusState, equals: .leftTrigger)
+        .accessibilityLabel("打开分类")
+    }
+
     private func updateEmptyState() {
         pendingEmptyState?.cancel()
         pendingEmptyState = nil
@@ -250,7 +301,7 @@ struct ListMainView: View {
     }
 
     private func logNavigation(_ event: String) {
-        let message = "RoomListNavigation \(event) model=\(ObjectIdentifier(liveViewModel)) focus=\(String(describing: focusState)) expanded=\(liveViewModel.isSidebarExpanded) loading=\(liveViewModel.isLoading) pendingCategory=\(pendingCategoryFocus)"
+        let message = "RoomListNavigation \(event) model=\(ObjectIdentifier(liveViewModel)) focus=\(String(describing: focusState)) expanded=\(liveViewModel.isSidebarExpanded) loading=\(liveViewModel.isLoading) pendingCategory=\(pendingCategoryFocus) roomCount=\(liveViewModel.roomList.count) triggerEnabled=\(canFocusSidebarTrigger)"
         Logger.debug(message, category: .ui)
         #if DEBUG
         // 保留非调试器启动后的返回记录，避免设备会话结束时丢失现场。
@@ -441,6 +492,17 @@ struct ListMainView: View {
             } else {
                 listContainerView
             }
+
+            // 菜单真正接到焦点前保留入口，不能在展开瞬间删掉当前焦点源。
+            if !liveViewModel.categories.isEmpty &&
+                (!liveViewModel.isSidebarExpanded || focusState == .leftTrigger) {
+                HStack(spacing: 0) {
+                    leftSidebarTrigger
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .ignoresSafeArea()
+            }
         }
         .background(.thinMaterial)
         .interactiveDismissDisabled()
@@ -464,6 +526,11 @@ struct ListMainView: View {
         }
         .onChange(of: focusState) { oldValue, newValue in
             logNavigation("focusChanged from=\(String(describing: oldValue)) to=\(String(describing: newValue))")
+            if newValue == .leftTrigger,
+               canFocusSidebarTrigger,
+               isSidebarTriggerSource(oldValue) {
+                openSidebar()
+            }
         }
         .onChange(of: liveViewModel.roomList) { _, _ in
             updateEmptyState()
