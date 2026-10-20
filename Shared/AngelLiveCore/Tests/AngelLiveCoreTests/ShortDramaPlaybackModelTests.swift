@@ -475,6 +475,51 @@ struct ShortDramaPlaybackModelTests {
         #expect(try Data(contentsOf: file) == damaged)
     }
 
+    @Test("history begins only after readiness and repeated callbacks cannot reset progress or unhide it")
+    func historyRequiresNewSuccessfulPlayback() async throws {
+        let fixture = PlaybackFixture()
+        let model = fixture.model()
+        await model.load()
+        let id = try #require(model.playback?.id)
+        #expect(fixture.progressStore.historyEntries.isEmpty)
+        model.playbackReady(id: id, duration: 0)
+        #expect(fixture.progressStore.historyEntries.isEmpty)
+        model.playbackReady(id: id, duration: 100)
+        #expect(fixture.progressStore.historyEntries.count == 1)
+        #expect(fixture.progressStore.historyEntries.first?.position == 0)
+        model.recordProgress(id: id, position: 34, duration: 100)
+        model.playbackReady(id: id, duration: 100)
+        #expect(fixture.progressStore.historyEntries.first?.position == 34)
+        try fixture.progressStore.removeHistory(for: fixture.progressKey)
+        model.recordProgress(id: id, position: 35, duration: 100)
+        model.playbackReady(id: id, duration: 100)
+        await model.restorationCompleted(id: id, position: 0, duration: 100,
+                                         succeeded: true, resumePlayback: true)
+        #expect(fixture.progressStore.historyEntries.isEmpty)
+        model.cancel()
+        let reentry = fixture.model()
+        await reentry.load()
+        let firstRestoreID = try #require(reentry.playback?.id)
+        #expect(reentry.playback?.resumePosition == 35)
+        reentry.playbackReady(id: firstRestoreID, duration: 100)
+        #expect(fixture.progressStore.historyEntries.isEmpty)
+        await reentry.restorationCompleted(id: firstRestoreID, position: 35, duration: 100,
+                                           succeeded: false, resumePlayback: true)
+        #expect(fixture.progressStore.historyEntries.isEmpty)
+        let episode = try #require(reentry.selectedEpisodeID)
+        await reentry.selectEpisode(id: episode)
+        let successfulID = try #require(reentry.playback?.id)
+        await reentry.restorationCompleted(id: successfulID, position: 35, duration: 100,
+                                           succeeded: true, resumePlayback: true)
+        let history = try #require(fixture.progressStore.historyEntries.first)
+        #expect(history.title == "Fixture drama")
+        #expect(history.episodeNumber == 1)
+        #expect(history.position == 35)
+        #expect(history.duration == 100)
+        #expect(history.key == fixture.progressKey)
+        #expect(history.completed == false)
+    }
+
     private func record(_ model: ShortDramaPlaybackModel, position: Double) throws -> UUID {
         let id = try #require(model.playback?.id)
         model.playbackReady(id: id, duration: 100)

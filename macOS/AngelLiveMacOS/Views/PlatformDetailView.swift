@@ -394,6 +394,8 @@ struct LiveRoomCard: View {
     let showsCoverBadge: Bool
     private let isFavoritedOverride: Bool?
     private let onRemoveFromHistory: (@MainActor () -> Void)?
+    private let subtitle: String?
+    private let allowsFavoriteActions: Bool
 
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(ToastManager.self) private var toastManager
@@ -405,12 +407,16 @@ struct LiveRoomCard: View {
         room: LiveModel,
         showsCoverBadge: Bool = false,
         isFavoritedOverride: Bool? = nil,
-        onRemoveFromHistory: (@MainActor () -> Void)? = nil
+        onRemoveFromHistory: (@MainActor () -> Void)? = nil,
+        subtitle: String? = nil,
+        allowsFavoriteActions: Bool = true
     ) {
         self.room = room
         self.showsCoverBadge = showsCoverBadge
         self.isFavoritedOverride = isFavoritedOverride
         self.onRemoveFromHistory = onRemoveFromHistory
+        self.subtitle = subtitle
+        self.allowsFavoriteActions = allowsFavoriteActions
     }
 
     private var isFavorited: Bool {
@@ -481,7 +487,7 @@ struct LiveRoomCard: View {
                         .foregroundColor(.primary)
                         .lineLimit(1)
 
-                    Text(room.userName.orDash)
+                    Text(subtitle ?? room.userName.orDash)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -506,7 +512,7 @@ struct LiveRoomCard: View {
             }, value: isFavoriteAnimating
         )
         .contextMenu {
-            favoriteContextMenu
+            if allowsFavoriteActions { favoriteContextMenu }
             if let callback = onRemoveFromHistory {
                 Divider()
                 Button(role: .destructive, action: callback) {

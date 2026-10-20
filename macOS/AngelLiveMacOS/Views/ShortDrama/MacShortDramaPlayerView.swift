@@ -48,7 +48,6 @@ struct MacShortDramaPlayerView: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(HistoryModel.self) private var historyModel
 
     init(room: LiveModel, onClose: (@MainActor () -> Void)? = nil, onExitFullscreen: (@MainActor () -> Bool)? = nil) {
         self.room = room
@@ -138,7 +137,6 @@ struct MacShortDramaPlayerView: View {
         .ignoresSafeArea()
         .task {
             isLeaving = false
-            historyModel.addHistory(room: room)
             await model.load()
         }
         .task(id: model.playback?.id) {

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Observation
 
 public struct ShortDramaProgressKey: Codable, Hashable, Sendable {
     public let pluginID: String
@@ -45,6 +46,8 @@ public struct ShortDramaProgressSnapshot: Codable, Equatable, Sendable {
     public let key: ShortDramaProgressKey
     public fileprivate(set) var lastEpisodeID: String?
     public fileprivate(set) var episodes: [String: ShortDramaEpisodeProgress]
+    public fileprivate(set) var historyMetadata: ShortDramaHistoryMetadata?
+    public fileprivate(set) var historyHidden: Bool?
 
     public init(key: ShortDramaProgressKey) {
         version = 1
@@ -56,18 +59,24 @@ public struct ShortDramaProgressSnapshot: Codable, Equatable, Sendable {
     var isValid: Bool {
         version == 1 && key.isValid && episodes.allSatisfy { !$0.key.isEmpty && $0.value.isValid }
             && (lastEpisodeID.map { episodes[$0] != nil } ?? true)
+            && (historyMetadata?.isValid ?? true)
     }
 }
 
-/// One small atomic file per drama. URLs and playback credentials never enter the snapshot.
+/// One small atomic file per drama. Playback URLs and credentials never enter the snapshot.
 @MainActor
+@Observable
 public final class ShortDramaProgressStore {
     public static let shared = ShortDramaProgressStore()
     public enum StorageError: Error { case invalidSnapshot }
-    private let directory: URL
-    private let write: (Data, URL) throws -> Void
-    private var entries: [ShortDramaProgressKey: Entry] = [:]
-    private var readFailures: [ShortDramaProgressKey: any Error] = [:]
+    public private(set) var historyEntries: [ShortDramaHistoryEntry] = []
+    public private(set) var historyWarning: String?
+    @ObservationIgnored private let directory: URL
+    @ObservationIgnored private let write: (Data, URL) throws -> Void
+    @ObservationIgnored private let resolveHistoryPlugin: (LiveModel) -> String?
+    @ObservationIgnored private var entries: [ShortDramaProgressKey: Entry] = [:]
+    @ObservationIgnored private var readFailures: [ShortDramaProgressKey: any Error] = [:]
+    @ObservationIgnored private var historyLoaded = false
 
     private struct Entry {
         var snapshot: ShortDramaProgressSnapshot
@@ -84,11 +93,14 @@ public final class ShortDramaProgressStore {
         #endif
         self.directory = directory ?? base.appendingPathComponent("ShortDramaProgress", isDirectory: true)
         write = { data, url in try data.write(to: url, options: .atomic) }
+        resolveHistoryPlugin = Self.shortDramaPluginID
     }
 
-    init(directory: URL, write: @escaping (Data, URL) throws -> Void) {
+    init(directory: URL, write: @escaping (Data, URL) throws -> Void,
+         resolveHistoryPlugin: ((LiveModel) -> String?)? = nil) {
         self.directory = directory
         self.write = write
+        self.resolveHistoryPlugin = resolveHistoryPlugin ?? Self.shortDramaPluginID
     }
 
     public func load(for key: ShortDramaProgressKey) throws -> ShortDramaProgressSnapshot {
@@ -98,6 +110,7 @@ public final class ShortDramaProgressStore {
         do {
             let snapshot = try readSnapshot(for: key)
             entries[key] = Entry(snapshot: snapshot)
+            refreshHistoryEntries()
             return snapshot
         } catch {
             // Keep the unreadable file and prevent a later session from overwriting it with defaults.
@@ -107,13 +120,142 @@ public final class ShortDramaProgressStore {
     }
 
     public func updateEpisode(
-        _ progress: ShortDramaEpisodeProgress, episodeID: String, for key: ShortDramaProgressKey
+        _ progress: ShortDramaEpisodeProgress, episodeID: String, for key: ShortDramaProgressKey,
+        historyMetadata: ShortDramaHistoryMetadata? = nil
     ) throws {
-        guard progress.isValid, !episodeID.isEmpty else { throw StorageError.invalidSnapshot }
+        guard progress.isValid, !episodeID.isEmpty, historyMetadata?.isValid ?? true else {
+            throw StorageError.invalidSnapshot
+        }
         _ = try load(for: key)
         entries[key]?.snapshot.episodes[episodeID] = progress
         entries[key]?.snapshot.lastEpisodeID = episodeID
+        if let historyMetadata { entries[key]?.snapshot.historyMetadata = historyMetadata }
         entries[key]?.dirty = true
+        refreshHistoryEntries()
+    }
+
+    /// Enumerate once, then use accepted in-memory events. A failed read is retried on the next visit.
+    /// Legacy rooms only enrich matching existing progress; they never fabricate a watched position.
+    public func loadHistory(legacyRooms: [LiveModel] = []) {
+        var failed = false
+        if !historyLoaded || historyWarning != nil {
+            do {
+                let files: [URL]
+                do {
+                    files = try FileManager.default.contentsOfDirectory(
+                        at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+                } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+                    historyLoaded = true
+                    migrateLegacyHistory(legacyRooms, failed: &failed)
+                    historyWarning = failed ? "部分短剧历史暂时无法读取或保存" : nil
+                    refreshHistoryEntries()
+                    return
+                }
+                let cachedFilenames = Set(entries.keys.map(\.filename))
+                for file in files where file.pathExtension == "json" && !cachedFilenames.contains(file.lastPathComponent) {
+                    do {
+                        let snapshot = try JSONDecoder().decode(ShortDramaProgressSnapshot.self,
+                                                               from: Data(contentsOf: file))
+                        guard snapshot.isValid, file.lastPathComponent == snapshot.key.filename else {
+                            throw StorageError.invalidSnapshot
+                        }
+                        entries[snapshot.key] = Entry(snapshot: snapshot)
+                        readFailures.removeValue(forKey: snapshot.key)
+                    } catch {
+                        // Do not remove or replace damaged/unsupported records when listing the rest.
+                        failed = true
+                    }
+                }
+                historyLoaded = true
+            } catch {
+                failed = true
+            }
+        }
+        migrateLegacyHistory(legacyRooms, failed: &failed)
+        historyWarning = failed ? "部分短剧历史暂时无法读取或保存" : nil
+        refreshHistoryEntries()
+    }
+
+    /// FullUI classification includes hidden records, so removing a drama cannot move it into live history.
+    public func isShortDramaHistory(_ room: LiveModel) -> Bool {
+        if resolveHistoryPlugin(room) != nil { return true }
+        return entries.values.contains {
+            $0.snapshot.key.roomID == room.roomId
+                && $0.snapshot.historyMetadata?.recordedLiveType == room.liveType
+        }
+    }
+
+    public func removeHistory(for key: ShortDramaProgressKey) throws {
+        _ = try load(for: key)
+        guard var candidate = entries[key], candidate.snapshot.historyHidden != true else { return }
+        candidate.snapshot.historyHidden = true
+        try writeHistoryChange(candidate, for: key)
+    }
+
+    public func clearHistory() throws {
+        // Each independent file commits atomically. A failed file remains visible and can be retried.
+        var firstFailure: (any Error)?
+        for key in historyEntries.map(\.key) {
+            do { try removeHistory(for: key) } catch { if firstFailure == nil { firstFailure = error } }
+        }
+        if let firstFailure { throw firstFailure }
+    }
+
+    /// Called only once after a new playback UUID really becomes ready or finishes restoring.
+    /// Ordinary samples may update metadata but must never undo a history removal.
+    func recordPlaybackStarted(metadata: ShortDramaHistoryMetadata, for key: ShortDramaProgressKey) throws {
+        guard metadata.isValid else { throw StorageError.invalidSnapshot }
+        _ = try load(for: key)
+        guard var candidate = entries[key] else { return }
+        candidate.snapshot.historyMetadata = metadata
+        candidate.snapshot.historyHidden = false
+        // Share the same failure throttle as ordinary progress writes.
+        entries[key]?.lastFlushAttempt = .now
+        try writeHistoryChange(candidate, for: key)
+    }
+
+    private func writeHistoryChange(_ candidate: Entry, for key: ShortDramaProgressKey) throws {
+        let data = try JSONEncoder().encode(candidate.snapshot)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try write(data, directory.appendingPathComponent(key.filename))
+        var committed = candidate
+        committed.dirty = false
+        committed.lastFlushAttempt = .now
+        entries[key] = committed
+        refreshHistoryEntries()
+    }
+
+    private func migrateLegacyHistory(_ rooms: [LiveModel], failed: inout Bool) {
+        for room in rooms {
+            guard let pluginID = resolveHistoryPlugin(room) else { continue }
+            let key = ShortDramaProgressKey(pluginID: pluginID, roomID: room.roomId)
+            guard var candidate = entries[key], candidate.snapshot.historyMetadata == nil,
+                  !candidate.snapshot.episodes.isEmpty else { continue }
+            let updatedAt = candidate.snapshot.episodes.values.map(\.updatedAt).max() ?? .now
+            candidate.snapshot.historyMetadata = ShortDramaHistoryMetadata(room: room, lastWatchedAt: updatedAt)
+            do { try writeHistoryChange(candidate, for: key) } catch { failed = true }
+        }
+    }
+
+    private func refreshHistoryEntries() {
+        historyEntries = entries.values.compactMap { entry in
+            let snapshot = entry.snapshot
+            guard snapshot.historyHidden != true,
+                  !snapshot.episodes.isEmpty || snapshot.historyMetadata != nil else { return nil }
+            return ShortDramaHistoryEntry(snapshot: snapshot)
+        }.sorted {
+            if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
+            if $0.key.pluginID != $1.key.pluginID { return $0.key.pluginID < $1.key.pluginID }
+            return $0.key.roomID < $1.key.roomID
+        }
+    }
+
+    private static func shortDramaPluginID(_ room: LiveModel) -> String? {
+        guard let platform = LiveParseJSPlatformManager.platform(for: room.liveType),
+              SandboxPluginCatalog.isInstalled(pluginId: platform.pluginId),
+              let behavior = try? LiveParsePlugins.shared.resolve(pluginId: platform.pluginId).manifest.hostBehavior,
+              behavior.contentKind == "shortDrama", behavior.episodeSelection == "qualityList" else { return nil }
+        return platform.pluginId
     }
 
     public func flush(for key: ShortDramaProgressKey) throws {

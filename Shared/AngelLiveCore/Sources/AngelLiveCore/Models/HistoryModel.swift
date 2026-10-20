@@ -13,8 +13,17 @@ import Observation
 public final class HistoryModel {
 
     public init() {
+        defaults = .shared
         loadWatchList()
     }
+
+    init(defaults: UserDefaults) {
+        self.defaults = defaults
+        loadWatchList()
+    }
+
+    @ObservationIgnored
+    private let defaults: UserDefaults
 
     @ObservationIgnored
     private let watchListKey = "SimpleLive.History.WatchList"
@@ -22,7 +31,7 @@ public final class HistoryModel {
     public var watchList: Array<LiveModel> = []
 
     private func loadWatchList() {
-        guard let data = UserDefaults.shared.data(forKey: watchListKey),
+        guard let data = defaults.data(forKey: watchListKey),
               let decoded = try? JSONDecoder().decode([LiveModel].self, from: data) else {
             watchList = []
             return
@@ -32,7 +41,7 @@ public final class HistoryModel {
 
     private func saveWatchList() {
         guard let encoded = try? JSONEncoder().encode(watchList) else { return }
-        UserDefaults.shared.set(encoded, forKey: watchListKey)
+        defaults.set(encoded, forKey: watchListKey)
     }
 
     public func addHistory(room: LiveModel) {
@@ -52,6 +61,12 @@ public final class HistoryModel {
 
     public func removeHistory(room: LiveModel) {
         watchList.removeAll { $0.roomId == room.roomId }
+        saveWatchList()
+    }
+
+    /// FullUI can remove its selected category without deleting a same-room-ID record from another source.
+    public func removeHistories(ids: Set<String>) {
+        watchList.removeAll { ids.contains($0.id) }
         saveWatchList()
     }
 

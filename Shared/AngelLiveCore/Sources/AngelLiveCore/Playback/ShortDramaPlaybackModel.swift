@@ -35,6 +35,7 @@ public final class ShortDramaPlaybackModel {
     @ObservationIgnored private let progressStore: ShortDramaProgressStore
     @ObservationIgnored private var progress: ShortDramaProgressSession?
     @ObservationIgnored private var progressStorageAvailable = true
+    @ObservationIgnored private var historyRecordedPlaybackID: UUID?
 
     public var selectedEpisode: ShortDramaEpisode? {
         episodes.first { $0.id == selectedEpisodeID }
@@ -272,11 +273,10 @@ public final class ShortDramaPlaybackModel {
 
     public func playbackReady(id: UUID, duration: Double) {
         guard playback?.id == id, playback?.resumePosition == nil else { return }
-        let previous = progress?.snapshot
         guard progress?.ready(playbackID: id, duration: duration) == true else { return }
-        if progress?.snapshot != previous {
-            commitProgress(flushImmediately: true)
-        }
+        // Initial readiness is an accepted zero-position sample; even a quick exit has a resumable episode.
+        _ = progress?.record(playbackID: id, position: 0, duration: duration)
+        recordPlaybackHistory(id: id)
     }
 
     public func restorationCompleted(
@@ -290,8 +290,9 @@ public final class ShortDramaPlaybackModel {
             errorMessage = "未能恢复播放进度，请重试或选择其他剧集"
             return
         }
-        progress?.ready(playbackID: id, duration: duration)
-        recordProgress(id: id, position: position, duration: duration)
+        guard progress?.ready(playbackID: id, duration: duration) == true else { return }
+        _ = progress?.record(playbackID: id, position: position, duration: duration)
+        recordPlaybackHistory(id: id)
         if position >= duration {
             // A confirmed restore to the endpoint follows the same paused/autoplay semantics
             // as a successful user seek, including the independent sheet/swipe holds.
@@ -330,7 +331,8 @@ public final class ShortDramaPlaybackModel {
               let episodeProgress = progress.snapshot.episodes[episodeID] else { return }
         do {
             // Submit only this UUID's accepted episode event, never its possibly stale full snapshot.
-            try progressStore.updateEpisode(episodeProgress, episodeID: episodeID, for: progress.snapshot.key)
+            try progressStore.updateEpisode(episodeProgress, episodeID: episodeID, for: progress.snapshot.key,
+                                            historyMetadata: historyMetadata(updatedAt: episodeProgress.updatedAt))
             if flushImmediately {
                 try progressStore.flush(for: progress.snapshot.key)
             } else {
@@ -338,6 +340,28 @@ public final class ShortDramaPlaybackModel {
             }
         } catch {
             warnAboutProgress("播放进度暂时无法保存")
+        }
+    }
+
+    private func historyMetadata(updatedAt: Date = .now) -> ShortDramaHistoryMetadata {
+        ShortDramaHistoryMetadata(room: room, episodeID: selectedEpisode?.id,
+                                  episodeTitle: selectedEpisode?.title, episodeNumber: selectedEpisode?.number,
+                                  lastWatchedAt: updatedAt)
+    }
+
+    private func recordPlaybackHistory(id: UUID) {
+        guard progressStorageAvailable, historyRecordedPlaybackID != id,
+              let progress, let episodeID = progress.activeEpisodeID,
+              let sample = progress.snapshot.episodes[episodeID] else { return }
+        // A repeated ready/restore callback from this player must not undo a user removing its history.
+        historyRecordedPlaybackID = id
+        do {
+            let metadata = historyMetadata(updatedAt: sample.updatedAt)
+            try progressStore.updateEpisode(sample, episodeID: episodeID, for: progress.snapshot.key,
+                                            historyMetadata: metadata)
+            try progressStore.recordPlaybackStarted(metadata: metadata, for: progress.snapshot.key)
+        } catch {
+            warnAboutProgress("短剧历史暂时无法保存")
         }
     }
 
