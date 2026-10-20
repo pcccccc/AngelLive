@@ -1353,14 +1353,14 @@ private final class TVHomePlaybackCoordinator {
     }
 
     private func present(room: LiveModel, rooms: [LiveModel], mode: TVHomePlaybackMode) {
-        if !appViewModel.historyViewModel.watchList.contains(room) {
-            appViewModel.historyViewModel.watchList.insert(room, at: 0)
-        }
         if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
             roomInfoViewModel = nil
             shortDramaRoom = room
             isPresented = true
             return
+        }
+        if !appViewModel.historyViewModel.watchList.contains(room) {
+            appViewModel.historyViewModel.watchList.insert(room, at: 0)
         }
         shortDramaRoom = nil
         let roomType: LiveRoomListType = mode == .favorite ? .favorite : .live

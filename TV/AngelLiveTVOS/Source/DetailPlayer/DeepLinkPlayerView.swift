@@ -100,9 +100,6 @@ struct DeepLinkPlayerView: View {
         }
 
         if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
-            if !appViewModel.historyViewModel.watchList.contains(room) {
-                appViewModel.historyViewModel.watchList.insert(room, at: 0)
-            }
             shortDramaRoom = room
             isLoading = false
             return

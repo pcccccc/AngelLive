@@ -9,6 +9,7 @@ import os
 enum FocusableField: Hashable {
     case leftMenu(Int, Int)
     case mainContent(Int)
+    case historyContent(String)
     case leftFavorite(Int, Int)
     case platformInfo
     case emptyContent

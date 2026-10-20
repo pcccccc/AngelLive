@@ -112,6 +112,7 @@ class LiveViewModel {
     var lodingTimer: Timer?
     private var roomRequestGeneration = UUID()
     private var catalogRequestGeneration = UUID()
+    private var fullUIHistoryGeneration = UUID()
     let searchRequest = SearchRequestModel(
         fetchOutcome: LiveViewModel.fetchSearch,
         onAccepted: LiveViewModel.recordAcceptedSearch
@@ -342,6 +343,30 @@ class LiveViewModel {
         self.selectedSubCategory = subList
     }
     
+    /// Only the FullUI history page calls this; the legacy history path is unchanged.
+    func refreshFullUIHistoryRooms(_ rooms: [LiveModel]) async {
+        let generation = UUID()
+        fullUIHistoryGeneration = generation
+        roomList = rooms
+        currentRoom = nil
+        selectedRoomListIndex = -1
+        for room in rooms {
+            guard !Task.isCancelled, fullUIHistoryGeneration == generation else { return }
+            do {
+                var updatedRoom = try await ApiManager.fetchLastestLiveInfo(liveModel: room)
+                guard !Task.isCancelled, fullUIHistoryGeneration == generation,
+                      let index = roomList.firstIndex(where: { $0.id == room.id }) else { return }
+                if updatedRoom.liveState?.isEmpty != false { updatedRoom.liveState = "0" }
+                // A response for another identity must never replace this record.
+                guard updatedRoom.id == room.id else { continue }
+                roomList[index] = updatedRoom
+            } catch {
+                guard !Task.isCancelled, fullUIHistoryGeneration == generation else { return }
+                // The saved card remains available; selection retries its live-state query.
+            }
+        }
+    }
+
     func getLastestHistoryRoomInfo(_ index: Int) {
         isLoading = true
         Task {

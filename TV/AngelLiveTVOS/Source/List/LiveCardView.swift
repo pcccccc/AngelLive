@@ -23,7 +23,12 @@ struct LiveCardView: View {
     var contentRevision: Int = 0
     var cardWidth: CGFloat = 370
     var coverHeight: CGFloat = 210
+    /// FullUI history owns selection and deletion by stable record identity.
+    var historySelection: (() -> Void)? = nil
+    var historyDeletion: (() -> Void)? = nil
+    var historyFocusID: String? = nil
     @State private var isLive: Bool = false
+    @State private var historyPlaybackTask: Task<Void, Never>?
     @FocusState private var internalFocusState: FocusableField?
 
     /// 卡片底部渐变，用于显示观看人数
@@ -35,9 +40,13 @@ struct LiveCardView: View {
     /// 是否获得焦点
     private var isFocused: Bool {
         if let external = externalFocusState {
-            return external.wrappedValue == .mainContent(index)
+            return external.wrappedValue == focusValue
         }
-        return internalFocusState == .mainContent(index)
+        return internalFocusState == focusValue
+    }
+
+    private var focusValue: FocusableField {
+        historyFocusID.map(FocusableField.historyContent) ?? .mainContent(index)
     }
 
     /// 获取当前 focusState 的值
@@ -46,7 +55,8 @@ struct LiveCardView: View {
     }
 
     private func titleTranslationEnabled(for room: LiveModel) -> Bool {
-        appViewModel.pluginAvailability.hasAvailablePlugins
+        historySelection == nil
+            && appViewModel.pluginAvailability.hasAvailablePlugins
             && SandboxPluginCatalog.platform(for: room.liveType) != nil
     }
 
@@ -123,7 +133,7 @@ struct LiveCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.card)
-        .focused(externalFocusState ?? $internalFocusState, equals: .mainContent(index))
+        .focused(externalFocusState ?? $internalFocusState, equals: focusValue)
         .onMoveCommand { direction in
             Logger.debug("LiveCardView onMoveCommand index=\(index) direction=\(direction)", category: .ui)
             onMoveCommand?(direction)
@@ -139,6 +149,11 @@ struct LiveCardView: View {
         .contextMenu { contextMenuContent }
         .fullScreenCover(isPresented: $isLive, onDismiss: restoreShortDramaCardFocus) {
             playerFullScreenContent
+        }
+        .onDisappear {
+            guard historyDeletion != nil else { return }
+            historyPlaybackTask?.cancel()
+            historyPlaybackTask = nil
         }
     }
 
@@ -298,6 +313,17 @@ struct LiveCardView: View {
     /// 上下文菜单内容
     @ViewBuilder
     private var contextMenuContent: some View {
+        if historySelection != nil {
+            if historyDeletion != nil {
+                historyDeleteButton
+            }
+        } else {
+            standardContextMenuContent
+        }
+    }
+
+    @ViewBuilder
+    private var standardContextMenuContent: some View {
         if liveViewModel.currentRoomIsFavorited {
             Button {
                 Task {
@@ -338,11 +364,19 @@ struct LiveCardView: View {
         }
 
         if liveViewModel.roomListType == .history {
-            Button(role: .destructive) {
+            historyDeleteButton
+        }
+    }
+
+    private var historyDeleteButton: some View {
+        Button(role: .destructive) {
+            if let historyDeletion {
+                historyDeletion()
+            } else {
                 liveViewModel.deleteHistory(index: index)
-            } label: {
-                Label("删除", systemImage: "trash")
             }
+        } label: {
+            Label("删除", systemImage: "trash")
         }
     }
 
@@ -373,30 +407,44 @@ struct LiveCardView: View {
         guard liveViewModel.shortDramaRoom != nil else { return }
         liveViewModel.shortDramaRoom = nil
         if let externalFocusState {
-            externalFocusState.wrappedValue = .mainContent(index)
+            externalFocusState.wrappedValue = focusValue
         } else {
-            internalFocusState = .mainContent(index)
+            internalFocusState = focusValue
         }
     }
 
     private func handleFocusChange(newValue: FocusableField?, liveModel: Bindable<LiveViewModel>) {
-        guard case .mainContent(let focusedIndex) = newValue, focusedIndex == index else { return }
+        guard newValue == focusValue else { return }
+        guard historySelection == nil else { return }
+        if historyDeletion != nil, let currentLiveModel {
+            liveViewModel.currentRoom = currentLiveModel
+            liveViewModel.selectedRoomListIndex = index
+            return
+        }
         guard index < liveViewModel.roomList.count else { return }
 
         liveViewModel.currentRoom = liveViewModel.roomList[index]
-        liveViewModel.selectedRoomListIndex = focusedIndex
+        liveViewModel.selectedRoomListIndex = index
         if liveViewModel.roomListType == .search {
-            if focusedIndex >= liveViewModel.roomList.count - 4 {
+            if index >= liveViewModel.roomList.count - 4 {
                 liveViewModel.searchRequest.loadMore()
             }
         } else if liveViewModel.roomListType == .live {
-            if focusedIndex >= liveViewModel.roomList.count - 4 && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
+            if index >= liveViewModel.roomList.count - 4 && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
                 liveViewModel.roomPage += 1
             }
         }
     }
 
     private func enterDetailRoom() {
+        if let historySelection {
+            historySelection()
+            return
+        }
+        if historyDeletion != nil {
+            historyPlaybackTask?.cancel()
+            historyPlaybackTask = nil
+        }
         liveViewModel.currentRoom = currentLiveModel ?? liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = index
 
@@ -415,7 +463,7 @@ struct LiveCardView: View {
 
         // 搜索/收藏/历史等列表的 liveState 可能为空或过期,先拉一次实时状态再判定
         guard let room = liveViewModel.currentRoom else { return }
-        Task {
+        let playbackTask = Task {
             do {
                 let state = try await ApiManager.getCurrentRoomLiveState(
                     roomId: room.roomId,
@@ -445,17 +493,23 @@ struct LiveCardView: View {
                 }
             }
         }
+        if historyDeletion != nil { historyPlaybackTask = playbackTask }
     }
 
     private func proceedToPlayer() {
         guard let currentRoom = liveViewModel.currentRoom else { return }
-        if !appViewModel.historyViewModel.watchList.contains(where: { currentRoom.roomId == $0.roomId }) {
+        if !TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel),
+           !appViewModel.historyViewModel.watchList.contains(where: { currentRoom.roomId == $0.roomId }) {
             appViewModel.historyViewModel.watchList.insert(currentRoom, at: 0)
         }
         let enterFromLive = liveViewModel.roomListType == .live
         liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)
-        DispatchQueue.main.async {
+        if historyDeletion != nil {
             isLive = true
+        } else {
+            DispatchQueue.main.async {
+                isLive = true
+            }
         }
     }
 
