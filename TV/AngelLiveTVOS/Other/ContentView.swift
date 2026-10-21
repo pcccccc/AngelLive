@@ -78,7 +78,7 @@ struct ContentView: View {
 
             // 本地缓存可在完整同步前恢复 Top Shelf；空缓存不应覆盖已有共享快照。
             if appViewModel.favoriteViewModel.roomList.isEmpty {
-                let cachedFavorites = await FavoriteLocalStore.shared.load()
+                let cachedFavorites =  await FavoriteLocalStore.shared.load()
                 guard !Task.isCancelled, presentsFullUI, scenePhase == .active else { return }
                 if !cachedFavorites.isEmpty {
                     TopShelfManager.publish(favorites: cachedFavorites)

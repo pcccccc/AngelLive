@@ -98,6 +98,8 @@ struct PlayerContentView: View {
     @State private var lastResignActiveAt: Date?
     /// 进后台前的播放意图,用于区分 C 类自动暂停与用户本来就暂停。
     @State private var wasPlayingBeforeBackground: Bool?
+    /// 因未开启后台播放而在进后台时停掉了恢复协调器采样,回前台需重启。
+    @State private var recoverySuspendedForBackground = false
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -164,6 +166,13 @@ struct PlayerContentView: View {
             if useKSPlayer {
                 wasPlayingBeforeBackground = playerCoordinator.playerLayer?.player.isPlaying ?? playerCoordinator.state.isPlaying
                 logForegroundLifecycleSnapshot(event: "willResignActive")
+                // 未开启后台播放时,KSPlayer 进后台会主动暂停;协调器若继续采样,
+                // 会把这次有意暂停误判为 stall,12s 后 changePlayUrl 重新拉流 → 后台又在播。
+                // 此时停掉采样,回前台再恢复。开启后台播放/自动画中画(会强制开后台播放)时保持监控。
+                if !PlayerSettingModel().enableBackgroundAudio {
+                    viewModel.recoveryCoordinator.stop()
+                    recoverySuspendedForBackground = true
+                }
                 // 进入后台时自动开启画中画（每次读取最新设置值）
                 if PlayerSettingModel().enableAutoPiPOnBackground,
                    ownsGlobalCapability(.pictureInPicture) {
@@ -191,6 +200,16 @@ struct PlayerContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             if useKSPlayer {
                 logForegroundLifecycleSnapshot(event: "didBecomeActive")
+                if recoverySuspendedForBackground {
+                    recoverySuspendedForBackground = false
+                    viewModel.recoveryCoordinator.start()
+                    // 后台暂停是宿主/内核有意为之,回前台按进后台前的意图恢复播放。
+                    if wasPlayingBeforeBackground == true,
+                       let layer = playerCoordinator.playerLayer,
+                       !layer.player.isPlaying {
+                        layer.play()
+                    }
+                }
                 // 返回前台时自动关闭画中画
                 if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
                    playerLayer.isPictureInPictureActive {

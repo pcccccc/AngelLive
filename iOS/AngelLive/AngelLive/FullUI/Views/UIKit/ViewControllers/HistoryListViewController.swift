@@ -1,5 +1,5 @@
 //
-//  HistoryListViewController.swift
+//  HistoryContentListViewController.swift
 //  AngelLive
 //
 //  历史记录列表 UICollectionView 实现
@@ -10,12 +10,103 @@ import SwiftUI
 import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
+import JXSegmentedView
 
-class HistoryListViewController: UIViewController {
+
+/// Uses the same category strip and interactive paging container as the platform room list.
+final class HistoryListViewController: UIViewController {
+    private let historyModel: HistoryModel
+    private let navigationState: LiveRoomNavigationState
+    private let namespace: Namespace.ID
+    private weak var favoriteModel: AppFavoriteModel?
+    private let dataSource = JXSegmentedTitleDataSource()
+    private let segmentedView = JXSegmentedView()
+    private lazy var listContainer = JXSegmentedListContainerView(dataSource: self)
+    private var pages: [Int: HistoryContentListViewController] = [:]
+    var onSelectionChanged: ((Int) -> Void)?
+    var onOpenShortDrama: ((LiveModel) -> Void)?
+    var toastPresenter: ((ToastValue) -> Void)? {
+        didSet { pages.values.forEach { $0.toastPresenter = toastPresenter } }
+    }
+
+    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState,
+         namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
+        self.historyModel = historyModel
+        self.navigationState = navigationState
+        self.namespace = namespace
+        self.favoriteModel = favoriteModel
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        FullUIMainCategoryStyle.configure(segmentedView, dataSource: dataSource)
+        dataSource.titles = ["直播", "短剧"]
+        segmentedView.delegate = self
+        segmentedView.listContainer = listContainer
+        segmentedView.translatesAutoresizingMaskIntoConstraints = false
+        listContainer.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(segmentedView)
+        view.addSubview(listContainer)
+        NSLayoutConstraint.activate([
+            segmentedView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            segmentedView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            segmentedView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            segmentedView.heightAnchor.constraint(equalToConstant: FullUIMainCategoryStyle.height),
+            listContainer.topAnchor.constraint(equalTo: segmentedView.bottomAnchor),
+            listContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            listContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            listContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        segmentedView.reloadData()
+        listContainer.reloadData()
+    }
+
+    func reloadData() { pages.values.forEach { $0.reloadData() } }
+}
+
+extension HistoryListViewController: JXSegmentedViewDelegate {
+    func segmentedView(_ segmentedView: JXSegmentedView, didSelectedItemAt index: Int) {
+        pages.values.forEach { $0.cancelPendingNavigation() }
+        onSelectionChanged?(index)
+    }
+}
+
+extension HistoryListViewController: JXSegmentedListContainerViewDataSource {
+    func numberOfLists(in listContainerView: JXSegmentedListContainerView) -> Int { 2 }
+
+    func listContainerView(_ listContainerView: JXSegmentedListContainerView,
+                           initListAt index: Int) -> JXSegmentedListContainerViewListDelegate {
+        let page = HistoryContentListViewController(
+            historyModel: historyModel, navigationState: navigationState,
+            namespace: namespace, favoriteModel: favoriteModel, isShortDrama: index == 1
+        )
+        page.toastPresenter = toastPresenter
+        page.onOpenShortDrama = { [weak self] room in self?.onOpenShortDrama?(room) }
+        pages[index] = page
+        return page
+    }
+}
+
+final class HistoryContentListViewController: UIViewController {
 
     // MARK: - Properties
 
     private var historyModel: HistoryModel
+    private let isShortDrama: Bool
+    private let progressStore = ShortDramaProgressStore.shared
+    private var liveCheckTask: Task<Void, Never>?
+    private var liveCheckToken = UUID()
+    var onOpenShortDrama: ((LiveModel) -> Void)?
+
+    private var liveRooms: [LiveModel] {
+        historyModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
+    }
+
+    private var itemCount: Int { isShortDrama ? progressStore.historyEntries.count : liveRooms.count }
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
@@ -48,8 +139,9 @@ class HistoryListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
+    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil, isShortDrama: Bool) {
         self.historyModel = historyModel
+        self.isShortDrama = isShortDrama
         self.navigationState = navigationState
         self.namespace = namespace
         self.favoriteModel = favoriteModel
@@ -71,6 +163,17 @@ class HistoryListViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.navigationBar.prefersLargeTitles = true
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        cancelPendingNavigation()
+    }
+
+    func cancelPendingNavigation() {
+        liveCheckToken = UUID()
+        liveCheckTask?.cancel()
+        liveCheckTask = nil
     }
 
     override func viewDidLayoutSubviews() {
@@ -162,7 +265,7 @@ class HistoryListViewController: UIViewController {
     private func updateViewState() {
         hideAllStateViews()
 
-        if historyModel.watchList.isEmpty {
+        if itemCount == 0 {
             showEmptyView()
         } else {
             collectionView.isHidden = false
@@ -184,7 +287,7 @@ class HistoryListViewController: UIViewController {
         let emptyView = AnyView(
             ErrorView.empty(
                 title: "暂无观看记录",
-                message: "开始观看直播后，最近打开的内容会显示在这里。",
+                message: isShortDrama ? "开始观看短剧后，最近播放的剧集和进度会显示在这里。" : "开始观看直播后，最近打开的内容会显示在这里。",
                 symbolName: "clock.badge.questionmark",
                 tint: .orange
             )
@@ -222,9 +325,9 @@ class HistoryListViewController: UIViewController {
 
 // MARK: - UICollectionViewDataSource
 
-extension HistoryListViewController: UICollectionViewDataSource {
+extension HistoryContentListViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return historyModel.watchList.count
+        return itemCount
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -232,17 +335,20 @@ extension HistoryListViewController: UICollectionViewDataSource {
             return UICollectionViewCell()
         }
 
-        guard indexPath.item < historyModel.watchList.count else {
-            return cell
+        guard indexPath.item < itemCount, let favoriteModel else { return cell }
+        if isShortDrama {
+            let entry = progressStore.historyEntries[indexPath.item]
+            cell.configure(with: entry.historyDisplayRoom, favoriteModel: favoriteModel,
+                           navigationState: navigationState, namespace: namespace,
+                           subtitle: entry.historySubtitle)
+        } else {
+            let room = liveRooms[indexPath.item]
+            cell.configure(with: room, favoriteModel: favoriteModel, navigationState: navigationState,
+                           namespace: namespace, liveCheckMode: .remote, onDelete: { [weak self] in
+                self?.historyModel.removeHistories(ids: [room.id])
+                self?.updateViewState()
+            }, showsCoverBadge: true)
         }
-
-        let room = historyModel.watchList[indexPath.item]
-        guard let favoriteModel else { return cell }
-        cell.configure(with: room, favoriteModel: favoriteModel, navigationState: navigationState, namespace: namespace, liveCheckMode: .remote, onDelete: { [weak self] in
-            // 删除历史记录回调
-            self?.historyModel.removeHistory(room: room)
-            self?.updateViewState()
-        }, showsCoverBadge: true)
         cell.attachHostingController(to: self)
 
         return cell
@@ -251,21 +357,28 @@ extension HistoryListViewController: UICollectionViewDataSource {
 
 // MARK: - UICollectionViewDelegate
 
-extension HistoryListViewController: UICollectionViewDelegate {
+extension HistoryContentListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let watchList = historyModel.watchList
-        guard indexPath.item < watchList.count else {
-            collectionView.deselectItem(at: indexPath, animated: true)
+        defer { collectionView.deselectItem(at: indexPath, animated: true) }
+        if isShortDrama {
+            guard indexPath.item < progressStore.historyEntries.count else { return }
+            let entry = progressStore.historyEntries[indexPath.item]
+            guard let room = entry.room else {
+                let alert = UIAlertController(title: "暂时无法播放", message: "此短剧的插件尚未安装或不可用。安装对应插件后可继续观看，观看进度仍会保留。", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "好的", style: .default))
+                present(alert, animated: true)
+                return
+            }
+            onOpenShortDrama?(room)
             return
         }
+        let watchList = liveRooms
+        guard indexPath.item < watchList.count else { return }
         let room = watchList[indexPath.item]
-        if ShortDramaRouting.isShortDrama(room) {
-            navigationState.navigate(to: room)
-            collectionView.deselectItem(at: indexPath, animated: true)
-            return
-        }
         // mode = .remote:异步请求 API 查询直播状态
-        Task { @MainActor [weak self] in
+        cancelPendingNavigation()
+        let token = liveCheckToken
+        liveCheckTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let state = try await ApiManager.getCurrentRoomLiveState(
@@ -273,6 +386,8 @@ extension HistoryListViewController: UICollectionViewDelegate {
                     userId: room.userId,
                     liveType: room.liveType
                 )
+                guard !Task.isCancelled, self.liveCheckToken == token,
+                      self.viewIfLoaded?.window != nil else { return }
                 if state == .live {
                     self.navigationState.navigate(to: room)
                 } else {
@@ -281,6 +396,8 @@ extension HistoryListViewController: UICollectionViewDelegate {
                     self.present(alert, animated: true)
                 }
             } catch {
+                guard !Task.isCancelled, self.liveCheckToken == token,
+                      self.viewIfLoaded?.window != nil else { return }
                 // 查询失败仍放行,让播放页自行处理
                 self.navigationState.navigate(to: room)
             }
@@ -295,7 +412,22 @@ extension HistoryListViewController: UICollectionViewDelegate {
         contextMenuConfigurationForItemAt indexPath: IndexPath,
         point: CGPoint
     ) -> UIContextMenuConfiguration? {
-        let watchList = historyModel.watchList
+        if isShortDrama {
+            guard indexPath.item < progressStore.historyEntries.count else { return nil }
+            let entry = progressStore.historyEntries[indexPath.item]
+            return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+                UIMenu(children: [UIAction(title: "删除记录", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in
+                    guard let self else { return }
+                    do {
+                        try self.progressStore.removeHistory(for: entry.key)
+                        self.updateViewState()
+                    } catch {
+                        self.toastPresenter?(ToastValue(icon: Image(systemName: "xmark.circle.fill"), message: "删除记录失败，请重试"))
+                    }
+                }])
+            }
+        }
+        let watchList = liveRooms
         guard indexPath.item < watchList.count else { return nil }
         let room = watchList[indexPath.item]
         let favoriteModel = self.favoriteModel
@@ -352,7 +484,7 @@ extension HistoryListViewController: UICollectionViewDelegate {
                 attributes: .destructive
             ) { _ in
                 Task { @MainActor in
-                    historyModel.removeHistory(room: room)
+                    historyModel.removeHistories(ids: [room.id])
                     self?.updateViewState()
                 }
             })
@@ -374,8 +506,31 @@ extension HistoryListViewController: UICollectionViewDelegate {
 
 // MARK: - UICollectionViewDelegateFlowLayout
 
-extension HistoryListViewController: UICollectionViewDelegateFlowLayout {
+extension HistoryContentListViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         return calculateItemSize(for: effectiveCollectionWidth)
+    }
+}
+
+
+extension HistoryContentListViewController: JXSegmentedListContainerViewListDelegate {
+    func listView() -> UIView { view }
+    func listWillDisappear() { cancelPendingNavigation() }
+}
+
+
+private extension ShortDramaHistoryEntry {
+    var historyDisplayRoom: LiveModel {
+        room ?? LiveModel(userName: "", roomTitle: title, roomCover: coverURL ?? "", userHeadImg: "",
+                          liveType: .placeholder, liveState: nil, userId: "", roomId: key.roomID,
+                          liveWatchedCount: nil)
+    }
+
+    var historySubtitle: String {
+        let episode = episodeNumber.map { "第 \($0) 集" } ?? episodeTitle ?? "最近观看"
+        if completed { return "\(episode) · 已看完" }
+        let minutes = String(format: "%.0f", floor(position / 60))
+        let seconds = String(format: "%02.0f", floor(position.truncatingRemainder(dividingBy: 60)))
+        return "\(episode) · \(minutes):\(seconds)"
     }
 }

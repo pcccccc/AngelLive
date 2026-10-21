@@ -50,8 +50,8 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
 
     /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
     /// cell-based 场景:SwiftUI 只渲染视觉,tap 由 UICollectionView.didSelectItemAt 接管
-    func configure(with room: LiveModel, favoriteModel: AppFavoriteModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, liveCheckMode: LiveCheckMode = .local, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
-        var roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
+    func configure(with room: LiveModel, favoriteModel: AppFavoriteModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, liveCheckMode: LiveCheckMode = .local, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false, subtitle: String? = nil) {
+        var roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge, subtitle: subtitle)
         roomCard.onDelete = onDelete
         roomCard.disableTapGesture = true
         let cardView = roomCard
