@@ -107,14 +107,14 @@ class SubCategoryViewController: UIViewController {
 
         NSLayoutConstraint.activate([
             // 子分类 SegmentedView
-            subCategorySegmentedView.topAnchor.constraint(equalTo: view.topAnchor),
-            subCategorySegmentedView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            subCategorySegmentedView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            subCategorySegmentedView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             subCategorySegmentedView.trailingAnchor.constraint(equalTo: manageButton.leadingAnchor, constant: -8),
             subCategorySegmentedView.heightAnchor.constraint(equalToConstant: 50),
 
             // 管理按钮
             manageButton.centerYAnchor.constraint(equalTo: subCategorySegmentedView.centerYAnchor),
-            manageButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            manageButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             manageButton.widthAnchor.constraint(equalToConstant: 30),
             manageButton.heightAnchor.constraint(equalToConstant: 30),
 

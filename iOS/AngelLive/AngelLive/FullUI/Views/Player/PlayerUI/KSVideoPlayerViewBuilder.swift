@@ -288,27 +288,19 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     @ViewBuilder
-    static func landscapeButton(isIPadFullscreen: Binding<Bool>) -> some View {
-        let iconName: String = {
-            var iconName = ""
-            if AppConstants.Device.isIPad {
-                // iPad: 全屏图标
-                iconName = isIPadFullscreen.wrappedValue ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
-            } else {
-                // iPhone: 方向图标
-                iconName = UIApplication.isLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
-            }
-            return iconName
-        }()
-        
+    static func landscapeButton(
+        isIPadFullscreen: Binding<Bool>,
+        usesInPlaceFullscreen: Bool,
+        isFullscreen: Bool,
+        windowContext: FullUIWindowContext?
+    ) -> some View {
+        let iconName = isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
 
         Button {
-            if AppConstants.Device.isIPad {
-                // iPad: 切换全屏状态（不改变方向）
-                isIPadFullscreen.wrappedValue.toggle()
-            } else {
+            isIPadFullscreen.wrappedValue = !isFullscreen
+            if !usesInPlaceFullscreen {
                 // iPhone: 切换屏幕方向
-                toggleOrientation()
+                toggleOrientation(isFullscreen: isFullscreen, windowContext: windowContext)
             }
         } label: {
             Image(systemName: iconName)
@@ -320,13 +312,11 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     // 使用 iOS 16+ GeometryPreferences API 切换屏幕方向
-    private static func toggleOrientation() {
-        let targetOrientation: UIInterfaceOrientationMask = UIApplication.isLandscape ? .portrait : .landscapeRight
+    private static func toggleOrientation(isFullscreen: Bool, windowContext: FullUIWindowContext?) {
+        let targetOrientation: UIInterfaceOrientationMask = isFullscreen ? .portrait : .landscapeRight
 
         // 获取当前的 WindowScene
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first else {
+        guard let windowScene = windowContext?.windowScene else {
             Logger.warning("无法获取 WindowScene", category: .ui)
             return
         }
@@ -335,7 +325,7 @@ public enum KSVideoPlayerViewBuilder {
         KSOptions.supportedInterfaceOrientations = targetOrientation
 
         // 先通知 ViewController 刷新支持的方向
-        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+        if let rootVC = windowContext?.hostViewController {
             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
         // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
@@ -349,7 +339,7 @@ public enum KSVideoPlayerViewBuilder {
             // 旋转完成后恢复自由旋转
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
             }
@@ -357,9 +347,9 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     @ViewBuilder
-    static var portraitButton: some View {
+    static func portraitButton(windowContext: FullUIWindowContext?) -> some View {
         Button {
-            forcePortraitOrientation()
+            forcePortraitOrientation(windowContext: windowContext)
         } label: {
             Image(systemName: "arrow.up.and.down")
                 .frame(width: 30, height: 30)
@@ -370,13 +360,11 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     // 强制切换到竖屏
-    private static func forcePortraitOrientation() {
+    private static func forcePortraitOrientation(windowContext: FullUIWindowContext?) {
         // iOS 16+ 使用 GeometryPreferences
         if #available(iOS 16.0, *) {
             // 获取当前的 WindowScene
-            guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first else {
+            guard let windowScene = windowContext?.windowScene else {
                 Logger.warning("无法获取 WindowScene", category: .ui)
                 return
             }
@@ -385,7 +373,7 @@ public enum KSVideoPlayerViewBuilder {
             KSOptions.supportedInterfaceOrientations = .portrait
 
             // 先通知 ViewController 刷新支持的方向
-            if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            if let rootVC = windowContext?.hostViewController {
                 rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
             // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
@@ -399,7 +387,7 @@ public enum KSVideoPlayerViewBuilder {
                 // 旋转完成后恢复自由旋转
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                    if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    if let rootVC = windowContext?.hostViewController {
                         rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                     }
                 }

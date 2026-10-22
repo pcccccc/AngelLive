@@ -12,6 +12,10 @@ struct UnifiedPlayerControlOverlay: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
+    @Environment(\.fullUIPlayerUsesExpandedLayout) private var usesExpandedLayout
+    @Environment(\.fullUIPlayerUsesInPlaceFullscreen) private var usesInPlaceFullscreen
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -31,14 +35,6 @@ struct UnifiedPlayerControlOverlay: View {
 
     // MARK: - Computed Properties
 
-    /// 是否处于全屏模式（iPad全屏 或 iPhone横屏）
-    private var isFullscreen: Bool {
-        if AppConstants.Device.isIPad {
-            return isIPadFullscreen.wrappedValue
-        }
-        return isLandscape
-    }
-
     /// 检测是否为横屏
     private var isLandscape: Bool {
         horizontalSizeClass == .compact && verticalSizeClass == .compact ||
@@ -48,7 +44,7 @@ struct UnifiedPlayerControlOverlay: View {
     /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
         if isLandscape {
-            return AppConstants.Device.isIPad ? 20 : 16
+            return usesExpandedLayout ? 20 : 16
         }
         return 12
     }
@@ -320,7 +316,7 @@ struct UnifiedPlayerControlOverlay: View {
                     }
 
                     // 画面缩放（仅横屏/全屏时显示）
-                    if isLandscape || isIPadFullscreen.wrappedValue {
+                    if isFullscreen {
                         scaleModeMenu
                     }
 
@@ -524,34 +520,27 @@ struct UnifiedPlayerControlOverlay: View {
     // MARK: - Helpers
 
     private var fullscreenIconName: String {
-        if AppConstants.Device.isIPad {
-            return isIPadFullscreen.wrappedValue ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
-        }
-        return isCurrentLandscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+        isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
     }
 
     /// 处理返回按钮点击
-    /// - iPad 全屏时：退出全屏
-    /// - iPhone 横屏时：切换回竖屏（不 dismiss）
+    /// - 显式全屏或紧凑高度时：先退出全屏；需要旋转时请求竖屏
     /// - 其他情况：dismiss 返回上一页
     private func handleBackButton() {
-        if AppConstants.Device.isIPad && isIPadFullscreen.wrappedValue {
+        if isIPadFullscreen.wrappedValue || verticalSizeClass == .compact {
             isIPadFullscreen.wrappedValue = false
-            return
-        } else if !AppConstants.Device.isIPad && isCurrentLandscape {
-            // iPhone 横屏：先切回竖屏，旋转完成后恢复自由旋转
+            if usesInPlaceFullscreen { return }
+            // 请求竖屏，旋转完成后恢复自由旋转。
             KSOptions.supportedInterfaceOrientations = .portrait
 
-            guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first else { return }
+            guard let windowScene = windowContext?.windowScene else { return }
 
             let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                 interfaceOrientations: .portrait
             )
 
             // 先通知 ViewController 刷新支持的方向
-            if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+            if let rootVC = windowContext?.hostViewController {
                 rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
             }
             // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
@@ -562,7 +551,7 @@ struct UnifiedPlayerControlOverlay: View {
                 // 旋转完成后恢复自由旋转，允许再次横屏自动全屏
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                    if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    if let rootVC = windowContext?.hostViewController {
                         rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                     }
                 }
@@ -575,22 +564,19 @@ struct UnifiedPlayerControlOverlay: View {
     }
 
     private func toggleOrientationOrFullscreen() {
-        if AppConstants.Device.isIPad {
-            isIPadFullscreen.wrappedValue.toggle()
-            return
-        }
+        let entersFullscreen = !isFullscreen
+        isIPadFullscreen.wrappedValue = entersFullscreen
+        if usesInPlaceFullscreen { return }
 
-        let targetOrientation: UIInterfaceOrientationMask = isCurrentLandscape ? .portrait : .landscapeRight
+        let targetOrientation: UIInterfaceOrientationMask = entersFullscreen ? .landscapeRight : .portrait
         KSOptions.supportedInterfaceOrientations = targetOrientation
 
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first else {
+        guard let windowScene = windowContext?.windowScene else {
             return
         }
 
         // 先通知 ViewController 刷新支持的方向
-        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+        if let rootVC = windowContext?.hostViewController {
             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
         // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
@@ -604,20 +590,11 @@ struct UnifiedPlayerControlOverlay: View {
             // 旋转完成后恢复自由旋转
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
             }
         }
-    }
-
-    private var isCurrentLandscape: Bool {
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }) else {
-            return false
-        }
-        return windowScene.interfaceOrientation.isLandscape
     }
 
     // MARK: - Auto Hide Timer

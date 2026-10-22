@@ -14,8 +14,8 @@ enum ShortDramaPanelDetent: Equatable {
     }
 }
 
-struct ShortDramaPanelMetrics {
-    let safeBottom: CGFloat
+struct ShortDramaPanelMetrics: Equatable {
+    let containerSize: CGSize
     let panelWidth: CGFloat
     let mediumHeight: CGFloat
     let largeHeight: CGFloat
@@ -23,17 +23,13 @@ struct ShortDramaPanelMetrics {
 
     init(
         containerSize: CGSize,
-        safeTop: CGFloat,
-        safeBottom: CGFloat,
-        isPad: Bool
+        isRegularWidth: Bool
     ) {
-        self.safeBottom = safeBottom
-        panelWidth = isPad ? min(560, containerSize.width) : containerSize.width
+        self.containerSize = containerSize
+        panelWidth = isRegularWidth ? min(560, containerSize.width) : containerSize.width
 
-        // GeometryReader is in the safe-area layout; add both insets once to recover full height.
-        let fullHeight = containerSize.height + safeTop + safeBottom
-        largeHeight = max(0, fullHeight - safeTop - 12)
-        mediumHeight = min(max(420, fullHeight * 0.52), largeHeight)
+        largeHeight = max(0, containerSize.height - 12)
+        mediumHeight = min(max(420, containerSize.height * 0.52), largeHeight)
     }
 }
 
@@ -163,7 +159,6 @@ struct ShortDramaDetentPanel<Content: View>: View {
             .allowsHitTesting(isPresented && isInteractive && visibleHeight > 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .ignoresSafeArea()
     }
 }
 

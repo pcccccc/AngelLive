@@ -59,7 +59,9 @@ public class DanmakuAsyncLayer: CALayer {
     
     override init() {
         super.init()
+#if !os(iOS)
         contentsScale = danmakuScreenScale()
+#endif
     }
     
     override init(layer: Any) {

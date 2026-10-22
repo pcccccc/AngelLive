@@ -191,7 +191,7 @@ class RoomListViewController: UIViewController {
     }
 
     private func createLayout() -> UICollectionViewLayout {
-        let layout = UICollectionViewFlowLayout()
+        let layout = RoomListFlowLayout()
         layout.scrollDirection = .vertical
         layout.minimumInteritemSpacing = 15
         layout.minimumLineSpacing = 24
@@ -451,7 +451,7 @@ class RoomListViewController: UIViewController {
             } : nil
         )
 
-        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled().fullUIArcLoadingStyle()))
+        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled().fullUIArcLoadingStyle().fullUIWindowContext()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -643,6 +643,24 @@ extension RoomListViewController: UICollectionViewDelegate {
             }
             return item.liveType == room.liveType && item.roomId == room.roomId
         }
+    }
+}
+
+/// A resized JX page must re-query item sizes, not just rearrange cached widths.
+private final class RoomListFlowLayout: UICollectionViewFlowLayout {
+    override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
+        collectionView?.bounds.width != newBounds.width
+            || super.shouldInvalidateLayout(forBoundsChange: newBounds)
+    }
+
+    override func invalidationContext(forBoundsChange newBounds: CGRect) -> UICollectionViewLayoutInvalidationContext {
+        let context = super.invalidationContext(forBoundsChange: newBounds)
+        if collectionView?.bounds.width != newBounds.width,
+           let flowContext = context as? UICollectionViewFlowLayoutInvalidationContext {
+            flowContext.invalidateFlowLayoutDelegateMetrics = true
+            flowContext.invalidateFlowLayoutAttributes = true
+        }
+        return context
     }
 }
 

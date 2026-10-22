@@ -14,8 +14,7 @@ struct QualitySelectionPanel: View {
     @State private var expandedSections: Set<Int> = []
 
     private var panelWidth: CGFloat {
-        if AppConstants.Device.isIPad { return 360 }
-        return horizontalSizeClass == .compact ? 280 : 320
+        horizontalSizeClass == .regular ? 360 : 280
     }
 
     /// 只有一个 CDN 时不需要折叠

@@ -14,15 +14,18 @@ import AppKit
 
 public struct WelcomeView: View {
     public var onContinue: () -> Void
+    private let usesResizableLayout: Bool
 
-    public init(onContinue: @escaping () -> Void) {
+    public init(usesResizableLayout: Bool = false, onContinue: @escaping () -> Void) {
+        self.usesResizableLayout = usesResizableLayout
         self.onContinue = onContinue
     }
 
     public var body: some View {
         WelcomePageView(
             tint: .accentColor,
-            title: "欢迎使用 AngelLive"
+            title: "欢迎使用 AngelLive",
+            usesResizableLayout: usesResizableLayout
         ) {
             // App 图标
 #if os(macOS)

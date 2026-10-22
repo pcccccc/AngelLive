@@ -94,6 +94,9 @@ struct PlayerGestureView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
+    @Environment(\.fullUIWindowContext) private var fullUIWindowContext
+    @Environment(\.fullUIPlayerIsFullscreen) private var fullUIPlayerIsFullscreen
+    @Environment(\.fullUIPlayerUsesInPlaceFullscreen) private var fullUIPlayerUsesInPlaceFullscreen
 
     /// 单击回调
     var onSingleTap: (() -> Void)?
@@ -166,6 +169,28 @@ struct PlayerGestureView: View {
         return false
     }
 
+    private var activationNotification: Notification.Name {
+        fullUIWindowContext == nil ? UIApplication.didBecomeActiveNotification : UIScene.didActivateNotification
+    }
+
+    private var deactivationNotification: Notification.Name {
+        fullUIWindowContext == nil ? UIApplication.willResignActiveNotification : UIScene.willDeactivateNotification
+    }
+
+    private func ownsLifecycleNotification(_ notification: Notification) -> Bool {
+        guard let context = fullUIWindowContext else { return true }
+        guard let scene = notification.object as? UIScene else { return false }
+        return scene === context.windowScene
+    }
+
+    private var gestureScreen: UIScreen? {
+        if let context = fullUIWindowContext {
+            return context.screen
+        }
+        // ShellUI retains its existing screen behavior until explicitly migrated.
+        return UIScreen.main
+    }
+
     var body: some View {
         GeometryReader { geometry in
             // 底部安全区域：使用实际安全区 + 额外边距，避免与系统底部手势（Home Indicator）冲突
@@ -183,7 +208,8 @@ struct PlayerGestureView: View {
                     // FullUI 覆盖整块画面以阻止下拉退出，调节数值时仍排除系统安全带。
                     gestureCanvas
                         // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
-                        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        .onReceive(NotificationCenter.default.publisher(for: activationNotification)) { notification in
+                            guard ownsLifecycleNotification(notification) else { return }
                             resetGestureState()
                         }
                         .contentShape(Rectangle())
@@ -253,11 +279,13 @@ struct PlayerGestureView: View {
                 resetGestureState()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: deactivationNotification)) { notification in
+            guard ownsLifecycleNotification(notification) else { return }
             // 进入后台/画中画时重置手势状态
             resetGestureState()
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: activationNotification)) { notification in
+            guard ownsLifecycleNotification(notification) else { return }
             // 返回前台时重置手势状态
             resetGestureState()
         }
@@ -338,6 +366,20 @@ struct PlayerGestureView: View {
             return
         }
 
+        if fullUIWindowContext != nil {
+            let wasFullscreen = fullUIPlayerIsFullscreen
+            let entersFullscreen = !wasFullscreen
+            if fullUIPlayerUsesInPlaceFullscreen {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isIPadFullscreen.wrappedValue = entersFullscreen
+                }
+            } else {
+                isIPadFullscreen.wrappedValue = entersFullscreen
+                toggleiPhoneOrientation(fullscreenBeforeAction: wasFullscreen)
+            }
+            return
+        }
+
         if AppConstants.Device.isIPad {
             // iPad: 切换全屏模式
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -350,16 +392,23 @@ struct PlayerGestureView: View {
     }
 
     /// 切换 iPhone 屏幕方向
-    private func toggleiPhoneOrientation() {
-        let isCurrentlyLandscape = UIApplication.isLandscape
+    private func toggleiPhoneOrientation(fullscreenBeforeAction: Bool? = nil) {
+        let isCurrentlyLandscape = fullscreenBeforeAction
+            ?? (fullUIWindowContext == nil ? UIApplication.isLandscape : fullUIPlayerIsFullscreen)
         let targetOrientation: UIInterfaceOrientationMask = isCurrentlyLandscape ? .portrait : .landscape
 
         KSOptions.supportedInterfaceOrientations = targetOrientation
 
         if #available(iOS 16.0, *) {
-            guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first else { return }
+            let currentScene: UIWindowScene?
+            if let context = fullUIWindowContext {
+                currentScene = context.windowScene
+            } else {
+                currentScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first
+            }
+            guard let windowScene = currentScene else { return }
 
             // 先通知 ViewController 刷新支持的方向
             if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
@@ -410,8 +459,9 @@ struct PlayerGestureView: View {
         if adjustType == .none {
             if startX < size.width / 2 {
                 // 左半边 - 亮度
+                guard let screen = gestureScreen else { return }
                 adjustType = .brightness
-                startValue = UIScreen.main.brightness
+                startValue = screen.brightness
             } else {
                 // 右半边 - 音量
                 adjustType = .volume
@@ -432,7 +482,7 @@ struct PlayerGestureView: View {
         // 应用调节
         switch adjustType {
         case .brightness:
-            UIScreen.main.brightness = newValue
+            gestureScreen?.brightness = newValue
         case .volume:
             setSystemVolume(newValue)
         case .none:

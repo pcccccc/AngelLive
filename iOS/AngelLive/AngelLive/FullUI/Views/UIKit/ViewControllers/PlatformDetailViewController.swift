@@ -92,8 +92,8 @@ class PlatformDetailViewController: UIViewController {
         NSLayoutConstraint.activate([
             // 主分类 SegmentedView
             mainCategorySegmentedView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            mainCategorySegmentedView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            mainCategorySegmentedView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mainCategorySegmentedView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            mainCategorySegmentedView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             mainCategorySegmentedView.heightAnchor.constraint(equalToConstant: FullUIMainCategoryStyle.height),
 
             // 主分类容器
@@ -208,7 +208,7 @@ class PlatformDetailViewController: UIViewController {
         )
 
         let hostingController = UIHostingController(
-            rootView: AnyView(errorView.supportDiagnosticsEnabled().environment(pluginAvailability).fullUIArcLoadingStyle())
+            rootView: AnyView(errorView.supportDiagnosticsEnabled().environment(pluginAvailability).fullUIArcLoadingStyle().fullUIWindowContext())
         )
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 

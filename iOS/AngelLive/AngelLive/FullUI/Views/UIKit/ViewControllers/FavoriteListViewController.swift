@@ -384,7 +384,7 @@ class FavoriteListViewController: UIViewController {
     }
 
     private func showStateView(_ view: AnyView, storeIn controller: inout UIHostingController<AnyView>?) {
-        let hostingController = UIHostingController(rootView: AnyView(view.fullUIArcLoadingStyle()))
+        let hostingController = UIHostingController(rootView: AnyView(view.fullUIArcLoadingStyle().fullUIWindowContext()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 

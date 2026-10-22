@@ -19,6 +19,11 @@ final class ShortDramaOrientationController {
     private var requestID = UUID()
     var errorMessage: String?
 
+    var permitsOrientationRequests: Bool {
+        guard let host else { return false }
+        return host.traitCollection.userInterfaceIdiom != .pad
+    }
+
     func attach(view: UIView) {
         guard active, let window = view.window else { return }
         scene = window.windowScene
@@ -43,19 +48,19 @@ final class ShortDramaOrientationController {
         if !allowed, manualOrientation == .landscape { manualOrientation = .portrait }
         if hasSavedPolicy { applyPolicy() }
         if !allowed, scene?.interfaceOrientation.isLandscape == true,
-           UIDevice.current.userInterfaceIdiom != .pad {
+           permitsOrientationRequests {
             request(.portrait)
         }
     }
 
     func enterLandscape() {
-        guard allowsLandscape, UIDevice.current.userInterfaceIdiom != .pad else { return }
+        guard allowsLandscape, permitsOrientationRequests else { return }
         manualOrientation = .landscape
         request(.landscape)
     }
 
     func exitLandscape() {
-        guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+        guard permitsOrientationRequests else { return }
         manualOrientation = .portrait
         request(.portrait)
     }
@@ -67,14 +72,14 @@ final class ShortDramaOrientationController {
         guard hasSavedPolicy else { return }
         KSOptions.supportedInterfaceOrientations = savedPolicy
         host?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        if UIDevice.current.userInterfaceIdiom != .pad,
+        if permitsOrientationRequests,
            let mask = Self.mask(for: savedOrientation) {
             scene?.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
         }
     }
 
     private func applyPolicy() {
-        guard UIDevice.current.userInterfaceIdiom != .pad else { return }
+        guard permitsOrientationRequests else { return }
         KSOptions.supportedInterfaceOrientations = allowsLandscape
             ? (manualOrientation ?? .allButUpsideDown) : .portrait
         host?.setNeedsUpdateOfSupportedInterfaceOrientations()

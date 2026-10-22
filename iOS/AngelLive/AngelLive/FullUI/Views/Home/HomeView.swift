@@ -114,7 +114,7 @@ private extension HomeView {
             GeometryReader { geometry in
                 homeNavigationContent(
                     containerSize: geometry.size,
-                    topSafeAreaInset: geometry.safeAreaInsets.top
+                    backgroundTopExtension: geometry.safeAreaInsets.top
                 )
                 .overlay(alignment: .top) {
                     if #available(iOS 26, *) {
@@ -131,13 +131,9 @@ private extension HomeView {
     }
 
     @ViewBuilder
-    func homeNavigationContent(containerSize: CGSize, topSafeAreaInset: CGFloat) -> some View {
+    func homeNavigationContent(containerSize: CGSize, backgroundTopExtension: CGFloat) -> some View {
         let showsNavigationTitle = homeNavigationModel.scrollOffset > 0.5
-        let content = homeScrollView(
-            containerSize: containerSize,
-            topSafeAreaInset: topSafeAreaInset
-        )
-            .ignoresSafeArea(.container, edges: .top)
+        let content = homeScrollView(containerSize: containerSize, backgroundTopExtension: backgroundTopExtension)
             .navigationTitle(showsNavigationTitle ? "首页" : "")
             .navigationBarTitleDisplayMode(.inline)
             // Keep the native bar's geometry stable while its title/background
@@ -164,7 +160,7 @@ private extension HomeView {
         )
     }
 
-    func homeScrollView(containerSize: CGSize, topSafeAreaInset: CGFloat) -> some View {
+    func homeScrollView(containerSize: CGSize, backgroundTopExtension: CGFloat) -> some View {
         let containerWidth = containerSize.width
         let featuredCardWidth = featuredRoomCardWidth(for: containerWidth)
         let compactCardWidth = compactRoomCardWidth(for: containerWidth)
@@ -192,21 +188,16 @@ private extension HomeView {
                     HomeHeroCarousel(
                         entries: viewModel.bannerEntries,
                         containerSize: containerSize,
-                        topSafeAreaInset: topSafeAreaInset,
+                        backgroundTopExtension: backgroundTopExtension,
                         metrics: homeNavigationModel,
                         onOpenRoom: { room in
                             openRoom(room, rooms: [room], mode: .direct)
                         }
                     )
                 } else if isAwaitingFirstContent {
-                    HomeHeroLoadingCard(
-                        containerSize: containerSize,
-                        topSafeAreaInset: topSafeAreaInset
-                    )
+                    HomeHeroLoadingCard(containerSize: containerSize)
                 } else {
-                    HomeCompactHeader(
-                        topSafeAreaInset: topSafeAreaInset
-                    )
+                    HomeCompactHeader()
                 }
 
                 if !favoriteModel.roomList.isEmpty {
@@ -538,9 +529,12 @@ private final class HomeScrollOffsetProbeView: UIView {
     }
 
     private func report(for scrollView: UIScrollView) {
+        // Remove only UIKit's safe-area/bar adjustment. The refresh control's
+        // contentInset still contributes real travel while its request runs.
+        let systemTopAdjustment = scrollView.adjustedContentInset.top - scrollView.contentInset.top
         onChange(
             scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
-            -scrollView.contentOffset.y
+            -scrollView.contentOffset.y - systemTopAdjustment
         )
     }
 
@@ -572,10 +566,9 @@ private final class HomeNavigationModel {
     private(set) var scrollOffset: CGFloat = 0
 
     /// How far the first content item currently sits below the scroll view's
-    /// top edge. This is plain content-to-bounds mapping (`-contentOffset.y`)
-    /// and deliberately excludes `adjustedContentInset`: the refresh control
-    /// raises that inset mid-gesture, and subtracting it here would under-
-    /// stretch the banner by exactly the control's height, leaving a gap.
+    /// safe content edge. Strip UIKit's system adjustment from `-contentOffset.y`,
+    /// while preserving the refresh control's dynamic `contentInset` contribution.
+    /// This is zero at rest even when a bar or safe area contributes a top inset.
     private(set) var contentTopOffset: CGFloat = 0
 
     private(set) var sectionPositions: [String: HomeNavigationSectionPosition] = [:]
@@ -921,7 +914,7 @@ private struct HomeSeeAllLabel: View {
 private struct HomeHeroCarousel: View {
     let entries: [HomeBannerEntry]
     let containerSize: CGSize
-    let topSafeAreaInset: CGFloat
+    let backgroundTopExtension: CGFloat
     let metrics: HomeNavigationModel
     let onOpenRoom: (LiveModel) -> Void
 
@@ -1007,39 +1000,56 @@ private struct HomeHeroCarousel: View {
                     preferredImageURL: backdropEntry.preferredHeroImageURL,
                     fallbackImageURL: backdropEntry.fallbackHeroImageURL,
                     cardWidth: viewportWidth,
-                    cardHeight: displayedCardHeight,
+                    cardHeight: displayedCardHeight + backgroundTopExtension,
                     imageDecodeHeight: cardHeight,
+                    backgroundTopExtension: backgroundTopExtension,
                     presentationScale: reduceMotion ? 1 : 1.1
                 )
-                .frame(width: viewportWidth, height: displayedCardHeight)
+                // Only the backdrop extends above the scroll content's safe origin.
+                // The bottom-aligned frame preserves the foreground's exact bounds.
+                .frame(width: viewportWidth, height: displayedCardHeight + backgroundTopExtension)
                 .backgroundExtensionEffect()
+                .frame(height: displayedCardHeight, alignment: .bottom)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
 
-            ScrollView(.horizontal) {
-                HStack(spacing: cardSpacing) {
-                    ForEach(loopPages) { page in
-                        heroPage(for: page.entry)
-                            .id(page.entry.id)
-                            .frame(width: viewportWidth, height: displayedCardHeight)
-                            .id(page.id)
+            ScrollViewReader { scrollProxy in
+                ScrollView(.horizontal) {
+                    HStack(spacing: cardSpacing) {
+                        ForEach(loopPages) { page in
+                            heroPage(for: page.entry)
+                                .id(page.entry.id)
+                                .frame(width: viewportWidth, height: displayedCardHeight)
+                                .id(page.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .background {
+                        HomeHeroScrollActivityProbe(onChange: scrollingChanged)
+                            .frame(width: 0, height: 0)
                     }
                 }
-                .scrollTargetLayout()
-                .background {
-                    HomeHeroScrollActivityProbe(onChange: scrollingChanged)
-                        .frame(width: 0, height: 0)
+                .scrollPosition(id: $selectedPageID, anchor: .center)
+                .scrollTargetBehavior(.paging)
+                .scrollIndicators(.hidden)
+                .frame(width: viewportWidth, height: displayedCardHeight)
+                .clipped()
+                // Keep the opaque viewport fill from covering the artwork's
+                // background extension in the surrounding safe area.
+                .background(AppConstants.Colors.primaryBackground, ignoresSafeAreaEdges: [])
+                .onChange(of: viewportSize) { oldSize, newSize in
+                    guard abs(oldSize.width - newSize.width) > 0.5
+                            || abs(oldSize.height - newSize.height) > 0.5
+                    else { return }
+                    scheduleLayoutCorrection(using: scrollProxy)
+                }
+                .onChange(of: isScrolling) { _, active in
+                    if !active && needsLayoutCorrection {
+                        scheduleLayoutCorrection(using: scrollProxy)
+                    }
                 }
             }
-            .scrollPosition(id: $selectedPageID, anchor: .center)
-            .scrollTargetBehavior(.paging)
-            .scrollIndicators(.hidden)
-            .frame(width: viewportWidth, height: displayedCardHeight)
-            .clipped()
-            // Keep the opaque viewport fill from covering the artwork's
-            // background extension in the surrounding safe area.
-            .background(AppConstants.Colors.primaryBackground, ignoresSafeAreaEdges: [])
 
             if entries.count > 1 {
                 HomeHeroPageIndicator(
@@ -1063,12 +1073,6 @@ private struct HomeHeroCarousel: View {
         .onChange(of: entries.map(\.id)) { _, _ in normalizeSelection() }
         .onChange(of: selectedPageID) { _, _ in
             settleSelectionIfNeeded()
-        }
-        .onChange(of: viewportSize) { oldSize, newSize in
-            guard abs(oldSize.width - newSize.width) > 0.5
-                    || abs(oldSize.height - newSize.height) > 0.5
-            else { return }
-            scheduleLayoutCorrection()
         }
         .onDisappear {
             layoutCorrectionTask?.cancel()
@@ -1097,9 +1101,7 @@ private struct HomeHeroCarousel: View {
         isScrolling = active
         if active {
             layoutCorrectionTask?.cancel()
-        } else if needsLayoutCorrection {
-            scheduleLayoutCorrection()
-        } else {
+        } else if !needsLayoutCorrection {
             settleSelectionIfNeeded()
         }
     }
@@ -1118,7 +1120,7 @@ private struct HomeHeroCarousel: View {
         }
     }
 
-    private func scheduleLayoutCorrection() {
+    private func scheduleLayoutCorrection(using scrollProxy: ScrollViewProxy) {
         layoutCorrectionTask?.cancel()
         needsLayoutCorrection = true
         guard !isScrolling else { return }
@@ -1137,22 +1139,15 @@ private struct HomeHeroCarousel: View {
                 entries.contains(where: { $0.id == selectedID }) ? selectedID : nil
             } ?? entries[0].id
 
-            // Clearing and restoring the scroll-position binding forces
-            // SwiftUI to resolve the target using the new viewport width.
-            // Both writes are non-animated so rotation never exposes a
-            // corrective horizontal slide.
+            // Re-anchor explicitly even when the selected ID is still 1.
+            // A binding reset can be coalesced while the viewport resizes,
+            // leaving the previous display's pixel offset between two pages.
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 currentBannerID = bannerID
-                selectedPageID = nil
-            }
-            await Task.yield()
-            guard !Task.isCancelled, !isScrolling else { return }
-            var restoreTransaction = Transaction()
-            restoreTransaction.disablesAnimations = true
-            withTransaction(restoreTransaction) {
                 selectedPageID = 1
+                scrollProxy.scrollTo(1, anchor: .center)
                 needsLayoutCorrection = false
                 layoutGeneration &+= 1
             }
@@ -1209,9 +1204,9 @@ private struct HomeHeroCarousel: View {
                     cardWidth: cardWidth,
                     cardHeight: displayedCardHeight,
                     imageDecodeHeight: cardHeight,
+                    backgroundTopExtension: backgroundTopExtension,
                     pageInset: pageInset,
                     cardSpacing: cardSpacing,
-                    topSafeAreaInset: topSafeAreaInset,
                     pageIndicatorReservedWidth: entries.count > 1 ? pageIndicatorWidth + 16 : 0
                 )
             }
@@ -1231,9 +1226,9 @@ private struct HomeHeroCarousel: View {
                     cardWidth: cardWidth,
                     cardHeight: displayedCardHeight,
                     imageDecodeHeight: cardHeight,
+                    backgroundTopExtension: backgroundTopExtension,
                     pageInset: pageInset,
                     cardSpacing: cardSpacing,
-                    topSafeAreaInset: topSafeAreaInset,
                     pageIndicatorReservedWidth: entries.count > 1 ? pageIndicatorWidth + 16 : 0
                 )
             }
@@ -1253,9 +1248,9 @@ private struct HomeHeroCard: View {
     let cardWidth: CGFloat
     let cardHeight: CGFloat
     let imageDecodeHeight: CGFloat
+    let backgroundTopExtension: CGFloat
     let pageInset: CGFloat
     let cardSpacing: CGFloat
-    let topSafeAreaInset: CGFloat
     let pageIndicatorReservedWidth: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1276,7 +1271,7 @@ private struct HomeHeroCard: View {
                 targetSize: CGSize(width: cardWidth, height: imageDecodeHeight),
                 presentationScale: imageScale
             )
-                .frame(width: cardWidth, height: cardHeight)
+                .frame(width: cardWidth, height: cardHeight + backgroundTopExtension)
                 .visualEffect { content, proxy in
                     let progress = pageProgress(
                         for: proxy,
@@ -1291,6 +1286,9 @@ private struct HomeHeroCard: View {
                         .scaleEffect(imageScale)
                         .offset(x: animatesReveal ? (imagePosition - progress) * cardWidth : 0)
                 }
+                // Match the backdrop's crop and scaling center before revealing
+                // only the original foreground region below the safe origin.
+                .frame(height: cardHeight, alignment: .bottom)
 
             HomeHeroGradient()
 
@@ -1390,6 +1388,7 @@ private struct HomeHeroBackdrop: View {
     let cardWidth: CGFloat
     let cardHeight: CGFloat
     let imageDecodeHeight: CGFloat
+    let backgroundTopExtension: CGFloat
     let presentationScale: CGFloat
 
     var body: some View {
@@ -1404,16 +1403,23 @@ private struct HomeHeroBackdrop: View {
                 .scaleEffect(presentationScale)
                 .clipped()
 
-            HomeHeroGradient()
+            VStack(spacing: 0) {
+                HomeHeroGradient.topShade
+                    .frame(height: backgroundTopExtension)
+                HomeHeroGradient()
+                    .frame(height: cardHeight - backgroundTopExtension)
+            }
         }
     }
 }
 
 private struct HomeHeroGradient: View {
+    static let topShade = Color.black.opacity(0.28)
+
     var body: some View {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.28), location: 0),
+                .init(color: Self.topShade, location: 0),
                 .init(color: .clear, location: 0.34),
                 .init(color: .clear, location: 0.54),
                 .init(color: AppConstants.Colors.primaryBackground.opacity(0.12), location: 0.60),
@@ -1485,14 +1491,13 @@ private struct HomeHeroContent: View {
 
 private struct HomeNavigationOverlay: View {
     let visibleSectionIDs: Set<String>
-    let topSafeAreaInset: CGFloat
     let model: HomeNavigationModel
 
     var body: some View {
         let progress = model.progress
         let title = model.title(
             visibleSectionIDs: visibleSectionIDs,
-            activationY: topSafeAreaInset + HomeNavigationMetrics.barHeight
+            activationY: HomeNavigationMetrics.barHeight
         )
 
         // No manual top inset: the bar is laid out inside the safe area by its
@@ -1730,7 +1735,6 @@ private extension View {
 
 private struct HomeHeroLoadingCard: View {
     let containerSize: CGSize
-    let topSafeAreaInset: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -1780,7 +1784,6 @@ private struct HomeHeroLoadingCard: View {
 }
 
 private struct HomeCompactHeader: View {
-    let topSafeAreaInset: CGFloat
 
     var body: some View {
         HStack {
@@ -1792,7 +1795,7 @@ private struct HomeCompactHeader: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, topSafeAreaInset + AppConstants.Spacing.sm)
+        .padding(.top, AppConstants.Spacing.sm)
         .padding(.horizontal, AppConstants.Spacing.xl)
         .padding(.bottom, AppConstants.Spacing.md)
         .background(AppConstants.Colors.primaryBackground)

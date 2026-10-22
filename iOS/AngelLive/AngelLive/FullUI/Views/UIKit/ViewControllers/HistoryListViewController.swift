@@ -53,8 +53,8 @@ final class HistoryListViewController: UIViewController {
         view.addSubview(listContainer)
         NSLayoutConstraint.activate([
             segmentedView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            segmentedView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            segmentedView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            segmentedView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            segmentedView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             segmentedView.heightAnchor.constraint(equalToConstant: FullUIMainCategoryStyle.height),
             listContainer.topAnchor.constraint(equalTo: segmentedView.bottomAnchor),
             listContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -293,7 +293,7 @@ final class HistoryContentListViewController: UIViewController {
             )
         )
 
-        let hostingController = UIHostingController(rootView: AnyView(emptyView.fullUIArcLoadingStyle()))
+        let hostingController = UIHostingController(rootView: AnyView(emptyView.fullUIArcLoadingStyle().fullUIWindowContext()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 

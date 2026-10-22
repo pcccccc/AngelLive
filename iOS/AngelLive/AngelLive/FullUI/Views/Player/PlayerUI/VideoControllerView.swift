@@ -24,6 +24,10 @@ struct VideoControllerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
+    @Environment(\.fullUIPlayerUsesExpandedLayout) private var usesExpandedLayout
+    @Environment(\.fullUIPlayerUsesInPlaceFullscreen) private var usesInPlaceFullscreen
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @State private var showDanmakuSettings = false
     @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
@@ -50,7 +54,7 @@ struct VideoControllerView: View {
     /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
         if isLandscape {
-            return AppConstants.Device.isIPad ? 20 : 16
+            return usesExpandedLayout ? 20 : 16
         }
         return 12
     }
@@ -60,7 +64,7 @@ struct VideoControllerView: View {
 
     /// 顶部状态信息仅在全屏时显示，并放在屏幕宽度中心。
     private var showsCenteredStatusBar: Bool {
-        isLandscape || isIPadFullscreen.wrappedValue
+        isFullscreen
     }
 
     /// 顶部返回按钮与右上角控制层都使用 50pt 行高。
@@ -154,23 +158,18 @@ struct VideoControllerView: View {
     }
 
     /// 处理返回按钮点击
-    /// - iPad 全屏时：退出全屏
-    /// - iPhone 横屏时：退出全屏（切换到竖屏）
+    /// - 显式全屏或紧凑高度时：先退出全屏；需要旋转时请求竖屏
     /// - 其他情况：返回上一页
     private func handleBackButton() {
-        if AppConstants.Device.isIPad && isIPadFullscreen.wrappedValue {
-            // iPad 全屏，退出全屏（不改变方向）
+        if isIPadFullscreen.wrappedValue || verticalSizeClass == .compact {
             isIPadFullscreen.wrappedValue = false
-            return
-        } else if !AppConstants.Device.isIPad && UIApplication.isLandscape {
-            // iPhone 横屏，切换回竖屏
+            if usesInPlaceFullscreen { return }
+            // 请求竖屏，旋转完成后恢复自由旋转。
             KSOptions.supportedInterfaceOrientations = .portrait
 
             // 使用 iOS 16+ API
             if #available(iOS 16.0, *) {
-                guard let windowScene = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .first else {
+                guard let windowScene = windowContext?.windowScene else {
                     return
                 }
 
@@ -179,7 +178,7 @@ struct VideoControllerView: View {
                 )
 
                 // 先通知 ViewController 刷新支持的方向
-                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
                 // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
@@ -190,7 +189,7 @@ struct VideoControllerView: View {
                     // 旋转完成后恢复自由旋转
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                        if let rootVC = windowContext?.hostViewController {
                             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                         }
                     }
@@ -304,7 +303,7 @@ struct VideoControllerView: View {
                                 HStack(spacing: 16) {
                                     // AirPlay 和画面缩放仅在横屏/全屏时显示
                                     // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
-                                    if isLandscape || isIPadFullscreen.wrappedValue {
+                                    if isFullscreen {
                                         if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
                                             AirPlayView()
                                                 .frame(width: 30, height: 30)
@@ -385,11 +384,16 @@ struct VideoControllerView: View {
                                     // 竖屏按钮（仅在视频为竖屏时显示）
                                     if let naturalSize = model.config.playerLayer?.player.naturalSize,
                                        !naturalSize.isHorizonal {
-                                        KSVideoPlayerViewBuilder.portraitButton
+                                        KSVideoPlayerViewBuilder.portraitButton(windowContext: windowContext)
                                     }
 
                                     // 全屏按钮
-                                    KSVideoPlayerViewBuilder.landscapeButton(isIPadFullscreen: isIPadFullscreen)
+                                    KSVideoPlayerViewBuilder.landscapeButton(
+                                        isIPadFullscreen: isIPadFullscreen,
+                                        usesInPlaceFullscreen: usesInPlaceFullscreen,
+                                        isFullscreen: isFullscreen,
+                                        windowContext: windowContext
+                                    )
                                 }
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
@@ -506,10 +510,7 @@ struct VideoSettingHUDView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var panelWidth: CGFloat {
-        if AppConstants.Device.isIPad {
-            return 420
-        }
-        return horizontalSizeClass == .compact ? 320 : 360
+        horizontalSizeClass == .regular ? 420 : 320
     }
 
     private var normalizedQualityTitle: String? {

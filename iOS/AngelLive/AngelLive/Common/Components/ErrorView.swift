@@ -35,6 +35,8 @@ struct ErrorView: View {
     @State private var showingSupportDiagnostics = false
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
+    @Environment(\.fullUIWindowContext) private var fullUIWindowContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// 是否有任何平台已登录
     private var isAnyPlatformLoggedIn: Bool {
@@ -75,7 +77,10 @@ struct ErrorView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geometry.size.width > geometry.size.height
+            let usesWideLayout = fullUIWindowContext != nil
+                ? horizontalSizeClass == .regular
+                : UIDevice.current.userInterfaceIdiom == .pad
+            let isPadLandscape = usesWideLayout && geometry.size.width > geometry.size.height
 
             ZStack {
                 // 使用系统背景色，确保与应用主题一致

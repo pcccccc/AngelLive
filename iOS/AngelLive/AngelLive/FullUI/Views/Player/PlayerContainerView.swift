@@ -51,13 +51,6 @@ struct PlayerContainerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    // 检测是否为 iPad 横屏
-    private var isIPadLandscape: Bool {
-        AppConstants.Device.isIPad &&
-        horizontalSizeClass == .regular &&
-        verticalSizeClass == .compact
-    }
-
     var body: some View {
         PlayerContentView(
             playerCoordinator: coordinator,
@@ -103,7 +96,9 @@ struct PlayerContentView: View {
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
+    @Environment(\.fullUIPlayerUsesExpandedLayout) private var usesExpandedLayout
     @Environment(\.roomSwitcherPresentation) private var roomSwitcherPresentation: Binding<Bool>
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
@@ -120,10 +115,6 @@ struct PlayerContentView: View {
 
     private var useKSPlayer: Bool {
         viewModel.selectedPlayerKernel == .ksplayer && PlayerKernelSupport.isKSPlayerAvailable
-    }
-
-    private var isFullscreen: Bool {
-        AppConstants.Device.isIPad ? isIPadFullscreen.wrappedValue : isDeviceLandscape
     }
 
     private var isControlLocked: Bool {
@@ -144,7 +135,7 @@ struct PlayerContentView: View {
                 maxHeight: isVerticalLiveMode ? .infinity : nil,
                 alignment: .center
             )
-            .background(AppConstants.Device.isIPad ? Color.black : (isDeviceLandscape ? Color.black : Color.clear))
+            .background(usesExpandedLayout || isFullscreen ? Color.black : Color.clear)
             .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
             .overlay(alignment: .top) {
                 if let notice = visibleRecoveryNotice {
@@ -160,7 +151,12 @@ struct PlayerContentView: View {
             }
         }
         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+        .onChange(of: isVideoPortrait && !usesExpandedLayout, initial: true) { _, usesVerticalPresentation in
+            isVerticalLiveMode = usesVerticalPresentation
+            applyVideoFillMode(isVerticalLive: usesVerticalPresentation)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.willDeactivateNotification)) { notification in
+            guard let scene = notification.object as? UIScene, scene === windowContext?.windowScene else { return }
             // 记录进后台时刻,供回前台 watchdog 算后台时长。
             lastResignActiveAt = Date()
             if useKSPlayer {
@@ -189,15 +185,18 @@ struct PlayerContentView: View {
                 vlcPlaybackController.enterBackground()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.didEnterBackgroundNotification)) { notification in
+            guard let scene = notification.object as? UIScene, scene === windowContext?.windowScene else { return }
             guard useKSPlayer else { return }
             logForegroundLifecycleSnapshot(event: "didEnterBackground")
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.willEnterForegroundNotification)) { notification in
+            guard let scene = notification.object as? UIScene, scene === windowContext?.windowScene else { return }
             guard useKSPlayer else { return }
             logForegroundLifecycleSnapshot(event: "willEnterForeground")
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIScene.didActivateNotification)) { notification in
+            guard let scene = notification.object as? UIScene, scene === windowContext?.windowScene else { return }
             if useKSPlayer {
                 logForegroundLifecycleSnapshot(event: "didBecomeActive")
                 if recoverySuspendedForBackground {
@@ -288,7 +287,7 @@ struct PlayerContentView: View {
 
     // 计算视频高度
     private func calculatedHeight(for size: CGSize) -> CGFloat {
-        let shouldFillHeight = isDeviceLandscape || AppConstants.Device.isIPad || isVerticalLiveMode
+        let shouldFillHeight = isFullscreen || usesExpandedLayout || isVerticalLiveMode
         let calculatedByRatio = size.width / videoAspectRatio
 
         return shouldFillHeight ? size.height : calculatedByRatio
@@ -417,18 +416,6 @@ struct PlayerContentView: View {
                         applyVideoFillMode(isVerticalLive: false)
                         configureModelIfNeeded(playURL: playURL)
                         viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
-
-                        // iPad 直接使用默认 16:9，不做尺寸探测，避免频繁重建
-                        if AppConstants.Device.isIPad {
-                            await MainActor.run {
-                                applyVideoFillMode(isVerticalLive: false)
-                                videoAspectRatio = 16.0 / 9.0
-                                isVideoPortrait = false
-                                isVerticalLiveMode = false
-                                hasDetectedSize = true
-                            }
-                            return
-                        }
 
                         // 使用异步任务定期检查视频尺寸
                         var retryCount = 0
@@ -727,7 +714,6 @@ struct PlayerContentView: View {
     @discardableResult
     private func detectVideoSizeIfReady(expectedURL: URL) -> Bool {
         guard useKSPlayer,
-              !AppConstants.Device.isIPad,
               viewModel.currentPlayURL == expectedURL,
               let playerLayer = playerCoordinator.playerLayer,
               playerLayer.url == expectedURL else { return false }
@@ -738,11 +724,9 @@ struct PlayerContentView: View {
         // 轨道尺寸证明媒体信息已就绪；播放器尺寸保留内核对旋转元数据的处理。
         let ratio = naturalSize.width / naturalSize.height
         let isPortrait = ratio < 1
-        applyVideoFillMode(isVerticalLive: isPortrait)
         withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
             videoAspectRatio = ratio
             isVideoPortrait = isPortrait
-            isVerticalLiveMode = isPortrait
             hasDetectedSize = true
         }
         Logger.debug("视频画幅已确认: \(naturalSize.width) x \(naturalSize.height), vertical=\(isPortrait)", category: .player)

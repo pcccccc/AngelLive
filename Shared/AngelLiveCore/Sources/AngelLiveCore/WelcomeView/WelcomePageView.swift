@@ -29,6 +29,7 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
     let cards: [WelcomeCard]
     let footer: Footer
     let onContinue: () -> Void
+    let usesResizableLayout: Bool
 
     @State private var animateIcon: Bool = false
     @State private var animateTitle: Bool = false
@@ -38,6 +39,7 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
     init(
         tint: Color,
         title: String,
+        usesResizableLayout: Bool = false,
         @ViewBuilder icon: @escaping () -> Icon,
         @WelcomeCardResultBuilder cards: @escaping () -> [WelcomeCard],
         @ViewBuilder footer: @escaping () -> Footer,
@@ -45,6 +47,7 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
     ) {
         self.tint = tint
         self.title = title
+        self.usesResizableLayout = usesResizableLayout
         self.icon = icon()
         self.cards = cards()
         self.footer = footer()
@@ -60,7 +63,7 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
         }
         .interactiveDismissDisabled()
         .task { await runAnimations() }
-        .setUpOnBoarding()
+        .setUpOnBoarding(usesResizableLayout: usesResizableLayout)
     }
 
     // MARK: - Subviews
@@ -197,12 +200,14 @@ extension View {
     }
 
     @ViewBuilder
-    fileprivate func setUpOnBoarding() -> some View {
+    fileprivate func setUpOnBoarding(usesResizableLayout: Bool) -> some View {
         #if os(macOS)
         self
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
             .frame(minHeight: 520)
+        #elseif os(iOS)
+        self.modifier(WelcomeLayoutModifier(usesResizableLayout: usesResizableLayout))
         #else
         if UIDevice.current.userInterfaceIdiom == .pad {
             self
@@ -221,6 +226,26 @@ extension View {
         #endif
     }
 }
+
+#if os(iOS)
+private struct WelcomeLayoutModifier: ViewModifier {
+    let usesResizableLayout: Bool
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    func body(content: Content) -> some View {
+        let usesWideLayout = usesResizableLayout
+            ? horizontalSizeClass == .regular
+            : UIDevice.current.userInterfaceIdiom == .pad
+
+        content
+            .padding(.horizontal, usesWideLayout ? 28 : 20)
+            .padding(.top, 12)
+            .padding(.bottom, usesWideLayout ? 12 : 8)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.hidden)
+    }
+}
+#endif
 
 #Preview {
     Text("")

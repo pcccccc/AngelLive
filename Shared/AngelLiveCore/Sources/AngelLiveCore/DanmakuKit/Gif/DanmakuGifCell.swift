@@ -57,11 +57,17 @@ open class DanmakuGifCell: DanmakuCell {
             debugPrint("Could not create gif animetion because imageSource create failed.")
             return
         }
+
+#if os(iOS)
+        let imageScale = traitCollection.displayScale
+#else
+        let imageScale = danmakuScreenScale()
+#endif
         
         let animator = GifAnimator(imageSource: imageSource,
                                    preloadCount: gifModel.preloadFrameCount,
                                    imageSize: gifModel.size,
-                                   imageScale: danmakuScreenScale(),
+                                   imageScale: imageScale,
                                    maxRepeatCount: gifModel.maxRepeatCount)
         animator.backgroundDecode = gifModel.backgroundDecode
         animator.prepare()

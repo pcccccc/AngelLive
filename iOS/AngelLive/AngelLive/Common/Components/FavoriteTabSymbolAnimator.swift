@@ -42,43 +42,84 @@ struct FavoriteTabSymbolAnimator: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+    func makeUIView(context: Context) -> ProbeView {
+        let view = ProbeView()
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = false
         return view
     }
 
-    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: ProbeView, coordinator: Coordinator) {
+        uiView.pendingUpdate?.cancel()
+        uiView.updateSymbols = nil
         coordinator.deactivate()
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
+    func updateUIView(_ uiView: ProbeView, context: Context) {
         let coordinator = context.coordinator
         let status = syncStatus
         let index = tabIndex
 
-        // 延一帧执行，保证 tab bar 已经布局完成
-        DispatchQueue.main.async {
-            guard let window = uiView.window ?? Self.activeKeyWindow(),
-                  let tabBar = Self.findTabBar(in: window) else { return }
+        uiView.updateSymbols = { view in
+            Self.updateSymbols(in: view, status: status, tabIndex: index, coordinator: coordinator)
+        }
+        uiView.scheduleUpdate()
+    }
 
-            // 收藏图标的所有副本（它的符号都含 "icloud"；其它 tab 是 grid/gear/magnifyingglass，不含）
-            let icloudViews = Self.symbolImageViews(in: tabBar)
-                .filter { $0.description.contains("icloud") }
+    private static func updateSymbols(in view: UIView, status: CloudSyncStatus, tabIndex: Int, coordinator: Coordinator) {
+        guard let window = view.window,
+              let tabBar = Self.findTabBar(in: window) else { return }
 
-            guard !icloudViews.isEmpty else {
-                // 退路：极端情况匹配不到 icloud，就按位置取可见的第 index 个
-                if let fallback = Self.fallbackImageView(in: tabBar, tabIndex: index) {
-                    coordinator.apply(status: status, target: fallback, allIcloudViews: [fallback])
-                }
-                return
+        // 收藏图标的所有副本（它的符号都含 "icloud"；其它 tab 是 grid/gear/magnifyingglass，不含）
+        let icloudViews = Self.symbolImageViews(in: tabBar)
+            .filter { $0.description.contains("icloud") }
+
+        guard !icloudViews.isEmpty else {
+            // 退路：极端情况匹配不到 icloud，就按位置取可见的第 index 个
+            if let fallback = Self.fallbackImageView(in: tabBar, tabIndex: tabIndex) {
+                coordinator.apply(status: status, target: fallback, allIcloudViews: [fallback])
             }
+            return
+        }
 
-            // 当前真正可见的那一个（iOS 26 有隐藏副本，frame 常在 (0,0)）
-            let target = icloudViews.first { Self.isEffectivelyVisible($0) && $0.bounds.width > 1 }
-                ?? icloudViews[0]
-            coordinator.apply(status: status, target: target, allIcloudViews: icloudViews)
+        // 当前真正可见的那一个（iOS 26 有隐藏副本，frame 常在 (0,0)）
+        let target = icloudViews.first { Self.isEffectivelyVisible($0) && $0.bounds.width > 1 }
+            ?? icloudViews[0]
+        coordinator.apply(status: status, target: target, allIcloudViews: icloudViews)
+    }
+
+    final class ProbeView: UIView {
+        var updateSymbols: ((ProbeView) -> Void)?
+        var pendingUpdate: Task<Void, Never>?
+        private var lastLayoutBounds: CGRect?
+        private var lastWindowBounds: CGRect?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            pendingUpdate?.cancel()
+            lastLayoutBounds = nil
+            lastWindowBounds = nil
+            guard window != nil else { return }
+            scheduleUpdate()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let windowBounds = window?.bounds
+            guard bounds != lastLayoutBounds || windowBounds != lastWindowBounds else { return }
+            lastLayoutBounds = bounds
+            lastWindowBounds = windowBounds
+            scheduleUpdate()
+        }
+
+        func scheduleUpdate() {
+            pendingUpdate?.cancel()
+            // 延一帧执行，保证 tab bar 已经布局完成。
+            pendingUpdate = Task { @MainActor [weak self] in
+                await Task.yield()
+                guard !Task.isCancelled, let self, self.window != nil else { return }
+                self.updateSymbols?(self)
+            }
         }
     }
 
@@ -149,13 +190,6 @@ struct FavoriteTabSymbolAnimator: UIViewRepresentable {
             node = n.superview
         }
         return v.window != nil
-    }
-
-    private static func activeKeyWindow() -> UIWindow? {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first(where: { $0.activationState == .foregroundActive })?
-            .windows.first(where: { $0.isKeyWindow })
     }
 
     /// 递归找第一个 UITabBar

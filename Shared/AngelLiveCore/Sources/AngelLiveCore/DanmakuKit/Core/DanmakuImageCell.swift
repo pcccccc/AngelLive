@@ -27,6 +27,9 @@ public class DanmakuImageCell: DanmakuCell {
     public override func willDisplay() {}
 
     nonisolated public override func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {
+#if os(iOS)
+        let renderScale = abs(context.ctm.a)
+#endif
         guard let model = model as? DanmakuImageCellModel else { return }
 
         let rect = model.contentRect(in: size)
@@ -39,7 +42,11 @@ public class DanmakuImageCell: DanmakuCell {
         // iOS/tvOS: context 由 UIGraphicsBeginImageContextWithOptions 创建,已按 UIKit 约定翻转;
         // 此时 CGContext.draw 会上下颠倒,故走 UIImage.draw 让 UIKit 处理翻转
         // (与 DanmakuTextCell 依赖 NSString.draw 同理)
+#if os(iOS)
+        makeDanmakuImage(from: model.image, scale: renderScale).draw(in: rect)
+#else
         makeDanmakuImage(from: model.image, scale: danmakuScreenScale()).draw(in: rect)
+#endif
 #endif
     }
 }

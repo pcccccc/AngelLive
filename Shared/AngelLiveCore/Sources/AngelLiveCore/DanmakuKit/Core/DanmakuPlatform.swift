@@ -17,6 +17,7 @@ public typealias DanmakuImage = UIImage
 public typealias DanmakuEvent = UIEvent
 public typealias DanmakuTapGestureRecognizer = UITapGestureRecognizer
 
+#if os(tvOS)
 /// Cached screen scale to avoid MainActor access from background threads
 nonisolated(unsafe) private var cachedScreenScale: CGFloat = 0
 
@@ -37,6 +38,7 @@ func danmakuScreenScale() -> CGFloat {
     initScreenScaleIfNeeded()
     return cachedScreenScale
 }
+#endif
 
 public extension UIView {
     var danmakuBackgroundColor: UIColor? {

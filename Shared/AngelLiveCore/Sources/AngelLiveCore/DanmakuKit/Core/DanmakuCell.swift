@@ -46,6 +46,13 @@ open class DanmakuCell: DanmakuBaseView {
     public required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+#if os(iOS)
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updateContentsScale()
+    }
+#endif
     
     /// Overriding this method, you can get the timing before the content rendering.
     open func willDisplay() {}
@@ -121,7 +128,14 @@ extension DanmakuCell {
     func setupLayer() {
         guard let layer = layer as? DanmakuAsyncLayer else { return }
 
+#if os(iOS)
+        registerForTraitChanges([UITraitDisplayScale.self]) { (cell: DanmakuCell, _) in
+            cell.updateContentsScale()
+        }
+        updateContentsScale()
+#else
         layer.contentsScale = danmakuScreenScale()
+#endif
 
         layer.willDisplay = { [weak self] (layer) in
             guard let strongSelf = self else { return }
@@ -138,5 +152,18 @@ extension DanmakuCell {
             strongSelf.didDisplay(finished)
         }
     }
+
+#if os(iOS)
+    private func updateContentsScale() {
+        guard let layer = layer as? DanmakuAsyncLayer else { return }
+        let scale = traitCollection.displayScale
+        guard scale > 0, layer.contentsScale != scale else { return }
+        layer.contentsScale = scale
+        // GIF frames are assigned directly by their animator, not rasterized by this layer.
+        if !(self is DanmakuGifCell) {
+            layer.setNeedsDisplay()
+        }
+    }
+#endif
     
 }

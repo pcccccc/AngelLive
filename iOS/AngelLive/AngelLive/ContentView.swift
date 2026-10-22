@@ -206,6 +206,7 @@ struct ContentView: View {
                 }
             }
         }
+        .fullUIWindowContext(isEnabled: pluginAvailability.hasAvailablePlugins)
         .environment(pluginAvailability)
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
         .roomTitleTranslationHost(enabled: pluginAvailability.hasAvailablePlugins)
@@ -243,7 +244,7 @@ struct ContentView: View {
             selectedTab = .settings
         }
         .sheet(isPresented: $manager.showWelcome, onDismiss: presentCloudPluginPromptIfNeeded) {
-            WelcomeView {
+            WelcomeView(usesResizableLayout: pluginAvailability.hasAvailablePlugins) {
                 welcomeManager.completeWelcome()
                 // 中国区 iOS 首次启动需要用户授权网络权限，
                 // 此时 .task 中的 fetchKeys 可能已因无权限失败，

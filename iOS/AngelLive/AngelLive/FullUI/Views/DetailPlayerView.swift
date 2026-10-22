@@ -30,17 +30,20 @@ struct DetailPlayerView: View {
     }
 
     var body: some View {
-        if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
-            ShortDramaPlayerView(room: viewModel.currentRoom)
-                .id(viewModel.currentRoom.id)
-        } else {
-            LiveDetailPlayerView(
-                viewModel: viewModel,
-                categoryRooms: categoryRooms,
-                canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
-                onLoadMoreCategoryRooms: onLoadMoreCategoryRooms
-            )
+        Group {
+            if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
+                ShortDramaPlayerView(room: viewModel.currentRoom)
+                    .id(viewModel.currentRoom.id)
+            } else {
+                LiveDetailPlayerView(
+                    viewModel: viewModel,
+                    categoryRooms: categoryRooms,
+                    canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
+                    onLoadMoreCategoryRooms: onLoadMoreCategoryRooms
+                )
+            }
         }
+        .fullUIWindowContext()
     }
 }
 
@@ -50,6 +53,7 @@ struct LiveDetailPlayerView: View {
     let canLoadMoreCategoryRooms: () -> Bool
     let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(HistoryModel.self) private var historyModel
@@ -66,7 +70,7 @@ struct LiveDetailPlayerView: View {
         supportedGlobalCapabilities: [.audioFocus, .nowPlaying, .pictureInPicture, .remoteCommands]
     )
 
-    /// iPad 是否处于全屏模式
+    /// Fullscreen intent is independent of whether the scene accepts a rotation request.
     @State private var isIPadFullscreen: Bool = false
 
     /// iPhone 播放器实际高度（由 PlayerContentView 报告）
@@ -80,7 +84,26 @@ struct LiveDetailPlayerView: View {
 
     /// Only a vertically compact phone layout needs to hide the information panel.
     private var isIPhoneLandscape: Bool {
-        !AppConstants.Device.isIPad && verticalSizeClass == .compact
+        verticalSizeClass == .compact
+    }
+
+    private var usesExpandedLayout: Bool {
+        horizontalSizeClass == .regular && verticalSizeClass == .regular
+    }
+
+    private var isFullscreen: Bool {
+        isIPhoneLandscape || isIPadFullscreen
+    }
+
+    /// iPad windows use an in-place action even when narrow; phone rotation
+    /// remains available outside the expanded layout.
+    private var usesInPlaceFullscreen: Bool {
+        usesExpandedLayout || windowContext?.window?.traitCollection.userInterfaceIdiom == .pad
+    }
+
+    /// Orientation policy remains phone-specific; layout does not depend on idiom.
+    private var usesPhoneOrientationPolicy: Bool {
+        windowContext?.window?.traitCollection.userInterfaceIdiom == .phone
     }
 
     /// 进入后台前是否处于 iPhone 横屏全屏（用于回前台时保留用户主动触发的横屏）
@@ -153,7 +176,7 @@ struct LiveDetailPlayerView: View {
         if #available(iOS 18.0, *) {
             return false
         }
-        return !isIPhoneLandscape && allowsEdgeDismiss
+        return !isFullscreen && allowsEdgeDismiss
     }
 
     private var allowsEdgeDismiss: Bool {
@@ -176,14 +199,18 @@ struct LiveDetailPlayerView: View {
             let isLandscape = geometry.size.width > geometry.size.height
             let iPhoneLandscapeMode = isIPhoneLandscape
             // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
-            let showInfoPanel = isVerticalLiveMode ? false : !(iPhoneLandscapeMode || isIPadFullscreen)
+            let showInfoPanel = !isVerticalLiveMode && !isFullscreen
+            // Reuse the 400pt information panel only with at least a compact
+            // 320pt playback surface beside it; regular traits alone are not a width guarantee.
+            let showsSidePanel = showInfoPanel && usesExpandedLayout && isLandscape
+                && geometry.size.width >= 720
 
             // 计算播放器宽度
             let playerWidth: CGFloat = {
                 let baseWidth = geometry.size.width
                 if isVerticalLiveMode {
                     return baseWidth // 竖屏直播占满宽度
-                } else if showInfoPanel && AppConstants.Device.isIPad && isLandscape {
+                } else if showsSidePanel {
                     return baseWidth - 400 // iPad 横屏减去右侧信息栏
                 } else {
                     return baseWidth
@@ -192,13 +219,13 @@ struct LiveDetailPlayerView: View {
 
             // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
             let playerHeight: CGFloat = {
-                if isVerticalLiveMode {
+                if isVerticalLiveMode || isFullscreen {
                     return geometry.size.height // 竖屏直播占满高度
-                } else if AppConstants.Device.isIPad {
+                } else if usesExpandedLayout {
                     // iPad 保持原逻辑
                     if showInfoPanel {
-                        if isLandscape {
-                            return geometry.size.height // iPad 横屏占满高度
+                        if showsSidePanel {
+                            return geometry.size.height // 展开侧栏时占满可用高度
                         } else {
                             return playerWidth / 16 * 9 // iPad 竖屏保持 16:9
                         }
@@ -275,7 +302,7 @@ struct LiveDetailPlayerView: View {
                         .environment(viewModel)
                         .frame(
                             width: playerWidth,
-                            height: AppConstants.Device.isIPad ? playerHeight : (iPhoneLandscapeMode ? geometry.size.height : nil)
+                            height: usesExpandedLayout || isVerticalLiveMode || isFullscreen ? playerHeight : nil
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         // 新画面手势桥接未启用的系统或内核，保留原有播放器手势处理。
@@ -284,14 +311,14 @@ struct LiveDetailPlayerView: View {
                             including: legacyPlayerGestureMask
                         )
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
-                            if !AppConstants.Device.isIPad {
+                            if !usesExpandedLayout {
                                 iPhonePlayerHeight = height
                             }
                         }
 
                     // 信息面板 - 根据布局动态显示/隐藏
                     if showInfoPanel {
-                        if AppConstants.Device.isIPad && isLandscape {
+                        if showsSidePanel {
                             // iPad 横屏：右侧面板
                             informationArea
                             .frame(width: 400)
@@ -310,8 +337,11 @@ struct LiveDetailPlayerView: View {
                     // 作为 ZStack 兄弟视图，独立于播放器控制层处理左边缘返回手势。
                     if #available(iOS 18.0, *), !iPhoneLandscapeMode, allowsEdgeDismiss {
                         EdgeSwipeDismissView(edgeWidth: 20) {
-                            if AppConstants.Device.isIPad && isIPadFullscreen {
+                            if isFullscreen {
                                 isIPadFullscreen = false
+                                if !usesInPlaceFullscreen {
+                                    requestPhoneOrientation(.portrait)
+                                }
                             } else {
                                 dismiss()
                             }
@@ -328,13 +358,24 @@ struct LiveDetailPlayerView: View {
             }
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
+        .environment(\.fullUIPlayerIsFullscreen, isFullscreen)
+        .environment(\.fullUIPlayerUsesExpandedLayout, usesExpandedLayout)
+        .environment(\.fullUIPlayerUsesInPlaceFullscreen, usesInPlaceFullscreen)
+        .onChange(of: usesInPlaceFullscreen) { _, usesInPlace in
+            if !usesInPlace { isIPadFullscreen = false }
+        }
+        .onChange(of: verticalSizeClass) { oldValue, newValue in
+            if !usesInPlaceFullscreen, oldValue == .compact, newValue == .regular {
+                isIPadFullscreen = false
+            }
+        }
         .environment(\.roomSwitcherPresentation, $isRoomSwitcherPresented)
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
         // 竖屏的左右滑动用于清屏/恢复，避免全屏 zoom 转场先接管右滑。
-        .interactiveDismissDisabled(isIPhoneLandscape || isVerticalLiveMode)
+        .interactiveDismissDisabled(isFullscreen || isVerticalLiveMode)
         .onChange(of: viewModel.currentRoom.id) { _, _ in
             verticalLiveControlsVisible = true
             verticalLiveControlPopupPresented = false
@@ -346,7 +387,7 @@ struct LiveDetailPlayerView: View {
                 viewModel.resumeDanmuUpdatesIfNeeded()
                 // iPhone：进后台前是横屏全屏（用户主动触发），回前台时保留横屏，
                 // 否则会被设备姿态/系统重新查询 supportedInterfaceOrientations 扳回竖屏。
-                if !AppConstants.Device.isIPad && wasLandscapeBeforeBackground {
+                if usesPhoneOrientationPolicy && wasLandscapeBeforeBackground {
                     wasLandscapeBeforeBackground = false
                     reassertLandscapeOrientation()
                 }
@@ -354,25 +395,28 @@ struct LiveDetailPlayerView: View {
                 viewModel.pauseDanmuUpdatesForBackground()
                 // 只在「从活跃态离开」时记录:回前台路径是 background→inactive→active,
                 // 若在 inactive 也记录会被回程的 inactive 用已翻回竖屏的值覆盖,导致保留失效。
-                if oldPhase == .active && !AppConstants.Device.isIPad {
+                if oldPhase == .active && usesPhoneOrientationPolicy {
                     wasLandscapeBeforeBackground = isIPhoneLandscape
                 }
             case .inactive:
                 // 系统弹窗会短暂进入 inactive；保留横屏记录，但不要取消弹幕翻译。
-                if oldPhase == .active && !AppConstants.Device.isIPad {
+                if oldPhase == .active && usesPhoneOrientationPolicy {
                     wasLandscapeBeforeBackground = isIPhoneLandscape
                 }
             @unknown default:
                 break
             }
         }
+        .onChange(of: windowContext?.window, initial: true) { _, window in
+            guard window?.traitCollection.userInterfaceIdiom == .phone else { return }
+            KSOptions.supportedInterfaceOrientations = isVerticalLiveMode ? .portrait : .allButUpsideDown
+            windowContext?.hostViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
         .onChange(of: isVerticalLiveMode) { _, isVertical in
             // 竖向直播锁定竖屏，切回普通画幅时恢复自由旋转。
-            if !AppConstants.Device.isIPad {
+            if usesPhoneOrientationPolicy {
                 KSOptions.supportedInterfaceOrientations = isVertical ? .portrait : .allButUpsideDown
-                if let rootVC = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .first?.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
             }
@@ -405,15 +449,6 @@ struct LiveDetailPlayerView: View {
                 isPlaying: false,
                 surfaceID: playbackSession.surfaceID
             )
-            // iPhone 进入播放页时允许自由旋转，横屏时自动全屏
-            if !AppConstants.Device.isIPad {
-                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                if let rootVC = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .first?.windows.first(where: { $0.isKeyWindow })?.rootViewController {
-                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                }
-            }
         }
         .onDisappear {
             roomSwitchTask?.cancel()
@@ -434,18 +469,16 @@ struct LiveDetailPlayerView: View {
             playbackSession.invalidate()
             viewModel.playbackSurfaceID = nil
             // iPhone 返回时强制竖屏
-            if !AppConstants.Device.isIPad {
+            if usesPhoneOrientationPolicy {
                 // 设置支持的方向为竖屏
                 KSOptions.supportedInterfaceOrientations = .portrait
 
-                    guard let windowScene = UIApplication.shared.connectedScenes
-                    .compactMap({ $0 as? UIWindowScene })
-                    .first else {
+                guard let windowScene = windowContext?.windowScene else {
                     return
                 }
 
                 // 先通知 ViewController 刷新支持的方向
-                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
                 // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
@@ -492,27 +525,29 @@ struct LiveDetailPlayerView: View {
     /// iPhone 回前台后保留横屏全屏:临时锁定横屏发起几何更新,完成后恢复自由旋转,
     /// 这样既保留用户主动横屏,又允许之后旋转/双击切回竖屏。
     private func reassertLandscapeOrientation() {
-        guard !AppConstants.Device.isIPad else { return }
-        KSOptions.supportedInterfaceOrientations = .landscape
-        guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first else { return }
+        requestPhoneOrientation(.landscape)
+    }
+
+    private func requestPhoneOrientation(_ orientation: UIInterfaceOrientationMask) {
+        guard usesPhoneOrientationPolicy else { return }
+        KSOptions.supportedInterfaceOrientations = orientation
+        guard let windowScene = windowContext?.windowScene else { return }
         // 先通知 ViewController 刷新支持的方向
-        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+        if let rootVC = windowContext?.hostViewController {
             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
         // 延迟到下一个 run loop,确保 VC 已刷新支持的方向
         DispatchQueue.main.async {
             let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                interfaceOrientations: .landscape
+                interfaceOrientations: orientation
             )
             windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
-                Logger.warning("[PlayerFlow] 回前台保留横屏失败: \(error.localizedDescription)", category: .player)
+                Logger.warning("[PlayerFlow] 方向更新失败: \(error.localizedDescription)", category: .player)
             }
             // 旋转完成后恢复自由旋转,允许用户后续旋转/双击切回竖屏
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
             }

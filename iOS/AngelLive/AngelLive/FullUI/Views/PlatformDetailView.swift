@@ -196,7 +196,7 @@ struct PlatformDetailView: View {
 
     @ViewBuilder
     private func loadingSkeletonView(geometry: GeometryProxy) -> some View {
-        let columns = AppConstants.Device.isIPad ? 3 : 2
+        let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20
@@ -252,7 +252,7 @@ struct PlatformDetailView: View {
 
     @ViewBuilder
     private func roomGridView(geometry: GeometryProxy, rooms: [LiveModel]) -> some View {
-        let columns = AppConstants.Device.isIPad ? 3 : 2
+        let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
         let horizontalPadding: CGFloat = 20

@@ -21,6 +21,9 @@ public final class DanmakuMixedCell: DanmakuCell {
     public override func willDisplay() {}
 
     nonisolated public override func displaying(_ context: CGContext, _ size: CGSize, _ isCancelled: Bool) {
+#if os(iOS)
+        let renderScale = abs(context.ctm.a)
+#endif
         guard let model = model as? DanmakuMixedCellModel else { return }
 
         for item in model.layoutItems {
@@ -38,7 +41,11 @@ public final class DanmakuMixedCell: DanmakuCell {
 #if canImport(AppKit) && !canImport(UIKit)
                 context.draw(image, in: item.rect)
 #else
+#if os(iOS)
+                makeDanmakuImage(from: image, scale: renderScale).draw(in: item.rect)
+#else
                 makeDanmakuImage(from: image, scale: danmakuScreenScale()).draw(in: item.rect)
+#endif
 #endif
             }
         }

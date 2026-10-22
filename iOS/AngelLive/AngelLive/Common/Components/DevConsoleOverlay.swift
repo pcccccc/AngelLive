@@ -23,6 +23,7 @@ final class DevConsoleWindowManager {
 
     private var overlayWindow: DevConsolePassthroughWindow?
     private var presentsFullUI = false
+    private weak var fullUIWindowContext: FullUIWindowContext?
 
     private init() {
         NotificationCenter.default.addObserver(
@@ -34,10 +35,13 @@ final class DevConsoleWindowManager {
         }
     }
 
-    func setup(presentsFullUI: Bool) {
+    func setup(presentsFullUI: Bool, windowContext: FullUIWindowContext? = nil) {
         let modeChanged = self.presentsFullUI != presentsFullUI
+        let sceneChanged = presentsFullUI && overlayWindow != nil
+            && overlayWindow?.windowScene !== windowContext?.windowScene
         self.presentsFullUI = presentsFullUI
-        if modeChanged, overlayWindow != nil {
+        fullUIWindowContext = windowContext
+        if modeChanged || sceneChanged {
             hide()
         }
         syncVisibility()
@@ -54,12 +58,20 @@ final class DevConsoleWindowManager {
 
     private func show() {
         guard overlayWindow == nil else { return }
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })
-                ?? UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first else { return }
+        let scene: UIWindowScene
+        if presentsFullUI {
+            guard let localScene = fullUIWindowContext?.windowScene else { return }
+            scene = localScene
+        } else {
+            guard let shellScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive })
+                    ?? UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first else { return }
+
+            scene = shellScene
+        }
 
         let window = DevConsolePassthroughWindow(windowScene: scene)
         window.windowLevel = .alert + 100
@@ -117,6 +129,8 @@ private class DevConsoleContainerView: UIView {
     private let floatingButton = UIButton(type: .custom)
     private var buttonCenter: CGPoint = .zero
     private var isPanelOpen = false
+    private var lastFullUILayoutFrame: CGRect?
+    private var isButtonOnTrailingEdge = false
 
     private var dimmingView: UIView?
     private var panelHosting: UIHostingController<AnyView>?
@@ -137,13 +151,42 @@ private class DevConsoleContainerView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if buttonCenter == .zero {
+        if presentsFullUI {
+            let safeFrame = safeAreaLayoutGuide.layoutFrame
+            guard safeFrame.width > 0, safeFrame.height > 0,
+                  safeFrame != lastFullUILayoutFrame else { return }
+            lastFullUILayoutFrame = safeFrame
+            if buttonCenter == .zero {
+                buttonCenter = CGPoint(x: safeFrame.minX + 28 + 4, y: safeFrame.maxY - 80)
+            }
+            buttonCenter = snapToEdge(buttonCenter, preservingEdge: true)
+            floatingButton.center = buttonCenter
+            if isPanelOpen {
+                panelHosting?.view.frame = fullUIPanelFrame
+            }
+        } else if buttonCenter == .zero {
             buttonCenter = CGPoint(
                 x: 28 + 4,
                 y: bounds.height - safeAreaInsets.bottom - 80
             )
             floatingButton.center = buttonCenter
         }
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        if presentsFullUI { setNeedsLayout() }
+    }
+
+    private var fullUIPanelFrame: CGRect {
+        let safeFrame = safeAreaLayoutGuide.layoutFrame
+        let height = safeFrame.height * 0.5
+        return CGRect(
+            x: safeFrame.minX + 6,
+            y: safeFrame.maxY - height,
+            width: max(0, safeFrame.width - 12),
+            height: height
+        )
     }
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -238,6 +281,9 @@ private class DevConsoleContainerView: UIView {
                 y: buttonCenter.y + translation.y
             )
             let snapped = snapToEdge(raw)
+            if presentsFullUI {
+                isButtonOnTrailingEdge = raw.x >= safeAreaLayoutGuide.layoutFrame.midX
+            }
             buttonCenter = snapped
             UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.8) {
                 self.floatingButton.center = snapped
@@ -247,9 +293,18 @@ private class DevConsoleContainerView: UIView {
         }
     }
 
-    private func snapToEdge(_ center: CGPoint) -> CGPoint {
+    private func snapToEdge(_ center: CGPoint, preservingEdge: Bool = false) -> CGPoint {
         let half: CGFloat = 28
         let pad: CGFloat = 4
+        if presentsFullUI {
+            let frame = safeAreaLayoutGuide.layoutFrame
+            let minX = frame.minX + half + pad
+            let maxX = max(minX, frame.maxX - half - pad)
+            let minY = frame.minY + half + pad
+            let maxY = max(minY, frame.maxY - half - pad)
+            let trailing = preservingEdge ? isButtonOnTrailingEdge : center.x >= frame.midX
+            return CGPoint(x: trailing ? maxX : minX, y: min(max(center.y, minY), maxY))
+        }
         let minX = half + pad
         let maxX = bounds.width - half - pad
         let minY = safeAreaInsets.top + half + pad
@@ -296,15 +351,25 @@ private class DevConsoleContainerView: UIView {
         hosting.didMove(toParent: parentVC)
 
         let panelHeight = bounds.height * 0.5
-        hosting.view.frame = CGRect(
-            x: 6, y: bounds.height,
-            width: bounds.width - 12, height: panelHeight
-        )
+        if presentsFullUI {
+            var startFrame = fullUIPanelFrame
+            startFrame.origin.y = bounds.maxY
+            hosting.view.frame = startFrame
+        } else {
+            hosting.view.frame = CGRect(
+                x: 6, y: bounds.height,
+                width: bounds.width - 12, height: panelHeight
+            )
+        }
         self.panelHosting = hosting
 
         UIView.animate(withDuration: 0.4, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0.5) {
             dimming.alpha = 1
-            hosting.view.frame.origin.y = self.bounds.height - panelHeight - self.safeAreaInsets.bottom
+            if self.presentsFullUI {
+                hosting.view.frame = self.fullUIPanelFrame
+            } else {
+                hosting.view.frame.origin.y = self.bounds.height - panelHeight - self.safeAreaInsets.bottom
+            }
         }
     }
 
@@ -415,15 +480,27 @@ struct DevConsoleOverlay: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
     var body: some View {
+        DevConsoleVisibilityObserver(presentsFullUI: pluginAvailability.hasAvailablePlugins)
+            .fullUIWindowContext(isEnabled: pluginAvailability.hasAvailablePlugins)
+    }
+}
+
+private struct DevConsoleVisibilityObserver: View {
+    let presentsFullUI: Bool
+    @Environment(\.fullUIWindowContext) private var windowContext
+
+    var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
-            .onAppear {
-                DevConsoleWindowManager.shared.setup(
-                    presentsFullUI: pluginAvailability.hasAvailablePlugins
-                )
-            }
-            .onChange(of: pluginAvailability.hasAvailablePlugins) { _, presentsFullUI in
-                DevConsoleWindowManager.shared.setup(presentsFullUI: presentsFullUI)
-            }
+            .onAppear { updateVisibility() }
+            .onChange(of: presentsFullUI) { _, _ in updateVisibility() }
+            .onChange(of: windowContext?.window) { _, _ in updateVisibility() }
+    }
+
+    private func updateVisibility() {
+        DevConsoleWindowManager.shared.setup(
+            presentsFullUI: presentsFullUI,
+            windowContext: windowContext
+        )
     }
 }

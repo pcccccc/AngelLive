@@ -239,9 +239,8 @@ private struct LiquidRefreshAnchor: Equatable {
     let attached: Bool
 }
 
-/// Reads the containing window, never another scene's key window. UIKit does
-/// not expose the cutout outline. Overlap inside the safe-area margin connects
-/// common sensor housings without drawing a fake island.
+/// Anchor the existing detached artwork in this surface's safe area. Insets
+/// describe usable space, not the presence or position of a sensor housing.
 private struct LiquidRefreshAnchorProbe: UIViewRepresentable {
     @Binding var anchor: LiquidRefreshAnchor?
 
@@ -286,17 +285,11 @@ private struct LiquidRefreshAnchorProbe: UIViewRepresentable {
             pending?.cancel()
             pending = Task { @MainActor [weak self] in
                 await Task.yield()
-                guard !Task.isCancelled, let self, let window, bounds.width > 0 else { return }
-                let top = window.safeAreaInsets.top
-                let frameInWindow = convert(bounds, to: window)
-                let fullWidth = abs(frameInWindow.width - window.bounds.width) < 2
-                let attached = traitCollection.userInterfaceIdiom == .phone
-                    && window.bounds.height > window.bounds.width && top >= 44 && fullWidth
-                let windowPoint = CGPoint(
-                    x: attached ? window.bounds.midX : frameInWindow.midX,
-                    y: attached ? top - 20 : max(top, frameInWindow.minY) + 8
-                )
-                publish?(LiquidRefreshAnchor(point: convert(windowPoint, from: window), attached: attached))
+                guard !Task.isCancelled, let self, window != nil, bounds.width > 0 else { return }
+                let safeFrame = safeAreaLayoutGuide.layoutFrame
+                guard safeFrame.width > 0 else { return }
+                let point = CGPoint(x: safeFrame.midX, y: safeFrame.minY + 8)
+                publish?(LiquidRefreshAnchor(point: point, attached: false))
             }
         }
     }

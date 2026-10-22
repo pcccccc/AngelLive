@@ -29,22 +29,11 @@ public struct KSVideoPlayerView: View {
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
     @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
-    @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
+    @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var hasAutoRotatedForCurrentRoom = false // 当前直播间是否已自动旋转
     @State private var actualPlayerHeight: CGFloat = 0 // 实际播放器高度
-
-    /// 是否处于全屏模式（iPad全屏 或 iPhone横屏）
-    private var isFullscreen: Bool {
-        if AppConstants.Device.isIPad {
-            return isIPadFullscreen.wrappedValue
-        } else {
-            // iPhone 横屏判断
-            return horizontalSizeClass == .compact && verticalSizeClass == .compact ||
-                   horizontalSizeClass == .regular && verticalSizeClass == .compact
-        }
-    }
 
     public init(
         model: KSVideoPlayerModel,
