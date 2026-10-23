@@ -73,8 +73,8 @@ struct LiveDetailPlayerView: View {
     /// Fullscreen intent is independent of whether the scene accepts a rotation request.
     @State private var isIPadFullscreen: Bool = false
 
-    /// iPhone 播放器实际高度（由 PlayerContentView 报告）
-    @State private var iPhonePlayerHeight: CGFloat = 0
+    /// 播放画面与信息区共用已确认的媒体比例，避免独立高度反馈滞后。
+    @State private var videoAspectRatio: CGFloat = 16.0 / 9.0
 
     /// 是否为竖屏直播模式
     @State private var isVerticalLiveMode: Bool = false
@@ -217,7 +217,7 @@ struct LiveDetailPlayerView: View {
                 }
             }()
 
-            // iPad: 使用计算的固定高度；iPhone: 使用报告的动态高度
+            // 扩展布局保留既有高度规则；紧凑布局随真实媒体比例调整。
             let playerHeight: CGFloat = {
                 if isVerticalLiveMode || isFullscreen {
                     return geometry.size.height // 竖屏直播占满高度
@@ -233,8 +233,7 @@ struct LiveDetailPlayerView: View {
                         return geometry.size.height // 全屏模式占满高度
                     }
                 } else {
-                    // iPhone: 使用 PlayerContentView 报告的高度，如果还没报告则用默认 16:9
-                    return iPhonePlayerHeight > 0 ? iPhonePlayerHeight : (playerWidth / 16 * 9)
+                    return playerWidth / videoAspectRatio
                 }
             }()
 
@@ -296,13 +295,14 @@ struct LiveDetailPlayerView: View {
                     PlayerContentView(
                         playerCoordinator: playerCoordinator,
                         playerModel: playerModel,
-                        isVerticalLiveMode: $isVerticalLiveMode
+                        isVerticalLiveMode: $isVerticalLiveMode,
+                        videoAspectRatio: $videoAspectRatio
                     )
                         .id("stable_player")
                         .environment(viewModel)
                         .frame(
                             width: playerWidth,
-                            height: usesExpandedLayout || isVerticalLiveMode || isFullscreen ? playerHeight : nil
+                            height: playerHeight
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         // 新画面手势桥接未启用的系统或内核，保留原有播放器手势处理。
@@ -310,11 +310,6 @@ struct LiveDetailPlayerView: View {
                             DragGesture(minimumDistance: 1).onChanged { _ in },
                             including: legacyPlayerGestureMask
                         )
-                        .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
-                            if !usesExpandedLayout {
-                                iPhonePlayerHeight = height
-                            }
-                        }
 
                     // 信息面板 - 根据布局动态显示/隐藏
                     if showInfoPanel {
@@ -568,7 +563,8 @@ struct LiveDetailPlayerView: View {
         PlayerContentView(
             playerCoordinator: playerCoordinator,
             playerModel: playerModel,
-            isVerticalLiveMode: $isVerticalLiveMode
+            isVerticalLiveMode: $isVerticalLiveMode,
+            videoAspectRatio: $videoAspectRatio
         )
             .id("stable_player") // 关键：所有布局使用相同的 id
             .environment(viewModel)
@@ -583,7 +579,8 @@ struct LiveDetailPlayerView: View {
             PlayerContentView(
                 playerCoordinator: playerCoordinator,
                 playerModel: playerModel,
-                isVerticalLiveMode: $isVerticalLiveMode
+                isVerticalLiveMode: $isVerticalLiveMode,
+                videoAspectRatio: $videoAspectRatio
             )
                 .id("stable_player") // 关键：所有布局使用相同的 id
                 .environment(viewModel)
@@ -601,7 +598,8 @@ struct LiveDetailPlayerView: View {
             PlayerContentView(
                 playerCoordinator: playerCoordinator,
                 playerModel: playerModel,
-                isVerticalLiveMode: $isVerticalLiveMode
+                isVerticalLiveMode: $isVerticalLiveMode,
+                videoAspectRatio: $videoAspectRatio
             )
                 .id("stable_player") // 关键：所有布局使用相同的 id
                 .environment(viewModel)

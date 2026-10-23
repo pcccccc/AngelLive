@@ -174,7 +174,12 @@ public enum ApiManager {
     ) async throws -> RoomSearchOutcome {
         let platforms = platforms.filter { pluginID == nil || $0.pluginId == pluginID }
         guard !platforms.isEmpty else {
-            throw shareResolveFailure()
+            let message = "没有匹配的已安装插件，请确认已安装对应插件，并检查所选平台是否支持该链接或口令。"
+            throw NSError(
+                domain: "AngelLive.ShareResolve",
+                code: -10001,
+                userInfo: [NSLocalizedDescriptionKey: message, "desc": message]
+            )
         }
 
         var lastError: Error?

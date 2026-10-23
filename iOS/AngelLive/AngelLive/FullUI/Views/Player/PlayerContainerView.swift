@@ -13,16 +13,6 @@ import UIKit
 import QuartzCore
 internal import AVFoundation
 
-// MARK: - Preference Key for Player Height
-
-struct PlayerHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - Vertical Live Mode Environment Key
 
 struct VerticalLiveModeKey: EnvironmentKey {
@@ -48,6 +38,7 @@ struct PlayerContainerView: View {
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
     @ObservedObject var playerModel: KSVideoPlayerModel
     @State private var isVerticalLiveMode = false
+    @State private var videoAspectRatio: CGFloat = 16.0 / 9.0
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -55,7 +46,8 @@ struct PlayerContainerView: View {
         PlayerContentView(
             playerCoordinator: coordinator,
             playerModel: playerModel,
-            isVerticalLiveMode: $isVerticalLiveMode
+            isVerticalLiveMode: $isVerticalLiveMode,
+            videoAspectRatio: $videoAspectRatio
         )
             .environment(viewModel)
     }
@@ -68,7 +60,7 @@ struct PlayerContentView: View {
     @ObservedObject var playerModel: KSVideoPlayerModel
     /// 与外层信息布局共用模式状态，控制层、弹幕和手势始终读取同一来源。
     @Binding var isVerticalLiveMode: Bool
-    @State private var videoAspectRatio: CGFloat = 16.0 / 9.0 // 默认 16:9 横屏，减少跳动
+    @Binding var videoAspectRatio: CGFloat
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var vlcState: VLCPlaybackBridgeState = .buffering
@@ -136,7 +128,6 @@ struct PlayerContentView: View {
                 alignment: .center
             )
             .background(usesExpandedLayout || isFullscreen ? Color.black : Color.clear)
-            .preference(key: PlayerHeightPreferenceKey.self, value: playerHeight)
             .overlay(alignment: .top) {
                 if let notice = visibleRecoveryNotice {
                     PlayerRecoveryNoticeBanner(notice: notice)

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import AngelLiveCore
 
@@ -73,6 +74,38 @@ struct SearchOutcomeTests {
             }
         }
         #expect(calls.isEmpty)
+    }
+
+    @Test func shareWithoutMatchingInstalledPluginReportsUnavailableResolver() async {
+        var didFetch = false
+        do {
+            _ = try await ApiManager.fetchSearchWithShareCodeOutcome(
+                shareCode: "https://live.example.invalid/fixture-room",
+                platforms: []
+            ) { _, _ in
+                didFetch = true
+                return nil
+            }
+            Issue.record("Expected an unavailable resolver error")
+        } catch {
+            let error = error as NSError
+            #expect(error.domain == "AngelLive.ShareResolve")
+            #expect(error.code == -10001)
+            #expect(error.localizedDescription.contains("已安装插件"))
+        }
+        #expect(!didFetch)
+    }
+
+    @Test func shareEmptyPluginResultRemainsResolutionFailure() async {
+        do {
+            _ = try await ApiManager.fetchSearchWithShareCodeOutcome(
+                shareCode: "fixture",
+                platforms: [Self.platform("fixture.empty")]
+            ) { _, _ in nil }
+            Issue.record("Expected a resolution failure")
+        } catch {
+            #expect((error as NSError).code == -10000)
+        }
     }
 
     @Test func pluginContextCannotBecomeTrustedRecoveryIdentity() {
