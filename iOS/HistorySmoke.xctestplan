@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "D33D4DE7-C720-4D91-A505-1B2DC719C50F",
+      "name" : "History Smoke",
+      "options" : { "language" : "zh-Hans", "region" : "SG" }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:AngelLive.xcodeproj",
+      "identifier" : "FB7077B22EA1D6450059AFD9",
+      "name" : "AngelLive"
+    },
+    "testExecutionOrdering" : "lexical",
+    "userAttachmentLifetime" : "keepAlways"
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:AngelLive.xcodeproj",
+        "identifier" : "A11E00000000000000000006",
+        "name" : "AngelLiveUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -8,9 +8,17 @@
 import Foundation
 
 public extension UserDefaults {
-    nonisolated(unsafe) static let shared = UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
+    nonisolated(unsafe) static let shared: UserDefaults = {
+        #if DEBUG
+        if let configuration = UITestLaunchConfiguration.process { return configuration.defaults }
+        #endif
+        return UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
+    }()
 
     func synchronized() -> UserDefaults {
+        #if DEBUG
+        if let configuration = UITestLaunchConfiguration.process { return configuration.defaults }
+        #endif
         return UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
     }
 

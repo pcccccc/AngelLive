@@ -6,6 +6,19 @@ import Foundation
 /// 因此提供一个共享实例给各平台调用。
 public enum LiveParsePlugins {
     public static let shared: LiveParsePluginManager = {
+        #if DEBUG
+        if let configuration = UITestLaunchConfiguration.process {
+            do {
+                let storage = try LiveParsePluginStorage(baseDirectory:
+                    configuration.directory.appendingPathComponent("LiveParse", isDirectory: true))
+                let session = URLSession(configuration: .ephemeral)
+                let vault = PlatformAPITokenVault(storage: UITestAPITokenStorage())
+                return LiveParsePluginManager(storage: storage, session: session, apiTokenVault: vault)
+            } catch {
+                fatalError("Cannot initialize isolated UI test plugin storage: \(error)")
+            }
+        }
+        #endif
         // 使用独立的 URLSession，禁用自动 cookie 管理，
         // 避免 HTTPCookieStorage 干扰插件手动设置的 Cookie header。
         let config = URLSessionConfiguration.default
@@ -44,3 +57,12 @@ public enum LiveParsePlugins {
         await shared.invalidateHTTPFailureCaches()
     }
 }
+
+#if DEBUG
+/// History smoke tests have no credentials and must never open the user's Keychain.
+private struct UITestAPITokenStorage: APITokenStorage {
+    func read(pluginId: String) throws -> Data? { nil }
+    func write(_ data: Data, pluginId: String) throws { throw APITokenError.storage }
+    func delete(pluginId: String) throws { throw APITokenError.storage }
+}
+#endif

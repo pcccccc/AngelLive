@@ -7,21 +7,32 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		152172A986DF41C4AE9BCC31 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = B8B9B3E117FA428194A9E13A /* SharedAssets */; };
 		4F76CB2F2FB1C4BF0019BDFF /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = 4F76CB282FB1C4BF0019BDFF /* AngelLiveCore */; };
 		4F76CB302FB1C4BF0019BDFF /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = 4F76CB292FB1C4BF0019BDFF /* AngelLiveDependencies */; };
 		4F76CB322FB1C4BF0019BDFF /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FBE22D672EE027C300866D4B /* Package.resolved */; };
 		4F76CB332FB1C4BF0019BDFF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */; };
+		7AE4CD6C6A064E2C92A97B4F /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = BD3882C465134EB3A5D66BD1 /* SharedAssets */; };
 		FB0F0B8F2EC5DE940006AE6E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */; };
 		FBE22D682EE027C300866D4B /* Package.resolved in Resources */ = {isa = PBXBuildFile; fileRef = FBE22D672EE027C300866D4B /* Package.resolved */; };
 		FBF74A742EA1F9A400591EEA /* AngelLiveCore in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A732EA1F9A400591EEA /* AngelLiveCore */; };
 		FBF74A762EA1F9A400591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A752EA1F9A400591EEA /* AngelLiveDependencies */; };
 		FBSPARKLE12EE8A0000000001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FBSPARKLE12EE8A0000000002 /* Sparkle */; };
-		7AE4CD6C6A064E2C92A97B4F /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = BD3882C465134EB3A5D66BD1 /* SharedAssets */; };
-		152172A986DF41C4AE9BCC31 /* SharedAssets in Frameworks */ = {isa = PBXBuildFile; productRef = B8B9B3E117FA428194A9E13A /* SharedAssets */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A17100000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FB7077C22EA1D6820059AFD9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FB7077C92EA1D6820059AFD9;
+			remoteInfo = AngelLiveMacOS;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		4F76CB372FB1C4BF0019BDFF /* Angel Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Angel Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A17100000000000000000002 /* AngelLiveMacOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AngelLiveMacOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
 		FB7077CA2EA1D6820059AFD9 /* Angel Live.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Angel Live.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBE22D672EE027C300866D4B /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = ../AngelLive.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = SOURCE_ROOT; };
@@ -47,6 +58,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A17100000000000000000003 /* AngelLiveMacOSUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AngelLiveMacOSUITests;
+			sourceTree = "<group>";
+		};
 		FB7077CC2EA1D6820059AFD9 /* AngelLiveMacOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -66,6 +82,13 @@
 				4F76CB2F2FB1C4BF0019BDFF /* AngelLiveCore in Frameworks */,
 				4F76CB302FB1C4BF0019BDFF /* AngelLiveDependencies in Frameworks */,
 				152172A986DF41C4AE9BCC31 /* SharedAssets in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A17100000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -89,6 +112,7 @@
 				FBE22D672EE027C300866D4B /* Package.resolved */,
 				FB0F0B8E2EC5DE940006AE6E /* Assets.xcassets */,
 				FB7077CC2EA1D6820059AFD9 /* AngelLiveMacOS */,
+				A17100000000000000000003 /* AngelLiveMacOSUITests */,
 				FBF74A722EA1F9A400591EEA /* Frameworks */,
 				FB7077CB2EA1D6820059AFD9 /* Products */,
 			);
@@ -99,6 +123,7 @@
 			children = (
 				FB7077CA2EA1D6820059AFD9 /* Angel Live.app */,
 				4F76CB372FB1C4BF0019BDFF /* Angel Live.app */,
+				A17100000000000000000002 /* AngelLiveMacOSUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -138,6 +163,27 @@
 			productReference = 4F76CB372FB1C4BF0019BDFF /* Angel Live.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A17100000000000000000005 /* AngelLiveMacOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A17100000000000000000006 /* Build configuration list for PBXNativeTarget "AngelLiveMacOSUITests" */;
+			buildPhases = (
+				A17100000000000000000007 /* Sources */,
+				A17100000000000000000004 /* Frameworks */,
+				A17100000000000000000008 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A17100000000000000000009 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A17100000000000000000003 /* AngelLiveMacOSUITests */,
+			);
+			name = AngelLiveMacOSUITests;
+			productName = AngelLiveMacOSUITests;
+			productReference = A17100000000000000000002 /* AngelLiveMacOSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		FB7077C92EA1D6820059AFD9 /* AngelLiveMacOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FB7077D52EA1D6860059AFD9 /* Build configuration list for PBXNativeTarget "AngelLiveMacOS" */;
@@ -174,6 +220,10 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					A17100000000000000000005 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = FB7077C92EA1D6820059AFD9;
+					};
 					FB7077C92EA1D6820059AFD9 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -198,6 +248,7 @@
 			targets = (
 				FB7077C92EA1D6820059AFD9 /* AngelLiveMacOS */,
 				4F76CB272FB1C4BF0019BDFF /* AngelLiveMacOS-AppStore */,
+				A17100000000000000000005 /* AngelLiveMacOSUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -209,6 +260,13 @@
 			files = (
 				4F76CB322FB1C4BF0019BDFF /* Package.resolved in Resources */,
 				4F76CB332FB1C4BF0019BDFF /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A17100000000000000000008 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -231,6 +289,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A17100000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB7077C62EA1D6820059AFD9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -239,6 +304,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A17100000000000000000009 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB7077C92EA1D6820059AFD9 /* AngelLiveMacOS */;
+			targetProxy = A17100000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4F76CB352FB1C4BF0019BDFF /* Debug */ = {
@@ -356,6 +429,34 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		A1710000000000000000000A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLiveMacOSUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = AngelLiveMacOS;
+			};
+			name = Debug;
+		};
+		A1710000000000000000000B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLiveMacOSUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = AngelLiveMacOS;
 			};
 			name = Release;
 		};
@@ -595,6 +696,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A17100000000000000000006 /* Build configuration list for PBXNativeTarget "AngelLiveMacOSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1710000000000000000000A /* Debug */,
+				A1710000000000000000000B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FB7077C52EA1D6820059AFD9 /* Build configuration list for PBXProject "AngelLiveMacOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -635,6 +745,14 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = AngelLiveDependencies;
 		};
+		B8B9B3E117FA428194A9E13A /* SharedAssets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SharedAssets;
+		};
+		BD3882C465134EB3A5D66BD1 /* SharedAssets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SharedAssets;
+		};
 		FBF74A732EA1F9A400591EEA /* AngelLiveCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = AngelLiveCore;
@@ -647,14 +765,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FBSPARKLE12EE8A0000000003 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
-		};
-		BD3882C465134EB3A5D66BD1 /* SharedAssets */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SharedAssets;
-		};
-		B8B9B3E117FA428194A9E13A /* SharedAssets */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SharedAssets;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

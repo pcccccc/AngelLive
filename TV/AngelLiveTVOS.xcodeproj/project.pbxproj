@@ -20,6 +20,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+        A17F00000000000000000001 /* PBXContainerItemProxy */ = {
+            isa = PBXContainerItemProxy;
+            containerPortal = 4FC3DCD22A49382F00CA36B9 /* Project object */;
+            proxyType = 1;
+            remoteGlobalIDString = 4FC3DCD92A49382F00CA36B9;
+            remoteInfo = AngelLiveTVOS;
+        };
 		FB19EE742EEBA4260099C48D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4FC3DCD22A49382F00CA36B9 /* Project object */;
@@ -44,6 +51,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        A17F00000000000000000002 /* AngelLiveTVOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AngelLiveTVOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLiveTVOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FB140CF82ECEB68500D12FD9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
 		FB19EE6D2EEBA4250099C48D /* TopShelfExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TopShelfExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -70,11 +78,13 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+        A17F00000000000000000003 /* AngelLiveTVOSUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AngelLiveTVOSUITests; sourceTree = "<group>"; };
 		4F3150422DF98086009B9FF5 /* AngelLiveTVOS */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (4F3150862DF98086009B9FF5 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = AngelLiveTVOS; sourceTree = "<group>"; };
 		FB19EE702EEBA4260099C48D /* TopShelfExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (FB19EE7A2EEBA4260099C48D /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = TopShelfExtension; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+        A17F00000000000000000004 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		4FC3DCD72A49382F00CA36B9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -105,6 +115,7 @@
 				FBE22D692EE027CA00866D4B /* Package.resolved */,
 				FB140CF82ECEB68500D12FD9 /* Assets.xcassets */,
 				4F3150422DF98086009B9FF5 /* AngelLiveTVOS */,
+                A17F00000000000000000003 /* AngelLiveTVOSUITests */,
 				FB19EE702EEBA4260099C48D /* TopShelfExtension */,
 				4FC3DCDB2A49382F00CA36B9 /* Products */,
 				FBDEF8382BB9CBCB002EE8FF /* Frameworks */,
@@ -115,6 +126,7 @@
 			isa = PBXGroup;
 			children = (
 				4FC3DCDA2A49382F00CA36B9 /* AngelLiveTVOS.app */,
+                A17F00000000000000000002 /* AngelLiveTVOSUITests.xctest */,
 				FB19EE6D2EEBA4250099C48D /* TopShelfExtension.appex */,
 			);
 			name = Products;
@@ -132,6 +144,19 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+        A17F00000000000000000005 /* AngelLiveTVOSUITests */ = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A17F00000000000000000006 /* Build configuration list for PBXNativeTarget "AngelLiveTVOSUITests" */;
+            buildPhases = (A17F00000000000000000007 /* Sources */, A17F00000000000000000004 /* Frameworks */, A17F00000000000000000008 /* Resources */, );
+            buildRules = ();
+            dependencies = (A17F00000000000000000009 /* PBXTargetDependency */, );
+            fileSystemSynchronizedGroups = (A17F00000000000000000003 /* AngelLiveTVOSUITests */, );
+            name = AngelLiveTVOSUITests;
+            packageProductDependencies = ();
+            productName = AngelLiveTVOSUITests;
+            productReference = A17F00000000000000000002 /* AngelLiveTVOSUITests.xctest */;
+            productType = "com.apple.product-type.bundle.ui-testing";
+        };
 		4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 4FC3DCFE2A49383100CA36B9 /* Build configuration list for PBXNativeTarget "AngelLiveTVOS" */;
@@ -193,6 +218,10 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
+                    A17F00000000000000000005 = {
+                        CreatedOnToolsVersion = 27.1;
+                        TestTargetID = 4FC3DCD92A49382F00CA36B9;
+                    };
 					4FC3DCD92A49382F00CA36B9 = {
 						CreatedOnToolsVersion = 14.3.1;
 					};
@@ -216,6 +245,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+                A17F00000000000000000005 /* AngelLiveTVOSUITests */,
 				4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */,
 				FB19EE6C2EEBA4250099C48D /* TopShelfExtension */,
 			);
@@ -223,6 +253,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+        A17F00000000000000000008 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		4FC3DCD82A49382F00CA36B9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -242,6 +273,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+        A17F00000000000000000007 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		4FC3DCD62A49382F00CA36B9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -259,6 +291,7 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+        A17F00000000000000000009 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 4FC3DCD92A49382F00CA36B9 /* AngelLiveTVOS */; targetProxy = A17F00000000000000000001 /* PBXContainerItemProxy */; };
 		FB19EE752EEBA4260099C48D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = FB19EE6C2EEBA4250099C48D /* TopShelfExtension */;
@@ -267,6 +300,40 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+        A17F00000000000000000010 /* Debug */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks", );
+                PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLiveTVOSUITests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = appletvos;
+                SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+                SWIFT_VERSION = 6.0;
+                TARGETED_DEVICE_FAMILY = 3;
+                TEST_TARGET_NAME = AngelLiveTVOS;
+                TVOS_DEPLOYMENT_TARGET = 17.0;
+            };
+            name = Debug;
+        };
+        A17F00000000000000000011 /* Release */ = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                CODE_SIGN_STYLE = Automatic;
+                GENERATE_INFOPLIST_FILE = YES;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks", );
+                PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLiveTVOSUITests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SDKROOT = appletvos;
+                SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+                SWIFT_VERSION = 6.0;
+                TARGETED_DEVICE_FAMILY = 3;
+                TEST_TARGET_NAME = AngelLiveTVOS;
+                TVOS_DEPLOYMENT_TARGET = 17.0;
+            };
+            name = Release;
+        };
 		39523F9DF14A4D0FB4B90CFD /* Release-SimpleLive */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -810,6 +877,12 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+        A17F00000000000000000006 /* Build configuration list for PBXNativeTarget "AngelLiveTVOSUITests" */ = {
+            isa = XCConfigurationList;
+            buildConfigurations = (A17F00000000000000000010 /* Debug */, A17F00000000000000000011 /* Release */, );
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Release;
+        };
 		4FC3DCD52A49382F00CA36B9 /* Build configuration list for PBXProject "AngelLiveTVOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

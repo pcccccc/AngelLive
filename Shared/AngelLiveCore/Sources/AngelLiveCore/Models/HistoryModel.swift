@@ -17,7 +17,7 @@ public final class HistoryModel {
         loadWatchList()
     }
 
-    init(defaults: UserDefaults) {
+    public init(defaults: UserDefaults) {
         self.defaults = defaults
         loadWatchList()
     }

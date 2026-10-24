@@ -24,30 +24,80 @@ func print(_ items: Any..., separator: String = " ", terminator: String = "\n") 
 struct AngelLiveApp: App {
     // 连接 AppDelegate 以支持屏幕方向控制
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    // 全局播放器协调器管理器
-    @State private var playerManager = PlayerCoordinatorManager()
-
-    // 首次启动管理器
-    @State private var welcomeManager = WelcomeManager()
-    @State private var favoriteViewModel = AppFavoriteModel()
-    @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
+    // Keep production dependencies shared across windows, as in the original App-level state.
+    @State private var launch = AppLaunch.current
 
     var body: some Scene {
         WindowGroup {
-            AngelLiveSceneView()
-                .environment(favoriteViewModel)
-                .developerModeConsoleOverlay()
-                .environment(pluginAvailability)
-                .environment(playerManager)
-                .environment(welcomeManager)
-                .installToast(position: .top)
-                // 旧单平台凭证管理已删除，凭证同步由 PlatformCredentialSyncService 管理
-                .onAppear {
-                    GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
+            switch launch {
+            case .production(let models):
+                ProductionAppRoot(models: models)
+            #if DEBUG
+            case .history(let context):
+                NavigationStack {
+                    HistoryListView(progressStore: context.progress)
                 }
-                .fullUIArcLoadingStyle(isEnabled: pluginAvailability.hasAvailablePlugins)
+                .environment(context.history)
+                .environment(context.favorite)
+                .installToast(position: .top)
+            case .invalid:
+                Text("UI 测试启动配置无效")
+                    .accessibilityIdentifier("uitest.launch.invalid")
+            #endif
+            }
         }
+    }
+}
+
+/// One instance belongs to App state; each window keeps its original scene-local history.
+private final class ProductionAppModels {
+    let playerManager = PlayerCoordinatorManager()
+    let welcomeManager = WelcomeManager()
+    let favoriteViewModel = AppFavoriteModel()
+    let pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
+}
+
+private enum AppLaunch {
+    case production(ProductionAppModels)
+    #if DEBUG
+    case history(UITestHistoryContext)
+    case invalid
+    #endif
+
+    /// Resolve once before creating any production dependency or preparing fixture storage.
+    static let current: AppLaunch = {
+        #if DEBUG
+        do {
+            if let configuration = try UITestLaunchConfiguration.current() {
+                return .history(try UITestHistoryContext.prepare(configuration: configuration))
+            } else if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-test") }) {
+                return .invalid
+            }
+        } catch {
+            // A malformed test launch must never fall through to personal application data.
+            return .invalid
+        }
+        #endif
+        return .production(ProductionAppModels())
+    }()
+}
+
+private struct ProductionAppRoot: View {
+    let models: ProductionAppModels
+
+    var body: some View {
+        AngelLiveSceneView()
+            .environment(models.favoriteViewModel)
+            .developerModeConsoleOverlay()
+            .environment(models.pluginAvailability)
+            .environment(models.playerManager)
+            .environment(models.welcomeManager)
+            .installToast(position: .top)
+            // 旧单平台凭证管理已删除，凭证同步由 PlatformCredentialSyncService 管理
+            .onAppear {
+                GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
+            }
+            .fullUIArcLoadingStyle(isEnabled: models.pluginAvailability.hasAvailablePlugins)
     }
 }
 
@@ -74,6 +124,13 @@ private extension View {
 class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        #if DEBUG
+        // Match all reserved test arguments, including malformed configurations.
+        // This gate runs before analytics, image cleanup, plugin and credential services.
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-test") }) {
+            return true
+        }
+        #endif
         MediaTransformSupport.registerHostCapability()
         BugsnagBootstrap.start(platform: .iOS)
         // 仅预配置播放类别，避免应用启动时立刻打断其他 App 的音频。

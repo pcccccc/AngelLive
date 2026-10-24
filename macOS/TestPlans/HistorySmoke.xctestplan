@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "id": "97B5A79D-870A-494D-9D56-C0EBBF1BFA74",
+      "name": "History smoke",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {
+    "targetForVariableExpansion": {
+      "containerPath": "container:AngelLiveMacOS.xcodeproj",
+      "identifier": "FB7077C92EA1D6820059AFD9",
+      "name": "AngelLiveMacOS"
+    },
+    "testTimeoutsEnabled": true,
+    "defaultTestExecutionTimeAllowance": 60,
+    "maximumTestExecutionTimeAllowance": 120
+  },
+  "testTargets": [
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:AngelLiveMacOS.xcodeproj",
+        "identifier": "A17100000000000000000005",
+        "name": "AngelLiveMacOSUITests"
+      }
+    }
+  ],
+  "version": 1
+}

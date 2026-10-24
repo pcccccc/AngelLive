@@ -14,9 +14,13 @@ struct HistoryListView: View {
     @Environment(HistoryModel.self) private var historyModel
     @State private var showClearAlert = false
     @State private var selectedType = 0
-    @State private var progressStore = ShortDramaProgressStore.shared
+    @State private var progressStore: ShortDramaProgressStore
     @State private var shortDramaRoom: LiveModel?
     @State private var historyError: String?
+
+    init(progressStore: ShortDramaProgressStore = .shared) {
+        _progressStore = State(initialValue: progressStore)
+    }
 
     private var liveRooms: [LiveModel] {
         historyModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
@@ -72,6 +76,7 @@ struct HistoryListView: View {
         let baseView = HistoryListViewControllerWrapper(
             navigationState: navigationState,
             namespace: roomTransitionNamespace,
+            progressStore: progressStore,
             historyEntries: progressStore.historyEntries,
             selectedType: $selectedType,
             onOpenShortDrama: { room in
@@ -93,14 +98,17 @@ struct HistoryListView: View {
                         Text("清空")
                             .foregroundStyle(AppConstants.Colors.error)
                     }
+                    .accessibilityIdentifier("history.clear")
                 }
             }
         }
         .alert(selectedType == 0 ? "清空直播历史" : "清空短剧历史", isPresented: $showClearAlert) {
             Button("取消", role: .cancel) { }
+                .accessibilityIdentifier("history.clear.cancel")
             Button("清空", role: .destructive) {
                 clearCurrentHistory()
             }
+            .accessibilityIdentifier("history.clear.confirm")
         } message: {
             Text(selectedType == 0 ? "确定要清空直播观看记录吗？" : "确定要清空短剧观看记录吗？续播进度仍会保留。")
         }
@@ -148,6 +156,7 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(\.presentToast) private var presentToast
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
+    let progressStore: ShortDramaProgressStore
     let historyEntries: [ShortDramaHistoryEntry]
     @Binding var selectedType: Int
     let onOpenShortDrama: (LiveModel) -> Void
@@ -157,6 +166,7 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
             historyModel: historyModel,
             navigationState: navigationState,
             namespace: namespace,
+            progressStore: progressStore,
             favoriteModel: favoriteModel
         )
         vc.toastPresenter = { presentToast($0) }

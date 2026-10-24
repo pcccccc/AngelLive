@@ -21,9 +21,26 @@ func print(_ items: Any..., separator: String = " ", terminator: String = "\n") 
 @main
 struct SimpleLiveTVOSApp: App {
 
-    var appViewModel = AppState()
+    private let appViewModel: AppState
+#if DEBUG
+    private let historyTestContext: UITestHistoryContext?
+#endif
 
     init() {
+#if DEBUG
+        do {
+            if let configuration = try UITestLaunchConfiguration.current() {
+                let context = try UITestHistoryContext.prepare(configuration: configuration)
+                historyTestContext = context
+                appViewModel = AppState(historyTestContext: context)
+                return
+            }
+            historyTestContext = nil
+        } catch {
+            fatalError("Cannot prepare isolated UI test history: \(error)")
+        }
+#endif
+        appViewModel = AppState()
         MediaTransformSupport.registerHostCapability()
         // 启动时将 Caches 中的插件同步到 App Group 容器（供 TopShelf 使用）
         PluginAppGroupSync.syncToAppGroup()
@@ -54,7 +71,25 @@ struct SimpleLiveTVOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(appViewModel: appViewModel)
+            rootView
+        }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+#if DEBUG
+        if let historyTestContext {
+            TVFullUIHistoryListView(appViewModel: appViewModel, progressStore: historyTestContext.progress)
+        } else {
+            productionRoot
+        }
+#else
+        productionRoot
+#endif
+    }
+
+    private var productionRoot: some View {
+        ContentView(appViewModel: appViewModel)
                 .task {
                     // 启动时同步所有平台的 Cookie 到 JS 插件
                     await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
@@ -72,6 +107,5 @@ struct SimpleLiveTVOSApp: App {
                 )) {
                     DeepLinkPlayerView(appViewModel: appViewModel)
                 }
-        }
     }
 }

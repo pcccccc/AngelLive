@@ -14,9 +14,13 @@ struct MacHistoryView: View {
     @Environment(ToastManager.self) private var toastManager
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(\.openWindow) private var openWindow
-    @State private var progressStore = ShortDramaProgressStore.shared
+    @State private var progressStore: ShortDramaProgressStore
     @State private var showClearAlert = false
     @State private var selectedType = 0
+
+    init(progressStore: ShortDramaProgressStore = .shared) {
+        _progressStore = State(initialValue: progressStore)
+    }
 
     private var liveRooms: [LiveModel] {
         historyModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
@@ -35,6 +39,7 @@ struct MacHistoryView: View {
                         symbolName: "clock.arrow.circlepath",
                         tint: .secondary
                     )
+                    .accessibilityIdentifier(selectedType == 0 ? "history.empty.live" : "history.empty.drama")
                 } else {
                     ScrollView { historyGridView }
                 }
@@ -45,12 +50,15 @@ struct MacHistoryView: View {
             if !isEmpty {
                 ToolbarItem(placement: .primaryAction) {
                     Button("清空") { showClearAlert = true }
+                        .accessibilityIdentifier("history.clear")
                 }
             }
         }
         .alert("清空\(selectedTitle)历史", isPresented: $showClearAlert) {
             Button("取消", role: .cancel) {}
+                .accessibilityIdentifier("history.clear.cancel")
             Button("清空", role: .destructive, action: clearCurrentHistory)
+                .accessibilityIdentifier("history.clear.confirm")
         } message: {
             Text(selectedType == 0 ? "确定要清空直播观看记录吗？" : "确定要清空短剧观看记录吗？续播进度仍会保留。")
         }
@@ -84,6 +92,7 @@ struct MacHistoryView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier(index == 0 ? "history.type.live" : "history.type.drama")
                 .accessibilityLabel(index == 0 ? "直播历史记录" : "短剧历史记录")
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
@@ -127,6 +136,7 @@ struct MacHistoryView: View {
                             historyModel.removeHistories(ids: [room.id])
                         })
                     }
+                    .accessibilityIdentifier("history.live.\(room.liveType.rawValue).\(room.roomId)")
                 }
             } else {
                 ForEach(progressStore.historyEntries) { entry in
@@ -136,6 +146,7 @@ struct MacHistoryView: View {
                                      subtitle: entry.historySubtitle,
                                      allowsFavoriteActions: entry.room != nil)
                     }
+                    .accessibilityIdentifier("history.drama.\(entry.key.pluginID).\(entry.key.roomID)")
                     .buttonStyle(MacRoomCardButtonStyle())
                     .macRoomCardHoverEffect()
                 }

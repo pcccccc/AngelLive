@@ -1,0 +1,28 @@
+{
+  "configurations": [{
+    "id": "E2BE0A3D-4711-48B3-841B-6CB3EAD59E1A",
+    "name": "History smoke",
+    "options": {"language": "zh-Hans", "region": "SG"}
+  }],
+  "defaultOptions": {
+    "targetForVariableExpansion": {
+      "containerPath": "container:AngelLiveTVOS.xcodeproj",
+      "identifier": "4FC3DCD92A49382F00CA36B9",
+      "name": "AngelLiveTVOS"
+    },
+    "testExecutionOrdering": "lexical",
+    "testTimeoutsEnabled": true,
+    "defaultTestExecutionTimeAllowance": 60,
+    "maximumTestExecutionTimeAllowance": 90,
+    "userAttachmentLifetime": "keepAlways"
+  },
+  "testTargets": [{
+    "parallelizable": false,
+    "target": {
+      "containerPath": "container:AngelLiveTVOS.xcodeproj",
+      "identifier": "A17F00000000000000000005",
+      "name": "AngelLiveTVOSUITests"
+    }
+  }],
+  "version": 1
+}

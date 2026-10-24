@@ -19,10 +19,12 @@ final class HistoryListViewController: UIViewController {
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
+    private let progressStore: ShortDramaProgressStore
     private let dataSource = JXSegmentedTitleDataSource()
     private let segmentedView = JXSegmentedView()
     private lazy var listContainer = JXSegmentedListContainerView(dataSource: self)
     private var pages: [Int: HistoryContentListViewController] = [:]
+    private var typeAccessibilityElements: [UIAccessibilityElement] = []
     var onSelectionChanged: ((Int) -> Void)?
     var onOpenShortDrama: ((LiveModel) -> Void)?
     var toastPresenter: ((ToastValue) -> Void)? {
@@ -30,10 +32,12 @@ final class HistoryListViewController: UIViewController {
     }
 
     init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState,
-         namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
+         namespace: Namespace.ID, progressStore: ShortDramaProgressStore = .shared,
+         favoriteModel: AppFavoriteModel? = nil) {
         self.historyModel = historyModel
         self.navigationState = navigationState
         self.namespace = namespace
+        self.progressStore = progressStore
         self.favoriteModel = favoriteModel
         super.init(nibName: nil, bundle: nil)
     }
@@ -45,10 +49,26 @@ final class HistoryListViewController: UIViewController {
         view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         FullUIMainCategoryStyle.configure(segmentedView, dataSource: dataSource)
         dataSource.titles = ["直播", "短剧"]
+        // JX owns visual selection separately from UICollectionView's tap-selected cells.
+        // Expose semantic controls on the strip so stale native cell selection cannot leak.
+        segmentedView.collectionView.accessibilityElementsHidden = true
+        typeAccessibilityElements = dataSource.titles.enumerated().map { index, title in
+            let element = UIAccessibilityElement(accessibilityContainer: segmentedView)
+            element.accessibilityIdentifier = index == 0 ? "history.type.live" : "history.type.drama"
+            element.accessibilityLabel = title
+            element.accessibilityActivateBlock = { [weak self] in
+                guard let self else { return false }
+                self.segmentedView.selectItemAt(index: index)
+                return true
+            }
+            return element
+        }
+        segmentedView.accessibilityElements = typeAccessibilityElements
         segmentedView.delegate = self
         segmentedView.listContainer = listContainer
         segmentedView.translatesAutoresizingMaskIntoConstraints = false
         listContainer.translatesAutoresizingMaskIntoConstraints = false
+        listContainer.accessibilityIdentifier = "history.pages"
         view.addSubview(segmentedView)
         view.addSubview(listContainer)
         NSLayoutConstraint.activate([
@@ -65,11 +85,28 @@ final class HistoryListViewController: UIViewController {
         listContainer.reloadData()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Use the rendered cell frames without changing their layout or selection state.
+        segmentedView.layoutIfNeeded()
+        segmentedView.collectionView.layoutIfNeeded()
+        updateTypeAccessibility()
+    }
+
+    private func updateTypeAccessibility() {
+        for (index, element) in typeAccessibilityElements.enumerated() {
+            guard let cell = segmentedView.collectionView.cellForItem(at: IndexPath(item: index, section: 0)) else { continue }
+            element.accessibilityFrameInContainerSpace = cell.convert(cell.bounds, to: segmentedView)
+            element.accessibilityTraits = index == segmentedView.selectedIndex ? [.button, .selected] : .button
+        }
+    }
+
     func reloadData() { pages.values.forEach { $0.reloadData() } }
 }
 
 extension HistoryListViewController: JXSegmentedViewDelegate {
     func segmentedView(_ segmentedView: JXSegmentedView, didSelectedItemAt index: Int) {
+        updateTypeAccessibility()
         pages.values.forEach { $0.cancelPendingNavigation() }
         onSelectionChanged?(index)
     }
@@ -82,7 +119,8 @@ extension HistoryListViewController: JXSegmentedListContainerViewDataSource {
                            initListAt index: Int) -> JXSegmentedListContainerViewListDelegate {
         let page = HistoryContentListViewController(
             historyModel: historyModel, navigationState: navigationState,
-            namespace: namespace, favoriteModel: favoriteModel, isShortDrama: index == 1
+            namespace: namespace, favoriteModel: favoriteModel, isShortDrama: index == 1,
+            progressStore: progressStore
         )
         page.toastPresenter = toastPresenter
         page.onOpenShortDrama = { [weak self] room in self?.onOpenShortDrama?(room) }
@@ -97,7 +135,7 @@ final class HistoryContentListViewController: UIViewController {
 
     private var historyModel: HistoryModel
     private let isShortDrama: Bool
-    private let progressStore = ShortDramaProgressStore.shared
+    private let progressStore: ShortDramaProgressStore
     private var liveCheckTask: Task<Void, Never>?
     private var liveCheckToken = UUID()
     var onOpenShortDrama: ((LiveModel) -> Void)?
@@ -132,6 +170,7 @@ final class HistoryContentListViewController: UIViewController {
         cv.delaysContentTouches = false
         cv.panGestureRecognizer.delaysTouchesBegan = false
         cv.alwaysBounceVertical = true
+        cv.accessibilityIdentifier = isShortDrama ? "history.list.drama" : "history.list.live"
         return cv
     }()
 
@@ -139,9 +178,10 @@ final class HistoryContentListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil, isShortDrama: Bool) {
+    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil, isShortDrama: Bool, progressStore: ShortDramaProgressStore = .shared) {
         self.historyModel = historyModel
         self.isShortDrama = isShortDrama
+        self.progressStore = progressStore
         self.navigationState = navigationState
         self.namespace = namespace
         self.favoriteModel = favoriteModel
@@ -296,6 +336,7 @@ final class HistoryContentListViewController: UIViewController {
         let hostingController = UIHostingController(rootView: AnyView(emptyView.fullUIArcLoadingStyle().fullUIWindowContext()))
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        hostingController.view.accessibilityIdentifier = isShortDrama ? "history.empty.drama" : "history.empty.live"
 
         addChild(hostingController)
         view.addSubview(hostingController.view)
@@ -338,11 +379,13 @@ extension HistoryContentListViewController: UICollectionViewDataSource {
         guard indexPath.item < itemCount, let favoriteModel else { return cell }
         if isShortDrama {
             let entry = progressStore.historyEntries[indexPath.item]
+            cell.accessibilityIdentifier = "history.item.drama.\(entry.key.pluginID).\(entry.key.roomID)"
             cell.configure(with: entry.historyDisplayRoom, favoriteModel: favoriteModel,
                            navigationState: navigationState, namespace: namespace,
                            subtitle: entry.historySubtitle)
         } else {
             let room = liveRooms[indexPath.item]
+            cell.accessibilityIdentifier = "history.item.live.\(room.liveType.rawValue).\(room.roomId)"
             cell.configure(with: room, favoriteModel: favoriteModel, navigationState: navigationState,
                            namespace: namespace, liveCheckMode: .remote, onDelete: { [weak self] in
                 self?.historyModel.removeHistories(ids: [room.id])

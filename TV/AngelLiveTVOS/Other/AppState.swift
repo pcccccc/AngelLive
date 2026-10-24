@@ -22,19 +22,21 @@ enum PluginManagementAutoAction: Sendable {
 class AppState {
     /// ShellUI 从收藏启动；FullUI 在推荐能力确认后由 ContentView 决定是否回退。
     var selection = 4
-    var favoriteViewModel = AppFavoriteModel()
-    var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
-    var pluginSourceManager = PluginSourceManager()
-    var pluginSourceSyncService = PluginSourceSyncService()
-    var consentService = PluginInstallConsentService()
-    var bookmarkService = StreamBookmarkService()
-    var shellHistoryService = ShellHistoryService()
-    var remoteInputService: RemoteInputService
-    var danmuSettingsViewModel = DanmuSettingModel()
-    var searchViewModel = SearchViewModel()
-    var historyViewModel = HistoryModel()
-    var playerSettingsViewModel = PlayerSettingModel()
-    var generalSettingsViewModel = GeneralSettingModel()
+    var favoriteViewModel: AppFavoriteModel
+    var pluginAvailability: PluginAvailabilityService
+    // These observable services own their own changes. Deferred construction allows
+    // the DEBUG history harness to use isolated models without starting host services.
+    @ObservationIgnored lazy var pluginSourceManager = PluginSourceManager()
+    @ObservationIgnored lazy var pluginSourceSyncService = PluginSourceSyncService()
+    @ObservationIgnored lazy var consentService = PluginInstallConsentService()
+    @ObservationIgnored lazy var bookmarkService = StreamBookmarkService()
+    @ObservationIgnored lazy var shellHistoryService = ShellHistoryService()
+    @ObservationIgnored lazy var remoteInputService = RemoteInputService()
+    @ObservationIgnored lazy var danmuSettingsViewModel = DanmuSettingModel()
+    @ObservationIgnored lazy var searchViewModel = SearchViewModel()
+    var historyViewModel: HistoryModel
+    @ObservationIgnored lazy var playerSettingsViewModel = PlayerSettingModel()
+    @ObservationIgnored lazy var generalSettingsViewModel = GeneralSettingModel()
 
     /// 控制 TVPluginManagementView 是否以 fullScreenCover 形式呈现。
     /// 所有触发 consent 的路径(用户添加源、一键安装、deep link)在调 installAll 前都先把它置 true,
@@ -47,14 +49,33 @@ class AppState {
     var pendingPluginManagementAction: PluginManagementAutoAction?
 
     init() {
-        let service = RemoteInputService()
-        service.start()
-        self.remoteInputService = service
+        favoriteViewModel = AppFavoriteModel()
+        pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
+        historyViewModel = HistoryModel()
+        // Preserve production startup, including eager service initialization.
+        _ = pluginSourceManager
+        _ = pluginSourceSyncService
+        _ = consentService
+        _ = bookmarkService
+        _ = shellHistoryService
+        _ = danmuSettingsViewModel
+        _ = searchViewModel
+        _ = playerSettingsViewModel
+        _ = generalSettingsViewModel
+        remoteInputService.start()
         selection = pluginAvailability.hasAvailablePlugins ? 4 : 0
 
         // 注入插件安装确认请求器
         pluginSourceManager.consentRequester = consentService
     }
+
+#if DEBUG
+    init(historyTestContext context: UITestHistoryContext) {
+        favoriteViewModel = context.favorite
+        historyViewModel = context.history
+        pluginAvailability = PluginAvailabilityService()
+    }
+#endif
 
     // MARK: - Deep Link
     var pendingDeepLinkRoom: LiveModel?

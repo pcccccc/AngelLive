@@ -518,6 +518,7 @@ struct LiveRoomCard: View {
                 Button(role: .destructive, action: callback) {
                     Label("删除历史记录", systemImage: "trash")
                 }
+                .accessibilityIdentifier("history.remove")
             }
         }
     }

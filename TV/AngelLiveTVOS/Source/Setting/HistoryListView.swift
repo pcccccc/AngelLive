@@ -144,10 +144,10 @@ private struct TVHistoryPendingRemoval {
 }
 
 /// FullUI keeps the original history grid and card geometry; only the source changes.
-private struct TVFullUIHistoryListView: View {
+struct TVFullUIHistoryListView: View {
     let appViewModel: AppState
     @State private var liveViewModel: LiveViewModel
-    @State private var progressStore = ShortDramaProgressStore.shared
+    @State private var progressStore: ShortDramaProgressStore
     @State private var selectedKind: TVHistoryKind = .live
     @State private var showClearAlert = false
     @State private var feedbackMessage: String?
@@ -157,8 +157,9 @@ private struct TVFullUIHistoryListView: View {
     @FocusState private var headerFocus: TVHistoryHeaderFocus?
     @FocusState private var cardFocus: FocusableField?
 
-    init(appViewModel: AppState) {
+    init(appViewModel: AppState, progressStore: ShortDramaProgressStore = .shared) {
         self.appViewModel = appViewModel
+        _progressStore = State(initialValue: progressStore)
         _liveViewModel = State(initialValue: LiveViewModel(
             roomListType: .history, liveType: .placeholder,
             appViewModel: appViewModel, shouldLoadData: false
@@ -229,7 +230,9 @@ private struct TVFullUIHistoryListView: View {
         .onPlayPauseCommand { }
         .alert("清空\(selectedKind.rawValue)历史记录", isPresented: $showClearAlert) {
             Button("取消", role: .cancel) { }
+                .accessibilityIdentifier("history.clear.cancel")
             Button("清空", role: .destructive, action: clearSelectedHistory)
+                .accessibilityIdentifier("history.clear.confirm")
         } message: {
             Text(selectedKind == .shortDrama
                  ? "确定要清空短剧观看记录吗？已保存的逐集播放进度会保留。"
@@ -261,6 +264,7 @@ private struct TVFullUIHistoryListView: View {
                         .foregroundStyle(.primary)
                 }
                 .focused($headerFocus, equals: .clear)
+                .accessibilityIdentifier("history.clear")
             }
         }
         .padding(.horizontal, 50)
@@ -287,6 +291,7 @@ private struct TVFullUIHistoryListView: View {
                     .foregroundStyle(.primary)
                 }
                 .focused($headerFocus, equals: .kind(kind))
+                .accessibilityIdentifier("history.kind.\(kind == .live ? "live" : "drama")")
                 .accessibilityLabel(kind.rawValue + "历史记录")
                 .accessibilityAddTraits(selectedKind == kind ? .isSelected : [])
                 .onMoveCommand { direction in
@@ -312,6 +317,7 @@ private struct TVFullUIHistoryListView: View {
                 Text("暂无\(selectedKind.rawValue)观看记录")
                     .font(.headline)
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("history.empty.\(selectedKind == .live ? "live" : "drama")")
                 Text("观看\(selectedKind.rawValue)后将自动记录在这里")
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)

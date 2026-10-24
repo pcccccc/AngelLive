@@ -15,7 +15,14 @@
 import Foundation
 
 public actor FavoriteLocalStore {
-    public static let shared = FavoriteLocalStore()
+    public static let shared: FavoriteLocalStore = {
+        #if DEBUG
+        if let configuration = UITestLaunchConfiguration.process {
+            return FavoriteLocalStore(directory: configuration.directory.appendingPathComponent("Favorites", isDirectory: true))
+        }
+        #endif
+        return FavoriteLocalStore()
+    }()
 
     private let fileName = "favorites.json"
     private let directoryOverride: URL?

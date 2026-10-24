@@ -41,7 +41,7 @@ public final class AppFavoriteModel {
     public private(set) var currentFavoriteGenerationID: UUID?
     /// 收藏是否启用 iCloud 同步。关闭 = 纯本地(服务「只有一台设备」的用户)。默认开启,保留既有行为。
     public var favoriteICloudSyncEnabled: Bool {
-        didSet { UserDefaults.standard.set(favoriteICloudSyncEnabled, forKey: Keys.favoriteICloudSyncEnabled) }
+        didSet { defaults.set(favoriteICloudSyncEnabled, forKey: Keys.favoriteICloudSyncEnabled) }
     }
     /// 最近一次收藏「云端同步」的错误(本地操作不受其影响)。非阻塞,供页面展示。
     public var lastSyncError: SyncError?
@@ -111,20 +111,24 @@ public final class AppFavoriteModel {
     @ObservationIgnored private var cloudMembershipTask: Task<Void, Never>?
     @ObservationIgnored private var cloudMembershipGeneration: UUID?
 
+    @ObservationIgnored private let defaults: UserDefaults
+
     private enum Keys {
         static let favoriteICloudSyncEnabled = "AppFavoriteModel.favoriteICloudSyncEnabled"
     }
 
     public init(
         refreshSession: FavoriteRefreshSession = FavoriteRefreshSession(),
-        refreshNow: @escaping @MainActor () -> Date = { Date() }
+        refreshNow: @escaping @MainActor () -> Date = { Date() },
+        defaults: UserDefaults = .standard
     ) {
+        self.defaults = defaults
         self.refreshSession = refreshSession
         self.refreshNow = refreshNow
-        if UserDefaults.standard.object(forKey: Keys.favoriteICloudSyncEnabled) == nil {
+        if defaults.object(forKey: Keys.favoriteICloudSyncEnabled) == nil {
             self.favoriteICloudSyncEnabled = true   // 默认开启,保留旧行为
         } else {
-            self.favoriteICloudSyncEnabled = UserDefaults.standard.bool(forKey: Keys.favoriteICloudSyncEnabled)
+            self.favoriteICloudSyncEnabled = defaults.bool(forKey: Keys.favoriteICloudSyncEnabled)
         }
     }
 

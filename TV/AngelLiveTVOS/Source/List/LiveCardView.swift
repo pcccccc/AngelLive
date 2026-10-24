@@ -133,6 +133,7 @@ struct LiveCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.card)
+        .accessibilityIdentifier(historyFocusID.map { "history.card.\($0)" } ?? "live.card.\(currentLiveModel.id)")
         .focused(externalFocusState ?? $internalFocusState, equals: focusValue)
         .onMoveCommand { direction in
             Logger.debug("LiveCardView onMoveCommand index=\(index) direction=\(direction)", category: .ui)
@@ -378,6 +379,7 @@ struct LiveCardView: View {
         } label: {
             Label("删除", systemImage: "trash")
         }
+        .accessibilityIdentifier("history.delete")
     }
 
     /// 播放器全屏内容

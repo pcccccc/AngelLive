@@ -51,6 +51,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if MacUITestBootstrap.context != nil { return }
+        #endif
         MediaTransformSupport.registerHostCapability()
         BugsnagBootstrap.start(platform: .macOS)
         KSOptions.logLevel = .error
@@ -79,35 +82,73 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// The holder is safe to construct in test launches: each production service is created on demand.
+@MainActor
+private final class MacProductionServices {
+    #if !APPSTORE
+    lazy var updater = UpdaterViewModel()
+    #endif
+    lazy var welcome = WelcomeManager()
+    lazy var favorite = AppFavoriteModel()
+    lazy var history = HistoryModel()
+    lazy var toast = ToastManager()
+    lazy var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
+}
+
+#if !APPSTORE
+private struct MacUpdateButton: View {
+    @ObservedObject var updater: UpdaterViewModel
+
+    var body: some View {
+        Button("检查更新...") { updater.checkForUpdates() }
+            .disabled(!updater.canCheckForUpdates)
+    }
+}
+#endif
+
 @main
 struct AngelLiveMacOSApp: App {
-
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
     @FocusedValue(\.macHomeRefreshAction) private var macHomeRefreshAction
-    #if !APPSTORE
-    // Sparkle 更新管理器
-    @StateObject private var updaterViewModel = UpdaterViewModel()
-    #endif
-    // 首次启动管理器
-    @State private var welcomeManager = WelcomeManager()
-    // 全局 ViewModels（用于共享到所有窗口）
-    @State private var favoriteViewModel = AppFavoriteModel()
-    @State private var historyViewModel = HistoryModel()
-    @State private var toastManager = ToastManager()
-    @State private var pluginAvailability = PluginAvailabilityService(managesAPICredentialPolicy: true)
+    @State private var production = MacProductionServices()
+
+    private var isUITesting: Bool {
+        #if DEBUG
+        MacUITestBootstrap.context != nil
+        #else
+        false
+        #endif
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        #if DEBUG
+        if let context = MacUITestBootstrap.context {
+            MacHistoryUITestRoot(context: context)
+        } else {
+            productionContent
+        }
+        #else
+        productionContent
+        #endif
+    }
+
+    private var productionContent: some View {
+        ContentView()
+            .environment(production.pluginAvailability)
+            .environment(production.welcome)
+            .environment(production.favorite)
+            .environment(production.history)
+            .environment(production.toast)
+            #if !APPSTORE
+            .environmentObject(production.updater)
+            #endif
+    }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(pluginAvailability)
-                .environment(welcomeManager)
-                .environment(favoriteViewModel)
-                .environment(historyViewModel)
-                .environment(toastManager)
-                #if !APPSTORE
-                .environmentObject(updaterViewModel)
-                #endif
+            mainContent
                 .frame(minWidth: 800, maxWidth: .infinity, minHeight: 450, maxHeight: .infinity)
         }
         .commands {
@@ -120,15 +161,14 @@ struct AngelLiveMacOSApp: App {
                         NSApp.orderFrontStandardAboutPanel(nil)
                     }
                 }
+                .disabled(isUITesting)
             }
             CommandGroup(after: .appInfo) {
                 #if !APPSTORE
-                Button("检查更新...") {
-                    updaterViewModel.checkForUpdates()
+                if !isUITesting {
+                    MacUpdateButton(updater: production.updater)
+                    Divider()
                 }
-                .disabled(!updaterViewModel.canCheckForUpdates)
-
-                Divider()
                 #endif
 
                 Button("刷新") {
@@ -139,16 +179,23 @@ struct AngelLiveMacOSApp: App {
                     }
                 }
                 .keyboardShortcut("r", modifiers: .command)
+                .disabled(isUITesting)
             }
             #if DEBUG
             // Debug 菜单 + ⌘⇧D 召出插件控制台,仅 DEBUG 构建可见。
-            DevConsoleCommands()
+            DevConsoleCommands(isEnabled: !isUITesting)
             #endif
         }
         .defaultSize(width: 1024, height: 960)
+        #if DEBUG
+        // UI tests open this native WindowGroup explicitly with File > New Window.
+        // Suppress automatic presentation so each launch owns exactly one window.
+        .defaultLaunchBehavior(isUITesting ? .suppressed : .automatic)
+        .restorationBehavior(isUITesting ? .disabled : .automatic)
+        #endif
 
         Window("关于 AngelLive", id: "about") {
-            MacAboutView()
+            if !isUITesting { MacAboutView() }
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -157,16 +204,16 @@ struct AngelLiveMacOSApp: App {
         .restorationBehavior(.disabled)
 
         #if DEBUG
-        DevConsoleScene(pluginAvailability: pluginAvailability)
+        DevConsoleScene(pluginAvailability: { production.pluginAvailability })
         #endif
 
         WindowGroup(for: LiveModel.self) { $room in
-            if let room = room {
+            if !isUITesting, let room = room {
                 MacRoomPlaybackDestination(room: room, presentation: .playerWindow)
-                    .environment(pluginAvailability)
-                    .environment(favoriteViewModel)
-                    .environment(historyViewModel)
-                    .environment(toastManager)
+                    .environment(production.pluginAvailability)
+                    .environment(production.favorite)
+                    .environment(production.history)
+                    .environment(production.toast)
                     .roomTitleTranslationHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
                     .supportDiagnosticsHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
                     .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))

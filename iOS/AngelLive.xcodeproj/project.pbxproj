@@ -15,7 +15,19 @@
 		FBF74A712EA1F99B00591EEA /* AngelLiveDependencies in Frameworks */ = {isa = PBXBuildFile; productRef = FBF74A702EA1F99B00591EEA /* AngelLiveDependencies */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A11E00000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FB7077AB2EA1D6450059AFD9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FB7077B22EA1D6450059AFD9;
+			remoteInfo = AngelLive;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		A11E00000000000000000002 /* AngelLiveUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AngelLiveUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A11E00000000000000000003 /* HistorySmoke.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = HistorySmoke.xctestplan; sourceTree = "<group>"; };
 		FB7077B32EA1D6450059AFD9 /* AngelLive.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AngelLive.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = ../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets; sourceTree = "<group>"; };
 		FBE22D652EE027BB00866D4B /* Package.resolved */ = {isa = PBXFileReference; lastKnownFileType = text; name = Package.resolved; path = ../AngelLive.xcworkspace/xcshareddata/swiftpm/Package.resolved; sourceTree = SOURCE_ROOT; };
@@ -32,6 +44,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A11E00000000000000000004 /* AngelLiveUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AngelLiveUITests;
+			sourceTree = "<group>";
+		};
 		FB7077B52EA1D6450059AFD9 /* AngelLive */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -43,6 +60,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A11E00000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB7077B02EA1D6450059AFD9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -60,6 +84,8 @@
 		FB7077AA2EA1D6450059AFD9 = {
 			isa = PBXGroup;
 			children = (
+				A11E00000000000000000004 /* AngelLiveUITests */,
+				A11E00000000000000000003 /* HistorySmoke.xctestplan */,
 				FBE22D652EE027BB00866D4B /* Package.resolved */,
 				FBA85D9E2EA5E83800D976E1 /* Assets.xcassets */,
 				FB7077B52EA1D6450059AFD9 /* AngelLive */,
@@ -72,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				FB7077B32EA1D6450059AFD9 /* AngelLive.app */,
+				A11E00000000000000000002 /* AngelLiveUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -86,6 +113,27 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A11E00000000000000000006 /* AngelLiveUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A11E00000000000000000007 /* Build configuration list for PBXNativeTarget "AngelLiveUITests" */;
+			buildPhases = (
+				A11E00000000000000000008 /* Sources */,
+				A11E00000000000000000005 /* Frameworks */,
+				A11E00000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A11E0000000000000000000A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A11E00000000000000000004 /* AngelLiveUITests */,
+			);
+			name = AngelLiveUITests;
+			productName = AngelLiveUITests;
+			productReference = A11E00000000000000000002 /* AngelLiveUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		FB7077B22EA1D6450059AFD9 /* AngelLive */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FB7077BE2EA1D6470059AFD9 /* Build configuration list for PBXNativeTarget "AngelLive" */;
@@ -122,6 +170,10 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					A11E00000000000000000006 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = FB7077B22EA1D6450059AFD9;
+					};
 					FB7077B22EA1D6450059AFD9 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -144,12 +196,20 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				A11E00000000000000000006 /* AngelLiveUITests */,
 				FB7077B22EA1D6450059AFD9 /* AngelLive */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A11E00000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB7077B12EA1D6450059AFD9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -162,6 +222,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A11E00000000000000000008 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB7077AF2EA1D6450059AFD9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -171,7 +238,45 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A11E0000000000000000000A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB7077B22EA1D6450059AFD9 /* AngelLive */;
+			targetProxy = A11E00000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		A11E0000000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLive.UITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = AngelLive;
+			};
+			name = Debug;
+		};
+		A11E0000000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.idog.AngelLive.UITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = AngelLive;
+			};
+			name = Release;
+		};
 		FB7077BC2EA1D6470059AFD9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -389,6 +494,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A11E00000000000000000007 /* Build configuration list for PBXNativeTarget "AngelLiveUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A11E0000000000000000000B /* Debug */,
+				A11E0000000000000000000C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FB7077AE2EA1D6450059AFD9 /* Build configuration list for PBXProject "AngelLive" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
