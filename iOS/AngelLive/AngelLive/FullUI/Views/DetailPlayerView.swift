@@ -359,6 +359,13 @@ struct LiveDetailPlayerView: View {
         .onChange(of: usesInPlaceFullscreen) { _, usesInPlace in
             if !usesInPlace { isIPadFullscreen = false }
         }
+        .onChange(of: usesExpandedLayout) { _, isExpanded in
+            // Entering an expanded phone layout restores details. Fullscreen
+            // choices within that layout and in iPad windows remain in place.
+            if isExpanded, usesPhoneOrientationPolicy {
+                isIPadFullscreen = false
+            }
+        }
         .onChange(of: verticalSizeClass) { oldValue, newValue in
             if !usesInPlaceFullscreen, oldValue == .compact, newValue == .regular {
                 isIPadFullscreen = false

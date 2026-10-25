@@ -1,4 +1,5 @@
 #if os(iOS)
+import CoreFoundation
 import CoreGraphics
 import ImageIO
 import QuartzCore
@@ -28,7 +29,7 @@ struct DanmakuDisplayScaleTests {
         cell.traitOverrides.displayScale = 2
         cell.updateTraitsIfNeeded()
         layer.displayIfNeeded()
-        let first = try #require(layer.contents as? CGImage)
+        let first = try imageContents(of: layer)
         #expect(layer.contentsScale == 2)
         #expect(first.width == 80 && first.height == 40)
 
@@ -40,7 +41,7 @@ struct DanmakuDisplayScaleTests {
         cell.updateTraitsIfNeeded()
         #expect(layer.needsDisplay())
         layer.displayIfNeeded()
-        let second = try #require(layer.contents as? CGImage)
+        let second = try imageContents(of: layer)
         #expect(layer.contentsScale == 3)
         #expect(second.width == 120 && second.height == 60)
         #expect((cell.model as? DanmakuTextCellModel) === model)
@@ -68,7 +69,7 @@ struct DanmakuDisplayScaleTests {
             cell.updateTraitsIfNeeded()
             cell.redraw()
             cell.layer.displayIfNeeded()
-            let bitmap = try #require(cell.layer.contents as? CGImage)
+            let bitmap = try imageContents(of: cell.layer)
             #expect(bitmap.width == 100 * scale)
             #expect(bitmap.height == 40 * scale)
         }
@@ -97,11 +98,18 @@ struct DanmakuDisplayScaleTests {
         cell.traitOverrides.displayScale = 3
         cell.updateTraitsIfNeeded()
         cell.layer.displayIfNeeded()
-        let retainedImage = try #require(cell.layer.contents as? CGImage)
+        let retainedImage = try imageContents(of: cell.layer)
         #expect(cell.layer.contentsScale == 3)
         #expect(retainedImage === image)
         #expect(cell.animator === animator)
         #expect(animator.currentFrameIndex == frameIndex)
+    }
+
+    private func imageContents(of layer: CALayer) throws -> CGImage {
+        let contents = try #require(layer.contents)
+        try #require(CFGetTypeID(contents as CFTypeRef) == CGImage.typeID)
+        // Swift cannot conditionally cast CF types; the assertion proves this cast.
+        return contents as! CGImage
     }
 
     private func makeImage() throws -> CGImage {

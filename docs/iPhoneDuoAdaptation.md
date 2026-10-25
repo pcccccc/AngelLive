@@ -1,6 +1,60 @@
 # iPhone Duo 适配
 
-状态：代码改动已落地，整体验收尚未完成。前次验收因 Mac 锁屏及交互工具失效停止；用户现已确认解锁，并要求先提交、推送当前进度。v6 已完成最后编辑后的 workspace 构建、正式安装、Running 捕获、Closed 首页视觉复核和真实直播进入全屏；返回、双击、内屏、真实短剧、普通设备与 iOS 运行片段仍待完成。此前 v4 安装包的三形态首页已通过 root 与 Astra 独立视觉复核，实际直播跨形态、就地全屏、分类和历史列表已有设备证据；这些不能替代最终新包检查，整体完成门禁尚未通过。范围为 iOS FullUI；保留 ShellUI、插件协议、账号数据和既有测试基础设施。
+状态：2026-10-25 剩余实测发现并修复“外屏全屏后展开仍隐藏详情”的回归。修复后 v7 已完成 Duo、普通 iPhone 与 iPad 新包构建、正式安装及下列设备交互；三段 UIKit 断言实际运行通过。真实短剧候选起播失败，亮度未取得数值证据；iPad 真正窄窗的全屏/Back 也已通过，测试数据与运行目标恢复已完成。证据位于 `runs/iphone-duo-finish-20261025/`。下方 v2–v6 均为历史版本，不能替代 v7。范围仅 iOS FullUI。
+
+## 2026-10-25 剩余验收
+
+基准为 `e78485eff1c03f8c83870aef289fc1f9b9889556`。保留任务前既有 scheme 启动调试配置修改；没有修改 ShellUI、签名、依赖、插件协议或用户账号。工具链 Xcode 27.1（27A9275）。JEV doctor 缺少模型服务凭据，按指南由唯一设备子代理使用 Device Hub；主管理窗口的嵌入设备坐标路径不可用，独立 compact 设备窗口的原生坐标实际有效。
+
+### 修复及新包门禁
+
+实测 Closed 显式全屏→Book→Open 时，详情持续隐藏。由 Astra/high 实际修改 `DetailPlayerView.swift` 7 行，在手机进入 regular/regular 布局时清理原有全屏意图；原页面继续拥有同一状态，不改变原有侧栏、控件样式、播放 identity 或 iPad 方向策略。源码 SHA256 为 `1f0023d10cd478de0451873d31ad26eed2cc013932a2d159311555a1193dff15`。root 已审阅 diff，并独立打开修复前后与下列最终包原尺寸截图。
+
+| 最后编辑后的 v7 | workspace MCP 构建 | 错误导航器 | 正式安装、运行捕获 |
+| --- | --- | --- | --- |
+| Duo / iOS 27.1 | response-113，16.675 秒，成功 | response-114，0 | response-116 成功；118 激活后 Running |
+| iPhone 17 / iOS 27.0 | response-125，15.104 秒，成功 | response-126，0 | response-128 成功；129 Running；130 Session stopped |
+| iPad Pro 11 英寸 M5 / iOS 27.0 | response-136，18.162 秒，成功 | response-137，0 | response-139 成功；140 Running；141 Session stopped |
+
+三个门禁的 398 个产品构建输入相同。Duo 的 117 为暂时后台，118 才是 Running；119 session 已过期，不能记作正常结束。之后各原生交互重新从实际应用图标启动，运行 PID 与门禁 PID 分开记录，不拼接为同一播放进程。实际包包含原 Launch Screen、生成启动配置与 iPad 四方向；没有 `UIRequiresFullScreen`。
+
+### v7 实际设备结果
+
+| 场景 | 结果 | 实际证据与边界 |
+| --- | --- | --- |
+| Duo 展开清理与折叠 | 通过所列链路 | 同一原生 PID 25260，Closed 全屏→Book/Open 恢复详情，媒体/聊天推进；`native-finish-v7-intent-*`。初次折回 Closed 仍为横屏 UI，实际 Home/前台后再 Closed 自动恢复竖屏详情，无额外全屏动作；不把横屏策略等同旧意图残留。Rotation Lock 状态未取得，不编造原因 |
+| Duo Open 竖/横与全屏返回 | 通过 | 手动全屏保留，Back 恢复原详情/侧栏；`native-finish-v7-open-manual-*`、`native-finish-v7-open-wide-*`。宽屏前后原侧栏边界及标题、头像、收藏、聊天层级一致 |
+| Duo Closed 控制 | 通过所列动作 | v7 按钮进入、双击进入和 Back 退出已实测，最终竖屏详情恢复；v7 Duo 双击退出未单独重复。双击双向另有本轮修复前 Duo 和 v7 普通手机实际证据 |
+| Duo 真正左右窄 Split | 通过 | 实际系统分隔条、另一半与窄应用窗口可见，左右均全屏→Back 恢复详情；`native-finish-v7-split-right-*` / `native-finish-v7-split-left-*`。按当前活动内屏 display3 及原生可见控件共同验收，不用旋转替代分屏。一次 AX Back 未生效，已用当前观察坐标成功返回，不计该无效图为通过 |
+| Duo 后台恢复、首页 | 通过当前状态 | 真正 Home→Springboard→系统搜索实际 App 图标→前台，同 PID 25260，媒体/聊天推进；`native-finish-v7-true-*`。`native-finish-v7-home-stable-display1.png` 无顶部白带、接缝或静止刷新圈；最终 Closed 详情见 `native-finish-v7-final-closed-detail-display1.png` |
+| 普通 iPhone | 通过 | v7 同 PID 29760：真实直播、按钮全屏/Back、双击双向、实际 Landscape/Portrait、真正 Home/前台恢复；`native-finish-phone-v7-*`。root 已打开原尺寸最终详情、双击、横屏及恢复截图，视频比例、原控件及安全区通过 |
+| iPad 竖屏、宽屏与旋转 | 通过 | 自有中立 24 秒样片真实推进，Portrait 全屏/Back、实际 Landscape 原右侧栏/全屏/Back、再 Portrait 恢复；`native-finish-pad-v7-*`。使用 `landscape-back-detail-native-display1.png`，排除 AX 无效尝试图；仅证明普通控制/布局，不替代真实短剧源 |
+| iPad 真正窄窗 | 通过全屏/返回 | 原系统已启用 Windowed Apps，未修改设置。通过系统顶栏 Window 菜单退出全屏并二等分到左侧，实际中立媒体推进、全屏→Back 恢复原详情；`native-finish-pad-narrow-*`。root 打开原生可见控件及 display1 原尺寸图，媒体比例、控制层安全区与原布局通过。恢复系统全屏的 AX 动作后退到资源库，正常图标重开为全屏；不能认定产品崩溃，宽窄同一播放连续恢复未验证 |
+| 亮度 | 未验证 | v7 普通手机确认手势开启、解锁全屏、VoiceOver 关闭、控制层隐藏后等待 5 秒，一次左半纯竖直原生 pointer 滑动未捕获 HUD/数值；8.673 秒原录像与全片 12fps 联系表保留。不据输入路径尚未隔离的结果认定产品故障 |
+
+原生 compact 物理预览与 scene UI 方向可能相差 180°；使用活动 raw display 判断产品方向，不将预览倒置当成布局故障。截图及相同 App PID 不证明零丢帧或播放器零重建。长文本、字体/深浅色及其他页面的历史验证范围继续见下方 v2–v6，不冒称本轮重新穷举。
+
+### 真实短剧候选与清理
+
+用户明确授权临时安装经核验的 v1.1.0。索引、ZIP SHA256、manifest 版本和短剧路由预检一致；外部普通浏览器 UA 请求为 200，不代替应用内播放。私有源与具体插件信息仅在被忽略的 `source-review/`，未写入宿主、测试或本文件。
+
+Duo 正常源刷新、风险确认及单插件安装成功；root 打开 `native-finish-candidate-version-and-install-receipt.png`，同页确认版本 1.1.0 与 1 成功/0 失败/0 取消。真实分类/列表加载，首条最终 `TIMEOUT` / `NSURLErrorDomain -1001`，尝试 2 次、`receivedHTTPResponse=false`、`00:00/00:00`，0 可播剧集。起播失败，切集/续播受阻；不能确定为服务端、App 或模拟器根因。此部分发生在只修改普通直播 DetailPlayerView 前，短剧路由源文件未改变。
+
+错误态选集面板半高→拖到全高→拖回半高→拖动收起实际通过，root 独立打开四张 `native-finish-drama-panel-*`；不将空列表证据用于非空 48pt 剧集行、切集或折叠后时间保留。候选已正常卸载，删除仅本轮新增源与可识别样片历史，Duo 原有 18 插件/2 源保留。Pad 自有普通样片第一轮也已清理至 0 插件/0 源/空历史，窄窗补验后再次通过正常删除源及关联插件回到原无插件配置，单条历史删除并截图为空，恢复系统全屏窗口及 Portrait，原 Windowed Apps 设置保留。
+
+### UIKit 弹幕与测试代码
+
+修正 `DanmakuDisplayScaleTests.swift` 四处 Swift 不接受的 CF 条件转换：共同 helper 先 `#require` 非空及 `CFGetTypeID(...) == CGImage.typeID`，再转换；原像素、重绘、模型/动画、GIF identity 断言保留。同一实际 iOS SDK、当前构建 Core module 与 Testing 宏下，HEAD 原文件类型检查失败，修正后整文件退出 0，见 `root-danmaku-testfile-ios-comparison.json`。
+
+随后 Xcode 27.1 `RunCodeSnippet` 在 UIKit private iPad Pro 13 英寸 M5 / iOS 27.0 预览宿主取得三组明确运行 PASS：
+
+- response-149：父 traits 2×→3×，位图 80×40→120×60，相同 scale 不重绘、变化失效，模型/运动动画保留。
+- response-147：图像与混合弹幕在 2×/3× 为 200×80 / 300×120。
+- response-148：GIF 当前 CGImage、animator 和 frame index 在 scale 改变后保留。
+
+root 独立读取匹配 id 的最终 `executionResults`。145 首次冷启动预览超时，146 控制台为空，均保留且不计 PASS。短宿主为 `FullUIWindowContext.swift`，原测试片段无删改；工具自动选择私有预览宿主，不冒称在 toolbar 标准 Pad11 包内执行。`GetTestList` 实际发现 HistorySmoke 7 项，但未执行；三段片段不等于完整 `@Test` suite。历史 macOS 59 项 Core 测试也不包含 iOS-only 文件。
+
+机器可读结果：`root-acceptance-checklist.json`；独立看图：`root-visual-review.json`；运行结果：`runtime-uikit-results.json`；最终用户报告：`root-acceptance-report.md`。全仓扫描覆盖 832 路径/739 文本/93 二进制清单，已知具体平台标识和测试数字映射候选均为 0；6 处歧义已人工确认通用含义，有限词表与二进制未 OCR 的边界见 `root-platform-neutrality-review.json`。最终所有标准及私有预览 iOS 设备已正常关闭，Xcode 恢复 `AngelLive / iPhone 17（27.0）`。146 个请求均有最终回执、无 pending；本轮 bridge 正常退出，健康 Xcode 保持，见 `final-restoration.json`。剩余未通过或未验证项为真实短剧起播及依赖它的切集/续播、亮度数值、Pad 宽窄同一播放连续恢复。
 
 ## 官方依据
 
@@ -9,6 +63,7 @@
 - Apple `device-interaction` Skill：workspace session、最后编辑后的安装、逐步截图及层级验收。
 - [Prepare your app for iPhone Duo](https://developer.apple.com/videos/play/tech-talks/111461/)
 - [Designing for iPhone Duo](https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo)
+- [Multitask on iPad](https://support.apple.com/en-us/125309)：正常系统 Windowed Apps 设置、窗口角与窗口菜单操作；实际原设置仍须逐次观察
 
 ## 方案与边界
 
@@ -71,7 +126,7 @@
 
 机器可读的逐文件五项检测及理由保存在 `runs/iphone-duo-adaptation/coverage-audit.json`（忽略提交的本地证据）。该清单的 HEAD 对照不是任务前脏工作区快照；其他任务修改独立保留。
 
-## 视觉参考与验收
+## 视觉参考与历史验收（v2–v6）
 
 复用现有 DetailPlayerView 的播放器、400pt 信息面板、StreamerInfoView、ChatTableView、RoomActionDock，以及既有控制层字体、图标、边距和触控尺寸。短剧参照 `docs/ShortDramaModePlan.md` 及既有 44pt 控件、48pt 选集格、8pt 网格间距与 60×84pt 海报；历史/分类栏参照 CategoryManagement 的同类安全区约束。不新增另一套卡片或设置行样式。布局实现使用 GPT-6 Astra/high 或 GPT-6.1 Sol/high，出现视觉破坏交 Astra/high 实际重写。
 
@@ -95,7 +150,7 @@
 
 v4 的正式新包门禁已补齐：response-81 建立同一设备的 workspace session，response-82 为最后源码编辑后的 `DeviceInteractionInstallAndRun`，明确返回安装并运行成功；随后 response-83 空交互捕获为 `Running`。此前 `simctl` 安装与产物哈希是辅助证据，不冒称官方安装回执；上表的局部通过结论仍不代表整体适配已完成。
 
-## 当前验证记录
+## 首轮验证记录（历史）
 
 - 首轮 `AngelLive` / iPhone Duo workspace MCP `BuildProject` 成功（31.6 秒，`errors=[]`），见 `runs/iphone-duo-adaptation/response-5.json`、`first-build.log`。这是中间版本编译，后续 Welcome / UIKit / Danmaku 编辑必须再构建。
 - 构建后 Issue Navigator 仍有 4 条另一任务的 macOS `HistorySmokeTests` 失败记录（`response-6.json`），不属于本次 iOS 编译诊断，也不能将其记为通过。
@@ -153,10 +208,10 @@ v4 的正式新包门禁已补齐：response-81 建立同一设备的 workspace 
 
 - 随后 CUA 正式重置明确返回 Mac 已锁屏，不能自动解锁；已停止 UI 输入和进一步工具恢复，向用户请求正常解锁。此状态解释当前交互阻塞，不是产品全屏返回失败的证据。锁屏期间只继续不依赖 UI 的独立检查，不绕过系统锁屏。
 
-本节结果优先于前次停止点；后续验收以 v6 最后编辑后的正式安装与实际截图为准。
+本节结果在该次恢复中优先于前次停止点；2026-10-25 继续验收使用本文顶部记录的当前包，不沿用本节的旧会话或旧包证明。
 
 
-## 当前停止点与下一步
+## 2026-10-22 停止点（历史）
 
 - 当前源码为 v6，54 个构建输入哈希仍全部匹配，后续没有产品代码编辑。root 与 Astra 对上述实际截图分别复核，整体完成门槛仍未通过。
 - 原生工具明确返回 Mac 已锁屏后，停止设备输入，已请求用户正常解锁。会话关闭请求没有返回最终结果；发送标准取消通知并有界等待后仍未确认，仅正常结束本轮 Python/MCP 客户端，没有重启 Xcode 或 Device Hub。该请求最终结果未知，不能写作会话成功关闭。
@@ -168,6 +223,6 @@ v4 的正式新包门禁已补齐：response-81 建立同一设备的 workspace 
 最新设备清单：`runs/iphone-duo-adaptation/resume-20261022/device-resume-final-manifest.json`；root 独立复核记录：`root-v6-verification.json`。旧版本证据只代表各自版本与已列范围。
 
 
-## 当前进度提交
+## 适配进度提交（历史）
 
 用户确认 Mac 已解锁后，先要求保存并推送当前进度。本次提交仅包含 Duo 适配、对应测试源码和本文档；另一聊天尚未提交的 XCUITest 改动保留在工作区。混合的 UIKit 历史页只提交本任务的安全区锚点与 FullUI 窗口上下文，其他测试注入及无障碍标识改动不包含在本次提交。此前构建与设备证据来自当时完整工作区，不冒称本次拆分提交单独完成了重建或全部视觉验收。剩余验收及现场恢复项目继续保留，不以提交或推送表示适配完成。
