@@ -5,6 +5,7 @@ public struct PlatformAPIAccountView: View {
     public let entry: LoginPlatformEntry
     public let onChangeLogin: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @State private var service = PlatformAPITokenService.shared
     @State private var working = false
     @State private var validationCompleted = false
@@ -65,9 +66,12 @@ public struct PlatformAPIAccountView: View {
             }
             .disabled(working)
             .navigationTitle("\(entry.displayName) 账号")
+            .macSettingsPage("\(entry.displayName) 账号", closeTitle: "完成", closeDisabled: working)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.disabled(working)
+                if !usesSettingsPresentation {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完成") { dismiss() }.disabled(working)
+                    }
                 }
             }
             .task { await service.load(pluginId: entry.pluginId) }

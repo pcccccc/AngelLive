@@ -12,6 +12,7 @@ struct MacAccountManagementView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     private let recoveryPluginIDs: [String]?
 
     @State private var platforms: [LoginPlatformEntry] = []
@@ -43,18 +44,7 @@ struct MacAccountManagementView: View {
     var body: some View {
         Form {
             Section {
-                PanelHintCard(
-                    title: recoveryPluginIDs == nil ? "登录后自动同步会话" : "选择登录平台",
-                    message: recoveryPluginIDs == nil
-                        ? "凭据由宿主安全保存，仅提供给对应插件用于登录验证和鉴权，不会与其他插件共享。"
-                        : "完成登录后关闭此页，回到当前页面手动重试。",
-                    systemImage: "person.crop.circle.badge.checkmark",
-                    tint: .blue
-                )
-            }
-
-            Section {
-                if recoveryPluginIDs != nil, !platformsLoaded {
+                if !platformsLoaded {
                     ProgressView("正在读取登录方式…")
                         .frame(maxWidth: .infinity, minHeight: 180)
                 } else if recoveryPluginIDs != nil, platforms.isEmpty {
@@ -91,17 +81,19 @@ struct MacAccountManagementView: View {
             } header: {
                 Text("平台列表")
             } footer: {
-                if !platforms.isEmpty {
-                    Text("共 \(platforms.count) 个平台")
-                }
+                Text(recoveryPluginIDs == nil
+                     ? "凭据由宿主安全保存，仅供对应插件登录验证使用，不会与其他插件共享。"
+                     : "完成登录后关闭此页，回到当前页面手动重试。")
             }
         }
         .formStyle(.grouped)
         .navigationTitle(recoveryPluginIDs == nil ? "账号管理" : "登录平台")
+        .macSettingsPage(recoveryPluginIDs == nil ? "账号管理" : "登录平台")
         .toolbar {
-            if recoveryPluginIDs != nil {
+            if recoveryPluginIDs != nil && !usesSettingsPresentation {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
                 }
             }
         }
@@ -126,6 +118,7 @@ struct MacAccountManagementView: View {
                 method: selection.method,
                 startsWithLogin: selection.startsWithLogin
             )
+                .macSettingsSheetPresentation(inheriting: true)
                 .frame(minWidth: 800, minHeight: 600)
         }
         .sheet(item: $accountSelection, onDismiss: {
@@ -138,6 +131,8 @@ struct MacAccountManagementView: View {
                 pendingMethodSelection = entry
                 accountSelection = nil
             }
+            .formStyle(.grouped)
+            .macSettingsSheetPresentation(inheriting: true)
             .frame(minWidth: 480, minHeight: 420)
         }
     }

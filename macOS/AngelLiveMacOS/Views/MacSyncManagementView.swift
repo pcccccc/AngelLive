@@ -38,67 +38,53 @@ struct MacSyncManagementView: View {
     var body: some View {
         Form {
             Section {
-                PanelHintCard(
-                    title: "iCloud 同步登录信息",
-                    message: "登录的 Cookie 会通过 iCloud 同步到您其它设备,登录态不再需要重新登录。",
-                    systemImage: "icloud.fill",
-                    tint: .cyan
-                )
-            }
-
-            Section {
-                Toggle(isOn: $syncService.iCloudSyncEnabled) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "icloud.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.cyan.gradient)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("iCloud 自动同步")
-                                .font(.body.weight(.medium))
-                            Text("登录后 Cookie 自动同步到其他设备")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .tint(AppConstants.Colors.accent)
-
-                if let lastSync = syncService.lastICloudSyncTime {
-                    HStack(spacing: 8) {
-                        Image(systemName: "clock")
-                            .foregroundStyle(.secondary)
-                        Text("上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
+                PanelNavigationRow(
+                    title: "iCloud 自动同步",
+                    subtitle: "登录信息自动同步到其他设备",
+                    showsChevron: false
+                ) {
+                    Image(systemName: "icloud.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.cyan.gradient)
+                } trailing: {
+                    Toggle("iCloud 自动同步", isOn: $syncService.iCloudSyncEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(AppConstants.Colors.accent)
+                        .accessibilityLabel("iCloud 自动同步")
+                        .accessibilityHint("登录信息自动同步到其他设备")
                 }
             } header: {
-                Text("自动同步")
+                Text("登录信息同步")
+            } footer: {
+                if let lastSync = syncService.lastICloudSyncTime {
+                    Text("上次同步：\(PlatformCredentialSyncService.formatSyncTime(lastSync))")
+                }
             }
 
             Section {
-                Toggle(isOn: Binding(
-                    get: { favoriteModel.favoriteICloudSyncEnabled },
-                    set: { newValue in
-                        favoriteModel.favoriteICloudSyncEnabled = newValue
-                        if newValue { Task { await favoriteModel.pullToRefresh() } }
-                    }
-                )) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.orange.gradient)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("收藏 iCloud 同步")
-                                .font(.body.weight(.medium))
-                            Text("关闭后收藏仅保存在本机")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                PanelNavigationRow(
+                    title: "收藏 iCloud 同步",
+                    subtitle: "关闭后收藏仅保存在本机",
+                    showsChevron: false
+                ) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.orange.gradient)
+                } trailing: {
+                    Toggle("收藏 iCloud 同步", isOn: Binding(
+                        get: { favoriteModel.favoriteICloudSyncEnabled },
+                        set: { newValue in
+                            favoriteModel.favoriteICloudSyncEnabled = newValue
+                            if newValue { Task { await favoriteModel.pullToRefresh() } }
                         }
-                    }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(AppConstants.Colors.accent)
+                    .accessibilityLabel("收藏 iCloud 同步")
+                    .accessibilityHint("关闭后收藏仅保存在本机")
                 }
-                .tint(AppConstants.Colors.accent)
 
                 if let syncError = favoriteModel.lastSyncError {
                     HStack(spacing: 8) {
@@ -167,19 +153,15 @@ struct MacSyncManagementView: View {
                     Button(role: .destructive) {
                         showClearCloudConfirm = true
                     } label: {
-                        HStack(spacing: 12) {
+                        PanelNavigationRow(
+                            title: isClearingCloudLoginInfo ? "正在清理…" : "清理云端登录信息",
+                            subtitle: "不影响此 Mac 上的登录信息",
+                            showsChevron: false
+                        ) {
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.red)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(isClearingCloudLoginInfo ? "正在清理..." : "清理云端登录信息")
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(.red)
-                                Text("仅清理 iCloud 中保存的登录信息,不影响本机")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
+                        } trailing: {
                             if isClearingCloudLoginInfo {
                                 ProgressView()
                                     .controlSize(.small)
@@ -195,6 +177,7 @@ struct MacSyncManagementView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("同步管理")
+        .macSettingsPage("同步管理")
         .task {
             await syncService.refreshAllLoginStatus()
         }
@@ -275,6 +258,7 @@ struct MacSyncManagementView: View {
                 FavoriteImportResultView(report: report) {
                     showImportResult = false
                 }
+                .macSettingsSheetPresentation(inheriting: true)
                 .frame(minWidth: 460, minHeight: 420)
             }
         }

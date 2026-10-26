@@ -60,37 +60,20 @@ struct MacPluginManagementView: View {
     var body: some View {
         @Bindable var consent = consentService
 
-        VStack(spacing: 0) {
-            header
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+        NavigationStack {
+            Form {
+                Section {
                     PluginUpdateOverview(
                         manager: pluginSourceManager,
                         installedPluginIds: allInstalledPluginIds,
                         update: updatePlugins,
                         check: checkUpdates
                     )
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                }
 
-                    Divider()
-
-                    MacPluginManagementScopePicker(
-                        scope: $scope,
-                        installedCount: allInstalledPluginIds.count,
-                        availableCount: allAvailablePlugins.count
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-
-                    if let message = pluginSourceManager.errorMessage {
+                Section {
+                    if pluginSourceManager.errorMessage != nil {
                         PluginManagementOperationError(manager: pluginSourceManager)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 10)
-                            .accessibilityLabel("操作未完成：\(message)")
                     }
 
                     MacPluginManagementList(
@@ -117,16 +100,50 @@ struct MacPluginManagementView: View {
                             )
                         }
                     )
+                } header: {
+                    HStack(spacing: 12) {
+                        MacPluginManagementScopePicker(
+                            scope: $scope,
+                            installedCount: allInstalledPluginIds.count,
+                            availableCount: allAvailablePlugins.count
+                        )
+                        MacPluginSearchField(text: $searchText, focusRequest: searchFocusRequest)
+                            .frame(width: 220)
+                    }
                 }
-                .frame(maxWidth: 820, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .center)
+
+                Section("管理") {
+                    Button { showSources = true } label: {
+                        PanelNavigationRow(
+                            title: "订阅源",
+                            subtitle: "管理插件来源与订阅状态"
+                        ) {
+                            Image(systemName: "list.bullet.rectangle")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        } trailing: {
+                            Text("\(pluginSourceManager.sourceURLs.count) 个")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Button { showAddSource = true } label: {
+                        PanelNavigationRow(title: "添加订阅源", showsChevron: false) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(pluginSourceManager.isManagementBusy)
+                }
             }
-
-            Divider()
-
-            footer
+            .formStyle(.grouped)
+            .navigationTitle("插件管理")
+            .macSettingsPage("插件管理")
         }
-        .background(.background)
+        .macSettingsSheetPresentation()
         .focusedSceneValue(
             \.pluginManagementActions,
             MacPluginManagementActions(
@@ -146,12 +163,14 @@ struct MacPluginManagementView: View {
             NavigationStack {
                 MacPluginSourcesView(reloadCatalog: reloadCatalog)
             }
+            .macSettingsSheetPresentation()
             .frame(minWidth: 620, idealWidth: 700, minHeight: 420, idealHeight: 520)
         }
         .sheet(isPresented: $showAddSource) {
             NavigationStack {
                 MacPluginAddSourceView(reloadCatalog: reloadCatalog)
             }
+            .macSettingsSheetPresentation()
             .frame(minWidth: 460, idealWidth: 520, minHeight: 280, idealHeight: 320)
         }
         .confirmationDialog(
@@ -186,51 +205,7 @@ struct MacPluginManagementView: View {
         } message: {
             Text(consent.alertMessage)
         }
-        .frame(minWidth: 760, minHeight: 580)
-    }
-
-    private var header: some View {
-        HStack(spacing: 16) {
-            Text("插件管理")
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer(minLength: 16)
-
-            MacPluginSearchField(text: $searchText, focusRequest: searchFocusRequest)
-                .frame(minWidth: 180, idealWidth: 220, maxWidth: 260)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .frame(maxWidth: 820)
-        .frame(maxWidth: .infinity)
-    }
-
-    private var footer: some View {
-        HStack(spacing: 8) {
-            Button("添加订阅源", systemImage: "plus") {
-                showAddSource = true
-            }
-            .disabled(pluginSourceManager.isManagementBusy)
-
-            Spacer(minLength: 16)
-
-            Button("关闭") { dismiss() }
-                .keyboardShortcut(.cancelAction)
-
-            Button("订阅源", systemImage: "list.bullet.rectangle") {
-                showSources = true
-            }
-            .buttonStyle(.borderedProminent)
-            .help("管理订阅源")
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.regular)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 820)
-        .frame(maxWidth: .infinity)
+        .frame(minWidth: 600, minHeight: 520)
     }
 
     private func pluginMatchesSearch(pluginId: String, remote: RemotePluginDisplayItem? = nil) -> Bool {
@@ -244,7 +219,7 @@ struct MacPluginManagementView: View {
     private func managedPluginRow(
         pluginId: String,
         remote: RemotePluginDisplayItem? = nil
-    ) -> PluginManagementPluginRow {
+    ) -> MacSettingsPluginRow {
         let installed = pluginSourceManager.installedVersion(for: pluginId)
         let latest = pluginSourceManager.latestVersion(for: pluginId)
         let version = installed.map { current in
@@ -258,7 +233,7 @@ struct MacPluginManagementView: View {
             .flatMap { MacPlatformIconProvider.pluginManagementImage(for: $0.liveType) }
             .map { Image(nsImage: $0) }
 
-        return PluginManagementPluginRow(
+        return MacSettingsPluginRow(
             name: pluginSourceManager.managementDisplayName(for: pluginId),
             version: version,
             requiresLogin: pluginAvailability.requiresLogin(for: pluginId) || remote?.item.auth?.required == true,
@@ -408,7 +383,7 @@ private struct MacPluginManagementScopePicker: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 240)
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityLabel("插件范围")
 
             Text(scope == .installed ? "\(installedCount) 个插件" : "\(availableCount) 个插件")
@@ -430,15 +405,15 @@ private struct MacPluginManagementList: View {
     let isManagementBusy: Bool
     let hasInstallablePlugins: Bool
     let searchText: String
-    let makeInstalledRow: (String) -> PluginManagementPluginRow
-    let makeAvailableRow: (RemotePluginDisplayItem) -> PluginManagementPluginRow
+    let makeInstalledRow: (String) -> MacSettingsPluginRow
+    let makeAvailableRow: (RemotePluginDisplayItem) -> MacSettingsPluginRow
     let displayNameForPlugin: (String) -> String
     let installAll: () -> Void
     let openAddSource: () -> Void
     let requestUninstall: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        Group {
             switch scope {
             case .installed:
                 MacInstalledPluginSection(
@@ -462,23 +437,19 @@ private struct MacPluginManagementList: View {
                 )
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
     }
 }
 
 private struct MacInstalledPluginSection: View {
     let pluginIds: [String]
     let searchText: String
-    let makeRow: (String) -> PluginManagementPluginRow
+    let makeRow: (String) -> MacSettingsPluginRow
     let isManagementBusy: Bool
     let displayNameForPlugin: (String) -> String
     let requestUninstall: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            MacPluginSectionHeader(title: "已安装插件")
-
+        Group {
             if pluginIds.isEmpty {
                 MacPluginEmptyState(
                     title: searchText.isEmpty ? "暂无已安装插件" : "没有匹配的插件",
@@ -488,16 +459,13 @@ private struct MacInstalledPluginSection: View {
                     systemImage: "puzzlepiece.extension"
                 )
             } else {
-                MacPluginRowsGroup {
-                    ForEach(pluginIds, id: \.self) { pluginId in
-                        MacInstalledPluginRow(
-                            pluginName: displayNameForPlugin(pluginId),
-                            row: makeRow(pluginId),
-                            isManagementBusy: isManagementBusy,
-                            showsSeparator: pluginId != pluginIds.last,
-                            requestUninstall: { requestUninstall(pluginId) }
-                        )
-                    }
+                ForEach(pluginIds, id: \.self) { pluginId in
+                    MacInstalledPluginRow(
+                        pluginName: displayNameForPlugin(pluginId),
+                        row: makeRow(pluginId),
+                        isManagementBusy: isManagementBusy,
+                        requestUninstall: { requestUninstall(pluginId) }
+                    )
                 }
             }
         }
@@ -509,24 +477,18 @@ private struct MacAvailablePluginSection: View {
     let sourceCount: Int
     let isManagementBusy: Bool
     let searchText: String
-    let makeRow: (RemotePluginDisplayItem) -> PluginManagementPluginRow
+    let makeRow: (RemotePluginDisplayItem) -> MacSettingsPluginRow
     let installAll: () -> Void
     let openAddSource: () -> Void
 
     let hasInstallablePlugin: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                MacPluginSectionHeader(title: "可安装插件")
-                Spacer(minLength: 12)
-                if searchText.isEmpty, hasInstallablePlugin {
-                    Button("全部安装", systemImage: "arrow.down.circle") {
-                        installAll()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(isManagementBusy)
+        Group {
+            if searchText.isEmpty, hasInstallablePlugin {
+                LabeledContent("安装当前订阅源中的全部插件") {
+                    Button("全部安装", systemImage: "arrow.down.circle", action: installAll)
+                        .disabled(isManagementBusy)
                 }
             }
 
@@ -540,10 +502,8 @@ private struct MacAvailablePluginSection: View {
                     actionDisabled: isManagementBusy
                 )
             } else {
-                MacPluginRowsGroup {
-                    ForEach(plugins) { item in
-                        MacAvailablePluginRow(row: makeRow(item), showsSeparator: item.id != plugins.last?.id)
-                    }
+                ForEach(plugins) { item in
+                    makeRow(item)
                 }
             }
         }
@@ -562,82 +522,122 @@ private struct MacAvailablePluginSection: View {
     }
 }
 
-private struct MacPluginSectionHeader: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.headline)
-        }
-    }
-}
-
-private struct MacPluginRowsGroup<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(spacing: 0) {
-            content
-        }
-        .background(.quaternary.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(.quaternary.opacity(0.45), lineWidth: 1)
-        }
-    }
-}
-
 private struct MacInstalledPluginRow: View {
     let pluginName: String
-    let row: PluginManagementPluginRow
+    let row: MacSettingsPluginRow
     let isManagementBusy: Bool
-    let showsSeparator: Bool
     let requestUninstall: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                row
-
-                Menu {
-                    Button("卸载插件", role: .destructive, action: requestUninstall)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(width: 28, height: 28)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .help("插件操作")
-                .accessibilityLabel("插件操作：\(pluginName)")
-                .disabled(isManagementBusy)
+        HStack(spacing: 12) {
+            row
+            Menu {
+                Button("卸载插件", role: .destructive, action: requestUninstall)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 28, height: 28)
             }
-
-            if showsSeparator {
-                Divider()
-                    .padding(.leading, 48)
-            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .help("插件操作")
+            .accessibilityLabel("插件操作：\(pluginName)")
+            .disabled(isManagementBusy)
         }
-        .padding(.horizontal, 12)
         .contentShape(Rectangle())
     }
 }
 
-private struct MacAvailablePluginRow: View {
-    let row: PluginManagementPluginRow
-    let showsSeparator: Bool
+/// Matches the existing settings/account rows while retaining catalog action semantics.
+private struct MacSettingsPluginRow: View {
+    let name: String
+    let version: String
+    let requiresLogin: Bool
+    let state: RemotePluginCatalogActionState
+    let icon: Image?
+    let disabled: Bool
+    let isWaiting: Bool
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            row
-                .padding(.horizontal, 12)
-                .contentShape(Rectangle())
-
-            if showsSeparator {
-                Divider()
-                    .padding(.leading, 60)
-                    .padding(.trailing, 12)
+        HStack(spacing: 12) {
+            PanelIconTile {
+                if let icon {
+                    icon.resizable().scaledToFit().frame(width: 24, height: 24)
+                } else {
+                    Image(systemName: "puzzlepiece.extension.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                Text(requiresLogin ? "\(version) · 需登录" : version)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if case .failed(let reason) = state {
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .layoutPriority(1)
+
+            Spacer(minLength: 12)
+
+            MacSettingsPluginAction(
+                name: name, state: state, disabled: disabled,
+                isWaiting: isWaiting, action: action
+            )
+        }
+    }
+}
+
+private struct MacSettingsPluginAction: View {
+    let name: String
+    let state: RemotePluginCatalogActionState
+    let disabled: Bool
+    let isWaiting: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Group {
+            if isWaiting {
+                Text("等待更新")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                switch state {
+                case .installed:
+                    EmptyView()
+                case .installing, .updating:
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(state == .updating ? "更新中" : "安装中")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .install, .update, .failed:
+                    Button(actionTitle, action: action)
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .disabled(disabled)
+                        .accessibilityLabel("\(actionTitle) \(name)")
+                }
+            }
+        }
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private var actionTitle: String {
+        switch state {
+        case .install: "安装"
+        case .failed: "重试"
+        default: "更新"
         }
     }
 }
@@ -678,7 +678,7 @@ private struct MacPluginSourcesView: View {
     @State private var pendingDeletion: MacSourceRemovalRequest?
 
     var body: some View {
-        List {
+        Form {
             Section {
                 if pluginSourceManager.sourceURLs.isEmpty {
                     MacPluginEmptyState(
@@ -689,7 +689,6 @@ private struct MacPluginSourcesView: View {
                         action: { showAddSource = true },
                         actionDisabled: pluginSourceManager.isManagementBusy
                     )
-                    .listRowSeparator(.hidden)
                 } else {
                     ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
                         MacPluginSourceRow(
@@ -702,34 +701,26 @@ private struct MacPluginSourcesView: View {
                                 pendingDeletion = MacSourceRemovalRequest(url: url)
                             }
                         )
-                        .listRowSeparator(.visible)
                         .disabled(pluginSourceManager.isManagementBusy)
                     }
                 }
-            } header: {
-                Text("订阅源")
             } footer: {
-                Text("订阅源的健康状态单独显示；删除订阅源会同时移除它关联的插件。")
+                Text("展开可查看完整订阅地址。删除订阅源会同时移除它关联的插件。")
             }
         }
-        .listStyle(.inset)
+        .formStyle(.grouped)
         .navigationTitle("订阅源")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("添加订阅源", systemImage: "plus") {
-                    showAddSource = true
-                }
-                .disabled(pluginSourceManager.isManagementBusy)
+        .macSettingsPage("订阅源") {
+            Button("添加订阅源", systemImage: "plus") {
+                showAddSource = true
             }
-            ToolbarItem(placement: .cancellationAction) {
-                Button("完成") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
+            .disabled(pluginSourceManager.isManagementBusy)
         }
         .sheet(isPresented: $showAddSource) {
             NavigationStack {
                 MacPluginAddSourceView(reloadCatalog: reloadCatalog)
             }
+            .macSettingsSheetPresentation()
             .frame(minWidth: 460, idealWidth: 520, minHeight: 280, idealHeight: 320)
         }
         .confirmationDialog(
@@ -784,40 +775,48 @@ private struct MacPluginSourceRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: health.isFailed ? "exclamationmark.triangle.fill" : "dot.radiowaves.left.and.right")
-                .foregroundStyle(health.isFailed ? .orange : .secondary)
-                .frame(width: 20)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(hostName)
-                    .font(.body.weight(.medium))
-                Text(url)
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("订阅地址")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                Text(url)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-                MacPluginSourceHealthText(health: health)
+                HStack {
+                    Button("刷新订阅源", systemImage: "arrow.clockwise", action: retry)
+                    Spacer()
+                    Button("删除订阅源", role: .destructive, action: remove)
+                }
+                .padding(.top, 4)
             }
+            .padding(.vertical, 8)
+        } label: {
+            HStack(spacing: 12) {
+                PanelIconTile {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityHidden(true)
 
-            Spacer(minLength: 10)
-
-            if health.isFailed {
-                Button("重试", systemImage: "arrow.clockwise", action: retry)
-                    .labelStyle(.titleAndIcon)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(hostName)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(url)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    MacPluginSourceHealthText(health: health)
+                }
+                Spacer(minLength: 0)
             }
-
-            Button(role: .destructive, action: remove) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help("删除订阅源")
-            .accessibilityLabel("删除订阅源：\(hostName)")
         }
-        .padding(.vertical, 5)
     }
 }
 
@@ -841,9 +840,9 @@ private struct MacPluginSourceHealthText: View {
                 Text("正常 · \(count) 个插件")
                     .foregroundStyle(.secondary)
             case .failed(let reason):
-                Text("异常 · \(reason)")
+                Label("异常 · \(reason)", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .font(.caption)
@@ -867,28 +866,21 @@ private struct MacPluginAddSourceView: View {
     var body: some View {
         Form {
             Section {
-                Text("输入订阅源地址或兑换码。添加后可在订阅源列表中查看健康状态。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 TextField("订阅源地址或兑换码", text: $inputURL)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(addSource)
-
-                if let localError {
+            } footer: {
+                Text("支持订阅源地址或兑换码。添加后可在订阅源列表中查看状态。")
+            }
+            if let localError {
+                Section {
                     PluginSourceErrorCard(title: "添加失败", message: localError)
                 }
             }
         }
         .formStyle(.grouped)
         .navigationTitle("添加订阅源")
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("取消") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            ToolbarItem(placement: .confirmationAction) {
+        .macSettingsPage("添加订阅源", closeTitle: "取消", placesActionsAfterClose: true) {
                 Button {
                     addSource()
                 } label: {
@@ -905,7 +897,6 @@ private struct MacPluginAddSourceView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(trimmedURL.isEmpty || isAdding || pluginSourceManager.isManagementBusy)
-            }
         }
     }
 
@@ -929,4 +920,45 @@ private struct MacPluginAddSourceView: View {
             }
         }
     }
+}
+
+// Pure display inputs: previews never read installed plugins, credentials, or the network.
+#Preview("插件设置行 · 原生表单基准") {
+    Form {
+        Section("已有设置行基准") {
+            PanelNavigationRow(title: "账号管理", subtitle: "管理平台登录信息") {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        Section("插件行") {
+            MacSettingsPluginRow(
+                name: "示例插件", version: "版本 1.0.0", requiresLogin: true,
+                state: .installed, icon: nil, disabled: false, isWaiting: false, action: {}
+            )
+            MacSettingsPluginRow(
+                name: "较长的插件名称用于检查文字换行与控件对齐",
+                version: "版本 1.0.0 → 1.1.0", requiresLogin: true,
+                state: .update, icon: nil, disabled: false, isWaiting: false, action: {}
+            )
+            MacSettingsPluginRow(
+                name: "正在更新的插件", version: "版本 1.0.0", requiresLogin: false,
+                state: .updating, icon: nil, disabled: true, isWaiting: false, action: {}
+            )
+            MacSettingsPluginRow(
+                name: "更新失败的插件", version: "版本 1.0.0", requiresLogin: false,
+                state: .failed("无法连接订阅源，请检查网络连接后重试。"),
+                icon: nil, disabled: false, isWaiting: false, action: {}
+            )
+        }
+        Section("订阅源") {
+            MacPluginSourceRow(
+                url: "https://source.example.invalid/subscriptions/index.json",
+                health: .healthy(pluginCount: 4), retry: {}, remove: {}
+            )
+        }
+    }
+    .formStyle(.grouped)
+    .frame(width: 600, height: 650)
 }

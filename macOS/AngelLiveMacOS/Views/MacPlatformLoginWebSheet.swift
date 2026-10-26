@@ -15,6 +15,7 @@ struct MacPlatformLoginWebSheet: View {
     let startsWithLogin: Bool
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
     @State private var entry: LoginPlatformEntry?
@@ -50,14 +51,21 @@ struct MacPlatformLoginWebSheet: View {
                 }
             }
             .navigationTitle(navigationTitle)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+            .macSettingsPage(navigationTitle) {
+                if isLoggedIn && !showWebView {
+                    Button("退出登录", role: .destructive) { logout() }
                 }
-                ToolbarItem(placement: .primaryAction) {
-                    if isLoggedIn && !showWebView {
-                        Button("退出登录", role: .destructive) {
-                            logout()
+            }
+            .toolbar {
+                if !usesSettingsPresentation {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { dismiss() }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        if isLoggedIn && !showWebView {
+                            Button("退出登录", role: .destructive) {
+                                logout()
+                            }
                         }
                     }
                 }

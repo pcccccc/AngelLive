@@ -43,6 +43,7 @@ private struct MacPlatformLoginQRSheet: View {
     let entry: LoginPlatformEntry
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @Environment(\.scenePhase) private var scenePhase
     @State private var service = PlatformLoginChallengeService()
     @State private var backgroundTimeoutTask: Task<Void, Never>?
@@ -56,9 +57,12 @@ private struct MacPlatformLoginQRSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(32)
                 .navigationTitle("\(entry.displayName) 扫码登录")
+                .macSettingsPage("\(entry.displayName) 扫码登录")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") { dismiss() }
+                    if !usesSettingsPresentation {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { dismiss() }
+                        }
                     }
                 }
         }

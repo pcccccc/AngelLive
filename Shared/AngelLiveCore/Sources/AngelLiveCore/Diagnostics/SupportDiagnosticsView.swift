@@ -76,6 +76,7 @@ private enum SupportDiagnosticsNotice {
 @MainActor
 public struct SupportDiagnosticsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
 
     @State private var service = SupportDiagnosticsService.shared
     @State private var description: String
@@ -100,11 +101,12 @@ public struct SupportDiagnosticsView: View {
         #if os(tvOS)
         return .infinity
         #else
+        if usesSettingsPresentation { return .infinity }
         switch phase {
         case .report:
-            680
+            return 680
         case .start, .recording:
-            560
+            return 560
         }
         #endif
     }
@@ -113,6 +115,7 @@ public struct SupportDiagnosticsView: View {
         #if os(tvOS)
         return 0
         #elseif os(macOS)
+        if usesSettingsPresentation { return 20 }
         if case .report = phase { return 20 }
         return 24
         #else
@@ -234,6 +237,7 @@ public struct SupportDiagnosticsView: View {
         }
         #endif
         .navigationTitle("问题诊断与反馈")
+        .macSettingsPage("问题诊断与反馈")
         #if os(tvOS)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -1119,6 +1123,7 @@ private struct SupportDiagnosticsReportPhase: View {
 
 private struct SupportDiagnosticsReportPreviewView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
 
     let service: SupportDiagnosticsService
 
@@ -1192,8 +1197,8 @@ private struct SupportDiagnosticsReportPreviewView: View {
             .padding(.horizontal, 0)
             .padding(.vertical, 60)
             #else
-            .frame(maxWidth: 760, alignment: .leading)
-            .padding(.horizontal, 20)
+            .frame(maxWidth: usesSettingsPresentation ? .infinity : 760, alignment: .leading)
+            .padding(.horizontal, usesSettingsPresentation ? 30 : 20)
             .padding(.vertical, 24)
             #endif
             .frame(maxWidth: .infinity, alignment: .center)
@@ -1220,7 +1225,9 @@ private struct SupportDiagnosticsReportPreviewView: View {
             .padding(.vertical, 12)
             .background {
                 SupportDiagnosticsSystemBackground()
-                    .overlay(alignment: .top) { Divider() }
+                    .overlay(alignment: .top) {
+                        if !usesSettingsPresentation { Divider() }
+                    }
             }
         }
         #endif
@@ -1241,6 +1248,7 @@ private struct SupportDiagnosticsReportPreviewView: View {
         #endif
         .disabled(!canUseReport)
         .navigationTitle("报告预览")
+        .macSettingsPage("报告预览", showsBackButton: true)
         #if os(tvOS)
         .toolbar {
             ToolbarItem(placement: .principal) {

@@ -9,6 +9,7 @@
 import SwiftUI
 
 public struct FavoriteImportResultView: View {
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     public let report: FavoriteImportReport
     public var onDismiss: () -> Void
 
@@ -34,12 +35,15 @@ public struct FavoriteImportResultView: View {
                 .padding()
             }
             .navigationTitle("导入结果")
+            .macSettingsPage("导入结果", closeTitle: "完成")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成", action: onDismiss)
+                if !usesSettingsPresentation {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完成", action: onDismiss)
+                    }
                 }
             }
         }

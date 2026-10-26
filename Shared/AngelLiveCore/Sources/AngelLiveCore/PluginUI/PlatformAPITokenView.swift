@@ -5,6 +5,7 @@ public struct PlatformAPITokenView: View {
     private let entry: LoginPlatformEntry
     private let kind: PlatformAPICredentialKind
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @State private var service = PlatformAPITokenService.shared
     @State private var token = ""
     @State private var clientId = ""
@@ -63,13 +64,16 @@ public struct PlatformAPITokenView: View {
                         Button("清除当前 API 配置", role: .destructive) { clear() }
                             .disabled(isWorking)
                     }
-                    Button("关闭") { dismiss() }
+                    if !usesSettingsPresentation {
+                        Button("关闭") { dismiss() }
+                    }
                 }
-                .padding(24)
-                .frame(maxWidth: 640)
+                .padding(usesSettingsPresentation ? 30 : 24)
+                .frame(maxWidth: usesSettingsPresentation ? .infinity : 640)
                 .frame(maxWidth: .infinity)
             }
             .navigationTitle("\(entry.displayName) API 凭据")
+            .macSettingsPage("\(entry.displayName) API 凭据")
         }
         .task { await service.load(pluginId: entry.pluginId) }
         #if os(macOS)

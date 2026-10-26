@@ -95,6 +95,7 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
     private let playback: LiveSubtitlePlaybackState
     private let activationID: UUID
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
 
     public init(playback: LiveSubtitlePlaybackState, activationID: UUID) {
         self.playback = playback
@@ -123,11 +124,14 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
             .formStyle(.grouped)
             #endif
             .navigationTitle("选择主播语言")
+            .macSettingsPage("选择主播语言", closeTitle: "取消")
             #if !os(tvOS)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消", role: .cancel) { dismiss() }
-                        .keyboardShortcut(.cancelAction)
+                if !usesSettingsPresentation {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消", role: .cancel) { dismiss() }
+                            .keyboardShortcut(.cancelAction)
+                    }
                 }
             }
             #endif
@@ -144,6 +148,7 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
 /// Shared settings reuse each host's existing labels and row layout.
 @MainActor
 public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLabel: View, ResourceLabel: View>: View {
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     private let subtitleLabel: SubtitleLabel
     private let sourceLanguageLabel: SourceLanguageLabel
     private let resourceLabel: ResourceLabel
@@ -231,6 +236,7 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
                         .formStyle(.grouped)
                         #endif
                         .navigationTitle("系统语音包")
+                        .macSettingsPage("系统语音包", showsBackButton: true)
                 } label: {
                     sourceLanguageLabel
                 }
@@ -244,7 +250,9 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
                 Text("实时字幕")
             } footer: {
                 Text(explanation)
+                    #if !os(macOS)
                     .font(.caption)
+                    #endif
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -269,15 +277,19 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
                 Form { LiveSubtitleSpeechResourcesSection() }
                     #if os(macOS)
                     .formStyle(.grouped)
+                    .macSettingsPage("系统语音包")
                     #endif
                     .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showSpeechResources = false }
+                        if !usesSettingsPresentation {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("关闭") { showSpeechResources = false }
+                            }
                         }
                     }
                 #endif
             }
             .navigationTitle("系统语音包")
+            .macSettingsSheetPresentation(inheriting: true)
             #if os(macOS)
             .frame(minWidth: 480, minHeight: 320)
             #endif
@@ -349,6 +361,7 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
 /// Shared settings rows for on-device live speech subtitles.
 @MainActor
 private struct LiveSubtitleSpeechResourcesSection: View {
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @Bindable private var settings = LiveSubtitleSettings.shared
     @State private var resourceStatus: LiveSubtitleResourceStatus?
     @State private var unavailableReason: LiveSubtitleUnavailableReason?
@@ -447,7 +460,9 @@ private struct LiveSubtitleSpeechResourcesSection: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
-            Text("系统语音包")
+            if !usesSettingsPresentation {
+                Text("系统语音包")
+            }
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 Text(subtitleExplanation)
@@ -455,7 +470,9 @@ private struct LiveSubtitleSpeechResourcesSection: View {
                     Text(unavailableResourceMessage)
                 }
             }
+                #if !os(macOS)
                 .font(.caption)
+                #endif
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

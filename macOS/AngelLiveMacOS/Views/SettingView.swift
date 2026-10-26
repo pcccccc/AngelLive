@@ -102,44 +102,27 @@ struct SettingView: View {
         .sheet(isPresented: $showAccountManagement) {
             NavigationStack {
                 MacAccountManagementView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showAccountManagement = false
-                            }
-                        }
-                    }
                     .onAppear {
                         guard supportDiagnosticsEnabled else { return }
                         supportDiagnosticsService.recordAction(.openedAccountManagement)
                     }
             }
+            .macSettingsSheetPresentation()
             .frame(minWidth: 600, minHeight: 480)
         }
         .sheet(isPresented: $showSyncManagement) {
             NavigationStack {
                 MacSyncManagementView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showSyncManagement = false
-                            }
-                        }
-                    }
             }
+            .macSettingsSheetPresentation()
             .frame(minWidth: 600, minHeight: 520)
         }
         .sheet(isPresented: $showTranslationSetting) {
             NavigationStack {
                 TranslationSettingView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showTranslationSetting = false
-                            }
-                        }
-                    }
             }
+            .macSettingsSheetPresentation()
+            .labelStyle(MacTranslationSettingLabelStyle())
             .frame(minWidth: 600, minHeight: 480)
         }
         .sheet(isPresented: $showPluginManagement) {
@@ -148,49 +131,71 @@ struct SettingView: View {
                     guard supportDiagnosticsEnabled else { return }
                     supportDiagnosticsService.recordAction(.openedPluginManagement)
                 }
-                .frame(minWidth: 760, idealWidth: 820, minHeight: 580, idealHeight: 640)
+                .frame(minWidth: 600, idealWidth: 680, minHeight: 520, idealHeight: 640)
         }
         .sheet(isPresented: $showOpenSourceList) {
-            NavigationStack {
-                OpenSourceListView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showOpenSourceList = false
+            if pluginAvailability.hasAvailablePlugins {
+                NavigationStack {
+                    OpenSourceListView(usesSettingsLayout: true)
+                }
+                .macSettingsSheetPresentation()
+                .frame(minWidth: 600, minHeight: 500)
+            } else {
+                NavigationStack {
+                    OpenSourceListView(usesSettingsLayout: false)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("关闭") {
+                                    showOpenSourceList = false
+                                }
                             }
                         }
-                    }
+                }
+                .frame(minWidth: 600, minHeight: 500)
             }
-            .frame(minWidth: 600, minHeight: 500)
         }
         .sheet(isPresented: $showDanmuSetting) {
-            NavigationStack {
-                MacDanmuSettingView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showDanmuSetting = false
+            if pluginAvailability.hasAvailablePlugins {
+                NavigationStack {
+                    MacDanmuSettingView(usesSettingsLayout: true)
+                }
+                .macSettingsSheetPresentation()
+                .frame(minWidth: 680, minHeight: 640)
+            } else {
+                NavigationStack {
+                    MacDanmuSettingView(usesSettingsLayout: false)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("关闭") {
+                                    showDanmuSetting = false
+                                }
                             }
                         }
-                    }
+                }
+                .frame(minWidth: 680, minHeight: 640)
             }
-            .frame(minWidth: 680, minHeight: 640)
         }
         .sheet(isPresented: $showSupportDiagnostics) {
-            NavigationStack {
-                SupportDiagnosticsView()
-                    .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button("关闭", systemImage: "xmark") {
-                                showSupportDiagnostics = false
+            if pluginAvailability.hasAvailablePlugins {
+                NavigationStack { SupportDiagnosticsView() }
+                    .macSettingsSheetPresentation()
+                    .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 560)
+            } else {
+                NavigationStack {
+                    SupportDiagnosticsView()
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button("关闭", systemImage: "xmark") {
+                                    showSupportDiagnostics = false
+                                }
+                                .labelStyle(.iconOnly)
+                                .help("关闭问题诊断")
+                                .keyboardShortcut(.cancelAction)
                             }
-                            .labelStyle(.iconOnly)
-                            .help("关闭问题诊断")
-                            .keyboardShortcut(.cancelAction)
                         }
-                    }
+                }
+                .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 560)
             }
-            .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 560)
         }
         .task {
             await refreshCacheSize()
@@ -584,13 +589,17 @@ struct TranslationSettingView: View {
         @Bindable var settings = settings
 
         Form {
-            Section("自动翻译") {
+            Section {
                 Toggle(isOn: $settings.isEnabled) {
-                    Label("自动翻译房间标题", systemImage: "character.book.closed.fill")
+                    MacTranslationSettingLabel(
+                        title: "自动翻译房间标题", systemImage: "character.book.closed.fill"
+                    )
                 }
 
                 Toggle(isOn: $settings.isDanmakuEnabled) {
-                    Label("自动翻译弹幕", systemImage: "text.bubble.fill")
+                    MacTranslationSettingLabel(
+                        title: "自动翻译弹幕", systemImage: "text.bubble.fill"
+                    )
                 }
 
                 Picker("翻译成", selection: $settings.targetLanguage) {
@@ -600,12 +609,19 @@ struct TranslationSettingView: View {
                     }
                 }
 
+            } header: {
+                Text("自动翻译")
+            } footer: {
                 Text("自动识别标题和弹幕的语言，翻译不成功时显示原文。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
-            LiveSubtitleSettingsSection()
+            LiveSubtitleSettingsSection {
+                MacTranslationSettingLabel(title: "实时字幕", systemImage: "waveform")
+            } sourceLanguageLabel: {
+                MacTranslationSettingLabel(title: "系统语音包", systemImage: "globe")
+            } resourceLabel: {
+                MacTranslationSettingLabel(title: "字幕识别文件", systemImage: "waveform")
+            }
 
             Section {
                 Picker("翻译方式", selection: $settings.engine) {
@@ -615,18 +631,17 @@ struct TranslationSettingView: View {
                     }
                 }
 
+            } footer: {
                 Text(settings.engine == .apple
                      ? settings.availabilityError?.localizedDescription ?? "使用系统翻译，需先下载下方语言包。"
                      : "填写下方配置，保存后点“测试翻译”。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             if settings.engine == .apple {
-                Section("翻译语言包") {
+                Section {
                     ForEach(nativeLanguagePairs) { pair in
                         HStack {
-                            Label(pair.displayName, systemImage: "globe")
+                            MacTranslationSettingLabel(title: pair.displayName, systemImage: "globe")
 
                             Spacer()
 
@@ -671,14 +686,15 @@ struct TranslationSettingView: View {
                         }
                     }
 
+                } header: {
+                    Text("翻译语言包")
+                } footer: {
                     Text("点“下载”后，在系统弹窗中确认。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
             if settings.engine == .llm {
-                Section("大模型配置") {
+                Section {
                     LabeledContent("API 地址") {
                         TextField("", text: $baseURL, prompt: Text(verbatim: "https://api.example.invalid/v1"))
                             .textFieldStyle(.roundedBorder)
@@ -725,9 +741,10 @@ struct TranslationSettingView: View {
                         }
                     }
 
+                } header: {
+                    Text("大模型配置")
+                } footer: {
                     Text(cloudServiceExplanation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -771,6 +788,7 @@ struct TranslationSettingView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("翻译与字幕")
+        .macSettingsPage("翻译与字幕")
         .onAppear {
             baseURL = settings.cloudBaseURL
             model = settings.cloudModel
@@ -960,7 +978,34 @@ struct TranslationSettingView: View {
     }
 }
 
+private struct MacTranslationSettingLabel: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(MacTranslationSettingLabelStyle())
+    }
+}
+
+private struct MacTranslationSettingLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            PanelIconTile {
+                configuration.icon
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityHidden(true)
+            configuration.title
+                .font(.body.weight(.medium))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 private struct MacDanmuSettingView: View {
+    var usesSettingsLayout = false
     @State private var danmuModel = DanmuSettingModel()
 
     var body: some View {
@@ -970,26 +1015,24 @@ private struct MacDanmuSettingView: View {
             }
 
             Section("弹幕显示") {
-                Toggle(isOn: $danmuModel.showDanmu) {
-                    DanmakuSettingDescriptor(
-                        title: "显示弹幕",
-                        subtitle: "在直播画面上显示滚动弹幕",
-                        systemImage: "bubble.left.and.bubble.right.fill",
-                        tint: .green
-                    )
-                }
-                    .tint(AppConstants.Colors.accent)
+                MacDanmakuToggleRow(
+                    title: "显示弹幕",
+                    subtitle: "在直播画面上显示滚动弹幕",
+                    systemImage: "bubble.left.and.bubble.right.fill",
+                    tint: .green,
+                    usesSettingsLayout: usesSettingsLayout,
+                    isOn: $danmuModel.showDanmu
+                )
 
-                Toggle(isOn: $danmuModel.showColorDanmu) {
-                    DanmakuSettingDescriptor(
-                        title: "彩色弹幕",
-                        subtitle: "显示弹幕发送者设置的颜色",
-                        systemImage: "paintpalette.fill",
-                        tint: .purple
-                    )
-                }
-                    .tint(AppConstants.Colors.accent)
-                    .disabled(!danmuModel.showDanmu)
+                MacDanmakuToggleRow(
+                    title: "彩色弹幕",
+                    subtitle: "显示弹幕发送者设置的颜色",
+                    systemImage: "paintpalette.fill",
+                    tint: .purple,
+                    usesSettingsLayout: usesSettingsLayout,
+                    isOn: $danmuModel.showColorDanmu
+                )
+                .disabled(!danmuModel.showDanmu)
             }
 
             Section("外观") {
@@ -1002,11 +1045,19 @@ private struct MacDanmuSettingView: View {
                         value: "\(danmuModel.danmuFontSize) pt"
                     )
 
-                    Slider(value: fontSizeBinding, in: 10...100, step: 1)
-                        .tint(AppConstants.Colors.accent)
-                        .padding(.leading, 46)
-                        .accessibilityLabel("弹幕字体大小")
-                        .accessibilityValue("\(danmuModel.danmuFontSize) 点")
+                    Group {
+                        if usesSettingsLayout {
+                            Slider(value: fontSizeBinding, in: 10...100, step: 1)
+                                .labelsHidden()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Slider(value: fontSizeBinding, in: 10...100, step: 1)
+                        }
+                    }
+                    .tint(AppConstants.Colors.accent)
+                    .padding(.leading, 46)
+                    .accessibilityLabel("弹幕字体大小")
+                    .accessibilityValue("\(danmuModel.danmuFontSize) 点")
                 }
 
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
@@ -1018,11 +1069,19 @@ private struct MacDanmuSettingView: View {
                         value: String(format: "%.0f%%", danmuModel.danmuAlpha * 100)
                     )
 
-                    Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
-                        .tint(AppConstants.Colors.accent)
-                        .padding(.leading, 46)
-                        .accessibilityLabel("弹幕透明度")
-                        .accessibilityValue(String(format: "%.0f%%", danmuModel.danmuAlpha * 100))
+                    Group {
+                        if usesSettingsLayout {
+                            Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
+                                .labelsHidden()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
+                        }
+                    }
+                    .tint(AppConstants.Colors.accent)
+                    .padding(.leading, 46)
+                    .accessibilityLabel("弹幕透明度")
+                    .accessibilityValue(String(format: "%.0f%%", danmuModel.danmuAlpha * 100))
                 }
             }
 
@@ -1079,6 +1138,7 @@ private struct MacDanmuSettingView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("弹幕设置")
+        .macSettingsPage("弹幕设置")
     }
 
     private var fontSizeBinding: Binding<Double> {
@@ -1147,8 +1207,13 @@ private struct MacDanmuSettingView: View {
                     .strokeBorder(.white.opacity(0.08), lineWidth: 1)
             }
         }
-        .padding(AppConstants.Spacing.lg)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg, style: .continuous))
+        .padding(usesSettingsLayout ? 0 : AppConstants.Spacing.lg)
+        .background {
+            if !usesSettingsLayout {
+                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg, style: .continuous)
+                    .fill(.thinMaterial)
+            }
+        }
     }
 
     private func previewDanmaku(_ text: String, color: Color) -> some View {
@@ -1159,6 +1224,42 @@ private struct MacDanmuSettingView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .shadow(color: .black.opacity(0.9), radius: 1, x: 1, y: 1)
+    }
+}
+
+private struct MacDanmakuToggleRow: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+    let usesSettingsLayout: Bool
+    @Binding var isOn: Bool
+
+    var body: some View {
+        if usesSettingsLayout {
+            PanelNavigationRow(title: title, subtitle: subtitle, showsChevron: false) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint.gradient)
+            } trailing: {
+                Toggle(title, isOn: $isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(AppConstants.Colors.accent)
+                    .accessibilityLabel(title)
+                    .accessibilityHint(subtitle)
+            }
+        } else {
+            Toggle(isOn: $isOn) {
+                DanmakuSettingDescriptor(
+                    title: title,
+                    subtitle: subtitle,
+                    systemImage: systemImage,
+                    tint: tint
+                )
+            }
+            .tint(AppConstants.Colors.accent)
+        }
     }
 }
 

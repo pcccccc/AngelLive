@@ -5,6 +5,7 @@ import CoreImage.CIFilterBuiltins
 public struct PlatformDeviceLoginView: View {
     private let entry: LoginPlatformEntry
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var loginId = UUID().uuidString
@@ -24,49 +25,56 @@ public struct PlatformDeviceLoginView: View {
 
     public var body: some View {
         NavigationStack {
-            if connected {
-                DeviceLoginSuccessContent(displayName: entry.displayName, clearing: clearing,
-                    error: clearError, onDone: { dismiss() }, onDisconnect: clearAccount)
-            } else {
-            ScrollView {
-                VStack(spacing: 20) {
-                    Text("登录 \(entry.displayName)").font(.title2.bold())
-                    PlatformAPITokenStatusLabel(pluginId: entry.pluginId)
-                    if let challenge, !finished {
-                        if let qrImage {
-                            Image(decorative: qrImage, scale: 1)
-                                .interpolation(.none).resizable().scaledToFit()
-                                .frame(maxWidth: 280, maxHeight: 280)
-                                .padding(16).background(.white, in: RoundedRectangle(cornerRadius: 12))
-                                .accessibilityLabel("用手机扫描以打开授权页面")
+            Group {
+                if connected {
+                    DeviceLoginSuccessContent(displayName: entry.displayName, clearing: clearing,
+                        error: clearError, onDone: { dismiss() }, onDisconnect: clearAccount)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if !usesSettingsPresentation {
+                                Text("登录 \(entry.displayName)").font(.title2.bold())
+                            }
+                            PlatformAPITokenStatusLabel(pluginId: entry.pluginId)
+                            if let challenge, !finished {
+                                if let qrImage {
+                                    Image(decorative: qrImage, scale: 1)
+                                        .interpolation(.none).resizable().scaledToFit()
+                                        .frame(maxWidth: 280, maxHeight: 280)
+                                        .padding(16).background(.white, in: RoundedRectangle(cornerRadius: 12))
+                                        .accessibilityLabel("用手机扫描以打开授权页面")
+                                }
+                                Text(challenge.userCode).font(.title.monospaced().bold())
+                                    .accessibilityLabel("设备码：\(challenge.userCode)")
+                                Text("用手机扫描二维码，在授权页面输入设备码并确认。")
+                                    .multilineTextAlignment(.center)
+                                #if !os(tvOS)
+                                Link("打开授权页面", destination: challenge.verificationUri)
+                                #endif
+                            }
+                            Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            if !finished { ProgressView() }
+                            if finished && !connected {
+                                Button("重新生成") {
+                                    challenge = nil
+                                    qrImage = nil
+                                    finished = false
+                                    loginId = UUID().uuidString
+                                }.buttonStyle(.borderedProminent)
+                            }
+                            if account.statuses[entry.pluginId] != nil {
+                                Button("退出 API 登录", role: .destructive, action: clearAccount)
+                                    .disabled(clearing)
+                            }
+                            if !usesSettingsPresentation {
+                                Button(connected ? "完成" : "关闭") { dismiss() }
+                            }
                         }
-                        Text(challenge.userCode).font(.title.monospaced().bold())
-                            .accessibilityLabel("设备码：\(challenge.userCode)")
-                        Text("用手机扫描二维码，在授权页面输入设备码并确认。")
-                            .multilineTextAlignment(.center)
-                        #if !os(tvOS)
-                        Link("打开授权页面", destination: challenge.verificationUri)
-                        #endif
+                        .padding(24).frame(maxWidth: 640).frame(maxWidth: .infinity)
                     }
-                    Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    if !finished { ProgressView() }
-                    if finished && !connected {
-                        Button("重新生成") {
-                            challenge = nil
-                            qrImage = nil
-                            finished = false
-                            loginId = UUID().uuidString
-                        }.buttonStyle(.borderedProminent)
-                    }
-                    if account.statuses[entry.pluginId] != nil {
-                        Button("退出 API 登录", role: .destructive, action: clearAccount)
-                            .disabled(clearing)
-                    }
-                    Button(connected ? "完成" : "关闭") { dismiss() }
                 }
-                .padding(24).frame(maxWidth: 640).frame(maxWidth: .infinity)
             }
-            }
+            .macSettingsPage("\(entry.displayName) 登录", closeTitle: connected ? "完成" : "关闭", closeDisabled: clearing)
         }
         #if os(iOS)
         .presentationDetents(connected && !dynamicTypeSize.isAccessibilitySize ? [.height(400), .large] : [.large], selection: $selectedDetent)
@@ -157,6 +165,7 @@ public struct PlatformDeviceLoginView: View {
 }
 
 private struct DeviceLoginSuccessContent: View {
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     let displayName: String
     let clearing: Bool
     let error: String?
@@ -179,13 +188,15 @@ private struct DeviceLoginSuccessContent: View {
                     }
                 }
                 VStack(spacing: 12) {
-                    Button(action: onDone) {
-                        Text("完成").fontWeight(.semibold)
-                            .frame(maxWidth: .infinity, minHeight: 32)
+                    if !usesSettingsPresentation {
+                        Button(action: onDone) {
+                            Text("完成").fontWeight(.semibold)
+                                .frame(maxWidth: .infinity, minHeight: 32)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(clearing)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(clearing)
                     Menu {
                         Button("退出登录", role: .destructive, action: onDisconnect)
                     } label: {
