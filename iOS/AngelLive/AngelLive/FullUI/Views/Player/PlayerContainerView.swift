@@ -346,6 +346,7 @@ struct PlayerContentView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .liveSubtitleOverlay(
                                 coordinator: playerCoordinator,
+                                playback: viewModel.subtitlePlayback,
                                 playbackIdentity: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)",
                                 bottomPadding: isDeviceLandscape ? 48 : 16
                             )

@@ -87,12 +87,13 @@ struct RoomPlayerView: View {
                 danmuOverlay(for: geometry.size)
 
                 #if canImport(KSPlayer)
-                if canShowLiveSubtitleSurface, let url = viewModel.currentPlayURL {
+                if titleTranslationEnabled, canShowLiveSubtitleSurface, let url = viewModel.currentPlayURL {
                     Color.clear
                         .allowsHitTesting(false)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .liveSubtitleOverlay(
                             coordinator: coordinator,
+                            playback: viewModel.subtitlePlayback,
                             playbackIdentity: url.absoluteString,
                             bottomPadding: 64
                         )
@@ -379,6 +380,7 @@ struct RoomPlayerView: View {
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        viewModel.subtitlePlayback.stop()
         viewModel.endPlaybackDiagnostics()
         viewModel.recoveryCoordinator.stop()
         coordinator.resetPlayer()

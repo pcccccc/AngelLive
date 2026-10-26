@@ -456,6 +456,10 @@ struct TranslationSettingView: View {
             && !settings.cloudModel.isEmpty
     }
 
+    private var cloudServiceExplanation: String {
+        "填写服务商提供的 API 地址（通常以 /v1 结尾），需支持 Chat Completions 接口。\n只发送待翻译文字，不上传音频；服务商可能收费。API Key 仅保存在本机。"
+    }
+
     var body: some View {
         @Bindable var settings = settings
 
@@ -476,11 +480,11 @@ struct TranslationSettingView: View {
                 .frame(height: 55)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("目标语言")
+                    Text("翻译成")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
 
-                    Picker("目标语言", selection: $settings.targetLanguage) {
+                    Picker("翻译成", selection: $settings.targetLanguage) {
                         ForEach(targetLanguages) { language in
                             Text(language.name)
                                 .tag(language.code)
@@ -490,7 +494,7 @@ struct TranslationSettingView: View {
                     .frame(height: 55)
                 }
 
-                Text("自动翻译仅处理英语、日语和韩语，其他语言保留原文。翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
+                Text("自动识别标题和弹幕的语言，翻译不成功时显示原文。")
                     .font(.system(size: 22))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -498,37 +502,37 @@ struct TranslationSettingView: View {
                 LiveSubtitleSettingsSection()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("翻译引擎")
+                    Text("大模型翻译")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text("Apple TV 仅支持兼容 AI 接口。")
+                    Text("Apple TV 不支持系统翻译。填写下方配置，保存后点“测试翻译”。")
                         .font(.system(size: 22))
                         .foregroundStyle(.secondary)
                 }
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("服务地址")
+                    Text("API 地址")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
                     TextField("https://api.example.invalid/v1", text: $baseURL)
                         .focused($focusedField, equals: .baseURL)
                         .font(.system(size: 26))
                         .frame(height: 55)
-                        .accessibilityLabel("服务地址")
+                        .accessibilityLabel("API 地址")
 
-                    Text("模型")
+                    Text("模型名称")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
                     TextField("模型名称", text: $model)
                         .focused($focusedField, equals: .model)
                         .font(.system(size: 26))
                         .frame(height: 55)
-                        .accessibilityLabel("模型")
+                        .accessibilityLabel("模型名称")
 
                     Text("API Key")
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
-                    SecureField(settings.hasAPIKey ? "留空保持已保存密钥" : "API Key", text: $apiKey)
+                    SecureField(settings.hasAPIKey ? "已保存，留空不修改" : "API Key", text: $apiKey)
                         .focused($focusedField, equals: .apiKey)
                         .font(.system(size: 26))
                         .frame(height: 55)
@@ -549,7 +553,7 @@ struct TranslationSettingView: View {
                         .disabled(isSaving || isTesting || isDeletingKey)
 
                         if settings.hasAPIKey {
-                            Button("删除已保存密钥", role: .destructive) {
+                            Button("删除 API Key", role: .destructive) {
                                 deleteAPIKey()
                             }
                             .focused($focusedField, equals: .delete)
@@ -557,14 +561,14 @@ struct TranslationSettingView: View {
                         }
                     }
 
-                    Text("开启对应开关后，房间标题或弹幕文本会发送至你配置的服务。弹幕频率较高，可能增加用量或费用；不会发送用户名或图片 URL。API Key 只保存在本机安全存储中。")
+                    Text(cloudServiceExplanation)
                         .font(.system(size: 22))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if configurationNeedsSave {
-                    Text("请先保存接口配置，再测试翻译。")
+                    Text("请先保存配置，再测试翻译。")
                         .font(.system(size: 22))
                         .foregroundStyle(.secondary)
                 }
@@ -697,6 +701,7 @@ struct TranslationSettingView: View {
             } catch {
                 guard !Task.isCancelled, testGeneration == generation else { return }
                 inlineMessage = translationService.lastErrorMessage
+                    ?? (error as? RoomTranslationError)?.recoveryMessage(for: settings.engine)
                     ?? (error as? LocalizedError)?.errorDescription
                     ?? error.localizedDescription
             }

@@ -5,9 +5,17 @@ public enum RoomTranslationEngine: String, CaseIterable, Sendable {
     case apple
     case llm
 
+    public static var llmSetupInstructions: String {
+        #if os(tvOS)
+        "请在“翻译与字幕”配置大模型翻译，再点“测试翻译”。"
+        #else
+        "请在“翻译与字幕”选择“大模型翻译”，完成配置后点“测试翻译”。"
+        #endif
+    }
+
     public var displayName: String {
         switch self {
-        case .apple: "Apple 原生翻译"
+        case .apple: "系统翻译"
         case .llm: "大模型翻译"
         }
     }
@@ -17,6 +25,10 @@ public enum RoomTranslationError: Error, LocalizedError, Equatable, Sendable {
     case invalidBaseURL
     case invalidModel
     case apiKeyRequired
+    case cloudConfigurationRequired
+    case appleTranslationUnsupported
+    case simulatorUnsupported
+    case unsupportedSourceLanguage
     case secureStorage
     case unavailable
     case authentication
@@ -26,30 +38,61 @@ public enum RoomTranslationError: Error, LocalizedError, Equatable, Sendable {
     case busy
     case languageResourcesRequired
 
+    public func recommendsLLMFallback(for engine: RoomTranslationEngine) -> Bool {
+        guard engine == .apple else { return false }
+        switch self {
+        case .appleTranslationUnsupported, .simulatorUnsupported, .languageResourcesRequired,
+             .unavailable, .serviceUnavailable, .invalidResponse:
+            return true
+        case .invalidBaseURL, .invalidModel, .apiKeyRequired, .cloudConfigurationRequired,
+             .unsupportedSourceLanguage, .secureStorage, .authentication, .rateLimited, .busy:
+            return false
+        }
+    }
+
+    public func recoveryMessage(for engine: RoomTranslationEngine) -> String {
+        guard recommendsLLMFallback(for: engine) else { return localizedDescription }
+        return "\(localizedDescription)\(RoomTranslationEngine.llmSetupInstructions)"
+    }
+
     public var errorDescription: String? {
         switch self {
         case .invalidBaseURL:
-            "请输入 HTTPS 服务基础地址，例如 https://example.invalid/v1。"
+            "请填写有效的 HTTPS 服务地址，例如 https://example.invalid/v1。"
         case .invalidModel:
             "请输入模型名称。"
         case .apiKeyRequired:
-            "更改接口地址时需要重新填写 API Key。"
+            "请填写并保存 API Key。更换服务地址后需要重新填写。"
+        case .cloudConfigurationRequired:
+            "请先填写服务地址、模型名称和 API Key，再保存配置。"
+        case .appleTranslationUnsupported:
+            #if os(tvOS)
+            "Apple TV 不支持系统翻译。"
+            #elseif os(macOS)
+            "系统翻译需要 macOS 15 或更高版本。"
+            #else
+            "系统翻译需要 iOS 18 或更高版本。"
+            #endif
+        case .simulatorUnsupported:
+            "模拟器不支持系统翻译。"
+        case .unsupportedSourceLanguage:
+            "无法识别字幕语言，保留原文。"
         case .secureStorage:
-            "无法访问安全存储，请稍后重试。"
+            "暂时无法读取或保存 API Key，请稍后重试。"
         case .unavailable:
-            "当前翻译方式暂不可用。"
+            "暂时无法翻译，请稍后重试。"
         case .authentication:
-            "API 凭据无效，请检查后重试。"
+            "API Key 无效或没有权限，请检查服务配置。"
         case .rateLimited:
-            "请求过于频繁，请稍后重试。"
+            "请求太频繁，请稍后重试。"
         case .serviceUnavailable:
-            "翻译服务暂不可用，请稍后重试。"
+            "翻译服务暂时无法使用，请稍后重试。"
         case .invalidResponse:
-            "翻译服务返回了无法识别的结果。"
+            "翻译服务没有返回可用结果，请重试。"
         case .busy:
-            "等待翻译的标题较多，请稍后重试。"
+            "当前翻译请求较多，请稍后重试。"
         case .languageResourcesRequired:
-            "请在翻译设置中下载所需语言包。"
+            "请在“翻译与字幕”下载翻译语言包。"
         }
     }
 }

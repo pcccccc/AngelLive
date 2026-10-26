@@ -2,10 +2,11 @@
 //  MacPluginManagementView.swift
 //  AngelLiveMacOS
 //
-//  macOS FullUI 的插件管理：以紧凑列表、订阅源 sheet 和原生工具栏承载
+//  macOS FullUI 的插件管理：以紧凑列表、订阅源 sheet 和原生控件承载
 //  插件安装、更新与卸载。业务状态仍由 PluginSourceManager 持有。
 //
 
+import AppKit
 import SwiftUI
 import AngelLiveCore
 
@@ -17,6 +18,7 @@ struct MacPluginManagementView: View {
 
     @State private var scope: MacPluginManagementScope = .installed
     @State private var searchText = ""
+    @State private var searchFocusRequest = 0
     @State private var showSources = false
     @State private var showAddSource = false
     @State private var pluginPendingUninstall: MacPluginRemovalRequest?
@@ -58,84 +60,73 @@ struct MacPluginManagementView: View {
     var body: some View {
         @Bindable var consent = consentService
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                PluginUpdateOverview(
-                    manager: pluginSourceManager,
-                    installedPluginIds: allInstalledPluginIds,
-                    update: updatePlugins,
-                    check: checkUpdates
-                )
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
+        VStack(spacing: 0) {
+            header
 
-                Divider()
+            Divider()
 
-                MacPluginManagementScopePicker(
-                    scope: $scope,
-                    installedCount: allInstalledPluginIds.count,
-                    availableCount: allAvailablePlugins.count
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    PluginUpdateOverview(
+                        manager: pluginSourceManager,
+                        installedPluginIds: allInstalledPluginIds,
+                        update: updatePlugins,
+                        check: checkUpdates
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
 
-                if let message = pluginSourceManager.errorMessage {
-                    PluginManagementOperationError(manager: pluginSourceManager)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 10)
-                        .accessibilityLabel("操作未完成：\(message)")
-                }
+                    Divider()
 
-                MacPluginManagementList(
-                    scope: scope,
-                    installedPluginIds: filteredInstalledPluginIds,
-                    availablePlugins: filteredAvailablePlugins,
-                    sourceCount: pluginSourceManager.sourceURLs.count,
-                    isManagementBusy: pluginSourceManager.isManagementBusy,
-                    hasInstallablePlugins: hasInstallablePlugins,
-                    searchText: normalizedSearchText,
-                    makeInstalledRow: { pluginId in
-                        managedPluginRow(pluginId: pluginId)
-                    },
-                    makeAvailableRow: { item in
-                        managedPluginRow(pluginId: item.id, remote: item)
-                    },
-                    displayNameForPlugin: { pluginSourceManager.managementDisplayName(for: $0) },
-                    installAll: installAllPlugins,
-                    openAddSource: { showAddSource = true },
-                    requestUninstall: { pluginId in
-                        pluginPendingUninstall = MacPluginRemovalRequest(
-                            id: pluginId,
-                            name: pluginSourceManager.managementDisplayName(for: pluginId)
-                        )
+                    MacPluginManagementScopePicker(
+                        scope: $scope,
+                        installedCount: allInstalledPluginIds.count,
+                        availableCount: allAvailablePlugins.count
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+
+                    if let message = pluginSourceManager.errorMessage {
+                        PluginManagementOperationError(manager: pluginSourceManager)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 10)
+                            .accessibilityLabel("操作未完成：\(message)")
                     }
-                )
+
+                    MacPluginManagementList(
+                        scope: scope,
+                        installedPluginIds: filteredInstalledPluginIds,
+                        availablePlugins: filteredAvailablePlugins,
+                        sourceCount: pluginSourceManager.sourceURLs.count,
+                        isManagementBusy: pluginSourceManager.isManagementBusy,
+                        hasInstallablePlugins: hasInstallablePlugins,
+                        searchText: normalizedSearchText,
+                        makeInstalledRow: { pluginId in
+                            managedPluginRow(pluginId: pluginId)
+                        },
+                        makeAvailableRow: { item in
+                            managedPluginRow(pluginId: item.id, remote: item)
+                        },
+                        displayNameForPlugin: { pluginSourceManager.managementDisplayName(for: $0) },
+                        installAll: installAllPlugins,
+                        openAddSource: { showAddSource = true },
+                        requestUninstall: { pluginId in
+                            pluginPendingUninstall = MacPluginRemovalRequest(
+                                id: pluginId,
+                                name: pluginSourceManager.managementDisplayName(for: pluginId)
+                            )
+                        }
+                    )
+                }
+                .frame(maxWidth: 820, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            .frame(maxWidth: 820, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .center)
+
+            Divider()
+
+            footer
         }
         .background(.background)
-        .navigationTitle("插件管理")
-        .searchable(text: $searchText, placement: .toolbar, prompt: "搜索插件")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button("订阅源", systemImage: "list.bullet.rectangle") {
-                    showSources = true
-                }
-                .help("管理订阅源")
-
-                Button("添加订阅源", systemImage: "plus") {
-                    showAddSource = true
-                }
-                .disabled(pluginSourceManager.isManagementBusy)
-                .help("添加订阅源")
-            }
-
-            ToolbarItem(placement: .cancellationAction) {
-                Button("关闭") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-        }
         .focusedSceneValue(
             \.pluginManagementActions,
             MacPluginManagementActions(
@@ -143,10 +134,12 @@ struct MacPluginManagementView: View {
                 canCheck: !showSources && !showAddSource && !pluginSourceManager.isManagementBusy && !pluginSourceManager.sourceURLs.isEmpty,
                 canAddSource: !showSources && !showAddSource && !pluginSourceManager.isManagementBusy,
                 canShowSources: !showSources && !showAddSource,
+                canSearch: !showSources && !showAddSource && pluginPendingUninstall == nil && !consent.isPresenting,
                 update: { updatePlugins(allInstalledPluginIds) },
                 check: checkUpdates,
                 addSource: { showAddSource = true },
-                showSources: { showSources = true }
+                showSources: { showSources = true },
+                search: { searchFocusRequest += 1 }
             )
         )
         .sheet(isPresented: $showSources) {
@@ -194,6 +187,50 @@ struct MacPluginManagementView: View {
             Text(consent.alertMessage)
         }
         .frame(minWidth: 760, minHeight: 580)
+    }
+
+    private var header: some View {
+        HStack(spacing: 16) {
+            Text("插件管理")
+                .font(.headline)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer(minLength: 16)
+
+            MacPluginSearchField(text: $searchText, focusRequest: searchFocusRequest)
+                .frame(minWidth: 180, idealWidth: 220, maxWidth: 260)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Button("添加订阅源", systemImage: "plus") {
+                showAddSource = true
+            }
+            .disabled(pluginSourceManager.isManagementBusy)
+
+            Spacer(minLength: 16)
+
+            Button("关闭") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+
+            Button("订阅源", systemImage: "list.bullet.rectangle") {
+                showSources = true
+            }
+            .buttonStyle(.borderedProminent)
+            .help("管理订阅源")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .frame(maxWidth: 820)
+        .frame(maxWidth: .infinity)
     }
 
     private func pluginMatchesSearch(pluginId: String, remote: RemotePluginDisplayItem? = nil) -> Bool {
@@ -307,6 +344,57 @@ private struct MacPluginRemovalRequest: Identifiable {
     let name: String
 }
 
+private struct MacPluginSearchField: NSViewRepresentable {
+    @Binding var text: String
+    let focusRequest: Int
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = "搜索插件"
+        field.controlSize = .regular
+        field.sendsWholeSearchString = false
+        field.sendsSearchStringImmediately = true
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.searchChanged(_:))
+        field.setAccessibilityLabel("搜索插件")
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        context.coordinator.text = $text
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+        if context.coordinator.lastFocusRequest != focusRequest,
+           let window = field.window {
+            context.coordinator.lastFocusRequest = focusRequest
+            window.makeFirstResponder(field)
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSearchField, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 220, height: nsView.intrinsicContentSize.height)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var text: Binding<String>
+        var lastFocusRequest = 0
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        @objc func searchChanged(_ field: NSSearchField) {
+            text.wrappedValue = field.stringValue
+        }
+    }
+}
+
 private struct MacPluginManagementScopePicker: View {
     @Binding var scope: MacPluginManagementScope
     let installedCount: Int
@@ -319,7 +407,9 @@ private struct MacPluginManagementScopePicker: View {
                 Text("可安装").tag(MacPluginManagementScope.available)
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 280)
+            .labelsHidden()
+            .frame(width: 240)
+            .accessibilityLabel("插件范围")
 
             Text(scope == .installed ? "\(installedCount) 个插件" : "\(availableCount) 个插件")
                 .font(.caption)
@@ -373,7 +463,7 @@ private struct MacPluginManagementList: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.vertical, 12)
     }
 }
 
@@ -404,6 +494,7 @@ private struct MacInstalledPluginSection: View {
                             pluginName: displayNameForPlugin(pluginId),
                             row: makeRow(pluginId),
                             isManagementBusy: isManagementBusy,
+                            showsSeparator: pluginId != pluginIds.last,
                             requestUninstall: { requestUninstall(pluginId) }
                         )
                     }
@@ -451,7 +542,7 @@ private struct MacAvailablePluginSection: View {
             } else {
                 MacPluginRowsGroup {
                     ForEach(plugins) { item in
-                        MacAvailablePluginRow(row: makeRow(item))
+                        MacAvailablePluginRow(row: makeRow(item), showsSeparator: item.id != plugins.last?.id)
                     }
                 }
             }
@@ -501,6 +592,7 @@ private struct MacInstalledPluginRow: View {
     let pluginName: String
     let row: PluginManagementPluginRow
     let isManagementBusy: Bool
+    let showsSeparator: Bool
     let requestUninstall: () -> Void
 
     var body: some View {
@@ -521,8 +613,10 @@ private struct MacInstalledPluginRow: View {
                 .disabled(isManagementBusy)
             }
 
-            Divider()
-                .padding(.leading, 12)
+            if showsSeparator {
+                Divider()
+                    .padding(.leading, 48)
+            }
         }
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
@@ -531,6 +625,7 @@ private struct MacInstalledPluginRow: View {
 
 private struct MacAvailablePluginRow: View {
     let row: PluginManagementPluginRow
+    let showsSeparator: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -538,8 +633,11 @@ private struct MacAvailablePluginRow: View {
                 .padding(.horizontal, 12)
                 .contentShape(Rectangle())
 
-            Divider()
-                .padding(.leading, 12)
+            if showsSeparator {
+                Divider()
+                    .padding(.leading, 60)
+                    .padding(.trailing, 12)
+            }
         }
     }
 }

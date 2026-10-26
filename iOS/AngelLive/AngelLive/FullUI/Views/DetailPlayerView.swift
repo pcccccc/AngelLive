@@ -454,6 +454,7 @@ struct LiveDetailPlayerView: View {
         }
         .onDisappear {
             roomSwitchTask?.cancel()
+            viewModel.subtitlePlayback.stop()
             viewModel.endPlaybackDiagnostics()
             SupportDiagnosticsService.shared.recordAction(
                 .closedRoom,

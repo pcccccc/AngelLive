@@ -245,7 +245,10 @@ struct LiveSubtitleTranslationTests {
         }
 
         #expect(pipeline.text == scenario.expectedText)
-        #expect(pipeline.errorMessage == nil)
+        #expect(pipeline.lastError == (scenario.sourceLanguage == "und" ? .unsupportedSourceLanguage : nil))
+        if scenario.sourceLanguage == "und" {
+            #expect(pipeline.errorMessage == RoomTranslationError.unsupportedSourceLanguage.localizedDescription)
+        }
         let requests = await provider.requests
         let expectedRequestSources = scenario.expectedRequestSource.map { [$0] } ?? []
         #expect(requests.map(\.sourceLanguage) == expectedRequestSources)
@@ -268,10 +271,50 @@ struct LiveSubtitleTranslationTests {
         try await waitUntil { pipeline.errorMessage != nil }
 
         #expect(pipeline.text.isEmpty)
-        #expect(pipeline.errorMessage == RoomTranslationError.languageResourcesRequired.localizedDescription)
+        #expect(pipeline.lastError == .languageResourcesRequired)
+        let message = try #require(pipeline.errorMessage)
+        #expect(message.hasPrefix(RoomTranslationError.languageResourcesRequired.localizedDescription))
+        #expect(message.contains(RoomTranslationEngine.llmSetupInstructions))
+        #expect(fixture.settings.engine == .apple)
         let request = try #require(await provider.lastRequest)
         #expect(request.contentKind == .subtitle)
         #expect(request.purpose == .automatic)
+    }
+
+    @Test @MainActor
+    func missingCloudConfigurationIsActionableWithoutSendingSubtitles() async throws {
+        let fixture = SubtitleTranslationSettingsFixture()
+        fixture.settings.engine = .llm
+        let provider = SubtitleImmediateProvider(result: "unused")
+        let pipeline = LiveSubtitleTranslationPipeline(
+            settings: fixture.settings,
+            appleProvider: provider,
+            llmProvider: provider,
+            minimumRequestInterval: .zero
+        )
+        defer { pipeline.reset() }
+
+        #expect(pipeline.availabilityError(sourceLanguage: "en-US") == .cloudConfigurationRequired)
+        #expect(pipeline.availabilityError(sourceLanguage: "zh-CN") == nil)
+        #expect(pipeline.availabilityError(sourceLanguage: "fr-FR") == .cloudConfigurationRequired)
+        #expect(pipeline.availabilityError(sourceLanguage: "und") == .unsupportedSourceLanguage)
+        pipeline.enqueue("A neutral caption", sourceLanguage: "en-US", segmentID: "segment-a")
+        #expect(pipeline.lastError == .cloudConfigurationRequired)
+        #expect(pipeline.errorMessage == fixture.settings.availabilityMessage)
+        #expect(pipeline.text.isEmpty)
+        #expect(await provider.requests.isEmpty)
+
+        try fixture.settings.saveCloudConfiguration(
+            baseURL: "https://translation.example.invalid/v1",
+            model: "fixture-model",
+            apiKey: "fixture-secret"
+        )
+        #expect(fixture.settings.availabilityMessage == nil)
+        pipeline.enqueue("A neutral caption", sourceLanguage: "en-US", segmentID: "segment-a")
+        try await waitUntil { pipeline.text == "unused" }
+        #expect(pipeline.lastError == nil)
+        pipeline.reset()
+        #expect(pipeline.lastError == nil)
     }
 
     @Test(arguments: SubtitleLLMFailureScenario.cases)
@@ -405,8 +448,22 @@ struct SubtitleLanguageScenario: Sendable {
             expectedRequestSource: nil
         ),
         Self(
-            text: "Unsupported source",
+            text: "French partial",
             sourceLanguage: "fr-FR",
+            targetLanguage: "zh-Hans",
+            expectedText: "translated",
+            expectedRequestSource: "fr"
+        ),
+        Self(
+            text: "Traditional Chinese partial",
+            sourceLanguage: "zh-Hant-TW",
+            targetLanguage: "zh-Hans",
+            expectedText: "translated",
+            expectedRequestSource: "zh-Hant"
+        ),
+        Self(
+            text: "Unknown source",
+            sourceLanguage: "und",
             targetLanguage: "zh-Hans",
             expectedText: "",
             expectedRequestSource: nil

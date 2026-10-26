@@ -412,6 +412,10 @@ struct TranslationSettingView: View {
         translationService.nativeLanguagePairs
     }
 
+    private var cloudServiceExplanation: String {
+        "填写服务商提供的 API 地址（通常以 /v1 结尾），需支持 Chat Completions 接口。\n只发送待翻译文字，不上传音频；服务商可能收费。API Key 仅保存在本机。"
+    }
+
     var body: some View {
         @Bindable var settings = settings
 
@@ -442,7 +446,7 @@ struct TranslationSettingView: View {
                     }
                 } label: {
                     TranslationSettingLabel(
-                        title: "目标语言",
+                        title: "翻译成",
                         systemImage: "globe",
                         tint: .blue
                     )
@@ -451,12 +455,30 @@ struct TranslationSettingView: View {
             } header: {
                 Text("自动翻译")
             } footer: {
-                Text("自动翻译仅处理英语、日语和韩语，其他语言保留原文。翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
+                Text("自动识别标题和弹幕的语言，翻译不成功时显示原文。")
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
 
-            LiveSubtitleSettingsSection()
+            LiveSubtitleSettingsSection {
+                TranslationSettingLabel(
+                    title: "实时字幕",
+                    systemImage: "waveform",
+                    tint: .orange
+                )
+            } sourceLanguageLabel: {
+                TranslationSettingLabel(
+                    title: "系统语音包",
+                    systemImage: "globe",
+                    tint: .blue
+                )
+            } resourceLabel: {
+                TranslationSettingLabel(
+                    title: "字幕识别文件",
+                    systemImage: "waveform",
+                    tint: .orange
+                )
+            }
 
             Section {
                 Picker(selection: $settings.engine) {
@@ -466,16 +488,16 @@ struct TranslationSettingView: View {
                     }
                 } label: {
                     TranslationSettingLabel(
-                        title: "翻译引擎",
+                        title: "翻译方式",
                         systemImage: "cpu",
                         tint: .purple
                     )
                 }
                 .pickerStyle(.navigationLink)
-            } header: {
-                Text("引擎")
             } footer: {
-                Text("Apple 原生翻译需要 iOS 18 或更高版本。")
+                Text(settings.engine == .apple
+                     ? settings.availabilityError?.localizedDescription ?? "使用系统翻译，需先下载下方语言包。"
+                     : "填写下方配置，保存后点“测试翻译”。")
                     .font(.caption)
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
@@ -529,9 +551,9 @@ struct TranslationSettingView: View {
                         }
                     }
                 } header: {
-                    Text("语言包")
+                    Text("翻译语言包")
                 } footer: {
-                    Text("Apple 原生翻译需要先下载语言包。下载进度请查看系统弹窗。")
+                    Text("点“下载”后，在系统弹窗中确认。")
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
@@ -543,14 +565,14 @@ struct TranslationSettingView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
-                        .accessibilityLabel("服务地址")
+                        .accessibilityLabel("API 地址")
 
                     TextField("模型名称", text: $model)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .accessibilityLabel("模型")
+                        .accessibilityLabel("模型名称")
 
-                    SecureField(settings.hasAPIKey ? "留空保持已保存密钥" : "API Key", text: $apiKey)
+                    SecureField(settings.hasAPIKey ? "已保存，留空不修改" : "API Key", text: $apiKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityLabel("API Key")
@@ -570,15 +592,15 @@ struct TranslationSettingView: View {
                     .disabled(isSaving || isTesting || isDeletingKey || isPreparingNativeLanguage)
 
                     if settings.hasAPIKey {
-                        Button("删除已保存密钥", role: .destructive) {
+                        Button("删除 API Key", role: .destructive) {
                             deleteAPIKey()
                         }
                         .disabled(isSaving || isTesting || isDeletingKey || isPreparingNativeLanguage)
                     }
                 } header: {
-                    Text("兼容 AI 接口")
+                    Text("大模型配置")
                 } footer: {
-                    Text("开启对应开关后，房间标题或弹幕文本会发送至你配置的服务。弹幕频率较高，可能增加用量或费用；不会发送用户名或图片 URL。API Key 只保存在本机安全存储中。")
+                    Text(cloudServiceExplanation)
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
@@ -600,7 +622,7 @@ struct TranslationSettingView: View {
                 .disabled(!canTest)
 
                 if configurationNeedsSave, settings.engine == .llm {
-                    Text("请先保存接口配置，再测试翻译。")
+                    Text("请先保存配置，再测试翻译。")
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
@@ -742,6 +764,7 @@ struct TranslationSettingView: View {
             } catch {
                 guard !Task.isCancelled, testGeneration == generation else { return }
                 inlineMessage = translationService.lastErrorMessage
+                    ?? (error as? RoomTranslationError)?.recoveryMessage(for: settings.engine)
                     ?? (error as? LocalizedError)?.errorDescription
                     ?? error.localizedDescription
             }
@@ -797,9 +820,9 @@ struct TranslationSettingView: View {
 
         switch result {
         case .success:
-            testResult = "语言包已准备好"
+            testResult = "翻译语言包已下载"
         case .failure(let error):
-            inlineMessage = error.localizedDescription
+            inlineMessage = error.recoveryMessage(for: settings.engine)
         }
     }
 

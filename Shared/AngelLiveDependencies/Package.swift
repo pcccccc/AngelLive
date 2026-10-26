@@ -51,6 +51,7 @@ packageDependencies += [
 
 var targetDependencies: [Target.Dependency] = [
     "AngelLiveCore",
+    "whisper",
     "Alamofire",
     .product(name: "Cache", package: "Cache"),
     .product(name: "Gzip", package: "GzipSwift"),
@@ -97,6 +98,11 @@ let package = Package(
     ],
     dependencies: packageDependencies,
     targets: [
+        .binaryTarget(
+            name: "whisper",
+            url: "https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-b5454-xcframework.zip",
+            checksum: "e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b"
+        ),
         .target(
             name: "AngelLiveDependencies",
             dependencies: targetDependencies,

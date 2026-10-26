@@ -31,6 +31,8 @@ struct MoreActionsButton: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var presentedSheet: MoreActionsSheet?
     @State private var buttonPressed = false
+    @State private var showSubtitleLanguages = false
+    @State private var subtitleActivationID = UUID()
 
     var body: some View {
         ZStack {
@@ -59,7 +61,10 @@ struct MoreActionsButton: View {
                 }
 
                 Menu("实时字幕") {
-                    LiveSubtitleQuickControls()
+                    LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
+                        subtitleActivationID = viewModel.subtitlePlayback.activationID
+                        showSubtitleLanguages = true
+                    }
 
                     Button("翻译与字幕设置…") {
                         presentedSheet = .subtitleTranslation
@@ -132,6 +137,15 @@ struct MoreActionsButton: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        }
+        .sheet(isPresented: $showSubtitleLanguages) {
+            LiveSubtitleLanguageSelectionSheet(
+                playback: viewModel.subtitlePlayback,
+                activationID: subtitleActivationID
+            )
+        }
+        .onChange(of: viewModel.subtitlePlayback.activationID) { _, _ in
+            showSubtitleLanguages = false
         }
         .tint(.primary)
     }

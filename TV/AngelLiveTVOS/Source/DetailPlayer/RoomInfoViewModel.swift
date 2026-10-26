@@ -21,6 +21,7 @@ enum PlayerDisplayState {
 
 @Observable
 final class RoomInfoViewModel {
+    let subtitlePlayback = LiveSubtitlePlaybackState()
 
     var appViewModel: AppState
 
@@ -921,7 +922,10 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             deliverDanmakuMessage(message)
             return
         }
-        danmakuTranslationPipeline.enqueue(message) { [weak self] translatedMessage in
+        danmakuTranslationPipeline.enqueue(message, onNativeTranslationFailure: { [weak self] _ in
+            guard let self, self.appViewModel.pluginAvailability.hasAvailablePlugins else { return }
+            self.showDanmuHint("原生翻译不可用，可在翻译与字幕设置中配置大模型。")
+        }) { [weak self] translatedMessage in
             guard let self,
                   !self.appViewModel.danmuSettingsViewModel.shouldBlockDanmu(originalText)
             else { return }
@@ -1008,6 +1012,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         danmuHadDisconnected = false
         KSOptions.isAutoPlay = true
         KSOptions.isSecondOpen = true
+        subtitlePlayback.stop()
         self.currentRoom = liveModel
         getPlayArgs()
         recoveryCoordinator.start()

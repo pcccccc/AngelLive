@@ -5,10 +5,12 @@ struct MacPluginManagementActions {
     let canCheck: Bool
     let canAddSource: Bool
     let canShowSources: Bool
+    let canSearch: Bool
     let update: () -> Void
     let check: () -> Void
     let addSource: () -> Void
     let showSources: () -> Void
+    let search: () -> Void
 }
 
 extension FocusedValues {
@@ -21,6 +23,12 @@ struct MacPluginManagementCommands: Commands {
     var body: some Commands {
         if let actions {
             CommandMenu("插件") {
+                Button("搜索插件", action: actions.search)
+                    .keyboardShortcut("f", modifiers: .command)
+                    .disabled(!actions.canSearch)
+
+                Divider()
+
                 Button("添加订阅源", systemImage: "plus", action: actions.addSource)
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                     .disabled(!actions.canAddSource)

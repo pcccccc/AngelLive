@@ -99,7 +99,7 @@ struct DanmakuTranslationTests {
     }
 
     @Test @MainActor
-    func automaticDanmakuRejectsNonCommonSourcesForAppleAndLLM() async throws {
+    func consecutiveDanmakuMessagesDetectTheirOwnActualLanguagesForAppleAndLLM() async throws {
         for engine in [RoomTranslationEngine.apple, .llm] {
             let fixture = DanmakuSettingsFixture()
             fixture.settings.isDanmakuEnabled = true
@@ -112,16 +112,207 @@ struct DanmakuTranslationTests {
                 )
             }
             let provider = DanmakuPrefixProvider()
+            let timeoutGate = DanmakuSuspendedTimeoutGate()
             let pipeline = makePipeline(
                 fixture: fixture,
                 provider: provider,
-                detector: DanmakuFixedLanguageDetector(language: "fr-FR")
+                detector: NaturalDanmakuLanguageDetector(),
+                broker: DanmakuTranslationBroker(
+                    cloudMinimumRequestInterval: .zero,
+                    timeoutSleep: { try await timeoutGate.sleep(for: $0) }
+                )
             )
-            let original = message("Un message neutre")
-
-            #expect(await deliveredMessage(from: pipeline, message: original) == original)
-            #expect(await provider.callCount == 0)
+            let texts = [
+                "Bonjour tout le monde, bienvenue dans cette émission en direct",
+                "Guten Abend zusammen, willkommen zu dieser Liveübertragung",
+                "OK",
+                "欢迎大家来到今天的直播间，我们一起分享精彩内容"
+            ]
+            // Each message has its own arrival budget. Suspending consumer
+            // timeouts isolates text routing from unrelated suite scheduling;
+            // multi-segment assembly and real deadlines have separate tests.
+            for (index, text) in texts.enumerated() {
+                let original = DanmakuDisplayMessage(
+                    text: text,
+                    nickname: "viewer-a",
+                    color: 0xFFFFFF,
+                    segments: [.text(text)]
+                )
+                let delivered = await deliveredMessage(from: pipeline, message: original)
+                let expected = index < 2 ? "译:\(text)" : text
+                #expect(delivered.segments == [.text(expected)])
+                #expect(delivered.nickname == original.nickname)
+            }
+            let requests = await provider.requests
+            #expect(requests.map(\.sourceLanguage) == ["fr", "de"])
+            #expect(requests.map(\.text) == Array(texts.prefix(2)))
+            pipeline.reset()
+            await timeoutGate.finish()
         }
+    }
+
+    @Test @MainActor
+    func actualAmbiguousAndMatchingDanmakuNeverCallsProvider() async {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        fixture.settings.targetLanguage = "en-US"
+        let provider = DanmakuPrefixProvider()
+        let pipeline = makePipeline(
+            fixture: fixture,
+            provider: provider,
+            detector: NaturalDanmakuLanguageDetector()
+        )
+        for text in ["OK", "12345 !!!", "Welcome everyone to this live broadcast today"] {
+            let original = message(text)
+            #expect(await deliveredMessage(from: pipeline, message: original) == original)
+        }
+        #expect(await provider.callCount == 0)
+    }
+
+    @Test @MainActor
+    func nativeFailuresNotifyOnceAcrossSegmentsAndMessagesUntilConfigurationOrReset() async {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        fixture.settings.engine = .apple
+        let provider = DanmakuFailingProvider(error: RoomTranslationError.languageResourcesRequired)
+        let pipeline = makePipeline(fixture: fixture, provider: provider)
+        var failures: [RoomTranslationError] = []
+        let original = DanmakuDisplayMessage(
+            text: "First textSecond text",
+            nickname: "viewer-a",
+            color: 0xFFFFFF,
+            segments: [.text("First text"), .text("Second text")]
+        )
+        #expect(await deliveredMessage(from: pipeline, message: message("No callback")) == message("No callback"))
+        #expect(await deliveredMessage(
+            from: pipeline,
+            message: original,
+            onNativeTranslationFailure: { failures.append($0) }
+        ) == original)
+        #expect(failures == [.languageResourcesRequired])
+
+        _ = await deliveredMessage(
+            from: pipeline,
+            message: message("Another text"),
+            onNativeTranslationFailure: { failures.append($0) }
+        )
+        #expect(failures == [.languageResourcesRequired])
+
+        fixture.settings.targetLanguage = "ja"
+        _ = await deliveredMessage(
+            from: pipeline,
+            message: message("Changed configuration"),
+            onNativeTranslationFailure: { failures.append($0) }
+        )
+        #expect(failures == [.languageResourcesRequired, .languageResourcesRequired])
+
+        pipeline.reset()
+        _ = await deliveredMessage(
+            from: pipeline,
+            message: message("New room cycle"),
+            onNativeTranslationFailure: { failures.append($0) }
+        )
+        #expect(failures == [.languageResourcesRequired, .languageResourcesRequired, .languageResourcesRequired])
+        #expect(fixture.settings.engine == .apple)
+    }
+
+    @Test(arguments: [false, true])
+    @MainActor
+    func providerServiceFailureNotifiesForTypedAndUnknownErrors(unknownError: Bool) async {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        fixture.settings.engine = .apple
+        let error: any Error = unknownError ? URLError(.timedOut) : RoomTranslationError.serviceUnavailable
+        let pipeline = makePipeline(fixture: fixture, provider: DanmakuFailingProvider(error: error))
+        var failures: [RoomTranslationError] = []
+        let original = message("Provider failure")
+        #expect(await deliveredMessage(
+            from: pipeline,
+            message: original,
+            onNativeTranslationFailure: { failures.append($0) }
+        ) == original)
+        #expect(failures == [.serviceUnavailable])
+    }
+
+    @Test(arguments: [
+        RoomTranslationError.busy, .rateLimited, .authentication, .unsupportedSourceLanguage
+    ])
+    @MainActor
+    func unrelatedNativeFailuresDoNotRecommendAnotherEngine(_ error: RoomTranslationError) async {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        fixture.settings.engine = .apple
+        let pipeline = makePipeline(fixture: fixture, provider: DanmakuFailingProvider(error: error))
+        var failures: [RoomTranslationError] = []
+        let original = message("A neutral message")
+        #expect(await deliveredMessage(
+            from: pipeline,
+            message: original,
+            onNativeTranslationFailure: { failures.append($0) }
+        ) == original)
+        #expect(failures.isEmpty)
+    }
+
+    @Test @MainActor
+    func cloudFailureAndProviderCancellationDoNotRecommendAnotherEngine() async throws {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        fixture.settings.engine = .llm
+        try fixture.settings.saveCloudConfiguration(
+            baseURL: "https://translation.example.invalid/v1",
+            model: "fixture-model",
+            apiKey: "fixture-secret"
+        )
+        let pipeline = makePipeline(
+            fixture: fixture,
+            provider: DanmakuFailingProvider(error: RoomTranslationError.serviceUnavailable)
+        )
+        var failures: [RoomTranslationError] = []
+        let original = message("Cloud failure")
+        #expect(await deliveredMessage(
+            from: pipeline,
+            message: original,
+            onNativeTranslationFailure: { failures.append($0) }
+        ) == original)
+
+        fixture.settings.engine = .apple
+        let cancelledPipeline = makePipeline(
+            fixture: fixture,
+            provider: DanmakuFailingProvider(error: CancellationError())
+        )
+        let cancelled = message("Cancelled translation")
+        #expect(await deliveredMessage(
+            from: cancelledPipeline,
+            message: cancelled,
+            onNativeTranslationFailure: { failures.append($0) }
+        ) == cancelled)
+        #expect(failures.isEmpty)
+    }
+
+    @Test(arguments: ["target", "engine", "disabled"])
+    @MainActor
+    func delayedNativeFailureCannotNotifyAfterConfigurationChange(_ change: String) async {
+        let fixture = DanmakuSettingsFixture()
+        fixture.settings.isDanmakuEnabled = true
+        fixture.settings.engine = .apple
+        let provider = DanmakuControlledProvider(behaviors: ["Delayed text": .hold])
+        let pipeline = makePipeline(fixture: fixture, provider: provider)
+        let log = DanmakuDeliveryLog()
+        var failures: [RoomTranslationError] = []
+        let original = message("Delayed text")
+        pipeline.enqueue(original, onNativeTranslationFailure: { failures.append($0) }) {
+            log.messages.append($0)
+        }
+        await provider.waitForCallCount(1)
+        switch change {
+        case "target": fixture.settings.targetLanguage = "ja"
+        case "engine": fixture.settings.engine = .llm
+        default: fixture.settings.isDanmakuEnabled = false
+        }
+        await provider.resume("Delayed text", throwing: RoomTranslationError.languageResourcesRequired)
+        await waitForDeliveryCount(1, in: log)
+        #expect(log.messages == [original])
+        #expect(failures.isEmpty)
     }
 
     @Test @MainActor
@@ -242,20 +433,23 @@ struct DanmakuTranslationTests {
             messageTimeout: .milliseconds(40)
         )
         let log = DanmakuDeliveryLog()
+        var failures: [RoomTranslationError] = []
         let first = message("First message")
         let second = message("Second message")
-        pipeline.enqueue(first) { log.messages.append($0) }
+        pipeline.enqueue(first, onNativeTranslationFailure: { failures.append($0) }) { log.messages.append($0) }
         pipeline.enqueue(second) { log.messages.append($0) }
 
         await provider.waitForCallCount(2)
         await waitForDeliveryCount(2, in: log)
         #expect(log.messages == [first, message("第二条译文")])
+        #expect(failures.isEmpty)
 
         await provider.resume("First message", throwing: RoomTranslationError.rateLimited)
         try? await Task.sleep(for: .milliseconds(10))
         let third = await deliveredMessage(from: pipeline, message: message("Third message"))
         #expect(third.text == "第三条译文")
         #expect(await provider.callCount == 3)
+        #expect(failures.isEmpty)
     }
 
     @Test @MainActor
@@ -310,21 +504,25 @@ struct DanmakuTranslationTests {
             messageTimeout: .seconds(1)
         )
         let log = DanmakuDeliveryLog()
+        var failures: [RoomTranslationError] = []
 
         let delayed = message("Delayed message")
-        pipeline.enqueue(delayed) { log.messages.append($0) }
+        pipeline.enqueue(delayed, onNativeTranslationFailure: { failures.append($0) }) { log.messages.append($0) }
         await provider.waitForCallCount(1)
         fixture.settings.targetLanguage = "ja"
         await provider.resume("Delayed message", returning: "古い翻訳")
         await waitForDeliveryCount(1, in: log)
         #expect(log.messages == [delayed])
 
-        pipeline.enqueue(message("Reset message")) { log.messages.append($0) }
+        pipeline.enqueue(message("Reset message"), onNativeTranslationFailure: { failures.append($0) }) {
+            log.messages.append($0)
+        }
         await provider.waitForCallCount(2)
         pipeline.reset()
-        await provider.resume("Reset message", returning: "破棄する翻訳")
+        await provider.resume("Reset message", throwing: RoomTranslationError.languageResourcesRequired)
         try? await Task.sleep(for: .milliseconds(20))
         #expect(log.messages == [delayed])
+        #expect(failures.isEmpty)
     }
 
     @Test @MainActor
@@ -495,6 +693,14 @@ private actor DanmakuPrefixProvider: RoomTranslationProvider {
     func translate(_ request: RoomTranslationRequest) async throws -> String {
         requests.append(request)
         return "译:\(request.text)"
+    }
+}
+
+private struct DanmakuFailingProvider: RoomTranslationProvider {
+    let error: any Error
+
+    func translate(_ request: RoomTranslationRequest) async throws -> String {
+        throw error
     }
 }
 
@@ -756,10 +962,13 @@ private func makePipeline(
 @MainActor
 private func deliveredMessage(
     from pipeline: DanmakuTranslationPipeline,
-    message: DanmakuDisplayMessage
+    message: DanmakuDisplayMessage,
+    onNativeTranslationFailure: (@MainActor (RoomTranslationError) -> Void)? = nil
 ) async -> DanmakuDisplayMessage {
     await withCheckedContinuation { continuation in
-        pipeline.enqueue(message) { continuation.resume(returning: $0) }
+        pipeline.enqueue(message, onNativeTranslationFailure: onNativeTranslationFailure) {
+            continuation.resume(returning: $0)
+        }
     }
 }
 

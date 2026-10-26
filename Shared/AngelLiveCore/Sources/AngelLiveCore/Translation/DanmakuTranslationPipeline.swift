@@ -1,7 +1,14 @@
 import Foundation
 
+private struct DanmakuTranslationConsumerTimeout: Error {}
+
 actor DanmakuTranslationBroker {
     static let shared = DanmakuTranslationBroker()
+
+    enum TimeoutReporting: Sendable {
+        case serviceUnavailable
+        case consumerTimeout
+    }
 
     private struct Consumer {
         let continuation: CheckedContinuation<String, any Error>
@@ -54,7 +61,8 @@ actor DanmakuTranslationBroker {
         key: RoomTranslationCacheKey,
         request: RoomTranslationRequest,
         provider: any RoomTranslationProvider,
-        timeout: Duration
+        timeout: Duration,
+        timeoutReporting: TimeoutReporting = .serviceUnavailable
     ) async throws -> String {
         let consumerID = UUID()
         return try await withTaskCancellationHandler {
@@ -66,6 +74,7 @@ actor DanmakuTranslationBroker {
                     request: request,
                     provider: provider,
                     timeout: timeout,
+                    timeoutReporting: timeoutReporting,
                     continuation: continuation
                 )
             }
@@ -89,6 +98,7 @@ actor DanmakuTranslationBroker {
         request: RoomTranslationRequest,
         provider: any RoomTranslationProvider,
         timeout: Duration,
+        timeoutReporting: TimeoutReporting,
         continuation: CheckedContinuation<String, any Error>
     ) {
         if let cached = cache[key] {
@@ -106,6 +116,7 @@ actor DanmakuTranslationBroker {
                 id: consumerID,
                 key: key,
                 timeout: timeout,
+                timeoutReporting: timeoutReporting,
                 continuation: continuation
             )
             flights[key] = flight
@@ -137,6 +148,7 @@ actor DanmakuTranslationBroker {
             id: consumerID,
             key: key,
             timeout: timeout,
+            timeoutReporting: timeoutReporting,
             continuation: continuation
         )
         flights[key] = Flight(
@@ -166,13 +178,14 @@ actor DanmakuTranslationBroker {
         id: UUID,
         key: RoomTranslationCacheKey,
         timeout: Duration,
+        timeoutReporting: TimeoutReporting,
         continuation: CheckedContinuation<String, any Error>
     ) -> Consumer {
         let timeoutSleep = timeoutSleep
         let timeoutTask = Task {
             do {
                 try await timeoutSleep(timeout)
-                self.timeout(consumerID: id, key: key)
+                self.timeout(consumerID: id, key: key, reporting: timeoutReporting)
             } catch {
                 // Completion or caller cancellation owns the continuation.
             }
@@ -180,13 +193,18 @@ actor DanmakuTranslationBroker {
         return Consumer(continuation: continuation, timeoutTask: timeoutTask)
     }
 
-    private func timeout(consumerID: UUID, key: RoomTranslationCacheKey) {
+    private func timeout(consumerID: UUID, key: RoomTranslationCacheKey, reporting: TimeoutReporting) {
         guard var flight = flights[key],
               let consumer = flight.consumers.removeValue(forKey: consumerID) else {
             return
         }
         flights[key] = flight
-        consumer.continuation.resume(throwing: RoomTranslationError.serviceUnavailable)
+        switch reporting {
+        case .serviceUnavailable:
+            consumer.continuation.resume(throwing: RoomTranslationError.serviceUnavailable)
+        case .consumerTimeout:
+            consumer.continuation.resume(throwing: DanmakuTranslationConsumerTimeout())
+        }
         retireIfUnobserved(key: key)
     }
 
@@ -316,9 +334,16 @@ public final class DanmakuTranslationPipeline {
         let original: DanmakuDisplayMessage
         let revision: Int
         let generation: Int
+        let onNativeTranslationFailure: (@MainActor (RoomTranslationError) -> Void)?
         let deliver: @MainActor (DanmakuDisplayMessage) -> Void
         var result: DanmakuDisplayMessage?
+        var nativeFailure: RoomTranslationError?
         var task: Task<Void, Never>?
+    }
+
+    private struct TranslationResult: Sendable {
+        let message: DanmakuDisplayMessage
+        let nativeFailure: RoomTranslationError?
     }
 
     private let settings: RoomTranslationSettings
@@ -334,6 +359,7 @@ public final class DanmakuTranslationPipeline {
     private var order: [Int] = []
     private var pending: [Int: Pending] = [:]
     private var observedRevision: Int
+    private var hasNotifiedNativeFailure = false
 
     public convenience init() {
         self.init(
@@ -366,6 +392,7 @@ public final class DanmakuTranslationPipeline {
 
     public func enqueue(
         _ message: DanmakuDisplayMessage,
+        onNativeTranslationFailure: (@MainActor (RoomTranslationError) -> Void)? = nil,
         deliver: @escaping @MainActor (DanmakuDisplayMessage) -> Void
     ) {
         reconcileConfiguration()
@@ -386,6 +413,7 @@ public final class DanmakuTranslationPipeline {
                 original: message,
                 revision: revision,
                 generation: currentGeneration,
+                onNativeTranslationFailure: onNativeTranslationFailure,
                 deliver: deliver,
                 result: message,
                 task: nil
@@ -399,6 +427,7 @@ public final class DanmakuTranslationPipeline {
             original: message,
             revision: revision,
             generation: currentGeneration,
+            onNativeTranslationFailure: onNativeTranslationFailure,
             deliver: deliver,
             result: nil,
             task: nil
@@ -409,11 +438,11 @@ public final class DanmakuTranslationPipeline {
         let timeout = messageTimeout
         let clock = clock
         let task = Task { [weak self] in
-            let result: DanmakuDisplayMessage
+            let result: TranslationResult
             do {
                 result = try await Self.translate(plan, broker: broker, timeout: timeout, clock: clock)
             } catch {
-                result = message
+                result = TranslationResult(message: message, nativeFailure: nil)
             }
             guard !Task.isCancelled else { return }
             self?.complete(
@@ -432,6 +461,7 @@ public final class DanmakuTranslationPipeline {
         pending.removeAll()
         order.removeAll()
         observedRevision = settings.revision
+        hasNotifiedNativeFailure = false
     }
 
     private func makePlan(message: DanmakuDisplayMessage, revision: Int) -> TranslationPlan? {
@@ -441,7 +471,6 @@ public final class DanmakuTranslationPipeline {
             guard case .text(let text) = segment,
                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   let source = languageDetector.sourceLanguage(for: text),
-                  RoomTranslationLanguageCatalog.supportsAutomaticTranslation(from: source),
                   !roomTranslationLanguagesMatch(source, target) else {
                 return .unchanged(segment)
             }
@@ -492,9 +521,10 @@ public final class DanmakuTranslationPipeline {
         broker: DanmakuTranslationBroker,
         timeout: Duration,
         clock: ContinuousClock
-    ) async throws -> DanmakuDisplayMessage {
+    ) async throws -> TranslationResult {
         let deadline = clock.now.advanced(by: timeout)
         var translatedSegments: [DanmakuDisplaySegment] = []
+        var nativeFailure: RoomTranslationError?
         translatedSegments.reserveCapacity(plan.segments.count)
 
         for segment in plan.segments {
@@ -532,23 +562,33 @@ public final class DanmakuTranslationPipeline {
                         key: key,
                         request: request,
                         provider: plan.provider,
-                        timeout: remaining
+                        timeout: remaining,
+                        timeoutReporting: .consumerTimeout
                     )
                     translatedSegments.append(.text(value))
                 } catch is CancellationError {
                     throw CancellationError()
+                } catch is DanmakuTranslationConsumerTimeout {
+                    translatedSegments.append(.text(text))
                 } catch {
+                    let error = (error as? RoomTranslationError) ?? .serviceUnavailable
+                    if nativeFailure == nil, error.recommendsLLMFallback(for: plan.engine) {
+                        nativeFailure = error
+                    }
                     translatedSegments.append(.text(text))
                 }
             }
         }
 
         let fallback = readableText(from: translatedSegments, original: plan.message.text)
-        return DanmakuDisplayMessage(
-            text: fallback,
-            nickname: plan.message.nickname,
-            color: plan.message.color,
-            segments: translatedSegments
+        return TranslationResult(
+            message: DanmakuDisplayMessage(
+                text: fallback,
+                nickname: plan.message.nickname,
+                color: plan.message.color,
+                segments: translatedSegments
+            ),
+            nativeFailure: nativeFailure
         )
     }
 
@@ -569,12 +609,13 @@ public final class DanmakuTranslationPipeline {
         sequence: Int,
         generation: Int,
         revision: Int,
-        result: DanmakuDisplayMessage
+        result: TranslationResult
     ) {
         guard var item = pending[sequence], item.generation == generation else { return }
         item.task = nil
         if settings.revision == revision, settings.isDanmakuEnabled {
-            item.result = result
+            item.result = result.message
+            item.nativeFailure = result.nativeFailure
         } else {
             item.result = item.original
         }
@@ -585,6 +626,7 @@ public final class DanmakuTranslationPipeline {
     private func reconcileConfiguration() {
         guard observedRevision != settings.revision else { return }
         observedRevision = settings.revision
+        hasNotifiedNativeFailure = false
         for sequence in order {
             guard var item = pending[sequence], item.result == nil else { continue }
             item.task?.cancel()
@@ -620,6 +662,16 @@ public final class DanmakuTranslationPipeline {
                 item.deliver(result)
             } else {
                 item.deliver(item.original)
+            }
+            if item.generation == generation,
+               item.revision == settings.revision,
+               settings.isDanmakuEnabled,
+               settings.engine == .apple,
+               !hasNotifiedNativeFailure,
+               let error = item.nativeFailure,
+               let onNativeTranslationFailure = item.onNativeTranslationFailure {
+                hasNotifiedNativeFailure = true
+                onNativeTranslationFailure(error)
             }
         }
     }

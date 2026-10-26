@@ -42,6 +42,9 @@ struct PlayerControlView: View {
     @State var selectIndex = 0
     @State private var showStatisticsPanel = false
     @State private var showQualityPanel = false
+    @State private var showSubtitleLanguages = false
+    @State private var subtitleActivationID = UUID()
+    @State private var subtitleFocusGeneration = UUID()
     @State private var suppressHiddenFocusActivation = false
     @State private var pendingVisibleFocusAfterReveal: PlayControlFocusableField?
     @State private var showVolumeHUD = false
@@ -365,12 +368,19 @@ struct PlayerControlView: View {
                                 .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUIControlSpacing,
                                                                              isFocused: state == .playPause, shape: .circle, legacyShape: .circle))
                                 .contextMenu(menuItems: {
+                                    if usesFullUIControlSpacing {
+                                        LiveSubtitleQuickControls(playback: roomInfoViewModel.subtitlePlayback) {
+                                            subtitleActivationID = roomInfoViewModel.subtitlePlayback.activationID
+                                            showSubtitleLanguages = true
+                                        }
+                                    }
                                     Button {
                                         showStatisticsAction()
                                     } label: {
                                         Label("视频信息统计", systemImage: "chart.bar.xaxis")
                                     }
                                 })
+                                .modifier(TVFullUISubtitleMenuHintModifier(enabled: usesFullUIControlSpacing))
                                 .focused($state, equals: .playPause)
 
                                 Button(action: {
@@ -529,7 +539,32 @@ struct PlayerControlView: View {
             roomInfoViewModel.showControl = true
             restoreControlFocus()
         }
+        .sheet(isPresented: $showSubtitleLanguages) {
+            LiveSubtitleLanguageSelectionSheet(
+                playback: roomInfoViewModel.subtitlePlayback,
+                activationID: subtitleActivationID
+            )
+        }
+        .onChange(of: roomInfoViewModel.subtitlePlayback.activationID) { _, _ in
+            showSubtitleLanguages = false
+        }
+        .onChange(of: showSubtitleLanguages) { _, isPresented in
+            subtitleFocusGeneration = UUID()
+            if isPresented {
+                roomInfoViewModel.contolTimer?.invalidate()
+                pendingVisibleFocusAfterReveal = nil
+                state = nil
+            } else {
+                pendingVisibleFocusAfterReveal = .playPause
+                let wasVisible = roomInfoViewModel.showControl
+                roomInfoViewModel.showControl = true
+                if wasVisible {
+                    restoreControlFocus()
+                }
+            }
+        }
         .onDisappear {
+            subtitleFocusGeneration = UUID()
             volumeHUDHideTask?.cancel()
             volumeHUDHideTask = nil
         }
@@ -548,6 +583,10 @@ struct PlayerControlView: View {
             }
         }
         .onChange(of: roomInfoViewModel.showControl) { oldValue, isVisible in
+            guard !showSubtitleLanguages else {
+                roomInfoViewModel.contolTimer?.invalidate()
+                return
+            }
             if isVisible {
                 restoreControlFocus()
             } else {
@@ -556,6 +595,7 @@ struct PlayerControlView: View {
             }
         }
         .onChange(of: state, { oldValue, newValue in
+            guard !showSubtitleLanguages else { return }
             roomInfoViewModel.controlViewOptionSecond = 5
 
             if oldValue != .list && isListContentField(oldValue) == false && oldValue != nil {
@@ -609,6 +649,10 @@ struct PlayerControlView: View {
     }
 
     private func handleBackCommand() {
+        if showSubtitleLanguages {
+            showSubtitleLanguages = false
+            return
+        }
         if roomInfoViewModel.showTop {
             logNavigation("closeRelatedRooms")
             withAnimation {
@@ -698,6 +742,7 @@ struct PlayerControlView: View {
     }
 
     private var shouldShowHiddenControlAnchors: Bool {
+        showSubtitleLanguages == false &&
         roomInfoViewModel.showControl == false &&
         roomInfoViewModel.showTop == false &&
         roomInfoViewModel.showDanmuSettingView == false &&
@@ -818,7 +863,8 @@ struct PlayerControlView: View {
     }
 
     private func restoreControlFocus() {
-        guard roomInfoViewModel.showTop == false,
+        guard showSubtitleLanguages == false,
+              roomInfoViewModel.showTop == false,
               roomInfoViewModel.showDanmuSettingView == false,
               showStatisticsPanel == false,
               showQualityPanel == false else {
@@ -827,9 +873,12 @@ struct PlayerControlView: View {
 
         let preferredFocus = pendingVisibleFocusAfterReveal ?? (state == .list ? roomInfoViewModel.lastOptionState : (state ?? roomInfoViewModel.lastOptionState))
         let target = resolvedVisibleControlFocus(from: preferredFocus)
+        let generation = subtitleFocusGeneration
         DispatchQueue.main.async {
+            guard generation == subtitleFocusGeneration, !showSubtitleLanguages else { return }
             state = nil
             DispatchQueue.main.async {
+                guard generation == subtitleFocusGeneration, !showSubtitleLanguages else { return }
                 state = target
                 pendingVisibleFocusAfterReveal = nil
             }
@@ -866,11 +915,14 @@ struct PlayerControlView: View {
 
         let preferredFocus = state == .list ? roomInfoViewModel.lastOptionState : (state ?? roomInfoViewModel.lastOptionState)
         let target = resolvedHiddenAnchorFocus(from: preferredFocus)
+        let generation = subtitleFocusGeneration
 
         suppressHiddenFocusActivation = true
         DispatchQueue.main.async {
+            guard generation == subtitleFocusGeneration, !showSubtitleLanguages else { return }
             state = nil
             DispatchQueue.main.async {
+                guard generation == subtitleFocusGeneration, !showSubtitleLanguages else { return }
                 state = target
             }
         }
@@ -1196,6 +1248,19 @@ struct PlayerControlView: View {
         }
     }
     
+}
+
+private struct TVFullUISubtitleMenuHintModifier: ViewModifier {
+    let enabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.accessibilityHint("聚焦此播放或暂停按钮后，长按遥控器选择键打开字幕菜单。")
+        } else {
+            content
+        }
+    }
 }
 
 private struct TVFullUIControlMoveModifier: ViewModifier {

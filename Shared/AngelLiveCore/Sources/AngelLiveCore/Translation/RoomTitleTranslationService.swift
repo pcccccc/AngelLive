@@ -149,7 +149,7 @@ public final class RoomTitleTranslationService {
                 endpoint: endpoint,
                 model: model
             ) else { throw CancellationError() }
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = error.recoveryMessage(for: engine)
             throw error
         } catch {
             try Task.checkCancellation()
@@ -160,7 +160,7 @@ public final class RoomTitleTranslationService {
                 endpoint: endpoint,
                 model: model
             ) else { throw CancellationError() }
-            lastErrorMessage = RoomTranslationError.serviceUnavailable.localizedDescription
+            lastErrorMessage = RoomTranslationError.serviceUnavailable.recoveryMessage(for: engine)
             throw RoomTranslationError.serviceUnavailable
         }
     }
@@ -228,7 +228,7 @@ public final class RoomTitleTranslationService {
                 throw CancellationError()
             }
             nativeLanguageStatuses[pair] = status
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = error.recoveryMessage(for: engine)
             throw error
         } catch {
             let status = await provider.nativeLanguageStatus(for: pair)
@@ -238,7 +238,7 @@ public final class RoomTitleTranslationService {
                 throw CancellationError()
             }
             nativeLanguageStatuses[pair] = status
-            lastErrorMessage = RoomTranslationError.serviceUnavailable.localizedDescription
+            lastErrorMessage = RoomTranslationError.serviceUnavailable.recoveryMessage(for: engine)
             throw RoomTranslationError.serviceUnavailable
         }
     }
@@ -252,8 +252,7 @@ public final class RoomTitleTranslationService {
     }
 
     private func cacheKey(for original: String) -> RoomTranslationCacheKey? {
-        guard let sourceLanguage = languageDetector.sourceLanguage(for: original),
-              RoomTranslationLanguageCatalog.supportsAutomaticTranslation(from: sourceLanguage) else {
+        guard let sourceLanguage = languageDetector.sourceLanguage(for: original) else {
             return nil
         }
         return RoomTranslationCacheKey(
@@ -366,9 +365,9 @@ public final class RoomTitleTranslationService {
     private func record(_ error: any Error, for key: RoomTranslationCacheKey) {
         guard isCurrent(key) else { return }
         if let error = error as? RoomTranslationError {
-            lastErrorMessage = error.localizedDescription
+            lastErrorMessage = error.recoveryMessage(for: key.engine)
         } else {
-            lastErrorMessage = RoomTranslationError.serviceUnavailable.localizedDescription
+            lastErrorMessage = RoomTranslationError.serviceUnavailable.recoveryMessage(for: key.engine)
         }
     }
 }

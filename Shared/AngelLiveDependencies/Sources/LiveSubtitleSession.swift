@@ -1,4 +1,5 @@
 import AVFoundation
+import AngelLiveCore
 import Foundation
 import Observation
 import Speech
@@ -8,12 +9,55 @@ import KSPlayer
 import Synchronization
 #endif
 
-public enum LiveSubtitleResourceStatus: Sendable {
+public enum LiveSubtitleResourceStatus: Equatable, Sendable {
     case unsupported
     case unavailable
     case needsDownload
     case downloading
     case ready
+}
+
+public enum LiveSubtitleUnavailableReason: Equatable, Sendable {
+    case playerBackend
+    case systemVersion
+    case simulator
+    case speechUnavailable
+    case sourceLanguage
+
+    public var shortDescription: String {
+        switch self {
+        case .playerBackend: "播放器不支持字幕"
+        case .systemVersion: "需要系统 26 或更高版本"
+        case .simulator: "模拟器不支持字幕识别"
+        case .speechUnavailable: "设备不支持字幕识别"
+        case .sourceLanguage: "不支持此语言"
+        }
+    }
+
+    public var message: String {
+        switch self {
+        case .playerBackend:
+            "当前播放器不支持字幕识别。"
+        case .systemVersion:
+            "字幕需要系统 26 或更高版本。"
+        case .simulator:
+            "模拟器不支持语音识别，请在真机上使用字幕。"
+        case .speechUnavailable:
+            "这台设备不支持语音识别，无法生成直播字幕。"
+        case .sourceLanguage:
+            "系统不支持识别这种语言。"
+        }
+    }
+}
+
+public struct LiveSubtitleAvailability: Equatable, Sendable {
+    public let status: LiveSubtitleResourceStatus
+    public let unavailableReason: LiveSubtitleUnavailableReason?
+
+    init(status: LiveSubtitleResourceStatus, unavailableReason: LiveSubtitleUnavailableReason? = nil) {
+        self.status = status
+        self.unavailableReason = unavailableReason
+    }
 }
 
 @MainActor
@@ -25,26 +69,43 @@ public final class LiveSubtitleSession {
 
     @ObservationIgnored private var generation: UInt = 0
     @ObservationIgnored private var runTask: Task<Void, Never>?
+    @ObservationIgnored private var updateHandler: (@MainActor @Sendable (LiveSubtitleUpdate) -> Void)?
+    @ObservationIgnored private var currentSourceLanguage: String?
+    @ObservationIgnored private let languageDetectionResources: LiveLanguageDetectionResources
     #if canImport(KSPlayer)
     @ObservationIgnored private weak var attachedLayer: KSPlayerLayer?
     @ObservationIgnored private var recognizer: (any LiveAudioRecognizing)?
     #endif
     @ObservationIgnored private var lastResultInstant: ContinuousClock.Instant?
 
-    public init() {}
+    public init() {
+        languageDetectionResources = .shared
+    }
+
+    init(languageDetectionResources: LiveLanguageDetectionResources) {
+        self.languageDetectionResources = languageDetectionResources
+    }
 
     #if canImport(KSPlayer)
-    public func run(layer: KSPlayerLayer, sourceLanguage: String) async {
+    public func run(
+        layer: KSPlayerLayer,
+        sourceLanguage: String? = nil,
+        resourcePreparation: LiveSubtitleResourcePreparation? = nil,
+        onUpdate: @escaping @MainActor @Sendable (LiveSubtitleUpdate) -> Void = { _ in }
+    ) async {
         stop()
         let currentGeneration = generation
+        updateHandler = onUpdate
+        currentSourceLanguage = sourceLanguage
+        publish(.preparing, message: "正在开启字幕…", generation: currentGeneration)
 
         #if canImport(KSPlayer)
         guard layer.player is KSMEPlayer else {
-            statusMessage = "当前播放内核不支持实时字幕。"
+            publish(.unavailable, message: LiveSubtitleUnavailableReason.playerBackend.message, generation: currentGeneration)
             return
         }
         #else
-        statusMessage = "当前播放内核不支持实时字幕。"
+        statusMessage = "当前播放器不支持字幕识别。"
         return
         #endif
 
@@ -53,6 +114,7 @@ public final class LiveSubtitleSession {
             await self.performRun(
                 layer: layer,
                 sourceLanguage: sourceLanguage,
+                resourcePreparation: resourcePreparation,
                 generation: currentGeneration
             )
         }
@@ -87,7 +149,12 @@ public final class LiveSubtitleSession {
             text = ""
             segmentID = nil
             lastResultInstant = nil
-            statusMessage = "当前播放内核不支持实时字幕。"
+            statusMessage = "当前播放器不支持字幕识别。"
+            updateHandler?(LiveSubtitleUpdate(
+                phase: .unavailable,
+                sourceLanguage: currentSourceLanguage,
+                message: statusMessage
+            ))
             return
         }
 
@@ -101,7 +168,7 @@ public final class LiveSubtitleSession {
         layer.options.audioRecognizes.insert(recognizer, at: 0)
         #else
         attachedLayer = layer
-        statusMessage = "当前播放内核不支持实时字幕。"
+        statusMessage = "当前播放器不支持字幕识别。"
         #endif
     }
 
@@ -119,31 +186,53 @@ public final class LiveSubtitleSession {
         segmentID = nil
         statusMessage = nil
         lastResultInstant = nil
+        currentSourceLanguage = nil
+        updateHandler = nil
     }
 
     public nonisolated static func resourceStatus(
         sourceLanguage: String
     ) async -> LiveSubtitleResourceStatus {
+        await availability(sourceLanguage: sourceLanguage).status
+    }
+
+    public nonisolated static func availability(
+        sourceLanguage: String
+    ) async -> LiveSubtitleAvailability {
         #if !canImport(KSPlayer)
-        return .unsupported
+        return .init(status: .unsupported, unavailableReason: .playerBackend)
         #else
         guard #available(iOS 26, macOS 26, tvOS 26, *) else {
-            return .unsupported
+            return .init(status: .unsupported, unavailableReason: .systemVersion)
         }
-        guard SpeechTranscriber.isAvailable,
-              let locale = await supportedLocale(for: sourceLanguage)
-        else {
-            return .unsupported
+        guard SpeechTranscriber.isAvailable else {
+            #if targetEnvironment(simulator)
+            return .init(status: .unsupported, unavailableReason: .simulator)
+            #else
+            return .init(status: .unsupported, unavailableReason: .speechUnavailable)
+            #endif
+        }
+        guard let locale = await supportedLocale(for: sourceLanguage) else {
+            return .init(status: .unsupported, unavailableReason: .sourceLanguage)
         }
 
         do {
-            return try await LiveSubtitleReservations.shared.withLease(locale: locale) { _ in
+            let status = try await LiveSubtitleReservations.shared.withLease(locale: locale) { _ in
                 await reservedResourceStatus(locale: locale)
             }
+            return .init(status: status, unavailableReason: status == .unsupported ? .sourceLanguage : nil)
         } catch {
-            return .unavailable
+            return .init(status: .unavailable)
         }
         #endif
+    }
+
+    public nonisolated static func supportedLanguages() async -> [Locale] {
+        guard #available(iOS 26, macOS 26, tvOS 26, *),
+              SpeechTranscriber.isAvailable else { return [] }
+        return await SpeechTranscriber.supportedLocales.sorted {
+            $0.identifier(.bcp47) < $1.identifier(.bcp47)
+        }
     }
 
     @available(iOS 26, macOS 26, tvOS 26, *)
@@ -231,107 +320,103 @@ public final class LiveSubtitleSession {
     #if canImport(KSPlayer)
     private func performRun(
         layer: KSPlayerLayer,
-        sourceLanguage: String,
+        sourceLanguage: String?,
+        resourcePreparation: LiveSubtitleResourcePreparation?,
         generation currentGeneration: UInt
     ) async {
         guard #available(iOS 26, macOS 26, tvOS 26, *) else {
-            setStatus("此系统版本不支持实时字幕。", generation: currentGeneration)
+            publish(.unavailable, message: LiveSubtitleUnavailableReason.systemVersion.message, generation: currentGeneration)
+            return
+        }
+        guard SpeechTranscriber.isAvailable else {
+            #if targetEnvironment(simulator)
+            let reason = LiveSubtitleUnavailableReason.simulator
+            #else
+            let reason = LiveSubtitleUnavailableReason.speechUnavailable
+            #endif
+            publish(.unavailable, message: reason.message, generation: currentGeneration)
             return
         }
 
-        guard let locale = await Self.supportedLocale(for: sourceLanguage) else {
-            setStatus("当前语言或设备不支持实时字幕。", generation: currentGeneration)
-            return
-        }
-        guard !Task.isCancelled, generation == currentGeneration else { return }
-
-        do {
-            try await LiveSubtitleReservations.shared.withLease(locale: locale) { _ in
-                await self.reservedRun(
-                    layer: layer,
-                    locale: locale,
-                    generation: currentGeneration
-                )
-            }
-        } catch is CancellationError {
-            return
-        } catch {
-            setStatus("暂时无法准备语音模型，请稍后重试。", generation: currentGeneration)
-        }
-    }
-
-    @available(iOS 26, macOS 26, tvOS 26, *)
-    private func reservedRun(
-        layer: KSPlayerLayer,
-        locale: Locale,
-        generation currentGeneration: UInt
-    ) async {
-        switch await Self.reservedResourceStatus(locale: locale) {
-        case .unsupported:
-            setStatus("当前语言或设备不支持实时字幕。", generation: currentGeneration)
-            return
-        case .unavailable:
-            setStatus("暂时无法准备语音模型，请稍后重试。", generation: currentGeneration)
-            return
-        case .needsDownload:
-            setStatus("请先在设置中下载该语言的语音识别资源。", generation: currentGeneration)
-            return
-        case .downloading:
-            setStatus("该语言的语音识别资源正在下载。", generation: currentGeneration)
-            return
-        case .ready:
-            break
+        if sourceLanguage == nil {
+            guard await prepareLanguageDetection(
+                resourcePreparation: resourcePreparation,
+                generation: currentGeneration
+            ) else { return }
         }
         guard !Task.isCancelled, generation == currentGeneration else { return }
 
-        #if canImport(KSPlayer)
-        let recognizer = LiveAudioRecognizer(languageCode: locale.identifier)
-        guard generation == currentGeneration else { return }
+        // Unknown language must not prevent capture. The single consumer below
+        // owns conversion; language detection only receives immutable snapshots.
+        let recognizer = LiveAudioRecognizer(languageCode: sourceLanguage)
         self.recognizer = recognizer
-        statusMessage = nil
-        lastResultInstant = nil
         attach(layer: layer)
-
-        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
-        guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
-            compatibleWith: [transcriber]
+        let detector = LiveAudioLanguageDetector(resources: languageDetectionResources)
+        let audio = LiveSubtitleAudioCoordinator(languageIsKnown: sourceLanguage != nil) { samples in
+            try await detector.detect(samples: samples, sampleRate: 16_000)
+        }
+        guard let detectionFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16_000,
+            channels: 1,
+            interleaved: false
         ) else {
-            setStatus("当前设备没有可用的语音识别音频格式。", generation: currentGeneration)
             recognizer.finish()
+            publish(.failed, message: "无法读取直播声音，请重试。", generation: currentGeneration)
             return
         }
+        if sourceLanguage == nil {
+            publish(.waitingForSpeech, message: "正在等主播说话…", generation: currentGeneration)
+        }
 
-        let analyzer = SpeechAnalyzer(modules: [transcriber])
-        let inputPair = AsyncStream<AnalyzerInput>.makeStream(
-            bufferingPolicy: .bufferingNewest(12)
-        )
         do {
             try await withTaskCancellationHandler {
-                try await analyzer.prepareToAnalyze(in: analyzerFormat)
-                try Task.checkCancellation()
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     group.addTask {
-                        defer { inputPair.continuation.finish() }
-                        var converter = LiveAudioConverter(analyzerFormat: analyzerFormat)
+                        var converter = LiveAudioConverter(analyzerFormat: detectionFormat)
                         for await chunk in recognizer.audioChunks {
                             try Task.checkCancellation()
-                            if let buffer = try converter.convert(chunk) {
-                                inputPair.continuation.yield(AnalyzerInput(buffer: buffer))
-                            }
+                            guard let buffer = try converter.convert(chunk),
+                                  let channel = buffer.floatChannelData?[0] else { continue }
+                            let samples = Array(UnsafeBufferPointer(
+                                start: channel,
+                                count: Int(buffer.frameLength)
+                            ))
+                            try await audio.append(samples)
                         }
                     }
                     group.addTask {
-                        _ = try await analyzer.analyzeSequence(inputPair.stream)
-                    }
-                    group.addTask {
-                        for try await result in transcriber.results {
-                            try Task.checkCancellation()
-                            let latestSegment = String(result.text.characters)
-                            await self.setText(
-                                latestSegment,
-                                segmentID: String(result.range.start.seconds),
+                        if let sourceLanguage {
+                            await self.prepareAndTranscribe(
+                                sourceLanguage: sourceLanguage,
+                                resourcePreparation: resourcePreparation,
+                                audio: audio,
                                 generation: currentGeneration
                             )
+                            return
+                        }
+                        for await event in audio.events {
+                            try Task.checkCancellation()
+                            switch event {
+                            case .waitingForSpeech:
+                                await self.publish(.waitingForSpeech, message: "正在等主播说话…", generation: currentGeneration)
+                            case .detecting:
+                                await self.publish(.detecting, message: "正在识别主播语言…", generation: currentGeneration)
+                            case let .detected(language):
+                                await self.prepareAndTranscribe(
+                                    sourceLanguage: language,
+                                    resourcePreparation: resourcePreparation,
+                                    audio: audio,
+                                    generation: currentGeneration
+                                )
+                                return
+                            case .uncertain:
+                                await self.publish(.manualSelectionRequired, message: "没能识别主播语言，请手动选择。", generation: currentGeneration)
+                                return
+                            case let .failed(message):
+                                await self.publish(.failed, message: message, generation: currentGeneration)
+                                return
+                            }
                         }
                     }
                     group.addTask {
@@ -340,40 +425,261 @@ public final class LiveSubtitleSession {
                             await self.clearTextIfInactive(generation: currentGeneration)
                         }
                     }
-
                     do {
                         _ = try await group.next()
                         recognizer.finish()
-                        inputPair.continuation.finish()
+                        await audio.finish()
+                        group.cancelAll()
+                    } catch {
+                        recognizer.finish()
+                        await audio.finish()
+                        group.cancelAll()
+                        throw error
+                    }
+                }
+            } onCancel: {
+                recognizer.finish()
+                Task { await audio.finish() }
+            }
+        } catch is CancellationError {
+            // Stopped or superseded sessions never publish a new room status.
+        } catch {
+            if !Task.isCancelled {
+                publish(.failed, message: "无法读取直播声音，请重试。", generation: currentGeneration)
+            }
+        }
+        await audio.finish()
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private func prepareLanguageDetection(
+        resourcePreparation: LiveSubtitleResourcePreparation?,
+        generation currentGeneration: UInt
+    ) async -> Bool {
+        let resources = languageDetectionResources
+        var status = await resources.status()
+        guard !Task.isCancelled, generation == currentGeneration else { return false }
+        do {
+            status = try await waitForLanguageDownload(status, resources: resources, generation: currentGeneration)
+        } catch { return false }
+        if status == .needsDownload, resourcePreparation == .languageDetection {
+            publish(.downloadingModel, message: "正在下载字幕识别文件…", progress: 0, generation: currentGeneration)
+            do {
+                try await resources.download { [weak self] fraction in
+                    self?.publish(.downloadingModel, message: "正在下载字幕识别文件…", progress: fraction, generation: currentGeneration)
+                }
+                try Task.checkCancellation()
+                status = await resources.status()
+            } catch LiveLanguageDetectionResourceError.downloadInProgress {
+                status = .downloading
+            } catch is CancellationError {
+                return false
+            } catch {
+                publish(.failed, message: "字幕识别文件下载失败，请检查网络后重试。", generation: currentGeneration)
+                return false
+            }
+        }
+        do {
+            status = try await waitForLanguageDownload(status, resources: resources, generation: currentGeneration)
+        } catch { return false }
+        guard !Task.isCancelled, generation == currentGeneration else { return false }
+        switch status {
+        case .ready:
+            return true
+        case .needsDownload:
+            publish(.modelDownloadRequired, message: "请先下载字幕识别文件，下载后继续开启字幕。", generation: currentGeneration)
+        case .downloading:
+            publish(.downloadingModel, message: "字幕识别文件正在下载。", generation: currentGeneration)
+        case .unsupported:
+            publish(.unavailable, message: "这台设备无法识别主播语言。", generation: currentGeneration)
+        case .unavailable:
+            publish(.failed, message: "字幕识别文件暂时无法使用，请重试。", generation: currentGeneration)
+        }
+        return false
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private func waitForLanguageDownload(
+        _ initialStatus: LiveSubtitleResourceStatus,
+        resources: LiveLanguageDetectionResources,
+        generation currentGeneration: UInt
+    ) async throws -> LiveSubtitleResourceStatus {
+        var status = initialStatus
+        if status == .downloading {
+            publish(.downloadingModel, message: "正在下载字幕识别文件…", generation: currentGeneration)
+        }
+        while status == .downloading {
+            try await Task.sleep(for: .milliseconds(250))
+            guard generation == currentGeneration else { throw CancellationError() }
+            status = await resources.status()
+            try Task.checkCancellation()
+        }
+        return status
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private func prepareAndTranscribe(
+        sourceLanguage: String,
+        resourcePreparation: LiveSubtitleResourcePreparation?,
+        audio: LiveSubtitleAudioCoordinator,
+        generation currentGeneration: UInt
+    ) async {
+        guard !Task.isCancelled, generation == currentGeneration else { return }
+        currentSourceLanguage = sourceLanguage
+        publish(.preparing, message: "正在启动语音识别…", generation: currentGeneration)
+        guard let locale = await Self.supportedLocale(for: sourceLanguage) else {
+            publish(.unavailable, message: "系统不支持识别主播说的这种语言。", generation: currentGeneration)
+            return
+        }
+        guard !Task.isCancelled, generation == currentGeneration else { return }
+        currentSourceLanguage = locale.identifier(.bcp47)
+        do {
+            try await LiveSubtitleReservations.shared.withLease(locale: locale) { _ in
+                var status = await Self.reservedResourceStatus(locale: locale)
+                status = try await waitForSpeechDownload(status, locale: locale, generation: currentGeneration)
+                try Task.checkCancellation()
+                guard generation == currentGeneration else { return }
+                // Authorization is limited to this exact language request. A
+                // previous model download never authorizes a Speech download.
+                if status == .needsDownload,
+                   case let .speech(authorizedLanguage) = resourcePreparation,
+                   authorizedLanguage == sourceLanguage {
+                    publish(.downloadingSpeechResources, message: "正在下载系统语音包…", progress: 0, generation: currentGeneration)
+                    try await Self.downloadResources(sourceLanguage: sourceLanguage) { [weak self] fraction in
+                        self?.publish(.downloadingSpeechResources, message: "正在下载系统语音包…", progress: fraction, generation: currentGeneration)
+                    }
+                    try Task.checkCancellation()
+                    status = await Self.reservedResourceStatus(locale: locale)
+                    status = try await waitForSpeechDownload(status, locale: locale, generation: currentGeneration)
+                }
+                guard !Task.isCancelled, generation == currentGeneration else { return }
+                switch status {
+                case .ready:
+                    await transcribe(locale: locale, audio: audio, generation: currentGeneration)
+                case .needsDownload:
+                    publish(.speechResourcesRequired, message: "请先下载对应语言的系统语音包。", generation: currentGeneration)
+                case .downloading:
+                    publish(.downloadingSpeechResources, message: "系统语音包正在下载。", generation: currentGeneration)
+                case .unsupported:
+                    publish(.unavailable, message: "这台设备不支持识别这种语言。", generation: currentGeneration)
+                case .unavailable:
+                    publish(.failed, message: "系统语音包暂时无法使用，请重试。", generation: currentGeneration)
+                }
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            publish(.failed, message: "系统语音包暂时无法使用，请重试。", generation: currentGeneration)
+        }
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private func waitForSpeechDownload(
+        _ initialStatus: LiveSubtitleResourceStatus,
+        locale: Locale,
+        generation currentGeneration: UInt
+    ) async throws -> LiveSubtitleResourceStatus {
+        var status = initialStatus
+        if status == .downloading {
+            publish(.downloadingSpeechResources, message: "正在下载系统语音包…", generation: currentGeneration)
+        }
+        while status == .downloading {
+            try await Task.sleep(for: .milliseconds(250))
+            guard generation == currentGeneration else { throw CancellationError() }
+            status = await Self.reservedResourceStatus(locale: locale)
+            try Task.checkCancellation()
+        }
+        return status
+    }
+
+    @available(iOS 26, macOS 26, tvOS 26, *)
+    private func transcribe(
+        locale: Locale,
+        audio: LiveSubtitleAudioCoordinator,
+        generation currentGeneration: UInt
+    ) async {
+        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+        guard let analyzerFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
+            compatibleWith: [transcriber]
+        ) else {
+            publish(.failed, message: "无法读取直播声音，请重试。", generation: currentGeneration)
+            return
+        }
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        // Analyzer demand drains the same eight-second rolling window used for
+        // pre-roll. No unbounded packet queue grows while Speech is suspended.
+        let input = AsyncThrowingStream<AnalyzerInput, Error>(unfolding: {
+            try await audio.nextSpeechInput()
+        })
+        do {
+            try await withTaskCancellationHandler {
+                try await analyzer.prepareToAnalyze(in: analyzerFormat)
+                try Task.checkCancellation()
+                guard generation == currentGeneration else { throw CancellationError() }
+                try await audio.installSpeechInput(format: analyzerFormat)
+                publish(.transcribing, generation: currentGeneration)
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        _ = try await analyzer.analyzeSequence(input)
+                    }
+                    group.addTask {
+                        for try await result in transcriber.results {
+                            try Task.checkCancellation()
+                            await self.setText(
+                                String(result.text.characters),
+                                segmentID: String(result.range.start.seconds),
+                                generation: currentGeneration
+                            )
+                        }
+                    }
+                    do {
+                        _ = try await group.next()
+                        await audio.finish()
                         group.cancelAll()
                         await analyzer.cancelAndFinishNow()
                     } catch {
-                        recognizer.finish()
-                        inputPair.continuation.finish()
+                        await audio.finish()
                         group.cancelAll()
                         await analyzer.cancelAndFinishNow()
                         throw error
                     }
                 }
             } onCancel: {
-                recognizer.finish()
-                inputPair.continuation.finish()
                 Task {
+                    await audio.finish()
                     await analyzer.cancelAndFinishNow()
                 }
             }
-            await analyzer.cancelAndFinishNow()
         } catch is CancellationError {
-            await analyzer.cancelAndFinishNow()
+            // Cancellation is handled by the room's newer activation.
         } catch {
-            await analyzer.cancelAndFinishNow()
             if !Task.isCancelled {
-                setStatus("实时字幕识别已停止。", generation: currentGeneration)
+                publish(.failed, message: "字幕识别已停止，请重新开启。", generation: currentGeneration)
             }
         }
-        #else
-        setStatus("当前播放内核不支持实时字幕。", generation: currentGeneration)
-        #endif
+        await audio.finish()
+        await analyzer.cancelAndFinishNow()
+    }
+
+    private func publish(
+        _ phase: LiveSubtitlePhase,
+        message: String? = nil,
+        progress: Double? = nil,
+        generation expectedGeneration: UInt
+    ) {
+        guard generation == expectedGeneration, !Task.isCancelled else { return }
+        switch phase {
+        case .unavailable, .failed, .manualSelectionRequired, .modelDownloadRequired, .speechResourcesRequired:
+            statusMessage = message
+        default:
+            statusMessage = nil
+        }
+        updateHandler?(LiveSubtitleUpdate(
+            phase: phase,
+            sourceLanguage: currentSourceLanguage,
+            message: message,
+            downloadProgress: progress
+        ))
     }
 
     private func setText(_ newText: String, segmentID newSegmentID: String, generation expectedGeneration: UInt) {
@@ -381,11 +687,6 @@ public final class LiveSubtitleSession {
         segmentID = newSegmentID
         text = newText
         lastResultInstant = .now
-    }
-
-    private func setStatus(_ message: String, generation expectedGeneration: UInt) {
-        guard generation == expectedGeneration else { return }
-        statusMessage = message
     }
 
     private func clearTextIfInactive(generation expectedGeneration: UInt) {
@@ -456,7 +757,7 @@ private final class LiveAudioRecognizer: LiveAudioRecognizing {
         set { selection.withLock { $0 = newValue } }
     }
 
-    init(languageCode: String) {
+    init(languageCode: String?) {
         self.languageCode = languageCode
         let pair = AsyncStream<LiveAudioChunk>.makeStream(
             bufferingPolicy: .bufferingNewest(12)
@@ -500,6 +801,16 @@ struct LiveAudioChunk: Sendable {
     private let isInterleaved: Bool
     private let frameLength: AVAudioFrameCount
     private let planes: [Data]
+
+    init?(monoSamples: [Float]) {
+        guard !monoSamples.isEmpty, monoSamples.count <= Int(UInt32.max) else { return nil }
+        sampleFormat = .float32
+        sampleRate = 16_000
+        channelCount = 1
+        isInterleaved = false
+        frameLength = AVAudioFrameCount(monoSamples.count)
+        planes = [monoSamples.withUnsafeBytes { Data($0) }]
+    }
 
     init?(frame: AudioFrame) {
         guard frame.numberOfSamples > 0,
@@ -644,17 +955,17 @@ private enum LiveSubtitleError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupported:
-            "当前设备不支持所选语言的实时字幕。"
+            "这台设备不支持识别这种语言。"
         case .downloadUnavailable:
-            "暂时无法下载语音识别模型，请稍后重试。"
+            "系统语音包下载失败，请重试。"
         case .downloadDidNotInstall:
-            "语音识别模型尚未完成安装。"
+            "系统语音包还没下载完成，请稍后重试。"
         case .invalidAudioFrame:
-            "播放器提供的音频帧无效。"
+            "无法读取直播声音，请重试。"
         case .audioConversionUnavailable:
-            "当前音频格式无法用于语音识别。"
+            "无法读取直播声音，请重试。"
         case .audioConversionFailed:
-            "音频格式转换失败。"
+            "无法读取直播声音，请重试。"
         }
     }
 }

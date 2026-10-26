@@ -64,16 +64,20 @@ enum RoomTranslationNativeBatchRouter {
 @MainActor
 func liveAppleRoomTranslationProvider() -> any RoomTranslationProvider {
 #if os(tvOS)
-    UnavailableAppleRoomTranslationProvider()
+    UnavailableAppleRoomTranslationProvider(reason: .appleTranslationUnsupported)
+#elseif targetEnvironment(simulator)
+    UnavailableAppleRoomTranslationProvider(reason: .simulatorUnsupported)
 #else
     if #available(iOS 18.0, macOS 15.0, *) { AppleRoomTranslationProvider.shared }
-    else { UnavailableAppleRoomTranslationProvider() }
+    else { UnavailableAppleRoomTranslationProvider(reason: .appleTranslationUnsupported) }
 #endif
 }
 
 private struct UnavailableAppleRoomTranslationProvider: RoomTranslationProvider {
+    let reason: RoomTranslationError
+
     func translate(_ request: RoomTranslationRequest) async throws -> String {
-        throw RoomTranslationError.unavailable
+        throw reason
     }
 }
 

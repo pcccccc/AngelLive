@@ -21,6 +21,8 @@ struct PlayerControlView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var showDanmakuSettings = false
     @State private var showSubtitleTranslationSettings = false
+    @State private var showSubtitleLanguages = false
+    @State private var subtitleActivationID = UUID()
     @State private var showStreamerInfo = false
     @State private var isFavoriteAnimating = false
     @State private var isFavoriteLoading = false
@@ -142,13 +144,18 @@ struct PlayerControlView: View {
 
                             // 设置按钮
                             Menu {
-                                LiveSubtitleQuickControls()
+                                if titleTranslationEnabled {
+                                    LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
+                                        subtitleActivationID = viewModel.subtitlePlayback.activationID
+                                        showSubtitleLanguages = true
+                                    }
 
-                                Button("翻译与字幕设置…") {
-                                    showSubtitleTranslationSettings = true
+                                    Button("翻译与字幕设置…") {
+                                        showSubtitleTranslationSettings = true
+                                    }
+
+                                    Divider()
                                 }
-
-                                Divider()
 
                                 Button("视频信息统计") {
                                     showSettings = true
@@ -446,6 +453,15 @@ struct PlayerControlView: View {
         }
         .sheet(isPresented: $showDanmakuSettings) {
             DanmakuSettingsPanel(viewModel: viewModel)
+        }
+        .sheet(isPresented: $showSubtitleLanguages) {
+            LiveSubtitleLanguageSelectionSheet(
+                playback: viewModel.subtitlePlayback,
+                activationID: subtitleActivationID
+            )
+        }
+        .onChange(of: viewModel.subtitlePlayback.activationID) { _, _ in
+            showSubtitleLanguages = false
         }
         .sheet(isPresented: $showSubtitleTranslationSettings) {
             NavigationStack {

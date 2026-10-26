@@ -102,6 +102,39 @@ public final class RoomTranslationSettings {
     public private(set) var hasAPIKey: Bool
     public private(set) var revision: Int
 
+    /// Local prerequisites only. A configured cloud service still needs an
+    /// explicit translation test to verify credentials, model access and network.
+    public var availabilityMessage: String? {
+        availabilityError?.recoveryMessage(for: engine)
+    }
+
+    public var availabilityError: RoomTranslationError? {
+        if engine == .apple {
+            return Self.nativeAvailabilityError
+        }
+        do {
+            _ = try cloudConfiguration()
+            return nil
+        } catch let error as RoomTranslationError {
+            return error
+        } catch {
+            return .serviceUnavailable
+        }
+    }
+
+    static var nativeAvailabilityError: RoomTranslationError? {
+        #if os(tvOS)
+        return .appleTranslationUnsupported
+        #elseif targetEnvironment(simulator)
+        return .simulatorUnsupported
+        #else
+        guard #available(iOS 18, macOS 15, *) else {
+            return .appleTranslationUnsupported
+        }
+        return nil
+        #endif
+    }
+
     private let defaults: UserDefaults
     private let secretStorage: any RoomTranslationSecretStorage
 
@@ -174,10 +207,23 @@ public final class RoomTranslationSettings {
     }
 
     func cloudConfiguration() throws -> (baseURL: URL, model: String, apiKey: String) {
-        guard let baseURL = URL(string: cloudBaseURL), !cloudModel.isEmpty else {
-            throw RoomTranslationError.unavailable
+        guard !cloudBaseURL.isEmpty, !cloudModel.isEmpty else {
+            throw RoomTranslationError.cloudConfigurationRequired
         }
-        guard let record = Self.readSecret(from: secretStorage, matching: cloudBaseURL) else {
+        let normalizedURL = try Self.normalizedBaseURL(cloudBaseURL)
+        guard let baseURL = URL(string: normalizedURL) else {
+            throw RoomTranslationError.invalidBaseURL
+        }
+        let secretData: Data?
+        do {
+            secretData = try secretStorage.read()
+        } catch {
+            throw RoomTranslationError.secureStorage
+        }
+        guard let secretData,
+              let record = try? JSONDecoder().decode(SecretRecord.self, from: secretData),
+              record.endpoint == cloudBaseURL,
+              !record.apiKey.isEmpty else {
             throw RoomTranslationError.apiKeyRequired
         }
         return (baseURL, cloudModel, record.apiKey)

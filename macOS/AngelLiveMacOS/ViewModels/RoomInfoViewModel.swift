@@ -42,6 +42,7 @@ private enum PlayerConstants {
 
 @Observable
 final class RoomInfoViewModel {
+    let subtitlePlayback = LiveSubtitlePlaybackState()
     var currentRoom: LiveModel
     var currentPlayURL: URL?
     var isLoading = false
@@ -280,6 +281,7 @@ final class RoomInfoViewModel {
         _playbackDiagnostics = nil
         playbackRequestGeneration = UUID()
         playbackSelectionGeneration = UUID()
+        subtitlePlayback.stop()
         currentRoom = room
         currentRoomPlayArgs = nil
         currentCdnIndex = 0
@@ -1096,7 +1098,10 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             deliverDanmakuMessage(message)
             return
         }
-        danmakuTranslationPipeline.enqueue(message) { [weak self] translatedMessage in
+        danmakuTranslationPipeline.enqueue(message, onNativeTranslationFailure: { [weak self] _ in
+            guard let self, SandboxPluginCatalog.platform(for: self.currentRoom.liveType) != nil else { return }
+            self.addSystemMessage("原生翻译不可用，可在翻译与字幕设置中配置大模型。")
+        }) { [weak self] translatedMessage in
             guard let self,
                   !self.danmuSettings.shouldBlockDanmu(originalText)
             else { return }

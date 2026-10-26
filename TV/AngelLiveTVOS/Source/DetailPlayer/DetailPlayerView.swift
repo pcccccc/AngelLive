@@ -211,12 +211,13 @@ struct DetailPlayerView: View {
                 }
 
                 #if canImport(KSPlayer)
-                if let url = roomInfoViewModel.currentPlayURL {
+                if appViewModel.pluginAvailability.hasAvailablePlugins, let url = roomInfoViewModel.currentPlayURL {
                     Color.clear
                         .allowsHitTesting(false)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .liveSubtitleOverlay(
                             coordinator: playerCoordinator,
+                            playback: roomInfoViewModel.subtitlePlayback,
                             playbackIdentity: url.absoluteString,
                             bottomPadding: 64
                         )
@@ -260,6 +261,7 @@ struct DetailPlayerView: View {
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        roomInfoViewModel.subtitlePlayback.stop()
         roomInfoViewModel.endPlaybackDiagnostics()
         SupportDiagnosticsService.shared.recordAction(
             .closedRoom,

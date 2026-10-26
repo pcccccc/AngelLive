@@ -264,23 +264,29 @@ struct SupportDiagnosticsTests {
         #expect(!service.reportText.contains("private"))
     }
 
-    @Test("the five-minute auto-stop path is session guarded and includes a pending failure")
+    @Test("the five-minute auto-stop path is session guarded and includes a pending failure", .timeLimit(.minutes(1)))
     @MainActor
     func automaticStopIncludesPendingFailure() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let fixture = Fixture()
+        let (stops, continuation) = AsyncStream<Bool>.makeStream()
+        defer { continuation.finish() }
         let service = SupportDiagnosticsService(
             storageDirectory: directory,
             entriesProvider: { fixture.entries },
-            sessionSetter: { fixture.recordedSessionIDs.append($0) },
+            sessionSetter: { sessionID in
+                fixture.recordedSessionIDs.append(sessionID)
+                if sessionID == nil { continuation.yield(true) }
+            },
             automaticStopDelayNanoseconds: 1_000_000
         )
         service.startRecording()
         let sessionID = try #require(fixture.recordedSessionIDs.last ?? nil)
         service.makeReportForError(title: "播放失败", message: "Bearer pending-secret", detail: nil)
         #expect(service.isRecording)
-        try await Task.sleep(nanoseconds: 50_000_000)
+        var iterator = stops.makeAsyncIterator()
+        #expect(await iterator.next() == true)
 
         let report = try #require(service.lastReport)
         #expect(!service.isRecording)

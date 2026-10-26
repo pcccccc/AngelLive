@@ -5,6 +5,112 @@ import Testing
 
 @Suite("Room title translation", .serialized)
 struct RoomTitleTranslationTests {
+    @Test(arguments: [
+        RoomTranslationError.appleTranslationUnsupported, .simulatorUnsupported,
+        .languageResourcesRequired, .unavailable, .serviceUnavailable, .invalidResponse
+    ])
+    func nativeEngineFailuresRecommendManualCloudSetup(_ error: RoomTranslationError) {
+        #expect(error.recommendsLLMFallback(for: .apple))
+        let message = error.recoveryMessage(for: .apple)
+        #expect(message.hasPrefix(error.localizedDescription))
+        #expect(message.components(separatedBy: RoomTranslationEngine.llmSetupInstructions).count == 2)
+        #expect(!error.recommendsLLMFallback(for: .llm))
+        #expect(error.recoveryMessage(for: .llm) == error.localizedDescription)
+    }
+
+    @Test(arguments: [
+        RoomTranslationError.invalidBaseURL, .invalidModel, .apiKeyRequired,
+        .cloudConfigurationRequired, .unsupportedSourceLanguage, .secureStorage,
+        .authentication, .rateLimited, .busy
+    ], RoomTranslationEngine.allCases)
+    func unrelatedFailuresKeepTheirOwnRecovery(
+        _ error: RoomTranslationError,
+        engine: RoomTranslationEngine
+    ) {
+        #expect(!error.recommendsLLMFallback(for: engine))
+        #expect(error.recoveryMessage(for: engine) == error.localizedDescription)
+    }
+
+    @Test(arguments: RoomTranslationEngine.allCases, [false, true])
+    @MainActor
+    func currentTitleAndExplicitTestFailuresUseEngineSpecificRecovery(
+        engine: RoomTranslationEngine,
+        unknownFailure: Bool
+    ) async throws {
+        let fixture = SettingsFixture()
+        fixture.settings.isEnabled = true
+        fixture.settings.engine = engine
+        try fixture.settings.saveCloudConfiguration(
+            baseURL: "https://translation.example.invalid/v1",
+            model: "fixture-model",
+            apiKey: "fixture-secret"
+        )
+        let expectedError: RoomTranslationError = unknownFailure ? .serviceUnavailable : .languageResourcesRequired
+        let error: any Error = unknownFailure ? URLError(.timedOut) : expectedError
+        let provider = FailingTranslationProvider(error: error)
+        let service = makeService(fixture: fixture, provider: provider)
+
+        await service.translate("A neutral room title")
+        #expect(service.displayTitle(for: "A neutral room title") == "A neutral room title")
+        #expect(service.lastErrorMessage == expectedError.recoveryMessage(for: engine))
+        #expect(fixture.settings.engine == engine)
+
+        service.clearError()
+        await #expect(throws: expectedError) {
+            try await service.testTranslation()
+        }
+        #expect(service.lastErrorMessage == expectedError.recoveryMessage(for: engine))
+        #expect(fixture.settings.engine == engine)
+    }
+
+    @Test(arguments: [false, true])
+    @MainActor
+    func retiredNativeFailureCannotPublishFallbackAfterEngineChange(explicitTest: Bool) async throws {
+        let fixture = SettingsFixture()
+        fixture.settings.isEnabled = true
+        fixture.settings.engine = .apple
+        let provider = ManualTranslationProvider()
+        let service = makeService(fixture: fixture, provider: provider)
+        let task = Task { @MainActor in
+            if explicitTest {
+                _ = try await service.testTranslation()
+            } else {
+                await service.translate("A neutral room title")
+            }
+        }
+        await provider.waitForCallCount(1)
+        fixture.settings.engine = .llm
+        await provider.resumeAll(throwing: RoomTranslationError.invalidResponse)
+
+        if explicitTest {
+            await #expect(throws: CancellationError.self) { try await task.value }
+        } else {
+            try await task.value
+        }
+        #expect(service.lastErrorMessage == nil)
+        #expect(fixture.settings.engine == .llm)
+        #expect(await provider.callCount == 1)
+    }
+
+    @Test @MainActor
+    func cloudAvailabilitySeparatesConfigurationCredentialsAndSecureStorage() throws {
+        let fixture = SettingsFixture()
+        fixture.settings.engine = .llm
+        #expect(fixture.settings.availabilityError == .cloudConfigurationRequired)
+        #expect(fixture.settings.availabilityMessage == RoomTranslationError.cloudConfigurationRequired.localizedDescription)
+        try fixture.settings.saveCloudConfiguration(
+            baseURL: "https://translation.example.invalid/v1",
+            model: "fixture-model",
+            apiKey: "fixture-secret"
+        )
+        #expect(fixture.settings.availabilityError == nil)
+        fixture.secrets.readError = true
+        #expect(fixture.settings.availabilityError == .secureStorage)
+        fixture.secrets.readError = false
+        try fixture.settings.deleteAPIKey()
+        #expect(fixture.settings.availabilityError == .apiKeyRequired)
+    }
+
     @Test @MainActor
     func cloudSettingsBindSecretToEndpointAndPreserveItOnlyForSameEndpoint() throws {
         let fixture = SettingsFixture()
@@ -110,7 +216,7 @@ struct RoomTitleTranslationTests {
     }
 
     @Test @MainActor
-    func automaticTitlesRejectNonCommonSourcesForAppleAndLLM() async throws {
+    func automaticTitlesDetectAdditionalLanguagesFromActualTextForAppleAndLLM() async throws {
         for engine in [RoomTranslationEngine.apple, .llm] {
             let fixture = SettingsFixture()
             fixture.settings.isEnabled = true
@@ -122,17 +228,40 @@ struct RoomTitleTranslationTests {
                     apiKey: "fixture-secret"
                 )
             }
-            let provider = RecordingTranslationProvider(result: "must not be used")
+            let provider = RecordingTranslationProvider(result: "translated")
             let service = RoomTitleTranslationService(
                 settings: fixture.settings,
-                languageDetector: FixedLanguageDetector(language: "fr-FR"),
+                languageDetector: NaturalRoomTitleLanguageDetector(),
                 appleProvider: provider,
                 llmProvider: provider
             )
 
-            await service.translate("Un titre neutre")
-            #expect(await provider.callCount == 0)
+            await service.translate("Bonjour tout le monde, bienvenue dans cette émission en direct")
+            await service.translate("Guten Abend zusammen, willkommen zu dieser Liveübertragung")
+            let requests = await provider.requests
+            #expect(requests.map(\.sourceLanguage) == ["fr", "de"])
+            #expect(requests.count == 2)
         }
+    }
+
+    @Test @MainActor
+    func actualUncertainAndTargetLanguageTitlesNeverRequestTranslation() async {
+        let fixture = SettingsFixture()
+        fixture.settings.isEnabled = true
+        fixture.settings.targetLanguage = "en-US"
+        let provider = RecordingTranslationProvider(result: "unused")
+        let service = RoomTitleTranslationService(
+            settings: fixture.settings,
+            languageDetector: NaturalRoomTitleLanguageDetector(),
+            appleProvider: provider,
+            llmProvider: provider
+        )
+        for original in ["OK", "12345 !!!", "Welcome everyone to this live broadcast today"] {
+            await service.translate(original)
+            #expect(service.displayTitle(for: original) == original)
+        }
+        #expect(await provider.callCount == 0)
+        #expect(service.lastErrorMessage == nil)
     }
 
     @Test @MainActor
@@ -254,6 +383,7 @@ struct RoomTitleTranslationTests {
     @Test @MainActor
     func preparingNativeLanguageUpdatesInstalledOrActualFailureStatus() async throws {
         let fixture = SettingsFixture()
+        fixture.settings.engine = .apple
         let pair = RoomTranslationLanguageCatalog.nativePairs(targetLanguage: "zh-Hans")[0]
         let provider = NativeLanguageProvider(
             statuses: [pair: .notDownloaded],
@@ -270,10 +400,12 @@ struct RoomTitleTranslationTests {
             try await service.prepareNativeLanguages(pair)
         }
         #expect(service.nativeLanguageStatus(for: pair) == .notDownloaded)
+        #expect(service.lastErrorMessage == RoomTranslationError.serviceUnavailable.recoveryMessage(for: .apple))
 
         provider.prepareError = nil
         try await service.prepareNativeLanguages(pair)
         #expect(service.nativeLanguageStatus(for: pair) == .installed)
+        #expect(service.lastErrorMessage == nil)
     }
 
     @Test @MainActor
@@ -542,7 +674,11 @@ private final class SettingsFixture {
 
 private final class MemoryTranslationSecretStorage: RoomTranslationSecretStorage {
     var data: Data?
-    func read() throws -> Data? { data }
+    var readError = false
+    func read() throws -> Data? {
+        if readError { throw RoomTranslationError.secureStorage }
+        return data
+    }
     func write(_ data: Data) throws { self.data = data }
     func delete() throws { data = nil }
 }
@@ -561,6 +697,14 @@ private actor RecordingTranslationProvider: RoomTranslationProvider {
     func translate(_ request: RoomTranslationRequest) async throws -> String {
         requests.append(request)
         return result
+    }
+}
+
+private struct FailingTranslationProvider: RoomTranslationProvider {
+    let error: any Error
+
+    func translate(_ request: RoomTranslationRequest) async throws -> String {
+        throw error
     }
 }
 

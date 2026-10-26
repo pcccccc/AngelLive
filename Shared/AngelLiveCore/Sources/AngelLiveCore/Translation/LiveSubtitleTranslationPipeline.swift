@@ -4,7 +4,8 @@ import Observation
 @MainActor @Observable
 public final class LiveSubtitleTranslationPipeline {
     public private(set) var text = ""
-    public private(set) var errorMessage: String?
+    public private(set) var lastError: RoomTranslationError?
+    public var errorMessage: String? { lastError?.recoveryMessage(for: settings.engine) }
 
     @ObservationIgnored private let settings: RoomTranslationSettings
     @ObservationIgnored private let appleProvider: any RoomTranslationProvider
@@ -77,6 +78,18 @@ public final class LiveSubtitleTranslationPipeline {
         invalidateWork(keepingSegmentID: nil)
     }
 
+    /// Checks local prerequisites without sending recognized text or testing
+    /// the service. Same-language captions never need a translation engine.
+    public func availabilityError(sourceLanguage: String) -> RoomTranslationError? {
+        if roomTranslationLanguagesMatch(sourceLanguage, settings.targetLanguage) {
+            return nil
+        }
+        guard normalizedSourceLanguage(sourceLanguage) != nil else {
+            return .unsupportedSourceLanguage
+        }
+        return settings.availabilityError
+    }
+
     private func startNextIfNeeded() {
         guard activeExecutionID == nil, let input = pendingInput else { return }
         pendingInput = nil
@@ -91,17 +104,17 @@ public final class LiveSubtitleTranslationPipeline {
         case let .passthrough(original):
             lastProcessedInput = input
             text = original
-            errorMessage = nil
+            lastError = nil
             startNextIfNeeded()
         case .unsupported:
             lastProcessedInput = input
             text = ""
-            errorMessage = nil
+            lastError = .unsupportedSourceLanguage
             startNextIfNeeded()
         case let .failure(error):
             lastProcessedInput = input
             text = ""
-            errorMessage = error.localizedDescription
+            lastError = error
             startNextIfNeeded()
         case let .request(request, provider):
             let executionID = UUID()
@@ -126,7 +139,7 @@ public final class LiveSubtitleTranslationPipeline {
         if roomTranslationLanguagesMatch(input.sourceLanguage, targetLanguage) {
             return .passthrough(input.original)
         }
-        guard let sourceLanguage = normalizedCommonSourceLanguage(input.sourceLanguage) else {
+        guard let sourceLanguage = normalizedSourceLanguage(input.sourceLanguage) else {
             return .unsupported
         }
 
@@ -245,10 +258,10 @@ public final class LiveSubtitleTranslationPipeline {
         switch result {
         case let .success(translated):
             text = translated
-            errorMessage = nil
+            lastError = nil
         case let .failure(error):
             text = ""
-            errorMessage = error.localizedDescription
+            lastError = error
         }
         startNextIfNeeded()
     }
@@ -293,7 +306,7 @@ public final class LiveSubtitleTranslationPipeline {
         lastProcessedInput = nil
         currentSegmentID = segmentID
         text = ""
-        errorMessage = nil
+        lastError = nil
     }
 
     private func reconcileConfigurationRevision() {
@@ -314,15 +327,25 @@ public final class LiveSubtitleTranslationPipeline {
         }
     }
 
-    private func normalizedCommonSourceLanguage(_ identifier: String) -> String? {
+    private func normalizedSourceLanguage(_ identifier: String) -> String? {
         let baseLanguage = identifier
             .replacingOccurrences(of: "_", with: "-")
             .split(separator: "-", maxSplits: 1)
             .first?
             .lowercased()
+        // The audio detector and Speech supply language identifiers. Let the
+        // selected translation service check its actual language coverage.
         guard let baseLanguage,
-              RoomTranslationLanguageCatalog.commonSourceLanguages.contains(baseLanguage) else {
+              (2...3).contains(baseLanguage.utf8.count),
+              baseLanguage.utf8.allSatisfy({ (97...122).contains($0) }),
+              !["und", "mul"].contains(baseLanguage) else {
             return nil
+        }
+        if baseLanguage == "zh" {
+            let language = Locale.Language(identifier: identifier)
+            if let script = language.script?.identifier, ["Hans", "Hant"].contains(script) {
+                return "zh-\(script)"
+            }
         }
         return baseLanguage
     }

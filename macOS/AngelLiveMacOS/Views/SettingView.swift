@@ -143,21 +143,12 @@ struct SettingView: View {
             .frame(minWidth: 600, minHeight: 480)
         }
         .sheet(isPresented: $showPluginManagement) {
-            NavigationStack {
-                MacPluginManagementView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showPluginManagement = false
-                            }
-                        }
-                    }
-                    .onAppear {
-                        guard supportDiagnosticsEnabled else { return }
-                        supportDiagnosticsService.recordAction(.openedPluginManagement)
-                    }
-            }
-            .frame(minWidth: 760, idealWidth: 820, minHeight: 580, idealHeight: 640)
+            MacPluginManagementView()
+                .onAppear {
+                    guard supportDiagnosticsEnabled else { return }
+                    supportDiagnosticsService.recordAction(.openedPluginManagement)
+                }
+                .frame(minWidth: 760, idealWidth: 820, minHeight: 580, idealHeight: 640)
         }
         .sheet(isPresented: $showOpenSourceList) {
             NavigationStack {
@@ -290,7 +281,7 @@ struct SettingView: View {
         } label: {
             PanelNavigationRow(
                 title: "翻译与字幕",
-                subtitle: "自动翻译房间标题，支持 Apple 原生或兼容 AI 接口"
+                subtitle: "翻译标题、弹幕和实时字幕"
             ) {
                 Image(systemName: "character.book.closed.fill")
                     .font(.system(size: 16, weight: .semibold))
@@ -585,6 +576,10 @@ struct TranslationSettingView: View {
         translationService.nativeLanguagePairs
     }
 
+    private var cloudServiceExplanation: String {
+        "填写服务商提供的 API 地址（通常以 /v1 结尾），需支持 Chat Completions 接口。\n只发送待翻译文字，不上传音频；服务商可能收费。API Key 仅保存在本机。"
+    }
+
     var body: some View {
         @Bindable var settings = settings
 
@@ -598,35 +593,37 @@ struct TranslationSettingView: View {
                     Label("自动翻译弹幕", systemImage: "text.bubble.fill")
                 }
 
-                Picker("目标语言", selection: $settings.targetLanguage) {
+                Picker("翻译成", selection: $settings.targetLanguage) {
                     ForEach(targetLanguages) { language in
                         Text(language.name)
                             .tag(language.code)
                     }
                 }
 
-                Text("自动翻译仅处理英语、日语和韩语，其他语言保留原文。翻译成功显示译文，失败或来不及翻译保留原文；图文弹幕保留图片表情。")
+                Text("自动识别标题和弹幕的语言，翻译不成功时显示原文。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             LiveSubtitleSettingsSection()
 
-            Section("引擎") {
-                Picker("翻译引擎", selection: $settings.engine) {
+            Section {
+                Picker("翻译方式", selection: $settings.engine) {
                     ForEach(RoomTranslationEngine.allCases, id: \.self) { engine in
                         Text(engine.displayName)
                             .tag(engine)
                     }
                 }
 
-                Text("Apple 原生翻译需要 macOS 15 或更高版本。")
+                Text(settings.engine == .apple
+                     ? settings.availabilityError?.localizedDescription ?? "使用系统翻译，需先下载下方语言包。"
+                     : "填写下方配置，保存后点“测试翻译”。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             if settings.engine == .apple {
-                Section("语言包") {
+                Section("翻译语言包") {
                     ForEach(nativeLanguagePairs) { pair in
                         HStack {
                             Label(pair.displayName, systemImage: "globe")
@@ -674,33 +671,33 @@ struct TranslationSettingView: View {
                         }
                     }
 
-                    Text("Apple 原生翻译需要先下载语言包。下载进度请查看系统弹窗。")
+                    Text("点“下载”后，在系统弹窗中确认。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
             if settings.engine == .llm {
-                Section("兼容 AI 接口") {
-                    LabeledContent("服务地址") {
+                Section("大模型配置") {
+                    LabeledContent("API 地址") {
                         TextField("", text: $baseURL, prompt: Text(verbatim: "https://api.example.invalid/v1"))
                             .textFieldStyle(.roundedBorder)
                             .labelsHidden()
-                            .accessibilityLabel("服务地址")
+                            .accessibilityLabel("API 地址")
                     }
 
-                    LabeledContent("模型") {
+                    LabeledContent("模型名称") {
                         TextField("", text: $model, prompt: Text("模型名称"))
                             .textFieldStyle(.roundedBorder)
                             .labelsHidden()
-                            .accessibilityLabel("模型")
+                            .accessibilityLabel("模型名称")
                     }
 
                     LabeledContent("API Key") {
                         SecureField(
                             "",
                             text: $apiKey,
-                            prompt: Text(settings.hasAPIKey ? "留空保持已保存密钥" : "API Key")
+                            prompt: Text(settings.hasAPIKey ? "已保存，留空不修改" : "API Key")
                         )
                             .textFieldStyle(.roundedBorder)
                             .labelsHidden()
@@ -721,14 +718,14 @@ struct TranslationSettingView: View {
                         Spacer()
 
                         if settings.hasAPIKey {
-                            Button("删除已保存密钥", role: .destructive) {
+                            Button("删除 API Key", role: .destructive) {
                                 deleteAPIKey()
                             }
                             .disabled(isSaving || isTesting || isDeletingKey || isPreparingNativeLanguage)
                         }
                     }
 
-                    Text("开启对应开关后，房间标题或弹幕文本会发送至你配置的服务。弹幕频率较高，可能增加用量或费用；不会发送用户名或图片 URL。API Key 只保存在本机安全存储中。")
+                    Text(cloudServiceExplanation)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -748,7 +745,7 @@ struct TranslationSettingView: View {
                 }
 
                 if configurationNeedsSave, settings.engine == .llm {
-                    Text("请先保存接口配置，再测试翻译。")
+                    Text("请先保存配置，再测试翻译。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -887,6 +884,7 @@ struct TranslationSettingView: View {
             } catch {
                 guard !Task.isCancelled, testGeneration == generation else { return }
                 inlineMessage = translationService.lastErrorMessage
+                    ?? (error as? RoomTranslationError)?.recoveryMessage(for: settings.engine)
                     ?? (error as? LocalizedError)?.errorDescription
                     ?? error.localizedDescription
             }
@@ -942,9 +940,9 @@ struct TranslationSettingView: View {
 
         switch result {
         case .success:
-            testResult = "语言包已准备好"
+            testResult = "翻译语言包已下载"
         case .failure(let error):
-            inlineMessage = error.localizedDescription
+            inlineMessage = error.recoveryMessage(for: settings.engine)
         }
     }
 

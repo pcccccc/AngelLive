@@ -22,9 +22,9 @@ struct SettingsButton: View {
     @State private var showTimerPicker = false
     @State private var showPlayerSettings = false
     @State private var showSubtitleSettings = false
+    @State private var subtitleActivationID = UUID()
     @State private var timerManager = TimerManager()
     @State private var playerSettingModel = PlayerSettingModel()
-    @Bindable private var subtitleSettings = LiveSubtitleSettings.shared
     @Environment(RoomInfoViewModel.self) private var viewModel
 
     /// 是否有任何弹窗展开
@@ -67,11 +67,13 @@ struct SettingsButton: View {
                 }
             }
 
-            Button(subtitleSettings.isEnabled ? "关闭实时字幕" : "开启实时字幕") {
-                subtitleSettings.isEnabled.toggle()
+            LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
+                subtitleActivationID = viewModel.subtitlePlayback.activationID
+                showSubtitleSettings = true
             }
 
-            Button("字幕语言与设置…") {
+            Button("翻译与字幕设置…") {
+                subtitleActivationID = viewModel.subtitlePlayback.activationID
                 showSubtitleSettings = true
             }
 
@@ -151,12 +153,19 @@ struct SettingsButton: View {
         .sheet(isPresented: $showSubtitleSettings) {
             NavigationStack {
                 Form {
-                    Section {
-                        LiveSubtitleQuickControls()
-                    } footer: {
-                        Text("语音模型、目标语言和翻译引擎可在翻译与字幕设置中调整。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    if viewModel.subtitlePlayback.phase == .manualSelectionRequired {
+                        Section {
+                            LiveSubtitleLanguageOptions(
+                                playback: viewModel.subtitlePlayback,
+                                activationID: subtitleActivationID
+                            ) {
+                                showSubtitleSettings = false
+                            }
+                        } header: {
+                            Text("选择主播语言")
+                        } footer: {
+                            Text("暂时无法从音频确定语言。请选择与主播语音一致的语言，字幕将继续识别。")
+                        }
                     }
 
                     Section {
@@ -181,6 +190,9 @@ struct SettingsButton: View {
         }
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)
+        }
+        .onChange(of: viewModel.subtitlePlayback.activationID) { _, _ in
+            showSubtitleSettings = false
         }
     }
 }
