@@ -201,7 +201,7 @@ swift test --package-path Shared/AngelLiveDependencies
 
 1. Xcode 27 已启动且打开 `AngelLive.xcworkspace`。
 2. Xcode Settings > Intelligence 中启用 Model Context Protocol 和 Xcode Tools。
-3. 首次连接批准 Xcode 的 PID 级权限弹窗；MCP 客户端重启后 PID 改变，可能需要再次批准。
+3. 用户已授权代理自动批准本仓库任务所需的 Xcode MCP PID 级标准授权弹窗（“Allow … to access Xcode?”），首次连接及客户端重启后均直接点击 `Allow`，无需逐次询问用户。操作前核验弹窗对应本轮启动的客户端及已确认的 Xcode 应用路径/PID；整组操作继续复用同一个 bridge，避免反复触发授权。这项授权仅覆盖上述 Xcode MCP 连接，不扩大到其他系统权限、外部服务或项目，也不替代 sandbox 的正常审批。
 4. 优先使用客户端已注册的 Xcode MCP server。新电脑可按 Skill 的客户端配置方式注册 `xcrun mcpbridge`。
 5. 多个 Xcode 同时运行时，动态取得目标 Xcode 27 的 PID，并为 bridge 设置 `MCP_XCODE_PID=<PID>`。同时设置 `DEVELOPER_DIR=<XCODE_APP>/Contents/Developer`，不要写死旧机器的 PID 或 Xcode Beta 小版本路径。
    多版本并存时，UI 工具也必须使用已核验版本的完整应用路径；不要用 `getApp("Xcode")` 或共享 bundle identifier 定位。`getApp` 会自动启动所匹配的应用，名称匹配可能拉起默认旧版本，bundle identifier 也不能区分多个安装。
@@ -243,7 +243,7 @@ Device Hub 的整组操作应复用同一个持续运行的 stdio bridge；不�
 2. **释放冲突并重连**：停止重复客户端或本轮遗留请求，优先取消当前操作、正常结束旧 session，再重连一次。session 无法正常结束时，先确认旧操作者和对应客户端已停止，记录失效状态，才创建新 session。权限或 sandbox/XPC 边界问题仍走正常审批，不通过重启或另起客户端绕过。
 3. **关闭并重启故障进程**：重连无效且已确认进程挂起、失联或冲突时，动态核验进程的完整路径、PID、父子关系及归属，先正常退出，再对拒绝退出的精确 PID 发送 TERM；只有确认仍未退出且不会丢失未保存工作时才使用 KILL。退出后确认旧进程已结束，再启动一个新实例。优先重启本轮 bridge 等客户端或目标测试 App；证据指向 Xcode、Device Hub 或模拟器本身时，再重启对应应用或已有设备。禁止用宽泛的 `killall` / `pkill -f` 清理同名进程，禁止批量终止系统服务或其他任务进程。
 4. **保护用户现场**：重启 Xcode 前保存本任务编辑，记录目标应用路径、workspace 和运行目标；若存在无法确认已保存的编辑、用户正在使用的窗口/设备，或会中断其他任务，则先协调该影响后再执行。常规恢复不删除 DerivedData、缓存、App、插件、账号或模拟器数据，不重启整台电脑，不创建替代模拟器。模拟器仍遵守第 9 节的单平台数量与设备选择约束。
-5. **重新发现并验证**：启动已核验路径的工具并重新打开本 workspace，重新获取 PID、工具 schema、`XcodeListWindows`、tabIdentifier 和设备/session 状态，不能沿用重启前的连接标识。必要的系统权限弹窗如实交由用户批准。设备恢复后先观察截图和 hierarchy，按第 9 节新包门禁确认安装证据，再继续未完成的验收；安装结果不确定时先查证，不能盲目重复安装。工具恢复成功不等于构建、交互或视觉通过。
+5. **重新发现并验证**：启动已核验路径的工具并重新打开本 workspace，重新获取 PID、工具 schema、`XcodeListWindows`、tabIdentifier 和设备/session 状态，不能沿用重启前的连接标识。Xcode MCP 标准授权弹窗按本节已授权规则由代理自动批准，其他系统权限弹窗仍按需交由用户批准。设备恢复后先观察截图和 hierarchy，按第 9 节新包门禁确认安装证据，再继续未完成的验收；安装结果不确定时先查证，不能盲目重复安装。工具恢复成功不等于构建、交互或视觉通过。
 6. **限定重试并交付证据**：同一故障默认最多执行 2 轮适用的恢复流程，每轮重连和对应故障进程重启各最多一次；根因已明确为不支持的能力、缺失凭据或待批准权限时停止无效重试。记录每轮原因、关闭/重启对象、结果和证据；达到上限仍失败时报告具体阻塞、缺失验收及恢复条件，继续独立工作，不无限重启或降低视觉门槛。用户要求停止或表示已测试时立即停止恢复和设备操作。
 
 ## 9. Device Hub / 模拟器 / 真机验收
