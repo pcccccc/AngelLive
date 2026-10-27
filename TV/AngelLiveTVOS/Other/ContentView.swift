@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("SimpleLive.Setting.ShowHomeRecommendation") private var showHomeRecommendation = true
 
     @State private var showPluginSyncPrompt = false
     @State private var showUpdateToast = false
@@ -44,7 +45,7 @@ struct ContentView: View {
     }
 
     private var shouldShowHomeTab: Bool {
-        presentsFullUI && homeRecommendationAvailability != .unavailable
+        presentsFullUI && showHomeRecommendation && homeRecommendationAvailability != .unavailable
     }
 
     private var tabSelection: Binding<Int> {
@@ -101,6 +102,10 @@ struct ContentView: View {
             guard wasFullUI, !isFullUI else { return }
             hasLoadedTopShelfFavorites = false
             TopShelfManager.publish(favorites: [])
+        }
+        .onChange(of: presentsFullUI && !showHomeRecommendation, initial: true) { _, prefersFavorites in
+            guard prefersFavorites, appViewModel.selection == 4 else { return }
+            appViewModel.selection = 0
         }
         .onChange(of: appViewModel.favoriteViewModel.listVersion) { _, _ in
             guard presentsFullUI, hasLoadedTopShelfFavorites else { return }

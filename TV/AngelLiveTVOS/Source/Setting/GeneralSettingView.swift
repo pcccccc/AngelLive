@@ -15,6 +15,7 @@ struct GeneralSettingView: View {
     @FocusState var focused: Bool
     @StateObject var settingStore = SettingStore()
     @State private var appIconSettings = TVAppIconSettingsModel()
+    @AppStorage("SimpleLive.Setting.ShowHomeRecommendation") private var showHomeRecommendation = true
     
     var body: some View {
 
@@ -59,6 +60,13 @@ struct GeneralSettingView: View {
                 .frame(height: 45)
 
             if appViewModel.pluginAvailability.hasAvailablePlugins {
+                Toggle(isOn: $showHomeRecommendation) {
+                    Text("显示推荐页面")
+                        .foregroundColor(.primary)
+                }
+                .frame(height: 45)
+                .accessibilityHint("关闭后隐藏推荐页面，并在启动时显示收藏。")
+
                 Picker("默认画质", selection: $playerSettingModel.defaultPlaybackQuality) {
                     ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
                         Text(quality.title)
@@ -127,6 +135,8 @@ struct GeneralSettingView: View {
             }
             .padding(.vertical, 50)
         }
+        // FullUI 的原生聚焦胶囊会超出滚动区域，保留两端放大后的完整轮廓。
+        .scrollClipDisabled(appViewModel.pluginAvailability.hasAvailablePlugins)
         .alert("无法更换应用图标", isPresented: $appIconSettings.isShowingError) {
             Button("好", role: .cancel) {}
         } message: {
