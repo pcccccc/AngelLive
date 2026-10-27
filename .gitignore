@@ -113,3 +113,6 @@ Shared/AngelLiveDependencies/Sources/Resources/BugsnagSecrets.local.plist
 
 # Local UI verification traces and screenshots
 /runs/
+
+# Local iOS UI automation configuration
+/.jev-ios/

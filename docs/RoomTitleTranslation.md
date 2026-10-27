@@ -58,10 +58,12 @@ iOS／macOS 26 及以上的“测试翻译”同样优先复用已安装资源�
 
 JEV 与 AXe 验证记录（原始证据位于被忽略的 `runs/jev-ios-translation/`）：
 
+仓库内 JEV 配置已于 2026-10-27 按用户要求移除，以下仅保留历史验收记录。
+
 - 默认开关值为 0，目标语言为中文简体，引擎为 Apple 原生翻译；开启后开关值为 1，语言可切换为英语。结果来自操作后的新 AX 观察。
 - 默认浅色、大模型空配置浅色及默认深色原尺寸截图均经复核，未见明显裁切、重叠或安全区异常；返回设置列表成功。结束后重启复核为关闭／中文简体／Apple，系统外观恢复浅色，无效地址未保存，用户订阅源与已安装插件保留，无活跃 JEV／Device Hub session。
 - 切到大模型后，空配置的“测试翻译”按钮为 disabled；保存非 HTTPS 的合成地址会显示 HTTPS 基础地址校验错误。未输入真实 API Key，也未调用真实大模型翻译服务。
-- `.jev-ios/smoke.json` 已替换占位内容，真实运行结果为 `verified / exact_labels_visible`，6 个配置标签匹配。JEV 内部耗时 2545.7 ms，CLI 整体约 12.8 秒，动作数 0、模型调用数 0；此结果仅证明已准备页面的标签可见，不能证明自主导航、后台效果或总体速度提升。报告为 `semantic-run-report.html`，原始结果为 `semantic-run-trace.jsonl`。
+- 当时的 smoke 场景已替换占位内容，真实运行结果为 `verified / exact_labels_visible`，6 个配置标签匹配。JEV 内部耗时 2545.7 ms，CLI 整体约 12.8 秒，动作数 0、模型调用数 0；此结果仅证明已准备页面的标签可见，不能证明自主导航、后台效果或总体速度提升。报告为 `semantic-run-report.html`，原始结果为 `semantic-run-trace.jsonl`。
 - Apple 原生测试唤起系统翻译弹层，明确提示翻译不支持模拟设备，需要真实设备；截图为 `apple-test-pending.png`。因此真实原生译文尚未验证，不将其归因为下载失败或应用卡死。
 - JEV 当前观察能读取系统标签栏的 `RadioButton`，但没有生成可点击目标；前置导航采用新 AX 观察定位后的确定性 AXe 输入。空密钥框也被报告为 `TextField / secure=false`，本轮没有输入密钥；后续涉及真实凭据前必须重新核验安全字段识别，不能据此假定脱敏有效。
 
