@@ -40,11 +40,14 @@ jobs:
           restore-keys: |
             swiftpm-core-${{ runner.os }}-${{ runner.arch }}-xcode-27-
 
-      - name: Verify Xcode 27 toolchain
+      - name: Verify Xcode 27.1 toolchain
         run: |
-          xcodebuild -version
+          # Capture the full output: piping xcodebuild into head can crash it
+          # with a broken pipe before it finishes writing the build version.
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "$xcode_version"
           swift --version
-          xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+          grep -Eq '^Xcode 27[.]1([.]|$)' <<< "$xcode_version"
 
       - name: Test AngelLiveCore
         run: |
@@ -84,11 +87,13 @@ jobs:
           git config --global url."https://github.com/".insteadOf \
             "git@github.com:"
 
-      - name: Verify Xcode 27 toolchain
+      - name: Verify Xcode 27.1 toolchain
         run: |
-          xcodebuild -version
+          # Consume all output before checking the version to avoid SIGPIPE.
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "$xcode_version"
           swift --version
-          xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+          grep -Eq '^Xcode 27[.]1([.]|$)' <<< "$xcode_version"
 
       # Xcode 27 ships Metal as an optional component. The preview runner image
       # currently omits it, while KSPlayer compiles a Metal shader resource.
@@ -172,11 +177,13 @@ jobs:
           git config --global url."https://github.com/".insteadOf \
             "git@github.com:"
 
-      - name: Verify Xcode 27 toolchain
+      - name: Verify Xcode 27.1 toolchain
         run: |
-          xcodebuild -version
+          # Consume all output before checking the version to avoid SIGPIPE.
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "$xcode_version"
           swift --version
-          xcodebuild -version | head -n 1 | grep -Eq '^Xcode 27([.]|$)'
+          grep -Eq '^Xcode 27[.]1([.]|$)' <<< "$xcode_version"
 
       # Xcode 27 ships Metal as an optional component. The preview runner image
       # currently omits it, while KSPlayer compiles a Metal shader resource.

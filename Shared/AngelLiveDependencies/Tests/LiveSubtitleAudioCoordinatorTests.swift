@@ -184,7 +184,7 @@ struct LiveSubtitleAudioCoordinatorTests {
         // Inference remains suspended while the sole PCM consumer appends.
         try await audio.append([Float](repeating: 0.2, count: 8 * 16_000))
         try await audio.append([Float](repeating: 0.3, count: 4 * 16_000))
-        let format = try await analyzerFormat()
+        let format = try analyzerFormat()
         try await audio.installSpeechInput(format: format)
         let preRoll = try #require(try await audio.nextSpeechInput())
         let preRollSamples = try samples(in: preRoll)
@@ -210,7 +210,7 @@ struct LiveSubtitleAudioCoordinatorTests {
             Issue.record("A known language must bypass detection.")
             return .uncertain
         }
-        let format = try await analyzerFormat()
+        let format = try analyzerFormat()
         try await audio.append([Float](repeating: 0.2, count: 4 * 16_000))
         try await audio.installSpeechInput(format: format)
         let preRoll = try #require(try await audio.nextSpeechInput())
@@ -237,9 +237,9 @@ struct LiveSubtitleAudioCoordinatorTests {
     }
 
     @available(iOS 26, macOS 26, tvOS 26, *)
-    private func analyzerFormat() async throws -> AVAudioFormat {
-        let transcriber = SpeechTranscriber(locale: Locale(identifier: "en-US"), preset: .progressiveTranscription)
-        return try #require(await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]))
+    private func analyzerFormat() throws -> AVAudioFormat {
+        // Exercise buffering and conversion without requiring installed Speech resources.
+        try #require(AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true))
     }
 
     @available(iOS 26, macOS 26, tvOS 26, *)
