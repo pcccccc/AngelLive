@@ -126,7 +126,9 @@ public final class KSShortDramaPlayerController {
         guard !Task.isCancelled, self.playbackID == playbackID,
               coordinator?.playerLayer === layer else { return false }
         if succeeded { return true }
-        guard target == 0, layer.player is KSMEPlayer, let resolvedURL else { return false }
+        guard target == 0,
+              layer.player is KSMEPlayer || layer.player is DualStreamPlayer,
+              let resolvedURL else { return false }
 
         // The pinned ME seek path truncates subsecond timestamps before scaling them. A
         // failed exact-zero seek can land before a valid HLS start; reopen this same resolved
@@ -145,7 +147,11 @@ public final class KSShortDramaPlayerController {
                 layer.pause()
                 layer.options.startPlayTime = 0
                 layer.options.startPlayTimePercentage = 0
-                layer.replace(playerItem: MEPlayerItem(io: .left(resolvedURL), options: layer.options))
+                if layer.player is DualStreamPlayer {
+                    layer.player.replace(url: resolvedURL, options: layer.options)
+                } else {
+                    layer.replace(playerItem: MEPlayerItem(io: .left(resolvedURL), options: layer.options))
+                }
                 // replace resets the player's playback state; keep decoding paused from the
                 // new beginning until this request's ready + playable state has been observed.
                 layer.pause()

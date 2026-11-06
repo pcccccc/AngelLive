@@ -28,9 +28,23 @@ public enum KSPlayerSessionConfigurator {
         let plan = RoomPlaybackResolver.resolvePlan(selectedQuality: quality)
         let mediaTransform = quality.playbackHints?.mediaTransform
         #if canImport(KSPlayer)
-        let playerTypes: [MediaPlayerProtocol.Type] = mediaTransform == nil
-            ? plan.playerKinds.map(playerType(for:))
-            : [MediaTransformPlayer.self]
+        let playerTypes: [MediaPlayerProtocol.Type]
+        if let audioURL = plan.audioURL {
+            let audioRequest = RoomPlaybackResolver.audioRequestOptions(
+                for: quality, fallbackUserAgent: fallbackUserAgent
+            )
+            (options as? PlayerOptions)?.dualStreamAudio = DualStreamAudioConfiguration(
+                url: audioURL, userAgent: audioRequest.userAgent,
+                headers: audioRequest.headers, decryption: quality.decryption
+            )
+            // Plain KSOptions is rejected by this player's explicit options error.
+            playerTypes = [DualStreamPlayer.self]
+        } else {
+            (options as? PlayerOptions)?.dualStreamAudio = nil
+            playerTypes = mediaTransform == nil
+                ? plan.playerKinds.map(playerType(for:))
+                : [MediaTransformPlayer.self]
+        }
         #else
         let playerTypes = plan.playerKinds.map(playerType(for:))
         #endif

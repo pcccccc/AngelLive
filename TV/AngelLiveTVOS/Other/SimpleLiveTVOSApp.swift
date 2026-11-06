@@ -42,6 +42,7 @@ struct SimpleLiveTVOSApp: App {
 #endif
         appViewModel = AppState()
         MediaTransformSupport.registerHostCapability()
+        DualStreamSupport.registerHostCapability()
         // 启动时将 Caches 中的插件同步到 App Group 容器（供 TopShelf 使用）
         PluginAppGroupSync.syncToAppGroup()
 

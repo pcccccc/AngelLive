@@ -1,5 +1,7 @@
 # 播放解密参数协议
 
+可选独立音频的字段、同钥范围及实验开放门槛见[独立音频播放协议](DualStreamPlaybackProtocol.md)。
+
 插件取得播放地址与解密密钥后，在对应的 `LiveQualityDetail` 中返回可选的 `decryption` 对象。宿主接收并验证参数，通过共享播放适配层交给 KSPlayer 的 FFmpeg 内核；宿主不实现视频解密算法。
 
 ## 插件返回字段

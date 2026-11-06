@@ -55,6 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if MacUITestBootstrap.context != nil { return }
         #endif
         MediaTransformSupport.registerHostCapability()
+        DualStreamSupport.registerHostCapability()
         BugsnagBootstrap.start(platform: .macOS)
         KSOptions.logLevel = .error
         KSOptions.hudLog = false

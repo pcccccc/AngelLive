@@ -982,7 +982,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             "loginid", "usercode", "verificationuri", "device_code", "devicecode",
             "setcookies", "authorization", "location", "headers", "requestheaders",
             "responseheaders", "body", "bodytext", "bodybase64", "requestbody", "responsebody",
-            "decryption", "decryption_key"
+            "decryption", "decryption_key", "audiourl", "audioheaders"
         ]
         return redactedKeys.contains(lowered)
             || lowered.contains("token")

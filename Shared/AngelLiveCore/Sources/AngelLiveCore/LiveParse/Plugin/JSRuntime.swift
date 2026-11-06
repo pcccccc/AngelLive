@@ -730,6 +730,9 @@ public final class JSRuntime: @unchecked Sendable {
         logHandler: LogHandler?,
         mediaTransformVersionProvider: @escaping @Sendable () -> Int = {
             LiveParseHostPlaybackCapabilities.mediaTransformVersion
+        },
+        dualStreamProvider: @escaping @Sendable () -> Bool = {
+            LiveParseHostPlaybackCapabilities.dualStream
         }
     ) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
@@ -756,7 +759,10 @@ public final class JSRuntime: @unchecked Sendable {
             self.configureHostSession(in: context)
             self.configureHostPromiseCallbacks(in: context)
             Self.configureHostRuntime(in: context)
-            Self.configureHostBootstrap(in: context, mediaTransformVersionProvider: mediaTransformVersionProvider)
+            Self.configureHostBootstrap(
+                in: context, mediaTransformVersionProvider: mediaTransformVersionProvider,
+                dualStreamProvider: dualStreamProvider
+            )
             Self.configureHostNativeStream(in: context, queue: queue, nativeStream: nativeStream)
             self.configureHostWebSocket(in: context)
         }
@@ -1112,10 +1118,13 @@ private extension JSRuntime {
 
     static func configureHostBootstrap(
         in context: JSContext,
-        mediaTransformVersionProvider: @escaping @Sendable () -> Int
+        mediaTransformVersionProvider: @escaping @Sendable () -> Int,
+        dualStreamProvider: @escaping @Sendable () -> Bool
     ) {
         let mediaTransformVersion: @convention(block) () -> Int = { mediaTransformVersionProvider() }
         context.setObject(mediaTransformVersion, forKeyedSubscript: "__lp_media_transform_version" as NSString)
+        let dualStream: @convention(block) () -> Bool = { dualStreamProvider() }
+        context.setObject(dualStream, forKeyedSubscript: "__lp_dual_stream" as NSString)
         // 给插件提供一个稳定的 Host API 表层（底层由 __lp_* 提供）。
         let script = """
         (function () {
@@ -1210,6 +1219,13 @@ private extension JSRuntime {
             enumerable: true,
             configurable: false,
             get: function () { return mediaTransformVersion(); }
+          });
+          var dualStream = globalThis.__lp_dual_stream;
+          delete globalThis.__lp_dual_stream;
+          Object.defineProperty(Host.capabilities, "dualStream", {
+            enumerable: true,
+            configurable: false,
+            get: function () { return dualStream(); }
           });
           Host.capabilities.loginTransaction = true;
           Host.capabilities.loginChallengeProtocol = \(PlatformLoginChallengeProtocol.currentVersion);

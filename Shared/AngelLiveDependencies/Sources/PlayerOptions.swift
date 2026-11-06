@@ -8,6 +8,13 @@ public class PlayerOptions: KSOptions, @unchecked Sendable {
     /// Set per resolved resource by the FullUI session configurator.
     @MainActor public internal(set) var mediaTransform: LiveMediaTransform?
 
+    #if canImport(KSPlayer)
+    /// Present only for FullUI resources with a resolved separate VOD audio URL.
+    @MainActor public internal(set) var dualStreamAudio: DualStreamAudioConfiguration?
+    /// A weakly captured, per-resource rendering clock. Never installed on audio options.
+    @MainActor var dualStreamClock: (@MainActor () -> TimeInterval?)?
+    #endif
+
     nonisolated required public init() {
         super.init()
     }
@@ -16,6 +23,7 @@ public class PlayerOptions: KSOptions, @unchecked Sendable {
         guard syncSystemRate else { return }
         super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
     }
+
 }
 
 #if canImport(KSPlayer)
@@ -23,9 +31,27 @@ extension PlayerOptions {
     /// Freeze resource options before background opening. Public per-session values
     /// are copied; transient FFmpeg state, time logs and rendering buffers start fresh.
     @MainActor func mediaTransformSessionSnapshot() -> PlayerOptions {
-        let copy = PlayerOptions()
+        sessionSnapshot(into: self is DualStreamVideoOptions ? DualStreamVideoOptions() : PlayerOptions())
+    }
+
+    @MainActor func dualStreamVideoSessionSnapshot() -> PlayerOptions {
+        let copy = sessionSnapshot(into: DualStreamVideoOptions())
+        // Controller operation settings on the layer's original options cannot reach
+        // an already-open private snapshot. Separate VOD always uses confirmed seeks.
+        copy.isAccurateSeek = true
+        copy.isSeekedAutoPlay = false
+        return copy
+    }
+
+    @MainActor func dualStreamAudioSessionSnapshot() -> PlayerOptions {
+        sessionSnapshot(into: PlayerOptions())
+    }
+
+    @MainActor private func sessionSnapshot(into copy: PlayerOptions) -> PlayerOptions {
         copy.syncSystemRate = syncSystemRate
         copy.mediaTransform = mediaTransform
+        copy.dualStreamAudio = dualStreamAudio
+        copy.dualStreamClock = dualStreamClock
         copy.context = context
         copy.avOptions = avOptions
         copy.startPlayTime = startPlayTime

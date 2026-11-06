@@ -255,6 +255,45 @@ public struct LiveQualityDetail: Codable, Sendable {
     public var playbackHints: LivePlaybackHints?
     /// 资源侧声明的解密要求；缺省时按未加密流处理。
     public var decryption: LivePlaybackDecryption? = nil
+    /// Optional companion audio on the same on-demand timeline and content key.
+    public var audioUrl: String? = nil
+    public var audioUserAgent: String? = nil
+    /// Independent audio request headers; main-stream credentials are not inherited.
+    public var audioHeaders: [String: String]? = nil
+}
+
+extension LiveQualityDetail {
+    private enum CodingKeys: String, CodingKey {
+        case roomId, title, qn, url, liveCodeType, liveType
+        case userAgent, headers, requestContext, playbackHints, decryption
+        case audioUrl, audioUserAgent, audioHeaders
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roomId = try container.decode(String.self, forKey: .roomId)
+        title = try container.decode(String.self, forKey: .title)
+        qn = try container.decode(Int.self, forKey: .qn)
+        url = try container.decode(String.self, forKey: .url)
+        liveCodeType = try container.decode(LiveCodeType.self, forKey: .liveCodeType)
+        liveType = try container.decode(LiveType.self, forKey: .liveType)
+        userAgent = try container.decodeIfPresent(String.self, forKey: .userAgent)
+        headers = try container.decodeIfPresent([String: String].self, forKey: .headers)
+        requestContext = try container.decodeIfPresent([String: String].self, forKey: .requestContext)
+        playbackHints = try container.decodeIfPresent(LivePlaybackHints.self, forKey: .playbackHints)
+        decryption = try container.decodeIfPresent(LivePlaybackDecryption.self, forKey: .decryption)
+        do {
+            audioUrl = try container.decodeIfPresent(String.self, forKey: .audioUrl)
+            audioUserAgent = try container.decodeIfPresent(String.self, forKey: .audioUserAgent)
+            audioHeaders = try container.decodeIfPresent([String: String].self, forKey: .audioHeaders)
+        } catch {
+            // Decoder errors may contain signed addresses or header values.
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Invalid companion audio declaration."
+            ))
+        }
+    }
 }
 
 public struct LiveCategoryModel: Codable, Sendable {

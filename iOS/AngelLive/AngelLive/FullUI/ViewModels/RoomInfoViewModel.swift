@@ -71,10 +71,12 @@ final class RoomInfoViewModel {
     /// KSPlayer state normalized for shared recovery and presentation logic.
     private(set) var engineState: PlaybackEngineState = .initialized
     var isHLSStream = false  // 当前是否为 HLS 流（支持 AirPlay 投屏）
+    private(set) var hasCompanionAudio = false
+    var canUseAirPlay: Bool { isHLSStream && !hasCompanionAudio }
 
     /// DLNA 接受电视可直接访问的媒体 URL，不复用 AirPlay 的 HLS 布尔值。
     var dlnaCastResource: DLNAMediaResource? {
-        guard let url = currentPlayURL else {
+        guard !hasCompanionAudio, let url = currentPlayURL else {
             return nil
         }
 
@@ -694,6 +696,7 @@ final class RoomInfoViewModel {
             liveReconnectPolicy: .playerManaged
         )
         let plan = applied.plan
+        hasCompanionAudio = plan.audioURL != nil
         recoveryCoordinator.playbackConfigured(isLive: plan.isLive)
 
         return PlayerTypeResult(

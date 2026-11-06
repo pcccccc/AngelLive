@@ -78,7 +78,7 @@ struct SettingsButton: View {
             }
 
             // 仅在 HLS 流时显示投屏选项（FLV 投屏只有音频）
-            if viewModel.isHLSStream {
+            if viewModel.canUseAirPlay {
                 Button("AirPlay 投屏") {
                     showAirPlayPicker = true
                 }

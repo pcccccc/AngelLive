@@ -132,6 +132,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
         #endif
         MediaTransformSupport.registerHostCapability()
+        DualStreamSupport.registerHostCapability()
         BugsnagBootstrap.start(platform: .iOS)
         // 仅预配置播放类别，避免应用启动时立刻打断其他 App 的音频。
         configureAudioSessionForPlayback()

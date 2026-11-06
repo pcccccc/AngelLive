@@ -22,6 +22,7 @@ public struct RoomPlaybackPlan: Sendable {
     public let isHLS: Bool
     public let isLive: Bool
     public let streamFormat: LivePlaybackStreamFormat
+    public let audioURL: URL?
     public let overrideURL: URL?
     public let overrideTitle: String?
     public let resolvedSelection: RoomPlaybackSelection?
@@ -33,12 +34,14 @@ public struct RoomPlaybackPlan: Sendable {
         streamFormat: LivePlaybackStreamFormat,
         overrideURL: URL? = nil,
         overrideTitle: String? = nil,
-        resolvedSelection: RoomPlaybackSelection? = nil
+        resolvedSelection: RoomPlaybackSelection? = nil,
+        audioURL: URL? = nil
     ) {
         self.playerKinds = playerKinds
         self.isHLS = isHLS
         self.isLive = isLive
         self.streamFormat = streamFormat
+        self.audioURL = audioURL
         self.overrideURL = overrideURL
         self.overrideTitle = overrideTitle
         self.resolvedSelection = resolvedSelection
@@ -361,6 +364,29 @@ public enum RoomPlaybackResolver {
         return RoomPlaybackRequestOptions(userAgent: userAgent, headers: headers)
     }
 
+    public static func audioRequestOptions(
+        for quality: LiveQualityDetail,
+        fallbackUserAgent: String
+    ) -> RoomPlaybackRequestOptions {
+        let customUA = quality.audioUserAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let inheritedUA = requestOptions(for: quality, fallbackUserAgent: fallbackUserAgent).userAgent
+        let userAgent = (customUA?.isEmpty == false) ? customUA! : inheritedUA
+        var headers = quality.audioHeaders ?? [:]
+        if !headers.keys.contains(where: { $0.caseInsensitiveCompare("User-Agent") == .orderedSame }) {
+            headers["user-agent"] = userAgent
+        }
+        return RoomPlaybackRequestOptions(userAgent: userAgent, headers: headers)
+    }
+
+    private static func companionAudioURL(for quality: LiveQualityDetail) -> URL? {
+        guard let raw = quality.audioUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty,
+              let url = URL(string: raw),
+              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme),
+              let host = url.host, !host.isEmpty else { return nil }
+        return url
+    }
+
     public static func cdnDisplayName(for cdn: LiveQualityModel) -> String {
         let displayName = cdn.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !displayName.isEmpty {
@@ -502,6 +528,13 @@ public enum RoomPlaybackResolver {
         let requiresCustomSegmentLoader = hints?.requiresCustomSegmentLoader == true
         let isHLS = format == .hlsLive || format == .hlsVod
         let isLive = hints?.isLive ?? (format != .hlsVod)
+
+        if !isLive, let audioURL = companionAudioURL(for: selectedQuality) {
+            return RoomPlaybackPlan(
+                playerKinds: [.mePlayer], isHLS: isHLS, isLive: false,
+                streamFormat: format, audioURL: audioURL
+            )
+        }
 
         if selectedQuality.decryption != nil || hints?.mediaTransform != nil || requiresCustomSegmentLoader {
             return RoomPlaybackPlan(

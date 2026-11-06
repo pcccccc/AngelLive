@@ -12,19 +12,31 @@ public enum LiveParseHostPlaybackCapabilities {
     public static var mediaTransformVersion: Int {
         registry.mediaTransformVersion
     }
+
+    public static func enableDualStream() { registry.enableDualStream() }
+
+    public static var dualStream: Bool { registry.dualStream }
 }
 
 /// A synchronous JS bridge reads while host startup may register on another thread.
-/// All mutable state is inside this lock; version only moves from 0 to 1. Keeping
+/// All mutable state is inside this lock; registration only enables capabilities. Keeping
 /// the registry independently constructible also isolates tests from global startup.
 struct LiveParseHostPlaybackCapabilityRegistry: Sendable {
-    private let version = OSAllocatedUnfairLock<Int>(initialState: 0)
+    private struct State {
+        var mediaTransformVersion = 0
+        var dualStream = false
+    }
+    private let state = OSAllocatedUnfairLock(initialState: State())
 
     func enableMediaTransformV1() {
-        version.withLock { $0 = 1 }
+        state.withLock { $0.mediaTransformVersion = 1 }
     }
 
     var mediaTransformVersion: Int {
-        version.withLock { $0 }
+        state.withLock { $0.mediaTransformVersion }
     }
+
+    func enableDualStream() { state.withLock { $0.dualStream = true } }
+
+    var dualStream: Bool { state.withLock { $0.dualStream } }
 }
