@@ -4,6 +4,90 @@ import Testing
 
 @Suite(.serialized)
 struct PluginHomeFeedModelRefreshTests {
+    @Test("saved selection filters the restored cache before catalog confirmation and throughout loading")
+    @MainActor
+    func savedSelectionSurvivesStartup() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        #expect(await fixture.store.save([cachedBannerFeed("source-a"), cachedBannerFeed("source-b")]))
+        let gate = FetchGate()
+        let model = PluginHomeFeedModel(
+            service: PluginHomeFeedService { id, _ in try await gate.fetch(pluginId: id) },
+            cacheStore: fixture.store, now: { Date(timeIntervalSince1970: 2_000_000_000) },
+            platformProvider: { _ in [platform("source-a"), platform("source-b")] }
+        )
+
+        model.selectPlatform(pluginId: "source-b")
+        #expect(model.selectedPluginId == "source-b")
+        await model.refresh(installedPluginIds: [], availabilityConfirmed: false)
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-b"])
+        #expect(await fixture.store.load().count == 2)
+
+        let refresh = Task { await model.refresh(installedPluginIds: ["source-a", "source-b"], force: true) }
+        await gate.waitForStarted(2)
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-b"])
+        await gate.resumeAll(response: try responseDTO())
+        await refresh.value
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-b"])
+    }
+
+    @Test("missing cached source does not invalidate saved selection when catalog confirms it")
+    @MainActor
+    func savedSelectionMissingFromCache() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        #expect(await fixture.store.save([cachedBannerFeed("source-a")]))
+        let gate = FetchGate()
+        let model = PluginHomeFeedModel(
+            service: PluginHomeFeedService { id, _ in try await gate.fetch(pluginId: id) },
+            cacheStore: fixture.store, now: { Date(timeIntervalSince1970: 2_000_000_000) },
+            platformProvider: { _ in [platform("source-a"), platform("source-b")] }
+        )
+        model.selectPlatform(pluginId: "source-b")
+        await model.refresh(installedPluginIds: [], availabilityConfirmed: false)
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.isEmpty)
+
+        let refresh = Task { await model.refresh(installedPluginIds: ["source-a", "source-b"], force: true) }
+        await gate.waitForStarted(2)
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.isEmpty)
+        await gate.resumeAll(response: try responseDTO())
+        await refresh.value
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-b"])
+    }
+
+    @Test("confirmed removal falls back to remaining sources before network completes")
+    @MainActor
+    func confirmedRemovalFallsBack() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        #expect(await fixture.store.save([cachedBannerFeed("source-a"), cachedBannerFeed("source-b")]))
+        let gate = FetchGate()
+        let model = PluginHomeFeedModel(
+            service: PluginHomeFeedService { id, _ in try await gate.fetch(pluginId: id) },
+            cacheStore: fixture.store, now: { Date(timeIntervalSince1970: 2_000_000_000) },
+            platformProvider: { _ in [platform("source-a")] }
+        )
+        model.selectPlatform(pluginId: "source-b")
+        await model.refresh(installedPluginIds: [], availabilityConfirmed: false)
+        #expect(model.selectedPluginId == "source-b")
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-b"])
+
+        let refresh = Task { await model.refresh(installedPluginIds: ["source-a"], force: true) }
+        await gate.waitForStarted(1)
+        #expect(model.selectedPluginId == nil)
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-a"])
+        await gate.resumeAll(response: try responseDTO())
+        await refresh.value
+        #expect(model.selectedPluginId == nil)
+        #expect(model.bannerEntries.map(\.pluginId) == ["source-a"])
+    }
+
     @Test("fresh matching cache skips automatic fetch while force refreshes")
     @MainActor
     func ttlAndForce() async throws {
@@ -295,5 +379,18 @@ private func makeModelFeed(pluginId: String, ttl: Int) -> PluginHomeFeed {
         schemaVersion: PluginHomeFeedRequest.supportedSchemaVersion, revision: "cached",
         generatedAt: nil, ttlSeconds: ttl, banners: [], sections: [],
         diagnostics: .init(droppedBanners: 0, droppedSections: 0, droppedItems: 0)
+    )
+}
+
+private func cachedBannerFeed(_ id: String) -> PluginHomeFeed {
+    PluginHomeFeed(
+        pluginId: id, pluginDisplayName: id,
+        schemaVersion: PluginHomeFeedRequest.supportedSchemaVersion, revision: "cached",
+        generatedAt: nil, ttlSeconds: 60,
+        banners: [PluginHomeBanner(
+            id: "banner", imageURL: URL(string: "https://example.invalid/banner.jpg")!,
+            title: id, subtitle: nil, badge: nil,
+            target: .category(.init(id: "category", parentId: "", title: "Category", icon: "", biz: nil))
+        )], sections: [], diagnostics: .init(droppedBanners: 0, droppedSections: 0, droppedItems: 0)
     )
 }

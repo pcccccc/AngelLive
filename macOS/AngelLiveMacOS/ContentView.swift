@@ -11,6 +11,66 @@ import AppKit
 import AngelLiveCore
 import SharedAssets
 
+/// FullUI 的主窗口和播放窗口保持独立；ShellUI 保留窗口原有的标签行为。
+struct FullUIWindowTabbingPolicyView: NSViewRepresentable {
+    let isEnabled: Bool
+
+    func makeNSView(context: Context) -> WindowTabbingPolicyView {
+        WindowTabbingPolicyView(isEnabled: isEnabled)
+    }
+
+    func updateNSView(_ nsView: WindowTabbingPolicyView, context: Context) {
+        nsView.isEnabled = isEnabled
+    }
+
+    static func dismantleNSView(_ nsView: WindowTabbingPolicyView, coordinator: ()) {
+        nsView.restoreTabbingMode()
+    }
+
+    final class WindowTabbingPolicyView: NSView {
+        var isEnabled: Bool {
+            didSet { configure(window) }
+        }
+        private weak var configuredWindow: NSWindow?
+        private var originalTabbingMode: NSWindow.TabbingMode?
+
+        init(isEnabled: Bool) {
+            self.isEnabled = isEnabled
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            // 在挂载窗口时同步设置，避免等到 onAppear 后窗口已参与自动标签合并。
+            configure(newWindow)
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        private func configure(_ window: NSWindow?) {
+            if configuredWindow !== window || !isEnabled {
+                restoreTabbingMode()
+            }
+            guard isEnabled, let window else { return }
+            if configuredWindow !== window {
+                configuredWindow = window
+                originalTabbingMode = window.tabbingMode
+            }
+            window.tabbingMode = .disallowed
+        }
+
+        func restoreTabbingMode() {
+            if let configuredWindow, let originalTabbingMode {
+                configuredWindow.tabbingMode = originalTabbingMode
+            }
+            configuredWindow = nil
+            originalTabbingMode = nil
+        }
+    }
+}
+
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {
     case home
@@ -183,6 +243,7 @@ struct ContentView: View {
             }
         }
         .background(PlayerWindowReferenceView(window: $mainWindow))
+        .background(FullUIWindowTabbingPolicyView(isEnabled: pluginAvailability.hasAvailablePlugins))
         .onChange(of: mainWindow) { _, window in
             fullscreenPlayerManager.mainWindow = window
         }

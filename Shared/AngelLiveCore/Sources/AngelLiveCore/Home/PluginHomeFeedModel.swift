@@ -117,6 +117,7 @@ public final class PluginHomeFeedModel {
     @ObservationIgnored private var fetchedAtByPluginId: [String: Date] = [:]
     @ObservationIgnored private var cachedRevisionByPluginId: [String: String] = [:]
     @ObservationIgnored private var platformOrder: [String] = []
+    @ObservationIgnored private var hasConfirmedPlatformCatalog = false
     @ObservationIgnored private var shortDramaPluginIds: Set<String> = []
     @ObservationIgnored private var cacheRestoreTask: Task<PluginHomeFeedCacheStore.Snapshot?, Never>?
     @ObservationIgnored private var activeRefresh: (identity: RefreshIdentity, task: Task<Void, Never>)?
@@ -259,6 +260,7 @@ private extension PluginHomeFeedModel {
         platformOptions = platforms.map {
             HomePlatformOption(pluginId: $0.pluginId, displayName: $0.displayName, liveType: $0.liveType)
         }
+        hasConfirmedPlatformCatalog = true
         normalizePlatformSelection()
         platformOrder = stableOrder(previous: platformOrder, current: platforms.map(\.pluginId))
         feedsByPluginId = feedsByPluginId.filter { activePluginIds.contains($0.key) }
@@ -438,7 +440,9 @@ private extension PluginHomeFeedModel {
     }
 
     func normalizePlatformSelection() {
-        guard let selectedPluginId else { return }
+        // A missing cached feed does not mean a saved source was uninstalled.
+        // Validate selection only after the current catalog has been applied.
+        guard hasConfirmedPlatformCatalog, let selectedPluginId else { return }
         if !platformOptions.contains(where: { $0.pluginId == selectedPluginId }) {
             self.selectedPluginId = nil
         }

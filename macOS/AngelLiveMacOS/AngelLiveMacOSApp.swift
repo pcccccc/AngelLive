@@ -218,6 +218,7 @@ struct AngelLiveMacOSApp: App {
                     .roomTitleTranslationHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
                     .supportDiagnosticsHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
                     .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))
+                    .background(FullUIWindowTabbingPolicyView(isEnabled: production.pluginAvailability.hasAvailablePlugins))
             }
         }
         // 仅作"首次打开"的提示尺寸 —— 真正强制每次新开都用 16:9 默认值
