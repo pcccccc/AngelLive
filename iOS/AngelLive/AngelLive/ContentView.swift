@@ -338,6 +338,10 @@ struct ContentView: View {
         }
         // 原地升级不会改变 pluginId 列表。以目录修订号重建平台元数据和
         // homeFeed 能力，避免长按 Tab 菜单继续使用更新前的能力快照。
+        // 播放列表增删改(含 iCloud 同步带来的变更)后重建平台目录。
+        .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
+            Task { @MainActor in await pluginAvailability.checkAvailability() }
+        }
         .onChange(of: pluginAvailability.catalogRevision) { _, _ in
             let catalogChanged = favoriteViewModel.updateFavoriteRefreshCatalog(SandboxPluginCatalog.installedPluginMap())
             if catalogChanged, pluginAvailability.hasAvailablePlugins {

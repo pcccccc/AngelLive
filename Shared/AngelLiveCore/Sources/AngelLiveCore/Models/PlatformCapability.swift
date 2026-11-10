@@ -178,7 +178,20 @@ public enum PlatformCapability {
         (.homeFeed, ["getHomeFeed"])
     ]
 
+    /// 宿主播放列表平台的固定能力；弹幕、分享解析与首页不提供。
+    private static let playlistFeatures: Set<PlatformFeature> = [
+        .categories, .rooms, .playback, .search, .roomDetail, .liveState
+    ]
+
     public static func features(for liveType: LiveType) -> [(PlatformFeature, FeatureStatus)] {
+        // 不进缓存：实例可能稍后才被添加或同步到本设备。
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            let exists = PlaylistInstanceStore.shared.instance(for: liveType) != nil
+            return PlatformFeature.allCases.map { feature in
+                (feature, exists && playlistFeatures.contains(feature) ? .available : .unavailable)
+            }
+        }
+
         let cacheKey = liveType.rawValue
         if let cached = cache.get(cacheKey) {
             return cached

@@ -463,6 +463,23 @@ struct LiveRoomCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
 
             HStack(spacing: 8) {
+                if isPlaylistRoom {
+                    ZStack {
+                        Circle().fill(Color(nsColor: .quaternarySystemFill))
+                        if let url = URL(string: room.userHeadImg), !room.userHeadImg.isEmpty {
+                            KFImage(url)
+                                .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 48, height: 48)))
+                                .placeholder { logoMonogram(size: 13) }
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .padding(5)
+                        } else {
+                            logoMonogram(size: 13)
+                        }
+                    }
+                    .frame(width: 32, height: 32)
+                    .clipShape(Circle())
+                } else {
                 RemoteAvatarView(url: URL(string: room.userHeadImg), size: 32) {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
@@ -523,7 +540,49 @@ struct LiveRoomCard: View {
         }
     }
 
+    /// 播放列表（IPTV）频道没有直播截图：台标按比例完整显示在中性底色上，无台标时显示首字。
+    private var isPlaylistRoom: Bool {
+        PlaylistPlatformIdentity.isPlaylist(room.liveType)
+    }
+
+    private var logoCoverView: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Rectangle()
+                    .fill(Color(nsColor: .quaternarySystemFill))
+                if let coverURL {
+                    KFImage(coverURL)
+                        .setProcessor(DownsamplingImageProcessor(size: coverDownsampleSize))
+                        .scaleFactor(displayScale)
+                        .placeholder { logoMonogram(size: geometry.size.height * 0.4) }
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(geometry.size.height * 0.18)
+                } else {
+                    logoMonogram(size: geometry.size.height * 0.4)
+                }
+            }
+        }
+        .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+    }
+
+    private func logoMonogram(size: CGFloat) -> some View {
+        Text(PlaylistIconCache.monogram(for: room.roomTitle))
+            .font(.system(size: max(size, 12), weight: .semibold))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
     private var coverView: some View {
+        if isPlaylistRoom {
+            logoCoverView
+        } else {
+            standardCoverView
+        }
+    }
+
+    private var standardCoverView: some View {
         Group {
             if let coverURL {
                 // 使用稳定的处理器尺寸，避免 LazyVGrid 滚动时 GeometryReader 的细微尺寸变化

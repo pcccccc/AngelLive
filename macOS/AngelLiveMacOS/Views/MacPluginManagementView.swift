@@ -21,6 +21,7 @@ struct MacPluginManagementView: View {
     @State private var searchFocusRequest = 0
     @State private var showSources = false
     @State private var showAddSource = false
+    @State private var playlistCount = PlaylistInstanceStore.shared.all().count
     @State private var pluginPendingUninstall: MacPluginRemovalRequest?
 
     private var normalizedSearchText: String {
@@ -116,13 +117,13 @@ struct MacPluginManagementView: View {
                     Button { showSources = true } label: {
                         PanelNavigationRow(
                             title: "订阅源",
-                            subtitle: "管理插件来源与订阅状态"
+                            subtitle: "管理插件来源与 m3u 播放列表"
                         ) {
                             Image(systemName: "list.bullet.rectangle")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         } trailing: {
-                            Text("\(pluginSourceManager.sourceURLs.count) 个")
+                            Text("\(pluginSourceManager.sourceURLs.count + playlistCount) 个")
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -172,6 +173,9 @@ struct MacPluginManagementView: View {
             }
             .macSettingsSheetPresentation()
             .frame(minWidth: 460, idealWidth: 520, minHeight: 280, idealHeight: 320)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
+            playlistCount = PlaylistInstanceStore.shared.all().count
         }
         .confirmationDialog(
             "卸载插件？",
@@ -676,20 +680,34 @@ private struct MacPluginSourcesView: View {
 
     @State private var showAddSource = false
     @State private var pendingDeletion: MacSourceRemovalRequest?
+    @State private var playlists = PlaylistInstanceStore.shared.all()
+    @State private var playlistStatuses: [UUID: PlaylistRefreshStatus] = [:]
+    @State private var editingPlaylist: PlaylistInstance?
+    @State private var pendingPlaylistDeletion: PlaylistInstance?
 
     var body: some View {
         Form {
             Section {
-                if pluginSourceManager.sourceURLs.isEmpty {
+                if pluginSourceManager.sourceURLs.isEmpty, playlists.isEmpty {
                     MacPluginEmptyState(
                         title: "暂无订阅源",
-                        message: "添加订阅源后，会在这里显示健康状态与关联插件。",
+                        message: "添加插件订阅源或 m3u 播放列表后，会在这里显示状态。",
                         systemImage: "dot.radiowaves.left.and.right",
                         actionTitle: "添加订阅源",
                         action: { showAddSource = true },
                         actionDisabled: pluginSourceManager.isManagementBusy
                     )
                 } else {
+                    // m3u 播放列表与插件订阅源同列展示，行内副标题区分类型。
+                    ForEach(playlists) { instance in
+                        MacPlaylistSourceRow(
+                            instance: instance,
+                            status: playlistStatuses[instance.id],
+                            edit: { editingPlaylist = instance },
+                            refresh: { refreshPlaylist(instance) },
+                            remove: { pendingPlaylistDeletion = instance }
+                        )
+                    }
                     ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
                         MacPluginSourceRow(
                             url: url,
@@ -707,6 +725,36 @@ private struct MacPluginSourcesView: View {
             } footer: {
                 Text("展开可查看完整订阅地址。删除订阅源会同时移除它关联的插件。")
             }
+        }
+        .task(id: playlists.map(\.id)) { await loadPlaylistStatuses() }
+        .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
+            playlists = PlaylistInstanceStore.shared.all()
+        }
+        .sheet(item: $editingPlaylist) { instance in
+            NavigationStack {
+                MacPlaylistEditorView(mode: .edit(instance))
+            }
+            .macSettingsSheetPresentation()
+            .frame(minWidth: 460, idealWidth: 520, minHeight: 360, idealHeight: 440)
+        }
+        .confirmationDialog(
+            "删除播放列表？",
+            isPresented: Binding(
+                get: { pendingPlaylistDeletion != nil },
+                set: { if !$0 { pendingPlaylistDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingPlaylistDeletion
+        ) { instance in
+            Button("删除“\(instance.name)”", role: .destructive) {
+                deletePlaylist(instance)
+                pendingPlaylistDeletion = nil
+            }
+            Button("取消", role: .cancel) {
+                pendingPlaylistDeletion = nil
+            }
+        } message: { _ in
+            Text("删除后，该平台下的收藏和观看历史将无法播放。")
         }
         .formStyle(.grouped)
         .navigationTitle("订阅源")
@@ -741,6 +789,29 @@ private struct MacPluginSourcesView: View {
             }
         } message: { request in
             Text("将删除 \(request.url)，并卸载该订阅源关联的插件。")
+        }
+    }
+
+    private func loadPlaylistStatuses() async {
+        var result: [UUID: PlaylistRefreshStatus] = [:]
+        for instance in playlists {
+            result[instance.id] = await PlaylistPlatformService.shared.status(instanceID: instance.id)
+        }
+        playlistStatuses = result
+    }
+
+    private func refreshPlaylist(_ instance: PlaylistInstance) {
+        Task {
+            _ = try? await PlaylistPlatformService.shared.refresh(instanceID: instance.id)
+            playlistStatuses[instance.id] = await PlaylistPlatformService.shared.status(instanceID: instance.id)
+        }
+    }
+
+    private func deletePlaylist(_ instance: PlaylistInstance) {
+        Task {
+            try? PlaylistInstanceStore.shared.remove(id: instance.id)
+            await PlaylistPlatformService.shared.removeCache(instanceID: instance.id)
+            await pluginAvailability.checkAvailability()
         }
     }
 
@@ -820,6 +891,337 @@ private struct MacPluginSourceRow: View {
     }
 }
 
+private struct MacPlaylistSourceRow: View {
+    let instance: PlaylistInstance
+    let status: PlaylistRefreshStatus?
+    let edit: () -> Void
+    let refresh: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("播放列表地址")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(instance.sourceURL)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                HStack {
+                    Button("编辑", systemImage: "pencil", action: edit)
+                    Button("刷新播放列表", systemImage: "arrow.clockwise", action: refresh)
+                    Spacer()
+                    Button("删除播放列表", role: .destructive, action: remove)
+                }
+                .padding(.top, 4)
+            }
+            .padding(.vertical, 8)
+        } label: {
+            HStack(spacing: 12) {
+                PanelIconTile {
+                    MacPlaylistIcon(instance: instance, size: 20)
+                }
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(instance.name)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text("m3u 播放列表 · " + (URL(string: instance.sourceURL)?.host() ?? instance.sourceURL))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    statusText
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusText: some View {
+        Group {
+            if let error = status?.lastErrorMessage {
+                Label(status?.fetchedAt == nil ? "异常 · \(error)" : "刷新失败，正在使用上次的数据",
+                      systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let count = status?.channelCount {
+                Text(summary(count: count))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("尚未加载")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption)
+    }
+
+    private func summary(count: Int) -> String {
+        var text = "正常 · \(count) 个频道"
+        if let fetchedAt = status?.fetchedAt {
+            text += " · " + PlaylistIconCache.updatedText(fetchedAt)
+        }
+        return text
+    }
+}
+
+private struct MacPlaylistIcon: View {
+    let instance: PlaylistInstance?
+    var name: String? = nil
+    var iconFileURL: URL? = nil
+    let size: CGFloat
+
+    private var fileURL: URL? {
+        iconFileURL ?? instance.flatMap(PlaylistIconCache.cachedFileURL(for:))
+    }
+
+    var body: some View {
+        if let fileURL, let image = NSImage(contentsOf: fileURL) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else {
+            Text(PlaylistIconCache.monogram(for: name ?? instance?.name ?? ""))
+                .font(.system(size: size * 0.75, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: size, height: size)
+        }
+    }
+}
+
+/// 添加或编辑播放列表。添加前必须解析成功；名称必填，图标可选。
+struct MacPlaylistEditorView: View {
+    enum Mode {
+        case add(sourceURL: String)
+        case edit(PlaylistInstance)
+    }
+
+    enum IconState: Equatable { case none, loading, loaded, failed }
+
+    let mode: Mode
+
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var sourceURL: String
+    @State private var name: String
+    @State private var iconURL: String
+    @State private var preview: PlaylistPreview?
+    @State private var previewError: String?
+    @State private var isLoadingPreview = false
+    @State private var iconState: IconState = .none
+    @State private var isSaving = false
+    @State private var saveError: String?
+
+    init(mode: Mode) {
+        self.mode = mode
+        switch mode {
+        case .add(let url):
+            _sourceURL = State(initialValue: url)
+            _name = State(initialValue: "")
+            _iconURL = State(initialValue: "")
+        case .edit(let instance):
+            _sourceURL = State(initialValue: instance.sourceURL)
+            _name = State(initialValue: instance.name)
+            _iconURL = State(initialValue: instance.iconURL ?? "")
+        }
+    }
+
+    private var editingInstance: PlaylistInstance? {
+        if case .edit(let instance) = mode { return instance }
+        return nil
+    }
+
+    private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedIcon: String { iconURL.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedSource: String { sourceURL.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var sourceChanged: Bool {
+        guard let editingInstance else { return true }
+        return trimmedSource != editingInstance.sourceURL
+    }
+
+    private var hasChanges: Bool {
+        guard let editingInstance else { return true }
+        return trimmedName != editingInstance.name
+            || trimmedIcon != (editingInstance.iconURL ?? "")
+            || sourceChanged
+    }
+
+    private var canSave: Bool {
+        !trimmedName.isEmpty && hasChanges && !isSaving && !isLoadingPreview
+            && (!sourceChanged || preview != nil)
+    }
+
+    private var iconFileURL: URL? {
+        guard !trimmedIcon.isEmpty, iconState == .loaded else { return nil }
+        return PlaylistIconCache.cachedFileURL(
+            for: PlaylistInstance(name: trimmedName, iconURL: trimmedIcon, sourceURL: trimmedSource)
+        )
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 12) {
+                    PanelIconTile {
+                        MacPlaylistIcon(
+                            instance: nil,
+                            name: trimmedName.isEmpty ? (preview?.title ?? "播") : trimmedName,
+                            iconFileURL: iconFileURL,
+                            size: 20
+                        )
+                    }
+                    .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(trimmedName.isEmpty ? (preview?.title ?? "播放列表") : trimmedName)
+                            .font(.body.weight(.medium))
+                            .lineLimit(1)
+                        Text(previewSummary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    if isLoadingPreview {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+            }
+
+            Section {
+                TextField("地址", text: $sourceURL)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { Task { await loadPreview() } }
+                TextField("平台名称", text: $name, prompt: Text("必填,例如:我的电视"))
+                    .textFieldStyle(.roundedBorder)
+                TextField("图标地址(可选)", text: $iconURL)
+                    .textFieldStyle(.roundedBorder)
+            } footer: {
+                Text(iconFooter)
+            }
+
+            if let previewError {
+                Section {
+                    PluginSourceErrorCard(title: "无法读取播放列表", message: previewError)
+                    Button("重试", systemImage: "arrow.clockwise") {
+                        Task { await loadPreview() }
+                    }
+                    .disabled(isLoadingPreview)
+                }
+            }
+
+            if let saveError {
+                Section {
+                    PluginSourceErrorCard(title: "无法保存", message: saveError)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(editingInstance == nil ? "添加播放列表" : "编辑播放列表")
+        .macSettingsPage(
+            editingInstance == nil ? "添加播放列表" : "编辑播放列表",
+            closeTitle: "取消",
+            closeDisabled: isSaving,
+            placesActionsAfterClose: true
+        ) {
+            Button(editingInstance == nil ? "添加" : "保存") { save() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+        }
+        .task {
+            if editingInstance == nil { await loadPreview() }
+        }
+        .task(id: trimmedIcon) { await loadIcon() }
+        .onChange(of: sourceURL) { _, _ in
+            preview = nil
+            previewError = nil
+        }
+    }
+
+    private var previewSummary: String {
+        if isLoadingPreview { return "正在读取播放列表…" }
+        if let preview { return "\(preview.channelCount) 个频道 · \(preview.groupCount) 个分组" }
+        if previewError != nil { return "未能读取播放列表" }
+        return "m3u 播放列表"
+    }
+
+    private var iconFooter: String {
+        switch iconState {
+        case .failed: "图标无法加载，将使用默认图标。内容由你添加的播放列表提供。"
+        case .loading: "正在加载图标…"
+        default: "图标留空时使用名称首字。内容由你添加的播放列表提供。"
+        }
+    }
+
+    private func loadPreview() async {
+        guard !trimmedSource.isEmpty else { return }
+        isLoadingPreview = true
+        previewError = nil
+        defer { isLoadingPreview = false }
+        do {
+            preview = try await PlaylistPlatformService.shared.preview(sourceURL: trimmedSource)
+        } catch {
+            preview = nil
+            previewError = PlaylistPlatformService.userMessage(for: error)
+        }
+    }
+
+    private func loadIcon() async {
+        guard !trimmedIcon.isEmpty else {
+            iconState = .none
+            return
+        }
+        iconState = .loading
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled else { return }
+        iconState = await PlaylistIconCache.fetch(iconURL: trimmedIcon) ? .loaded : .failed
+    }
+
+    private func save() {
+        guard canSave else { return }
+        saveError = nil
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            if sourceChanged, preview == nil {
+                await loadPreview()
+                guard preview != nil else { return }
+            }
+            do {
+                let store = PlaylistInstanceStore.shared
+                let reserved = Set(LiveParseJSPlatformManager.availablePlatforms
+                    .filter { !PlaylistPlatformIdentity.isPlaylist($0.pluginId) }
+                    .map(\.displayName))
+                let instance: PlaylistInstance
+                if let editingInstance {
+                    instance = try store.update(
+                        id: editingInstance.id, name: trimmedName, iconURL: trimmedIcon,
+                        sourceURL: trimmedSource, reservedNames: reserved
+                    )
+                } else {
+                    instance = try store.add(
+                        name: trimmedName, iconURL: trimmedIcon,
+                        sourceURL: trimmedSource, reservedNames: reserved
+                    )
+                }
+                if sourceChanged, let preview {
+                    await PlaylistPlatformService.shared.seed(preview, for: instance)
+                }
+                await pluginAvailability.checkAvailability()
+                dismiss()
+            } catch {
+                saveError = (error as? LocalizedError)?.errorDescription ?? "无法保存播放列表。"
+            }
+        }
+    }
+}
+
 private struct MacPluginSourceHealthText: View {
     let health: PluginSourceHealth
 
@@ -858,19 +1260,28 @@ private struct MacPluginAddSourceView: View {
     @State private var inputURL = ""
     @State private var isAdding = false
     @State private var localError: String?
+    @State private var detectedPlaylistURL: String?
 
     private var trimmedURL: String {
         inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     var body: some View {
+        if let detectedPlaylistURL {
+            MacPlaylistEditorView(mode: .add(sourceURL: detectedPlaylistURL))
+        } else {
+            sourceForm
+        }
+    }
+
+    private var sourceForm: some View {
         Form {
             Section {
-                TextField("订阅源地址或兑换码", text: $inputURL)
+                TextField("订阅源地址、兑换码或 m3u 地址", text: $inputURL)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(addSource)
             } footer: {
-                Text("支持订阅源地址或兑换码。添加后可在订阅源列表中查看状态。")
+                Text("支持订阅源地址、兑换码或 m3u 播放列表地址。订阅源添加后可在订阅源列表中查看状态。")
             }
             if let localError {
                 Section {
@@ -908,7 +1319,15 @@ private struct MacPluginAddSourceView: View {
         let input = trimmedURL
 
         Task {
-            let addedURLs = await pluginSourceManager.addSourceFromInput(input)
+            let addedURLs: [String]
+            switch await pluginSourceManager.addSourceOrDetectPlaylist(input) {
+            case .playlist(let url):
+                isAdding = false
+                detectedPlaylistURL = url
+                return
+            case .sources(let urls):
+                addedURLs = urls
+            }
             if !addedURLs.isEmpty {
                 inputURL = ""
                 isAdding = false

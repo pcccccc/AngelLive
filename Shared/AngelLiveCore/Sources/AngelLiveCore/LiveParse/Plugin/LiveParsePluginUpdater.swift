@@ -6,6 +6,8 @@ struct LiveParsePluginIndexResponseDiagnostics: Sendable {
     let statusCode: Int?
     let contentType: String?
     let bodyPreview: String
+    /// 正文是 m3u 播放列表（按内容判断）；用于把播放列表地址与插件索引区分开。
+    var isPlaylist: Bool = false
 
     var logDescription: String {
         let statusText = statusCode.map(String.init) ?? "n/a"
@@ -363,7 +365,8 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
             url: url,
             statusCode: httpResponse?.statusCode,
             contentType: httpResponse?.value(forHTTPHeaderField: "Content-Type") ?? response.mimeType,
-            bodyPreview: Self.bodyPreview(from: data)
+            bodyPreview: Self.bodyPreview(from: data),
+            isPlaylist: M3UPlaylistParser.looksLikePlaylist(data)
         )
     }
 

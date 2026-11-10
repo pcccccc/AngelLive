@@ -333,6 +333,9 @@ public enum LiveParseJSPlatformManager {
         function: String,
         payload: [String: Any] = [:]
     ) async throws -> ResultType {
+        if let instanceID = PlaylistPlatformIdentity.instanceID(from: platform.pluginId) {
+            return try await callPlaylist(instanceID: instanceID, function: function, payload: payload)
+        }
         return try await LiveParsePlugins.shared.callDecodable(
             pluginId: platform.pluginId,
             function: function,
@@ -347,6 +350,9 @@ public enum LiveParseJSPlatformManager {
         fallback: String,
         payload: [String: Any] = [:]
     ) async throws -> ResultType {
+        if let instanceID = PlaylistPlatformIdentity.instanceID(from: platform.pluginId) {
+            return try await callPlaylist(instanceID: instanceID, function: function, payload: payload)
+        }
         do {
             let result: ResultType = try await LiveParsePlugins.shared.callDecodable(
                 pluginId: platform.pluginId,
@@ -364,6 +370,21 @@ public enum LiveParseJSPlatformManager {
                 )
             }
             throw error
+        }
+    }
+
+    /// 播放列表平台由宿主原生提供数据，返回与插件同构的 JSON，按同一类型解码。
+    private static func callPlaylist<ResultType: Decodable>(
+        instanceID: UUID,
+        function: String,
+        payload: [String: Any]
+    ) async throws -> ResultType {
+        let request = PlaylistPlatformRequest.make(function: function, payload: payload)
+        let data = try await PlaylistPlatformService.shared.handle(request, instanceID: instanceID)
+        do {
+            return try JSONDecoder().decode(ResultType.self, from: data)
+        } catch {
+            throw LiveParseError.liveParseError("播放列表数据异常", "无法解析播放列表数据。")
         }
     }
 
@@ -433,9 +454,11 @@ public enum LiveParseJSPlatformManager {
             mergeCandidate(candidate, into: &candidatesByPluginId)
         }
 
-        let platforms = candidatesByPluginId.values
+        let pluginPlatforms = candidatesByPluginId.values
             .map(\.platform)
             .sorted(by: sortPlatform)
+        // 播放列表平台排在插件平台之后，按添加顺序。
+        let platforms = pluginPlatforms + PlaylistInstanceStore.shared.all().map(\.platform)
 
         var byPluginId: [String: LiveParseJSPlatform] = [:]
         var byLiveType: [LiveType: LiveParseJSPlatform] = [:]
@@ -452,8 +475,13 @@ public enum LiveParseJSPlatformManager {
 
     private static func makeCandidate(from manifestURL: URL, sourcePriority: Int) -> ManifestCandidate? {
         guard let manifest = try? LiveParsePluginManifest.load(from: manifestURL) else { return nil }
-        let liveTypes = manifest.liveTypes.compactMap { LiveType(rawValue: $0) }
-        guard !manifest.pluginId.isEmpty, !liveTypes.isEmpty else { return nil }
+        // `playlist:` 是宿主播放列表平台的保留命名空间，插件不得占用。
+        let liveTypes = manifest.liveTypes
+            .compactMap { LiveType(rawValue: $0) }
+            .filter { !PlaylistPlatformIdentity.isPlaylist($0) }
+        guard !manifest.pluginId.isEmpty,
+              !PlaylistPlatformIdentity.isPlaylist(manifest.pluginId),
+              !liveTypes.isEmpty else { return nil }
 
         let platform = LiveParseJSPlatform(
             pluginId: manifest.pluginId,

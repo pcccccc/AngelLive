@@ -8,6 +8,11 @@ public enum LiveService {
             return []
         }
 
+        // 播放列表平台自带 TTL 缓存，不能进入下方按插件版本命中、永不过期的分类缓存。
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return try await ApiManager.fetchCategoryList(liveType: liveType)
+        }
+
         // Token plugins own credential-scoped caches and authorization checks.
         // A host disk cache hit must never bypass those checks.
         if await PlatformAPITokenVault.shared.isEnabled,

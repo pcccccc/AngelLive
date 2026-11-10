@@ -25,7 +25,27 @@ enum PlatformIconProvider {
         listImageCache.removeAll()
     }
 
+    /// 播放列表平台：用户设置的图标（已缓存到本地时）。缓存键含文件路径，图标变更后自动失效。
+    static func playlistIcon(for liveType: LiveType) -> UIImage? {
+        guard let instance = PlaylistInstanceStore.shared.instance(for: liveType),
+              let fileURL = PlaylistIconCache.cachedFileURL(for: instance) else {
+            return nil
+        }
+        let cacheKey = "playlist|\(fileURL.path)"
+        if let cached = listImageCache[cacheKey] {
+            return cached
+        }
+        let image = UIImage(contentsOfFile: fileURL.path)
+        if let image {
+            listImageCache[cacheKey] = image
+        }
+        return image
+    }
+
     static func tabImage(for liveType: LiveType) -> UIImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType).map(normalizedTabImage)
+        }
         let cacheKey = liveType.rawValue
         if let cached = tabImageCache[cacheKey] {
             return cached
@@ -52,6 +72,9 @@ enum PlatformIconProvider {
     }
 
     static func configCardImage(for liveType: LiveType, isDarkMode: Bool) -> UIImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType)
+        }
         let cacheKey = "\(liveType.rawValue)_\(isDarkMode)"
         if let cached = cardImageCache[cacheKey] {
             return cached
@@ -78,6 +101,9 @@ enum PlatformIconProvider {
     }
 
     static func pluginManagementImage(for liveType: LiveType) -> UIImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType)
+        }
         let cacheKey = liveType.rawValue
         if let cached = listImageCache[cacheKey] {
             return cached

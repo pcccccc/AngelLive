@@ -101,6 +101,11 @@ public final class PlatformCredentialSyncService: ObservableObject {
 
     // MARK: - Private
 
+    /// 设置项原值，供非主 actor 的同步服务读取（播放列表地址与凭据同属敏感数据，共用此开关）。
+    nonisolated public static var iCloudSyncSettingEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Keys.iCloudSyncEnabled)
+    }
+
     private enum Keys {
         static let iCloudSyncEnabled = "PlatformCredentialSyncService.iCloudSyncEnabled"
         static let lastICloudSyncTime = "PlatformCredentialSyncService.lastICloudSyncTime"

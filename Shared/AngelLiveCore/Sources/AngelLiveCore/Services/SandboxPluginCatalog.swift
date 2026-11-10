@@ -108,6 +108,10 @@ public enum SandboxPluginCatalog {
         let idFilter = installedPluginIds.map(Set.init)
 
         return LiveParseJSPlatformManager.availablePlatforms.filter { platform in
+            // 播放列表平台由宿主提供，不对应沙盒插件，也不受已安装插件 ID 过滤。
+            if PlaylistPlatformIdentity.isPlaylist(platform.pluginId) {
+                return true
+            }
             if let idFilter, !idFilter.contains(platform.pluginId) {
                 return false
             }

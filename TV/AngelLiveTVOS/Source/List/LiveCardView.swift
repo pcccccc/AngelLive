@@ -83,6 +83,9 @@ struct LiveCardView: View {
             enterDetailRoom()
         } label: {
             ZStack(alignment: .topLeading) {
+                if PlaylistPlatformIdentity.isPlaylist(currentLiveModel.liveType) {
+                    playlistLogoCover(currentLiveModel)
+                } else {
                 ZStack(alignment: .bottom) {
                     // 背景模糊层
                     KFImage(URL(string: currentLiveModel.roomCover))
@@ -123,6 +126,7 @@ struct LiveCardView: View {
                     }
                 }
                 .frame(width: cardWidth, height: coverHeight)
+                }
 
                 // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
 //                // 平台和直播状态标签（非直播列表页面显示）
@@ -164,7 +168,20 @@ struct LiveCardView: View {
         HStack(spacing: 12) {
             // 主播头像
             Group {
-                if !currentLiveModel.userHeadImg.isEmpty,
+                if PlaylistPlatformIdentity.isPlaylist(currentLiveModel.liveType) {
+                    ZStack {
+                        Circle().fill(.quaternary)
+                        if let avatarURL = URL(string: currentLiveModel.userHeadImg), !currentLiveModel.userHeadImg.isEmpty {
+                            KFImage(avatarURL)
+                                .placeholder { playlistMonogram(currentLiveModel, size: 18) }
+                                .resizable()
+                                .scaledToFit()
+                                .padding(7)
+                        } else {
+                            playlistMonogram(currentLiveModel, size: 18)
+                        }
+                    }
+                } else if !currentLiveModel.userHeadImg.isEmpty,
                    let avatarURL = URL(string: currentLiveModel.userHeadImg) {
                     KFImage(avatarURL)
                         .placeholder { avatarFallback }
@@ -182,6 +199,16 @@ struct LiveCardView: View {
             )
 
             VStack(alignment: .leading, spacing: 4) {
+                // 播放列表频道：频道名为主标题，分组为副标题。
+                if PlaylistPlatformIdentity.isPlaylist(currentLiveModel.liveType) {
+                    Text(currentLiveModel.roomTitle.orDash)
+                        .font(.system(size: 20, weight: .semibold))
+                        .lineLimit(1)
+                    Text(currentLiveModel.userName.orDash)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
                 Text(currentLiveModel.userName.orDash)
                     .font(.system(size: 20, weight: .semibold))
                     .lineLimit(1)
@@ -195,12 +222,40 @@ struct LiveCardView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                }
             }
             Spacer()
         }
         .padding(.top, isFocused ? 16 : 8)
         .scaleEffect(isFocused ? 1.05 : 1.0, anchor: .leading)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isFocused)
+    }
+
+    // MARK: - 播放列表台标
+
+    /// 播放列表（IPTV）频道没有直播截图：台标按比例完整显示在中性底色上，无台标时显示首字。
+    private func playlistLogoCover(_ model: LiveModel) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(.quaternary)
+            if let url = URL(string: model.roomCover), !model.roomCover.isEmpty {
+                KFImage(url)
+                    .placeholder { playlistMonogram(model, size: coverHeight * 0.4) }
+                    .resizable()
+                    .scaledToFit()
+                    .padding(coverHeight * 0.18)
+            } else {
+                playlistMonogram(model, size: coverHeight * 0.4)
+            }
+        }
+        .frame(width: cardWidth, height: coverHeight)
+    }
+
+    private func playlistMonogram(_ model: LiveModel, size: CGFloat) -> some View {
+        Text(PlaylistIconCache.monogram(for: model.roomTitle))
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
     }
 
     // MARK: - 子视图组件

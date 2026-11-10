@@ -56,6 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
         MediaTransformSupport.registerHostCapability()
         DualStreamSupport.registerHostCapability()
+        Task { await PlaylistSyncService.shared.start() }
         BugsnagBootstrap.start(platform: .macOS)
         KSOptions.logLevel = .error
         KSOptions.hudLog = false

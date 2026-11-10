@@ -35,6 +35,10 @@ struct PlatformView: View {
             await appViewModel.pluginAvailability.checkAvailability()
             platformViewModel.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
         }
+        // 播放列表增删改(含 iCloud 同步带来的变更)后重建平台网格。
+        .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
+            Task { @MainActor in platformViewModel.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds) }
+        }
         .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedPluginIds in
             platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
             if installedPluginIds.isEmpty {
@@ -56,7 +60,14 @@ struct PlatformView: View {
                             Image("platform-bg")
                                 .resizable()
                                 .frame(width: 370, height: 222)
-                            if let bigImage = TVPlatformIconProvider.bigCardImage(
+                            if PlaylistPlatformIdentity.isPlaylist(platform.liveType) {
+                                // 播放列表平台没有插件字标图：显示用户图标（或首字）与名称。
+                                // 焦点态由下方描述浮层接管；文字内容模糊后会与描述重叠，故直接淡出。
+                                TVPlaylistPlatformCardContent(platform: platform)
+                                    .frame(width: 370, height: 222)
+                                    .opacity(focusIndex == index ? 0 : 1)
+                                    .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
+                            } else if let bigImage = TVPlatformIconProvider.bigCardImage(
                                 for: platform,
                                 isDarkMode: colorScheme == .dark
                             ) {
@@ -84,6 +95,7 @@ struct PlatformView: View {
                                         .padding(.top, 50)
 
                                 }
+                                .frame(width: 370, height: 222)
                                 .background(Color("sl-background", bundle: nil))
                                 .opacity(focusIndex == index ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
@@ -104,6 +116,8 @@ struct PlatformView: View {
                                         .padding(.top, 50)
 
                                 }
+                                // 无小图的平台(如播放列表)也铺满卡片，与其他平台焦点态一致。
+                                .frame(width: 370, height: 222)
                                 .background(.thinMaterial)
                                 .opacity(focusIndex == index ? 1 : 0)
                                 .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
@@ -147,4 +161,34 @@ extension AnyTransition {
 
 #Preview {
     PlatformView()
+}
+
+struct TVPlaylistPlatformCardContent: View {
+    let platform: Platformdescription
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Group {
+                if let image = TVPlatformIconProvider.playlistIcon(for: platform.liveType) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    Text(PlaylistIconCache.monogram(for: platform.title))
+                        .font(.system(size: 44, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.quaternary)
+                }
+            }
+            .frame(width: 88, height: 88)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityHidden(true)
+
+            Text(platform.title)
+                .font(.headline)
+                .lineLimit(1)
+                .padding(.horizontal, 20)
+        }
+    }
 }

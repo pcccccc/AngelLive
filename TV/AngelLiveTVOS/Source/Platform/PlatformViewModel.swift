@@ -73,8 +73,20 @@ enum TVPlatformIconProvider {
     private static let installedTabIconPrefix = "assets/live_card_"
     private static let imageCache = NSCache<NSString, UIImage>()
 
+    /// 播放列表平台：用户设置并已缓存到本地的图标。
+    static func playlistIcon(for liveType: LiveType) -> UIImage? {
+        guard let instance = PlaylistInstanceStore.shared.instance(for: liveType),
+              let fileURL = PlaylistIconCache.cachedFileURL(for: instance) else {
+            return nil
+        }
+        return UIImage(contentsOfFile: fileURL.path)
+    }
+
     /// 获取平台 tab 尺寸图标（用于账号管理等列表）
     static func tabImage(for liveType: LiveType) -> UIImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType)
+        }
         guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return nil
         }

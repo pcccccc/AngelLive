@@ -16,7 +16,21 @@ enum MacPlatformIconProvider {
         tabIconPrefix
     ]
 
+    /// 播放列表平台：用户设置并已缓存到本地的图标。
+    static func playlistIcon(for liveType: LiveType, logicalSize: NSSize? = nil) -> NSImage? {
+        guard let instance = PlaylistInstanceStore.shared.instance(for: liveType),
+              let fileURL = PlaylistIconCache.cachedFileURL(for: instance),
+              let image = NSImage(contentsOf: fileURL) else {
+            return nil
+        }
+        if let logicalSize { image.size = logicalSize }
+        return image
+    }
+
     static func tabImage(for liveType: LiveType) -> NSImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType, logicalSize: NSSize(width: 16, height: 16))
+        }
         // 直接按沙盒已安装插件目录匹配 liveType -> pluginId，避免依赖内置资源映射。
         if let pluginId = resolveInstalledPluginId(for: liveType),
            let image = loadInstalledIcon(
@@ -43,6 +57,9 @@ enum MacPlatformIconProvider {
     /// 这样由 SwiftUI 按管理列表的实际尺寸缩放，避免把 sidebar 用的尺寸
     /// 带进 36pt 的插件行。低分辨率资源仍按原始数据显示，不人为锐化或放大。
     static func pluginManagementImage(for liveType: LiveType) -> NSImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType)
+        }
         if let pluginId = resolveInstalledPluginId(for: liveType),
            let image = loadInstalledIcon(
                pluginId: pluginId,

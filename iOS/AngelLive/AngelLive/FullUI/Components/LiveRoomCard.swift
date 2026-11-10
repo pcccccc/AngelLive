@@ -347,8 +347,50 @@ struct LiveRoomCard: View {
 //        }
 //    }
 
+    /// 播放列表（IPTV）频道没有直播截图，封面与头像位都展示台标。
+    private var isPlaylistRoom: Bool {
+        PlaylistPlatformIdentity.isPlaylist(room.liveType)
+    }
+
+    /// 台标封面：中性底色上按比例完整显示台标，不裁切；无台标时显示频道名首字。
+    private var logoCoverView: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Rectangle()
+                    .fill(AppConstants.Colors.secondaryBackground)
+                if let url = coverURL {
+                    KFImage(url)
+                        .setProcessor(DownsamplingImageProcessor(size: coverDownsampleSize(for: geometry.size)))
+                        .placeholder { logoMonogram(size: geometry.size.height * 0.4) }
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding(geometry.size.height * 0.18)
+                } else {
+                    logoMonogram(size: geometry.size.height * 0.4)
+                }
+            }
+        }
+        .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+    }
+
+    private func logoMonogram(size: CGFloat) -> some View {
+        Text(PlaylistIconCache.monogram(for: room.roomTitle))
+            .font(.system(size: max(size, 12), weight: .semibold))
+            .foregroundStyle(AppConstants.Colors.secondaryText)
+            .accessibilityHidden(true)
+    }
+
     /// 封面图容器：有 URL 时双层 KFImage（模糊背景 + 清晰前景，不变形），失败或无 URL 时用本地占位
+    @ViewBuilder
     private var coverView: some View {
+        if isPlaylistRoom {
+            logoCoverView
+        } else {
+            standardCoverView
+        }
+    }
+
+    private var standardCoverView: some View {
         GeometryReader { geometry in
             let targetSize = coverDownsampleSize(for: geometry.size)
 
@@ -396,10 +438,24 @@ struct LiveRoomCard: View {
         )
     }
 
-    /// 头像：无效 URL 时展示占位
+    /// 头像：无效 URL 时展示占位；播放列表频道显示台标。
     private var avatarView: some View {
         Group {
-            if let url = avatarURL {
+            if isPlaylistRoom {
+                ZStack {
+                    Circle().fill(AppConstants.Colors.secondaryBackground)
+                    if let url = avatarURL {
+                        KFImage(url)
+                            .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 48, height: 48)))
+                            .placeholder { logoMonogram(size: 13) }
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .padding(5)
+                    } else {
+                        logoMonogram(size: 13)
+                    }
+                }
+            } else if let url = avatarURL {
                 KFImage(url)
                     .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 48, height: 48)))
                     .placeholder { avatarPlaceholder }

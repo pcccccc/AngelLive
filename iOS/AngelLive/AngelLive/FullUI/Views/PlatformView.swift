@@ -103,6 +103,8 @@ struct PlatformCard: View {
     let platform: Platformdescription
     @Environment(\.colorScheme) private var colorScheme
 
+    private var isPlaylist: Bool { PlaylistPlatformIdentity.isPlaylist(platform.liveType) }
+
     var body: some View {
         ZStack {
             Image("platform-bg")
@@ -111,8 +113,10 @@ struct PlatformCard: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
 
-            VStack(spacing: AppConstants.Spacing.md) {
-                if let image = PlatformIconProvider.configCardImage(
+            VStack(spacing: isPlaylist ? AppConstants.Spacing.sm : AppConstants.Spacing.md) {
+                if isPlaylist {
+                    playlistContent
+                } else if let image = PlatformIconProvider.configCardImage(
                     for: platform.liveType,
                     isDarkMode: colorScheme == .dark
                 ) {
@@ -126,7 +130,7 @@ struct PlatformCard: View {
                         .foregroundStyle(AppConstants.Colors.primaryText)
                 }
             }
-            .padding(AppConstants.Spacing.lg)
+            .padding(isPlaylist ? AppConstants.Spacing.sm : AppConstants.Spacing.lg)
         }
         .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
         .shadow(
@@ -136,6 +140,34 @@ struct PlatformCard: View {
             y: AppConstants.Shadow.lg.y
         )
         .contentShape(Rectangle())
+    }
+
+    /// 播放列表平台没有插件提供的字标图，显示用户设置的图标（或首字）与平台名称。
+    @ViewBuilder
+    private var playlistContent: some View {
+        Group {
+            if let image = PlatformIconProvider.configCardImage(for: platform.liveType, isDarkMode: colorScheme == .dark) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                Text(PlaylistIconCache.monogram(for: platform.title))
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(AppConstants.Colors.secondaryBackground)
+            }
+        }
+        // 尺寸按卡片可用高度收敛(卡片高 = 宽 × 0.6),不撑开格子。
+        .frame(width: 40, height: 40)
+        .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.sm, style: .continuous))
+        .accessibilityHidden(true)
+
+        Text(platform.title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(AppConstants.Colors.primaryText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
     }
 }
 

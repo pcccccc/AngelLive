@@ -55,6 +55,13 @@ public enum RemotePluginCatalogActionState: Equatable, Sendable {
 }
 
 /// 单个订阅源的健康状态
+public enum PluginSourceInputResult: Equatable, Sendable {
+    /// 作为插件源添加（或重新加载）的地址。
+    case sources([String])
+    /// 地址内容是 m3u 播放列表。
+    case playlist(url: String)
+}
+
 public enum PluginSourceHealth: Equatable, Sendable {
     /// 刚添加,还没拉取过索引
     case unknown
@@ -231,14 +238,27 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// 返回实际添加或重新加载成功的 URL 列表。
     @MainActor
     public func addSourceFromInput(_ input: String) async -> [String] {
-        await validateAndLoadSource(input, allowDirectInput: true)
+        switch await validateAndLoadSource(input, allowDirectInput: true, detectPlaylist: false) {
+        case .sources(let urls): urls
+        case .playlist: []
+        }
+    }
+
+    /// 与 `addSourceFromInput` 相同，但地址内容是 m3u 播放列表时不当作插件源保存，
+    /// 而是返回 `.playlist`，交由调用方走添加播放列表流程。
+    @MainActor
+    public func addSourceOrDetectPlaylist(_ input: String) async -> PluginSourceInputResult {
+        await validateAndLoadSource(input, allowDirectInput: true, detectPlaylist: true)
     }
 
     /// 仅处理 key 形式的订阅源输入。
     /// 若输入不是 key，则返回空数组，交由调用方按普通视频链接处理。
     @MainActor
     public func addSourceWithKeyResolution(_ input: String) async -> [String] {
-        await validateAndLoadSource(input, allowDirectInput: false)
+        switch await validateAndLoadSource(input, allowDirectInput: false, detectPlaylist: false) {
+        case .sources(let urls): urls
+        case .playlist: []
+        }
     }
 
     /// 乐观添加订阅源:
@@ -246,9 +266,13 @@ public final class PluginSourceManager: @unchecked Sendable {
     ///   失败时把该源标记为 `.failed`,用户可在列表里重试或删除 —— 临时不可达的源也能先存上。
     /// - 当 `allowDirectInput == false` 且输入不是 key 时仍返回空,保留"普通视频链接走书签兜底"的判定。
     @MainActor
-    private func validateAndLoadSource(_ input: String, allowDirectInput: Bool) async -> [String] {
+    private func validateAndLoadSource(
+        _ input: String,
+        allowDirectInput: Bool,
+        detectPlaylist: Bool
+    ) async -> PluginSourceInputResult {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
+        guard !trimmed.isEmpty else { return .sources([]) }
 
         errorMessage = nil
         await PluginSourceKeyService.shared.fetchKeys()
@@ -256,14 +280,14 @@ public final class PluginSourceManager: @unchecked Sendable {
         let resolvedCandidates = await PluginSourceKeyService.shared.resolveKey(trimmed)
         // 非 key 且不允许直接输入(用于区分订阅源 vs 视频书签):交回调用方按视频处理。
         if resolvedCandidates == nil, !allowDirectInput {
-            return []
+            return .sources([])
         }
 
         // key 解析出的多个候选是同一索引的镜像源,只持久化其中一个;直接输入则就是这一个 URL。
         let candidates = (resolvedCandidates ?? [trimmed]).filter { URL(string: $0) != nil }
         guard let primary = candidates.first else {
             errorMessage = "无效的 URL"
-            return []
+            return .sources([])
         }
 
         isFetchingIndex = true
@@ -279,7 +303,12 @@ public final class PluginSourceManager: @unchecked Sendable {
                 let index = try await fetchIndexWithTimeout(url: url)
                 persistSourceIfNeeded(candidate)
                 applyFetchedIndex(index, sourceURL: candidate)
-                return [candidate]
+                return .sources([candidate])
+            } catch LiveParsePluginIndexFetchError.nonJSONResponse(let diagnostics)
+                        where detectPlaylist && diagnostics.isPlaylist {
+                // m3u 播放列表不是插件源：不持久化、不标记异常。
+                errorMessage = nil
+                return .playlist(url: candidate)
             } catch {
                 lastError = error
                 Logger.warning("Source validation failed for \(candidate): \(Self.detailedErrorDescription(error))", category: .plugin)
@@ -293,7 +322,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         } else {
             sourceHealth[primary] = .failed("暂时无法拉取插件索引")
         }
-        return [primary]
+        return .sources([primary])
     }
 
     @MainActor

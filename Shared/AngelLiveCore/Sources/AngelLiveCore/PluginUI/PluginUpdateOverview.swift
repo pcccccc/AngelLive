@@ -108,7 +108,7 @@ public struct PluginUpdateOverview: View {
                 .font(.headline)
             }
 
-            Text("已安装 \(installedPluginIds.count) 个 · \(manager.sourceURLs.count) 个订阅源", bundle: Bundle.main)
+            Text("已安装 \(installedPluginIds.count) 个 · \(manager.sourceURLs.count + PlaylistInstanceStore.shared.all().count) 个订阅源", bundle: Bundle.main)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

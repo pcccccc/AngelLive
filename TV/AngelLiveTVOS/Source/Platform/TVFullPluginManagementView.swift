@@ -369,6 +369,9 @@ private enum TVFullPluginFocus: Hashable {
     case detailUninstall
     case detailBack
     case source(String)
+    case playlist(UUID)
+    case playlistName
+    case playlistIcon
     case sourceAdd
     case sourceRefresh
     case sourceDelete
@@ -763,6 +766,9 @@ private struct TVFullPluginSourcesView: View {
     @State private var showAddSource = false
     @State private var isRefreshingAfterAdd = false
     @State private var focusToRestore: TVFullPluginFocus?
+    @State private var playlists = PlaylistInstanceStore.shared.all()
+    @State private var playlistStatuses: [UUID: PlaylistRefreshStatus] = [:]
+    @State private var selectedPlaylist: PlaylistInstance?
     @FocusState private var focusedAction: TVFullPluginFocus?
 
     var body: some View {
@@ -787,6 +793,24 @@ private struct TVFullPluginSourcesView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
         }
+        .fullScreenCover(item: $selectedPlaylist, onDismiss: restoreSourceFocus) { instance in
+            NavigationStack {
+                TVPlaylistDetailView(instance: instance, onClose: { selectedPlaylist = nil })
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
+            .environment(appViewModel)
+        }
+        .task(id: playlists.map(\.id)) {
+            var result: [UUID: PlaylistRefreshStatus] = [:]
+            for instance in playlists {
+                result[instance.id] = await PlaylistPlatformService.shared.status(instanceID: instance.id)
+            }
+            playlistStatuses = result
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
+            playlists = PlaylistInstanceStore.shared.all()
+        }
         .fullScreenCover(isPresented: $showAddSource, onDismiss: restoreSourceFocus) {
             NavigationStack {
                 TVFullPluginSourceInputView(onAdded: refreshAfterAddingSource)
@@ -801,6 +825,8 @@ private struct TVFullPluginSourcesView: View {
         let target = focusToRestore
         focusToRestore = nil
         if case .source(let url) = target, manager.sourceURLs.contains(url) {
+            focusedAction = target
+        } else if case .playlist(let id) = target, playlists.contains(where: { $0.id == id }) {
             focusedAction = target
         } else {
             // Adding a source refreshes the combined catalog. Keep an enabled
@@ -833,13 +859,26 @@ private struct TVFullPluginSourcesView: View {
             )
             .focused($focusedAction, equals: .sourceAdd)
 
-            TVFullPluginSectionHeader(title: "已添加", count: manager.sourceURLs.count)
+            TVFullPluginSectionHeader(title: "已添加", count: manager.sourceURLs.count + playlists.count)
 
-            if manager.sourceURLs.isEmpty {
+            if manager.sourceURLs.isEmpty, playlists.isEmpty {
                 Text("尚未添加订阅源")
                     .font(.body)
                     .foregroundStyle(.secondary)
             } else {
+                // m3u 播放列表与插件订阅源同列展示。
+                ForEach(playlists) { instance in
+                    TVFullOperationRow(
+                        title: instance.name,
+                        symbol: "chevron.right",
+                        trailing: playlistStatus(for: instance),
+                        action: {
+                            focusToRestore = focusedAction
+                            selectedPlaylist = instance
+                        }
+                    )
+                    .focused($focusedAction, equals: .playlist(instance.id))
+                }
                 ForEach(manager.sourceURLs, id: \.self) { url in
                     TVFullOperationRow(
                         title: sourceHost(for: url),
@@ -868,6 +907,13 @@ private struct TVFullPluginSourcesView: View {
 
     private func sourceHost(for url: String) -> String {
         URL(string: url)?.host() ?? url
+    }
+
+    private func playlistStatus(for instance: PlaylistInstance) -> String {
+        let status = playlistStatuses[instance.id]
+        if status?.lastErrorMessage != nil, status?.fetchedAt == nil { return "m3u · 异常" }
+        if let count = status?.channelCount { return "m3u · \(count) 个频道" }
+        return "m3u"
     }
 
     private func sourceStatus(for url: String) -> String {
@@ -906,7 +952,7 @@ private struct TVFullSourceSummary: View {
                 .accessibilityHidden(true)
             Text("订阅源")
                 .font(.title2)
-            Text("添加和管理插件目录，查看订阅源的连接状态。")
+            Text("添加和管理插件目录与 m3u 播放列表，查看订阅源的连接状态。")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1035,6 +1081,10 @@ private struct TVFullPluginSourceInputView: View {
     @State private var inputURL = ""
     @State private var isProcessing = false
     @State private var localErrorMessage: String?
+    @State private var playlistPreview: PlaylistPreview?
+    @State private var playlistURL: String?
+    @State private var playlistName = ""
+    @State private var playlistIconURL = ""
     @FocusState private var focusedField: TVFullPluginFocus?
 
     private var trimmedURL: String {
@@ -1054,10 +1104,16 @@ private struct TVFullPluginSourceInputView: View {
             guard let event = appViewModel.remoteInputService.lastEvent else { return }
             switch event.field {
             case .url:
-                inputURL = event.value
+                if playlistURL != nil {
+                    playlistIconURL = event.value
+                } else {
+                    inputURL = event.value
+                }
             case .config:
                 if let url = event.url { inputURL = url }
-            case .title, .search, .cookie:
+            case .title:
+                if playlistURL != nil { playlistName = event.value }
+            case .search, .cookie:
                 break
             }
         }
@@ -1075,10 +1131,106 @@ private struct TVFullPluginSourceInputView: View {
 
     @ViewBuilder
     private var inputColumn: some View {
+        if let playlistURL {
+            playlistColumn(sourceURL: playlistURL)
+        } else {
+            sourceColumn
+        }
+    }
+
+    /// 地址内容是 m3u 播放列表：填写平台名称（必填）与图标地址(可选)后添加。
+    private func playlistColumn(sourceURL: String) -> some View {
+        let trimmedName = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return VStack(alignment: .leading, spacing: 15) {
+            TVFullPluginSectionHeader(title: "添加播放列表")
+            if let preview = playlistPreview {
+                // 与分区标题同一内容边距。
+                Text("\(preview.channelCount) 个频道 · \(preview.groupCount) 个分组")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 30)
+            }
+            // 两个输入框固定同一字号与宽度，避免随内容长度各自缩放。
+            TextField("平台名称(必填)", text: $playlistName)
+                .font(.body)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("平台名称")
+                .focused($focusedField, equals: .playlistName)
+                .onSubmit { focusedField = .playlistIcon }
+            TextField("图标地址(可选)", text: $playlistIconURL)
+                .font(.body)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel("图标地址(可选)")
+                .focused($focusedField, equals: .playlistIcon)
+                .onSubmit { focusedField = .inputAdd }
+
+            if let localErrorMessage {
+                Text(localErrorMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            TVFullOperationRow(
+                title: isProcessing ? "添加中…" : "添加",
+                symbol: "plus",
+                disabled: trimmedName.isEmpty || isProcessing,
+                action: { addPlaylist(sourceURL: sourceURL) }
+            )
+            .focused($focusedField, equals: .inputAdd)
+
+            TVFullOperationRow(
+                title: "取消",
+                symbol: "chevron.left",
+                action: { dismiss() }
+            )
+            .focused($focusedField, equals: .inputCancel)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .focusSection()
+    }
+
+    private func addPlaylist(sourceURL: String) {
+        guard !isProcessing else { return }
+        localErrorMessage = nil
+        isProcessing = true
+        Task {
+            defer { isProcessing = false }
+            do {
+                let preview: PlaylistPreview
+                if let playlistPreview {
+                    preview = playlistPreview
+                } else {
+                    preview = try await PlaylistPlatformService.shared.preview(sourceURL: sourceURL)
+                }
+                let reserved = Set(LiveParseJSPlatformManager.availablePlatforms
+                    .filter { !PlaylistPlatformIdentity.isPlaylist($0.pluginId) }
+                    .map(\.displayName))
+                let icon = playlistIconURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                let instance = try PlaylistInstanceStore.shared.add(
+                    name: playlistName,
+                    iconURL: icon,
+                    sourceURL: sourceURL,
+                    reservedNames: reserved
+                )
+                await PlaylistPlatformService.shared.seed(preview, for: instance)
+                if !icon.isEmpty { await PlaylistIconCache.fetch(iconURL: icon) }
+                await appViewModel.pluginAvailability.checkAvailability()
+                onAdded()
+                dismiss()
+            } catch {
+                localErrorMessage = PlaylistPlatformService.userMessage(for: error)
+            }
+        }
+    }
+
+    private var sourceColumn: some View {
         VStack(alignment: .leading, spacing: 15) {
-            TVFullPluginSectionHeader(title: "订阅地址或兑换码")
-            TextField("输入订阅地址或兑换码", text: $inputURL)
-                .accessibilityLabel("订阅地址或兑换码")
+            TVFullPluginSectionHeader(title: "订阅地址、兑换码或 m3u 地址")
+            TextField("输入订阅地址、兑换码或 m3u 地址", text: $inputURL)
+                .accessibilityLabel("订阅地址、兑换码或 m3u 地址")
                 .focused($focusedField, equals: .inputField)
                 .onSubmit(handleAdd)
 
@@ -1149,7 +1301,17 @@ private struct TVFullPluginSourceInputView: View {
         localErrorMessage = nil
         isProcessing = true
         Task {
-            let addedURLs = await appViewModel.pluginSourceManager.addSourceFromInput(input)
+            let addedURLs: [String]
+            switch await appViewModel.pluginSourceManager.addSourceOrDetectPlaylist(input) {
+            case .playlist(let url):
+                playlistPreview = try? await PlaylistPlatformService.shared.preview(sourceURL: url)
+                isProcessing = false
+                playlistURL = url
+                focusedField = .playlistName
+                return
+            case .sources(let urls):
+                addedURLs = urls
+            }
             isProcessing = false
             if !addedURLs.isEmpty {
                 inputURL = ""
@@ -1158,6 +1320,105 @@ private struct TVFullPluginSourceInputView: View {
             } else if appViewModel.pluginSourceManager.errorMessage == nil {
                 localErrorMessage = "无法解析为订阅源，请确认地址或兑换码有效。"
             }
+        }
+    }
+}
+
+private struct TVPlaylistDetailView: View {
+    let instance: PlaylistInstance
+    let onClose: () -> Void
+
+    @Environment(AppState.self) private var appViewModel
+    @State private var status: PlaylistRefreshStatus?
+    @State private var isRefreshing = false
+    @State private var message: String?
+    @State private var showDeleteConfirmation = false
+    @FocusState private var focusedAction: TVFullPluginFocus?
+
+    var body: some View {
+        TVFullDualColumnLayout {
+            VStack(alignment: .leading, spacing: 24) {
+                Image(systemName: "list.and.film")
+                    .font(.system(size: 72))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text(instance.name)
+                    .font(.title2)
+                Text(instance.sourceURL)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        } right: {
+            VStack(alignment: .leading, spacing: 15) {
+                TVFullOperationRow(
+                    title: isRefreshing ? "正在刷新…" : "刷新播放列表",
+                    symbol: "arrow.clockwise",
+                    disabled: isRefreshing,
+                    action: refresh
+                )
+                .focused($focusedAction, equals: .sourceRefresh)
+
+                TVFullOperationRow(
+                    title: "删除播放列表",
+                    symbol: "trash",
+                    disabled: isRefreshing,
+                    action: { showDeleteConfirmation = true }
+                )
+                .focused($focusedAction, equals: .sourceDelete)
+
+                TVFullOperationRow(title: "返回", symbol: "chevron.left", action: onClose)
+                    .focused($focusedAction, equals: .sourceBack)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .focusSection()
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .onExitCommand(perform: onClose)
+        .defaultFocus($focusedAction, .sourceRefresh)
+        .task { status = await PlaylistPlatformService.shared.status(instanceID: instance.id) }
+        .confirmationDialog("删除播放列表", isPresented: $showDeleteConfirmation) {
+            Button("删除", role: .destructive) {
+                Task {
+                    try? PlaylistInstanceStore.shared.remove(id: instance.id)
+                    await PlaylistPlatformService.shared.removeCache(instanceID: instance.id)
+                    await appViewModel.pluginAvailability.checkAvailability()
+                    onClose()
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后，该平台下的收藏和观看历史将无法播放。")
+        }
+    }
+
+    private var summary: String {
+        if let message { return message }
+        if let error = status?.lastErrorMessage { return error }
+        guard let count = status?.channelCount else { return "m3u 播放列表" }
+        var text = "m3u 播放列表 · \(count) 个频道"
+        if let fetchedAt = status?.fetchedAt {
+            text += " · " + PlaylistIconCache.updatedText(fetchedAt)
+        }
+        return text
+    }
+
+    private func refresh() {
+        isRefreshing = true
+        Task {
+            defer { isRefreshing = false }
+            do {
+                _ = try await PlaylistPlatformService.shared.refresh(instanceID: instance.id)
+                message = nil
+            } catch {
+                message = PlaylistPlatformService.userMessage(for: error)
+            }
+            status = await PlaylistPlatformService.shared.status(instanceID: instance.id)
         }
     }
 }
