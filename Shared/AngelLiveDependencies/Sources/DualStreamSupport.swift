@@ -20,12 +20,22 @@ public struct DualStreamAudioConfiguration: Sendable {
     public let userAgent: String
     public let headers: [String: String]
     public let decryption: LivePlaybackDecryption?
+    /// Audio uses exactly the video's request (UA and headers). Only then may both files be
+    /// opened through one combined manifest, which has a single request context.
+    public let sharesVideoRequest: Bool
 
-    public init(url: URL, userAgent: String, headers: [String: String], decryption: LivePlaybackDecryption?) {
+    public init(
+        url: URL,
+        userAgent: String,
+        headers: [String: String],
+        decryption: LivePlaybackDecryption?,
+        sharesVideoRequest: Bool = false
+    ) {
         self.url = url
         self.userAgent = userAgent
         self.headers = headers
         self.decryption = decryption
+        self.sharesVideoRequest = sharesVideoRequest
     }
 
     @MainActor func options(from source: PlayerOptions) -> PlayerOptions {

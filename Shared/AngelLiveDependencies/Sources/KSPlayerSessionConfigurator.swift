@@ -33,9 +33,14 @@ public enum KSPlayerSessionConfigurator {
             let audioRequest = RoomPlaybackResolver.audioRequestOptions(
                 for: quality, fallbackUserAgent: fallbackUserAgent
             )
+            let videoRequest = RoomPlaybackResolver.requestOptions(
+                for: quality, fallbackUserAgent: fallbackUserAgent
+            )
             (options as? PlayerOptions)?.dualStreamAudio = DualStreamAudioConfiguration(
                 url: audioURL, userAgent: audioRequest.userAgent,
-                headers: audioRequest.headers, decryption: quality.decryption
+                headers: audioRequest.headers, decryption: quality.decryption,
+                sharesVideoRequest: mediaTransform == nil
+                    && sameRequest(videoRequest, audioRequest)
             )
             // Plain KSOptions is rejected by this player's explicit options error.
             playerTypes = [DualStreamPlayer.self]
@@ -84,6 +89,19 @@ public enum KSPlayerSessionConfigurator {
             playerTypes: playerTypes,
             effectiveIsLive: effectiveIsLive
         )
+    }
+
+    /// The protocol forbids audio inheriting video credentials, so a combined input is used
+    /// only when both requests are already identical (header names compared case-insensitively).
+    static func sameRequest(_ video: RoomPlaybackRequestOptions, _ audio: RoomPlaybackRequestOptions) -> Bool {
+        func normalized(_ headers: [String: String]) -> [String: String] {
+            Dictionary(
+                headers.filter { $0.key.caseInsensitiveCompare("User-Agent") != .orderedSame }
+                    .map { ($0.key.lowercased(), $0.value) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+        return video.userAgent == audio.userAgent && normalized(video.headers) == normalized(audio.headers)
     }
 
     @MainActor

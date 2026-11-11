@@ -11,14 +11,12 @@ private let useVLC = ProcessInfo.processInfo.environment["USE_VLC"] == "1"
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, targets: [Target.Dependency])? {
     guard !useVLC else { return nil }
 
-    // MPVPlayer 与 KSPlayer 同包、共用 FFmpegKit,可共存:仅独立音频资源使用 mpv 内核。
     return (
         .package(url: "https://github.com/TracyPlayer/KSPlayer", from: "5.6.2"),
         [
             "KSPlayer",
             // 5.6 起 SwiftUI 播放器(KSVideoPlayer 等)拆到 KSPlayerUI。
             .product(name: "KSPlayerUI", package: "KSPlayer"),
-            .product(name: "MPVPlayer", package: "KSPlayer"),
         ]
     )
 }

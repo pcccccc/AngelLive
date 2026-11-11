@@ -24,6 +24,80 @@ struct DualStreamPlayerTests {
         return (player, video, audio, probe)
     }
 
+    private func combinedSetup(decryption: LivePlaybackDecryption? = nil)
+        -> (DualStreamPlayer, [(URL, KSOptions)], () -> [FakePlayer], FakePlayer, Probe) {
+        var created: [FakePlayer] = []
+        var requests: [(URL, KSOptions)] = []
+        let audio = FakePlayer()
+        let options = PlayerOptions()
+        options.formatContextOptions["decryption_key"] = decryption?.key
+        options.dualStreamAudio = DualStreamAudioConfiguration(
+            url: URL(string: "https://media.example.invalid/audio?sig=a&b=1")!, userAgent: "agent", headers: [:],
+            decryption: decryption, sharesVideoRequest: true
+        )
+        let player = DualStreamPlayer(
+            url: URL(string: "https://media.example.invalid/video")!, options: options,
+            primaryFactory: { url, options in
+                requests.append((url, options))
+                let fake = FakePlayer()
+                created.append(fake)
+                return fake
+            },
+            audioFactory: { _, _ in audio }
+        )
+        let probe = Probe()
+        player.delegate = probe
+        return (player, requests, { created }, audio, probe)
+    }
+
+    @Test("A shared request opens video and audio through one combined manifest")
+    func combinedInput() throws {
+        let key = try LivePlaybackDecryption(method: .cenc, key: "00112233445566778899aabbccddeeff")
+        let (player, requests, _, audio, _) = combinedSetup(decryption: key)
+        #expect(player.usesCombinedInput)
+        let (url, options) = try #require(requests.first)
+        #expect(url.isFileURL && url.pathExtension == "mpd")
+        let manifest = try String(contentsOf: url, encoding: .utf8)
+        #expect(manifest.contains("https://media.example.invalid/video"))
+        #expect(manifest.contains("audio?sig=a&amp;b=1"))
+        #expect(options.formatContextOptions["cenc_decryption_key"] as? String == key.key)
+        #expect(options.formatContextOptions["decryption_key"] == nil)
+        #expect((options.formatContextOptions["protocol_whitelist"] as? String)?.contains("http") == true)
+        // No follower player: a single demuxer owns the audio clock.
+        player.prepareToPlay(); player.play()
+        #expect(audio.seeks.isEmpty)
+        player.isMuted = true
+        player.playbackVolume = 0.3
+        #expect(player.tracks(mediaType: .audio).isEmpty)
+        player.stop()
+    }
+
+    @Test("A manifest open failure falls back to the two-player path for the same item")
+    func combinedFallback() throws {
+        let (player, _, created, audio, probe) = combinedSetup()
+        player.prepareToPlay(); player.play()
+        let combined = try #require(created().first)
+        player.finish(player: combined, error: NSError(domain: "fixture", code: 1))
+        #expect(!player.usesCombinedInput)
+        #expect(probe.finishCount == 0)
+        #expect(created().count == 2)
+        // The rebuilt item aligns the follower as before.
+        #expect(audio.seeks == [0])
+        player.stop()
+    }
+
+    @Test("Errors after the combined input became ready are reported, not retried")
+    func combinedLateError() throws {
+        let (player, _, created, _, probe) = combinedSetup()
+        player.prepareToPlay(); player.play()
+        let combined = try #require(created().first)
+        player.readyToPlay(player: combined)
+        player.finish(player: combined, error: NSError(domain: "fixture", code: 1))
+        #expect(player.usesCombinedInput)
+        #expect(probe.finishCount == 1)
+        player.stop()
+    }
+
     @Test("Audio starts only after successful alignment and follows pause and buffering")
     func playbackAndBuffering() {
         let (player, video, audio, _) = setup()

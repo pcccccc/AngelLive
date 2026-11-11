@@ -50,6 +50,11 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
     private var notifiedInputError = false
     private var reportedAudioReady = false
     private var reportedFirstAlignment = false
+    /// The video URL of the current item; kept to fall back from the combined manifest.
+    private var videoURL: URL?
+    /// One inner player opens video and audio through a local manifest (single clock).
+    private(set) var usesCombinedInput = false
+    private var combinedReady = false
     private static let logger = Logger(subsystem: "AngelLiveDependencies", category: "DualStream")
     public weak var delegate: MediaPlayerDelegate?
     private lazy var coordinator = AVDelegatingPlaybackCoordinator(playbackControlDelegate: self)
@@ -92,13 +97,58 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
         snapshot?.dualStreamClock = { [weak clock] in clock?.time }
         self.options = snapshot
         rate = options.startPlayRate
-        primary = primaryFactory(url, snapshot ?? options)
+        videoURL = url
+        let combined = Self.combinedInput(videoURL: url, options: snapshot)
+        usesCombinedInput = combined != nil
+        primary = combined.map { primaryFactory($0.url, $0.options) } ?? primaryFactory(url, snapshot ?? options)
         super.init()
         installPrimaryView()
         primary.delegate = self
-        primary.isMuted = true
+        primary.isMuted = usesCombinedInput ? muted : true
         if snapshot?.dualStreamAudio == nil { inputError = .missingAudioOptions }
+        if !usesCombinedInput { installAudio() }
+    }
+
+    /// Builds the combined-manifest input when the audio shares the video request and
+    /// no media transform is active. Any failure keeps the two-player path.
+    private static func combinedInput(videoURL: URL, options: PlayerOptions?) -> (url: URL, options: PlayerOptions)? {
+        guard let options, let audio = options.dualStreamAudio, audio.sharesVideoRequest,
+              options.mediaTransform == nil, videoURL.scheme?.hasPrefix("http") == true,
+              let manifest = try? SeparateAudioManifest.write(videoURL: videoURL, audioURL: audio.url) else {
+            return nil
+        }
+        let combined = options.mediaTransformSessionSnapshot()
+        // A single demuxer owns both tracks; the external render clock is not needed.
+        combined.dualStreamClock = nil
+        combined.formatContextOptions["protocol_whitelist"] = SeparateAudioManifest.protocolWhitelist
+        combined.formatContextOptions[SeparateAudioManifest.decryptionKeyOption] =
+            combined.formatContextOptions["decryption_key"]
+        combined.formatContextOptions["decryption_key"] = nil
+        return (manifest, combined)
+    }
+
+    /// Opening the manifest failed before playback: rebuild this item with two players.
+    private func fallBackToSeparateInputs() {
+        guard usesCombinedInput, let videoURL else { return }
+        let resumePreparing = isPreparing
+        let resumePlaying = wantsPlayback
+        primary.delegate = nil
+        if primaryNeedsStop { primary.stop() }
+        primary.view.removeFromSuperview()
+        usesCombinedInput = false
+        combinedReady = false
+        isPreparing = false
+        primary = primaryFactory(videoURL, options ?? PlayerOptions())
+        primaryNeedsStop = true
+        primary.delegate = self
+        primary.isMuted = true
+        primary.playbackRate = rate
+        primary.contentMode = mode
+        installPrimaryView()
         installAudio()
+        diagnose("combinedFallback")
+        if resumePreparing { prepareToPlay() }
+        if resumePlaying { play() }
     }
 
     // The layer must stop players before release, matching MediaPlayerProtocol's contract.
@@ -178,11 +228,19 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
     }
     public var playbackVolume: Float {
         get { volume }
-        set { volume = newValue; audio?.playbackVolume = newValue }
+        set {
+            volume = newValue
+            audio?.playbackVolume = newValue
+            if usesCombinedInput { primary.playbackVolume = newValue }
+        }
     }
     public var isMuted: Bool {
         get { muted }
-        set { muted = newValue; audio?.isMuted = newValue || !aligned || !primary.isPlaying }
+        set {
+            muted = newValue
+            if usesCombinedInput { primary.isMuted = newValue }
+            audio?.isMuted = newValue || !aligned || !primary.isPlaying
+        }
     }
     // A video-only route/PiP would bypass the logical command owner. These optional
     // presentations remain unavailable for separate audio until both streams can move.
@@ -362,7 +420,7 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
     public func reset() { clear(stopped: false) }
     public func stop() { clear(stopped: true) }
 
-    /// 本播放器自行建立输入管线，不接管外部 PlayerItem（与锁定内核的 KSMPVPlayer 一致）。
+    /// 本播放器自行建立输入管线，不接管外部 PlayerItem。。
     @MainActor public func replace(playerItem _: PlayerItem, options _: KSOptions) {}
     public func replace(io: Either<URL, AbstractAVIOContext>, options: KSOptions) {
         primary.delegate = nil
@@ -382,15 +440,19 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
         rate = options.startPlayRate
         switch io {
         case let .left(url):
-            primary = primaryFactory(url, self.options ?? options)
+            videoURL = url
+            combinedReady = false
+            let combined = Self.combinedInput(videoURL: url, options: self.options)
+            usesCombinedInput = combined != nil
+            primary = combined.map { primaryFactory($0.url, $0.options) } ?? primaryFactory(url, self.options ?? options)
             primaryNeedsStop = true
             acceptingCallbacks = true
             primary.delegate = self
-            primary.isMuted = true
+            primary.isMuted = usesCombinedInput ? muted : true
             primary.playbackRate = rate
             primary.contentMode = mode
             installPrimaryView()
-            installAudio()
+            if !usesCombinedInput { installAudio() }
         case let .right(context):
             context.close()
             inputError = .unsupportedInput
@@ -404,10 +466,12 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
     public func startRecord(url: URL) { primary.startRecord(url: url) }
     public func stopRecord() { primary.stopRecord() }
     public func tracks(mediaType: AVMediaType) -> [MediaPlayerTrack] {
-        mediaType == .audio ? (audio?.tracks(mediaType: mediaType) ?? []) : primary.tracks(mediaType: mediaType)
+        guard !usesCombinedInput else { return primary.tracks(mediaType: mediaType) }
+        return mediaType == .audio ? (audio?.tracks(mediaType: mediaType) ?? []) : primary.tracks(mediaType: mediaType)
     }
     public func select(track: some MediaPlayerTrack) {
-        if track.mediaType == .audio {
+        if usesCombinedInput { primary.select(track: track) }
+        else if track.mediaType == .audio {
             suspendAudio()
             audio?.select(track: track)
             synchronizeAudio()
@@ -431,7 +495,13 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
 
     public func readyToPlay(player: some MediaPlayerProtocol) {
         guard acceptingCallbacks, primary === player || audio === player else { return }
-        if primary === player { delegate?.readyToPlay(player: self) }
+        if primary === player {
+            if usesCombinedInput, !combinedReady {
+                combinedReady = true
+                diagnose("combinedReady")
+            }
+            delegate?.readyToPlay(player: self)
+        }
         else if !reportedAudioReady {
             reportedAudioReady = true
             diagnose("ready")
@@ -464,6 +534,11 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
     }
     public func finish(player: some MediaPlayerProtocol, error: Error?) {
         guard acceptingCallbacks else { return }
+        if primary === player, usesCombinedInput, !combinedReady, error != nil {
+            // The manifest never opened; retry the same item with the two-player path.
+            fallBackToSeparateInputs()
+            return
+        }
         if primary === player {
             hasFinished = true
             wantsPlayback = false
