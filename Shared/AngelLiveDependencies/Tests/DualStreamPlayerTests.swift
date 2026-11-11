@@ -395,6 +395,7 @@ struct DualStreamPlayerTests {
         func pause() { playbackState = .paused }
         func stop() { playbackState = .stopped }
         func reset() { playbackState = .idle }
+        func replace(playerItem _: PlayerItem, options _: KSOptions) {}
         func replace(io: Either<URL, AbstractAVIOContext>, options: KSOptions) {}
         func startRecord(url: URL) {}
         func stopRecord() {}

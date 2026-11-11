@@ -775,7 +775,7 @@ private final class LiveAudioRecognizer: LiveAudioRecognizing {
         continuation.finish()
     }
 
-    func search(with _: KSSubtitleQuery) async -> [SubtitlePart] {
+    func search(with _: KSSubtitleQuery) -> [SubtitlePart] {
         []
     }
 }

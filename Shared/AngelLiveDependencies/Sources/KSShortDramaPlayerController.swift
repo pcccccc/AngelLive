@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import AngelLiveCore
 import KSPlayer
+import KSPlayerUI
 
 /// Shared short-drama player ownership, confirmed seeking, and progress restoration.
 @MainActor
@@ -150,7 +151,7 @@ public final class KSShortDramaPlayerController {
                 if layer.player is DualStreamPlayer {
                     layer.player.replace(url: resolvedURL, options: layer.options)
                 } else {
-                    layer.replace(playerItem: MEPlayerItem(io: .left(resolvedURL), options: layer.options))
+                    layer.replace(playerItem: MEPlayerItem(io: .left(resolvedURL), options: layer.options), options: layer.options)
                 }
                 // replace resets the player's playback state; keep decoding paused from the
                 // new beginning until this request's ready + playable state has been observed.

@@ -4,6 +4,7 @@ import AngelLiveDependencies
 
 #if canImport(KSPlayer)
 import KSPlayer
+import KSPlayerUI
 
 /// FullUI keeps window geometry under the host and user's control across player lifetimes.
 /// This follows KSVideoPlayer's make/update/reset path without its teardown aspect-ratio write.

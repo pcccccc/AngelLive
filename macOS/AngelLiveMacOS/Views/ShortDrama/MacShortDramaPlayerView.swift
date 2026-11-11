@@ -4,6 +4,7 @@ import Observation
 import AngelLiveCore
 import AngelLiveDependencies
 import KSPlayer
+import KSPlayerUI
 import AppKit
 import Kingfisher
 import SharedAssets

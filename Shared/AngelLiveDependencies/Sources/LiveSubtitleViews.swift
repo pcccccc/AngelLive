@@ -591,6 +591,7 @@ private struct LiveSubtitleSpeechResourcesSection: View {
 
 #if canImport(KSPlayer)
 import KSPlayer
+import KSPlayerUI
 
 @MainActor
 private struct LiveSubtitleOverlayModifier: ViewModifier {

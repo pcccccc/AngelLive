@@ -11,6 +11,7 @@
 import Foundation
 import SwiftUI
 import KSPlayer
+import KSPlayerUI
 import AngelLiveCore
 
 public struct KSCorePlayerView: View {

@@ -4,6 +4,7 @@ import Observation
 import AngelLiveCore
 import AngelLiveDependencies
 import KSPlayer
+import KSPlayerUI
 
 struct MacShortDramaPlayerSurface: View {
     let playback: ShortDramaPlayback

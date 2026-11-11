@@ -53,7 +53,7 @@ enum MediaTransformContextFactory {
         opened.pointee.pb?.pointee.eof_reached = 0
         return FormatContext(formatCtx: opened, fileSize: 0, interrupt: interrupt,
                              ioContext: owner,
-                             audioOutputType: options.audioOutputType)
+                             options: options)
     }
 }
 

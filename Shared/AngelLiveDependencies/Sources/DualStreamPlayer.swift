@@ -362,6 +362,8 @@ public final class DualStreamPlayer: NSObject, @preconcurrency MediaPlayerProtoc
     public func reset() { clear(stopped: false) }
     public func stop() { clear(stopped: true) }
 
+    /// 本播放器自行建立输入管线，不接管外部 PlayerItem（与锁定内核的 KSMPVPlayer 一致）。
+    @MainActor public func replace(playerItem _: PlayerItem, options _: KSOptions) {}
     public func replace(io: Either<URL, AbstractAVIOContext>, options: KSOptions) {
         primary.delegate = nil
         clear(stopped: true)

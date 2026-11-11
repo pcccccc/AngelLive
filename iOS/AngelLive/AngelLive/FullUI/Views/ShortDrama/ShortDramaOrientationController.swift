@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import Observation
 import KSPlayer
+import KSPlayerUI
 
 /// Owns only this page's orientation lease; it never selects another window scene.
 @MainActor

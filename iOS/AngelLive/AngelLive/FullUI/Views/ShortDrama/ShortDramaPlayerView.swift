@@ -7,6 +7,7 @@ import UIKit
 import Observation
 import AngelLiveDependencies
 import KSPlayer
+import KSPlayerUI
 import Kingfisher
 
 /// FullUI short-drama playback. Episode resolution and completion policy stay in the model.

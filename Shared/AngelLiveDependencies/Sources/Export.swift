@@ -14,6 +14,7 @@
 #endif
 #if canImport(KSPlayer)
 @_exported import KSPlayer
+@_exported import KSPlayerUI
 #endif
 @_exported import NIO
 @_exported import NIOHTTP1

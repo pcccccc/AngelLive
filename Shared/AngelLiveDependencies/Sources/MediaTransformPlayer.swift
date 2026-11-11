@@ -279,7 +279,14 @@ public final class MediaTransformPlayer: NSObject, MediaPlayerProtocol, MediaPla
 
     public func reset() { onMain { self.clear(stopped: false) } }
     public func stop() { onMain { self.clear(stopped: true) } }
-    @MainActor public func replace(io: Either<URL, AbstractAVIOContext>, options: KSOptions) {
+    /// 本播放器自行建立输入管线，不接管外部 PlayerItem（与锁定内核的 KSMPVPlayer 一致）。
+    public func replace(playerItem _: PlayerItem, options _: KSOptions) {}
+    /// KSPlayer 5.6 起该要求为 nonisolated；唯一调用方 KSPlayerLayer 与宿主均在主线程调用，
+    /// 因此用 assumeIsolated 进入主 actor（非主线程调用会立即中断，而不是静默数据竞争）。
+    public func replace(io: Either<URL, AbstractAVIOContext>, options: KSOptions) {
+        MainActor.assumeIsolated { replaceOnMain(io: io, options: options) }
+    }
+    @MainActor private func replaceOnMain(io: Either<URL, AbstractAVIOContext>, options: KSOptions) {
         clear(stopped: false)
         self.options = (options as? PlayerOptions)?.mediaTransformSessionSnapshot() ?? options
         rate = options.startPlayRate

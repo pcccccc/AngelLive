@@ -1,6 +1,7 @@
 #if canImport(KSPlayer)
 import CoreGraphics
 import KSPlayer
+import KSPlayerUI
 internal import AVFoundation
 
 @MainActor

@@ -45,8 +45,8 @@ struct MediaTransformIntegrationTests {
     }
 
     @Test("Restored master playlist produces every original compressed video packet")
-    func restoresAllSegmentsBeforeProbe() throws {
-        let plain = try FormatContext(url: Self.fixture("media-transform-plain.m3u8"), options: Self.options())
+    func restoresAllSegmentsBeforeProbe() async throws {
+        let plain = try await FormatContext(url: Self.fixture("media-transform-plain.m3u8"), options: Self.options())
         defer { plain.close() }
         let expected = Self.packets(plain)
         #expect(expected.count == 24)
@@ -114,7 +114,7 @@ struct MediaTransformIntegrationTests {
             )
             defer { context.close() }
             let actual = Self.packets(context)
-            let plain = try FormatContext(url: Self.fixture("media-transform-plain.m3u8"), options: Self.options())
+            let plain = try await FormatContext(url: Self.fixture("media-transform-plain.m3u8"), options: Self.options())
             defer { plain.close() }
             #expect(actual.count == 24)
             #expect(actual == Self.packets(plain))

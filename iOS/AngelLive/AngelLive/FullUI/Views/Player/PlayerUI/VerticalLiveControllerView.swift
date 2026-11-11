@@ -9,6 +9,7 @@
 
 import SwiftUI
 import KSPlayer
+import KSPlayerUI
 import AngelLiveCore
 import AngelLiveDependencies
 

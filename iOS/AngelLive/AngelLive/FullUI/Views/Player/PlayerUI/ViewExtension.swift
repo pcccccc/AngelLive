@@ -9,6 +9,7 @@
 
 import SwiftUI
 import KSPlayer
+import KSPlayerUI
 
 @MainActor
 public struct PlayBackCommands: Commands {

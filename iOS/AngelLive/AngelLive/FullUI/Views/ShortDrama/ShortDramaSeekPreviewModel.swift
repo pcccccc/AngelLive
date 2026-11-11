@@ -6,6 +6,7 @@ import AngelLiveCore
 import AngelLiveDependencies
 #if canImport(KSPlayer)
 import KSPlayer
+import KSPlayerUI
 #endif
 
 enum ShortDramaSeekPreviewState {
@@ -239,11 +240,11 @@ private actor ShortDramaThumbnailWorker {
 
     func generate(
         url: URL, options: KSOptions, onFrame: @escaping @Sendable (ShortDramaPreviewFrame) -> Void
-    ) -> [ShortDramaPreviewFrame] {
+    ) async -> [ShortDramaPreviewFrame] {
         guard !Task.isCancelled else { return [] }
         var frames: [ShortDramaPreviewFrame] = []
         do {
-            try FFmpegUtility.streamThumbnail(for: url, options: options, thumbnailCount: 24) { image, time, _ in
+            try await FFmpegUtility.streamThumbnail(for: url, options: options, thumbnailCount: 24) { image, time, _ in
                 guard !Task.isCancelled, time.isFinite else { return }
                 // streamThumbnail yields source-size CGImages; ThumbnailController's thumbWidth
                 // is ignored in this dependency revision, so resize before retaining any image.
