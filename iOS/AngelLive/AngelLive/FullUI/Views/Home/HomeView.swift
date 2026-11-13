@@ -957,6 +957,10 @@ private struct HomeHeroCarousel: View {
         cardHeight + pullExtension
     }
 
+    private var artworkHeight: CGFloat {
+        displayedCardHeight + backgroundTopExtension
+    }
+
     private var isPulling: Bool {
         metrics.pullDistance > 1
     }
@@ -1000,14 +1004,14 @@ private struct HomeHeroCarousel: View {
                     preferredImageURL: backdropEntry.preferredHeroImageURL,
                     fallbackImageURL: backdropEntry.fallbackHeroImageURL,
                     cardWidth: viewportWidth,
-                    cardHeight: displayedCardHeight + backgroundTopExtension,
+                    cardHeight: artworkHeight,
                     imageDecodeHeight: cardHeight,
                     backgroundTopExtension: backgroundTopExtension,
                     presentationScale: reduceMotion ? 1 : 1.1
                 )
-                // Only the backdrop extends above the scroll content's safe origin.
-                // The bottom-aligned frame preserves the foreground's exact bounds.
-                .frame(width: viewportWidth, height: displayedCardHeight + backgroundTopExtension)
+                // Keep the system's surrounding-area extension behind the actual
+                // carousel artwork, which also covers the top safe area.
+                .frame(width: viewportWidth, height: artworkHeight)
                 .backgroundExtensionEffect()
                 .frame(height: displayedCardHeight, alignment: .bottom)
                 .allowsHitTesting(false)
@@ -1033,8 +1037,11 @@ private struct HomeHeroCarousel: View {
                 .scrollPosition(id: $selectedPageID, anchor: .center)
                 .scrollTargetBehavior(.paging)
                 .scrollIndicators(.hidden)
+                // Keep the real interaction viewport below the safe origin.
+                // Only drawing extends upward, using the same page reveal.
+                .scrollClipDisabled()
                 .frame(width: viewportWidth, height: displayedCardHeight)
-                .clipped()
+                .clipShape(HomeHeroArtworkClip(topExtension: backgroundTopExtension))
                 // Keep the opaque viewport fill from covering the artwork's
                 // background extension in the surrounding safe area.
                 .background(AppConstants.Colors.primaryBackground, ignoresSafeAreaEdges: [])
@@ -1191,7 +1198,7 @@ private struct HomeHeroCarousel: View {
     private func heroPage(for entry: HomeBannerEntry) -> some View {
         heroDestination(for: entry)
             .frame(width: cardWidth, height: displayedCardHeight)
-            .clipped()
+            .clipShape(HomeHeroArtworkClip(topExtension: backgroundTopExtension))
     }
 
     @ViewBuilder
@@ -1262,7 +1269,7 @@ private struct HomeHeroCard: View {
         let imageScale: CGFloat = reduceMotion ? 1 : 1.1
         let animatesReveal = !reduceMotion
 
-        ZStack {
+        ZStack(alignment: .bottom) {
             HomeHeroRemoteImage(
                 url: entry.preferredHeroImageURL,
                 fallbackURL: entry.fallbackHeroImageURL,
@@ -1286,11 +1293,17 @@ private struct HomeHeroCard: View {
                         .scaleEffect(imageScale)
                         .offset(x: animatesReveal ? (imagePosition - progress) * cardWidth : 0)
                 }
-                // Match the backdrop's crop and scaling center before revealing
-                // only the original foreground region below the safe origin.
                 .frame(height: cardHeight, alignment: .bottom)
+                .allowsHitTesting(false)
 
-            HomeHeroGradient()
+            VStack(spacing: 0) {
+                HomeHeroGradient.topShade
+                    .frame(height: backgroundTopExtension)
+                HomeHeroGradient()
+                    .frame(height: cardHeight)
+            }
+            .frame(height: cardHeight, alignment: .bottom)
+            .allowsHitTesting(false)
 
             VStack {
                 Spacer(minLength: 0)
@@ -1304,6 +1317,7 @@ private struct HomeHeroCard: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, AppConstants.Spacing.xl)
             .padding(.bottom, AppConstants.Spacing.xxl)
+            .frame(height: cardHeight)
             .visualEffect { content, proxy in
                 let progress = abs(pageProgress(
                     for: proxy,
@@ -1324,7 +1338,6 @@ private struct HomeHeroCard: View {
             }
 
         }
-        .clipped()
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
@@ -1379,6 +1392,23 @@ private struct HomeHeroCard: View {
             max(pageMinX / max(pageStride, 1), -1),
             1
         )
+    }
+}
+
+// The image may draw above its page, but never across the page's reveal edge.
+// This pure geometry changes clipping, not the scroll view or button bounds.
+nonisolated private struct HomeHeroArtworkClip: Shape {
+    let topExtension: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.addRect(CGRect(
+                x: rect.minX,
+                y: rect.minY - topExtension,
+                width: rect.width,
+                height: rect.height + topExtension
+            ))
+        }
     }
 }
 
