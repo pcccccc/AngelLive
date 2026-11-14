@@ -18,6 +18,7 @@ struct LiveCardView: View {
     var externalFocusState: FocusState<FocusableField?>.Binding?
     var onMoveCommand: ((MoveCommandDirection) -> Void)? = nil
     var currentLiveModel: LiveModel? = nil
+    var onToast: (@MainActor (Bool, String) -> Void)? = nil
     // LiveModel 的相等判断只比较房间身份。收藏数据版本作为独立输入，
     // 让同一房间的新封面、标题等内容触发视图更新，不重建卡片或焦点状态。
     var contentRevision: Int = 0
@@ -353,10 +354,10 @@ struct LiveCardView: View {
                 Task {
                     do {
                         try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                        liveViewModel.showToast(true, title: "取消收藏成功")
+                        presentToast(true, title: "取消收藏成功")
                         TopShelfManager.notifyContentChanged()
                     } catch {
-                        liveViewModel.showToast(false, title: FavoriteService.formatErrorCode(error: error))
+                        presentToast(false, title: FavoriteService.formatErrorCode(error: error))
                     }
                 }
             }
@@ -385,11 +386,11 @@ struct LiveCardView: View {
                 Task {
                     do {
                         try await appViewModel.favoriteViewModel.removeFavoriteRoom(room: liveViewModel.currentRoom!)
-                        liveViewModel.showToast(true, title: "取消收藏成功")
+                        presentToast(true, title: "取消收藏成功")
                         liveViewModel.currentRoomIsFavorited = false
                         TopShelfManager.notifyContentChanged()
                     } catch {
-                        liveViewModel.showToast(false, title: FavoriteService.formatErrorCode(error: error))
+                        presentToast(false, title: FavoriteService.formatErrorCode(error: error))
                     }
                 }
             } label: {
@@ -407,11 +408,11 @@ struct LiveCardView: View {
                             ).rawValue
                         }
                         try await appViewModel.favoriteViewModel.addFavorite(room: liveViewModel.currentRoom!)
-                        liveViewModel.showToast(true, title: "收藏成功")
+                        presentToast(true, title: "收藏成功")
                         liveViewModel.currentRoomIsFavorited = true
                         TopShelfManager.notifyContentChanged()
                     } catch {
-                        liveViewModel.showToast(false, title: FavoriteService.formatErrorCode(error: error))
+                        presentToast(false, title: FavoriteService.formatErrorCode(error: error))
                     }
                 }
             } label: {
@@ -457,6 +458,14 @@ struct LiveCardView: View {
     }
 
     // MARK: - 事件处理
+
+    private func presentToast(_ success: Bool, title: String) {
+        if let onToast {
+            onToast(success, title)
+        } else {
+            liveViewModel.showToast(success, title: title)
+        }
+    }
 
     private func restoreShortDramaCardFocus() {
         // Keep the FullUI short-drama content alive through cover dismissal;
@@ -540,13 +549,13 @@ struct LiveCardView: View {
                     if PlatformHostBehavior.isPlayableRoom(updatedRoom) {
                         proceedToPlayer()
                     } else {
-                        liveViewModel.showToast(false, title: "主播已经下播")
+                        presentToast(false, title: "主播已经下播")
                     }
                 }
             } catch {
                 await MainActor.run {
                     guard !Task.isCancelled, liveViewModel.currentRoom?.id == room.id else { return }
-                    liveViewModel.showToast(false, title: "状态获取失败,请稍后再试")
+                    presentToast(false, title: "状态获取失败,请稍后再试")
                 }
             }
         }

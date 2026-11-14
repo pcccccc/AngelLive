@@ -182,9 +182,13 @@ public final class PersistentSyncRetryCoordinator {
     private var accountObserver: NSObjectProtocol?
 
     private convenience init() {
+        #if os(tvOS)
+        // 与收藏快照、CKSyncEngine state 使用相同的 tvOS 缓存目录。
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        #else
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #endif
         let directory = base.appendingPathComponent("AngelLive", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.init(
             executor: LivePersistentSyncRetryExecutor(),
             stateURL: directory.appendingPathComponent("persistent-sync-retry-v1.plist"),

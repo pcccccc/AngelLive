@@ -57,11 +57,13 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     // MARK: - State 持久化
 
     private var stateURL: URL {
+        #if os(tvOS)
+        // tvOS 的本地文件只作缓存；丢失后以 nil state 重新获取云端变更。
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        #else
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        #endif
         let dir = base.appendingPathComponent("AngelLive", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
         return dir.appendingPathComponent("favorites-sync-state.dat")
     }
 
@@ -73,7 +75,12 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     private func saveState(_ state: CKSyncEngine.State.Serialization) {
         do {
             let data = try PropertyListEncoder().encode(state)
-            try data.write(to: stateURL, options: [.atomic])
+            let url = stateURL
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: [.atomic])
         } catch {
             Logger.warning("保存 CKSyncEngine state 失败: \(error.localizedDescription)", category: .general)
         }

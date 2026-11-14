@@ -1,5 +1,25 @@
-#if canImport(KSPlayer)
 import CoreGraphics
+
+enum PlayerVideoSizeResolver {
+    static func resolve(trackSize: CGSize, rotation: UInt16, presentationSize: CGSize?) -> CGSize? {
+        guard isValid(trackSize) else { return nil }
+        // Presentation dimensions already include the display transform.
+        if let presentationSize, isValid(presentationSize) {
+            return presentationSize
+        }
+        let angle = Int(rotation)
+        if abs(angle - 90) <= 1 || abs(angle - 270) <= 1 {
+            return CGSize(width: trackSize.height, height: trackSize.width)
+        }
+        return trackSize
+    }
+
+    private static func isValid(_ size: CGSize) -> Bool {
+        size.width.isFinite && size.height.isFinite && size.width > 1 && size.height > 1
+    }
+}
+
+#if canImport(KSPlayer)
 import KSPlayer
 import KSPlayerUI
 internal import AVFoundation
@@ -13,16 +33,13 @@ enum PlayerVideoGeometry {
             return nil
         }
 
-        let trackSize = videoTrack.naturalSize
-        let naturalSize = player.naturalSize
-        guard trackSize.width.isFinite, trackSize.height.isFinite,
-              trackSize.width > 1, trackSize.height > 1,
-              naturalSize.width.isFinite, naturalSize.height.isFinite,
-              naturalSize.width > 1, naturalSize.height > 1 else {
-            return nil
-        }
-
-        return naturalSize
+        let presentationSize = (player as? KSAVPlayer)?.player.currentItem?.presentationSize
+        // Track naturalSize already accounts for pixel aspect ratio in the player adapter.
+        return PlayerVideoSizeResolver.resolve(
+            trackSize: videoTrack.naturalSize,
+            rotation: videoTrack.rotation,
+            presentationSize: presentationSize
+        )
     }
 }
 #endif

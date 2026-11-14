@@ -56,16 +56,22 @@ struct TVHomeView: View {
                                 heroStage(containerSize: geometry.size, artworkProcessor: viewportProcessor)
                                     .id("home-hero")
                             } else if let primaryRail {
-                                TVHomeRoomRail(rail: primaryRail, appViewModel: appViewModel, onSeeAll: openCategory)
-                                    .padding(.top, 120)
-                                    .id("home-hero")
+                                TVHomeRoomRail(
+                                    rail: primaryRail,
+                                    appViewModel: appViewModel,
+                                    onSeeAll: openCategory,
+                                    onToast: playback.show
+                                )
+                                .padding(.top, 120)
+                                .id("home-hero")
                             }
 
                             ForEach(remainingRails) { rail in
                                 TVHomeRoomRail(
                                     rail: rail,
                                     appViewModel: appViewModel,
-                                    onSeeAll: openCategory
+                                    onSeeAll: openCategory,
+                                    onToast: playback.show
                                 )
                                 .padding(.top, 26)
                             }
@@ -429,7 +435,8 @@ private extension TVHomeView {
                 TVHomeRoomRail(
                     rail: primaryRail,
                     appViewModel: appViewModel,
-                    onSeeAll: openCategory
+                    onSeeAll: openCategory,
+                    onToast: playback.show
                 )
                 .padding(.top, heroContentHeight - TVHomeMetrics.primaryRailVerticalOverlap)
             }
@@ -1057,17 +1064,20 @@ private struct TVHomeRoomRail: View {
     let rail: TVHomeRailData
     let appViewModel: AppState
     let onSeeAll: (PluginHomeCategoryRoute) -> Void
+    let onToast: @MainActor (Bool, String) -> Void
 
     @State private var liveViewModel: LiveViewModel
 
     init(
         rail: TVHomeRailData,
         appViewModel: AppState,
-        onSeeAll: @escaping (PluginHomeCategoryRoute) -> Void
+        onSeeAll: @escaping (PluginHomeCategoryRoute) -> Void,
+        onToast: @escaping @MainActor (Bool, String) -> Void
     ) {
         self.rail = rail
         self.appViewModel = appViewModel
         self.onSeeAll = onSeeAll
+        self.onToast = onToast
 
         let roomListType: LiveRoomListType = rail.playbackMode == .favorite ? .favorite : .live
         let viewModel = LiveViewModel(
@@ -1109,6 +1119,7 @@ private struct TVHomeRoomRail: View {
                         LiveCardView(
                             index: index,
                             currentLiveModel: room,
+                            onToast: onToast,
                             cardWidth: TVHomeMetrics.cardWidth,
                             coverHeight: TVHomeMetrics.cardCoverHeight
                         )
@@ -1221,6 +1232,9 @@ private struct TVHomeCategoryView: View {
 
     @State private var model: PluginHomeCategoryModel
     @State private var liveViewModel: LiveViewModel
+    @State private var showToast = false
+    @State private var toastTitle = ""
+    @State private var toastSuccess = false
 
     init(route: PluginHomeCategoryRoute, appViewModel: AppState) {
         self.route = route
@@ -1261,7 +1275,7 @@ private struct TVHomeCategoryView: View {
                 } else {
                     LazyVGrid(columns: columns, alignment: .center, spacing: 52) {
                         ForEach(Array(model.rooms.enumerated()), id: \.element.id) { index, room in
-                            LiveCardView(index: index, currentLiveModel: room)
+                            LiveCardView(index: index, currentLiveModel: room, onToast: presentToast)
                                 .environment(liveViewModel)
                                 .environment(appViewModel)
                                 .frame(width: 370, height: 280)
@@ -1290,6 +1304,7 @@ private struct TVHomeCategoryView: View {
         .background(Color.black)
         .preferredColorScheme(.dark)
         .navigationTitle(route.title)
+        .tvHomeToast(isPresented: $showToast, success: toastSuccess, title: toastTitle)
         .task {
             if model.rooms.isEmpty {
                 await model.load(refresh: true)
@@ -1298,6 +1313,12 @@ private struct TVHomeCategoryView: View {
         .onChange(of: model.rooms.map(\.id)) { _, _ in
             liveViewModel.roomList = model.rooms
         }
+    }
+
+    private func presentToast(_ success: Bool, title: String) {
+        toastSuccess = success
+        toastTitle = title
+        showToast = true
     }
 }
 
@@ -1312,7 +1333,6 @@ private final class TVHomePlaybackCoordinator {
     var showToast = false
     var toastTitle = ""
     var toastSuccess = false
-    var toastOptions = SimpleToastOptions(alignment: .topLeading, hideAfter: 1.8)
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
@@ -1375,7 +1395,7 @@ private final class TVHomePlaybackCoordinator {
         isPresented = true
     }
 
-    private func show(success: Bool, title: String) {
+    func show(success: Bool, title: String) {
         toastSuccess = success
         toastTitle = title
         showToast = true
@@ -1406,20 +1426,28 @@ private struct TVHomePlaybackPresentationModifier: ViewModifier {
                     .frame(width: 1920, height: 1080)
                 }
             }
-            .simpleToast(isPresented: $coordinator.showToast, options: coordinator.toastOptions) {
-                Label(
-                    coordinator.toastTitle,
-                    systemImage: coordinator.toastSuccess ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
-                )
-                .font(.headline)
-                .padding(20)
-                .background(.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 14))
-                .foregroundStyle(.white)
-            }
+            .tvHomeToast(
+                isPresented: $coordinator.showToast,
+                success: coordinator.toastSuccess,
+                title: coordinator.toastTitle
+            )
     }
 }
 
 private extension View {
+    func tvHomeToast(isPresented: Binding<Bool>, success: Bool, title: String) -> some View {
+        simpleToast(
+            isPresented: isPresented,
+            options: SimpleToastOptions(alignment: .topLeading, hideAfter: 1.8)
+        ) {
+            Label(title, systemImage: success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .font(.headline)
+                .padding(20)
+                .background(.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(.white)
+        }
+    }
+
     func tvHomePlaybackPresentation(_ coordinator: TVHomePlaybackCoordinator) -> some View {
         modifier(TVHomePlaybackPresentationModifier(coordinator: coordinator))
     }

@@ -58,6 +58,13 @@
 - [ ] 实现去重、到期和三端 FullUI 展示，保持 ShellUI 边界；移除新 FullUI 路径的正文嗅探。
 - [ ] 完成兼容、取消、跨房间及三端视觉和交互验收。
 
+### 扫码登录：外部插件接入
+
+- [ ] 在外部插件仓库补齐 Authoring Guide 和挑战函数实现，将探测脚本改为调用插件函数，并完成首个插件的真实扫码、验证、兑换、落库及取消验收。
+- [ ] 验证正式 Cookie 集合是否符合现有 session 存储契约；仅在真实接入证据表明有必要时，再评估 scope Jar 或独立事务会话。
+
+宿主 Core、三端 FullUI 入口及协议测试已有实现，插件接入和真实账号验收仍需单独完成。来源：[扫码登录挑战协议](docs/PluginQRCodeLoginProtocolPlan.md#11-实施状态)。
+
 ### CloudKit 静默推送与通用持久重试
 
 - [ ] 核验 `CKSyncEngine` 自身订阅与真实设备通知到达行为，再判断是否需要宿主补充通知接线。
@@ -77,6 +84,13 @@
 来源：[插件驱动个性首页规划](docs/PluginDrivenHomePagePlan.md)。当前实现入口：`HomeView.swift`、`HomeViewModel.swift`、`PluginHomeFeed.swift`、`PluginHomeFeedCacheStore.swift`。
 
 ## P2：实现已完成，但仍缺设备验收
+
+### 诊断报告界面与分享
+
+- [ ] 完成 iOS 报告页最后源码的 workspace 构建、新包安装及交互验收，核对按钮尺寸、摘要布局、深浅色、大字体、补充保存、预览返回与取消流程。
+- [ ] 复核 macOS 报告编辑、预览与分享设计，并在最后构建的原生应用中验证。
+
+来源：[报告界面规范](docs/SupportDiagnosticsDesign.md)、[诊断功能契约](docs/SupportDiagnostics.md)。现有类型检查和历史截图不能替代新包验收。
 
 ### 实时语音字幕
 

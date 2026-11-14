@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
@@ -63,6 +64,7 @@ struct PlayerContentView: View {
     @Binding var videoAspectRatio: CGFloat
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
+    @State private var detectedVideoSize: CGSize?
     @State private var vlcState: VLCPlaybackBridgeState = .buffering
     @State private var showVideoSetting = false
     @State private var showDanmakuSettings = false
@@ -247,6 +249,12 @@ struct PlayerContentView: View {
                 break
             }
         }
+        #if canImport(KSPlayer)
+        .onReceive(playerCoordinator.timemodel.$currentTime) { _ in
+            guard useKSPlayer, let expectedURL = viewModel.currentPlayURL else { return }
+            _ = detectVideoSizeIfReady(expectedURL: expectedURL)
+        }
+        #endif
         .onChange(of: showVideoSetting) { _, isPresented in
             guard !useKSPlayer, isPresented else { return }
             Logger.debug("[PlayerFlow] VLC setting tapped, show unsupported hint", category: .player)
@@ -397,6 +405,7 @@ struct PlayerContentView: View {
                         "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",
                         category: .player
                     )
+                    detectedVideoSize = nil
                     if useKSPlayer {
                         #if canImport(KSPlayer)
                         // Reset for every URL/kernel task before touching the player. The
@@ -466,6 +475,7 @@ struct PlayerContentView: View {
                     isVideoPortrait = false
                     isVerticalLiveMode = false
                     hasDetectedSize = false
+                    detectedVideoSize = nil
                     hasVLCStartedPlayback = false
                     if useKSPlayer {
                         applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
@@ -709,17 +719,18 @@ struct PlayerContentView: View {
               viewModel.currentPlayURL == expectedURL,
               let playerLayer = playerCoordinator.playerLayer,
               playerLayer.url == expectedURL else { return false }
-        if hasDetectedSize { return true }
 
         guard let naturalSize = PlayerVideoGeometry.readyNaturalSize(of: playerLayer) else { return false }
+        if detectedVideoSize == naturalSize { return true }
 
-        // 轨道尺寸证明媒体信息已就绪；播放器尺寸保留内核对旋转元数据的处理。
+        // 已校正旋转的显示尺寸决定画幅；播放推进时也允许校正迟到的尺寸。
         let ratio = naturalSize.width / naturalSize.height
         let isPortrait = ratio < 1
         withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
             videoAspectRatio = ratio
             isVideoPortrait = isPortrait
             hasDetectedSize = true
+            detectedVideoSize = naturalSize
         }
         Logger.debug("视频画幅已确认: \(naturalSize.width) x \(naturalSize.height), vertical=\(isPortrait)", category: .player)
         return true
