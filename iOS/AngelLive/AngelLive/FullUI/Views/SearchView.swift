@@ -9,6 +9,28 @@ import SwiftUI
 import AngelLiveDependencies
 import AngelLiveCore
 
+struct PlatformRoomSearchView: View {
+    let platform: Platformdescription
+    @State private var viewModel = SearchViewModel()
+
+    var body: some View {
+        SearchView(platform: platform)
+            .environment(viewModel)
+    }
+
+    static func availableSearchKinds(
+        for platform: Platformdescription,
+        pluginAvailability: PluginAvailabilityService
+    ) -> [RoomSearchKind] {
+        // An update can change capabilities without changing the installed plugin IDs.
+        _ = pluginAvailability.catalogRevision
+        let isInstalled = pluginAvailability.isPluginInstalled(for: platform.pluginId)
+        let isPlaylist = PlaylistPlatformIdentity.isPlaylist(platform.liveType)
+        guard isInstalled || isPlaylist else { return [] }
+        return RoomSearchKind.platformOptions(for: platform.liveType)
+    }
+}
+
 struct SearchView: View {
     @Environment(SearchViewModel.self) private var viewModel
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
@@ -20,14 +42,30 @@ struct SearchView: View {
     @State private var selectedSearchPluginID: String?
     @State private var searchPlatformOptions: [LiveParseJSPlatform] = []
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
+    @State private var isSearchPresented: Bool
+    @State private var platformSearchKind: RoomSearchKind = .keyword
+
+    private let platform: Platformdescription?
 
     /// 共享导航状态 - 在旋转时保持稳定，避免重复请求API
     @State private var navigationState = LiveRoomNavigationState()
     /// 共享命名空间 - 用于 zoom 过渡动画
     @Namespace private var roomTransitionNamespace
 
+    init(platform: Platformdescription? = nil) {
+        self.platform = platform
+        _isSearchPresented = State(initialValue: platform != nil)
+    }
+
     var body: some View {
-        playerPresentation
+        if #available(iOS 18.0, *) {
+            searchPage
+                .fullScreenCover(isPresented: playerPresentedBinding) {
+                    playerDestination
+                }
+        } else {
+            searchPage
+        }
     }
 
     // MARK: - 播放器导航
@@ -51,7 +89,18 @@ struct SearchView: View {
         }
     }
 
+    private var searchTitle: String {
+        guard let platform else { return String(localized: "搜索") }
+        return String(localized: "在 \(platform.title) 搜索")
+    }
+
     private var searchPrompt: String {
+        if platform != nil {
+            return activePlatformSearchKind == .share
+                ? String(localized: "输入分享链接或口令")
+                : String(localized: "搜索主播名或直播间标题")
+        }
+
         switch viewModel.searchTypeIndex {
         case 0:
             return "输入链接、分享口令或房间号..."
@@ -79,100 +128,166 @@ struct SearchView: View {
             ?? selectedSearchPluginID
     }
 
+    private var platformSearchKinds: [RoomSearchKind] {
+        guard let platform else { return [] }
+        return PlatformRoomSearchView.availableSearchKinds(for: platform, pluginAvailability: pluginAvailability)
+    }
+
+    private var activePlatformSearchKind: RoomSearchKind? {
+        let kinds = platformSearchKinds
+        return kinds.contains(platformSearchKind) ? platformSearchKind : kinds.first
+    }
+
+    private var platformSearchKindSelection: Binding<RoomSearchKind> {
+        Binding(get: { platformSearchKind }, set: selectPlatformSearchKind)
+    }
+
     @ViewBuilder
-    private var playerPresentation: some View {
+    private var searchPage: some View {
+        if platform != nil {
+            searchContent
+        } else {
+            NavigationStack {
+                searchContent
+                    .fullUITabBarVisibilityRoot()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var searchContent: some View {
         @Bindable var viewModel = viewModel
-        let baseView = NavigationStack {
-            GeometryReader { geometry in
-                VStack(spacing: 0) {
-                    // 搜索类型选择器
-                    Picker("搜索类型", selection: $viewModel.searchTypeIndex) {
+        let content = Group {
+            if platform == nil || activePlatformSearchKind != nil {
+                searchLayout
+                    .searchable(
+                        text: $viewModel.searchText,
+                        isPresented: $isSearchPresented,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: searchPrompt
+                    )
+                    .onSubmit(of: .search) { performSearch() }
+            } else {
+                ErrorView.empty(
+                    title: "暂时无法搜索",
+                    message: "当前平台的搜索功能不可用。",
+                    symbolName: "magnifyingglass.circle",
+                    tint: .blue
+                )
+            }
+        }
+        .navigationTitle(searchTitle)
+        .navigationBarTitleDisplayMode(platform == nil ? .large : .inline)
+        .onChange(of: viewModel.searchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchRequest.clear()
+            }
+        }
+        .onChange(of: viewModel.searchTypeIndex) { _, _ in
+            guard platform == nil else { return }
+            searchRequest.clear()
+            refreshSearchPlatformOptions()
+        }
+        .onChange(of: pluginAvailability.catalogRevision) { _, _ in
+            refreshSearchPlatformOptions()
+        }
+        .onChange(of: platformSearchKinds, initial: true) { _, kinds in
+            guard platform != nil, !kinds.contains(platformSearchKind) else { return }
+            if let kind = kinds.first {
+                selectPlatformSearchKind(kind)
+            } else {
+                resetPlatformSearch()
+                isSearchPresented = false
+            }
+        }
+        .onAppear { refreshSearchPlatformOptions() }
+        .onDisappear { searchRequest.cancel() }
+        .sheet(item: $authenticationRecoveryRequest) { request in
+            NavigationStack {
+                PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
+            }
+        }
+
+        if #available(iOS 18.0, *) {
+            content
+        } else {
+            content.navigationDestination(isPresented: playerPresentedBinding) {
+                playerDestination
+            }
+        }
+    }
+
+    private var searchLayout: some View {
+        @Bindable var viewModel = viewModel
+        return GeometryReader { geometry in
+            VStack(spacing: 0) {
+                if platform == nil {
+                    searchTypePicker(selection: $viewModel.searchTypeIndex) {
                         ForEach(viewModel.searchTypeArray.indices, id: \.self) { index in
                             Text(viewModel.searchTypeArray[index])
                                 .tag(index)
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.top, AppConstants.Spacing.sm)
-                    .padding(.bottom, AppConstants.Spacing.md)
-
                     SearchPlatformFilter(
                         platforms: searchPlatformOptions,
                         selection: searchPlatformSelection
                     )
-
-                    // 搜索结果
-                    Group {
-                        if searchRequest.isLoading {
-                            searchSkeletonGrid(geometry: geometry)
-                        } else if let searchError = searchRequest.error {
-                            searchErrorState(error: searchError)
-                        } else if searchRequest.rooms.isEmpty {
-                            if searchRequest.hasSearched {
-                                searchNoResultsState()
-                            } else {
-                                searchEmptyState()
-                            }
-                        } else {
-                            searchResultsGrid(geometry: geometry)
+                } else if platformSearchKinds.count > 1 {
+                    searchTypePicker(selection: platformSearchKindSelection) {
+                        ForEach(platformSearchKinds, id: \.self) { kind in
+                            Text(kind == .share ? "链接/口令 🔗" : "关键词 🔍")
+                                .tag(kind)
                         }
                     }
-                    .animation(.easeInOut, value: searchRequest.isLoading)
-                    .animation(.easeInOut, value: searchRequest.rooms.count)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .navigationTitle("搜索")
-            .navigationBarTitleDisplayMode(.large)
-            .searchable(
-                text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .always),
-                prompt: searchPrompt
-            )
-            .onSubmit(of: .search) {
-                performSearch()
-            }
-            .onChange(of: viewModel.searchText) { _, newValue in
-                // 当搜索框清空时，恢复到初始状态
-                if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    searchRequest.clear()
+
+                Group {
+                    if searchRequest.isLoading && (platform == nil || searchRequest.rooms.isEmpty) {
+                        searchSkeletonGrid(geometry: geometry)
+                    } else if let searchError = searchRequest.error {
+                        searchErrorState(error: searchError)
+                    } else if searchRequest.rooms.isEmpty {
+                        if searchRequest.hasSearched {
+                            searchNoResultsState()
+                        } else {
+                            searchEmptyState()
+                        }
+                    } else {
+                        searchResultsGrid(geometry: geometry)
+                    }
                 }
+                .animation(.easeInOut, value: searchRequest.isLoading)
+                .animation(.easeInOut, value: searchRequest.rooms.count)
             }
-            .onChange(of: viewModel.searchTypeIndex) { _, _ in
-                searchRequest.clear()
-                refreshSearchPlatformOptions()
-            }
-            .onChange(of: pluginAvailability.catalogRevision) { _, _ in
-                refreshSearchPlatformOptions()
-            }
-            .onAppear { refreshSearchPlatformOptions() }
-            .onDisappear { searchRequest.cancel() }
-            .sheet(item: $authenticationRecoveryRequest) { request in
-                NavigationStack {
-                    PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
-                }
-            }
-            .fullUITabBarVisibilityRoot()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        if #available(iOS 18.0, *) {
-            baseView
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        } else {
-            baseView
-                .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
+    }
+
+    private func searchTypePicker<Selection: Hashable, Options: View>(
+        selection: Binding<Selection>,
+        @ViewBuilder options: () -> Options
+    ) -> some View {
+        Picker("搜索类型", selection: selection, content: options)
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top, AppConstants.Spacing.sm)
+            .padding(.bottom, AppConstants.Spacing.md)
+    }
+
+    private var searchEmptyMessage: String {
+        guard platform != nil else {
+            return "支持分享链接、口令或房间号直达，也可以尝试搜索主播名和直播间标题。"
         }
+        return activePlatformSearchKind == .share
+            ? String(localized: "粘贴当前平台的分享链接或口令。")
+            : String(localized: "输入主播名或直播间标题开始搜索。")
     }
 
     @ViewBuilder
     private func searchEmptyState() -> some View {
         ErrorView.empty(
             title: "搜索直播间",
-            message: "支持分享链接、口令或房间号直达，也可以尝试搜索主播名和直播间标题。",
+            message: searchEmptyMessage,
             symbolName: "magnifyingglass.circle",
             tint: .blue
         )
@@ -197,6 +312,12 @@ struct SearchView: View {
     }
 
     private var searchNoResultsMessage: String {
+        if platform != nil {
+            return activePlatformSearchKind == .share
+                ? String(localized: "请检查分享链接或口令是否属于当前平台。")
+                : String(localized: "换个主播名或直播间标题试试。")
+        }
+
         if let selectedSearchPlatformName {
             return String(localized: "当前筛选平台：\(selectedSearchPlatformName)。换个关键词试试，或切换平台后重试。")
         }
@@ -221,7 +342,10 @@ struct SearchView: View {
                         pluginIDs: searchRequest.authenticationRequiredPluginIDs
                     )
                 } label: {
-                    Label("部分平台需要登录", systemImage: "person.crop.circle.badge.exclamationmark")
+                    Label(
+                        platform == nil ? "部分平台需要登录" : "登录平台账号",
+                        systemImage: "person.crop.circle.badge.exclamationmark"
+                    )
                         .font(.subheadline)
                 }
                 .buttonStyle(.bordered)
@@ -244,6 +368,19 @@ struct SearchView: View {
                 }
                 .padding(.horizontal, horizontalPadding)
                 .padding(.vertical, AppConstants.Spacing.md)
+
+                if platform != nil && searchRequest.hasMore {
+                    Group {
+                        if searchRequest.isLoading {
+                            ProgressView()
+                                .accessibilityLabel("正在加载更多直播间")
+                        } else {
+                            Button("加载更多") { searchRequest.loadMore() }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                    .padding(.bottom, AppConstants.Spacing.md)
+                }
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.interactively)
@@ -288,7 +425,13 @@ struct SearchView: View {
             showLoginButton: error.showsLoginAction,
             showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
             onDismiss: nil,
-            onRetry: { performSearch() },
+            onRetry: {
+                if platform != nil, !searchRequest.rooms.isEmpty, searchRequest.hasMore {
+                    searchRequest.loadMore()
+                } else {
+                    performSearch()
+                }
+            },
             onLogin: error.showsLoginAction ? {
                 authenticationRecoveryRequest = AuthenticationRecoveryRequest(
                     pluginIDs: error.authRequiredPluginIDs
@@ -298,15 +441,32 @@ struct SearchView: View {
     }
 
     private func performSearch() {
-        hideKeyboard()
-        let keyword = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return }
+        let kind: RoomSearchKind
+        let pluginID: String?
+        if let platform {
+            guard let activePlatformSearchKind else { return }
+            kind = activePlatformSearchKind
+            pluginID = platform.pluginId
+        } else {
+            kind = viewModel.searchTypeIndex == 1 ? .keyword : .share
+            pluginID = selectedSearchPluginID
+        }
 
-        searchRequest.submit(
-            input: keyword,
-            kind: viewModel.searchTypeIndex == 1 ? .keyword : .share,
-            pluginID: selectedSearchPluginID
-        )
+        hideKeyboard()
+        let input = viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return }
+        searchRequest.submit(input: input, kind: kind, pluginID: pluginID)
+    }
+
+    private func selectPlatformSearchKind(_ kind: RoomSearchKind) {
+        guard kind != platformSearchKind else { return }
+        platformSearchKind = kind
+        resetPlatformSearch()
+    }
+
+    private func resetPlatformSearch() {
+        viewModel.searchText = ""
+        searchRequest.clear()
     }
 
     private func updateSelectedSearchPlatform(_ pluginID: String?) {
@@ -322,6 +482,7 @@ struct SearchView: View {
     }
 
     private func refreshSearchPlatformOptions() {
+        guard platform == nil else { return }
         searchPlatformOptions = SandboxPluginCatalog.availablePlatforms().filter {
             PlatformCapability.supports(searchPlatformFeature, for: $0.liveType)
         }

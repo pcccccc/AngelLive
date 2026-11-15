@@ -19,6 +19,7 @@ struct PlatformDetailView: View {
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
     @State private var showCapabilityPopover = false
+    @State private var showPlatformSearch = false
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
 
     /// 根据平台类型生成登录相关的错误标题
@@ -158,7 +159,24 @@ struct PlatformDetailView: View {
                 .disabled(isRefreshing || viewModel.isLoadingRooms)
                 .buttonStyle(.plain)
                 .frame(width: 36, height: 36)
+
+                if !RoomSearchKind.platformOptions(for: viewModel.platform.liveType).isEmpty {
+                    Button {
+                        showPlatformSearch = true
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.body)
+                            .frame(width: 16, height: 16)
+                    }
+                    .accessibilityLabel("搜索当前平台")
+                    .help("搜索当前平台")
+                    .buttonStyle(.plain)
+                    .frame(width: 36, height: 36)
+                }
             }
+        }
+        .sheet(isPresented: $showPlatformSearch) {
+            MacPlatformSearchView(platform: viewModel.platform)
         }
         .overlay {
             if showCategorySheet {

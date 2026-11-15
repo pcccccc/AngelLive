@@ -18,7 +18,7 @@ struct PlatformView: View {
     @State private var platformViewModel = PlatformViewModel()
     @FocusState private var focusIndex: Int?
     @Environment(AppState.self) private var appViewModel
-    @State private var selectedLiveType: LiveType?
+    @State private var selectedPlatform: Platformdescription?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -42,7 +42,7 @@ struct PlatformView: View {
         .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedPluginIds in
             platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
             if installedPluginIds.isEmpty {
-                selectedLiveType = nil
+                selectedPlatform = nil
             }
         }
     }
@@ -54,7 +54,7 @@ struct PlatformView: View {
                 // 在数组 mutate 时缓存的 index 落到新数组之外触发 "Index out of range"。
                 ForEach(Array(platformViewModel.platformInfo.enumerated()), id: \.element.id) { index, platform in
                     Button {
-                        selectedLiveType = platform.liveType
+                        selectedPlatform = platform
                     } label: {
                         ZStack {
                             Image("platform-bg")
@@ -137,17 +137,17 @@ struct PlatformView: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 40)
         }
-        .fullScreenCover(item: $selectedLiveType) { liveType in
+        .fullScreenCover(item: $selectedPlatform) { platform in
             if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
-                ListMainView(liveType: liveType, appViewModel: appViewModel)
+                ListMainView(platform: platform, appViewModel: appViewModel)
                     .background(
                         Color("sl-background", bundle: nil)
                     )
                     .safeAreaPadding(.all)
-                    .id("\(liveType.rawValue)-\(PlatformAPITokenService.shared.contentRevision)")
+                    .id("\(platform.id)-\(PlatformAPITokenService.shared.contentRevision)")
             } else {
-                ListMainView(liveType: liveType, appViewModel: appViewModel)
-                    .id("\(liveType.rawValue)-\(PlatformAPITokenService.shared.contentRevision)")
+                ListMainView(platform: platform, appViewModel: appViewModel)
+                    .id("\(platform.id)-\(PlatformAPITokenService.shared.contentRevision)")
             }
         }
     }

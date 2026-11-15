@@ -139,7 +139,7 @@ public enum LiveService {
             var rooms: [LiveModel] = []
             var authenticationRequiredPluginIDs = Set<String>()
             for try await result in group {
-                rooms.append(contentsOf: result.rooms)
+                rooms.append(contentsOf: result.rooms.map(removingKeywordHighlights))
                 if result.authenticationRequired {
                     authenticationRequiredPluginIDs.insert(result.pluginID)
                 }
@@ -149,6 +149,34 @@ public enum LiveService {
                 authenticationRequiredPluginIDs: platforms.map(\.pluginId).filter(authenticationRequiredPluginIDs.contains)
             )
         }
+    }
+
+    private static func removingKeywordHighlights(from room: LiveModel) -> LiveModel {
+        func plainText(_ text: String) -> String {
+            // Keyword results may wrap matched text in emphasis tags. Keep the text and unrelated markup.
+            text.replacingOccurrences(
+                of: #"<em(?:\s+[^<>]*)?>([^<]*)</em\s*>"#,
+                with: "$1",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+
+        let title = plainText(room.roomTitle)
+        let userName = plainText(room.userName)
+        guard title != room.roomTitle || userName != room.userName else { return room }
+
+        return LiveModel(
+            userName: userName,
+            roomTitle: title,
+            roomCover: room.roomCover,
+            userHeadImg: room.userHeadImg,
+            liveType: room.liveType,
+            liveState: room.liveState,
+            userId: room.userId,
+            roomId: room.roomId,
+            liveWatchedCount: room.liveWatchedCount,
+            identityUpdatedAt: room.identityUpdatedAt
+        )
     }
 
     public static func searchRoomWithShareCode(shareCode: String) async throws -> LiveModel? {

@@ -751,7 +751,6 @@ struct ContentView: View {
 
 private struct PlatformDetailTabContainer: View {
     let platform: Platformdescription
-    @State private var showCapabilitySheet = false
 
     var body: some View {
         NavigationStack {
@@ -759,19 +758,7 @@ private struct PlatformDetailTabContainer: View {
                 .environment(PlatformDetailViewModel(platform: platform))
                 .navigationBarTitleDisplayMode(.inline)
                 .navigationTitle(platform.title)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showCapabilitySheet = true
-                        } label: {
-                            Image(systemName: "info.circle")
-                        }
-                    }
-                }
                 .fullUITabBarVisibilityRoot()
-        }
-        .sheet(isPresented: $showCapabilitySheet) {
-            PlatformCapabilitySheet(liveType: platform.liveType)
         }
     }
 }

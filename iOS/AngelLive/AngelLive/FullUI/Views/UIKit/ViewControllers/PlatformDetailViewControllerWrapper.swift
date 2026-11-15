@@ -17,13 +17,48 @@ struct PlatformDetailViewControllerWrapper: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(\.presentToast) private var presentToast
 
+    @State private var showCapabilitySheet = false
+    @State private var searchPlatform: Platformdescription?
+
     /// 共享导航状态 - 在 PiP 背景/前台切换时保持稳定
     @State private var navigationState = LiveRoomNavigationState()
     /// 共享命名空间 - 用于 zoom 过渡动画
     @Namespace private var roomTransitionNamespace
 
     var body: some View {
+        let platform = viewModel.platform
+        let searchKinds = PlatformRoomSearchView.availableSearchKinds(for: platform, pluginAvailability: pluginAvailability)
         playerPresentation
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if !searchKinds.isEmpty {
+                        Button {
+                            searchPlatform = platform
+                        } label: {
+                            Label(
+                                searchKinds.contains(.share) ? "搜索直播间" : "搜索主播和直播间",
+                                systemImage: "magnifyingglass"
+                            )
+                            .labelStyle(.iconOnly)
+                        }
+                    }
+
+                    Button {
+                        showCapabilitySheet = true
+                    } label: {
+                        Label("插件信息", systemImage: "info.circle")
+                            .labelStyle(.iconOnly)
+                    }
+                }
+            }
+            .sheet(isPresented: $showCapabilitySheet) {
+                PlatformCapabilitySheet(liveType: platform.liveType)
+            }
+            .navigationDestination(item: $searchPlatform) { platform in
+                PlatformRoomSearchView(platform: platform)
+                    .apiCredentialContentIdentity(pluginId: platform.pluginId)
+                    .fullUITabBarHidden()
+            }
     }
 
     private var baseView: some View {

@@ -297,8 +297,8 @@ class LiveViewModel {
         }
     }
 
-    func submitSearch(input: String, kind: RoomSearchKind) {
-        searchRequest.submit(input: input, kind: kind)
+    func submitSearch(input: String, kind: RoomSearchKind, pluginID: String? = nil) {
+        searchRequest.submit(input: input, kind: kind, pluginID: pluginID)
     }
 
     private static func fetchSearch(_ request: RoomSearchRequest) async throws -> RoomSearchOutcome {
@@ -312,9 +312,16 @@ class LiveViewModel {
             return try await SupportDiagnosticContext.$operationID.withValue(operationID) {
                 switch request.kind {
                 case .keyword:
-                    return try await LiveService.searchRoomsWithOutcome(keyword: request.input, page: request.page)
+                    return try await LiveService.searchRoomsWithOutcome(
+                        keyword: request.input,
+                        page: request.page,
+                        pluginID: request.pluginID
+                    )
                 case .share:
-                    return try await LiveService.searchRoomWithShareCodeWithOutcome(shareCode: request.input)
+                    return try await LiveService.searchRoomWithShareCodeWithOutcome(
+                        shareCode: request.input,
+                        pluginID: request.pluginID
+                    )
                 }
             }
         } catch let error as LiveParseError where error.detail.contains("返回结果为空") {

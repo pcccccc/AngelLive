@@ -14,7 +14,6 @@ struct PlatformView: View {
     @Environment(SearchViewModel.self) private var searchViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var navigationPath: [Platformdescription] = []
-    @State private var showCapabilitySheet = false
     private let gridSpacing = AppConstants.Spacing.lg
 
     var body: some View {
@@ -47,18 +46,6 @@ struct PlatformView: View {
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationTitle(platform.title)
                     .fullUITabBarHidden()
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                showCapabilitySheet = true
-                            } label: {
-                                Image(systemName: "info.circle")
-                            }
-                        }
-                    }
-                    .sheet(isPresented: $showCapabilitySheet) {
-                        PlatformCapabilitySheet(liveType: platform.liveType)
-                    }
             }
         }
     }

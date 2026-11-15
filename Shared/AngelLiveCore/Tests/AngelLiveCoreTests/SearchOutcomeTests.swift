@@ -4,6 +4,54 @@ import Testing
 
 @Suite("Search authentication outcomes")
 struct SearchOutcomeTests {
+    @Test(arguments: [false, true])
+    func keywordResultsRemoveEmphasisWithoutChangingRoomMetadata(scoped: Bool) async throws {
+        let platforms = [Self.platform("source-a"), Self.platform("source-b")]
+        let calls = SearchPlatformCalls()
+        let timestamp = Date(timeIntervalSince1970: 12345)
+        let outcome = try await LiveService.searchRoomsWithOutcome(
+            platforms: platforms, keyword: "query", page: 2, pluginID: scoped ? "source-b" : nil
+        ) { platform, _, _ in
+            await calls.record(platform.pluginId)
+            return [LiveModel(
+                userName: "Host <EM class=\"match\">query</EM> <note>",
+                roomTitle: "Before <em class=\"match\">query</em> after <em>again</em> <note>",
+                roomCover: "cover", userHeadImg: "avatar",
+                liveType: LiveType(rawValue: platform.pluginId)!, liveState: "live",
+                userId: "user", roomId: platform.pluginId, liveWatchedCount: "42",
+                identityUpdatedAt: timestamp
+            )]
+        }
+        #expect(await calls.pluginIDs.sorted() == (scoped ? ["source-b"] : ["source-a", "source-b"]))
+        #expect(outcome.rooms.count == (scoped ? 1 : 2))
+        #expect(outcome.rooms.map(\.roomId).sorted() == (scoped ? ["source-b"] : ["source-a", "source-b"]))
+        for room in outcome.rooms {
+            #expect(room.userName == "Host query <note>")
+            #expect(room.roomTitle == "Before query after again <note>")
+            #expect(room.roomCover == "cover")
+            #expect(room.userHeadImg == "avatar")
+            #expect(room.liveType.rawValue == room.roomId)
+            #expect(room.liveState == "live")
+            #expect(room.userId == "user")
+            #expect(room.liveWatchedCount == "42")
+            #expect(room.identityUpdatedAt == timestamp)
+        }
+    }
+
+    @Test func shareResultPreservesLiteralEmphasisText() async throws {
+        let room = LiveModel(
+            userName: "<em>host</em>", roomTitle: "<em>title</em>",
+            roomCover: "cover", userHeadImg: "avatar", liveType: LiveType(rawValue: "source-a")!,
+            liveState: nil, userId: "user", roomId: "room", liveWatchedCount: nil
+        )
+        let outcome = try await ApiManager.fetchSearchWithShareCodeOutcome(
+            shareCode: "fixture", platforms: [Self.platform("source-a")]
+        ) { _, _ in room }
+        let result = try #require(outcome.rooms.first)
+        #expect(result.roomTitle == "<em>title</em>")
+        #expect(result.userName == "<em>host</em>")
+    }
+
     @Test func keywordDefaultSearchesEveryAvailablePlatform() async throws {
         let platforms = [Self.platform("source-a"), Self.platform("source-b")]
         let calls = SearchPlatformCalls()

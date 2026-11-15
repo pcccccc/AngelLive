@@ -1,9 +1,20 @@
 import Foundation
 import Observation
 
-public enum RoomSearchKind: Sendable, Equatable {
+public enum RoomSearchKind: Sendable, Hashable {
     case keyword
     case share
+
+    public static func platformOptions(for liveType: LiveType) -> [Self] {
+        var options: [Self] = []
+        if PlatformCapability.supports(.shareResolve, for: liveType) {
+            options.append(.share)
+        }
+        if PlatformCapability.supports(.search, for: liveType) {
+            options.append(.keyword)
+        }
+        return options
+    }
 }
 
 public struct RoomSearchRequest: Sendable, Equatable {

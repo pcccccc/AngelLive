@@ -17,7 +17,6 @@ struct AdaptivePlatformView: View {
     @State private var showAddSheet = false
     @State private var navigationPath: [AdaptivePlatformRoute] = []
     @State private var pendingPluginSourceURLs: [String]?
-    @State private var showCapabilitySheet = false
     private let gridSpacing = AppConstants.Spacing.lg
 
     var body: some View {
@@ -96,18 +95,6 @@ struct AdaptivePlatformView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationTitle(platform.title)
             .fullUITabBarHidden()
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCapabilitySheet = true
-                    } label: {
-                        Image(systemName: "info.circle")
-                    }
-                }
-            }
-            .sheet(isPresented: $showCapabilitySheet) {
-                PlatformCapabilitySheet(liveType: platform.liveType)
-            }
     }
 
     private func openPluginSources(_ sourceURLs: [String]) {

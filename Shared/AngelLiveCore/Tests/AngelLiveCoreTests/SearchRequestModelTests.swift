@@ -4,6 +4,37 @@ import Testing
 @Suite("Search request ownership")
 @MainActor
 struct SearchRequestModelTests {
+    @Test func scopedShareReplacesInflightKeywordAndCannotPaginate() async {
+        let gate = SearchRequestGate()
+        let model = SearchRequestModel(fetch: gate.fetch)
+        model.submit(input: "query", kind: .keyword, pluginID: "source-a")
+        let first = model.pendingTask
+        await gate.waitForStarted(1)
+        gate.finish(0, .success([room("first", plugin: "source-a")]))
+        await first?.value
+        model.loadMore()
+        let oldPage = model.pendingTask
+        await gate.waitForStarted(2)
+
+        model.submit(input: "https://login.example.invalid/room", kind: .share, pluginID: "source-a")
+        let share = model.pendingTask
+        await gate.waitForStarted(3)
+        #expect(model.rooms.isEmpty)
+        #expect(gate.requests == [
+            RoomSearchRequest(input: "query", kind: .keyword, page: 1, pluginID: "source-a"),
+            RoomSearchRequest(input: "query", kind: .keyword, page: 2, pluginID: "source-a"),
+            RoomSearchRequest(input: "https://login.example.invalid/room", kind: .share, page: 1, pluginID: "source-a")
+        ])
+        gate.finish(2, .success([room("shared", plugin: "source-a")]))
+        await share?.value
+        gate.finish(1, .success([room("stale", plugin: "source-a")]))
+        await oldPage?.value
+        #expect(model.rooms.map(\.roomId) == ["shared"])
+        #expect(!model.hasMore)
+        model.loadMore()
+        #expect(gate.requests.count == 3)
+    }
+
     @Test func selectedPlatformIsRetainedAcrossPagination() async {
         let gate = SearchRequestGate()
         let model = SearchRequestModel(fetch: gate.fetch)

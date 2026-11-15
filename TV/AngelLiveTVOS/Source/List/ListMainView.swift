@@ -12,6 +12,7 @@ enum FocusableField: Hashable {
     case historyContent(String)
     case leftFavorite(Int, Int)
     case platformInfo
+    case platformSearch
     case emptyContent
     case leftTrigger
 }
@@ -27,6 +28,7 @@ struct ListMainView: View {
     @State private var showEmptyState: Bool = false
     @State private var pendingEmptyState: DispatchWorkItem?
     @State private var showCapabilitySheet: Bool = false
+    @State private var showPlatformSearch = false
     @State private var authenticationRecovery: AuthenticationRecoveryRequest?
     @State private var hasStartedInitialLoad = false
     private static let topId = "topIdHere"
@@ -42,19 +44,23 @@ struct ListMainView: View {
     private let cardHeight: CGFloat = 280
     private let emptyStateDelay: TimeInterval = 0.35
     private let headerToGridSpacing: CGFloat = 24
+    private let headerTrailingInset: CGFloat = 80
+    // tvOS 的 plain 按钮焦点背景超出 label，动作间距须包含两侧扩展区域。
+    private let headerActionSpacing: CGFloat = 80
 
-    var liveType: LiveType
+    private let platform: Platformdescription
+    private var liveType: LiveType { platform.liveType }
     @State private var liveViewModel: LiveViewModel
     @FocusState var focusState: FocusableField?
     var appViewModel: AppState
     
-    init(liveType: LiveType, appViewModel: AppState) {
-        self.liveType = liveType
+    init(platform: Platformdescription, appViewModel: AppState) {
+        self.platform = platform
         self.appViewModel = appViewModel
         _liveViewModel = State(
             initialValue: LiveViewModel(
                 roomListType: .live,
-                liveType: liveType,
+                liveType: platform.liveType,
                 appViewModel: appViewModel,
                 shouldLoadData: false
             )
@@ -112,10 +118,14 @@ struct ListMainView: View {
             let index = cardIndex ?? focusedIndex
             if direction == .left && index >= 0 && index % gridColumnCount == 0 {
                 openSidebar()
+            } else if direction == .up && index < gridColumnCount && canSearchPlatform {
+                focusState = .platformSearch
             }
         case .emptyContent, .platformInfo:
             if direction == .left {
                 openSidebar()
+            } else if direction == .up && focusState == .emptyContent && canSearchPlatform {
+                focusState = .platformSearch
             }
         default:
             break
@@ -158,18 +168,70 @@ struct ListMainView: View {
             Spacer()
         }
         .overlay(alignment: .trailing) {
+            platformHeaderActions
+        }
+    }
+
+    private var canSearchPlatform: Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins && !RoomSearchKind.platformOptions(for: liveType).isEmpty
+    }
+
+    private var platformHeaderActions: some View {
+        HStack(spacing: headerActionSpacing) {
+            if canSearchPlatform {
+                platformSearchButton
+            }
             Button {
                 showCapabilitySheet = true
             } label: {
                 Image(systemName: "info.circle")
                     .font(.title3)
+                    .frame(
+                        minWidth: canSearchPlatform ? 44 : nil,
+                        minHeight: canSearchPlatform ? 44 : nil
+                    )
             }
             .buttonStyle(.plain)
-            .padding(.trailing, 80)
             .focused($focusState, equals: .platformInfo)
             .onMoveCommand { direction in
-                handleMoveCommand(direction)
+                if direction == .left && canSearchPlatform {
+                    cancelPendingFocus()
+                    focusState = .platformSearch
+                } else {
+                    handleMoveCommand(direction)
+                }
             }
+        }
+        .padding(.trailing, headerTrailingInset)
+    }
+
+    private var platformSearchButton: some View {
+        Button {
+            guard !liveViewModel.isSidebarExpanded else { return }
+            cancelPendingFocus()
+            showPlatformSearch = true
+        } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.title3)
+                .frame(minWidth: 44, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .focused($focusState, equals: .platformSearch)
+        .accessibilityLabel("搜索当前平台")
+        .onMoveCommand { direction in
+            if direction == .left && !liveViewModel.hasError {
+                openSidebar()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var platformSearchOnEmptyContent: some View {
+        if canSearchPlatform {
+            platformSearchButton
+                .padding(.trailing, headerTrailingInset)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .focusSection()
         }
     }
 
@@ -192,7 +254,7 @@ struct ListMainView: View {
             return liveViewModel.roomList.indices.contains(index) && index % gridColumnCount == 0
         case .emptyContent:
             return liveViewModel.roomList.isEmpty && showEmptyState && !liveViewModel.isLoading
-        case .platformInfo:
+        case .platformInfo, .platformSearch:
             // 初次加载时信息按钮可能先获得焦点，不能据此启用左缘入口。
             return !liveViewModel.roomList.isEmpty
         default:
@@ -206,6 +268,7 @@ struct ListMainView: View {
               !liveViewModel.isSidebarExpanded || focusState == .leftTrigger,
               !liveViewModel.hasError,
               !showCapabilitySheet,
+              !showPlatformSearch,
               authenticationRecovery == nil,
               !liveViewModel.showAlert,
               !pendingCategoryFocus,
@@ -256,7 +319,9 @@ struct ListMainView: View {
     }
 
     private func openSidebar() {
-        guard !liveViewModel.isSidebarExpanded, !liveViewModel.categories.isEmpty else { return }
+        guard !showPlatformSearch,
+              !liveViewModel.isSidebarExpanded,
+              !liveViewModel.categories.isEmpty else { return }
         logNavigation("openSidebar")
         cancelPendingFocus()
         liveViewModel.isSidebarExpanded = true
@@ -292,6 +357,7 @@ struct ListMainView: View {
     }
 
     private func handleBackCommand() {
+        guard !showPlatformSearch else { return }
         cancelPendingFocus()
         if liveViewModel.isSidebarExpanded {
             closeSidebar()
@@ -313,6 +379,7 @@ struct ListMainView: View {
     private var pendingFocusTarget: FocusableField? {
         guard !liveViewModel.isLoading,
               !liveViewModel.hasError,
+              !showPlatformSearch,
               !liveViewModel.isSidebarExpanded else {
             return nil
         }
@@ -385,6 +452,7 @@ struct ListMainView: View {
                     // 已确认为空态时才显示空态视图
                     emptyStateView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .topTrailing) { platformSearchOnEmptyContent }
                 } else {
                     // 其他情况都显示列表（包括加载中、有数据）
                     roomListView
@@ -432,6 +500,7 @@ struct ListMainView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .task(id: pendingSidebarFocus) {
             guard let target = pendingSidebarFocus,
+                  !showPlatformSearch,
                   !liveViewModel.isSidebarExpanded,
                   !Task.isCancelled else { return }
             // 等背景在新视图树中重新启用，再请求恢复焦点。
@@ -490,6 +559,7 @@ struct ListMainView: View {
         ZStack {
             if liveViewModel.hasError, let error = liveViewModel.currentError {
                 errorView(error)
+                    .overlay(alignment: .topTrailing) { platformSearchOnEmptyContent }
             } else {
                 listContainerView
             }
@@ -517,6 +587,7 @@ struct ListMainView: View {
             handleBackCommand()
         }
         .onKeyPress(.escape, phases: .all) { press in
+            guard !showPlatformSearch else { return .ignored }
             logNavigation("escape phase=\(press.phase)")
             // Escape 不一定转换为遥控器的 Exit 命令。消费整个按键，
             // 松开时只返回一层，避免按下时收起菜单、松开时又退出页面。
@@ -558,7 +629,7 @@ struct ListMainView: View {
             .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
-            guard liveViewModel.isLoading == true else { return }
+            guard !showPlatformSearch, liveViewModel.isLoading == true else { return }
             liveViewModel.getRoomList(index: 1)
         })
         .onChange(of: scenePhase) { oldValue, newValue in
@@ -610,6 +681,13 @@ struct ListMainView: View {
                 .onExitCommand {
                     showCapabilitySheet = false
                 }
+        }
+        .fullScreenCover(isPresented: $showPlatformSearch, onDismiss: {
+            if canSearchPlatform {
+                focusState = .platformSearch
+            }
+        }) {
+            TVPlatformSearchView(platform: platform, appViewModel: appViewModel)
         }
     }
 }

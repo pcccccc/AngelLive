@@ -8,13 +8,85 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import SharedAssets
+
+struct TVPlatformSearchView: View {
+    let platform: Platformdescription
+    @Environment(\.dismiss) private var dismiss
+    @State private var liveViewModel: LiveViewModel
+
+    init(platform: Platformdescription, appViewModel: AppState) {
+        self.platform = platform
+        _liveViewModel = State(initialValue: LiveViewModel(
+            roomListType: .search,
+            liveType: platform.liveType,
+            appViewModel: appViewModel
+        ))
+    }
+
+    var body: some View {
+        SearchRoomView(platform: platform)
+            .environment(liveViewModel)
+            .environment(liveViewModel.appViewModel)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                Color.shared("sl-background")
+                    .overlay {
+                        if !liveViewModel.appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
+                            Rectangle().fill(.thinMaterial)
+                        }
+                    }
+                    .ignoresSafeArea()
+            }
+            .interactiveDismissDisabled()
+            .onExitCommand { dismiss() }
+            .onKeyPress(.escape, phases: .all) { press in
+                if press.phase == .up {
+                    dismiss()
+                }
+                return .handled
+            }
+    }
+}
 
 struct SearchRoomView: View {
 
-    @FocusState var focusState: Int?
+    private let platform: Platformdescription?
+    @State private var platformSearchText = ""
+    @State private var platformSearchKind: RoomSearchKind
     @State private var authenticationRecovery: AuthenticationRecoveryRequest?
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(AppState.self) var appViewModel
+
+    init(platform: Platformdescription? = nil) {
+        self.platform = platform
+        let options = platform.map { RoomSearchKind.platformOptions(for: $0.liveType) } ?? []
+        _platformSearchKind = State(initialValue: options.contains(.keyword) ? .keyword : .share)
+    }
+
+    private var platformSearchOptions: [RoomSearchKind] {
+        platform.map { RoomSearchKind.platformOptions(for: $0.liveType) } ?? []
+    }
+
+    private var platformSearchPrompt: String {
+        platformSearchKind == .keyword ? "主播名或直播间关键词" : "平台链接/分享口令"
+    }
+
+    private var platformSearchSelection: Binding<RoomSearchKind> {
+        Binding(
+            get: { platformSearchKind },
+            set: { kind in
+                guard kind != platformSearchKind else { return }
+                platformSearchText = ""
+                liveViewModel.searchRequest.clear()
+                platformSearchKind = kind
+            }
+        )
+    }
+
+    private var searchText: String {
+        platform == nil ? appViewModel.searchViewModel.searchText : platformSearchText
+    }
 
     var body: some View {
 
@@ -26,26 +98,46 @@ struct SearchRoomView: View {
             HStack(alignment: .center, spacing: 40) {
                 // 左侧：搜索输入区域
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
-                    Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
-                        ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
-                            let text = liveViewModel.searchTypeArray[index]
-                            Text(text)
+                    if let platform {
+                        Text("搜索\(platform.title)")
+                        if platformSearchOptions.count > 1 {
+                            Picker(selection: platformSearchSelection) {
+                                ForEach(platformSearchOptions, id: \.self) { kind in
+                                    Text(liveViewModel.searchTypeArray[kind == .share ? 0 : 1])
+                                        .tag(kind)
+                                }
+                            } label: {
+                                Text("搜索类型")
+                            }
                         }
-                    } label: {
-                        Text("搜索类型")
+                        HStack {
+                            TextField(platformSearchPrompt, text: $platformSearchText)
+                                .onSubmit(submitSearch)
+                            Button("搜索", action: submitSearch)
+                                .disabled(platformSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    } else {
+                        Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
+                        Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
+                            ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
+                                let text = liveViewModel.searchTypeArray[index]
+                                Text(text)
+                            }
+                        } label: {
+                            Text("搜索类型")
+                        }
+                        TextField("搜索", text: $appModel.searchViewModel.searchText)
+                            .onSubmit(submitSearch)
                     }
-                    TextField("搜索", text: $appModel.searchViewModel.searchText)
-                        .onSubmit {
-                            submitSearch()
-                        }
                 }
                 .frame(maxWidth: 1200, alignment: .leading)
 
                 Spacer()
 
                 // 右侧：扫码输入面板
-                searchQRPanel
+                if platform == nil {
+                    searchQRPanel
+                }
             }
 
             Spacer()
@@ -69,6 +161,12 @@ struct SearchRoomView: View {
                         authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: error.authRequiredPluginIDs)
                     }
                 )
+            } else if platform != nil,
+                      liveViewModel.searchRequest.hasSearched,
+                      !liveViewModel.searchRequest.isLoading,
+                      liveViewModel.roomList.isEmpty {
+                ContentUnavailableView.search(text: platformSearchText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 if !liveViewModel.searchRequest.authenticationRequiredPluginIDs.isEmpty {
                     Button("部分平台需要登录") {
@@ -118,22 +216,32 @@ struct SearchRoomView: View {
             submitSearch()
         })
         .onChange(of: appModel.searchViewModel.searchTypeIndex) { _, _ in
+            guard platform == nil else { return }
             liveViewModel.searchRequest.clear()
         }
-        .onChange(of: appModel.searchViewModel.searchText) { _, newValue in
+        .onChange(of: searchText) { _, newValue in
             if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 liveViewModel.searchRequest.clear()
             }
         }
         .onDisappear { liveViewModel.searchRequest.cancel() }
         .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
-            guard let event = appViewModel.remoteInputService.lastEvent,
+            guard platform == nil,
+                  let event = appViewModel.remoteInputService.lastEvent,
                   event.field == .search else { return }
             appModel.searchViewModel.searchText = event.value
         }
     }
 
     private func submitSearch() {
+        if let platform {
+            guard platformSearchOptions.contains(platformSearchKind) else {
+                liveViewModel.searchRequest.clear()
+                return
+            }
+            liveViewModel.submitSearch(input: platformSearchText, kind: platformSearchKind, pluginID: platform.pluginId)
+            return
+        }
         liveViewModel.submitSearch(
             input: appViewModel.searchViewModel.searchText,
             kind: appViewModel.searchViewModel.searchTypeIndex == 1 ? .keyword : .share
