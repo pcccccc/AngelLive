@@ -86,7 +86,12 @@ struct ShortDramaPlayerView: View {
                 isRegularWidth: horizontalSizeClass == .regular
             )
             let landscape = geometry.size.width > geometry.size.height
+            let usesCompactLandscapeControls = landscape && verticalSizeClass == .compact
+                && orientation.permitsOrientationRequests
             let controlInset = controlEdgeInset(geometry: geometry)
+            let horizontalControlInset = usesCompactLandscapeControls
+                ? UnifiedPlayerControlOverlay.compactLandscapeControlInset
+                : controlInset
 
             ZStack(alignment: .topLeading) {
                 Color.black.ignoresSafeArea()
@@ -95,13 +100,12 @@ struct ShortDramaPlayerView: View {
                     GeometryReader { videoGeometry in
                         videoRegion(
                             size: videoGeometry.size,
-                            metrics: panelMetrics,
-                            controlInset: controlInset
+                            landscape: landscape
                         )
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    bottomControls(metrics: panelMetrics)
+                    bottomControls(metrics: panelMetrics, landscape: landscape)
                         .padding(.horizontal, controlInset)
                         .padding(.bottom, controlInset)
                         .frame(height: landscape ? 0 : nil, alignment: .bottom)
@@ -124,11 +128,12 @@ struct ShortDramaPlayerView: View {
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
 
                 if landscape {
-                    bottomControls(metrics: panelMetrics)
-                        .padding(.horizontal, controlInset)
+                    bottomControls(metrics: panelMetrics, landscape: landscape)
+                        .padding(.horizontal, horizontalControlInset)
                         .padding(.bottom, controlInset)
                         .background(alignment: .bottom) {
                             LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
+                                .ignoresSafeArea(.container, edges: [.horizontal, .bottom])
                                 .allowsHitTesting(false)
                         }
                         .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
@@ -136,6 +141,27 @@ struct ShortDramaPlayerView: View {
                         .allowsHitTesting(landscapeControlsVisible && panel == nil && !panelTransitioning)
                         .accessibilityHidden(!landscapeControlsVisible || panel != nil || panelTransitioning)
                 }
+
+                // Controls share the window's safe geometry; only the media extends beyond it.
+                topControls(metrics: panelMetrics, landscape: landscape)
+                    .padding(.top, landscape ? controlInset : 8)
+                    .padding(.horizontal, landscape ? horizontalControlInset : 16)
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                    .opacity(!landscape || landscapeControlsVisible ? 1 : 0)
+                    .allowsHitTesting(
+                        panel == nil
+                            && (!landscape || landscapeControlsVisible)
+                            && !panelTransitioning
+                            && !episodeSwipeHoldActive
+                            && !episodeSwipeTransitioning
+                    )
+                    .accessibilityHidden(
+                        panel != nil
+                            || (landscape && !landscapeControlsVisible)
+                            || panelTransitioning
+                            || episodeSwipeHoldActive
+                            || episodeSwipeTransitioning
+                    )
 
                 panelOverlay(metrics: panelMetrics)
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
@@ -273,8 +299,7 @@ struct ShortDramaPlayerView: View {
 
     private func videoRegion(
         size: CGSize,
-        metrics: ShortDramaPanelMetrics,
-        controlInset: CGFloat
+        landscape: Bool
     ) -> some View {
         ZStack {
             GeometryReader { mediaGeometry in
@@ -285,7 +310,7 @@ struct ShortDramaPlayerView: View {
             }
             .ignoresSafeArea(.container, edges: .all)
 
-            episodeInteractionLayer(availableHeight: size.height)
+            episodeInteractionLayer(availableHeight: size.height, landscape: landscape)
                 .allowsHitTesting(
                     panel == nil
                         && !panelTransitioning
@@ -330,26 +355,6 @@ struct ShortDramaPlayerView: View {
                     .transition(reduceMotion ? .identity : .opacity)
                     .zIndex(3)
             }
-        }
-        .overlay(alignment: .top) {
-            topControls(metrics: metrics)
-                .opacity(!isLandscapeLayout || landscapeControlsVisible ? 1 : 0)
-                .padding(.top, isLandscapeLayout ? controlInset : 8)
-                .padding(.horizontal, isLandscapeLayout ? controlInset : 16)
-                .allowsHitTesting(
-                    panel == nil
-                        && (!isLandscapeLayout || landscapeControlsVisible)
-                        && !panelTransitioning
-                        && !episodeSwipeHoldActive
-                        && !episodeSwipeTransitioning
-                )
-                .accessibilityHidden(
-                    panel != nil
-                        || (isLandscapeLayout && !landscapeControlsVisible)
-                        || panelTransitioning
-                        || episodeSwipeHoldActive
-                        || episodeSwipeTransitioning
-                )
         }
         .frame(width: size.width, height: size.height)
     }
@@ -476,13 +481,13 @@ struct ShortDramaPlayerView: View {
         .allowsHitTesting(false)
     }
 
-    private func episodeInteractionLayer(availableHeight: CGFloat) -> some View {
+    private func episodeInteractionLayer(availableHeight: CGFloat, landscape: Bool) -> some View {
         Color.clear
             // The timeline borrows 12pt from the picture; video gestures yield that strip.
-            .frame(height: max(0, availableHeight - (isLandscapeLayout ? 0 : 12)))
+            .frame(height: max(0, availableHeight - (landscape ? 0 : 12)))
             .contentShape(Rectangle())
             .onTapGesture {
-                if isLandscapeLayout && !landscapeControlsVisible {
+                if landscape && !landscapeControlsVisible {
                     showLandscapeControls()
                 } else {
                     togglePlayback()
@@ -838,7 +843,7 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func topControls(metrics: ShortDramaPanelMetrics) -> some View {
+    private func topControls(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
         let exitsLandscape = verticalSizeClass == .compact && orientation.permitsOrientationRequests
 
         return HStack {
@@ -865,7 +870,7 @@ struct ShortDramaPlayerView: View {
                 Button("播放设置", systemImage: "slider.horizontal.3") {
                     present(.settings, metrics: metrics)
                 }
-                if isHorizontalVideo && !isLandscapeLayout,
+                if isHorizontalVideo && !landscape,
                    horizontalSizeClass == .compact, verticalSizeClass == .regular,
                    orientation.permitsOrientationRequests {
                     Button("横屏观看", systemImage: "rectangle.landscape") {
@@ -886,26 +891,26 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private func bottomControls(metrics: ShortDramaPanelMetrics) -> some View {
+    private func bottomControls(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
         VStack(spacing: 0) {
-            progressControl
-            if !isLandscapeLayout {
+            progressControl(landscape: landscape)
+            if !landscape {
                 episodeMetadata
                     .padding(.bottom, 12)
             }
             HStack(spacing: 8) {
                 episodeDock(metrics: metrics)
-                    .frame(maxWidth: isLandscapeLayout ? 240 : .infinity)
-                if isLandscapeLayout { Spacer(minLength: 8) }
+                    .frame(maxWidth: landscape ? 240 : .infinity)
+                if landscape { Spacer(minLength: 8) }
                 quickRateButton
             }
         }
         .frame(maxWidth: .infinity)
-        .background(isLandscapeLayout ? Color.clear : Color.black)
+        .background(landscape ? Color.clear : Color.black)
         .accessibilityElement(children: .contain)
     }
 
-    private var progressControl: some View {
+    private func progressControl(landscape: Bool) -> some View {
         ZStack(alignment: .top) {
             ShortDramaProgressSlider(
                 value: $seekValue,
@@ -917,11 +922,11 @@ struct ShortDramaPlayerView: View {
                     if editing { beginSeek() }
                 },
                 onCommit: commitSeek,
-                trackOffset: isLandscapeLayout ? 0 : 9,
+                trackOffset: landscape ? 0 : 9,
                 onCancel: cancelSeek
             )
             .frame(height: 44)
-            .offset(y: isLandscapeLayout ? 0 : -12)
+            .offset(y: landscape ? 0 : -12)
 
             if !isPlaying || isSeeking {
                 HStack(spacing: 8) {
@@ -939,17 +944,17 @@ struct ShortDramaPlayerView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
-                .offset(y: isLandscapeLayout ? -20 : -24)
+                .offset(y: landscape ? -20 : -24)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: isLandscapeLayout ? 44 : 32, alignment: .top)
+        .frame(height: landscape ? 44 : 32, alignment: .top)
         .overlay(alignment: .bottom) {
             if isSeeking {
                 seekPreviewOverlay
-                    .padding(.bottom, isLandscapeLayout ? 52 : 44)
+                    .padding(.bottom, landscape ? 52 : 44)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1075,7 +1080,10 @@ struct ShortDramaPlayerView: View {
     private func controlEdgeInset(geometry: GeometryProxy) -> CGFloat {
         if #available(iOS 27.0, *),
            let corners = geometry.concentricCornerRadii(in: CGRect(
-               origin: .zero, size: geometry.size
+               x: -geometry.safeAreaInsets.leading,
+               y: -geometry.safeAreaInsets.top,
+               width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+               height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom
            )) {
             let radius = max(corners.bottomLeading, corners.bottomTrailing)
             if radius > 0 {

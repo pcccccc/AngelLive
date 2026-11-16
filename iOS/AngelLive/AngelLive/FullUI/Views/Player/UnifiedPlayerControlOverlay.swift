@@ -9,6 +9,8 @@ import AngelLiveDependencies
 import UIKit
 
 struct UnifiedPlayerControlOverlay: View {
+    static let compactLandscapeControlInset: CGFloat = 16
+
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
@@ -44,7 +46,7 @@ struct UnifiedPlayerControlOverlay: View {
     /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
         if isLandscape {
-            return usesExpandedLayout ? 20 : 16
+            return usesExpandedLayout ? 20 : Self.compactLandscapeControlInset
         }
         return 12
     }
