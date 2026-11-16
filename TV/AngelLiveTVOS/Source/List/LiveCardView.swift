@@ -14,6 +14,7 @@ struct LiveCardView: View {
 
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(AppState.self) var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
     let index: Int
     var externalFocusState: FocusState<FocusableField?>.Binding?
     var onMoveCommand: ((MoveCommandDirection) -> Void)? = nil
@@ -55,10 +56,9 @@ struct LiveCardView: View {
         externalFocusState?.wrappedValue ?? internalFocusState
     }
 
-    private func titleTranslationEnabled(for room: LiveModel) -> Bool {
+    private var titleTranslationEnabled: Bool {
         historySelection == nil
-            && appViewModel.pluginAvailability.hasAvailablePlugins
-            && SandboxPluginCatalog.platform(for: room.liveType) != nil
+            && usesFullUI
     }
 
     var body: some View {
@@ -214,7 +214,7 @@ struct LiveCardView: View {
                     .font(.system(size: 20, weight: .semibold))
                     .lineLimit(1)
                 Group {
-                    if titleTranslationEnabled(for: currentLiveModel) {
+                    if titleTranslationEnabled {
                         TranslatedRoomTitle(currentLiveModel.roomTitle.orDash)
                     } else {
                         Text(currentLiveModel.roomTitle.orDash)

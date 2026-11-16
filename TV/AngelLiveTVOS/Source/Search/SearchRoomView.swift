@@ -54,6 +54,7 @@ struct SearchRoomView: View {
     private let platform: Platformdescription?
     @State private var platformSearchText = ""
     @State private var platformSearchKind: RoomSearchKind
+    @FocusState private var isPlatformSearchInputFocused: Bool
     @State private var authenticationRecovery: AuthenticationRecoveryRequest?
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(AppState.self) var appViewModel
@@ -93,105 +94,11 @@ struct SearchRoomView: View {
         @Bindable var appModel = appViewModel
         @Bindable var liveModel = liveViewModel
 
-        VStack(spacing: 0) {
-            // 顶部：搜索输入 + 二维码，左右分列
-            HStack(alignment: .center, spacing: 40) {
-                // 左侧：搜索输入区域
-                VStack(alignment: .leading, spacing: 20) {
-                    if let platform {
-                        Text("搜索\(platform.title)")
-                        if platformSearchOptions.count > 1 {
-                            Picker(selection: platformSearchSelection) {
-                                ForEach(platformSearchOptions, id: \.self) { kind in
-                                    Text(liveViewModel.searchTypeArray[kind == .share ? 0 : 1])
-                                        .tag(kind)
-                                }
-                            } label: {
-                                Text("搜索类型")
-                            }
-                        }
-                        HStack {
-                            TextField(platformSearchPrompt, text: $platformSearchText)
-                                .onSubmit(submitSearch)
-                            Button("搜索", action: submitSearch)
-                                .disabled(platformSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                    } else {
-                        Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
-                        Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
-                            ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
-                                let text = liveViewModel.searchTypeArray[index]
-                                Text(text)
-                            }
-                        } label: {
-                            Text("搜索类型")
-                        }
-                        TextField("搜索", text: $appModel.searchViewModel.searchText)
-                            .onSubmit(submitSearch)
-                    }
-                }
-                .frame(maxWidth: 1200, alignment: .leading)
-
-                Spacer()
-
-                // 右侧：扫码输入面板
-                if platform == nil {
-                    searchQRPanel
-                }
-            }
-
-            Spacer()
-
-            // 搜索结果区域（占满全宽）
-            if let error = liveViewModel.searchRequest.error {
-                ErrorView(
-                    title: error.isAuthRequired ? "搜索需要登录" : "搜索失败",
-                    message: error.liveParseMessage,
-                    detailMessage: error.liveParseDetail,
-                    curlCommand: error.liveParseCurl,
-                    showRetry: true,
-                    showLoginButton: error.showsLoginAction,
-                    onDismiss: {
-                        liveViewModel.searchRequest.dismissError()
-                    },
-                    onRetry: {
-                        submitSearch()
-                    },
-                    onLogin: {
-                        authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: error.authRequiredPluginIDs)
-                    }
-                )
-            } else if platform != nil,
-                      liveViewModel.searchRequest.hasSearched,
-                      !liveViewModel.searchRequest.isLoading,
-                      liveViewModel.roomList.isEmpty {
-                ContentUnavailableView.search(text: platformSearchText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if let platform {
+                platformSearchContent(platform)
             } else {
-                if !liveViewModel.searchRequest.authenticationRequiredPluginIDs.isEmpty {
-                    Button("部分平台需要登录") {
-                        authenticationRecovery = AuthenticationRecoveryRequest(
-                            pluginIDs: liveViewModel.searchRequest.authenticationRequiredPluginIDs
-                        )
-                    }
-                }
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], alignment: .center, spacing: 50) {
-                        ForEach(Array(liveViewModel.roomList.enumerated()), id: \.element.id) { index, room in
-                            LiveCardView(index: index, currentLiveModel: room)
-                                .environment(liveViewModel)
-                                .frame(width: 370, height: 280)
-                        }
-                        if liveViewModel.searchRequest.isLoading {
-                            LoadingView()
-                                .frame(width: 370, height: 280)
-                                .cornerRadius(5)
-                                .shimmering(active: true)
-                                .redacted(reason: .placeholder)
-                        }
-                    }
-                    .safeAreaPadding(.top, 50)
-                }
+                globalSearchContent
             }
         }
         .fullScreenCover(item: $authenticationRecovery) { request in
@@ -231,6 +138,179 @@ struct SearchRoomView: View {
                   event.field == .search else { return }
             appModel.searchViewModel.searchText = event.value
         }
+    }
+
+    private var globalSearchContent: some View {
+        @Bindable var appModel = appViewModel
+
+        return VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 40) {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
+                    Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
+                        ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
+                            Text(liveViewModel.searchTypeArray[index])
+                        }
+                    } label: {
+                        Text("搜索类型")
+                    }
+                    TextField("搜索", text: $appModel.searchViewModel.searchText)
+                        .onSubmit(submitSearch)
+                }
+                .frame(maxWidth: 1200, alignment: .leading)
+
+                Spacer()
+                searchQRPanel
+            }
+
+            Spacer()
+            searchResults
+        }
+    }
+
+    private let searchCardWidth: CGFloat = 370
+    private let searchGridSpacing: CGFloat = 50
+
+    private var searchContentWidth: CGFloat {
+        searchCardWidth * 4 + searchGridSpacing * 3
+    }
+
+    private func platformSearchContent(_ platform: Platformdescription) -> some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 40) {
+                HStack(alignment: .center, spacing: searchGridSpacing) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("搜索")
+                            .font(.largeTitle.bold())
+                        Text(platform.title)
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: searchGridSpacing)
+
+                    if platformSearchOptions.count > 1 {
+                        Picker("搜索类型", selection: platformSearchSelection) {
+                            ForEach(platformSearchOptions, id: \.self) { kind in
+                                Text(kind == .share ? "链接 / 口令" : "关键词")
+                                    .tag(kind)
+                            }
+                        }
+                        .frame(maxWidth: searchCardWidth * 2 + searchGridSpacing)
+                    }
+                }
+
+                HStack(spacing: searchGridSpacing) {
+                    TextField(
+                        platformSearchPrompt,
+                        text: $platformSearchText,
+                        prompt: Text("")
+                    )
+                    .focused($isPlatformSearchInputFocused)
+                    .background(.quaternary, in: Capsule())
+                    .overlay(alignment: .leading) {
+                        if platformSearchText.isEmpty {
+                            Text(platformSearchPrompt)
+                                .font(.body)
+                                .foregroundStyle(isPlatformSearchInputFocused ? Color.black : Color.primary)
+                                .lineLimit(1)
+                                // 与原生输入文字的起点对齐，不参与 TextField 的布局或焦点。
+                                .padding(.horizontal, 30)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityLabel(platformSearchPrompt)
+                    .onSubmit(submitSearch)
+
+                    Button("搜索", action: submitSearch)
+                        .disabled(platformSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .frame(maxWidth: searchContentWidth, alignment: .leading)
+            .focusSection()
+
+            if !liveViewModel.searchRequest.hasSearched && !liveViewModel.searchRequest.isLoading {
+                ContentUnavailableView {
+                    Label(
+                        platformSearchKind == .keyword ? "搜索主播和直播间" : "解析分享链接",
+                        systemImage: platformSearchKind == .keyword ? "magnifyingglass" : "link"
+                    )
+                } description: {
+                    Text(platformSearchKind == .keyword
+                         ? "输入主播名或直播间关键词"
+                         : "输入当前平台的分享链接或口令")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                searchResults
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        if let error = liveViewModel.searchRequest.error {
+            ErrorView(
+                title: error.isAuthRequired ? "搜索需要登录" : "搜索失败",
+                message: error.liveParseMessage,
+                detailMessage: error.liveParseDetail,
+                curlCommand: error.liveParseCurl,
+                showRetry: true,
+                showLoginButton: error.showsLoginAction,
+                onDismiss: {
+                    liveViewModel.searchRequest.dismissError()
+                },
+                onRetry: {
+                    submitSearch()
+                },
+                onLogin: {
+                    authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: error.authRequiredPluginIDs)
+                }
+            )
+        } else if platform != nil,
+                  liveViewModel.searchRequest.hasSearched,
+                  !liveViewModel.searchRequest.isLoading,
+                  liveViewModel.roomList.isEmpty {
+            ContentUnavailableView.search(text: platformSearchText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            if !liveViewModel.searchRequest.authenticationRequiredPluginIDs.isEmpty {
+                Button("部分平台需要登录") {
+                    authenticationRecovery = AuthenticationRecoveryRequest(
+                        pluginIDs: liveViewModel.searchRequest.authenticationRequiredPluginIDs
+                    )
+                }
+            }
+            ScrollView {
+                LazyVGrid(columns: resultColumns, alignment: .center, spacing: searchGridSpacing) {
+                    ForEach(Array(liveViewModel.roomList.enumerated()), id: \.element.id) { index, room in
+                        LiveCardView(index: index, currentLiveModel: room)
+                            .environment(liveViewModel)
+                            .frame(width: searchCardWidth, height: 280)
+                    }
+                    if liveViewModel.searchRequest.isLoading {
+                        LoadingView()
+                            .frame(width: searchCardWidth, height: 280)
+                            .cornerRadius(5)
+                            .shimmering(active: true)
+                            .redacted(reason: .placeholder)
+                    }
+                }
+                .frame(maxWidth: platform == nil ? nil : searchContentWidth)
+                .frame(maxWidth: platform == nil ? nil : .infinity)
+                .safeAreaPadding(.top, searchGridSpacing)
+            }
+        }
+    }
+
+    private var resultColumns: [GridItem] {
+        if platform != nil {
+            return [GridItem(.adaptive(minimum: searchCardWidth, maximum: searchCardWidth), spacing: searchGridSpacing)]
+        }
+        return Array(repeating: GridItem(.fixed(searchCardWidth), spacing: searchGridSpacing), count: 4)
     }
 
     private func submitSearch() {

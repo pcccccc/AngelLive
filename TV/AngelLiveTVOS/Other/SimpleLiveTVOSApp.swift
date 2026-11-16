@@ -18,6 +18,12 @@ func print(_ items: Any..., separator: String = " ", terminator: String = "\n") 
 #endif
 }
 
+
+extension EnvironmentValues {
+    /// Presentation mode supplied by this host's FullUI/ShellUI entry point.
+    @Entry var usesFullUI = false
+}
+
 @main
 struct SimpleLiveTVOSApp: App {
 
@@ -109,5 +115,6 @@ struct SimpleLiveTVOSApp: App {
                 )) {
                     DeepLinkPlayerView(appViewModel: appViewModel)
                 }
+                .environment(\.usesFullUI, appViewModel.pluginAvailability.hasAvailablePlugins)
     }
 }
