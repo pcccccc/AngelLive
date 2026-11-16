@@ -17,6 +17,7 @@ import SharedAssets
 
 struct RoomPlayerView: View {
     let room: LiveModel
+    let usesFullUI: Bool
     let onClose: (@MainActor () -> Void)?
     let onExitFullscreen: (@MainActor () -> Bool)?
     let onRouteShortDrama: ((LiveModel) -> Void)?
@@ -51,21 +52,19 @@ struct RoomPlayerView: View {
 
     init(
         room: LiveModel,
+        usesFullUI: Bool,
         categoryRooms: CategoryRoomListModel? = nil,
         onClose: (@MainActor () -> Void)? = nil,
         onExitFullscreen: (@MainActor () -> Bool)? = nil,
         onRouteShortDrama: ((LiveModel) -> Void)? = nil
     ) {
         self.room = room
+        self.usesFullUI = usesFullUI
         self.onClose = onClose
         self.onExitFullscreen = onExitFullscreen
         self.onRouteShortDrama = onRouteShortDrama
         self._categoryRooms = State(initialValue: categoryRooms)
-        self._viewModel = State(initialValue: RoomInfoViewModel(room: room))
-    }
-
-    private var titleTranslationEnabled: Bool {
-        SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType) != nil
+        self._viewModel = State(initialValue: RoomInfoViewModel(room: room, usesFullUI: usesFullUI))
     }
 
     private var canShowLiveSubtitleSurface: Bool {
@@ -87,7 +86,7 @@ struct RoomPlayerView: View {
                 danmuOverlay(for: geometry.size)
 
                 #if canImport(KSPlayer)
-                if titleTranslationEnabled, canShowLiveSubtitleSurface, let url = viewModel.currentPlayURL {
+                if usesFullUI, canShowLiveSubtitleSurface, let url = viewModel.currentPlayURL {
                     Color.clear
                         .allowsHitTesting(false)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -110,7 +109,7 @@ struct RoomPlayerView: View {
                     showSettings: $showVideoSettings,
                     playerWindow: playerWindow,
                     onClose: onClose,
-                    onShowRoomSwitcher: titleTranslationEnabled ? { showRoomSwitcher = true } : nil
+                    onShowRoomSwitcher: usesFullUI ? { showRoomSwitcher = true } : nil
                 )
 
                 if let notice = visibleRecoveryNotice {
@@ -147,7 +146,7 @@ struct RoomPlayerView: View {
             }
         }
         .navigationTitle(
-            titleTranslationEnabled
+            usesFullUI
                 ? translationService.displayTitle(for: viewModel.currentRoom.roomTitle)
                 : viewModel.currentRoom.roomTitle
         )
@@ -187,13 +186,13 @@ struct RoomPlayerView: View {
         .onKeyPress(.escape) {
             if showRoomSwitcher {
                 showRoomSwitcher = false
-            } else if titleTranslationEnabled, showVideoSettings {
+            } else if usesFullUI, showVideoSettings {
                 showVideoSettings = false
-            } else if titleTranslationEnabled, onExitFullscreen?() == true {
+            } else if usesFullUI, onExitFullscreen?() == true {
                 // Keep playback until a subsequent Esc requests the destination's close action.
             } else if let window = playerWindow, window.styleMask.contains(.fullScreen) {
                 if onExitFullscreen == nil { window.toggleFullScreen(nil) }
-            } else if titleTranslationEnabled {
+            } else if usesFullUI {
                 onClose?()
             }
             return .handled
@@ -209,12 +208,15 @@ struct RoomPlayerView: View {
         .task {
             await viewModel.loadPlayURL()
         }
+        .onChange(of: usesFullUI, initial: true) { _, enabled in
+            viewModel.usesFullUI = enabled
+        }
         .onChange(of: room) { _, newRoom in
-            guard titleTranslationEnabled, newRoom != viewModel.currentRoom else { return }
+            guard usesFullUI, newRoom != viewModel.currentRoom else { return }
             switchRoom(newRoom)
         }
         .onChange(of: MacPlayerCategoryHandoff.shared.requestID(for: room), initial: true) { _, requestID in
-            guard titleTranslationEnabled, requestID != nil,
+            guard usesFullUI, requestID != nil,
                   let entry = MacPlayerCategoryHandoff.shared.take(for: room) else { return }
             categoryRooms = entry.model
             // WindowGroup 会激活已有的同值窗口；它可能已在窗口内换到另一个房间。
@@ -222,7 +224,7 @@ struct RoomPlayerView: View {
         }
         .roomTitleTranslationTask(
             viewModel.currentRoom.roomTitle,
-            enabled: titleTranslationEnabled
+            enabled: usesFullUI
         )
         .onDisappear {
             roomSwitchTask?.cancel()
@@ -235,7 +237,7 @@ struct RoomPlayerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
             guard let closedWindow = notification.object as? NSWindow else { return }
-            if titleTranslationEnabled, closedWindow === playerWindow {
+            if usesFullUI, closedWindow === playerWindow {
                 roomSwitchTask?.cancel()
                 playbackSession.invalidate()
                 cleanupPlayer()
@@ -315,8 +317,8 @@ struct RoomPlayerView: View {
         // 当前平台登录状态变化后重新取流，让被锁定的画质解锁
         .onReceive(
             NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
-                .compactMap { $0.object as? String }
                 .receive(on: RunLoop.main)
+                .compactMap { $0.object as? String }
         ) { pluginId in
             guard pluginId == SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)?.pluginId else { return }
             viewModel.refreshPlayback()
@@ -848,6 +850,6 @@ private enum SpeedFormatter {
         userId: "",
         roomId: "12345",
         liveWatchedCount: "1.2万"
-    ))
+    ), usesFullUI: false)
     .frame(width: 800, height: 600)
 }

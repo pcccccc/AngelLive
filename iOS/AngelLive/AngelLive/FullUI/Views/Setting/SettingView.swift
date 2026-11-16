@@ -160,7 +160,7 @@ struct SettingView: View {
                 // 历史记录（始终可用）
                 Section {
                     NavigationLink {
-                        HistoryListView()
+                        HistoryListView(catalogRevision: pluginAvailability.catalogRevision)
                             .fullUITabBarHidden()
                     } label: {
                         HStack {

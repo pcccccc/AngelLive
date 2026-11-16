@@ -13,6 +13,7 @@ struct LiveRoomCardButton<Content: View>: View {
     let room: LiveModel
     let content: Content
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(ToastManager.self) private var toastManager
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
 
@@ -30,7 +31,7 @@ struct LiveRoomCardButton<Content: View>: View {
     var body: some View {
         Button {
             if MacShortDramaRouting.isShortDrama(room) || isLive {
-                fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+                fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
             } else {
                 toastManager.show(icon: "tv.slash", message: "主播已下播")
             }

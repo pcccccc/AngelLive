@@ -12,18 +12,32 @@ import AngelLiveDependencies
 
 struct HistoryListView: View {
     @Environment(HistoryModel.self) private var historyModel
+    private let catalogRevision: UInt
     @State private var showClearAlert = false
     @State private var selectedType = 0
     @State private var progressStore: ShortDramaProgressStore
     @State private var shortDramaRoom: LiveModel?
     @State private var historyError: String?
+    @State private var liveRooms: [LiveModel] = []
+    @State private var classification: ShortDramaHistoryClassification?
 
-    init(progressStore: ShortDramaProgressStore = .shared) {
+    init(progressStore: ShortDramaProgressStore = .shared, catalogRevision: UInt = 0) {
         _progressStore = State(initialValue: progressStore)
+        self.catalogRevision = catalogRevision
     }
 
-    private var liveRooms: [LiveModel] {
-        historyModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
+    private func refreshHistory() {
+        let rooms = historyModel.watchList
+        let snapshot = progressStore.historyClassification(for: rooms)
+        classification = snapshot
+        progressStore.loadHistory(legacyRooms: rooms, classification: snapshot)
+        liveRooms = progressStore.liveHistory(from: rooms, classification: snapshot)
+        historyError = progressStore.historyWarning
+    }
+
+    private func refreshLiveRooms() {
+        guard let classification else { return }
+        liveRooms = progressStore.liveHistory(from: historyModel.watchList, classification: classification)
     }
 
     private var hasCurrentHistory: Bool {
@@ -77,6 +91,7 @@ struct HistoryListView: View {
             navigationState: navigationState,
             namespace: roomTransitionNamespace,
             progressStore: progressStore,
+            liveRooms: liveRooms,
             historyEntries: progressStore.historyEntries,
             selectedType: $selectedType,
             onOpenShortDrama: { room in
@@ -114,9 +129,11 @@ struct HistoryListView: View {
         }
 
         .onAppear {
-            progressStore.loadHistory(legacyRooms: historyModel.watchList)
-            historyError = progressStore.historyWarning
+            refreshHistory()
         }
+        .onChange(of: historyModel.watchList) { _, _ in refreshHistory() }
+        .onChange(of: catalogRevision) { _, _ in refreshHistory() }
+        .onChange(of: progressStore.historyRevision) { _, _ in refreshLiveRooms() }
         .onChange(of: progressStore.historyWarning) { _, warning in
             if let warning { historyError = warning }
         }
@@ -157,6 +174,7 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
     let progressStore: ShortDramaProgressStore
+    let liveRooms: [LiveModel]
     let historyEntries: [ShortDramaHistoryEntry]
     @Binding var selectedType: Int
     let onOpenShortDrama: (LiveModel) -> Void
@@ -167,6 +185,7 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
             navigationState: navigationState,
             namespace: namespace,
             progressStore: progressStore,
+            liveRooms: liveRooms,
             favoriteModel: favoriteModel
         )
         vc.toastPresenter = { presentToast($0) }
@@ -181,6 +200,6 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
         uiViewController.onOpenShortDrama = onOpenShortDrama
         // 避免后台状态触发 UICollectionView 更新导致 iOS 18 崩溃
         guard scenePhase == .active else { return }
-        uiViewController.reloadData()
+        uiViewController.reloadData(liveRooms: liveRooms)
     }
 }

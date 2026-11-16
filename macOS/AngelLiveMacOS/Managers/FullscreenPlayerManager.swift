@@ -42,10 +42,10 @@ final class FullscreenPlayerManager {
     func openRoom(
         _ room: LiveModel,
         openWindow: OpenWindowAction,
+        usesFullUI: Bool,
         categoryRooms: CategoryRoomListModel? = nil
     ) {
-        let isFullUI = SandboxPluginCatalog.platform(for: room.liveType) != nil
-        let usesSinglePage = isFullUI && UserDefaults.standard.bool(
+        let usesSinglePage = usesFullUI && UserDefaults.standard.bool(
             forKey: MacPlaybackPresentationPreference.singlePageModeKey
         )
         if usesSinglePage || isMainWindowFullscreen {

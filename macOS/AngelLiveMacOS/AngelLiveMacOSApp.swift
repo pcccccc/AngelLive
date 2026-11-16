@@ -157,7 +157,7 @@ struct AngelLiveMacOSApp: App {
             MacPluginManagementCommands()
             CommandGroup(replacing: .appInfo) {
                 Button("关于 AngelLive") {
-                    if !SandboxPluginCatalog.installedPluginIds().isEmpty {
+                    if production.pluginAvailability.hasAvailablePlugins {
                         openWindow(id: "about")
                     } else {
                         NSApp.orderFrontStandardAboutPanel(nil)
@@ -212,12 +212,13 @@ struct AngelLiveMacOSApp: App {
         WindowGroup(for: LiveModel.self) { $room in
             if !isUITesting, let room = room {
                 MacRoomPlaybackDestination(room: room, presentation: .playerWindow)
+                    .environment(\.usesFullUI, production.pluginAvailability.hasAvailablePlugins)
                     .environment(production.pluginAvailability)
                     .environment(production.favorite)
                     .environment(production.history)
                     .environment(production.toast)
-                    .roomTitleTranslationHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
-                    .supportDiagnosticsHost(enabled: SandboxPluginCatalog.platform(for: room.liveType) != nil)
+                    .roomTitleTranslationHost(enabled: production.pluginAvailability.hasAvailablePlugins)
+                    .supportDiagnosticsHost(enabled: production.pluginAvailability.hasAvailablePlugins)
                     .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))
                     .background(FullUIWindowTabbingPolicyView(isEnabled: production.pluginAvailability.hasAvailablePlugins))
             }

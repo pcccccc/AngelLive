@@ -63,6 +63,53 @@ public struct ShortDramaProgressSnapshot: Codable, Equatable, Sendable {
     }
 }
 
+/// Classification for one history refresh. Callers replace it after catalog changes;
+/// it holds no runtime or process-wide cache, so a fresh snapshot observes pin/reload changes.
+public struct ShortDramaHistoryClassification: Sendable {
+    fileprivate struct RoomIdentity: Hashable, Sendable {
+        let liveType: LiveType
+        let roomID: String
+
+        init(_ room: LiveModel) {
+            liveType = room.liveType
+            roomID = room.roomId
+        }
+
+        init(liveType: LiveType, roomID: String) {
+            self.liveType = liveType
+            self.roomID = roomID
+        }
+    }
+
+    fileprivate let pluginIDs: [RoomIdentity: String]
+
+    static func make(
+        for rooms: [LiveModel],
+        platforms: () -> [LiveType: LiveParseJSPlatform],
+        installedPluginIDs: () -> Set<String>,
+        resolveManifest: (String) throws -> LiveParsePluginManifest
+    ) -> Self {
+        guard !rooms.isEmpty else { return Self(pluginIDs: [:]) }
+        let platformMap = platforms()
+        let installed = installedPluginIDs()
+        var isShortDramaByPlugin: [String: Bool] = [:]
+        var pluginIDs: [RoomIdentity: String] = [:]
+        for room in rooms {
+            guard let platform = platformMap[room.liveType], installed.contains(platform.pluginId) else { continue }
+            let isShortDrama: Bool
+            if let cached = isShortDramaByPlugin[platform.pluginId] {
+                isShortDrama = cached
+            } else {
+                let behavior = try? resolveManifest(platform.pluginId).hostBehavior
+                isShortDrama = behavior?.contentKind == "shortDrama" && behavior?.episodeSelection == "qualityList"
+                isShortDramaByPlugin[platform.pluginId] = isShortDrama
+            }
+            if isShortDrama { pluginIDs[RoomIdentity(room)] = platform.pluginId }
+        }
+        return Self(pluginIDs: pluginIDs)
+    }
+}
+
 /// One small atomic file per drama. Playback URLs and credentials never enter the snapshot.
 @MainActor
 @Observable
@@ -70,10 +117,11 @@ public final class ShortDramaProgressStore {
     public static let shared = ShortDramaProgressStore()
     public enum StorageError: Error { case invalidSnapshot }
     public private(set) var historyEntries: [ShortDramaHistoryEntry] = []
+    public private(set) var historyRevision: UInt = 0
     public private(set) var historyWarning: String?
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let write: (Data, URL) throws -> Void
-    @ObservationIgnored private let resolveHistoryPlugin: (LiveModel) -> String?
+    @ObservationIgnored private let resolveHistoryPlugin: ((LiveModel) -> String?)?
     @ObservationIgnored private var entries: [ShortDramaProgressKey: Entry] = [:]
     @ObservationIgnored private var readFailures: [ShortDramaProgressKey: any Error] = [:]
     @ObservationIgnored private var historyLoaded = false
@@ -93,14 +141,14 @@ public final class ShortDramaProgressStore {
         #endif
         self.directory = directory ?? base.appendingPathComponent("ShortDramaProgress", isDirectory: true)
         write = { data, url in try data.write(to: url, options: .atomic) }
-        resolveHistoryPlugin = Self.shortDramaPluginID
+        resolveHistoryPlugin = nil
     }
 
     init(directory: URL, write: @escaping (Data, URL) throws -> Void,
          resolveHistoryPlugin: ((LiveModel) -> String?)? = nil) {
         self.directory = directory
         self.write = write
-        self.resolveHistoryPlugin = resolveHistoryPlugin ?? Self.shortDramaPluginID
+        self.resolveHistoryPlugin = resolveHistoryPlugin
     }
 
     public func load(for key: ShortDramaProgressKey) throws -> ShortDramaProgressSnapshot {
@@ -136,7 +184,11 @@ public final class ShortDramaProgressStore {
 
     /// Enumerate once, then use accepted in-memory events. A failed read is retried on the next visit.
     /// Legacy rooms only enrich matching existing progress; they never fabricate a watched position.
-    public func loadHistory(legacyRooms: [LiveModel] = []) {
+    public func loadHistory(
+        legacyRooms: [LiveModel] = [],
+        classification: ShortDramaHistoryClassification? = nil
+    ) {
+        let classification = classification ?? historyClassification(for: legacyRooms)
         var failed = false
         if !historyLoaded || historyWarning != nil {
             do {
@@ -146,7 +198,7 @@ public final class ShortDramaProgressStore {
                         at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
                 } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
                     historyLoaded = true
-                    migrateLegacyHistory(legacyRooms, failed: &failed)
+                    migrateLegacyHistory(legacyRooms, classification: classification, failed: &failed)
                     historyWarning = failed ? "部分短剧历史暂时无法读取或保存" : nil
                     refreshHistoryEntries()
                     return
@@ -171,17 +223,48 @@ public final class ShortDramaProgressStore {
                 failed = true
             }
         }
-        migrateLegacyHistory(legacyRooms, failed: &failed)
+        migrateLegacyHistory(legacyRooms, classification: classification, failed: &failed)
         historyWarning = failed ? "部分短剧历史暂时无法读取或保存" : nil
         refreshHistoryEntries()
     }
 
     /// FullUI classification includes hidden records, so removing a drama cannot move it into live history.
     public func isShortDramaHistory(_ room: LiveModel) -> Bool {
-        if resolveHistoryPlugin(room) != nil { return true }
+        isShortDramaHistory(room, classification: historyClassification(for: [room]))
+    }
+
+    public func isShortDramaHistory(_ room: LiveModel, classification: ShortDramaHistoryClassification) -> Bool {
+        if classification.pluginIDs[.init(room)] != nil { return true }
         return entries.values.contains {
             $0.snapshot.key.roomID == room.roomId
                 && $0.snapshot.historyMetadata?.recordedLiveType == room.liveType
+        }
+    }
+
+    public func historyClassification(for rooms: [LiveModel]) -> ShortDramaHistoryClassification {
+        if let resolveHistoryPlugin {
+            var pluginIDs: [ShortDramaHistoryClassification.RoomIdentity: String] = [:]
+            for room in rooms {
+                if let pluginID = resolveHistoryPlugin(room) { pluginIDs[.init(room)] = pluginID }
+            }
+            return ShortDramaHistoryClassification(pluginIDs: pluginIDs)
+        }
+        return .make(
+            for: rooms,
+            platforms: LiveParseJSPlatformManager.platformSnapshot,
+            installedPluginIDs: { Set(SandboxPluginCatalog.installedPluginMap().keys) },
+            resolveManifest: { try LiveParsePlugins.shared.resolve(pluginId: $0).manifest }
+        )
+    }
+
+    public func liveHistory(from rooms: [LiveModel], classification: ShortDramaHistoryClassification) -> [LiveModel] {
+        let recordedRooms = Set(entries.values.compactMap { entry -> ShortDramaHistoryClassification.RoomIdentity? in
+            guard let liveType = entry.snapshot.historyMetadata?.recordedLiveType else { return nil }
+            return .init(liveType: liveType, roomID: entry.snapshot.key.roomID)
+        })
+        return rooms.filter {
+            let identity = ShortDramaHistoryClassification.RoomIdentity($0)
+            return classification.pluginIDs[identity] == nil && !recordedRooms.contains(identity)
         }
     }
 
@@ -225,9 +308,11 @@ public final class ShortDramaProgressStore {
         refreshHistoryEntries()
     }
 
-    private func migrateLegacyHistory(_ rooms: [LiveModel], failed: inout Bool) {
+    private func migrateLegacyHistory(
+        _ rooms: [LiveModel], classification: ShortDramaHistoryClassification, failed: inout Bool
+    ) {
         for room in rooms {
-            guard let pluginID = resolveHistoryPlugin(room) else { continue }
+            guard let pluginID = classification.pluginIDs[.init(room)] else { continue }
             let key = ShortDramaProgressKey(pluginID: pluginID, roomID: room.roomId)
             guard var candidate = entries[key], candidate.snapshot.historyMetadata == nil,
                   !candidate.snapshot.episodes.isEmpty else { continue }
@@ -238,6 +323,7 @@ public final class ShortDramaProgressStore {
     }
 
     private func refreshHistoryEntries() {
+        historyRevision &+= 1
         historyEntries = entries.values.compactMap { entry in
             let snapshot = entry.snapshot
             guard snapshot.historyHidden != true,
@@ -248,14 +334,6 @@ public final class ShortDramaProgressStore {
             if $0.key.pluginID != $1.key.pluginID { return $0.key.pluginID < $1.key.pluginID }
             return $0.key.roomID < $1.key.roomID
         }
-    }
-
-    private static func shortDramaPluginID(_ room: LiveModel) -> String? {
-        guard let platform = LiveParseJSPlatformManager.platform(for: room.liveType),
-              SandboxPluginCatalog.isInstalled(pluginId: platform.pluginId),
-              let behavior = try? LiveParsePlugins.shared.resolve(pluginId: platform.pluginId).manifest.hostBehavior,
-              behavior.contentKind == "shortDrama", behavior.episodeSelection == "qualityList" else { return nil }
-        return platform.pluginId
     }
 
     public func flush(for key: ShortDramaProgressKey) throws {

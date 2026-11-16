@@ -44,6 +44,7 @@ private enum PlayerConstants {
 final class RoomInfoViewModel {
     let subtitlePlayback = LiveSubtitlePlaybackState()
     var currentRoom: LiveModel
+    var usesFullUI: Bool
     var currentPlayURL: URL?
     var isLoading = false
     var playError: Error?
@@ -154,7 +155,8 @@ final class RoomInfoViewModel {
         PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
     }
 
-    init(room: LiveModel) {
+    init(room: LiveModel, usesFullUI: Bool) {
+        self.usesFullUI = usesFullUI
         self.currentRoom = room
 
         // 初始化播放器选项
@@ -387,8 +389,8 @@ final class RoomInfoViewModel {
         // 重新取参后尽量保持当前线路/清晰度,避免无感续播跳回默认档
         // 自动选择跳过插件标记为登录/会员才能看的档位（全部被锁时保持原逻辑）
         let firstLoad = !hasLoadedPlayURL
-        // 与根页面的 FullUI/ShellUI 判定一样，仅已安装插件时应用该偏好。
-        let clamped = if firstLoad && !SandboxPluginCatalog.installedPluginIds().isEmpty {
+        // 由宿主入口传入 FullUI 模式；ShellUI 保持原有自动选择。
+        let clamped = if firstLoad && usesFullUI {
             initialSelection ?? RoomPlaybackResolver.initialSelection(
                 in: playArgs,
                 preferredCdnIndex: preferredIndex,
@@ -1099,7 +1101,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             return
         }
         danmakuTranslationPipeline.enqueue(message, onNativeTranslationFailure: { [weak self] _ in
-            guard let self, SandboxPluginCatalog.platform(for: self.currentRoom.liveType) != nil else { return }
+            guard let self, self.usesFullUI else { return }
             self.addSystemMessage("原生翻译不可用，可在翻译与字幕设置中配置大模型。")
         }) { [weak self] translatedMessage in
             guard let self,

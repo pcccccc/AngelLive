@@ -15,12 +15,9 @@ struct StreamerInfoPopover: View {
     let room: LiveModel
     @Environment(\.openURL) private var openURL
     @Environment(ToastManager.self) private var toastManager: ToastManager?
+    @Environment(\.usesFullUI) private var usesFullUI
     @State private var translationSettings = RoomTranslationSettings.shared
     @State private var translationService = RoomTitleTranslationService.shared
-
-    private var titleTranslationEnabled: Bool {
-        SandboxPluginCatalog.platform(for: room.liveType) != nil
-    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -77,7 +74,7 @@ struct StreamerInfoPopover: View {
         VStack(alignment: .leading, spacing: 12) {
             infoRow(
                 icon: "tv",
-                title: titleTranslationEnabled ? "原始标题" : "直播间标题",
+                title: usesFullUI ? "原始标题" : "直播间标题",
                 value: room.roomTitle.orDash
             )
 
@@ -97,11 +94,11 @@ struct StreamerInfoPopover: View {
         }
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .roomTitleTranslationTask(room.roomTitle, enabled: titleTranslationEnabled)
+        .roomTitleTranslationTask(room.roomTitle, enabled: usesFullUI)
     }
 
     private var translatedTitle: String? {
-        guard titleTranslationEnabled, translationSettings.isEnabled else { return nil }
+        guard usesFullUI, translationSettings.isEnabled else { return nil }
         let translated = translationService.displayTitle(for: room.roomTitle)
         guard translated != room.roomTitle else { return nil }
         return translated

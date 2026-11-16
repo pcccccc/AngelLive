@@ -29,6 +29,7 @@ struct MacRoomPlaybackDestination: View {
     let categoryRooms: CategoryRoomListModel?
     let presentation: MacPlaybackPresentation
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesFullUI) private var usesFullUI
     @State private var playerWindow: NSWindow?
     @State private var closeCoordinator = MacPlayerCloseCoordinator()
     @State private var routedRoom: LiveModel
@@ -61,20 +62,16 @@ struct MacRoomPlaybackDestination: View {
             #endif
         }
         .background(PlayerWindowReferenceView(window: $playerWindow))
-        .fullUIArcLoadingStyle(isEnabled: isKnownPlugin)
+        .fullUIArcLoadingStyle(isEnabled: usesFullUI)
         .onChange(of: playerWindow, initial: true) { _, window in
-            closeCoordinator.bind(to: isKnownPlugin ? window : nil)
+            closeCoordinator.bind(to: usesFullUI ? window : nil)
         }
-        .onChange(of: isKnownPlugin) { _, enabled in
+        .onChange(of: usesFullUI) { _, enabled in
             closeCoordinator.bind(to: enabled ? playerWindow : nil)
         }
         .onChange(of: routedRoom.id) { _, _ in closeCoordinator.cancelPendingClose() }
         .onChange(of: room) { _, newRoom in routedRoom = newRoom }
         .onDisappear { closeCoordinator.invalidate() }
-    }
-
-    private var isKnownPlugin: Bool {
-        SandboxPluginCatalog.platform(for: routedRoom.liveType) != nil
     }
 
     /// Shell playback keeps its existing dismissal path.
@@ -96,9 +93,10 @@ struct MacRoomPlaybackDestination: View {
     private var livePlayer: some View {
         RoomPlayerView(
             room: routedRoom,
+            usesFullUI: usesFullUI,
             categoryRooms: categoryRooms,
-            onClose: isKnownPlugin ? requestClose : legacyClose,
-            onExitFullscreen: isKnownPlugin ? closeCoordinator.requestExitFullscreen : nil,
+            onClose: usesFullUI ? requestClose : legacyClose,
+            onExitFullscreen: usesFullUI ? closeCoordinator.requestExitFullscreen : nil,
             onRouteShortDrama: { routedRoom = $0 }
         )
         .id(routedRoom.id)

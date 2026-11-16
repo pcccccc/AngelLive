@@ -85,6 +85,11 @@ public enum LiveParseJSPlatformManager {
         registry().byLiveType[liveType]
     }
 
+    /// A caller-owned batch lookup; unlike repeated platform(for:), this discovers manifests once.
+    static func platformSnapshot() -> [LiveType: LiveParseJSPlatform] {
+        registry().byLiveType
+    }
+
     public static func platform(forPluginId pluginId: String) -> LiveParseJSPlatform? {
         registry().byPluginId[pluginId]
     }

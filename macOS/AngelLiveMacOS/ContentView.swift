@@ -11,6 +11,12 @@ import AppKit
 import AngelLiveCore
 import SharedAssets
 
+
+extension EnvironmentValues {
+    /// Presentation mode supplied by this host's FullUI/ShellUI entry point.
+    @Entry var usesFullUI = false
+}
+
 /// FullUI 的主窗口和播放窗口保持独立；ShellUI 保留窗口原有的标签行为。
 struct FullUIWindowTabbingPolicyView: NSViewRepresentable {
     let isEnabled: Bool
@@ -205,7 +211,7 @@ struct ContentView: View {
                         }
 
                         Tab("历史记录", systemImage: "clock.arrow.circlepath", value: TabSelection.history) {
-                            MacHistoryView()
+                            MacHistoryView(catalogRevision: pluginAvailability.catalogRevision)
                         }
 
                         Tab("设置", systemImage: "gearshape.fill", value: TabSelection.settings) {
@@ -250,6 +256,7 @@ struct ContentView: View {
         .environment(platformViewModel)
         .environment(favoriteViewModel)
         .environment(searchViewModel)
+        .environment(\.usesFullUI, pluginAvailability.hasAvailablePlugins)
         .environment(pluginAvailability)
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
         .roomTitleTranslationHost(enabled: pluginAvailability.hasAvailablePlugins)

@@ -16,6 +16,7 @@ import JXSegmentedView
 /// Uses the same category strip and interactive paging container as the platform room list.
 final class HistoryListViewController: UIViewController {
     private let historyModel: HistoryModel
+    private var liveRooms: [LiveModel]
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
     private weak var favoriteModel: AppFavoriteModel?
@@ -33,8 +34,10 @@ final class HistoryListViewController: UIViewController {
 
     init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState,
          namespace: Namespace.ID, progressStore: ShortDramaProgressStore = .shared,
+         liveRooms: [LiveModel],
          favoriteModel: AppFavoriteModel? = nil) {
         self.historyModel = historyModel
+        self.liveRooms = liveRooms
         self.navigationState = navigationState
         self.namespace = namespace
         self.progressStore = progressStore
@@ -101,7 +104,10 @@ final class HistoryListViewController: UIViewController {
         }
     }
 
-    func reloadData() { pages.values.forEach { $0.reloadData() } }
+    func reloadData(liveRooms: [LiveModel]) {
+        self.liveRooms = liveRooms
+        pages.values.forEach { $0.reloadData(liveRooms: liveRooms) }
+    }
 }
 
 extension HistoryListViewController: JXSegmentedViewDelegate {
@@ -120,7 +126,7 @@ extension HistoryListViewController: JXSegmentedListContainerViewDataSource {
         let page = HistoryContentListViewController(
             historyModel: historyModel, navigationState: navigationState,
             namespace: namespace, favoriteModel: favoriteModel, isShortDrama: index == 1,
-            progressStore: progressStore
+            progressStore: progressStore, liveRooms: liveRooms
         )
         page.toastPresenter = toastPresenter
         page.onOpenShortDrama = { [weak self] room in self?.onOpenShortDrama?(room) }
@@ -140,9 +146,7 @@ final class HistoryContentListViewController: UIViewController {
     private var liveCheckToken = UUID()
     var onOpenShortDrama: ((LiveModel) -> Void)?
 
-    private var liveRooms: [LiveModel] {
-        historyModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
-    }
+    private var liveRooms: [LiveModel]
 
     private var itemCount: Int { isShortDrama ? progressStore.historyEntries.count : liveRooms.count }
     private let navigationState: LiveRoomNavigationState
@@ -178,8 +182,9 @@ final class HistoryContentListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil, isShortDrama: Bool, progressStore: ShortDramaProgressStore = .shared) {
+    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil, isShortDrama: Bool, progressStore: ShortDramaProgressStore = .shared, liveRooms: [LiveModel]) {
         self.historyModel = historyModel
+        self.liveRooms = liveRooms
         self.isShortDrama = isShortDrama
         self.progressStore = progressStore
         self.navigationState = navigationState
@@ -298,7 +303,8 @@ final class HistoryContentListViewController: UIViewController {
 
     // MARK: - Data
 
-    func reloadData() {
+    func reloadData(liveRooms: [LiveModel]) {
+        self.liveRooms = liveRooms
         updateViewState()
     }
 
@@ -389,6 +395,7 @@ extension HistoryContentListViewController: UICollectionViewDataSource {
             cell.configure(with: room, favoriteModel: favoriteModel, navigationState: navigationState,
                            namespace: namespace, liveCheckMode: .remote, onDelete: { [weak self] in
                 self?.historyModel.removeHistories(ids: [room.id])
+                self?.liveRooms.removeAll { $0.id == room.id }
                 self?.updateViewState()
             }, showsCoverBadge: true)
         }
@@ -528,6 +535,7 @@ extension HistoryContentListViewController: UICollectionViewDelegate {
             ) { _ in
                 Task { @MainActor in
                     historyModel.removeHistories(ids: [room.id])
+                    self?.liveRooms.removeAll { $0.id == room.id }
                     self?.updateViewState()
                 }
             })

@@ -154,8 +154,8 @@ struct MacHomeView: View {
         }
         .onReceive(
             NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
-                .compactMap { $0.object as? String }
                 .receive(on: RunLoop.main)
+                .compactMap { $0.object as? String }
         ) { pluginId in
             if pluginAvailability.installedPluginIds.contains(pluginId) {
                 credentialRevision &+= 1
@@ -321,6 +321,7 @@ private struct MacHomeRoomRail: View {
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(ToastManager.self) private var toastManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -380,7 +381,7 @@ private struct MacHomeRoomRail: View {
         if openMode == .favorite, room.liveState == LiveState.close.rawValue {
             toastManager.show(icon: "tv.slash", message: "主播已下播")
         } else {
-            fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+            fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
         }
     }
 }
@@ -425,6 +426,7 @@ private struct MacHomeHeroCarousel: View {
 
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedID: String?
@@ -525,7 +527,7 @@ private struct MacHomeHeroCarousel: View {
         switch entry.banner.target {
         case .room(let room):
             Button {
-                fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+                fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
             } label: {
                 MacHomeHeroCard(entry: entry, width: width, height: height)
             }
@@ -1036,6 +1038,7 @@ private struct MacHomeAllRoomsView: View {
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(ToastManager.self) private var toastManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
 
     var body: some View {
         ScrollView {
@@ -1067,7 +1070,7 @@ private struct MacHomeAllRoomsView: View {
         if openMode == .favorite, room.liveState == LiveState.close.rawValue {
             toastManager.show(icon: "tv.slash", message: "主播已下播")
         } else {
-            fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+            fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
         }
     }
 }
@@ -1077,6 +1080,7 @@ private struct MacHomeCategoryView: View {
     @State private var model: PluginHomeCategoryModel
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
 
     init(route: PluginHomeCategoryRoute) {
         self.route = route
@@ -1113,7 +1117,7 @@ private struct MacHomeCategoryView: View {
                     ) {
                         ForEach(model.rooms) { room in
                             Button {
-                                fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+                                fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
                             } label: {
                                 LiveRoomCard(room: room)
                             }

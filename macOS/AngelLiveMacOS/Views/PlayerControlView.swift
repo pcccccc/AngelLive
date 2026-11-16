@@ -40,14 +40,11 @@ struct PlayerControlView: View {
     var onShowRoomSwitcher: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(ToastManager.self) private var toastManager: ToastManager?
 
-    private var titleTranslationEnabled: Bool {
-        SandboxPluginCatalog.platform(for: room.liveType) != nil
-    }
-
     private var displayedRoomTitle: String {
-        let title = titleTranslationEnabled
+        let title = usesFullUI
             ? RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle)
             : room.roomTitle
         return String(title.prefix(20)).orDash
@@ -144,7 +141,7 @@ struct PlayerControlView: View {
 
                             // 设置按钮
                             Menu {
-                                if titleTranslationEnabled {
+                                if usesFullUI {
                                     LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
                                         subtitleActivationID = viewModel.subtitlePlayback.activationID
                                         showSubtitleLanguages = true
@@ -526,7 +523,7 @@ struct PlayerControlView: View {
 
                         // 房间标题
                         Text(displayedRoomTitle)
-                            .roomTitleTranslationTask(room.roomTitle, enabled: titleTranslationEnabled)
+                            .roomTitleTranslationTask(room.roomTitle, enabled: usesFullUI)
                             .foregroundStyle(.white.opacity(0.8))
                             .font(.caption)
                             .lineLimit(1)

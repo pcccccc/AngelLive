@@ -148,6 +148,8 @@ struct TVFullUIHistoryListView: View {
     let appViewModel: AppState
     @State private var liveViewModel: LiveViewModel
     @State private var progressStore: ShortDramaProgressStore
+    @State private var liveRooms: [LiveModel] = []
+    @State private var classification: ShortDramaHistoryClassification?
     @State private var selectedKind: TVHistoryKind = .live
     @State private var showClearAlert = false
     @State private var feedbackMessage: String?
@@ -166,8 +168,17 @@ struct TVFullUIHistoryListView: View {
         ))
     }
 
-    private var liveRooms: [LiveModel] {
-        appViewModel.historyViewModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
+    private func refreshHistory() {
+        let rooms = appViewModel.historyViewModel.watchList
+        let snapshot = progressStore.historyClassification(for: rooms)
+        classification = snapshot
+        progressStore.loadHistory(legacyRooms: rooms, classification: snapshot)
+        liveRooms = progressStore.liveHistory(from: rooms, classification: snapshot)
+    }
+
+    private func refreshLiveRooms() {
+        guard let classification else { return }
+        liveRooms = progressStore.liveHistory(from: appViewModel.historyViewModel.watchList, classification: classification)
     }
 
     private var recordCount: Int {
@@ -203,11 +214,11 @@ struct TVFullUIHistoryListView: View {
         .environment(appViewModel)
         .defaultFocus($headerFocus, .kind(selectedKind))
         .onAppear {
-            progressStore.loadHistory(legacyRooms: appViewModel.historyViewModel.watchList)
+            refreshHistory()
         }
-        .onChange(of: appViewModel.historyViewModel.watchList) { _, rooms in
-            progressStore.loadHistory(legacyRooms: rooms)
-        }
+        .onChange(of: appViewModel.historyViewModel.watchList) { _, _ in refreshHistory() }
+        .onChange(of: appViewModel.pluginAvailability.catalogRevision) { _, _ in refreshHistory() }
+        .onChange(of: progressStore.historyRevision) { _, _ in refreshLiveRooms() }
         .task(id: TVHistoryRefreshIdentity(kind: selectedKind, roomIDs: liveRooms.map(\.id))) {
             await liveViewModel.refreshFullUIHistoryRooms(selectedKind == .live ? liveRooms : [])
         }
@@ -451,6 +462,7 @@ struct TVFullUIHistoryListView: View {
     private func removeLiveHistory(_ room: LiveModel) {
         guard let index = historyFocusIDs.firstIndex(of: liveFocusID(room.id)) else { return }
         appViewModel.historyViewModel.removeHistories(ids: [room.id])
+        refreshLiveRooms()
         restoreFocusAfterRemoval(index: index)
     }
 
@@ -470,6 +482,7 @@ struct TVFullUIHistoryListView: View {
                 try progressStore.clearHistory()
             } else {
                 appViewModel.historyViewModel.removeHistories(ids: Set(liveRooms.map(\.id)))
+                refreshLiveRooms()
             }
             focusSelectedKind()
         } catch {

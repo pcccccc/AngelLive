@@ -15,6 +15,7 @@ import Pow
 struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
@@ -350,6 +351,7 @@ struct PlatformDetailView: View {
                             fullscreenPlayerManager.openRoom(
                                 room,
                                 openWindow: openWindow,
+                                usesFullUI: usesFullUI,
                                 categoryRooms: viewModel.currentRoomListModel
                             )
                         } label: {
@@ -416,6 +418,7 @@ struct LiveRoomCard: View {
     private let allowsFavoriteActions: Bool
 
     @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(ToastManager.self) private var toastManager
     @Environment(\.displayScale) private var displayScale
     @State private var isFavoriteLoading = false
@@ -509,10 +512,11 @@ struct LiveRoomCard: View {
                                 .padding(4)
                         )
                 }
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Group {
-                        if SandboxPluginCatalog.platform(for: room.liveType) != nil {
+                        if usesFullUI {
                             TranslatedRoomTitle(room.roomTitle.orDash)
                         } else {
                             Text(room.roomTitle.orDash)

@@ -11,19 +11,33 @@ import AngelLiveCore
 
 struct MacHistoryView: View {
     @Environment(HistoryModel.self) private var historyModel
+    private let catalogRevision: UInt
     @Environment(ToastManager.self) private var toastManager
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
     @State private var progressStore: ShortDramaProgressStore
     @State private var showClearAlert = false
     @State private var selectedType = 0
+    @State private var liveRooms: [LiveModel] = []
+    @State private var classification: ShortDramaHistoryClassification?
 
-    init(progressStore: ShortDramaProgressStore = .shared) {
+    init(progressStore: ShortDramaProgressStore = .shared, catalogRevision: UInt = 0) {
         _progressStore = State(initialValue: progressStore)
+        self.catalogRevision = catalogRevision
     }
 
-    private var liveRooms: [LiveModel] {
-        historyModel.watchList.filter { !progressStore.isShortDramaHistory($0) }
+    private func refreshHistory() {
+        let rooms = historyModel.watchList
+        let snapshot = progressStore.historyClassification(for: rooms)
+        classification = snapshot
+        progressStore.loadHistory(legacyRooms: rooms, classification: snapshot)
+        liveRooms = progressStore.liveHistory(from: rooms, classification: snapshot)
+    }
+
+    private func refreshLiveRooms() {
+        guard let classification else { return }
+        liveRooms = progressStore.liveHistory(from: historyModel.watchList, classification: classification)
     }
     private var isEmpty: Bool { selectedType == 0 ? liveRooms.isEmpty : progressStore.historyEntries.isEmpty }
     private var selectedTitle: String { selectedType == 0 ? "直播" : "短剧" }
@@ -63,11 +77,14 @@ struct MacHistoryView: View {
             Text(selectedType == 0 ? "确定要清空直播观看记录吗？" : "确定要清空短剧观看记录吗？续播进度仍会保留。")
         }
         .task {
-            progressStore.loadHistory(legacyRooms: historyModel.watchList)
+            refreshHistory()
             if let warning = progressStore.historyWarning {
                 toastManager.show(icon: "exclamationmark.triangle", message: warning)
             }
         }
+        .onChange(of: historyModel.watchList) { _, _ in refreshHistory() }
+        .onChange(of: catalogRevision) { _, _ in refreshHistory() }
+        .onChange(of: progressStore.historyRevision) { _, _ in refreshLiveRooms() }
     }
 
     private var historyTypeNavigator: some View {
@@ -121,7 +138,7 @@ struct MacHistoryView: View {
             toastManager.show(icon: "puzzlepiece.extension", message: "此短剧的插件尚未安装或不可用。安装对应插件后可继续观看，观看进度仍会保留。")
             return
         }
-        fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+        fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
     }
 
     private var historyGridView: some View {
@@ -178,6 +195,7 @@ private struct HistoryRoomCardButton<Content: View>: View {
     let room: LiveModel
     let content: Content
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(ToastManager.self) private var toastManager
     @State private var isChecking = false
@@ -205,14 +223,14 @@ private struct HistoryRoomCardButton<Content: View>: View {
                     )
                     guard !Task.isCancelled, liveCheckToken == token else { return }
                     if state == .live {
-                        fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+                        fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
                     } else {
                         toastManager.show(icon: "tv.slash", message: "主播已下播")
                     }
                 } catch {
                     guard !Task.isCancelled, liveCheckToken == token else { return }
                     // 查询失败时仍然放行，让播放页自行处理错误
-                    fullscreenPlayerManager.openRoom(room, openWindow: openWindow)
+                    fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
                 }
             }
         } label: {
@@ -230,11 +248,14 @@ private struct HistoryRoomCardButton<Content: View>: View {
         }
         .buttonStyle(MacRoomCardButtonStyle())
         .macRoomCardHoverEffect()
-        .onDisappear {
-            liveCheckToken = UUID()
-            liveCheckTask?.cancel()
-            liveCheckTask = nil
-            isChecking = false
-        }
+        .onChange(of: usesFullUI) { _, _ in cancelLiveCheck() }
+        .onDisappear(perform: cancelLiveCheck)
+    }
+
+    private func cancelLiveCheck() {
+        liveCheckToken = UUID()
+        liveCheckTask?.cancel()
+        liveCheckTask = nil
+        isChecking = false
     }
 }
