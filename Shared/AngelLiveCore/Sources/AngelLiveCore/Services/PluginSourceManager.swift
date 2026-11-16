@@ -286,7 +286,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         // key 解析出的多个候选是同一索引的镜像源,只持久化其中一个;直接输入则就是这一个 URL。
         let candidates = (resolvedCandidates ?? [trimmed]).filter { URL(string: $0) != nil }
         guard let primary = candidates.first else {
-            errorMessage = "无效的 URL"
+            errorMessage = invalidSourceURLDescription
             return .sources([])
         }
 
@@ -318,9 +318,13 @@ public final class PluginSourceManager: @unchecked Sendable {
         // 所有候选都拉取失败:乐观地把主候选存下来并标记异常,源不丢,用户可重试/删除。
         persistSourceIfNeeded(primary)
         if let lastError {
-            sourceHealth[primary] = .failed(Self.detailedErrorDescription(lastError))
+            sourceHealth[primary] = .failed(sourceErrorDescription(lastError))
         } else {
-            sourceHealth[primary] = .failed("暂时无法拉取插件索引")
+            sourceHealth[primary] = .failed(
+                PersistentSyncRetryCoordinator.shared.isFullUIEnabled
+                    ? "暂时无法加载订阅源，请稍后重试或联系订阅源提供者。"
+                    : "暂时无法拉取插件索引"
+            )
         }
         return .sources([primary])
     }
@@ -450,7 +454,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     public func fetchIndex(from urlString: String) async {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed) else {
-            errorMessage = "无效的 URL"
+            errorMessage = invalidSourceURLDescription
             return
         }
 
@@ -462,7 +466,9 @@ public final class PluginSourceManager: @unchecked Sendable {
             let index = try await fetchIndexWithTimeout(url: url)
             applyFetchedIndex(index, sourceURL: trimmed)
         } catch {
-            errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(error))"
+            errorMessage = PersistentSyncRetryCoordinator.shared.isFullUIEnabled
+                ? sourceErrorDescription(error)
+                : "拉取插件索引失败: \(Self.detailedErrorDescription(error))"
         }
     }
 
@@ -487,7 +493,7 @@ public final class PluginSourceManager: @unchecked Sendable {
 
         for source in sourceURLs {
             guard let url = URL(string: source) else {
-                sourceHealth[source] = .failed("无效的 URL")
+                sourceHealth[source] = .failed(invalidSourceURLDescription)
                 continue
             }
             do {
@@ -507,7 +513,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             } catch {
                 // 单个源失败不影响其它源,失败状态记到该源的 health 上(列表行显示并可重试),
                 // 不再写全局 errorMessage,避免一个失效源把整页都罩上红色异常卡片。
-                sourceHealth[source] = .failed(Self.detailedErrorDescription(error))
+                sourceHealth[source] = .failed(sourceErrorDescription(error))
             }
         }
 
@@ -530,7 +536,7 @@ public final class PluginSourceManager: @unchecked Sendable {
 
         for source in sourceURLs {
             guard let url = URL(string: source) else {
-                sourceHealth[source] = .failed("无效的 URL")
+                sourceHealth[source] = .failed(invalidSourceURLDescription)
                 continue
             }
             sourceHealth[source] = .checking
@@ -548,7 +554,7 @@ public final class PluginSourceManager: @unchecked Sendable {
                 mergeLatestRemoteItems(index.plugins)
             } catch {
                 // 失败状态记到该源的 health(列表行可重试),不再写全局 errorMessage。
-                sourceHealth[source] = .failed(Self.detailedErrorDescription(error))
+                sourceHealth[source] = .failed(sourceErrorDescription(error))
             }
         }
 
@@ -565,7 +571,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard sourceURLs.contains(trimmed) else { return false }
         guard let url = URL(string: trimmed) else {
-            sourceHealth[trimmed] = .failed("无效的 URL")
+            sourceHealth[trimmed] = .failed(invalidSourceURLDescription)
             return false
         }
 
@@ -585,7 +591,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             }
             return true
         } catch {
-            sourceHealth[trimmed] = .failed(Self.detailedErrorDescription(error))
+            sourceHealth[trimmed] = .failed(sourceErrorDescription(error))
             return false
         }
     }
@@ -1075,6 +1081,86 @@ public final class PluginSourceManager: @unchecked Sendable {
     }
 
     // MARK: - Error Description Helper
+
+    @MainActor
+    private var invalidSourceURLDescription: String {
+        PersistentSyncRetryCoordinator.shared.isFullUIEnabled
+            ? Self.friendlySourceErrorDescription(URLError(.badURL))
+            : "无效的 URL"
+    }
+
+    @MainActor
+    func sourceErrorDescription(_ error: Error) -> String {
+        PersistentSyncRetryCoordinator.shared.isFullUIEnabled
+            ? Self.friendlySourceErrorDescription(error)
+            : Self.detailedErrorDescription(error)
+    }
+
+    /// 面向订阅源用户的提示，仅使用错误类型和 HTTP 状态，不展示地址或响应内容。
+    static func friendlySourceErrorDescription(_ error: Error) -> String {
+        if let statusCode = (error as NSError).userInfo[LiveParsePluginUpdater.httpStatusCodeUserInfoKey] as? Int {
+            switch statusCode {
+            case 401, 403:
+                return "订阅源拒绝访问（HTTP \(statusCode)），请联系订阅源提供者确认访问权限。"
+            case 404, 410:
+                return "订阅源地址不可用（HTTP \(statusCode)），请检查地址或联系订阅源提供者。"
+            case 408, 504:
+                return "订阅源响应超时（HTTP \(statusCode)），请稍后重试。"
+            case 429:
+                return "订阅源请求过于频繁（HTTP \(statusCode)），请稍后重试。"
+            case 500...599:
+                return "订阅源服务暂时不可用（HTTP \(statusCode)），请稍后重试。"
+            default:
+                return "订阅源请求失败（HTTP \(statusCode)），请稍后重试或联系订阅源提供者。"
+            }
+        }
+
+        if let fetchError = error as? LiveParsePluginIndexFetchError {
+            switch fetchError {
+            case .nonJSONResponse:
+                return "订阅源返回的内容不是有效的订阅数据，请检查地址或联系订阅源提供者。"
+            case .decodingFailed:
+                return "订阅源内容格式不正确，请联系订阅源提供者更新内容。"
+            }
+        }
+
+        if error is DecodingError {
+            return "订阅源内容格式不正确，请联系订阅源提供者更新内容。"
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return "订阅源连接超时，请检查网络或稍后重试。"
+            case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff, .callIsActive:
+                return "网络不可用，请检查网络连接后重试。"
+            case .cannotFindHost, .dnsLookupFailed:
+                return "无法找到订阅源服务器，请检查地址和网络后重试。"
+            case .cannotConnectToHost:
+                return "无法连接订阅源服务器，请检查网络或稍后重试。"
+            case .networkConnectionLost:
+                return "订阅源连接已中断，请检查网络后重试。"
+            case .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateUntrusted,
+                 .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid,
+                 .clientCertificateRejected, .clientCertificateRequired:
+                return "无法与订阅源建立安全连接，请联系订阅源提供者检查证书或服务配置。"
+            case .appTransportSecurityRequiresSecureConnection:
+                return "订阅源未满足安全连接要求，请联系订阅源提供者检查地址或服务配置。"
+            case .badURL, .unsupportedURL:
+                return "订阅源地址无效，请检查地址后重试。"
+            case .badServerResponse:
+                return "订阅源响应异常，请稍后重试或联系订阅源提供者。"
+            case .cannotDecodeRawData, .cannotDecodeContentData, .cannotParseResponse:
+                return "订阅源返回的内容无法读取，请联系订阅源提供者。"
+            case .cancelled:
+                return "订阅源加载已取消，请重试。"
+            default:
+                return "暂时无法连接订阅源，请检查网络后重试。"
+            }
+        }
+
+        return "暂时无法加载订阅源，请稍后重试或联系订阅源提供者。"
+    }
 
     /// 将错误转为更具体的描述，方便排查问题
     static func detailedErrorDescription(_ error: Error) -> String {

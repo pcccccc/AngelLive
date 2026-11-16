@@ -44,6 +44,8 @@ public struct LiveParsePluginUpdateInfo: Equatable, Sendable {
 }
 
 public final class LiveParsePluginUpdater: @unchecked Sendable {
+    static let httpStatusCodeUserInfoKey = "LiveParsePluginUpdater.HTTPStatusCode"
+
     public let storage: LiveParsePluginStorage
     public let session: URLSession
 
@@ -58,7 +60,8 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         if let httpResponse,
            !(200...299).contains(httpResponse.statusCode) {
             throw URLError(.badServerResponse, userInfo: [
-                NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"
+                NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)",
+                Self.httpStatusCodeUserInfoKey: httpResponse.statusCode
             ])
         }
 
