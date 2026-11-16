@@ -69,8 +69,8 @@ struct DetailPlayerView: View {
             // 当前平台登录状态变化后重新取流，让被锁定的画质解锁
             .onReceive(
                 NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
-                    .compactMap { $0.object as? String }
                     .receive(on: RunLoop.main)
+                    .compactMap { $0.object as? String }
             ) { pluginId in
                 guard pluginId == SandboxPluginCatalog.platform(for: roomInfoViewModel.currentRoom.liveType)?.pluginId else { return }
                 // 与错误页「重试」一致：先清掉错误态再重新取流

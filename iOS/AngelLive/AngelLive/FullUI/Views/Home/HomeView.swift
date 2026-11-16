@@ -67,8 +67,8 @@ struct HomeView: View {
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
-                    .compactMap { $0.object as? String }
                     .receive(on: RunLoop.main)
+                    .compactMap { $0.object as? String }
             ) { pluginId in
                 if pluginAvailability.installedPluginIds.contains(pluginId) {
                     credentialRevision &+= 1

@@ -153,8 +153,8 @@ struct TVHomeView: View {
         }
         .onReceive(
             NotificationCenter.default.publisher(for: .platformSessionMetadataDidChange)
-                .compactMap { $0.object as? String }
                 .receive(on: RunLoop.main)
+                .compactMap { $0.object as? String }
         ) { pluginID in
             guard pluginAvailability.installedPluginIds.contains(pluginID) else { return }
             credentialRevision &+= 1

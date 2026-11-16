@@ -31,6 +31,7 @@ struct MacPlatformLoginWebSheet: View {
     @State private var isValidating = false
     @State private var validationMessage: String?
     @State private var userDisplayName: String?
+    @State private var loginLifecycle = PlatformWebLoginLifecycle()
 
     init(pluginId: String, startsWithLogin: Bool = false) {
         self.pluginId = pluginId
@@ -40,11 +41,11 @@ struct MacPlatformLoginWebSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let entry {
-                    if isLoggedIn && !showWebView {
-                        statusContent(entry: entry)
+                if loginLifecycle.isInitialStatusLoaded, let entry {
+                    if let attemptID = loginLifecycle.attemptID {
+                        loginContent(entry: entry, attemptID: attemptID)
                     } else {
-                        loginContent(entry: entry)
+                        statusContent(entry: entry)
                     }
                 } else {
                     ProgressView("加载中...")
@@ -59,7 +60,10 @@ struct MacPlatformLoginWebSheet: View {
             .toolbar {
                 if !usesSettingsPresentation {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") { dismiss() }
+                        Button("关闭") {
+                            stopCookiePolling()
+                            dismiss()
+                        }
                     }
                     ToolbarItem(placement: .primaryAction) {
                         if isLoggedIn && !showWebView {
@@ -70,16 +74,24 @@ struct MacPlatformLoginWebSheet: View {
                     }
                 }
             }
-            .task {
-                entry = await PlatformLoginRegistry.shared.entry(pluginId: pluginId)
-                if !startsWithLogin {
-                    await reloadLoginStatus()
-                }
+        }
+        .task {
+            let generation = loginLifecycle.beginLoading()
+            let loadedEntry = await PlatformLoginRegistry.shared.entry(pluginId: pluginId)
+            guard !Task.isCancelled, loginLifecycle.isCurrentGeneration(generation) else { return }
+            if !startsWithLogin {
+                await reloadLoginStatus(generation: generation)
             }
-            .onDisappear {
-                cookiePollingTimer?.invalidate()
-                cookiePollingTimer = nil
-            }
+            guard !Task.isCancelled, loginLifecycle.isCurrentGeneration(generation) else { return }
+            entry = loadedEntry
+            loginLifecycle.completeInitialStatus(
+                generation: generation,
+                isAuthenticated: isLoggedIn,
+                startsWithLogin: startsWithLogin
+            )
+        }
+        .onDisappear {
+            stopCookiePolling()
         }
     }
 
@@ -138,6 +150,9 @@ struct MacPlatformLoginWebSheet: View {
 
             Section {
                 Button("重新登录") {
+                    stopCookiePolling()
+                    loginLifecycle.beginLoginAttempt()
+                    lastSavedCookieSignature = nil
                     showWebView = true
                     statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
                     errorMessage = nil
@@ -164,15 +179,22 @@ struct MacPlatformLoginWebSheet: View {
     }
 
     private func revalidate() async {
+        let generation = loginLifecycle.generation
         isValidating = true
         validationMessage = nil
         let status = await PlatformSessionManager.shared.fetchCredentialStatus(pluginId: pluginId)
+        guard loginLifecycle.isCurrentGeneration(generation) else { return }
         if let name = status?.userName, !name.isEmpty {
             userDisplayName = name
         }
         let result = await PlatformSessionManager.shared.validateSession(pluginId: pluginId)
+        guard loginLifecycle.isCurrentGeneration(generation) else { return }
         await syncService.refreshLoginStatus(pluginId: pluginId)
-        await reloadLoginStatus()
+        await reloadLoginStatus(generation: generation)
+        guard loginLifecycle.isCurrentGeneration(generation) else { return }
+        if !isLoggedIn {
+            loginLifecycle.beginLoginAttempt()
+        }
         switch result {
         case .valid:
             validationMessage = "✅ 凭证有效"
@@ -187,23 +209,26 @@ struct MacPlatformLoginWebSheet: View {
     }
 
     @ViewBuilder
-    private func loginContent(entry: LoginPlatformEntry) -> some View {
+    private func loginContent(entry: LoginPlatformEntry, attemptID: UUID) -> some View {
         if let loginFlow = entry.loginFlow {
         VStack(spacing: 0) {
             MacPlatformLoginWebView(
                 loginFlow: loginFlow,
                 usesEphemeralSession: startsWithLogin,
                 onWebViewCreated: { webView in
+                    guard loginLifecycle.acceptsCallback(for: attemptID) else { return }
                     currentWebView = webView
-                    startCookiePolling(entry: entry)
+                    startCookiePolling(entry: entry, attemptID: attemptID)
                 },
                 onNavigationStateChange: { title, url, didFinish in
+                    guard loginLifecycle.acceptsCallback(for: attemptID) else { return }
                     updateNavigationStatus(title: title, url: url)
                     if didFinish {
-                        pollCookieOnce(entry: entry)
+                        pollCookieOnce(entry: entry, attemptID: attemptID)
                     }
                 }
             )
+            .id(attemptID)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(statusText)
@@ -249,42 +274,53 @@ struct MacPlatformLoginWebSheet: View {
 
     // MARK: - Cookie Polling (macOS 需要轮询)
 
-    private func startCookiePolling(entry: LoginPlatformEntry) {
+    private func startCookiePolling(entry: LoginPlatformEntry, attemptID: UUID) {
+        guard loginLifecycle.acceptsCallback(for: attemptID) else { return }
         cookiePollingTimer?.invalidate()
         cookiePollingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
             // 线程前提:scheduledTimer 挂在当前(主)RunLoop,回调必在主线程,判断错误会 trap。
             MainActor.assumeIsolated {
-                pollCookieOnce(entry: entry)
+                pollCookieOnce(entry: entry, attemptID: attemptID)
             }
         }
     }
 
-    private func pollCookieOnce(entry: LoginPlatformEntry) {
-        guard !isSavingCookie, let currentWebView else { return }
+    private func pollCookieOnce(entry: LoginPlatformEntry, attemptID: UUID) {
+        guard loginLifecycle.acceptsCallback(for: attemptID),
+              !isSavingCookie, let currentWebView else { return }
         guard let loginFlow = entry.loginFlow else { return }
 
         currentWebView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
-            let filteredCookies = cookies.filter { cookie in
-                loginFlow.cookieDomains.contains { hint in
-                    cookie.domain.contains(hint)
-                }
-            }
-
-            let cookieString = makeCookieString(from: filteredCookies)
-            guard !cookieString.isEmpty else { return }
-            guard containsAuthenticatedCookie(in: filteredCookies, loginFlow: loginFlow) else { return }
-
-            let signature = makeCookieSignature(from: filteredCookies)
-
             Task { @MainActor in
-                guard !isSavingCookie else { return }
+                guard loginLifecycle.acceptsCallback(for: attemptID), !isSavingCookie else { return }
+                let filteredCookies = cookies.filter { cookie in
+                    loginFlow.cookieDomains.contains { hint in
+                        cookie.domain.contains(hint)
+                    }
+                }
+
+                let cookieString = makeCookieString(from: filteredCookies)
+                guard !cookieString.isEmpty else { return }
+                guard containsAuthenticatedCookie(in: filteredCookies, loginFlow: loginFlow) else { return }
+
+                let signature = makeCookieSignature(from: filteredCookies)
                 guard signature != lastSavedCookieSignature else { return }
-                await saveCookie(cookieString, entry: entry, cookies: filteredCookies, signature: signature)
+                await saveCookie(cookieString, entry: entry, cookies: filteredCookies, signature: signature, attemptID: attemptID)
             }
         }
     }
 
-    private func saveCookie(_ cookieString: String, entry: LoginPlatformEntry, cookies: [HTTPCookie], signature: String) async {
+    private func stopCookiePolling() {
+        cookiePollingTimer?.invalidate()
+        cookiePollingTimer = nil
+        loginLifecycle.stopLoginAttempt()
+        currentWebView = nil
+        isSavingCookie = false
+        isValidating = false
+    }
+
+    private func saveCookie(_ cookieString: String, entry: LoginPlatformEntry, cookies: [HTTPCookie], signature: String, attemptID: UUID) async {
+        guard loginLifecycle.acceptsCallback(for: attemptID) else { return }
         guard !cookieString.isEmpty else { return }
 
         isSavingCookie = true
@@ -302,9 +338,15 @@ struct MacPlatformLoginWebSheet: View {
             validateBeforeSave: shouldValidate
         )
 
+        // The session manager owns any committed result. A departed page only
+        // discards its UI callback; it must not undo a completed login.
+        guard loginLifecycle.acceptsCallback(for: attemptID) else { return }
         switch result {
         case .valid:
             isLoggedIn = true
+            showWebView = false
+            stopCookiePolling()
+            let generation = loginLifecycle.generation
             lastSavedCookieSignature = signature
             statusText = "登录信息已保存（宿主托管鉴权）"
             errorMessage = nil
@@ -312,7 +354,8 @@ struct MacPlatformLoginWebSheet: View {
             if syncService.iCloudSyncEnabled {
                 await syncService.syncAllToICloud()
             }
-            await reloadLoginStatus()
+            await reloadLoginStatus(generation: generation)
+            return
         case .expired:
             statusText = "登录信息已过期"
             errorMessage = "Cookie 已过期，请重新登录。"
@@ -365,12 +408,15 @@ struct MacPlatformLoginWebSheet: View {
     // MARK: - Actions
 
     private func logout() {
+        stopCookiePolling()
+        let generation = loginLifecycle.generation
         Task {
             await syncService.clearSession(pluginId: pluginId)
             if syncService.iCloudSyncEnabled {
                 await syncService.syncAllToICloud()
             }
             await MainActor.run {
+                guard loginLifecycle.isCurrentGeneration(generation) else { return }
                 isLoggedIn = false
                 currentSession = nil
                 validationMessage = nil
@@ -378,12 +424,14 @@ struct MacPlatformLoginWebSheet: View {
                 showWebView = false
                 statusText = "已退出登录"
                 errorMessage = nil
+                loginLifecycle.beginLoginAttempt()
             }
         }
     }
 
-    private func reloadLoginStatus() async {
+    private func reloadLoginStatus(generation: UUID) async {
         let session = await PlatformSessionManager.shared.getSession(pluginId: pluginId)
+        guard !Task.isCancelled, loginLifecycle.isCurrentGeneration(generation) else { return }
         currentSession = session
         let loggedIn = session?.state == .authenticated
         isLoggedIn = loggedIn
@@ -392,7 +440,8 @@ struct MacPlatformLoginWebSheet: View {
             Task {
                 if let status = await PlatformSessionManager.shared.fetchCredentialStatus(pluginId: pluginId),
                    let name = status.userName, !name.isEmpty {
-                    await MainActor.run { userDisplayName = name }
+                    guard loginLifecycle.isCurrentGeneration(generation) else { return }
+                    userDisplayName = name
                 }
             }
         } else {
