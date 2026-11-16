@@ -79,6 +79,7 @@ struct PanelNavigationRow: View {
     let title: String
     let subtitle: String?
     let showsChevron: Bool
+    private let titleStyle: AnyShapeStyle
     private let icon: AnyView
     private let titleAccessory: AnyView
     private let trailingContent: AnyView
@@ -87,6 +88,7 @@ struct PanelNavigationRow: View {
         title: String,
         subtitle: String? = nil,
         showsChevron: Bool = true,
+        titleColor: Color? = nil,
         @ViewBuilder icon: () -> Icon,
         @ViewBuilder titleAccessory: () -> TitleAccessory,
         @ViewBuilder trailing: () -> Trailing
@@ -94,6 +96,7 @@ struct PanelNavigationRow: View {
         self.title = title
         self.subtitle = subtitle
         self.showsChevron = showsChevron
+        self.titleStyle = titleColor.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary)
         self.icon = AnyView(icon())
         self.titleAccessory = AnyView(titleAccessory())
         self.trailingContent = AnyView(trailing())
@@ -103,6 +106,7 @@ struct PanelNavigationRow: View {
         title: String,
         subtitle: String? = nil,
         showsChevron: Bool = true,
+        titleColor: Color? = nil,
         @ViewBuilder icon: () -> Icon,
         @ViewBuilder trailing: () -> Trailing
     ) {
@@ -110,6 +114,7 @@ struct PanelNavigationRow: View {
             title: title,
             subtitle: subtitle,
             showsChevron: showsChevron,
+            titleColor: titleColor,
             icon: icon,
             titleAccessory: { EmptyView() },
             trailing: trailing
@@ -120,12 +125,14 @@ struct PanelNavigationRow: View {
         title: String,
         subtitle: String? = nil,
         showsChevron: Bool = true,
+        titleColor: Color? = nil,
         @ViewBuilder icon: () -> Icon
     ) {
         self.init(
             title: title,
             subtitle: subtitle,
             showsChevron: showsChevron,
+            titleColor: titleColor,
             icon: icon,
             titleAccessory: { EmptyView() },
             trailing: { EmptyView() }
@@ -142,7 +149,7 @@ struct PanelNavigationRow: View {
                 HStack(spacing: 6) {
                     Text(title)
                         .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(titleStyle)
 
                     titleAccessory
                 }

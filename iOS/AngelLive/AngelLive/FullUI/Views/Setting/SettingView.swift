@@ -278,6 +278,22 @@ struct SettingView: View {
                         }
                     }
 
+                    if pluginAvailability.hasAvailablePlugins {
+                        NavigationLink {
+                            SponsorAcknowledgementsView()
+                                .fullUITabBarHidden()
+                        } label: {
+                            HStack {
+                                Image(systemName: "heart.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.pink.gradient)
+                                    .frame(width: 32)
+                                    .accessibilityHidden(true)
+                                Text("赞助商")
+                            }
+                        }
+                    }
+
                     NavigationLink {
                         AboutUSView()
                             .fullUITabBarHidden()

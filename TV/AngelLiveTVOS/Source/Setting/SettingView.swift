@@ -9,6 +9,7 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 import Kingfisher
+import SharedAssets
 
 extension Int: @retroactive Identifiable {
     public var id: Int { self }
@@ -16,7 +17,8 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈", "翻译与字幕", "播放时间轴"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈", "翻译与字幕", "播放时间轴", "赞助商"]
+    private static let sponsorsIndex = 12
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @State private var lastFocusedIndex: Int?
@@ -84,9 +86,15 @@ struct SettingView: View {
         .fullScreenCover(item: $fullScreenIndex) { index in
             fullScreenContentView(for: index)
         }
-        .onChange(of: fullScreenIndex) { _, newValue in
-            guard newValue == nil, let lastFocusedIndex else { return }
-            focusedIndex = lastFocusedIndex
+        .onChange(of: fullScreenIndex) { previousIndex, newValue in
+            guard newValue == nil else { return }
+            if previousIndex == Self.sponsorsIndex {
+                if shouldShowMenuItem(Self.sponsorsIndex) {
+                    focusedIndex = Self.sponsorsIndex
+                }
+            } else if let lastFocusedIndex {
+                focusedIndex = lastFocusedIndex
+            }
         }
         .onChange(of: selectedIndex) { previousIndex, newIndex in
             guard appViewModel.pluginAvailability.hasAvailablePlugins,
@@ -102,6 +110,9 @@ struct SettingView: View {
                 selectedIndex = nil
             }
             if fullScreenIndex == 1 && !canEnterPluginManagement {
+                fullScreenIndex = nil
+            }
+            if fullScreenIndex == Self.sponsorsIndex {
                 fullScreenIndex = nil
             }
             // 数据同步现在走半屏(selectedIndex),失去插件后跟着关闭
@@ -219,7 +230,7 @@ struct SettingView: View {
         if index == 9 {
             return supportDiagnosticsEnabled
         }
-        if index == 10 {
+        if index == 10 || index == Self.sponsorsIndex {
             return appViewModel.pluginAvailability.hasAvailablePlugins
         }
         if index == 11 {
@@ -284,7 +295,7 @@ struct SettingView: View {
         }
     }
 
-    // MARK: - 全屏内容视图（插件管理、历史记录、开源许可、关于）
+    // MARK: - 全屏内容视图
     @ViewBuilder
     private func fullScreenContentView(for index: Int) -> some View {
         switch index {
@@ -349,6 +360,18 @@ struct SettingView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
+        case Self.sponsorsIndex:
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                TVSponsorAcknowledgementsView(onClose: { fullScreenIndex = nil })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background {
+                        Color.shared("sl-background")
+                            .ignoresSafeArea()
+                    }
+                    .onExitCommand {
+                        fullScreenIndex = nil
+                    }
+            }
         default:
             EmptyView()
         }

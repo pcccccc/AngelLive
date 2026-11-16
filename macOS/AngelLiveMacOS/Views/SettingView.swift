@@ -23,6 +23,7 @@ struct SettingView: View {
 
     @State private var playerSettingModel = PlayerSettingModel()
     @State private var showOpenSourceList = false
+    @State private var showSponsorAcknowledgements = false
     @State private var showPluginManagement = false
     @State private var showDanmuSetting = false
     @State private var showAccountManagement = false
@@ -87,6 +88,9 @@ struct SettingView: View {
                     supportDiagnosticsRow
                 }
                 openSourceRow
+                if pluginAvailability.hasAvailablePlugins {
+                    sponsorAcknowledgementsRow
+                }
                 githubRow
             }
 
@@ -154,6 +158,15 @@ struct SettingView: View {
                 .frame(minWidth: 600, minHeight: 500)
             }
         }
+        .sheet(isPresented: $showSponsorAcknowledgements) {
+            if pluginAvailability.hasAvailablePlugins {
+                NavigationStack {
+                    MacSponsorAcknowledgementsView()
+                }
+                .macSettingsSheetPresentation()
+                .frame(minWidth: 600, minHeight: 420)
+            }
+        }
         .sheet(isPresented: $showDanmuSetting) {
             if pluginAvailability.hasAvailablePlugins {
                 NavigationStack {
@@ -203,6 +216,7 @@ struct SettingView: View {
         .onChange(of: pluginAvailability.hasAvailablePlugins) { _, hasPlugins in
             if !hasPlugins {
                 showTranslationSetting = false
+                showSponsorAcknowledgements = false
             }
         }
         .alert(
@@ -474,6 +488,23 @@ struct SettingView: View {
                 Image(systemName: "doc.text.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.blue.gradient)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sponsorAcknowledgementsRow: some View {
+        Button {
+            showSponsorAcknowledgements = true
+        } label: {
+            PanelNavigationRow(
+                title: "赞助商",
+                subtitle: "查看支持 AngelLive 的合作伙伴"
+            ) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.pink.gradient)
+                    .accessibilityHidden(true)
             }
         }
         .buttonStyle(.plain)
