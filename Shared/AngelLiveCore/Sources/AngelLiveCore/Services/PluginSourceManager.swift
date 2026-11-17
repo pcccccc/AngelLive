@@ -126,6 +126,45 @@ public final class PluginSourceManager: @unchecked Sendable {
     @ObservationIgnored @MainActor
     public private(set) lazy var installBatch = PluginInstallBatch()
 
+    /// Opt-in delayed removal for management hosts. Existing direct uninstall
+    /// callers retain their immediate behavior.
+    @ObservationIgnored @MainActor
+    public private(set) lazy var deferredUninstall = PluginDeferredUninstall(
+        canUninstall: { [weak self] pluginId in
+            guard let self, self.installedVersion(for: pluginId) != nil else { return false }
+            let isQueuedForInstall = self.installBatch.isRunning &&
+                self.installBatch.pluginIds.contains(pluginId) && self.installBatch.outcomes[pluginId] == nil
+            return !isQueuedForInstall && !self.updatingPluginIds.contains(pluginId) &&
+                !self.remotePlugins.contains { $0.id == pluginId && $0.installState == .installing }
+        },
+        uninstall: { [weak self] pluginId in
+            self?.uninstallPlugin(pluginId: pluginId) ?? false
+        }
+    )
+
+    @MainActor public var pendingUninstallPluginId: String? {
+        deferredUninstall.pendingUninstallPluginId
+    }
+
+    @MainActor public var pendingUninstallDeadline: Date? {
+        deferredUninstall.pendingUninstallDeadline
+    }
+
+    @MainActor @discardableResult
+    public func stageUninstall(pluginId: String) -> Bool {
+        deferredUninstall.stageUninstall(pluginId: pluginId)
+    }
+
+    @MainActor
+    public func undoPendingUninstall() {
+        deferredUninstall.undoPendingUninstall()
+    }
+
+    @MainActor @discardableResult
+    public func commitPendingUninstall() -> Bool {
+        deferredUninstall.commitPendingUninstall()
+    }
+
     @MainActor public var isManagementBusy: Bool {
         installBatch.isRunning || updateBatch.isRunning || isFetchingIndex || isCheckingUpdates || isInstalling ||
         installTotalCount > 0 || !updatingPluginIds.isEmpty

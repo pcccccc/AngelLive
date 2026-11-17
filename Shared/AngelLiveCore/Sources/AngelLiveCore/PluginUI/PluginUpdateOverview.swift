@@ -253,6 +253,12 @@ extension PluginSourceManager {
         if hasUpdate(for: pluginId), case .failed(let reason) = updateBatch.outcomes[pluginId] {
             return .failed(reason)
         }
+        // Catalog refresh replaces display items, but the install batch still
+        // owns its failed result until a retry or explicit result reset.
+        if !installBatch.isRunning, installedVersion(for: pluginId) == nil,
+           case .failed(let reason) = installBatch.outcomes[pluginId] {
+            return .failed(reason)
+        }
         if let remote { return catalogActionState(for: remote) }
         return hasUpdate(for: pluginId) ? .update : .installed
     }

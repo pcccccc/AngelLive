@@ -232,6 +232,21 @@ public enum PlatformCapability {
         status(for: feature, liveType: liveType).isSupported
     }
 
+    /// Explicit manifest declarations only; older script-inferred capabilities
+    /// are intentionally absent from descriptive management UI.
+    public static func declaredFeatures(forPluginId pluginId: String) -> [PlatformFeature]? {
+        guard let plugin = try? LiveParsePlugins.shared.resolve(pluginId: pluginId),
+              let data = try? Data(contentsOf: plugin.rootDirectory.appendingPathComponent("manifest.json")) else {
+            return nil
+        }
+        return declaredFeatures(from: data)
+    }
+
+    static func declaredFeatures(from manifestData: Data) -> [PlatformFeature]? {
+        guard let capabilities = parseCapabilities(from: manifestData) else { return nil }
+        return PlatformFeature.allCases.filter { capabilities[$0]?.isSupported == true }
+    }
+
     /// 功能的登录要求（manifest `capabilities.<feature>.auth`），未声明时为 `.none`。
     public static func auth(
         for feature: PlatformFeature,
