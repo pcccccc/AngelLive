@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import ImageIO
 import AngelLiveCore
 
 enum PlatformIconProvider {
@@ -124,6 +125,42 @@ enum PlatformIconProvider {
             listImageCache[cacheKey] = legacyImage
         }
         return legacyImage
+    }
+
+    /// 管理页独立选图，不读取或写入账号页共用的列表图标缓存。
+    static func pluginManagementImage(
+        for liveType: LiveType, targetSide: CGFloat, displayScale: CGFloat
+    ) -> UIImage? {
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return playlistIcon(for: liveType)
+        }
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else { return nil }
+        let pluginId = platform.pluginId
+        let fileNames = [installedListIconPrefix, installedTabIconPrefix, "assets/mini_live_card_"]
+            .map { $0 + pluginId }
+        let versions = LiveParsePlugins.shared.storage.listInstalledVersions(pluginId: pluginId)
+            .sorted { semverCompare($0.lastPathComponent, $1.lastPathComponent) > 0 }
+        let targetPixels = targetSide * displayScale
+        for version in versions {
+            var smallestCovering: CGImage?
+            var largest: CGImage?
+            for fileName in fileNames {
+                let url = version.appendingPathComponent(fileName).appendingPathExtension("png")
+                guard FileManager.default.fileExists(atPath: url.path),
+                      let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                      let bitmap = CGImageSourceCreateImageAtIndex(source, 0, nil) else { continue }
+                let area = Double(bitmap.width) * Double(bitmap.height)
+                if largest.map({ area > Double($0.width) * Double($0.height) }) ?? true { largest = bitmap }
+                if CGFloat(bitmap.width) >= targetPixels, CGFloat(bitmap.height) >= targetPixels,
+                   smallestCovering.map({ area < Double($0.width) * Double($0.height) }) ?? true {
+                    smallestCovering = bitmap
+                }
+            }
+            if let best = smallestCovering ?? largest {
+                return UIImage(cgImage: best)
+            }
+        }
+        return UIImage(named: installedListIconPrefix.replacingOccurrences(of: "assets/", with: "") + pluginId)
     }
 
     private static func loadInstalledIcon(pluginId: String, fileName: String) -> UIImage? {
