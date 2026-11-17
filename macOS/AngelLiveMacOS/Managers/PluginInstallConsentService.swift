@@ -18,10 +18,29 @@ final class PluginInstallConsentService: PluginInstallConsentRequesting {
     var isPresenting: Bool = false
     var pendingReason: PluginInstallConsentReason?
 
+    private var presentationHosts: [UUID] = []
+
+    var hasPresentationHost: Bool { !presentationHosts.isEmpty }
+
     @ObservationIgnored
     private var continuation: CheckedContinuation<Bool, Never>?
 
     nonisolated init() {}
+
+    func presentationDidAppear(_ id: UUID) {
+        presentationHosts.removeAll { $0 == id }
+        presentationHosts.append(id)
+    }
+
+    func presentationDidDisappear(_ id: UUID) {
+        let wasActiveHost = presentationHosts.last == id
+        presentationHosts.removeAll { $0 == id }
+        if wasActiveHost, isPresenting { resolve(false) }
+    }
+
+    func isPresenting(for hostID: UUID) -> Bool {
+        isPresenting && presentationHosts.last == hostID
+    }
 
     func requestConsent(reason: PluginInstallConsentReason) async -> Bool {
         await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in

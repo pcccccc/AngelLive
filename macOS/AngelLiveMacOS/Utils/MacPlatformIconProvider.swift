@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import ImageIO
 import AngelLiveCore
 
 enum MacPlatformIconProvider {
@@ -53,25 +54,55 @@ enum MacPlatformIconProvider {
         return nil
     }
 
-    /// 管理页使用原始插件图像数据，不复用 tabImage 的 16pt 逻辑尺寸。
-    /// 这样由 SwiftUI 按管理列表的实际尺寸缩放，避免把 sidebar 用的尺寸
-    /// 带进 36pt 的插件行。低分辨率资源仍按原始数据显示，不人为锐化或放大。
-    static func pluginManagementImage(for liveType: LiveType) -> NSImage? {
+    private static func loadManagementIcon(
+        pluginId: String, fileNames: [String], targetPixels: CGFloat
+    ) -> NSImage? {
+        let versions = LiveParsePlugins.shared.storage.listInstalledVersions(pluginId: pluginId)
+            .sorted { semverCompare($0.lastPathComponent, $1.lastPathComponent) > 0 }
+        for version in versions {
+            var smallestCovering: CGImage?
+            var largest: CGImage?
+            for fileName in fileNames {
+                let url = version.appendingPathComponent(fileName).appendingPathExtension("png")
+                guard FileManager.default.fileExists(atPath: url.path),
+                      let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                      let bitmap = CGImageSourceCreateImageAtIndex(source, 0, nil) else { continue }
+                let area = Double(bitmap.width) * Double(bitmap.height)
+                if largest.map({ area > Double($0.width) * Double($0.height) }) ?? true { largest = bitmap }
+                if CGFloat(bitmap.width) >= targetPixels, CGFloat(bitmap.height) >= targetPixels,
+                   smallestCovering.map({ area < Double($0.width) * Double($0.height) }) ?? true {
+                    smallestCovering = bitmap
+                }
+            }
+            // Keep the first available version; select resolution only among its resources.
+            if let best = smallestCovering ?? largest {
+                return NSImage(cgImage: best, size: NSSize(width: CGFloat(best.width), height: CGFloat(best.height)))
+            }
+        }
+        return nil
+    }
+
+    /// 管理页按目标像素选择最小足够资源，不复用侧栏的逻辑尺寸。
+    static func pluginManagementImage(
+        for liveType: LiveType, targetSide: CGFloat, displayScale: CGFloat
+    ) -> NSImage? {
         if PlaylistPlatformIdentity.isPlaylist(liveType) {
             return playlistIcon(for: liveType)
         }
         if let pluginId = resolveInstalledPluginId(for: liveType),
-           let image = loadInstalledIcon(
+           let image = loadManagementIcon(
                pluginId: pluginId,
-               fileNames: managementIconPrefixes.map { $0 + pluginId }
+               fileNames: managementIconPrefixes.map { $0 + pluginId },
+               targetPixels: targetSide * displayScale
            ) {
             return image
         }
 
         if let platform = SandboxPluginCatalog.platform(for: liveType) {
-            return loadInstalledIcon(
+            return loadManagementIcon(
                 pluginId: platform.pluginId,
-                fileNames: managementIconPrefixes.map { $0 + platform.pluginId }
+                fileNames: managementIconPrefixes.map { $0 + platform.pluginId },
+                targetPixels: targetSide * displayScale
             )
         }
 

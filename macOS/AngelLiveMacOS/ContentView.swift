@@ -352,7 +352,14 @@ struct ContentView: View {
         } message: {
             Text("检测到您已在其他设备安装过插件，是否一键安装？")
         }
-        .alert(consentService.alertTitle, isPresented: $consentService.isPresenting) {
+        .alert(consentService.alertTitle, isPresented: Binding(
+            get: { consentService.isPresenting && !(pluginAvailability.hasAvailablePlugins && consentService.hasPresentationHost) },
+            set: { presented in
+                if !(pluginAvailability.hasAvailablePlugins && consentService.hasPresentationHost) {
+                    consentService.isPresenting = presented
+                }
+            }
+        )) {
             Button(consentService.continueButtonTitle) { consentService.resolve(true) }
             Button("取消", role: .cancel) { consentService.resolve(false) }
         } message: {
