@@ -422,6 +422,7 @@ private struct TVPluginDetailInformation: View {
     let manager: PluginSourceManager
     let availability: PluginAvailabilityService
     let loggedIn: Bool
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var features: [PlatformFeature] = []
 
     var body: some View {
@@ -448,8 +449,7 @@ private struct TVPluginDetailInformation: View {
                     .foregroundStyle(TVPluginLayout.failure).lineLimit(1)
             }
             if !features.isEmpty {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)],
-                    alignment: .leading, spacing: TVPluginLayout.infoSpacing) {
+                TVPluginTagFlowLayout(spacing: TVPluginLayout.infoSpacing, layoutDirection: layoutDirection) {
                     ForEach(features, id: \.rawValue) { feature in
                         Text(feature.displayName).font(.caption).lineLimit(1)
                             .padding(.horizontal, 16).padding(.vertical, 8)
@@ -462,6 +462,60 @@ private struct TVPluginDetailInformation: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: availability.catalogRevision) {
             features = PlatformCapability.declaredFeatures(forPluginId: pluginID) ?? []
+        }
+    }
+}
+
+/// Packs capability tags by their own width. Horizontal and vertical gaps share one spacing.
+private struct TVPluginTagFlowLayout: Layout {
+    let spacing: CGFloat
+    let layoutDirection: LayoutDirection
+
+    private struct Placement {
+        let origins: [CGPoint]
+        let sizes: [CGSize]
+        let size: CGSize
+    }
+
+    private func placement(width: CGFloat?, subviews: Subviews) -> Placement {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let limit = width.flatMap { $0.isFinite ? max(0, $0) : nil }
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var contentWidth: CGFloat = 0
+        for size in sizes {
+            if x > 0, let limit, x + size.width > limit {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            contentWidth = max(contentWidth, x + size.width)
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        let reportedWidth = limit ?? contentWidth
+        return Placement(origins: origins, sizes: sizes,
+            size: CGSize(width: reportedWidth, height: sizes.isEmpty ? 0 : y + rowHeight))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        placement(width: proposal.width, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let placed = placement(width: bounds.width, subviews: subviews)
+        let isRightToLeft = layoutDirection == .rightToLeft
+        for index in subviews.indices {
+            let origin = placed.origins[index]
+            subviews[index].place(
+                at: CGPoint(x: isRightToLeft ? bounds.maxX - origin.x : bounds.minX + origin.x,
+                            y: bounds.minY + origin.y),
+                anchor: isRightToLeft ? .topTrailing : .topLeading,
+                proposal: ProposedViewSize(placed.sizes[index])
+            )
         }
     }
 }

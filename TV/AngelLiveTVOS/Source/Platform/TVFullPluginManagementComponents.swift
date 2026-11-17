@@ -8,8 +8,13 @@ nonisolated enum TVPluginLayout {
     static let headingSpacing: CGFloat = 20
     static let titleSpacing: CGFloat = 30
     static let cardSpacing: CGFloat = 44
-    static let cardWidth: CGFloat = 280
-    static let cardHeight: CGFloat = 280
+    static let cardWidth: CGFloat = 160
+    static let cardHeight: CGFloat = 160
+    /// 128px artwork draws 1:1 at 2x. Smaller bitmaps stay at pixel size / scale.
+    static let iconSide: CGFloat = 64
+    /// Unfocused system card and bordered-row fill sampled on the 4K capture.
+    static let installedSurface = Color(.sRGB, red: 25.0 / 255.0, green: 25.0 / 255.0, blue: 25.0 / 255.0, opacity: 1)
+    static let brandWashOpacity: CGFloat = 0.12
     static let discoveryWidth: CGFloat = 420
     static let discoveryHeight: CGFloat = 140
     static let cornerRadius: CGFloat = 22
@@ -327,54 +332,94 @@ private struct TVPluginInstalledArtwork: View {
     let phase: PluginManagementRowPhase
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
-    @State private var shelfColor: Color?
+    @State private var wash: Color?
     @State private var loaded = false
 
     var body: some View {
-        let side = min(TVPluginLayout.cardWidth, TVPluginLayout.cardHeight)
         ZStack {
-            shelfColor ?? monogramColor
-            if let image, let bitmap = image.cgImage {
-                let draw = PluginManagementMonogramStyle.bitmapDrawSize(
-                    pixelWidth: bitmap.width, pixelHeight: bitmap.height,
-                    targetSide: side, displayScale: displayScale)
-                if draw.width >= 1, draw.height >= 1 {
-                    Image(decorative: bitmap, scale: max(displayScale, 1))
-                        .interpolation(.none)
-                        .resizable()
-                        .frame(width: draw.width, height: draw.height)
-                        .clipShape(RoundedRectangle(
-                            cornerRadius: min(draw.width, draw.height) * PluginManagementMonogramStyle.cornerFraction,
-                            style: .continuous))
-                }
-            } else if loaded {
-                PluginManagementMonogram(pluginID: pluginID, displayName: name, size: side * 0.46)
-            } else {
-                ProgressView()
+            TVPluginLayout.installedSurface
+            if let wash {
+                wash.opacity(TVPluginLayout.brandWashOpacity)
             }
+            icon
         }
         .frame(width: TVPluginLayout.cardWidth, height: TVPluginLayout.cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: TVPluginLayout.cornerRadius, style: .continuous))
         .overlay { TVPluginCardProgress(phase: phase) }
         .task(id: [pluginID, String(revision), String(Double(displayScale))]) {
+            let slot = CGSize(width: TVPluginLayout.iconSide, height: TVPluginLayout.iconSide)
             let loadedImage = TVPlatformIconProvider.managementImage(
-                pluginID: pluginID,
-                targetSize: CGSize(width: TVPluginLayout.cardWidth, height: TVPluginLayout.cardHeight),
-                displayScale: displayScale, remote: remote)
+                pluginID: pluginID, targetSize: slot, displayScale: displayScale, remote: remote)
             image = loadedImage
-            if let loadedImage, let color = TVPlatformIconProvider.managementShelfColor(
+            if let loadedImage, let brand = TVPlatformIconProvider.managementShelfColor(
                 pluginID: pluginID, revision: revision, image: loadedImage) {
-                shelfColor = Color(uiColor: color)
+                wash = TVPluginBrandWash.color(brand)
             } else {
-                shelfColor = nil
+                wash = nil
             }
             loaded = true
         }
     }
 
-    private var monogramColor: Color {
-        let rgb = PluginManagementMonogramStyle(pluginID: pluginID, displayName: name).backgroundRGB
-        return Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue, opacity: 1)
+    @ViewBuilder
+    private var icon: some View {
+        if let bitmap = image?.cgImage {
+            let draw = PluginManagementMonogramStyle.bitmapDrawSize(
+                pixelWidth: bitmap.width, pixelHeight: bitmap.height,
+                targetSide: TVPluginLayout.iconSide, displayScale: displayScale)
+            if draw.width >= 1, draw.height >= 1 {
+                let pixels = max(displayScale, 1)
+                let scalesDown = CGFloat(bitmap.width) > draw.width * pixels + 0.5
+                    || CGFloat(bitmap.height) > draw.height * pixels + 0.5
+                Image(decorative: bitmap, scale: pixels)
+                    .interpolation(scalesDown ? .high : .none)
+                    .resizable()
+                    .frame(width: draw.width, height: draw.height)
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: min(draw.width, draw.height) * PluginManagementMonogramStyle.cornerFraction,
+                        style: .continuous))
+            } else if loaded {
+                PluginManagementMonogram(pluginID: pluginID, displayName: name, size: TVPluginLayout.iconSide)
+            }
+        } else if loaded {
+            PluginManagementMonogram(pluginID: pluginID, displayName: name, size: TVPluginLayout.iconSide)
+        } else {
+            ProgressView()
+        }
+    }
+}
+
+/// Brand tint stays at or below 0.12, and only when the icon color still clears 3:1 on the result.
+private enum TVPluginBrandWash {
+    static func color(_ brand: UIColor) -> Color? {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard brand.getRed(&red, green: &green, blue: &blue, alpha: &alpha), alpha > 0 else { return nil }
+        let amount = TVPluginLayout.brandWashOpacity
+        let base: CGFloat = 25 / 255
+        let mixed = (
+            red: base * (1 - amount) + red * amount,
+            green: base * (1 - amount) + green * amount,
+            blue: base * (1 - amount) + blue * amount
+        )
+        guard contrast(mixed, against: (red, green, blue)) >= 3 else { return nil }
+        return Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
+    }
+
+    private static func contrast(
+        _ surface: (red: CGFloat, green: CGFloat, blue: CGFloat),
+        against brand: (CGFloat, CGFloat, CGFloat)
+    ) -> CGFloat {
+        let lighter = max(luminance(surface.red, surface.green, surface.blue), luminance(brand.0, brand.1, brand.2))
+        let darker = min(luminance(surface.red, surface.green, surface.blue), luminance(brand.0, brand.1, brand.2))
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private static func luminance(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) -> CGFloat {
+        func channel(_ value: CGFloat) -> CGFloat {
+            let clamped = min(max(value, 0), 1)
+            return clamped <= 0.04045 ? clamped / 12.92 : pow((clamped + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
     }
 }
 
