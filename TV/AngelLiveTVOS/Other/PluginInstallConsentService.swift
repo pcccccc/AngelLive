@@ -21,10 +21,32 @@ final class PluginInstallConsentService: PluginInstallConsentRequesting {
     @ObservationIgnored
     private var continuation: CheckedContinuation<Bool, Never>?
 
+    // Only FullUI sets this one-shot approval after its inline confirmation.
+    @ObservationIgnored private var inlineApprovedPluginID: String?
+
+    func approveNextLoginRequest(for pluginID: String) {
+        inlineApprovedPluginID = pluginID
+    }
+
+    func clearInlineApproval() {
+        inlineApprovedPluginID = nil
+    }
+
     nonisolated init() {}
 
     func requestConsent(reason: PluginInstallConsentReason) async -> Bool {
-        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+        if case .installingLoginPlugin(let pluginID, _) = reason,
+           inlineApprovedPluginID == pluginID {
+            inlineApprovedPluginID = nil
+            return true
+        }
+        if case .installingLoginPluginsBatch(let plugins) = reason,
+           plugins.count == 1, plugins.first?.pluginId == inlineApprovedPluginID,
+           inlineApprovedPluginID != nil {
+            // Keep the same approval for the manifest hook after download.
+            return true
+        }
+        return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             if let existing = continuation {
                 existing.resume(returning: false)
             }
