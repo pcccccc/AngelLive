@@ -432,6 +432,9 @@ struct LiveDetailPlayerView: View {
         .onChange(of: playerCoordinator.state) { _, _ in
             playbackSession.attach(playerLayer: playerCoordinator.playerLayer)
         }
+        .onChange(of: playbackSession.owns(.pictureInPicture)) {
+            viewModel.updateAutoPictureInPicture()
+        }
         .onChange(of: categoryRooms) { _, newValue in
             switcherCategoryRooms = newValue
         }

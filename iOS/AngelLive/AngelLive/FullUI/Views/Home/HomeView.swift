@@ -926,6 +926,7 @@ private struct HomeHeroCarousel: View {
     @State private var needsLayoutCorrection = false
     @State private var layoutCorrectionTask: Task<Void, Never>?
     @State private var layoutGeneration = 0
+    @State private var scrollViewport = HomeHeroScrollViewport()
     @State private var autoplayProgress: CGFloat = 1
     @State private var pageIndicatorWidth: CGFloat = 72
 
@@ -943,10 +944,6 @@ private struct HomeHeroCarousel: View {
 
     private var cardHeight: CGFloat {
         HomeHeroLayout.cardHeight(for: containerSize)
-    }
-
-    private var viewportSize: CGSize {
-        CGSize(width: viewportWidth, height: cardHeight)
     }
 
     private var pullExtension: CGFloat {
@@ -1018,43 +1015,39 @@ private struct HomeHeroCarousel: View {
                 .accessibilityHidden(true)
             }
 
-            ScrollViewReader { scrollProxy in
-                ScrollView(.horizontal) {
-                    HStack(spacing: cardSpacing) {
-                        ForEach(loopPages) { page in
-                            heroPage(for: page.entry)
-                                .id(page.entry.id)
-                                .frame(width: viewportWidth, height: displayedCardHeight)
-                                .id(page.id)
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .background {
-                        HomeHeroScrollActivityProbe(onChange: scrollingChanged)
-                            .frame(width: 0, height: 0)
+            ScrollView(.horizontal) {
+                HStack(spacing: cardSpacing) {
+                    ForEach(loopPages) { page in
+                        heroPage(for: page.entry)
+                            .id(page.entry.id)
+                            .frame(width: viewportWidth, height: displayedCardHeight)
+                            .id(page.id)
                     }
                 }
-                .scrollPosition(id: $selectedPageID, anchor: .center)
-                .scrollTargetBehavior(.paging)
-                .scrollIndicators(.hidden)
-                // Keep the real interaction viewport below the safe origin.
-                // Only drawing extends upward, using the same page reveal.
-                .scrollClipDisabled()
-                .frame(width: viewportWidth, height: displayedCardHeight)
-                .clipShape(HomeHeroArtworkClip(topExtension: backgroundTopExtension))
-                // Keep the opaque viewport fill from covering the artwork's
-                // background extension in the surrounding safe area.
-                .background(AppConstants.Colors.primaryBackground, ignoresSafeAreaEdges: [])
-                .onChange(of: viewportSize) { oldSize, newSize in
-                    guard abs(oldSize.width - newSize.width) > 0.5
-                            || abs(oldSize.height - newSize.height) > 0.5
-                    else { return }
-                    scheduleLayoutCorrection(using: scrollProxy)
+                .scrollTargetLayout()
+                .background {
+                    HomeHeroScrollActivityProbe(viewport: scrollViewport, onChange: scrollingChanged)
+                        .frame(width: 0, height: 0)
                 }
-                .onChange(of: isScrolling) { _, active in
-                    if !active && needsLayoutCorrection {
-                        scheduleLayoutCorrection(using: scrollProxy)
-                    }
+            }
+            .scrollPosition(id: $selectedPageID, anchor: .center)
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            // Keep the real interaction viewport below the safe origin.
+            // Only drawing extends upward, using the same page reveal.
+            .scrollClipDisabled()
+            .frame(width: viewportWidth, height: displayedCardHeight)
+            .clipShape(HomeHeroArtworkClip(topExtension: backgroundTopExtension))
+            // Keep the opaque viewport fill from covering the artwork's
+            // background extension in the surrounding safe area.
+            .background(AppConstants.Colors.primaryBackground, ignoresSafeAreaEdges: [])
+            .onChange(of: viewportWidth) { oldWidth, newWidth in
+                guard abs(oldWidth - newWidth) > 0.5 else { return }
+                scheduleLayoutCorrection()
+            }
+            .onChange(of: isScrolling) { _, active in
+                if !active && needsLayoutCorrection {
+                    scheduleLayoutCorrection()
                 }
             }
 
@@ -1127,7 +1120,7 @@ private struct HomeHeroCarousel: View {
         }
     }
 
-    private func scheduleLayoutCorrection(using scrollProxy: ScrollViewProxy) {
+    private func scheduleLayoutCorrection() {
         layoutCorrectionTask?.cancel()
         needsLayoutCorrection = true
         guard !isScrolling else { return }
@@ -1154,7 +1147,7 @@ private struct HomeHeroCarousel: View {
             withTransaction(transaction) {
                 currentBannerID = bannerID
                 selectedPageID = 1
-                scrollProxy.scrollTo(1, anchor: .center)
+                scrollViewport.centerPage()
                 needsLayoutCorrection = false
                 layoutGeneration &+= 1
             }

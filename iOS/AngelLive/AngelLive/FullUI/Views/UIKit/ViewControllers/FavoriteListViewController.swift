@@ -60,6 +60,7 @@ class FavoriteListViewController: UIViewController {
     private var emptyHostingController: UIHostingController<AnyView>?
     private var lastKnownCollectionWidth: CGFloat = 0
     private var lastKnownHorizontalSizeClass: UIUserInterfaceSizeClass?
+    private weak var navigationScrollOwner: UIViewController?
 
     private var effectiveCollectionWidth: CGFloat {
         max(0, collectionView.bounds.width - collectionView.adjustedContentInset.left - collectionView.adjustedContentInset.right)
@@ -90,6 +91,22 @@ class FavoriteListViewController: UIViewController {
         super.viewWillAppear(animated)
         // 确保导航栏大标题可以正常折叠
         navigationController?.navigationBar.prefersLargeTitles = true
+        // The SwiftUI hosting controller owns the navigation item. Bind its
+        // top edge to the list even when the tab swaps its root content in place.
+        if let navigationController,
+           let owner = sequence(first: self as UIViewController, next: { $0.parent })
+               .first(where: { $0.parent === navigationController }) {
+            owner.setContentScrollView(collectionView, for: .top)
+            navigationScrollOwner = owner
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if navigationScrollOwner?.contentScrollView(for: .top) === collectionView {
+            navigationScrollOwner?.setContentScrollView(nil, for: .top)
+        }
+        navigationScrollOwner = nil
     }
 
     override func viewDidLayoutSubviews() {

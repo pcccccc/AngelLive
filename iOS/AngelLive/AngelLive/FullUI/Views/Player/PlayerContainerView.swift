@@ -162,14 +162,6 @@ struct PlayerContentView: View {
                     viewModel.recoveryCoordinator.stop()
                     recoverySuspendedForBackground = true
                 }
-                // 进入后台时自动开启画中画（每次读取最新设置值）
-                if PlayerSettingModel().enableAutoPiPOnBackground,
-                   ownsGlobalCapability(.pictureInPicture) {
-                    if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
-                       !playerLayer.isPictureInPictureActive {
-                        playerLayer.pipStart()
-                    }
-                }
             } else {
                 Logger.debug(
                     "[PlayerFlow] willResignActive kernel=\(viewModel.selectedPlayerKernel.rawValue), useKS=false, url=\(compactURL(viewModel.currentPlayURL))",
@@ -628,11 +620,6 @@ struct PlayerContentView: View {
     private func activatePlaybackSurface() -> Bool {
         guard let surfaceID = viewModel.playbackSurfaceID else { return false }
         return PlaybackSessionRegistry.shared.activate(surfaceID)
-    }
-
-    private func ownsGlobalCapability(_ capability: PlaybackGlobalCapability) -> Bool {
-        guard let surfaceID = viewModel.playbackSurfaceID else { return false }
-        return PlaybackSessionRegistry.shared.isOwner(surfaceID, of: capability)
     }
 
     private var controlBridge: PlayerControlBridge {

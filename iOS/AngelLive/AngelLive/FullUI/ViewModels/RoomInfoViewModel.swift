@@ -219,8 +219,8 @@ final class RoomInfoViewModel {
         option.userAgent = "libmpv"
         option.registerRemoteControll = false
 //        option.allowsExternalPlayback = true  //启用 AirPlay 和外部播放
-        // 根据用户设置控制自动画中画行为
-        option.canStartPictureInPictureAutomaticallyFromInline = PlayerSettingModel().enableAutoPiPOnBackground
+        // The eligible playback surface opts in when its controller is ready.
+        option.canStartPictureInPictureAutomaticallyFromInline = false
         self.playerOption = option
     }
 
@@ -1095,36 +1095,17 @@ final class RoomInfoViewModel {
         }
     }
 
-    /// 「自动画中画」开关切换时,同步武装/拆除 PiP 控制器。
-    ///
-    /// 根因:`KSComplexPlayerLayer` 只在 `readyToPlay` 且当时选项已 true 时预建 `pipController`。
-    /// 在播放中(readyToPlay 已过)才打开开关 → `pipController` 仍为 nil → 首次进后台 `pipStart()` 走
-    /// else 分支:新建控制器后**延迟 0.3s 再 start**,而此刻 App 已进后台、start 失败;控制器虽建好,
-    /// 要等第二次进后台才走即时 start 分支 →「推出进来推出进来才生效」。
-    ///
-    /// 开:提前把控制器建好(与 readyToPlay 完全一致的 configPIP + delegate),首次进后台即即时 start。
-    /// 关:若 PiP 未在进行,拆掉控制器,避免残留武装态(防「关不掉」)。幂等。
     @MainActor
-    func setAutoPiPArmed(_ armed: Bool) {
+    func updateAutoPictureInPicture() {
         #if canImport(KSPlayer)
-        guard let layer = watchedPlayerLayer as? KSComplexPlayerLayer else {
-            Logger.debug("[PlayerFlow] PiP arm skip: no KSComplexPlayerLayer (armed=\(armed))", category: .player)
-            return
-        }
-        if armed {
-            guard let playbackSurfaceID,
-                  PlaybackSessionRegistry.shared.isOwner(playbackSurfaceID, of: .pictureInPicture)
-            else { return }
-            guard layer.player.pipController == nil else { return }   // 已就绪,幂等
-            layer.player.configPIP()
-            // delegate 便捷属性跨模块不可见,用公开的 setValue(等价 KSPlayer 内部 `delegate = self`)。
-            layer.player.pipController?.setValue(layer, forKey: "delegate")
-            Logger.debug("[PlayerFlow] PiP controller armed (toggle on)", category: .player)
-        } else {
-            guard !layer.isPictureInPictureActive else { return }     // 正在 PiP 不拆,交给 enterForeground
-            layer.player.pipController = nil
-            Logger.debug("[PlayerFlow] PiP controller torn down (toggle off)", category: .player)
-        }
+        guard let layer = watchedPlayerLayer as? KSComplexPlayerLayer else { return }
+        let ownsPictureInPicture = playbackSurfaceID.map {
+            PlaybackSessionRegistry.shared.isOwner($0, of: .pictureInPicture)
+        } ?? false
+        KSPlayerInlinePictureInPicture.update(
+            PlayerSettingModel().enableAutoPiPOnBackground && ownsPictureInPicture,
+            on: layer
+        )
         #endif
     }
 
@@ -1250,6 +1231,9 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         // 状态变化喂给协调器:起播成功/抖动/终态的判定与熔断预算全在状态机内。
         recoveryCoordinator.stateChanged(engine)
 
+        guard state == .readyToPlay else { return }
+        updateAutoPictureInPicture()
+
         // 播放器就绪后重设一次系统媒体中心(Now Playing)信息。
         // NowPlayingManager.update 是媒体中心内容的唯一来源(房间标题/主播/平台/封面);
         // 而 KSComplexPlayerLayer 只会清空它:set(resource) 置 nil(VideoPlayerView:80)、
@@ -1258,7 +1242,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
         // 会把 onAppear 写的信息抹掉 → 媒体中心有概率变空。
         // readyToPlay 是所有清空动作之后的稳定时点(此后至下次重建不再清空),在此补写一次即可确保
         // 我们的信息最后落地;恢复协调器每次重建也会重新走到 readyToPlay,自动补回被清空的信息。
-        if state == .readyToPlay, let playbackSurfaceID {
+        if let playbackSurfaceID {
             NowPlayingManager.update(
                 room: currentRoom,
                 isPlaying: layer.player.isPlaying,

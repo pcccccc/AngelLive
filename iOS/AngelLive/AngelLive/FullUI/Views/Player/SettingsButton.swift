@@ -138,14 +138,7 @@ struct SettingsButton: View {
         .sheet(isPresented: $showPlayerSettings) {
             PlayerSettingsSheet(
                 playerSettingModel: playerSettingModel,
-                onAutoPiPChanged: { newValue in
-                    // 把开关同步到当前直播间的 PlayerOptions，
-                    // 否则只有下次重开直播间才生效
-                    viewModel.playerOption.canStartPictureInPictureAutomaticallyFromInline = newValue
-                    // 关键:开关当下就武装/拆除 PiP 控制器，否则首次进后台只新建、要第二次进后台才启动
-                    //（「推出进来推出进来才生效」根因）。
-                    viewModel.setAutoPiPArmed(newValue)
-                }
+                onAutoPiPChanged: viewModel.updateAutoPictureInPicture
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -204,7 +197,7 @@ private struct PlayerSettingsSheet: View {
     // @Observable 引用类型用 @Bindable 取属性绑定;早前误用 @Binding(绑定到类引用)
     // 不会对内部属性建立观察,导致首次点开关 onChange 不触发——「要操作两次才生效」的根因。
     @Bindable var playerSettingModel: PlayerSettingModel
-    var onAutoPiPChanged: (Bool) -> Void
+    var onAutoPiPChanged: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     /// 当前内核是否支持画中画（VLC4 路径目前为 no-op）
@@ -238,7 +231,7 @@ private struct PlayerSettingsSheet: View {
                                             // 切到不支持 PiP 的内核时关掉自动 PiP，避免悬空状态
                                             if newKernel != .ksplayer && playerSettingModel.enableAutoPiPOnBackground {
                                                 playerSettingModel.enableAutoPiPOnBackground = false
-                                                onAutoPiPChanged(false)
+                                                onAutoPiPChanged()
                                             }
                                         }
                                     }
@@ -256,7 +249,7 @@ private struct PlayerSettingsSheet: View {
                                         // 关后台播放时，自动 PiP 必然失效，一起关掉
                                         if !newValue && playerSettingModel.enableAutoPiPOnBackground {
                                             playerSettingModel.enableAutoPiPOnBackground = false
-                                            onAutoPiPChanged(false)
+                                            onAutoPiPChanged()
                                         }
                                     }
                             }
@@ -274,7 +267,7 @@ private struct PlayerSettingsSheet: View {
                                                 playerSettingModel.enableBackgroundAudio = true
                                                 KSOptions.canBackgroundPlay = true
                                             }
-                                            onAutoPiPChanged(newValue)
+                                            onAutoPiPChanged()
                                         }
 
                                     Text(pipSupported
