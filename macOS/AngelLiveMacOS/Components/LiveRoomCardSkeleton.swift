@@ -57,8 +57,32 @@ struct LiveRoomSkeletonGrid: View {
     var horizontalSpacing: CGFloat = 15
     var verticalSpacing: CGFloat = 24
     var horizontalPadding: CGFloat = 20
+    var viewportVerticalPadding: CGFloat? = nil
+
+    @State private var viewportCount: Int? = nil
 
     var body: some View {
+        if let viewportVerticalPadding {
+            ScrollView {
+                grid(count: viewportCount ?? count)
+                    .padding(.vertical, viewportVerticalPadding)
+            }
+            .scrollIndicators(.never)
+            .onScrollGeometryChange(for: Int.self) { geometry in
+                let viewport = geometry.containerSize
+                return itemCount(
+                    width: max(0, viewport.width - 2 * horizontalPadding),
+                    height: max(0, viewport.height - 2 * viewportVerticalPadding)
+                )
+            } action: { _, newCount in
+                viewportCount = newCount
+            }
+        } else {
+            grid(count: count)
+        }
+    }
+
+    private func grid(count: Int) -> some View {
         LazyVGrid(
             columns: [
                 GridItem(.adaptive(minimum: minCardWidth, maximum: maxCardWidth), spacing: horizontalSpacing)
@@ -70,6 +94,16 @@ struct LiveRoomSkeletonGrid: View {
             }
         }
         .padding(.horizontal, horizontalPadding)
+    }
+
+    private func itemCount(width: CGFloat, height: CGFloat) -> Int {
+        let columns = max(1, Int((width + horizontalSpacing) / (minCardWidth + horizontalSpacing)))
+        let totalColumnSpacing = CGFloat(columns - 1) * horizontalSpacing
+        let cardWidth = min(maxCardWidth, (width - totalColumnSpacing) / CGFloat(columns))
+        // The cover is followed by the card's 8-point gap and 32-point metadata row.
+        let cardHeight = cardWidth / AppConstants.AspectRatio.pic + 8 + 32
+        let rows = max(1, Int(ceil((height + verticalSpacing) / (cardHeight + verticalSpacing))))
+        return columns * rows
     }
 }
 

@@ -43,6 +43,11 @@ class RoomListViewController: UIViewController {
         cv.delegate = self
         cv.dataSource = self
         cv.register(LiveRoomCollectionViewCell.self, forCellWithReuseIdentifier: LiveRoomCollectionViewCell.reuseIdentifier)
+        cv.register(
+            RoomListLoadMoreFooter.self,
+            forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter,
+            withReuseIdentifier: RoomListLoadMoreFooter.reuseIdentifier
+        )
         cv.refreshControl = usesStaticRooms ? nil : refreshControl
         cv.translatesAutoresizingMaskIntoConstraints = false
         // iOS UIScrollView 默认 delaysContentTouches=true 会让 SwiftUI Button 的 gesture 卡 150ms,
@@ -55,8 +60,6 @@ class RoomListViewController: UIViewController {
         return cv
     }()
 
-    private let refreshDecoration = ArcRefreshControlDecoration()
-
     private lazy var refreshControl: UIRefreshControl = {
         let rc = UIRefreshControl()
         rc.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
@@ -65,6 +68,11 @@ class RoomListViewController: UIViewController {
 
     private var errorHostingController: UIHostingController<AnyView>?
     private var emptyHostingController: UIHostingController<AnyView>?
+    private var skeletonHostingController: UIHostingController<RoomListSkeletonGrid>?
+    private var displayedRoomSignature: [String] = []
+    private var displayedLoadingMore = false
+    private var displayedEmptyRetrying: Bool?
+    private var displayedErrorSignature: String?
     private var isLoadingMore = false
     private var isLoadingMoreStaticRooms = false
     private var lastKnownCollectionWidth: CGFloat = 0
@@ -142,19 +150,8 @@ class RoomListViewController: UIViewController {
         loadData()
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        if !usesStaticRooms { refreshDecoration.attach(to: refreshControl) }
-    }
-
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        refreshDecoration.detach()
-    }
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if !usesStaticRooms, view.window != nil { refreshDecoration.attach(to: refreshControl) }
 
         let currentWidth = effectiveCollectionWidth
         let currentHorizontalSizeClass = traitCollection.horizontalSizeClass
@@ -162,6 +159,9 @@ class RoomListViewController: UIViewController {
             lastKnownCollectionWidth = currentWidth
             lastKnownHorizontalSizeClass = currentHorizontalSizeClass
             collectionView.collectionViewLayout.invalidateLayout()
+            if skeletonHostingController != nil {
+                showSkeleton()
+            }
         }
     }
 
@@ -242,26 +242,7 @@ class RoomListViewController: UIViewController {
             return
         }
 
-        guard let viewModel = viewModel else { return }
-
-        rooms = viewModel.rooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
         updateRooms()
-
-        // An existing request owns this key until it commits. The observation
-        // below will apply its final rooms/error state to this controller.
-        if rooms.isEmpty,
-           viewModel.roomError(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) == nil,
-           !viewModel.isLoadingRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) {
-            Task { @MainActor in
-                await viewModel.loadRoomList(
-                    mainCategoryIndex: mainCategoryIndex,
-                    subCategoryIndex: subCategoryIndex
-                )
-
-                // 更新数据
-                updateRooms()
-            }
-        }
     }
 
     private func observeRoomState() {
@@ -279,6 +260,14 @@ class RoomListViewController: UIViewController {
                 mainCategoryIndex: mainCategoryIndex,
                 subCategoryIndex: subCategoryIndex
             )
+            _ = viewModel.isLoadingMoreRooms(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+            _ = viewModel.roomListPhase(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -291,10 +280,8 @@ class RoomListViewController: UIViewController {
     @objc private func handleRefresh() {
         guard let viewModel = viewModel else {
             refreshControl.endRefreshing()
-            refreshDecoration.update(isRefreshing: false)
             return
         }
-        refreshDecoration.update(isRefreshing: true)
 
         Task { @MainActor in
             await viewModel.loadRoomList(
@@ -304,7 +291,6 @@ class RoomListViewController: UIViewController {
 
             updateRooms()
             refreshControl.endRefreshing()
-            refreshDecoration.update(isRefreshing: false)
         }
     }
 
@@ -343,19 +329,53 @@ class RoomListViewController: UIViewController {
     func updateRooms() {
         guard !usesStaticRooms else { return }
         guard let viewModel = viewModel else { return }
-        rooms = viewModel.rooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        let phase = viewModel.roomListPhase(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        let isLoading = viewModel.isLoadingRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        let isLoadingMore = viewModel.isLoadingMoreRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        let isRetrying = isLoading && (phase == .empty || phase == .failure)
 
-        // 检查是否有错误需要显示
-        if let error = viewModel.roomError(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex), rooms.isEmpty {
-            showErrorView(error: error)
-        } else {
+        switch phase {
+        case .content:
+            hideSkeleton()
+            hideEmptyView()
             hideErrorView()
+            collectionView.isHidden = false
+            let nextRooms = viewModel.rooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+            let signature = nextRooms.map { "\($0.id)|\($0.roomTitle)|\($0.roomCover)" }
+            let contentChanged = signature != displayedRoomSignature || isLoadingMore != displayedLoadingMore
+            rooms = nextRooms
+            displayedRoomSignature = signature
+            displayedLoadingMore = isLoadingMore
+            guard contentChanged else { return }
+            collectionView.reloadData()
+            collectionView.layoutIfNeeded()
+        case .skeleton:
+            rooms = []
+            displayedRoomSignature = []
+            displayedLoadingMore = false
+            hideEmptyView()
+            hideErrorView()
+            collectionView.isHidden = true
+            showSkeleton()
+        case .empty:
+            rooms = []
+            displayedRoomSignature = []
+            displayedLoadingMore = false
+            hideSkeleton()
+            hideErrorView()
+            collectionView.isHidden = true
+            showPlatformEmpty(isRetrying: isRetrying)
+        case .failure:
+            rooms = []
+            displayedRoomSignature = []
+            displayedLoadingMore = false
+            hideSkeleton()
+            hideEmptyView()
+            collectionView.isHidden = true
+            if let error = viewModel.roomError(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) {
+                showErrorView(error: error, isRetrying: isRetrying)
+            }
         }
-
-        collectionView.reloadData()
-        // reloadData 后立刻 layoutIfNeeded,把 cells 注册进 visibleCells,
-        // 否则 cv 在内容不足 + JX 嵌套场景下可能直到下次 layout pass 才注册,didSelectItemAt 失效。
-        collectionView.layoutIfNeeded()
     }
 
     func updateStaticRooms(_ rooms: [LiveModel]) {
@@ -413,6 +433,7 @@ class RoomListViewController: UIViewController {
     }
 
     private func hideEmptyView() {
+        displayedEmptyRetrying = nil
         guard let emptyHostingController else { return }
         emptyHostingController.willMove(toParent: nil)
         emptyHostingController.view.removeFromSuperview()
@@ -420,38 +441,136 @@ class RoomListViewController: UIViewController {
         self.emptyHostingController = nil
     }
 
+    private func showPlatformEmpty(isRetrying: Bool) {
+        let root = AnyView(platformEmptyContent(isRetrying: isRetrying).fullUIArcLoadingStyle())
+        if let emptyHostingController {
+            if displayedEmptyRetrying != isRetrying {
+                emptyHostingController.rootView = root
+                displayedEmptyRetrying = isRetrying
+            }
+            return
+        }
+        let hostingController = UIHostingController(rootView: root)
+        hostingController.view.backgroundColor = .clear
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        hostingController.didMove(toParent: self)
+        emptyHostingController = hostingController
+        displayedEmptyRetrying = isRetrying
+    }
+
+    private func platformEmptyContent(isRetrying: Bool) -> some View {
+        ContentUnavailableView {
+            Label("暂无直播", systemImage: "video.slash")
+        } description: {
+            Text("换个分类看看，或稍后再试")
+        } actions: {
+            Button {
+                guard !isRetrying else { return }
+                self.retryCurrentCategory()
+            } label: {
+                if isRetrying {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text("重试")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func showSkeleton() {
+        let metrics = gridMetrics()
+        let grid = RoomListSkeletonGrid(
+            cardSize: metrics.itemSize,
+            columns: metrics.columns,
+            horizontalSpacing: metrics.horizontalSpacing,
+            verticalSpacing: metrics.verticalSpacing,
+            horizontalPadding: metrics.horizontalPadding
+        )
+        if let skeletonHostingController {
+            skeletonHostingController.rootView = grid
+            return
+        }
+        let hostingController = UIHostingController(rootView: grid)
+        hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        addChild(hostingController)
+        view.addSubview(hostingController.view)
+        NSLayoutConstraint.activate([
+            hostingController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            hostingController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hostingController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        hostingController.didMove(toParent: self)
+        skeletonHostingController = hostingController
+    }
+
+    private func hideSkeleton() {
+        guard let skeletonHostingController else { return }
+        skeletonHostingController.willMove(toParent: nil)
+        skeletonHostingController.view.removeFromSuperview()
+        skeletonHostingController.removeFromParent()
+        self.skeletonHostingController = nil
+    }
+
+    private func gridMetrics() -> (columns: Int, itemSize: CGSize, horizontalSpacing: CGFloat, verticalSpacing: CGFloat, horizontalPadding: CGFloat) {
+        let flowLayout = collectionView.collectionViewLayout as? UICollectionViewFlowLayout
+        let horizontalSpacing = flowLayout?.minimumInteritemSpacing ?? 15
+        let verticalSpacing = flowLayout?.minimumLineSpacing ?? 24
+        let insets = flowLayout?.sectionInset ?? UIEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        var columns = traitCollection.horizontalSizeClass == .regular ? 3 : 2
+        let availableWidth = max(0, effectiveCollectionWidth - insets.left - insets.right)
+        while columns > 1 {
+            let totalSpacing = horizontalSpacing * CGFloat(columns - 1)
+            if availableWidth - totalSpacing > 0 { break }
+            columns -= 1
+        }
+        columns = max(columns, 1)
+        let itemSize = calculateItemSize(for: effectiveCollectionWidth)
+        return (columns, itemSize, horizontalSpacing, verticalSpacing, insets.left)
+    }
+
+    private func retryCurrentCategory() {
+        guard let viewModel else { return }
+        Task { @MainActor in
+            await viewModel.loadRoomList(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+            updateRooms()
+        }
+    }
+
     // MARK: - Error Handling
 
-    private func showErrorView(error: Error) {
-        // 如果已经显示错误视图，先移除
-        hideErrorView()
-
-        let authTitle: String
-        if error.isAuthRequired, let liveType = viewModel?.platform.liveType {
-            let platformName = LiveParseTools.getLivePlatformName(liveType)
-            authTitle = "加载失败-请登录\(platformName)账号"
-        } else {
-            authTitle = "加载失败"
+    private func showErrorView(error: Error, isRetrying: Bool) {
+        let signature = "\(error.liveParseMessage)|\(isRetrying)|\(error.showsLoginAction)"
+        let root = AnyView(
+            makeErrorView(error: error, isRetrying: isRetrying)
+                .supportDiagnosticsEnabled()
+                .fullUIArcLoadingStyle()
+                .fullUIWindowContext()
+        )
+        if let errorHostingController {
+            if displayedErrorSignature != signature {
+                errorHostingController.rootView = root
+                displayedErrorSignature = signature
+            }
+            collectionView.isHidden = true
+            return
         }
 
-        let errorView = ErrorView(
-            title: authTitle,
-            message: error.liveParseMessage,
-            detailMessage: error.liveParseDetail,
-            curlCommand: error.liveParseCurl,
-            showRetry: true,
-            showLoginButton: error.showsLoginAction,
-            showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
-            onRetry: { [weak self] in
-                self?.hideErrorView()
-                self?.handleRefresh()
-            },
-            onLogin: error.showsLoginAction ? { [weak self] in
-                self?.presentAuthenticationRecovery()
-            } : nil
-        )
-
-        let hostingController = UIHostingController(rootView: AnyView(errorView.supportDiagnosticsEnabled().fullUIArcLoadingStyle().fullUIWindowContext()))
+        let hostingController = UIHostingController(rootView: root)
         hostingController.view.backgroundColor = UIColor(AppConstants.Colors.primaryBackground)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
@@ -467,9 +586,36 @@ class RoomListViewController: UIViewController {
 
         hostingController.didMove(toParent: self)
         errorHostingController = hostingController
+        displayedErrorSignature = signature
 
         // 隐藏 collectionView
         collectionView.isHidden = true
+    }
+
+    private func makeErrorView(error: Error, isRetrying: Bool) -> ErrorView {
+        let authTitle: String
+        if error.isAuthRequired, let liveType = viewModel?.platform.liveType {
+            let platformName = LiveParseTools.getLivePlatformName(liveType)
+            authTitle = "加载失败-请登录\(platformName)账号"
+        } else {
+            authTitle = "加载失败"
+        }
+        return ErrorView(
+            title: authTitle,
+            message: error.liveParseMessage,
+            detailMessage: error.liveParseDetail,
+            curlCommand: error.liveParseCurl,
+            showRetry: true,
+            showLoginButton: error.showsLoginAction,
+            showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
+            isRetrying: isRetrying,
+            onRetry: { [weak self] in
+                self?.retryCurrentCategory()
+            },
+            onLogin: error.showsLoginAction ? { [weak self] in
+                self?.presentAuthenticationRecovery()
+            } : nil
+        )
     }
 
     @MainActor
@@ -488,6 +634,7 @@ class RoomListViewController: UIViewController {
     }
 
     private func hideErrorView() {
+        displayedErrorSignature = nil
         guard let errorHostingController = errorHostingController else { return }
 
         errorHostingController.willMove(toParent: nil)
@@ -670,6 +817,21 @@ extension RoomListViewController: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         return calculateItemSize(for: effectiveCollectionWidth)
     }
+
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, referenceSizeForFooterInSection section: Int) -> CGSize {
+        guard !usesStaticRooms, displayedLoadingMore else { return .zero }
+        return CGSize(width: collectionView.bounds.width, height: 44)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, viewForSupplementaryElementOfKind kind: String, at indexPath: IndexPath) -> UICollectionReusableView {
+        let footer = collectionView.dequeueReusableSupplementaryView(
+            ofKind: kind,
+            withReuseIdentifier: RoomListLoadMoreFooter.reuseIdentifier,
+            for: indexPath
+        )
+        (footer as? RoomListLoadMoreFooter)?.configure()
+        return footer
+    }
 }
 
 extension RoomListViewController: JXSegmentedListContainerViewListDelegate {
@@ -687,5 +849,38 @@ extension RoomListViewController: JXSegmentedListContainerViewListDelegate {
 
     func listDidAppear() {
         refreshLayoutForCurrentBounds()
+        guard !usesStaticRooms, let viewModel else { return }
+        Task { @MainActor in
+            await viewModel.activateCategory(
+                mainCategoryIndex: mainCategoryIndex,
+                subCategoryIndex: subCategoryIndex
+            )
+        }
+    }
+}
+
+private final class RoomListLoadMoreFooter: UICollectionReusableView {
+    static let reuseIdentifier = "RoomListLoadMoreFooter"
+    private var host: UIHostingController<AnyView>?
+
+    func configure() {
+        guard host == nil else { return }
+        let root = AnyView(
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .fullUIArcLoadingStyle()
+        )
+        let host = UIHostingController(rootView: root)
+        host.view.backgroundColor = .clear
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: bottomAnchor),
+            host.view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: trailingAnchor)
+        ])
+        self.host = host
     }
 }

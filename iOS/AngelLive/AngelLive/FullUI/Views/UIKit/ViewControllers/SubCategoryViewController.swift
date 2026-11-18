@@ -179,21 +179,8 @@ class SubCategoryViewController: UIViewController {
 
         viewModel.selectedSubCategoryIndex = index
         subCategorySegmentedView.selectItemAt(index: index)
-
-        // 检查缓存，如果没有数据则加载
-        let key = "\(mainCategoryIndex)-\(index)"
-        if viewModel.roomListCache[key]?.isEmpty ?? true {
-            Task { @MainActor in
-                await viewModel.loadRoomList(
-                    mainCategoryIndex: mainCategoryIndex,
-                    subCategoryIndex: index
-                )
-
-                // 通知当前显示的 ViewController 更新数据
-                if let currentVC = listContainerView.validListDict[index] as? RoomListViewController {
-                    currentVC.updateRooms()
-                }
-            }
+        Task { @MainActor in
+            await viewModel.activateCategory(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: index)
         }
     }
 
@@ -244,21 +231,8 @@ extension SubCategoryViewController: JXSegmentedViewDelegate {
         guard let viewModel = viewModel else { return }
 
         viewModel.selectedSubCategoryIndex = index
-
-        // 检查缓存，如果没有数据则加载
-        let key = "\(mainCategoryIndex)-\(index)"
-        if viewModel.roomListCache[key]?.isEmpty ?? true {
-            Task { @MainActor in
-                await viewModel.loadRoomList(
-                    mainCategoryIndex: mainCategoryIndex,
-                    subCategoryIndex: index
-                )
-
-                // 通知当前显示的 ViewController 更新数据
-                if let currentVC = listContainerView.validListDict[index] as? RoomListViewController {
-                    currentVC.updateRooms()
-                }
-            }
+        Task { @MainActor in
+            await viewModel.activateCategory(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: index)
         }
     }
 }

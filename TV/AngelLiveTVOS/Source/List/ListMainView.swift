@@ -25,8 +25,6 @@ struct ListMainView: View {
     @State private var hasSetInitialFocus: Bool = false
     @State private var pendingCategoryFocus = false
     @State private var pendingSidebarFocus: FocusableField?
-    @State private var showEmptyState: Bool = false
-    @State private var pendingEmptyState: DispatchWorkItem?
     @State private var showCapabilitySheet: Bool = false
     @State private var showPlatformSearch = false
     @State private var authenticationRecovery: AuthenticationRecoveryRequest?
@@ -42,7 +40,6 @@ struct ListMainView: View {
     private let gridSpacing: CGFloat = 50
     private let cardWidth: CGFloat = 380
     private let cardHeight: CGFloat = 280
-    private let emptyStateDelay: TimeInterval = 0.35
     private let headerToGridSpacing: CGFloat = 24
     private let headerTrailingInset: CGFloat = 80
     // tvOS 的 plain 按钮焦点背景超出 label，动作间距须包含两侧扩展区域。
@@ -57,19 +54,18 @@ struct ListMainView: View {
     init(platform: Platformdescription, appViewModel: AppState) {
         self.platform = platform
         self.appViewModel = appViewModel
-        _liveViewModel = State(
-            initialValue: LiveViewModel(
-                roomListType: .live,
-                liveType: platform.liveType,
-                appViewModel: appViewModel,
-                shouldLoadData: false
-            )
+        let model = LiveViewModel(
+            roomListType: .live,
+            liveType: platform.liveType,
+            appViewModel: appViewModel,
+            shouldLoadData: false
         )
+        model.usesCategoryRoomCache = true
+        _liveViewModel = State(initialValue: model)
     }
 
     private enum RoomGridItem: Hashable {
         case room(Int)
-        case loading(Int)
     }
 
     private var gridColumns: [GridItem] {
@@ -93,12 +89,6 @@ struct ListMainView: View {
             for index in start..<end {
                 items.append(.room(index))
             }
-        }
-
-        if shouldShowLoadingPlaceholder {
-            // 补一行 Loading 卡片
-            let loadingRow = rowCount
-            items.append(.loading(loadingRow))
         }
 
         return items
@@ -145,17 +135,10 @@ struct ListMainView: View {
             )
                 .environment(liveViewModel)
                 .onPlayPauseCommand(perform: {
-                    liveViewModel.roomPage = 1
-                    liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+                    Task { await liveViewModel.refreshDisplayedRooms() }
                     reader.scrollTo(Self.topId)
                 })
                 .frame(width: 370, height: cardHeight)
-        case .loading:
-            LoadingView()
-                .frame(width: 370, height: cardHeight)
-                .cornerRadius(5)
-                .shimmering(active: true)
-                .redacted(reason: .placeholder)
         }
     }
 
@@ -219,7 +202,7 @@ struct ListMainView: View {
         .focused($focusState, equals: .platformSearch)
         .accessibilityLabel("搜索当前平台")
         .onMoveCommand { direction in
-            if direction == .left && !liveViewModel.hasError {
+            if direction == .left && blockingError == nil {
                 openSidebar()
             }
         }
@@ -235,8 +218,22 @@ struct ListMainView: View {
         }
     }
 
-    private var shouldShowLoadingPlaceholder: Bool {
-        (liveViewModel.isLoading || (liveViewModel.roomList.isEmpty && !showEmptyState)) && liveViewModel.hasMoreRooms
+    private var roomPhase: RoomListDisplayPhase {
+        if liveViewModel.dismissedRoomFailure, liveViewModel.roomListPhase == .failure {
+            return .empty
+        }
+        return liveViewModel.roomListPhase
+    }
+
+    private var showsLoadMoreFooter: Bool {
+        roomPhase == .content && liveViewModel.isLoadingMoreRooms
+    }
+
+    private var blockingError: Error? {
+        if liveViewModel.hasError, let error = liveViewModel.currentError {
+            return error
+        }
+        return liveViewModel.displayedRoomError
     }
 
     private var sidebarOwnsFocus: Bool {
@@ -253,7 +250,7 @@ struct ListMainView: View {
         case .mainContent(let index):
             return liveViewModel.roomList.indices.contains(index) && index % gridColumnCount == 0
         case .emptyContent:
-            return liveViewModel.roomList.isEmpty && showEmptyState && !liveViewModel.isLoading
+            return roomPhase == .empty
         case .platformInfo, .platformSearch:
             // 初次加载时信息按钮可能先获得焦点，不能据此启用左缘入口。
             return !liveViewModel.roomList.isEmpty
@@ -264,9 +261,9 @@ struct ListMainView: View {
 
     private var canFocusSidebarTrigger: Bool {
         guard !liveViewModel.categories.isEmpty,
-              !liveViewModel.roomList.isEmpty || (showEmptyState && !liveViewModel.isLoading),
+              roomPhase == .content || roomPhase == .empty,
               !liveViewModel.isSidebarExpanded || focusState == .leftTrigger,
-              !liveViewModel.hasError,
+              blockingError == nil,
               !showCapabilitySheet,
               !showPlatformSearch,
               authenticationRecovery == nil,
@@ -298,26 +295,6 @@ struct ListMainView: View {
         .accessibilityLabel("打开分类")
     }
 
-    private func updateEmptyState() {
-        pendingEmptyState?.cancel()
-        pendingEmptyState = nil
-
-        if liveViewModel.isLoading {
-            showEmptyState = false
-            return
-        }
-
-        if liveViewModel.roomList.isEmpty {
-            let workItem = DispatchWorkItem {
-                showEmptyState = true
-            }
-            pendingEmptyState = workItem
-            DispatchQueue.main.asyncAfter(deadline: .now() + emptyStateDelay, execute: workItem)
-        } else {
-            showEmptyState = false
-        }
-    }
-
     private func openSidebar() {
         guard !showPlatformSearch,
               !liveViewModel.isSidebarExpanded,
@@ -342,12 +319,16 @@ struct ListMainView: View {
     }
 
     private var focusAfterSidebarClose: FocusableField {
-        guard !liveViewModel.roomList.isEmpty else {
-            return showEmptyState && !liveViewModel.isLoading ? .emptyContent : .platformInfo
+        switch roomPhase {
+        case .content:
+            let selectedIndex = liveViewModel.selectedRoomListIndex
+            let validIndex = liveViewModel.roomList.indices.contains(selectedIndex) ? selectedIndex : 0
+            return .mainContent(validIndex)
+        case .empty:
+            return .emptyContent
+        case .skeleton, .failure:
+            return .platformInfo
         }
-        let selectedIndex = liveViewModel.selectedRoomListIndex
-        let validIndex = liveViewModel.roomList.indices.contains(selectedIndex) ? selectedIndex : 0
-        return .mainContent(validIndex)
     }
 
     private func closeSidebar(restoreContentFocus: Bool = true) {
@@ -377,37 +358,46 @@ struct ListMainView: View {
     }
 
     private var pendingFocusTarget: FocusableField? {
-        guard !liveViewModel.isLoading,
-              !liveViewModel.hasError,
+        guard roomPhase != .skeleton,
+              roomPhase != .failure,
+              blockingError == nil,
               !showPlatformSearch,
               !liveViewModel.isSidebarExpanded else {
             return nil
         }
 
         if pendingCategoryFocus {
-            if liveViewModel.roomList.isEmpty {
-                return showEmptyState ? .emptyContent : nil
-            }
-            return .mainContent(0)
+            return roomPhase == .empty ? .emptyContent : .mainContent(0)
         }
 
         guard !hasSetInitialFocus else { return nil }
-        if !liveViewModel.roomList.isEmpty {
-            return .mainContent(0)
-        }
-        return showEmptyState ? .emptyContent : nil
+        return roomPhase == .empty ? .emptyContent : .mainContent(0)
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Text("暂无房间")
+        let isRetrying = liveViewModel.isLoading
+        return VStack(spacing: 28) {
+            Image(systemName: "video.slash")
+                .font(.system(size: 64))
+            Text("暂无直播")
                 .font(.title2.bold())
-            Text("请稍后重试或切换分类")
+            Text("换个分类看看，或稍后再试")
                 .foregroundStyle(.secondary)
+            Button {
+                guard !isRetrying else { return }
+                liveViewModel.dismissedRoomFailure = false
+                Task { await liveViewModel.refreshDisplayedRooms() }
+            } label: {
+                if isRetrying {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
+            }
+            .accessibilityLabel(isRetrying ? "正在加载" : "重试")
         }
         .padding()
-        .focusable()
-        .focusEffectDisabled()
         .focused($focusState, equals: .emptyContent)
         .onMoveCommand { direction in
             handleMoveCommand(direction)
@@ -421,18 +411,28 @@ struct ListMainView: View {
                     platformTitleView
                         .id(Self.topId)
                         .frame(maxWidth: .infinity, alignment: .center)
-                    LazyVGrid(
-                        columns: gridColumns,
-                        alignment: .center,
-                        spacing: gridSpacing
-                    ) {
-                        ForEach(roomGridItems, id: \.self) { item in
-                            roomGridItemView(item, reader: reader)
+                    if roomPhase == .skeleton {
+                        TVRoomSkeletonGrid(columns: gridColumns, spacing: gridSpacing)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    } else {
+                        LazyVGrid(
+                            columns: gridColumns,
+                            alignment: .center,
+                            spacing: gridSpacing
+                        ) {
+                            ForEach(roomGridItems, id: \.self) { item in
+                                roomGridItemView(item, reader: reader)
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
 
-                    if !liveViewModel.hasMoreRooms && !liveViewModel.roomList.isEmpty {
+                    if showsLoadMoreFooter {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(.top, 20)
+                            .padding(.bottom, 40)
+                    } else if !liveViewModel.hasMoreRooms && !liveViewModel.roomList.isEmpty {
                         Text("已经到底了")
                             .font(.callout)
                             .foregroundColor(.secondary)
@@ -448,8 +448,7 @@ struct ListMainView: View {
     private var listContainerView: some View {
         ZStack(alignment: .leading) {
             Group {
-                if liveViewModel.roomList.isEmpty && showEmptyState && !liveViewModel.isLoading {
-                    // 已确认为空态时才显示空态视图
+                if roomPhase == .empty {
                     emptyStateView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .overlay(alignment: .topTrailing) { platformSearchOnEmptyContent }
@@ -532,17 +531,18 @@ struct ListMainView: View {
             curlCommand: error.liveParseCurl,
             showRetry: true,
             showLoginButton: error.showsLoginAction,
+            isRetrying: liveViewModel.isLoading,
             onDismiss: {
+                liveViewModel.dismissedRoomFailure = true
                 liveViewModel.hasError = false
                 liveViewModel.currentError = nil
             },
             onRetry: {
-                liveViewModel.hasError = false
-                liveViewModel.currentError = nil
+                liveViewModel.dismissedRoomFailure = false
                 if liveViewModel.categories.isEmpty {
                     Task { await liveViewModel.getCategoryList() }
                 } else {
-                    liveViewModel.getRoomList(index: liveViewModel.selectedSubListIndex)
+                    Task { await liveViewModel.refreshDisplayedRooms() }
                 }
             },
             onLogin: {
@@ -557,7 +557,7 @@ struct ListMainView: View {
         @Bindable var liveModel = liveViewModel
         
         ZStack {
-            if liveViewModel.hasError, let error = liveViewModel.currentError {
+            if let error = blockingError {
                 errorView(error)
                     .overlay(alignment: .topTrailing) { platformSearchOnEmptyContent }
             } else {
@@ -604,15 +604,8 @@ struct ListMainView: View {
                 openSidebar()
             }
         }
-        .onChange(of: liveViewModel.roomList) { _, _ in
-            updateEmptyState()
-        }
-        .onChange(of: liveViewModel.isLoading) { _, _ in
-            updateEmptyState()
-        }
         .onAppear {
             logNavigation("listAppeared")
-            updateEmptyState()
         }
         .onDisappear {
             logNavigation("listDisappeared")
@@ -629,14 +622,14 @@ struct ListMainView: View {
             .cornerRadius(10)
         }
         .onPlayPauseCommand(perform: {
-            guard !showPlatformSearch, liveViewModel.isLoading == true else { return }
-            liveViewModel.getRoomList(index: 1)
+            guard !showPlatformSearch, liveViewModel.isLoading else { return }
+            Task { await liveViewModel.refreshDisplayedRooms() }
         })
         .onChange(of: scenePhase) { oldValue, newValue in
             switch newValue {
                 case .active:
                     liveViewModel.showToast(true, title: "程序返回前台，正在为您刷新列表", hideAfter: 3)
-                    liveViewModel.roomPage = 1
+                    Task { await liveViewModel.refreshDisplayedRooms() }
                 case .background:
                     Logger.debug("background。。。。", category: .app)
                 case .inactive:

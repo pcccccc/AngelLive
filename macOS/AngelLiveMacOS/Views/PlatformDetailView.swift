@@ -22,6 +22,7 @@ struct PlatformDetailView: View {
     @State private var showCapabilityPopover = false
     @State private var showPlatformSearch = false
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 根据平台类型生成登录相关的错误标题
     private var authErrorTitle: String {
@@ -300,51 +301,66 @@ struct PlatformDetailView: View {
     @ViewBuilder
     private var roomListView: some View {
         let rooms = viewModel.roomList
+        let cardWidths: ClosedRange<CGFloat> = 180...260
+        let gridSpacing: CGFloat = 16
 
-        if viewModel.isLoadingRooms && rooms.isEmpty {
-            ScrollView {
-                LiveRoomSkeletonGrid(
-                    horizontalSpacing: 16,
-                    verticalSpacing: 16,
-                    horizontalPadding: 16
-                )
-                .padding(.vertical, 16)
-            }
-            .shimmering()
-        } else if let error = viewModel.roomError, rooms.isEmpty {
-            ErrorView(
-                title: error.isAuthRequired ? authErrorTitle : "加载失败",
-                message: error.liveParseMessage,
-                detailMessage: error.liveParseDetail,
-                curlCommand: error.liveParseCurl,
-                showRetry: true,
-                showLoginButton: error.showsLoginAction,
-                onRetry: {
-                    Task {
-                        await viewModel.loadRoomList()
-                    }
-                },
-                onLogin: error.showsLoginAction ? {
-                    authenticationRecoveryRequest = AuthenticationRecoveryRequest(
-                        pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
-                            .map { [$0.pluginId] } ?? []
-                    )
-                } : nil
+        switch viewModel.roomListPhase {
+        case .skeleton:
+            LiveRoomSkeletonGrid(
+                minCardWidth: cardWidths.lowerBound,
+                maxCardWidth: cardWidths.upperBound,
+                horizontalSpacing: gridSpacing,
+                verticalSpacing: gridSpacing,
+                horizontalPadding: gridSpacing,
+                viewportVerticalPadding: gridSpacing
             )
-        } else if rooms.isEmpty {
+            .shimmering(active: !reduceMotion)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("正在加载")
+        case .failure:
+            if let error = viewModel.roomError {
+                ErrorView(
+                    title: error.isAuthRequired ? authErrorTitle : "加载失败",
+                    message: error.liveParseMessage,
+                    detailMessage: error.liveParseDetail,
+                    curlCommand: error.liveParseCurl,
+                    showRetry: true,
+                    showLoginButton: error.showsLoginAction,
+                    isRetrying: viewModel.isLoadingRooms,
+                    onRetry: {
+                        Task {
+                            await viewModel.loadRoomList()
+                        }
+                    },
+                    onLogin: error.showsLoginAction ? {
+                        authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                            pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+                                .map { [$0.pluginId] } ?? []
+                        )
+                    } : nil
+                )
+            }
+        case .empty:
             ErrorView.empty(
                 title: "暂无直播",
-                message: "当前分类下没有正在直播的房间。",
+                message: "换个分类看看，或稍后再试",
                 symbolName: "video.slash",
-                tint: .secondary
+                tint: .secondary,
+                isRetrying: viewModel.isLoadingRooms,
+                onRetry: {
+                    Task { await viewModel.loadRoomList() }
+                }
             )
-        } else {
+        case .content:
             ScrollView {
                 LazyVGrid(
                     columns: [
-                        GridItem(.adaptive(minimum: 180, maximum: 260), spacing: 16)
+                        GridItem(
+                            .adaptive(minimum: cardWidths.lowerBound, maximum: cardWidths.upperBound),
+                            spacing: gridSpacing
+                        )
                     ],
-                    spacing: 16
+                    spacing: gridSpacing
                 ) {
                     ForEach(rooms) { room in
                         Button {
@@ -368,26 +384,21 @@ struct PlatformDetailView: View {
                             }
                         }
                     }
-
-                    // 加载更多指示器
-                    if viewModel.isLoadingRooms {
-                        HStack {
-                            ProgressView()
-                            Text("加载更多...")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                    } else if !viewModel.hasMoreRooms && !rooms.isEmpty {
-                        Text("已经到底了")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                    }
                 }
-                .padding(16)
+                .padding(gridSpacing)
+
+                if viewModel.isLoadingMoreRooms {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, gridSpacing)
+                } else if !viewModel.hasMoreRooms && !rooms.isEmpty {
+                    Text("已经到底了")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, gridSpacing)
+                }
             }
             .refreshable {
                 await viewModel.loadRoomList()

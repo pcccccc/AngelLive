@@ -497,7 +497,11 @@ struct LiveCardView: View {
             }
         } else if liveViewModel.roomListType == .live {
             if index >= liveViewModel.roomList.count - 4 && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
-                liveViewModel.roomPage += 1
+                if liveViewModel.usesCategoryRoomCache {
+                    liveViewModel.loadMoreDisplayedRooms()
+                } else {
+                    liveViewModel.roomPage += 1
+                }
             }
         }
     }

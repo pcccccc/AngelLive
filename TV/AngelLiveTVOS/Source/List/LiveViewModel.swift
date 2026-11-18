@@ -52,30 +52,90 @@ class LiveViewModel {
     var selectedRoomListIndex: Int = -1
     
     //加载状态
-    var isLoading = false
+    private var storedIsLoading = false
+    var isLoading: Bool {
+        get {
+            if usesCategoryRoomCache, let model = displayedCategoryModel {
+                return model.isLoading || storedIsLoading
+            }
+            return storedIsLoading
+        }
+        set { storedIsLoading = newValue }
+    }
     var hasError = false
     var errorMessage = ""
     var errorDetail: String? = nil
     var showErrorDetail = false
     var currentError: Error? = nil
-   
+    /// 平台房间列表才按分类缓存。首页、收藏、历史和搜索继续用整表。
+    var usesCategoryRoomCache = false
+    var dismissedRoomFailure = false
+
     //直播列表分页
     var subPageNumber = 0
     var subPageSize = 20
-    var hasMoreRooms = true
+    private var storedHasMoreRooms = true
+    var hasMoreRooms: Bool {
+        get {
+            if usesCategoryRoomCache {
+                return displayedCategoryModel?.hasMore ?? false
+            }
+            return storedHasMoreRooms
+        }
+        set { storedHasMoreRooms = newValue }
+    }
     var roomPage: Int = 1 {
         didSet {
-            if roomListType == .favorite || roomListType == .search || !hasMoreRooms {
+            if usesCategoryRoomCache || roomListType == .favorite || roomListType == .search || !hasMoreRooms {
                 return
             }
             getRoomList(index: selectedSubListIndex)
         }
     }
     private var storedRoomList: [LiveModel] = []
+    private var categoryModels: [String: CategoryRoomListModel] = [:]
+    @ObservationIgnored private var categoryTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var categoryTaskTokens: [String: UUID] = [:]
+    private var displayedCategoryKey: String?
+    private var catalogResolved = false
+    private var displayedCategoryModel: CategoryRoomListModel? {
+        guard let displayedCategoryKey else { return nil }
+        return categoryModels[displayedCategoryKey]
+    }
+    var roomListPhase: RoomListDisplayPhase {
+        guard usesCategoryRoomCache else {
+            if hasError && storedRoomList.isEmpty { return .failure }
+            if !storedRoomList.isEmpty { return .content }
+            return storedIsLoading ? .skeleton : .empty
+        }
+        if let displayedCategoryModel { return displayedCategoryModel.phase }
+        if catalogResolved && categories.isEmpty { return .empty }
+        return .skeleton
+    }
+    var displayedRoomError: Error? {
+        guard usesCategoryRoomCache, !dismissedRoomFailure, displayedCategoryModel?.phase == .failure else { return nil }
+        return displayedCategoryModel?.error
+    }
+    var isLoadingMoreRooms: Bool {
+        usesCategoryRoomCache && (displayedCategoryModel?.isLoadingMore ?? false)
+    }
     var roomList: [LiveModel] {
-        get { roomListType == .search ? searchRequest.rooms : storedRoomList }
+        get {
+            if roomListType == .search { return searchRequest.rooms }
+            if usesCategoryRoomCache {
+                guard let displayedCategoryKey else { return [] }
+                return categoryModels[displayedCategoryKey]?.rooms ?? []
+            }
+            return storedRoomList
+        }
         set {
             guard roomListType != .search else { return }
+            if usesCategoryRoomCache {
+                if let displayedCategoryKey, let model = categoryModels[displayedCategoryKey] {
+                    model.replaceRooms(newValue)
+                }
+                return
+            }
             storedRoomList = newValue
         }
     }
@@ -161,22 +221,39 @@ class LiveViewModel {
         let generation = UUID()
         catalogRequestGeneration = generation
         livePlatformName = LiveParseTools.getLivePlatformName(liveType)
+        usesCategoryRoomCache = true
+        catalogResolved = false
         isLoading = true
-        var handedLoadingToRoomRequest = false
         defer {
-            if catalogRequestGeneration == generation, !handedLoadingToRoomRequest {
+            if catalogRequestGeneration == generation {
                 isLoading = false
             }
         }
         do {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: liveType)
             guard !Task.isCancelled, catalogRequestGeneration == generation else { return }
+            cancelCategoryLoads(except: nil)
+            categoryModels.removeAll()
+            displayedCategoryKey = nil
             categories = fetchedCategories
-            selectedMainListCategory = nil
-            selectedSubCategory = []
-            selectedSubListIndex = -1
-            getRoomList(index: selectedSubListIndex)
-            handedLoadingToRoomRequest = roomListType == .live
+            catalogResolved = true
+            hasError = false
+            currentError = nil
+            dismissedRoomFailure = false
+            if let parent = categories.first, !parent.subList.isEmpty {
+                selectedMainListCategory = parent
+                selectedSubCategory = parent.subList
+                selectedSubListIndex = 0
+                selectedRoomListIndex = 0
+                let key = "0-0"
+                ensureCategoryModel(key: key, parent: parent, subIndex: 0)
+                displayedCategoryKey = key
+                await startCategoryLoad(key: key, refresh: true).value
+            } else {
+                selectedMainListCategory = nil
+                selectedSubCategory = []
+                selectedSubListIndex = -1
+            }
             Task {
                 try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
                 guard !Task.isCancelled, self.catalogRequestGeneration == generation else { return }
@@ -194,17 +271,40 @@ class LiveViewModel {
         let parent = categories[parentIndex]
         guard parent.subList.indices.contains(subIndex) else { return false }
 
+        usesCategoryRoomCache = true
         selectedMainListCategory = parent
         selectedSubCategory = parent.subList
         selectedSubListIndex = subIndex
         selectedRoomListIndex = 0
-        hasMoreRooms = true
-        roomPage = 1
+        dismissedRoomFailure = false
+        let key = "\(parentIndex)-\(subIndex)"
+        if displayedCategoryKey != key {
+            cancelCategoryLoads(except: key)
+        }
+        ensureCategoryModel(key: key, parent: parent, subIndex: subIndex)
+        displayedCategoryKey = key
+        startCategoryLoad(key: key, refresh: true)
         return true
+    }
+
+    func refreshDisplayedRooms() async {
+        guard usesCategoryRoomCache, let key = displayedCategoryKey else { return }
+        await startCategoryLoad(key: key, refresh: true).value
+    }
+
+    func loadMoreDisplayedRooms() {
+        guard usesCategoryRoomCache, let key = displayedCategoryKey,
+              let model = categoryModels[key], model.hasMore, !model.isLoading else { return }
+        if let task = categoryTasks[key], !task.isCancelled { return }
+        startCategoryLoad(key: key, refresh: false)
     }
 
     func getRoomList(index: Int) {
         if roomListType == .search {
+            return
+        }
+        if usesCategoryRoomCache && roomListType == .live {
+            Task { await refreshDisplayedRooms() }
             return
         }
         if roomPage == 1 {
@@ -427,6 +527,62 @@ class LiveViewModel {
         self.toastOptions = SimpleToastOptions(
             alignment: .topLeading, hideAfter: hideAfter
         )
+    }
+
+    private func ensureCategoryModel(key: String, parent: LiveMainListModel, subIndex: Int) {
+        guard categoryModels[key] == nil, parent.subList.indices.contains(subIndex) else { return }
+        let subCategory = parent.subList[subIndex]
+        let parentBiz = parent.biz
+        let liveType = liveType
+        categoryModels[key] = CategoryRoomListModel { page in
+            do {
+                return try await LiveService.fetchRoomList(
+                    liveType: liveType,
+                    category: subCategory,
+                    parentBiz: parentBiz,
+                    page: page
+                )
+            } catch {
+                if error is CancellationError { throw error }
+                let bridged = error as NSError
+                if bridged.domain == NSURLErrorDomain && bridged.code == NSURLErrorCancelled {
+                    throw CancellationError()
+                }
+                if let parseError = error as? LiveParseError, parseError.detail.contains("返回结果为空") {
+                    return []
+                }
+                throw error
+            }
+        }
+    }
+
+    @discardableResult
+    private func startCategoryLoad(key: String, refresh: Bool) -> Task<Void, Never> {
+        let previous = categoryTasks[key]
+        previous?.cancel()
+        let generation = catalogRequestGeneration
+        let token = UUID()
+        categoryTaskTokens[key] = token
+        let task = Task { @MainActor in
+            await previous?.value
+            guard !Task.isCancelled,
+                  self.catalogRequestGeneration == generation,
+                  let model = self.categoryModels[key] else { return }
+            await model.load(refresh: refresh)
+            guard self.categoryTaskTokens[key] == token else { return }
+            if model.phase != .failure {
+                self.dismissedRoomFailure = false
+            }
+            self.categoryTasks[key] = nil
+        }
+        categoryTasks[key] = task
+        return task
+    }
+
+    private func cancelCategoryLoads(except key: String?) {
+        for (other, task) in categoryTasks where other != key {
+            task.cancel()
+        }
     }
 
     // MARK: - 错误处理

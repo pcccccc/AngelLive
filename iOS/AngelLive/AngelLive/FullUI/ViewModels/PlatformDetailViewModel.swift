@@ -5,12 +5,12 @@
 //  Created by pangchong on 10/21/25.
 //
 
+import Alamofire
 import Foundation
 import SwiftUI
 import Observation
 import AngelLiveCore
 import AngelLiveDependencies
-import Alamofire
 
 @Observable
 class PlatformDetailViewModel {
@@ -36,22 +36,12 @@ class PlatformDetailViewModel {
         return subList.indices.contains(selectedSubCategoryIndex) ? subList[selectedSubCategoryIndex] : nil
     }
 
-    // 房间列表 - 使用字典按分类索引缓存
-    var roomListCache: [String: [LiveModel]] = [:]
+    private var roomModels: [String: CategoryRoomListModel] = [:]
+    @ObservationIgnored private var roomTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var activeRoomKey: String?
 
     var roomList: [LiveModel] {
-        get {
-            let key = cacheKey
-            return roomListCache[key] ?? []
-        }
-        set {
-            let key = cacheKey
-            roomListCache[key] = newValue
-        }
-    }
-
-    private var cacheKey: String {
-        cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
+        rooms(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
     }
 
     private func cacheKey(mainCategoryIndex: Int, subCategoryIndex: Int) -> String {
@@ -59,14 +49,13 @@ class PlatformDetailViewModel {
     }
 
     func rooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> [LiveModel] {
-        roomListCache[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)] ?? []
+        roomModels[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]?.rooms ?? []
     }
 
     // 加载状态
     var isLoadingCategories = false
     @ObservationIgnored private var catalogRequestID = UUID()
     @ObservationIgnored private var catalogGeneration = UUID()
-    private var loadingRoomKeys: Set<String> = []
 
     var isLoadingRooms: Bool {
         isLoadingRooms(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
@@ -74,51 +63,35 @@ class PlatformDetailViewModel {
 
     // 错误状态
     var categoryError: Error?
-    private var roomErrors: [String: Error] = [:]
 
     var roomError: Error? {
-        get { roomError(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex) }
-        set {
-            let key = cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
-            roomErrors[key] = newValue
-        }
-    }
-
-    // 分页
-    private var currentPages: [String: Int] = [:]
-    private let pageSize = 20
-    private var hasMoreRoomsByKey: [String: Bool] = [:]
-
-    var currentPage: Int {
-        get { currentPage(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex) }
-        set {
-            let key = cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
-            currentPages[key] = newValue
-        }
+        roomError(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
     }
 
     var hasMoreRooms: Bool {
-        get { canLoadMoreRooms(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex) }
-        set {
-            let key = cacheKey(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
-            hasMoreRoomsByKey[key] = newValue
-        }
-    }
-
-    func currentPage(mainCategoryIndex: Int, subCategoryIndex: Int) -> Int {
-        currentPages[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)] ?? 1
+        canLoadMoreRooms(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: selectedSubCategoryIndex)
     }
 
     func canLoadMoreRooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> Bool {
-        hasMoreRoomsByKey[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)] ?? true
+        roomModels[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]?.hasMore ?? true
     }
 
     func isLoadingRooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> Bool {
-        loadingRoomKeys.contains(cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex))
+        roomModels[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]?.isLoading ?? false
+    }
+
+    func isLoadingMoreRooms(mainCategoryIndex: Int, subCategoryIndex: Int) -> Bool {
+        roomModels[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]?.isLoadingMore ?? false
     }
 
     func roomError(mainCategoryIndex: Int, subCategoryIndex: Int) -> Error? {
-        roomErrors[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]
+        let model = roomModels[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]
+        guard model?.phase == .failure else { return nil }
+        return model?.error
+    }
+
+    func roomListPhase(mainCategoryIndex: Int, subCategoryIndex: Int) -> RoomListDisplayPhase {
+        roomModels[cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)]?.phase ?? .skeleton
     }
 
     init(platform: Platformdescription) {
@@ -140,17 +113,16 @@ class PlatformDetailViewModel {
             guard !Task.isCancelled, catalogRequestID == requestID else { return }
             catalogGeneration = UUID()
             categories = fetchedCategories
-            roomListCache.removeAll()
-            loadingRoomKeys.removeAll()
-            roomErrors.removeAll()
-            currentPages.removeAll()
-            hasMoreRoomsByKey.removeAll()
+            cancelAllRoomLoads()
+            roomModels.removeAll()
+            activeRoomKey = nil
 
             // 自动加载第一个分类的房间列表
             if !categories.isEmpty {
                 selectedMainCategoryIndex = 0
                 if !currentSubCategories.isEmpty {
                     selectedSubCategoryIndex = 0
+                    activeRoomKey = cacheKey(mainCategoryIndex: 0, subCategoryIndex: 0)
                     await loadRoomList()
                 }
             }
@@ -172,77 +144,74 @@ class PlatformDetailViewModel {
         )
     }
 
+    /// 切到这个分类：取消其它分类仍在进行的请求，有缓存就先显示再刷新。
+    @MainActor
+    func activateCategory(mainCategoryIndex: Int, subCategoryIndex: Int) async {
+        let key = cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        let isNewSelection = activeRoomKey != key
+        activeRoomKey = key
+        if isNewSelection {
+            cancelRoomLoads(except: key)
+        }
+        let currentTask = roomTasks[key]
+        let keepsInFlightLoad = currentTask?.isCancelled == false
+            && isLoadingRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        if isNewSelection {
+            // 这个分类自己的请求还在飞（例如首屏）时接着用，不重新开始。
+            guard !keepsInFlightLoad else { return }
+            await loadRoomList(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+            return
+        }
+        let phase = roomListPhase(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+        guard phase == .skeleton, !keepsInFlightLoad else { return }
+        await loadRoomList(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
+    }
+
     @MainActor
     func loadRoomList(mainCategoryIndex: Int, subCategoryIndex: Int, refresh: Bool = true) async {
         guard categories.indices.contains(mainCategoryIndex) else { return }
         let mainCategory = categories[mainCategoryIndex]
         guard mainCategory.subList.indices.contains(subCategoryIndex) else { return }
 
-        let subCategory = mainCategory.subList[subCategoryIndex]
         let generation = catalogGeneration
         let requestKey = cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
-        guard !loadingRoomKeys.contains(requestKey) else { return }
-
-        if refresh {
-            currentPages[requestKey] = 1
-            hasMoreRoomsByKey[requestKey] = true
-            roomListCache[requestKey] = []
-            roomErrors[requestKey] = nil
+        let subCategory = mainCategory.subList[subCategoryIndex]
+        let parentBiz = mainCategory.biz
+        let liveType = platform.liveType
+        if roomModels[requestKey] == nil {
+            roomModels[requestKey] = CategoryRoomListModel { page in
+                do {
+                    return try await LiveService.fetchRoomList(
+                        liveType: liveType,
+                        category: subCategory,
+                        parentBiz: parentBiz,
+                        page: page
+                    )
+                } catch {
+                    if (error as? AFError)?.isExplicitlyCancelledError == true {
+                        throw CancellationError()
+                    }
+                    if let parseError = error as? LiveParseError,
+                       parseError.detail.contains("返回结果为空") {
+                        return []
+                    }
+                    throw error
+                }
+            }
         }
 
-        let requestPage = currentPages[requestKey] ?? 1
-        loadingRoomKeys.insert(requestKey)
-        defer { if catalogGeneration == generation { loadingRoomKeys.remove(requestKey) } }
+        let previous = roomTasks[requestKey]
+        previous?.cancel()
+        await previous?.value
+        guard !Task.isCancelled, catalogGeneration == generation else { return }
+        guard let model = roomModels[requestKey] else { return }
 
-        do {
-            // 将父分类业务标识一并传给插件。
-            let parentBiz = mainCategory.biz
-
-            let fetchedRooms = try await LiveService.fetchRoomList(
-                liveType: platform.liveType,
-                category: subCategory,
-                parentBiz: parentBiz,
-                page: requestPage
-            )
-            guard catalogGeneration == generation else { return }
-            try Task.checkCancellation()
-
-            hasMoreRoomsByKey[requestKey] = !fetchedRooms.isEmpty
-
-            if refresh {
-                roomListCache[requestKey] = fetchedRooms.removingDuplicates()
-            } else {
-                let currentRooms = roomListCache[requestKey] ?? []
-                roomListCache[requestKey] = currentRooms.appendingUnique(contentsOf: fetchedRooms)
-            }
-            // 清除错误状态（加载成功）
-            roomErrors[requestKey] = nil
-        } catch {
-            guard catalogGeneration == generation else { return }
-            if !refresh {
-                currentPages[requestKey] = max(1, requestPage - 1)
-            }
-
-            // 检查是否是取消错误
-            let isCancelled = (error as? AFError)?.isExplicitlyCancelledError ?? false
-                || error is CancellationError
-                || (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled
-
-            if isCancelled {
-                return
-            }
-
-            // 插件抛 "返回结果为空" 不算错误:分页到底 / 当前分类无房间。
-            // 不挂 roomError,只置 hasMoreRooms=false;首页刷新场景 roomList 已在 refresh 入口清空。
-            if let liveParseError = error as? LiveParseError,
-               liveParseError.detail.contains("返回结果为空") {
-                hasMoreRoomsByKey[requestKey] = false
-                return
-            }
-
-            Logger.warning("获取房间列表失败: \(error)", category: .network)
-            roomErrors[requestKey] = error
+        let task = Task { @MainActor in
+            await model.load(refresh: refresh)
         }
+        roomTasks[requestKey] = task
+        await task.value
+        guard catalogGeneration == generation else { return }
     }
 
     // MARK: - 加载更多
@@ -259,14 +228,12 @@ class PlatformDetailViewModel {
     @discardableResult
     func loadMoreRooms(mainCategoryIndex: Int, subCategoryIndex: Int) async -> [LiveModel] {
         let requestKey = cacheKey(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex)
-        guard !loadingRoomKeys.contains(requestKey),
-              canLoadMoreRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) else {
-            return roomListCache[requestKey] ?? []
+        guard canLoadMoreRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex),
+              !isLoadingRooms(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex) else {
+            return roomModels[requestKey]?.rooms ?? []
         }
-
-        currentPages[requestKey] = (currentPages[requestKey] ?? 1) + 1
         await loadRoomList(mainCategoryIndex: mainCategoryIndex, subCategoryIndex: subCategoryIndex, refresh: false)
-        return roomListCache[requestKey] ?? []
+        return roomModels[requestKey]?.rooms ?? []
     }
 
     // MARK: - 切换主分类
@@ -278,7 +245,7 @@ class PlatformDetailViewModel {
 
         selectedMainCategoryIndex = index
         selectedSubCategoryIndex = 0
-        await loadRoomList()
+        await activateCategory(mainCategoryIndex: index, subCategoryIndex: 0)
     }
 
     // MARK: - 切换子分类
@@ -286,12 +253,22 @@ class PlatformDetailViewModel {
     @MainActor
     func selectSubCategory(index: Int) async {
         guard currentSubCategories.indices.contains(index) else { return }
-
         selectedSubCategoryIndex = index
+        await activateCategory(mainCategoryIndex: selectedMainCategoryIndex, subCategoryIndex: index)
+    }
 
-        // 检查是否有缓存数据，没有则加载
-        if roomList.isEmpty {
-            await loadRoomList()
+    @MainActor
+    private func cancelRoomLoads(except key: String) {
+        for (other, task) in roomTasks where other != key {
+            task.cancel()
         }
+    }
+
+    @MainActor
+    private func cancelAllRoomLoads() {
+        for task in roomTasks.values {
+            task.cancel()
+        }
+        roomTasks.removeAll()
     }
 }
