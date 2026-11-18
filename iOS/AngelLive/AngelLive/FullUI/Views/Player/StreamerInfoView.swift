@@ -114,15 +114,16 @@ struct StreamerInfoView: View {
                         .font(.headline)
                         .foregroundStyle(Color(white: 0.9))
 
-                    // 人气信息
-                    HStack(spacing: 6) {
-                        Image(systemName: "flame.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                        Text(formatPopularity(viewModel.currentRoom.liveWatchedCount ?? "0"))
-                            .font(.caption)
+                    if let popularity = FullUIPlayerDisplay.popularityTitle(viewModel.currentRoom.liveWatchedCount) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "flame.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Text(popularity)
+                                .font(.caption)
+                        }
+                        .foregroundStyle(Color(white: 0.7))
                     }
-                    .foregroundStyle(Color(white: 0.7))
                 }
 
                 Spacer()

@@ -362,7 +362,8 @@ struct PlayerContentView: View {
                             bridge: controlBridge,
                             showVideoSetting: $showVideoSetting,
                             showDanmakuSettings: $showDanmakuSettings,
-                            isPopupPresented: $isControlPopupOpen
+                            isPopupPresented: $isControlPopupOpen,
+                            contrastPlayer: { useKSPlayer ? playerCoordinator.playerLayer?.player : nil }
                         )
                     }
                     #else

@@ -9,12 +9,29 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 
+@Observable
+final class FullUIPlaybackMenuState {
+    enum Action: Equatable {
+        case danmaku, subtitles, timer, cancelTimer, airPlay, dlna, settings, statistics
+    }
+
+    var isPresented = false
+    var selectedAction: Action?
+
+    func select(_ action: Action) {
+        selectedAction = action
+        isPresented = false
+    }
+}
+
 /// 播放器设置按钮（视频信息统计、弹幕设置、投屏、定时关闭、播放设置）
 struct SettingsButton: View {
     @Binding var showVideoSetting: Bool
     @Binding var showDanmakuSettings: Bool
     var onDismiss: () -> Void
     var onPopupStateChanged: ((Bool) -> Void)? // 弹窗状态变化回调
+    var fullscreenMenu: FullUIPlaybackMenuState?
+    var playbackTimer: TimerManager?
 
     @State private var showActionSheet = false
     @State private var showAirPlayPicker = false
@@ -23,26 +40,36 @@ struct SettingsButton: View {
     @State private var showPlayerSettings = false
     @State private var showSubtitleSettings = false
     @State private var subtitleActivationID = UUID()
-    @State private var timerManager = TimerManager()
+    @State private var localTimer = TimerManager()
     @State private var playerSettingModel = PlayerSettingModel()
     @Environment(RoomInfoViewModel.self) private var viewModel
+
+    private var usesFullscreenChrome: Bool { fullscreenMenu != nil }
+    private var timerManager: TimerManager { playbackTimer ?? localTimer }
 
     /// 是否有任何弹窗展开
     private var isAnyPopupOpen: Bool {
         showActionSheet || showAirPlayPicker || showDLNAPicker || showTimerPicker || showPlayerSettings || showSubtitleSettings
     }
 
-    var body: some View {
-        ZStack {
+    private var trigger: some View {
+        let size: CGFloat = usesFullscreenChrome ? FullUIPlayerChrome.controlSize : 30
+        return ZStack {
             Button(action: {
-                showActionSheet = true
+                if let fullscreenMenu {
+                    fullscreenMenu.isPresented = true
+                } else {
+                    showActionSheet = true
+                }
             }) {
                 Image(systemName: "gearshape")
-                    .frame(width: 30, height: 30)
-                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: size, height: size)
+                    .font(FullUIPlayerChrome.symbolFont)
                     .foregroundStyle(.white)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .accessibilityLabel("播放器设置")
 
             // 定时器激活时显示倒计时
             if timerManager.isTimerActive {
@@ -56,63 +83,54 @@ struct SettingsButton: View {
                             .fill(.red)
                     )
                     .offset(y: -18)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
-        // 用 .primary 覆盖默认主题色，dialog/sheet 按钮文字按浅/深色模式呈黑/白
+    }
+
+    @ViewBuilder private var settingsTrigger: some View {
+        if usesFullscreenChrome {
+            trigger
+        } else {
+            trigger.confirmationDialog("播放器设置", isPresented: $showActionSheet, titleVisibility: .visible) {
+                legacyActions
+            }
+        }
+    }
+
+    @ViewBuilder private var legacyActions: some View {
+        if viewModel.supportsDanmu {
+            Button("弹幕设置") { perform(.danmaku) }
+        }
+
+        LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
+            perform(.subtitles)
+        }
+
+        Button("翻译与字幕设置…") { perform(.subtitles) }
+
+        if viewModel.canUseAirPlay {
+            Button("AirPlay 投屏") { perform(.airPlay) }
+        }
+        if viewModel.dlnaCastResource != nil {
+            Button("DLNA 投屏") { perform(.dlna) }
+        }
+
+        if timerManager.isTimerActive {
+            Button("取消定时关闭 (\(timerManager.formattedTime))") { perform(.cancelTimer) }
+        } else {
+            Button("定时关闭") { perform(.timer) }
+        }
+
+        Button("播放设置") { perform(.settings) }
+        Button("视频信息统计") { perform(.statistics) }
+        Button("取消", role: .cancel) { showActionSheet = false }
+    }
+
+    var body: some View {
+        settingsTrigger
         .tint(.primary)
-        .confirmationDialog("播放器设置", isPresented: $showActionSheet, titleVisibility: .visible) {
-            if viewModel.supportsDanmu {
-                Button("弹幕设置") {
-                    showDanmakuSettings = true
-                }
-            }
-
-            LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
-                subtitleActivationID = viewModel.subtitlePlayback.activationID
-                showSubtitleSettings = true
-            }
-
-            Button("翻译与字幕设置…") {
-                subtitleActivationID = viewModel.subtitlePlayback.activationID
-                showSubtitleSettings = true
-            }
-
-            // 仅在 HLS 流时显示投屏选项（FLV 投屏只有音频）
-            if viewModel.canUseAirPlay {
-                Button("AirPlay 投屏") {
-                    showAirPlayPicker = true
-                }
-            }
-
-            if viewModel.dlnaCastResource != nil {
-                Button("DLNA 投屏") {
-                    showDLNAPicker = true
-                }
-            }
-
-            // 根据定时器状态显示不同按钮
-            if timerManager.isTimerActive {
-                Button("取消定时关闭 (\(timerManager.formattedTime))") {
-                    timerManager.cancelTimer()
-                }
-            } else {
-                Button("定时关闭") {
-                    showTimerPicker = true
-                }
-            }
-
-            Button("播放设置") {
-                showPlayerSettings = true
-            }
-
-            Button("视频信息统计") {
-                showVideoSetting = true
-            }
-
-            Button("取消", role: .cancel) {
-                showActionSheet = false
-            }
-        }
         .sheet(isPresented: $showAirPlayPicker) {
             AirPlayPickerSheet()
                 .presentationDetents([.height(200)])
@@ -146,6 +164,13 @@ struct SettingsButton: View {
         .sheet(isPresented: $showSubtitleSettings) {
             NavigationStack {
                 Form {
+                    if usesFullscreenChrome {
+                        Section {
+                            LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
+                                subtitleActivationID = viewModel.subtitlePlayback.activationID
+                            }
+                        }
+                    }
                     if viewModel.subtitlePlayback.phase == .manualSelectionRequired {
                         Section {
                             LiveSubtitleLanguageOptions(
@@ -184,9 +209,136 @@ struct SettingsButton: View {
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)
         }
+        .onChange(of: fullscreenMenu?.selectedAction) { _, action in
+            guard let action else { return }
+            fullscreenMenu?.selectedAction = nil
+            perform(action)
+        }
         .onChange(of: viewModel.subtitlePlayback.activationID) { _, _ in
             showSubtitleSettings = false
         }
+    }
+
+    private func perform(_ action: FullUIPlaybackMenuState.Action) {
+        switch action {
+        case .danmaku: showDanmakuSettings = true
+        case .subtitles:
+            subtitleActivationID = viewModel.subtitlePlayback.activationID
+            showSubtitleSettings = true
+        case .timer: showTimerPicker = true
+        case .cancelTimer: timerManager.cancelTimer()
+        case .airPlay: showAirPlayPicker = true
+        case .dlna: showDLNAPicker = true
+        case .settings: showPlayerSettings = true
+        case .statistics: showVideoSetting = true
+        }
+    }
+}
+
+struct FullUIPlaybackMenu: View {
+    @Environment(RoomInfoViewModel.self) private var viewModel
+    @State private var showCastOptions = false
+    let state: FullUIPlaybackMenuState
+    let timer: TimerManager
+
+    private var hasCastOptions: Bool {
+        viewModel.canUseAirPlay || viewModel.dlnaCastResource != nil
+    }
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            sections
+            ScrollView { sections }
+        }
+        .frame(width: 240)
+        .foregroundStyle(.white)
+        .fullUIPlayerGlass(in: RoundedRectangle(cornerRadius: 24), interactive: false)
+        .environment(\.fullUIPlayerPrefersRegularGlass, true)
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("播放器设置")
+        .accessibilityAction(.escape) { state.isPresented = false }
+    }
+
+    private var sections: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if showCastOptions {
+                menuSection("投屏") {
+                    menuRow("返回", symbol: "chevron.backward", showsChevron: false) { showCastOptions = false }
+                    if viewModel.canUseAirPlay {
+                        menuRow("AirPlay 投屏", symbol: "airplay.video") { state.select(.airPlay) }
+                    }
+                    if viewModel.dlnaCastResource != nil {
+                        menuRow("DLNA 投屏", symbol: "tv") { state.select(.dlna) }
+                    }
+                }
+            } else {
+                menuSection("常用") {
+                    if viewModel.supportsDanmu {
+                        menuRow("弹幕", symbol: "captions.bubble") { state.select(.danmaku) }
+                    }
+                    menuRow("字幕与翻译", symbol: "captions.bubble.fill") { state.select(.subtitles) }
+                    if timer.isTimerActive {
+                        menuRow("取消定时关闭 (\(timer.formattedTime))", symbol: "timer", showsChevron: false) {
+                            state.select(.cancelTimer)
+                        }
+                    } else {
+                        menuRow("定时关闭", symbol: "timer") { state.select(.timer) }
+                    }
+                }
+                if hasCastOptions {
+                    Divider()
+                    menuSection("投屏") {
+                        menuRow("投屏", symbol: "airplay.video") { showCastOptions = true }
+                    }
+                }
+                Divider()
+                menuSection("更多") {
+                    menuRow("播放设置", symbol: "gearshape") { state.select(.settings) }
+                    menuRow("视频信息", symbol: "info.circle") { state.select(.statistics) }
+                }
+            }
+        }
+        .padding(8)
+    }
+
+    private func menuSection<Content: View>(_ title: String, @ViewBuilder rows: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.top, 2)
+                .accessibilityAddTraits(.isHeader)
+            rows()
+        }
+    }
+
+    private func menuRow(
+        _ title: String,
+        symbol: String,
+        showsChevron: Bool = true,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(FullUIPlayerChrome.symbolFont)
+                    .frame(width: 20)
+                Text(title)
+                    .font(.callout)
+                Spacer(minLength: 0)
+                if showsChevron {
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

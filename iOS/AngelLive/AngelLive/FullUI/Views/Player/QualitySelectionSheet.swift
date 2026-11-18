@@ -127,7 +127,7 @@ struct QualitySelectionPanel: View {
                             isShowing = false
                         } label: {
                             HStack(spacing: 10) {
-                                Text(RoomPlaybackResolver.qualityDisplayTitle(quality, in: playArgs))
+                                Text(FullUIPlayerDisplay.qualityTitle(quality, in: playArgs))
                                     .font(.system(size: 15, weight: selected ? .semibold : .regular))
                                     .foregroundStyle(selected ? .white : .white.opacity(0.8))
 
@@ -173,7 +173,7 @@ struct QualitySelectionPanel: View {
         HStack(spacing: 6) {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.system(size: 11, weight: .semibold))
-            Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
+            Text(FullUIPlayerDisplay.lineTitle(for: cdn, index: cdnIndex))
                 .font(.system(size: 13, weight: .semibold))
 
             if isCurrentCdn && canCollapse {

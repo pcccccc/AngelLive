@@ -2,6 +2,9 @@ import SwiftUI
 import UIKit
 
 struct ShortDramaProgressSlider: UIViewRepresentable {
+    static let hitHeight: CGFloat = 44
+    static let visibleTrackHeight: CGFloat = 4
+
     @Binding var value: Double
     let range: ClosedRange<Double>
     let isEnabled: Bool
@@ -9,7 +12,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
     let accessibilityValue: String
     let onEditingChanged: (Bool) -> Void
     let onCommit: (Double) -> Void
-    let trackOffset: CGFloat
+    let showsCompactTrack: Bool
     let onCancel: () -> Void
 
     init(
@@ -20,7 +23,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
         accessibilityValue: String,
         onEditingChanged: @escaping (Bool) -> Void,
         onCommit: @escaping (Double) -> Void,
-        trackOffset: CGFloat = 0,
+        showsCompactTrack: Bool,
         onCancel: @escaping () -> Void = {}
     ) {
         self._value = value
@@ -30,7 +33,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
         self.accessibilityValue = accessibilityValue
         self.onEditingChanged = onEditingChanged
         self.onCommit = onCommit
-        self.trackOffset = trackOffset
+        self.showsCompactTrack = showsCompactTrack
         self.onCancel = onCancel
     }
 
@@ -43,16 +46,17 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
         uiView: ShortDramaAccessibleSlider,
         context: Context
     ) -> CGSize? {
-        CGSize(width: proposal.width ?? uiView.bounds.width, height: 44)
+        CGSize(width: proposal.width ?? uiView.bounds.width, height: Self.hitHeight)
     }
 
     func makeUIView(context: Context) -> ShortDramaAccessibleSlider {
         let slider = ShortDramaAccessibleSlider()
-        slider.updateRange(range, trackOffset: trackOffset)
+        slider.updateRange(range, showsCompactTrack: showsCompactTrack)
         slider.setProgressValue(value, notify: false)
         slider.accessibilityLabel = accessibilityLabel
         slider.accessibilityValue = accessibilityValue
         slider.isEnabled = isEnabled
+        slider.isUserInteractionEnabled = isEnabled
 
         slider.onValueChanged = { [weak coordinator = context.coordinator] value in
             coordinator?.valueChanged(value)
@@ -71,7 +75,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
 
     func updateUIView(_ slider: ShortDramaAccessibleSlider, context: Context) {
         context.coordinator.parent = self
-        slider.updateRange(range, trackOffset: trackOffset)
+        slider.updateRange(range, showsCompactTrack: showsCompactTrack)
         slider.accessibilityLabel = accessibilityLabel
         slider.accessibilityValue = accessibilityValue
 
@@ -79,6 +83,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
             slider.cancelActiveInteraction()
         }
         slider.isEnabled = isEnabled
+        slider.isUserInteractionEnabled = isEnabled
 
         // Playback sampling can continue while the user drags. Keep the value
         // owned by the active touch until the interaction ends or is cancelled.
@@ -128,11 +133,17 @@ final class ShortDramaAccessibleSlider: UIControl {
     var onCommit: ((Double) -> Void)?
     var onCancel: (() -> Void)?
 
-    private(set) var isEditing = false
+    private(set) var isEditing = false {
+        didSet {
+            thumb.isHidden = !isEditing
+            setNeedsDisplay()
+        }
+    }
     private var minimumValue = 0.0
     private var maximumValue = 1.0
     private var value = 0.0
-    private var trackOffset: CGFloat = 0
+    private var showsCompactTrack = false
+    private let thumb = UIView(frame: CGRect(x: 0, y: 0, width: 16, height: 16))
     private var suspendedNavigationGestures: [SuspendedGesture] = []
     private weak var suspendedPresentation: UIViewController?
     private var wasModalInPresentation = false
@@ -142,11 +153,15 @@ final class ShortDramaAccessibleSlider: UIControl {
         let wasEnabled: Bool
     }
 
-    private var trackThickness: CGFloat { isEditing ? 3 : 2 }
+    private var trackThickness: CGFloat {
+        if isEditing { return 6 }
+        return showsCompactTrack ? 2 : ShortDramaProgressSlider.visibleTrackHeight
+    }
+
     private var trackRect: CGRect {
         CGRect(
             x: bounds.minX,
-            y: bounds.midY + trackOffset - trackThickness / 2,
+            y: bounds.midY - trackThickness / 2,
             width: bounds.width,
             height: trackThickness
         )
@@ -154,19 +169,20 @@ final class ShortDramaAccessibleSlider: UIControl {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        configureAccessibility()
+        configure()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        configureAccessibility()
+        configure()
     }
 
-    func updateRange(_ range: ClosedRange<Double>, trackOffset: CGFloat) {
+    func updateRange(_ range: ClosedRange<Double>, showsCompactTrack: Bool) {
         minimumValue = range.lowerBound
         maximumValue = range.upperBound
-        self.trackOffset = trackOffset
+        self.showsCompactTrack = showsCompactTrack
         setNeedsDisplay()
+        if isEditing { setNeedsLayout() }
     }
 
     @discardableResult
@@ -176,6 +192,7 @@ final class ShortDramaAccessibleSlider: UIControl {
 
         value = nextValue
         setNeedsDisplay()
+        if isEditing { setNeedsLayout() }
         if notify {
             onValueChanged?(nextValue)
         }
@@ -192,7 +209,8 @@ final class ShortDramaAccessibleSlider: UIControl {
 
         let track = trackRect
         let cornerRadius = track.height / 2
-        let inactiveAlpha: CGFloat = isEnabled ? 0.34 : 0.18
+        let showsEnabledColors = isEnabled || showsCompactTrack
+        let inactiveAlpha: CGFloat = showsEnabledColors ? 0.38 : 0.18
         context.setFillColor(UIColor.white.withAlphaComponent(inactiveAlpha).cgColor)
         context.addPath(UIBezierPath(roundedRect: track, cornerRadius: cornerRadius).cgPath)
         context.fillPath()
@@ -205,23 +223,16 @@ final class ShortDramaAccessibleSlider: UIControl {
                 width: track.width * fraction,
                 height: track.height
             )
-            context.setFillColor(UIColor.white.withAlphaComponent(isEnabled ? 1 : 0.55).cgColor)
+            context.setFillColor(UIColor.white.withAlphaComponent(showsEnabledColors ? 1 : 0.55).cgColor)
             context.addPath(UIBezierPath(roundedRect: progress, cornerRadius: cornerRadius).cgPath)
             context.fillPath()
         }
+    }
 
-        if isEditing {
-            let markerWidth: CGFloat = 3
-            let markerHeight: CGFloat = 8
-            let marker = CGRect(
-                x: track.minX + track.width * fraction - markerWidth / 2,
-                y: track.midY - markerHeight / 2,
-                width: markerWidth,
-                height: markerHeight
-            )
-            context.setFillColor(UIColor.white.cgColor)
-            context.fill(marker)
-        }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let track = trackRect
+        thumb.center = CGPoint(x: track.minX + track.width * valueFraction, y: track.midY)
     }
 
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
@@ -229,7 +240,7 @@ final class ShortDramaAccessibleSlider: UIControl {
 
         suspendNavigationGestures()
         isEditing = true
-        setNeedsDisplay()
+        setNeedsLayout()
         onEditingChanged?(true)
         guard isEditing else { return true }
         updateValue(at: touch.location(in: self))
@@ -291,9 +302,16 @@ final class ShortDramaAccessibleSlider: UIControl {
         return CGFloat(min(max((value - minimumValue) / span, 0), 1))
     }
 
-    private func configureAccessibility() {
+    private func configure() {
         backgroundColor = .clear
         isOpaque = false
+        contentMode = .redraw
+        thumb.backgroundColor = .white
+        thumb.layer.cornerRadius = thumb.bounds.width / 2
+        thumb.isUserInteractionEnabled = false
+        thumb.isHidden = true
+        // Keep the whole thumb visible when its center is at either endpoint.
+        addSubview(thumb)
         isAccessibilityElement = true
         accessibilityTraits = .adjustable
         accessibilityCustomActions = [
@@ -335,7 +353,6 @@ final class ShortDramaAccessibleSlider: UIControl {
         guard isEditing else { return }
         isEditing = false
         restoreNavigationGestures()
-        setNeedsDisplay()
         onEditingChanged?(false)
 
         if committing {

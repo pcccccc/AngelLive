@@ -27,12 +27,25 @@ struct MoreActionsButton: View {
     var supportsPictureInPicture: Bool = false
     var onTogglePictureInPicture: (() -> Void)? = nil
     var embeddedInDock: Bool = false
+    var showsDanmakuConnectionIssue = false
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var presentedSheet: MoreActionsSheet?
     @State private var buttonPressed = false
     @State private var showSubtitleLanguages = false
     @State private var subtitleActivationID = UUID()
+    @State private var presentedDanmakuIssue: String?
+
+    private var danmakuIssue: String? {
+        showsDanmakuConnectionIssue ? viewModel.danmakuConnectionIssue : nil
+    }
+
+    private var isDanmakuIssuePresented: Binding<Bool> {
+        Binding(
+            get: { presentedDanmakuIssue != nil },
+            set: { if !$0 { presentedDanmakuIssue = nil } }
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -60,6 +73,12 @@ struct MoreActionsButton: View {
                     }
                 }
 
+                if let danmakuIssue {
+                    Button("弹幕连接详情") {
+                        presentedDanmakuIssue = danmakuIssue
+                    }
+                }
+
                 Menu("实时字幕") {
                     LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
                         subtitleActivationID = viewModel.subtitlePlayback.activationID
@@ -76,7 +95,7 @@ struct MoreActionsButton: View {
                 if showQualityOption, let playArgs = viewModel.currentRoomPlayArgs {
                     Menu("清晰度 - \(viewModel.currentPlayQualityString)") {
                         ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
-                            Menu(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn) {
+                            Menu(FullUIPlayerDisplay.lineTitle(for: cdn, index: cdnIndex)) {
                                 ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
                                     Button {
                                         viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
@@ -99,23 +118,18 @@ struct MoreActionsButton: View {
                     onClearChat()
                 }
             } label: {
-                Image(systemName: embeddedInDock ? "ellipsis" : "ellipsis.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(embeddedInDock ? Color.primary : Color.white)
-                    .frame(width: 44, height: 44)
-                    .background(
-                        Circle()
-                            .fill(embeddedInDock ? AnyShapeStyle(.clear) : AnyShapeStyle(.ultraThinMaterial))
-                    )
-                    .shadow(
-                        color: .black.opacity(embeddedInDock ? 0 : 0.2),
-                        radius: 4,
-                        x: 0,
-                        y: 2
-                    )
+                if embeddedInDock {
+                    menuGlyph
+                } else {
+                    menuGlyph
+                        .fullUIPlayerGlass(in: Circle())
+                        .fullUIPlayerShadow(in: Circle())
+                        .environment(\.colorScheme, .dark)
+                }
             }
             .menuIndicator(.hidden)
             .accessibilityLabel("更多直播间操作")
+            .accessibilityValue(danmakuIssue == nil ? Text("") : Text("弹幕连接异常"))
         }
         .sheet(item: $presentedSheet) { sheet in
             switch sheet {
@@ -144,10 +158,34 @@ struct MoreActionsButton: View {
                 activationID: subtitleActivationID
             )
         }
+        .alert("弹幕连接", isPresented: isDanmakuIssuePresented, presenting: presentedDanmakuIssue) { _ in
+            Button("好", role: .cancel) {}
+        } message: { issue in
+            Text(issue)
+        }
         .onChange(of: viewModel.subtitlePlayback.activationID) { _, _ in
             showSubtitleLanguages = false
         }
         .tint(.primary)
+    }
+
+    private var menuGlyph: some View {
+        let usesDetailDock = embeddedInDock && !showsDanmakuConnectionIssue
+        return Image(systemName: "ellipsis")
+            .font(usesDetailDock ? .title2 : FullUIPlayerChrome.symbolFont)
+            .foregroundStyle(usesDetailDock ? Color.primary : Color.white)
+            .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+            .contentShape(Rectangle())
+            .overlay(alignment: .topTrailing) {
+                if danmakuIssue != nil {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 6, height: 6)
+                        .padding(9)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
     }
 }
 

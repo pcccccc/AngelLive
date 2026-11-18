@@ -7,6 +7,9 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 import UIKit
+#if canImport(KSPlayer)
+import KSPlayer
+#endif
 
 struct UnifiedPlayerControlOverlay: View {
     static let compactLandscapeControlInset: CGFloat = 16
@@ -20,17 +23,24 @@ struct UnifiedPlayerControlOverlay: View {
     @Environment(\.fullUIPlayerUsesInPlaceFullscreen) private var usesInPlaceFullscreen
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     let bridge: PlayerControlBridge
     @Binding var showVideoSetting: Bool
     @Binding var showDanmakuSettings: Bool
     @Binding var isPopupPresented: Bool
+    #if canImport(KSPlayer)
+    var contrastPlayer: () -> (any MediaPlayerProtocol)?
+    #endif
 
     @State private var autoHideTask: Task<Void, Never>?
     @State private var isSettingsPopupOpen = false
-    @State private var statusBarVM = StatusBarViewModel()
     @State private var videoScaleMode: VideoScaleMode = PlayerSettingModel().videoScaleMode
     @State private var showQualityPanel = false
+    @State private var showDanmakuIssue = false
+    @State private var playbackTimer = TimerManager()
+    @State private var fullscreenMenu = FullUIPlaybackMenuState()
 
     // 将 bridge.isMaskShow 的值提取到本地 @State 以便 SwiftUI 能可靠追踪变化
     @State private var isMaskVisible: Bool = true
@@ -54,23 +64,13 @@ struct UnifiedPlayerControlOverlay: View {
     /// 顶部一排控制的目标高度，和返回按钮的 50pt 点击区对齐。
     private let topControlRowHeight: CGFloat = 50
 
-    /// 顶部状态信息仅在全屏时显示，并放在屏幕宽度中心。
-    private var showsCenteredStatusBar: Bool {
-        isFullscreen
-    }
-
     /// 顶部返回按钮与右上角控制层都使用 50pt 行高。
     private var topControlPadding: CGFloat {
         controlPadding
     }
 
-    private var centeredStatusBarTopPadding: CGFloat {
-        5
-    }
-
-    /// 顶部阴影覆盖时间、电池和控制按钮，提升花屏背景下的可读性。
     private var topShadowHeight: CGFloat {
-        (max(topControlPadding + topControlRowHeight, centeredStatusBarTopPadding + 20) + 32) * 0.75
+        (topControlPadding + topControlRowHeight + 32) * 0.75
     }
 
     private var topShadowGradient: some View {
@@ -93,13 +93,21 @@ struct UnifiedPlayerControlOverlay: View {
 
     /// 是否有弹窗/菜单展开
     private var isPopupOpen: Bool {
-        showDanmakuSettings || showVideoSetting || isSettingsPopupOpen || showQualityPanel
+        showDanmakuSettings || showVideoSetting || isSettingsPopupOpen || fullscreenMenu.isPresented
+            || showQualityPanel || showDanmakuIssue
     }
 
     var body: some View {
+        #if canImport(KSPlayer)
+        overlayContent.fullUIPlayerContrast(while: isFullscreen && isMaskVisible, player: contrastPlayer)
+        #else
+        overlayContent
+        #endif
+    }
+
+    private var overlayContent: some View {
         ZStack {
-            // 顶/底部渐变背景（锁定时隐藏）
-            if !bridge.isLocked.wrappedValue {
+            if !isFullscreen && !bridge.isLocked.wrappedValue {
                 topShadowGradient
                     .opacity(isMaskVisible ? 1 : 0)
 
@@ -121,49 +129,20 @@ struct UnifiedPlayerControlOverlay: View {
                 .allowsHitTesting(false)
             }
 
-            // 控制按钮层
-            ZStack {
-                // 左侧中间：锁定按钮（始终显示）
-                lockButton
-
-                // 锁定时隐藏其余所有控制
-                if !bridge.isLocked.wrappedValue {
-                    if showsCenteredStatusBar {
-                        topCenteredStatusBarLayer
-                    }
-
-                    // 左上角：返回按钮
-                    backButtonLayer
-
-                    // 右上角：功能按钮
-                    topRightLayer
-
-                    // 中间：暂停大按钮（加载/缓冲时不显示，避免「页面卡住」错觉，交给 loading overlay）
-                    if !bridge.isPlaying && !bridge.isBuffering && !bridge.isInitialLoading {
-                        Button {
-                            bridge.togglePlayPause()
-                        } label: {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 62, height: 62)
-                                .background(.black.opacity(0.45), in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    // 左下角：播放/暂停、刷新
-                    bottomLeftLayer
-
-                    // 右下角：弹幕、清晰度、全屏
-                    bottomRightLayer
+            Group {
+                if isFullscreen {
+                    fullscreenControls
+                } else {
+                    detailControls
                 }
             }
-            .padding(.leading, controlPadding)
-            .padding(.trailing, controlPadding)
-            .padding(.bottom, controlPadding)
             .opacity(isMaskVisible ? 1 : 0)
             .allowsHitTesting(isMaskVisible)
+            .accessibilityHidden(!isMaskVisible || fullscreenMenu.isPresented)
+            .animation(
+                isFullscreen ? FullUIPlayerChrome.visibilityAnimation(isMaskVisible, reduceMotion: reduceMotion) : nil,
+                value: isMaskVisible
+            )
             // 触摸控制层时重置自动隐藏
             .simultaneousGesture(
                 TapGesture()
@@ -173,6 +152,15 @@ struct UnifiedPlayerControlOverlay: View {
                         }
                     }
             )
+            FullUIPlayerDanmakuStatus(
+                status: viewModel.danmakuConnectionStatus,
+                controlsVisible: isMaskVisible,
+                controlBottomInset: isFullscreen ? FullUIPlayerChrome.inset : controlPadding
+            )
+
+            if isFullscreen && fullscreenMenu.isPresented {
+                fullscreenSettingsMenu
+            }
             // 清晰度选择面板（右侧滑入）
             if showQualityPanel {
                 Color.black.opacity(0.001)
@@ -181,6 +169,15 @@ struct UnifiedPlayerControlOverlay: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+        }
+        .environment(\.colorScheme, .dark)
+        .alert("弹幕连接", isPresented: $showDanmakuIssue) {
+            Button(viewModel.danmuSettings.showDanmu ? "关闭弹幕" : "开启弹幕") {
+                viewModel.danmuSettings.showDanmu.toggle()
+            }
+            Button("关闭", role: .cancel) {}
+        } message: {
+            Text(viewModel.danmakuConnectionIssue ?? "弹幕连接状态已更新")
         }
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         // 双向同步 bridge.isMaskShow ↔ isMaskVisible
@@ -200,29 +197,20 @@ struct UnifiedPlayerControlOverlay: View {
                 cancelAutoHideTimer()
             }
         }
-        .onChange(of: showDanmakuSettings) { _, isShowing in
-            if !isShowing && isMaskVisible && !isPopupOpen {
-                startAutoHideTimer()
-            } else if isShowing {
-                cancelAutoHideTimer()
-            }
-        }
-        .onChange(of: showVideoSetting) { _, isShowing in
-            if !isShowing && isMaskVisible && !isPopupOpen {
-                startAutoHideTimer()
-            } else if isShowing {
-                cancelAutoHideTimer()
-            }
-        }
-        .onChange(of: showQualityPanel) { _, isShowing in
-            if !isShowing && isMaskVisible && !isPopupOpen {
-                startAutoHideTimer()
-            } else if isShowing {
-                cancelAutoHideTimer()
-            }
+        .onChange(of: isFullscreen) { _, _ in
+            isSettingsPopupOpen = false
+            fullscreenMenu.isPresented = false
         }
         .onChange(of: isPopupOpen) { _, isOpen in
             isPopupPresented = isOpen
+            if isOpen {
+                cancelAutoHideTimer()
+            } else if isMaskVisible {
+                startAutoHideTimer()
+            }
+        }
+        .onChange(of: bridge.isPlaying) { _, _ in
+            if isMaskVisible { startAutoHideTimer() }
         }
         .onAppear {
             isMaskVisible = bridge.isMaskShow.wrappedValue
@@ -235,6 +223,179 @@ struct UnifiedPlayerControlOverlay: View {
             cancelAutoHideTimer()
             isPopupPresented = false
         }
+    }
+
+    private var fullscreenSettingsMenu: some View {
+        let inset = FullUIPlayerChrome.inset
+        return ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.001)
+                .ignoresSafeArea()
+                .onTapGesture { fullscreenMenu.isPresented = false }
+                .accessibilityHidden(true)
+
+            FullUIPlaybackMenu(state: fullscreenMenu, timer: playbackTimer)
+                .padding(.trailing, inset)
+                .padding(.top, inset + FullUIPlayerChrome.controlSize + 6)
+                .padding(.bottom, 8)
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
+    }
+
+    private var showsCentralPlay: Bool {
+        !bridge.isPlaying && !bridge.isBuffering && !bridge.isInitialLoading
+    }
+
+    private var detailControls: some View {
+        ZStack {
+            lockButton
+            if !bridge.isLocked.wrappedValue {
+                backButtonLayer
+                topRightLayer
+                if showsCentralPlay {
+                    Button(action: bridge.togglePlayPause) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 62, height: 62)
+                            .background(.black.opacity(0.45), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                bottomLeftLayer
+                bottomRightLayer
+            }
+        }
+        .padding([.horizontal, .bottom], controlPadding)
+    }
+
+    private var fullscreenControls: some View {
+        let inset = FullUIPlayerChrome.inset
+        let locked = bridge.isLocked.wrappedValue
+        let safeArea = windowContext?.window?.safeAreaInsets ?? .zero
+        let videoCenterOffset = (safeArea.bottom - safeArea.top) / 2
+
+        return ZStack(alignment: .leading) {
+            chromeButton(locked ? "lock.fill" : "lock.open", label: locked ? "解锁" : "锁定") {
+                bridge.isLocked.wrappedValue.toggle()
+            }
+            .fullUIPlayerGlass(in: Circle())
+            .fullUIPlayerShadow(in: Circle())
+            .offset(y: videoCenterOffset)
+
+            if !locked {
+                VStack(spacing: 0) {
+                    fullscreenTopBar
+                    Spacer(minLength: 0)
+                    fullscreenBottomBar
+                }
+
+                if showsCentralPlay {
+                    Button(action: bridge.togglePlayPause) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .fullUIPlayerGlass(in: Circle())
+                    .fullUIPlayerShadow(in: Circle())
+                    .frame(maxWidth: .infinity)
+                    .offset(y: videoCenterOffset)
+                    .accessibilityLabel("播放")
+                }
+            }
+        }
+        .padding(inset)
+    }
+
+    private var fullscreenTopBar: some View {
+        HStack(spacing: 12) {
+            chromeButton("chevron.backward", label: "返回", action: handleBackButton)
+                .fullUIPlayerGlass(in: Circle())
+                .fullUIPlayerShadow(in: Circle())
+
+            FullUIPlayerName(
+                viewModel.currentRoom.userName.isEmpty ? viewModel.currentRoom.roomTitle : viewModel.currentRoom.userName,
+                font: .systemFont(ofSize: 13, weight: .semibold)
+            )
+            .foregroundStyle(.white)
+            .fullUIPlayerMediaText()
+            Spacer(minLength: 0)
+
+            FullUIPlayerGlassGroup {
+                if bridge.supportsPictureInPicture {
+                    chromeButton("pip", label: "画中画", action: bridge.togglePictureInPicture)
+                }
+                scaleModeMenu
+                settingsButton(fullscreen: true)
+            }
+        }
+    }
+
+    private var fullscreenBottomBar: some View {
+        HStack {
+            FullUIPlayerGlassGroup {
+                chromeButton(bridge.isPlaying ? "pause.fill" : "play.fill", label: bridge.isPlaying ? "暂停" : "播放") {
+                    bridge.togglePlayPause()
+                }
+                chromeButton("arrow.counterclockwise", label: "刷新", action: bridge.refreshPlayback)
+                    .disabled(viewModel.isLoading)
+            }
+
+            Spacer(minLength: 12)
+
+            FullUIPlayerGlassGroup {
+                danmakuButton(size: FullUIPlayerChrome.controlSize)
+                qualityMenu
+                chromeButton(fullscreenIconName, label: "退出全屏", action: toggleOrientationOrFullscreen)
+            }
+        }
+    }
+
+    private func danmakuButton(size: CGFloat) -> some View {
+        Button {
+            if viewModel.danmakuConnectionIssue != nil {
+                showDanmakuIssue = true
+            } else {
+                viewModel.danmuSettings.showDanmu.toggle()
+            }
+        } label: {
+            Image(systemName: viewModel.danmuSettings.showDanmu ? "captions.bubble.fill" : "captions.bubble")
+                .font(FullUIPlayerChrome.symbolFont)
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("弹幕开关")
+        .accessibilityValue(viewModel.danmakuConnectionIssue == nil ? "" : "连接异常")
+        .overlay(alignment: .topTrailing) {
+            if viewModel.danmakuConnectionIssue != nil {
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 5, height: 5)
+                    .padding(size == 30 ? 3 : 8)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private func chromeButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            chromeSymbol(symbol)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private func chromeSymbol(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(FullUIPlayerChrome.symbolFont)
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
     }
 
     // MARK: - Lock Button
@@ -287,18 +448,7 @@ struct UnifiedPlayerControlOverlay: View {
         .transition(.opacity)
     }
 
-    // MARK: - Top Center / Top Right
-
-    private var topCenteredStatusBarLayer: some View {
-        VStack {
-            statusBarContent
-                .frame(maxWidth: .infinity)
-                .padding(.top, centeredStatusBarTopPadding)
-            Spacer()
-        }
-        .allowsHitTesting(false)
-        .transition(.opacity)
-    }
+    // MARK: - Detail Top Right
 
     private var topRightLayer: some View {
         VStack(spacing: 0) {
@@ -317,24 +467,7 @@ struct UnifiedPlayerControlOverlay: View {
                         .buttonStyle(.plain)
                     }
 
-                    // 画面缩放（仅横屏/全屏时显示）
-                    if isFullscreen {
-                        scaleModeMenu
-                    }
-
-                    SettingsButton(
-                        showVideoSetting: $showVideoSetting,
-                        showDanmakuSettings: $showDanmakuSettings,
-                        onDismiss: { dismiss() },
-                        onPopupStateChanged: { isOpen in
-                            isSettingsPopupOpen = isOpen
-                            if isOpen {
-                                cancelAutoHideTimer()
-                            } else if isMaskVisible {
-                                startAutoHideTimer()
-                            }
-                        }
-                    )
+                    settingsButton(fullscreen: false)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -345,6 +478,17 @@ struct UnifiedPlayerControlOverlay: View {
         }
         .padding(.top, topControlPadding)
         .transition(.opacity)
+    }
+
+    private func settingsButton(fullscreen: Bool) -> some View {
+        SettingsButton(
+            showVideoSetting: $showVideoSetting,
+            showDanmakuSettings: $showDanmakuSettings,
+            onDismiss: { dismiss() },
+            onPopupStateChanged: { isSettingsPopupOpen = $0 },
+            fullscreenMenu: fullscreen ? fullscreenMenu : nil,
+            playbackTimer: playbackTimer
+        )
     }
 
     // MARK: - Bottom Left (Play/Pause + Refresh)
@@ -391,15 +535,7 @@ struct UnifiedPlayerControlOverlay: View {
             HStack {
                 Spacer()
                 HStack(spacing: 16) {
-                    Button {
-                        viewModel.danmuSettings.showDanmu.toggle()
-                    } label: {
-                        Image(systemName: viewModel.danmuSettings.showDanmu ? "captions.bubble.fill" : "captions.bubble")
-                            .frame(width: 30, height: 30)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.plain)
+                    danmakuButton(size: 30)
 
                     qualityMenu
 
@@ -420,76 +556,27 @@ struct UnifiedPlayerControlOverlay: View {
         }
     }
 
-    // MARK: - Status Bar Content
-
-    @ViewBuilder
-    private var statusBarContent: some View {
-        HStack(spacing: 4) {
-            Text(statusBarVM.formattedTime)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
-            Image(systemName: statusBarVM.batteryIconName)
-                .font(.system(size: 11))
-                .foregroundStyle(statusBarVM.batteryColor)
-        }
-    }
-
     // MARK: - Quality Menu
 
     private var qualityMenu: some View {
         Button {
             showQualityPanel = true
         } label: {
-            Text(viewModel.currentPlayQualityString)
-                .foregroundStyle(.white)
+            if isFullscreen {
+                let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+                let width = ("清晰度清晰度" as NSString).size(withAttributes: [.font: font]).width
+                FullUIPlayerName(viewModel.currentPlayQualityString, font: font, maximumWidth: width)
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 12)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            } else {
+                Text(viewModel.currentPlayQualityString)
+                    .foregroundStyle(.white)
+            }
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Legacy Quality Menu (commented out for rollback)
-    /*
-    private var qualityMenuLegacy: some View {
-        Menu {
-            if let playArgs = viewModel.currentRoomPlayArgs {
-                ForEach(displayedCDNIndices(from: playArgs), id: \.self) { cdnIndex in
-                    let cdn = playArgs[cdnIndex]
-                    Menu {
-                        ForEach(displayedQualityIndices(from: cdn), id: \.self) { urlIndex in
-                            let quality = cdn.qualitys[urlIndex]
-                            Button {
-                                viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
-                            } label: {
-                                HStack {
-                                    Text(RoomPlaybackResolver.qualityDisplayTitle(quality, in: playArgs))
-                                    if viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
-                    }
-                }
-            }
-        } label: {
-            Text(viewModel.currentPlayQualityString)
-                .foregroundStyle(.white)
-        }
-        .menuIndicator(.hidden)
-        .menuStyle(.borderlessButton)
-        .tint(.primary)
-    }
-    */
-
-    private func displayedCDNIndices(from playArgs: [LiveQualityModel]) -> [Int] {
-        let indices = Array(playArgs.indices)
-        return isFullscreen ? Array(indices.reversed()) : indices
-    }
-
-    private func displayedQualityIndices(from cdn: LiveQualityModel) -> [Int] {
-        let indices = Array(cdn.qualitys.indices)
-        return isFullscreen ? Array(indices.reversed()) : indices
     }
 
     // MARK: - Scale Mode Menu
@@ -510,12 +597,10 @@ struct UnifiedPlayerControlOverlay: View {
                 }
             }
         } label: {
-            Image(systemName: videoScaleMode.iconName)
-                .frame(width: 30, height: 30)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
+            chromeSymbol("aspectratio")
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .accessibilityLabel("画面比例")
         .tint(.primary)
     }
 
@@ -603,9 +688,10 @@ struct UnifiedPlayerControlOverlay: View {
 
     private func startAutoHideTimer() {
         autoHideTask?.cancel()
+        if isFullscreen && (!bridge.isPlaying || voiceOverEnabled || bridge.isLocked.wrappedValue) { return }
         autoHideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if !Task.isCancelled && !isPopupOpen {
+            if !Task.isCancelled && !isPopupOpen && (!isFullscreen || (bridge.isPlaying && !voiceOverEnabled && !bridge.isLocked.wrappedValue)) {
                 isMaskVisible = false
             }
         }

@@ -26,7 +26,6 @@ struct VerticalLiveControllerView: View {
     @Environment(\.verticalLiveControlsVisible) private var controlsVisible
     @Environment(\.verticalLiveControlPopupPresented) private var controlPopupPresented
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var backTapped = false
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
     @State private var showQualityPanel = false
@@ -47,19 +46,21 @@ struct VerticalLiveControllerView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let visible = controlsVisible.wrappedValue
             ZStack {
                 ZStack {
-                    topBar
+                    topBar(maximumStreamerWidth: max(0, geometry.size.width - 2 * FullUIPlayerChrome.inset) * 0.46)
 
                     bottomLeftArea
                         .allowsHitTesting(false)
 
                     bottomRightArea
                 }
-                .offset(x: controlsVisible.wrappedValue || reduceMotion ? 0 : -geometry.size.width)
-                .opacity(controlsVisible.wrappedValue ? 1 : 0)
-                .allowsHitTesting(controlsVisible.wrappedValue)
-                .accessibilityHidden(!controlsVisible.wrappedValue)
+                .opacity(visible ? 1 : 0)
+                .allowsHitTesting(visible)
+                .accessibilityHidden(!visible)
+
+                FullUIPlayerDanmakuStatus(status: viewModel.danmakuConnectionStatus, controlsVisible: visible)
 
                 // 面板独立于清屏动画；展开时不接收底层清屏手势。
                 if showQualityPanel {
@@ -72,7 +73,11 @@ struct VerticalLiveControllerView: View {
             }
             .clipped()
         }
-        .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.28), value: controlsVisible.wrappedValue)
+        .fullUIPlayerContrast(while: controlsVisible.wrappedValue) { model.config.playerLayer?.player }
+        .animation(
+            FullUIPlayerChrome.visibilityAnimation(controlsVisible.wrappedValue, reduceMotion: reduceMotion),
+            value: controlsVisible.wrappedValue
+        )
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         .environment(\.colorScheme, .dark)
         .onChange(of: showQualityPanel || showStreamerInfo, initial: true) { _, presented in
@@ -85,83 +90,26 @@ struct VerticalLiveControllerView: View {
 
     // MARK: - 顶部信息栏
 
-    private var topBar: some View {
+    private func topBar(maximumStreamerWidth: CGFloat) -> some View {
         VStack {
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Button {
-                    backTapped.toggle()
                     dismiss()
                 } label: {
                     Image(systemName: "chevron.backward")
-                        .fontWeight(.medium)
+                        .font(FullUIPlayerChrome.symbolFont)
                         .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.backplate), in: RoundedRectangle(cornerRadius: 20))
-                        .adaptiveGlassEffect(in: .rect(cornerRadius: 20.0))
-                        .padding(5)
-                        .contentShape(Rectangle())
+                        .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                        .fullUIPlayerGlass(in: Circle())
+                        .fullUIPlayerShadow(in: Circle())
+                        .contentShape(Circle())
                 }
-                .padding(-5)
+                .buttonStyle(.plain)
+                .accessibilityLabel("返回")
 
-                // 主播信息
-                HStack(spacing: 10) {
-                    Button {
-                        showStreamerInfo = true
-                    } label: {
-                        Group {
-                            if !viewModel.currentRoom.userHeadImg.isEmpty,
-                               let avatarURL = URL(string: viewModel.currentRoom.userHeadImg) {
-                                KFAnimatedImage(avatarURL)
-                                    .configure { view in
-                                        view.framePreloadCount = 2
-                                    }
-                                    .placeholder { verticalAvatarFallback }
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                verticalAvatarFallback
-                            }
-                        }
-                        .frame(width: 36, height: 36)
-                        .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(String(viewModel.currentRoom.userName.prefix(10)).orDash)
-                            .foregroundStyle(.white)
-                            .font(.subheadline.bold())
-                            .lineLimit(1)
-
-                        // 直播间热度
-                        HStack(spacing: 6) {
-                            Image(systemName: "flame.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                            Text(formatPopularity(viewModel.currentRoom.liveWatchedCount ?? "0"))
-                                .foregroundStyle(.white)
-                                .font(.caption)
-                        }
-                    }
-
-                    // 收藏按钮
-                    Button {
-                        Task {
-                            await toggleFavorite()
-                        }
-                    } label: {
-                        Image(systemName: isFavorited ? "heart.fill" : "heart")
-                            .font(.system(size: 16))
-                            .foregroundStyle(isFavorited ? .red : .white)
-                            .frame(width: 28, height: 28)
-                            .symbolEffect(.bounce, value: isFavoriteAnimating)
-                    }
-                    .ksBorderlessButton()
+                FullUIPlayerGlassGroup {
+                    streamerControls(maximumWidth: maximumStreamerWidth)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.backplate), in: Capsule())
-                .adaptiveGlassEffect(in: .capsule)
-                .clipShape(Capsule())
                 .sheet(isPresented: $showStreamerInfo) {
                     StreamerInfoSheet(room: viewModel.currentRoom)
                         .presentationDetents([.medium, .large])
@@ -170,9 +118,50 @@ struct VerticalLiveControllerView: View {
 
                 Spacer()
             }
-            .padding(.horizontal)
+            .padding(.horizontal, FullUIPlayerChrome.inset)
+            .padding(.top, FullUIPlayerChrome.inset)
             Spacer()
         }
+    }
+
+    private func streamerControls(maximumWidth: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                showStreamerInfo = true
+            } label: {
+                HStack(spacing: 8) {
+                    avatar
+                    FullUIPlayerName(viewModel.currentRoom.userName.orDash, font: .systemFont(ofSize: 13, weight: .semibold))
+                        .layoutPriority(1)
+
+                    if let popularity = FullUIPlayerDisplay.popularityTitle(viewModel.currentRoom.liveWatchedCount) {
+                        Label(popularity, systemImage: "flame.fill")
+                            .labelStyle(FullUIPlayerHeatLabelStyle())
+                            .fixedSize()
+                    }
+                }
+                .padding(.leading, 8)
+                .frame(minHeight: FullUIPlayerChrome.controlSize)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                Task { await toggleFavorite() }
+            } label: {
+                Image(systemName: isFavorited ? "heart.fill" : "heart")
+                    .font(FullUIPlayerChrome.symbolFont)
+                    .foregroundStyle(isFavorited ? .red : .white)
+                    .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                    .contentShape(Rectangle())
+                    .symbolEffect(.bounce, value: isFavoriteAnimating)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isFavorited ? "取消收藏" : "收藏")
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: maximumWidth, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     // MARK: - 左下角区域：弹幕气泡
@@ -193,13 +182,29 @@ struct VerticalLiveControllerView: View {
 
                 Spacer()
             }
-            .padding(.leading)
+            .padding(.leading, FullUIPlayerChrome.inset)
         }
     }
 
     // MARK: - Helper Methods
 
-    /// 格式化热度数值
+    private var avatar: some View {
+        Group {
+            if !viewModel.currentRoom.userHeadImg.isEmpty,
+               let avatarURL = URL(string: viewModel.currentRoom.userHeadImg) {
+                KFAnimatedImage(avatarURL)
+                    .configure { view in view.framePreloadCount = 2 }
+                    .placeholder { verticalAvatarFallback }
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                verticalAvatarFallback
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
     /// 头像兜底（URL 空 / 加载失败）
     private var verticalAvatarFallback: some View {
         Circle()
@@ -211,14 +216,6 @@ struct VerticalLiveControllerView: View {
                     .foregroundStyle(.white.opacity(0.8))
                     .padding(5)
             )
-    }
-
-    private func formatHeat(_ value: Int) -> String {
-        if value >= 10000 {
-            return String(format: "%.1f万", Double(value) / 10000.0)
-        } else {
-            return "\(value)"
-        }
     }
 
     @MainActor
@@ -266,10 +263,11 @@ struct VerticalLiveControllerView: View {
                     },
                     onRefreshPlayback: refreshPlayback,
                     supportsPictureInPicture: supportsPictureInPicture,
-                    onTogglePictureInPicture: togglePictureInPicture
+                    onTogglePictureInPicture: togglePictureInPicture,
+                    showsDanmakuConnectionIssue: true
                 )
             }
-            .padding(.trailing, 16)
+            .padding(.trailing, FullUIPlayerChrome.inset)
         }
     }
 
@@ -301,36 +299,14 @@ struct VerticalLiveControllerView: View {
     }
 }
 
-// MARK: - Glass Effect Extension
-private extension View {
-    @ViewBuilder
-    func adaptiveGlassEffect(in shape: GlassEffectShape) -> some View {
-        if #available(iOS 26.0, *) {
-            switch shape {
-            case .rect(let radius):
-                self.glassEffect(in: .rect(cornerRadius: radius))
-            case .circle:
-                self.glassEffect()
-            case .capsule:
-                self.glassEffect(in: .capsule)
-            }
-        } else {
-            switch shape {
-            case .rect(let radius):
-                self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius))
-            case .circle:
-                self.background(.ultraThinMaterial, in: Circle())
-            case .capsule:
-                self.background(.ultraThinMaterial, in: Capsule())
-            }
+private struct FullUIPlayerHeatLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 3) {
+            configuration.icon.foregroundStyle(.orange)
+            configuration.title
         }
+        .font(.system(size: 12))
     }
-}
-
-private enum GlassEffectShape {
-    case rect(cornerRadius: CGFloat)
-    case circle
-    case capsule
 }
 
 #endif
