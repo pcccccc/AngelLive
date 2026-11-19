@@ -18,6 +18,9 @@ struct TVFullPluginManagementView: View {
     @State private var hasChecked = false
     @State private var installedIDs: [String] = []
     @State private var availableIDs: [String] = []
+    @State private var seenInstallSuccesses: Set<String> = []
+    @State private var seenUpdateSuccesses: Set<String> = []
+    @State private var completionDeadlines: [String: ContinuousClock.Instant] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(pluginSourceManager: PluginSourceManager, pluginAvailability: PluginAvailabilityService,
@@ -43,17 +46,19 @@ struct TVFullPluginManagementView: View {
     }
 
     var body: some View {
+        let completingIDs = Set(completionDeadlines.keys)
+        let nextCompletionDeadline = completionDeadlines.values.min()
         ScrollView {
             VStack(alignment: .leading, spacing: TVPluginLayout.sectionSpacing) {
                 TVPluginManagementHeader(manager: pluginSourceManager, ids: installedIDs,
                     hasChecked: hasChecked, focus: $focusedAction,
                     summaryAction: performSummaryAction, check: checkUpdates, sources: openSources)
                 TVPluginShelf(title: "已安装", ids: installedIDs, installed: true,
-                    manager: pluginSourceManager, availability: pluginAvailability,
+                    completingIDs: completingIDs, manager: pluginSourceManager, availability: pluginAvailability,
                     focus: $focusedAction, open: openPlugin, action: performPluginAction,
                     emptyAction: openSources)
                 TVPluginShelf(title: "发现", ids: availableIDs, installed: false,
-                    manager: pluginSourceManager, availability: pluginAvailability,
+                    completingIDs: completingIDs, manager: pluginSourceManager, availability: pluginAvailability,
                     focus: $focusedAction, open: openPlugin, action: performPluginAction,
                     emptyAction: openSources)
                 if let message = pluginSourceManager.errorMessage {
@@ -88,6 +93,8 @@ struct TVFullPluginManagementView: View {
         }
         .onPlayPauseCommand(perform: undoUninstall)
         .task {
+            seenInstallSuccesses = installSuccesses
+            seenUpdateSuccesses = updateSuccesses
             rebuildShelves()
             await reloadCatalog()
             if let action = appViewModel.pendingPluginManagementAction {
@@ -95,6 +102,18 @@ struct TVFullPluginManagementView: View {
                 await runAutoAction(action)
             }
         }
+        .task(id: nextCompletionDeadline) {
+            guard let nextCompletionDeadline else { return }
+            let clock = ContinuousClock()
+            do { try await clock.sleep(until: nextCompletionDeadline) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            let now = clock.now
+            completionDeadlines = completionDeadlines.filter { $0.value > now }
+            rebuildShelves()
+        }
+        .onChange(of: installSuccesses) { rebuildShelves() }
+        .onChange(of: updateSuccesses) { rebuildShelves() }
         .onChange(of: pluginAvailability.catalogRevision) { rebuildShelves() }
         .onChange(of: pluginSourceManager.remotePlugins.map(\.id)) { rebuildShelves() }
         .onChange(of: deferredUninstall.pendingUninstallPluginId) {
@@ -122,16 +141,41 @@ struct TVFullPluginManagementView: View {
         }
     }
 
+    private var installSuccesses: Set<String> {
+        Set(pluginSourceManager.installBatch.outcomes.compactMap { $0.value == .installed ? $0.key : nil })
+    }
+
+    private var updateSuccesses: Set<String> {
+        Set(pluginSourceManager.updateBatch.outcomes.compactMap { $0.value == .updated ? $0.key : nil })
+    }
+
     private func rebuildShelves() {
+        let installs = installSuccesses
+        let updates = updateSuccesses
+        let completed = installs.subtracting(seenInstallSuccesses).union(updates.subtracting(seenUpdateSuccesses))
+        seenInstallSuccesses = installs
+        seenUpdateSuccesses = updates
+        let deadline = ContinuousClock().now.advanced(by: TVPluginLayout.completionFeedbackDuration)
+        for id in completed { completionDeadlines[id] = deadline }
+
         let pending = deferredUninstall.pendingUninstallPluginId
+        // Let a discovery card finish showing its check before moving it to the installed shelf.
+        let completedDiscoveries = Set(availableIDs).intersection(installs)
         var seen = Set<String>()
         installedIDs = pluginAvailability.installedPluginIds.filter {
-            $0 != pending && pluginSourceManager.installedVersion(for: $0) != nil && seen.insert($0).inserted
+            $0 != pending && pluginSourceManager.installedVersion(for: $0) != nil &&
+                !(completedDiscoveries.contains($0) && completionDeadlines[$0] != nil) && seen.insert($0).inserted
         }
+        let installedSet = Set(installedIDs)
         seen.removeAll()
         availableIDs = pluginSourceManager.remotePlugins.compactMap {
-            pluginSourceManager.installedVersion(for: $0.id) == nil && $0.id != pending &&
-                seen.insert($0.id).inserted ? $0.id : nil
+            let id = $0.id
+            let staysInDiscovery = completedDiscoveries.contains(id) && !installedSet.contains(id)
+            return id != pending && (staysInDiscovery || pluginSourceManager.installedVersion(for: id) == nil) &&
+                seen.insert(id).inserted ? id : nil
+        }
+        if case .available(let id) = focusedAction, installedSet.contains(id), !availableIDs.contains(id) {
+            focusedAction = .installed(id)
         }
     }
 
@@ -145,6 +189,7 @@ struct TVFullPluginManagementView: View {
     private func restoreManagementFocus() {
         switch focusToRestore {
         case .installed(let id) where !installedIDs.contains(id): focusedAction = .summary
+        case .available(let id) where installedIDs.contains(id): focusedAction = .installed(id)
         case .available(let id) where !availableIDs.contains(id): focusedAction = .summary
         default: focusedAction = focusToRestore
         }
@@ -208,6 +253,8 @@ struct TVFullPluginManagementView: View {
 
     private func stopOperation() {
         operation?.cancel()
+        let ids = pluginSourceManager.installBatch.pluginIds + pluginSourceManager.updateBatch.pluginIds
+        for id in ids { pluginSourceManager.cancelInstallation(pluginId: id) }
         if consentService.isPresenting { consentService.resolve(false) }
     }
 
@@ -218,8 +265,11 @@ struct TVFullPluginManagementView: View {
     }
 
     private func performPluginAction(_ id: String) {
-        let phase = TVPluginStatus.phase(id, manager: pluginSourceManager)
-        if phase == .progress || phase == .queued { stopOperation(); return }
+        guard !consentService.isPresenting else { return }
+        if pluginSourceManager.isPendingInstallation(for: id) {
+            pluginSourceManager.cancelInstallation(pluginId: id)
+            return
+        }
         guard !pluginSourceManager.isManagementBusy else { return }
         if pluginSourceManager.installedVersion(for: id) != nil {
             if pluginSourceManager.hasUpdate(for: id) { updatePlugins([id]) }
@@ -329,16 +379,19 @@ private struct TVFullPluginDetailView: View {
     private var phase: PluginManagementRowPhase { TVPluginStatus.phase(pluginID, manager: manager) }
 
     var body: some View {
+        let phase = phase
+        let activity = consent.isPresenting ? nil : TVPluginInstallationActivity(phase: phase, manager: manager, pluginID: pluginID)
+        let canStop = manager.isPendingInstallation(for: pluginID)
         TVFullDualColumnLayout {
             TVPluginDetailInformation(pluginID: pluginID, manager: manager, availability: availability,
                 loggedIn: credentials.isLoggedIn(pluginId: pluginID))
         } right: {
             VStack(alignment: .leading, spacing: TVPluginLayout.actionSpacing) {
-                TVPluginConfirmRow(title: primaryTitle, symbol: primarySymbol,
+                TVPluginConfirmRow(title: activity.map { canStop ? "\($0.title) · 停止" : $0.title } ?? primaryTitle,
+                    symbol: primarySymbol,
                     confirmation: consent.isPresenting || (!installed && needsLogin && (phase == .install || isInstallFailure))
                         ? "需要登录 · 再按一次继续安装" : nil,
-                    destructive: false,
-                    disabled: !consent.isPresenting && manager.isManagementBusy && phase != .progress && phase != .queued,
+                    installation: activity, showsInstallationStop: canStop,
                     cancel: { if consent.isPresenting { consent.resolve(false) } },
                     action: primaryAction)
                     .focused($focus, equals: .detailAction)
@@ -391,15 +444,14 @@ private struct TVFullPluginDetailView: View {
         switch phase {
         case .install: return "安装"
         case .update: return "更新到 \(remote?.item.version ?? "")"
-        case .queued, .progress: return "停止当前批次"
-        case .failed: return installed ? "重试更新" : "重试安装"
-        case .success, .idle: return "已是最新版本"
+        case .queued, .progress: return "停止"
+        case .failed: return "重试"
+        case .success, .idle: return "已安装"
         }
     }
 
     private var primarySymbol: String {
         switch phase {
-        case .queued, .progress: "stop.fill"
         case .failed: "arrow.clockwise"
         case .success, .idle: "checkmark"
         default: "arrow.down.circle"
@@ -408,10 +460,19 @@ private struct TVFullPluginDetailView: View {
 
     private func primaryAction() {
         if consent.isPresenting { consent.resolve(true); return }
-        if installed { performAction(pluginID); return }
-        if phase == .progress || phase == .queued { performAction(pluginID); return }
-        guard remote != nil, !manager.isManagementBusy else { return }
-        install(pluginID)
+        if manager.isPendingInstallation(for: pluginID) {
+            manager.cancelInstallation(pluginId: pluginID)
+            return
+        }
+        guard !manager.isManagementBusy else { return }
+        switch phase {
+        case .update: performAction(pluginID)
+        case .install where remote != nil: install(pluginID)
+        case .failed:
+            if installed { performAction(pluginID) }
+            else if remote != nil { install(pluginID) }
+        default: break
+        }
     }
 
     private func close() {
@@ -426,6 +487,7 @@ private struct TVPluginDetailInformation: View {
     let availability: PluginAvailabilityService
     let loggedIn: Bool
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.colorSchemeContrast) private var contrast
     @State private var features: [PlatformFeature] = []
 
     var body: some View {
@@ -448,8 +510,8 @@ private struct TVPluginDetailInformation: View {
                 ? (loggedIn ? "已登录" : "需要登录") : "不需要登录")
                 .foregroundStyle(.secondary)
             if case .failed(let reason) = TVPluginStatus.phase(pluginID, manager: manager) {
-                Label(reason, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(TVPluginLayout.failure).lineLimit(1)
+                Label(TVPluginStatus.failureReason(reason), systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(contrast == .increased ? Color.primary : TVPluginLayout.failure).lineLimit(1)
             }
             if !features.isEmpty {
                 TVPluginTagFlowLayout(spacing: TVPluginLayout.infoSpacing, layoutDirection: layoutDirection) {

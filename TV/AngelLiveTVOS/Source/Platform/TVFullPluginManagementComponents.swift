@@ -17,10 +17,16 @@ nonisolated enum TVPluginLayout {
     static let brandWashOpacity: CGFloat = 0.12
     static let discoveryWidth: CGFloat = 420
     static let discoveryHeight: CGFloat = 140
+    static let discoveryIconSide: CGFloat = 86
     static let cornerRadius: CGFloat = 22
     static let summaryHeight: CGFloat = 190
     static let actionContentHeight: CGFloat = 50
     static let actionSpacing: CGFloat = 24
+    static let actionSymbolSide: CGFloat = 36
+    static let cardStatusSymbolSide: CGFloat = 58
+    static let progressLineWidth: CGFloat = 3
+    static let progressStopSide: CGFloat = 12
+    static let completionFeedbackDuration: Duration = .milliseconds(900)
     static let destructiveSpacing: CGFloat = 44
     static let infoSpacing: CGFloat = 14
     static let detailIcon: CGFloat = 240
@@ -39,7 +45,7 @@ nonisolated enum TVPluginLayout {
 enum TVPluginStatus {
     static func resolve(manager: PluginSourceManager, ids: [String], hasChecked: Bool) -> PluginManagementSummaryState {
         PluginManagementSummaryState.resolve(
-            isRunning: manager.updateBatch.isRunning || manager.installBatch.isRunning || manager.isInstalling,
+            isRunning: manager.activeInstallationCount > 0,
             hasFailures: !manager.updateBatch.failedPluginIds.isEmpty ||
                 !manager.installBatch.failedPluginIds.isEmpty ||
                 manager.sourceHealth.values.contains(where: \.isFailed),
@@ -49,21 +55,47 @@ enum TVPluginStatus {
     }
 
     static func phase(_ id: String, manager: PluginSourceManager) -> PluginManagementRowPhase {
-        PluginManagementRowPhase.resolve(
-            actionState: manager.managementActionState(for: id, remote: manager.remotePlugins.first { $0.id == id }),
-            isWaiting: manager.isWaitingForUpdate(for: id),
-            isSuccessful: manager.updateBatch.outcomes[id] == .updated || manager.installBatch.outcomes[id] == .installed)
+        let action = manager.managementActionState(for: id, remote: manager.remotePlugins.first { $0.id == id })
+        let isWaiting = manager.isPendingInstallation(for: id) &&
+            manager.installBatch.currentPluginId != id && manager.updateBatch.currentPluginId != id
+        return PluginManagementRowPhase.resolve(
+            actionState: action,
+            isWaiting: isWaiting,
+            isSuccessful: action == .installed &&
+                (manager.updateBatch.outcomes[id] == .updated || manager.installBatch.outcomes[id] == .installed))
     }
 
-    static func subtitle(_ phase: PluginManagementRowPhase, version: String?) -> String {
+    static func failureReason(_ reason: String) -> String {
+        SupportDiagnosticSanitizer.text(reason, limit: 512)
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+}
+
+enum TVPluginInstallationActivity: Equatable {
+    case queued
+    case preparing
+    case progress(PluginInstallationProgress)
+
+    init?(phase: PluginManagementRowPhase, manager: PluginSourceManager, pluginID: String) {
         switch phase {
-        case .idle: version ?? "已安装"
-        case .install: "按下查看并安装"
-        case .update: "有更新"
+        case .queued: self = .queued
+        case .progress: self = manager.installationProgress(for: pluginID).map(Self.progress) ?? .preparing
+        default: return nil
+        }
+    }
+
+    var title: String {
+        switch self {
         case .queued: "等待中"
-        case .progress: "正在处理"
-        case .success: "已完成"
-        case .failed: "操作失败"
+        case .preparing: "正在准备"
+        case .progress(.downloading(let fraction)):
+            if let fraction {
+                "已下载 \(fraction.formatted(.percent.precision(.fractionLength(0))))"
+            } else {
+                "正在下载"
+            }
+        case .progress(.verifyingAndExtracting): "校验和解压中"
+        case .progress(.activating): "正在激活"
         }
     }
 }
@@ -133,30 +165,16 @@ private struct TVPluginSummaryCard: View {
             }
             .padding(.horizontal, 32)
             .frame(height: TVPluginLayout.summaryHeight)
-            .overlay(alignment: .bottom) {
-                if case .running = state {
-                    ProgressView(value: progress).tint(TVPluginLayout.activity).padding(.horizontal, 24)
-                }
-            }
         }
         .buttonStyle(.card)
         .accessibilityIdentifier("plugins.summary")
     }
 
-    private var progress: Double {
-        if manager.updateBatch.isRunning {
-            return Double(manager.updateBatch.completedCount) / Double(max(1, manager.updateBatch.pluginIds.count))
-        }
-        return Double(manager.installBatch.completedCount) / Double(max(1, manager.installBatch.pluginIds.count))
-    }
-
     private var title: String {
         switch state {
         case .running:
-            let update = manager.updateBatch
-            let install = manager.installBatch
-            return update.isRunning ? "正在更新 \(update.completedCount) / \(update.pluginIds.count)" :
-                "正在安装 \(install.completedCount) / \(install.pluginIds.count)"
+            let count = manager.activeInstallationCount
+            return manager.updateBatch.isRunning ? "正在更新 \(count) 个插件" : "正在安装 \(count) 个插件"
         case .failed: return "部分操作未完成"
         case .updates(let count): return "\(count) 个更新可用"
         case .checking: return "正在检查更新"
@@ -180,7 +198,7 @@ private struct TVPluginSummaryCard: View {
 
     private var hint: String {
         switch state {
-        case .running: "按下停止当前批次"
+        case .running: "全部停止"
         case .failed: "按下重试"
         case .updates: "按下全部更新"
         case .checking: "请稍候"
@@ -211,6 +229,7 @@ struct TVPluginShelf: View {
     let title: String
     let ids: [String]
     let installed: Bool
+    let completingIDs: Set<String>
     let manager: PluginSourceManager
     let availability: PluginAvailabilityService
     let focus: FocusState<TVFullPluginFocus?>.Binding
@@ -232,7 +251,7 @@ struct TVPluginShelf: View {
                     HStack(alignment: .top, spacing: TVPluginLayout.cardSpacing) {
                         ForEach(ids, id: \.self) { id in
                             TVPluginShelfCard(pluginID: id, installed: installed, manager: manager,
-                                availability: availability, focus: focus,
+                                availability: availability, showsCompletion: completingIDs.contains(id), focus: focus,
                                 open: { open(id, .detailAction) }, action: { action(id) },
                                 uninstall: { open(id, .detailUninstall) })
                         }
@@ -253,43 +272,47 @@ private struct TVPluginShelfCard: View {
     let installed: Bool
     let manager: PluginSourceManager
     let availability: PluginAvailabilityService
+    let showsCompletion: Bool
     let focus: FocusState<TVFullPluginFocus?>.Binding
     let open: () -> Void
     let action: () -> Void
     let uninstall: () -> Void
+    @Environment(\.colorSchemeContrast) private var contrast
     private var phase: PluginManagementRowPhase { TVPluginStatus.phase(pluginID, manager: manager) }
 
     var body: some View {
         let name = manager.managementDisplayName(for: pluginID)
+        let remote = manager.remotePlugins.first { $0.id == pluginID }?.item
+        let phase = phase
+        let activity = TVPluginInstallationActivity(phase: phase, manager: manager, pluginID: pluginID)
+        let subtitle = subtitle(phase: phase, activity: activity, requiresLogin: remote?.auth?.required == true)
         Button(action: open) {
             if installed {
-                TVPluginInstalledArtwork(pluginID: pluginID, name: name,
-                    remote: manager.remotePlugins.first { $0.id == pluginID }?.item,
-                    revision: availability.catalogRevision, phase: phase)
+                TVPluginInstalledArtwork(pluginID: pluginID, name: name, remote: remote,
+                    revision: availability.catalogRevision, phase: phase, activity: activity,
+                    showsCompletion: showsCompletion)
                     .hoverEffect(.highlight)
                 Text(name).font(.headline).lineLimit(1)
                     .frame(width: TVPluginLayout.cardWidth, alignment: .leading)
-                Text(TVPluginStatus.subtitle(phase, version: manager.installedVersion(for: pluginID)))
-                    .font(.caption).foregroundStyle(phaseColor).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(captionColor(phase)).lineLimit(1)
                     .frame(width: TVPluginLayout.cardWidth, alignment: .leading)
             } else {
-                ZStack {
-                    HStack(spacing: 24) {
-                        TVPluginManagementIcon(pluginID: pluginID, name: name,
-                            remote: manager.remotePlugins.first { $0.id == pluginID }?.item,
-                            size: 86, revision: availability.catalogRevision)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(name).font(.headline).lineLimit(1)
-                            Text(manager.remotePlugins.first { $0.id == pluginID }?.item.auth?.required == true
-                                ? "需要登录" : "不需要登录")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 24) {
+                    TVPluginCardProgress(activity: activity, showsCompletion: showsCompletion) {
+                        TVPluginManagementIcon(pluginID: pluginID, name: name, remote: remote,
+                            size: TVPluginLayout.discoveryIconSide, revision: availability.catalogRevision)
                     }
-                    .padding(.horizontal, 24)
-                    .frame(width: TVPluginLayout.discoveryWidth, height: TVPluginLayout.discoveryHeight)
-                    TVPluginCardProgress(phase: phase)
+                    .frame(width: TVPluginLayout.discoveryIconSide, height: TVPluginLayout.discoveryIconSide)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(name).font(.headline).lineLimit(1)
+                        Text(subtitle).font(.caption).foregroundStyle(captionColor(phase)).lineLimit(1)
+                            .padding(.trailing, phase.isFailure ? TVPluginLayout.actionContentHeight : 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.horizontal, 24)
+                .frame(width: TVPluginLayout.discoveryWidth, height: TVPluginLayout.discoveryHeight)
+                .overlay(alignment: .topTrailing) { TVPluginCardBadge(phase: phase) }
             }
         }
         .modifier(TVPluginShelfButtonStyle(installed: installed))
@@ -300,16 +323,35 @@ private struct TVPluginShelfCard: View {
         }
         .accessibilityIdentifier("plugins.item.\(pluginID)")
         .accessibilityLabel(name)
-        .accessibilityValue(TVPluginStatus.subtitle(phase, version: manager.installedVersion(for: pluginID)))
+        .accessibilityValue(subtitle)
         .frame(width: installed ? TVPluginLayout.cardWidth : TVPluginLayout.discoveryWidth, alignment: .leading)
     }
 
-    private var phaseColor: Color {
+    private func subtitle(phase: PluginManagementRowPhase, activity: TVPluginInstallationActivity?, requiresLogin: Bool) -> String {
+        if let activity { return activity.title }
         switch phase {
-        case .failed: TVPluginLayout.failure
-        case .success: TVPluginLayout.success
+        case .idle: return manager.installedVersion(for: pluginID) ?? "已安装"
+        case .install: return requiresLogin ? "需要登录" : "不需要登录"
+        case .update: return "有更新"
+        case .success: return showsCompletion ? "已完成" : "已安装"
+        case .failed(let reason): return TVPluginStatus.failureReason(reason)
+        case .queued, .progress: return ""
+        }
+    }
+
+    private func captionColor(_ phase: PluginManagementRowPhase) -> Color {
+        switch phase {
+        case .failed: contrast == .increased ? .primary : TVPluginLayout.failure
+        case .success where showsCompletion: contrast == .increased ? .primary : TVPluginLayout.success
         default: .secondary
         }
+    }
+}
+
+private extension PluginManagementRowPhase {
+    var isFailure: Bool {
+        if case .failed = self { return true }
+        return false
     }
 }
 
@@ -330,6 +372,8 @@ private struct TVPluginInstalledArtwork: View {
     let remote: LiveParseRemotePluginItem?
     let revision: UInt
     let phase: PluginManagementRowPhase
+    let activity: TVPluginInstallationActivity?
+    let showsCompletion: Bool
     @Environment(\.displayScale) private var displayScale
     @State private var image: UIImage?
     @State private var wash: Color?
@@ -341,11 +385,11 @@ private struct TVPluginInstalledArtwork: View {
             if let wash {
                 wash.opacity(TVPluginLayout.brandWashOpacity)
             }
-            icon
+            TVPluginCardProgress(activity: activity, showsCompletion: showsCompletion, onDarkArtwork: true) { icon }
         }
         .frame(width: TVPluginLayout.cardWidth, height: TVPluginLayout.cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: TVPluginLayout.cornerRadius, style: .continuous))
-        .overlay { TVPluginCardProgress(phase: phase) }
+        .overlay(alignment: .topTrailing) { TVPluginCardBadge(phase: phase) }
         .task(id: [pluginID, String(revision), String(Double(displayScale))]) {
             let slot = CGSize(width: TVPluginLayout.iconSide, height: TVPluginLayout.iconSide)
             let loadedImage = TVPlatformIconProvider.managementImage(
@@ -423,20 +467,90 @@ private enum TVPluginBrandWash {
     }
 }
 
-private struct TVPluginCardProgress: View {
+private struct TVPluginCardProgress<Artwork: View>: View {
+    let activity: TVPluginInstallationActivity?
+    let showsCompletion: Bool
+    var onDarkArtwork = false
+    @ViewBuilder let artwork: () -> Artwork
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        ZStack {
+            artwork().opacity(activity == nil && !showsCompletion ? 1 : 0)
+            if let activity {
+                if activity == .queued {
+                    Image(systemName: "clock")
+                        .font(.system(size: TVPluginLayout.cardStatusSymbolSide))
+                        .foregroundStyle(statusColor(TVPluginLayout.activity))
+                        .accessibilityHidden(true)
+                } else {
+                    TVPluginInstallationRing(activity: activity, onDarkArtwork: onDarkArtwork)
+                        .frame(width: TVPluginLayout.cardStatusSymbolSide, height: TVPluginLayout.cardStatusSymbolSide)
+                }
+            } else if showsCompletion {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: TVPluginLayout.cardStatusSymbolSide))
+                    .foregroundStyle(statusColor(TVPluginLayout.success))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private func statusColor(_ color: Color) -> Color {
+        guard contrast == .increased || isFocused else { return color }
+        return onDarkArtwork ? .white : .primary
+    }
+}
+
+private struct TVPluginInstallationRing: View {
+    let activity: TVPluginInstallationActivity
+    var onDarkArtwork = false
+    var showsStop = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isFocused) private var isFocused
+
+    private var lineWidth: CGFloat { TVPluginLayout.progressLineWidth + (contrast == .increased ? 1 : 0) }
+    private var color: Color {
+        guard contrast == .increased || isFocused else { return TVPluginLayout.activity }
+        return onDarkArtwork ? .white : .primary
+    }
+
+    var body: some View {
+        ZStack {
+            Circle().strokeBorder(color.opacity(contrast == .increased ? 0.55 : 0.28), lineWidth: lineWidth)
+            if case .progress(let progress) = activity, let fraction = progress.fractionCompleted {
+                if fraction > 0 { arc(fraction).rotationEffect(.degrees(-90)) }
+            } else if activity != .queued {
+                if reduceMotion {
+                    Circle().strokeBorder(color, style: StrokeStyle(lineWidth: lineWidth, dash: [lineWidth]))
+                } else {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                        let turns = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1)
+                        arc(0.72).rotationEffect(.degrees(turns * 360))
+                    }
+                }
+            }
+            if showsStop {
+                Image(systemName: "stop.fill").font(.system(size: TVPluginLayout.progressStopSide))
+                    .foregroundStyle(color)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func arc(_ fraction: Double) -> some View {
+        Circle().inset(by: lineWidth / 2).trim(from: 0, to: fraction)
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+    }
+}
+
+private struct TVPluginCardBadge: View {
     let phase: PluginManagementRowPhase
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if phase == .progress || phase == .queued || phase == .success {
-                Rectangle().fill(.black.opacity(0.45))
-                if phase == .success {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 58)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ProgressView().controlSize(.large).tint(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else if phase == .update {
+        Group {
+            if phase == .update {
                 Label("更新", systemImage: "arrow.down").font(.caption2.bold())
                     .padding(10).background(.regularMaterial, in: Capsule()).padding(12)
             } else if case .failed = phase {
@@ -445,7 +559,7 @@ private struct TVPluginCardProgress: View {
             }
         }
         .allowsHitTesting(false)
-        .clipShape(RoundedRectangle(cornerRadius: TVPluginLayout.cornerRadius))
+        .accessibilityHidden(true)
     }
 }
 
@@ -459,8 +573,8 @@ struct TVPluginContextActions: View {
         let phase = TVPluginStatus.phase(pluginID, manager: manager)
         if phase == .update { Button("更新", systemImage: "arrow.down.circle", action: action) }
         if case .failed = phase { Button("重试", systemImage: "arrow.clockwise", action: action) }
-        if phase == .progress || phase == .queued {
-            Button("停止当前批次", systemImage: "stop", action: action)
+        if manager.isPendingInstallation(for: pluginID) {
+            Button(phase == .queued ? "取消排队" : "停止", systemImage: "stop", action: action)
         }
         if phase == .install { Button("安装", systemImage: "arrow.down.circle", action: open) }
         Button("查看详情", systemImage: "info.circle", action: open)
@@ -480,7 +594,7 @@ struct TVFullOperationRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 20) {
-                Image(systemName: symbol).frame(width: 36)
+                Image(systemName: symbol).frame(width: TVPluginLayout.actionSymbolSide)
                 Text(title).lineLimit(1)
                 Spacer(minLength: 0)
                 if let trailing { Text(trailing).foregroundStyle(trailingColor).lineLimit(1) }
@@ -511,6 +625,8 @@ struct TVPluginConfirmRow: View {
     let title: String
     let symbol: String
     var confirmation: String? = nil
+    var installation: TVPluginInstallationActivity? = nil
+    var showsInstallationStop = false
     var destructive = false
     var disabled = false
     var cancel: () -> Void = {}
@@ -528,7 +644,15 @@ struct TVPluginConfirmRow: View {
             }
         } label: {
             HStack(spacing: 20) {
-                Image(systemName: symbol).frame(width: 36)
+                Group {
+                    if let installation {
+                        TVPluginInstallationRing(activity: installation, showsStop: showsInstallationStop)
+                            .frame(height: TVPluginLayout.actionSymbolSide)
+                    } else {
+                        Image(systemName: symbol)
+                    }
+                }
+                .frame(width: TVPluginLayout.actionSymbolSide)
                 Text(deadline == nil ? title : confirmation ?? title).lineLimit(1)
                 Spacer(minLength: 0)
             }
