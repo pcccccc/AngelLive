@@ -50,6 +50,8 @@ struct MacShortDramaPlayerView: View {
     @State private var preMuteVolume: Float = 1
     @State private var menuTrackingCount = 0
     @State private var hideControlsTask: Task<Void, Never>?
+    @State private var pointerOverControls = false
+    @State private var bottomControlsFrame = CGRect.null
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.dismiss) private var dismiss
@@ -141,11 +143,11 @@ struct MacShortDramaPlayerView: View {
                         .accessibilityHidden(!chromeVisible)
                     Spacer(minLength: 16)
                     bottomControls(availableWidth: geometry.size.width - 2 * inset)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(MacPlayerChrome.hoverSpace)) } action: {
+                            bottomControlsFrame = $0
+                        }
                 }
                 .padding(inset)
-                .onContinuousHover { phase in
-                    if case .active = phase { revealControls() }
-                }
                 .allowsHitTesting(controlsVisible && !showsEpisodes && !showVideoInfo)
                 .accessibilityHidden(showsEpisodes || showVideoInfo || !controlsVisible)
                 statusContent
@@ -171,10 +173,24 @@ struct MacShortDramaPlayerView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
+            .coordinateSpace(name: MacPlayerChrome.hoverSpace)
+            .onContinuousHover(coordinateSpace: .named(MacPlayerChrome.hoverSpace)) { phase in
+                switch phase {
+                case .active(let point):
+                    pointerOverControls = MacPlayerChrome.isPointerOverControls(
+                        point, inset: inset, bottomFrame: bottomControlsFrame
+                    )
+                    revealControls()
+                case .ended:
+                    guard pointerOverControls else { return }
+                    pointerOverControls = false
+                    revealControls()
+                }
+            }
         }
         .macPlayerContrast(while: controlsVisible) { playerLayer?.player }
         .background(PlayerWindowReferenceView(window: $playerWindow))
-        .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: controlsHeld))
+        .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: controlsHeld || pointerOverControls))
         .macPlayerWindowState(playerWindow) {
             isFullscreen = playerWindow?.styleMask.contains(.fullScreen) == true
             isPinned = playerWindow?.level == .floating
@@ -463,7 +479,7 @@ struct MacShortDramaPlayerView: View {
     private func revealControls() {
         controlsRevealed = true
         hideControlsTask?.cancel()
-        guard !controlsHeld, !isLeaving else { return }
+        guard !controlsHeld, !pointerOverControls, !isLeaving else { return }
         hideControlsTask = Task { @MainActor in
             do { try await Task.sleep(for: .seconds(3)) } catch { return }
             guard !Task.isCancelled, !isLeaving, !controlsHeld else { return }

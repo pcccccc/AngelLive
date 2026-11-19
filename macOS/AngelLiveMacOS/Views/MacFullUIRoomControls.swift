@@ -26,6 +26,8 @@ struct MacFullUIRoomControls: View {
     @Environment(ToastManager.self) private var toastManager: ToastManager?
     @State private var controlsVisible = true
     @State private var hideTask: Task<Void, Never>?
+    @State private var pointerOverControls = false
+    @State private var bottomControlsFrame = CGRect.null
     @State private var panel: Panel?
     @State private var showStreamer = false
     @State private var showDanmakuIssue = false
@@ -122,12 +124,17 @@ struct MacFullUIRoomControls: View {
                         .allowsHitTesting(chromeVisible)
                         .accessibilityHidden(!chromeVisible)
                     Spacer(minLength: 0)
-                    if isOnDemand {
-                        onDemandBottom(width: geometry.size.width)
-                    } else {
-                        bottomRow(width: geometry.size.width)
-                            .opacity(chromeVisible ? 1 : 0)
-                            .animation(chromeAnimation, value: chromeVisible)
+                    Group {
+                        if isOnDemand {
+                            onDemandBottom(width: geometry.size.width)
+                        } else {
+                            bottomRow(width: geometry.size.width)
+                                .opacity(chromeVisible ? 1 : 0)
+                                .animation(chromeAnimation, value: chromeVisible)
+                        }
+                    }
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(MacPlayerChrome.hoverSpace)) } action: {
+                        bottomControlsFrame = $0
                     }
                 }
                 .padding(inset)
@@ -165,10 +172,16 @@ struct MacFullUIRoomControls: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
-            .onContinuousHover { phase in
+            .coordinateSpace(name: MacPlayerChrome.hoverSpace)
+            .onContinuousHover(coordinateSpace: .named(MacPlayerChrome.hoverSpace)) { phase in
                 switch phase {
-                case .active: revealControls()
+                case .active(let point):
+                    pointerOverControls = MacPlayerChrome.isPointerOverControls(
+                        point, inset: inset, bottomFrame: bottomControlsFrame
+                    )
+                    revealControls()
                 case .ended:
+                    pointerOverControls = false
                     hideTask?.cancel()
                     if !holdsControls { controlsVisible = false }
                 }
@@ -176,7 +189,7 @@ struct MacFullUIRoomControls: View {
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: holdsControls))
+        .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: holdsControls || pointerOverControls))
         .macPlayerWindowState(window) {
             isFullscreen = window?.styleMask.contains(.fullScreen) == true
             isPinned = window?.level == .floating
@@ -629,9 +642,10 @@ struct MacFullUIRoomControls: View {
     private func revealControls() {
         controlsVisible = true
         hideTask?.cancel()
-        guard !holdsControls else { return }
+        guard !holdsControls, !pointerOverControls else { return }
         hideTask = Task { @MainActor in
             do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            guard !Task.isCancelled else { return }
             controlsVisible = false
         }
     }

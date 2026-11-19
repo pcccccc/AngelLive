@@ -12,8 +12,13 @@ enum MacPlayerChrome {
     static let symbolFont: Font = .system(size: 18, weight: .semibold)
     static let topControlSpacing: CGFloat = 12
     static let titleWidthFraction: CGFloat = 0.40
+    static let hoverSpace = "MacPlayerChrome.hoverSpace"
 
     static func inset(fullscreen: Bool) -> CGFloat { fullscreen ? 24 : 16 }
+
+    static func isPointerOverControls(_ point: CGPoint, inset: CGFloat, bottomFrame: CGRect) -> Bool {
+        (0..<(inset + controlSize)).contains(point.y) || bottomFrame.contains(point)
+    }
 
     static func visibilityAnimation(reduceMotion: Bool) -> Animation {
         reduceMotion ? .easeOut(duration: 0.15) : .easeInOut(duration: 0.30)
