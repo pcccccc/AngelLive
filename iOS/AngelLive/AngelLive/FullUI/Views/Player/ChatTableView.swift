@@ -11,6 +11,7 @@ import AngelLiveCore
 
 struct ChatTableView: UIViewRepresentable {
     let messages: [ChatMessage]
+    let topSpacing: CGFloat
     @Binding var showJumpToLatest: Bool
     @Binding var scrollToBottomRequest: Bool
 
@@ -19,22 +20,25 @@ struct ChatTableView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> UITableView {
-        let tableView = UITableView(frame: .zero, style: .plain)
+        let tableView = ChatListTableView(frame: .zero, style: .plain)
         tableView.backgroundColor = .clear
         tableView.separatorStyle = .none
         tableView.showsVerticalScrollIndicator = false
         tableView.keyboardDismissMode = .interactive
         tableView.estimatedRowHeight = 44
         tableView.rowHeight = UITableView.automaticDimension
-        tableView.contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 0, right: 0)
-        // 用 footer 占位代替 contentInset.bottom，避免影响底部滚动判断
-        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 56))
+        // 单元格自身的上边距也计入标题行到首条气泡的间距。
+        tableView.contentInset.top = max(0, topSpacing - AppConstants.Spacing.xs)
+        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 4))
         footer.backgroundColor = .clear
         tableView.tableFooterView = footer
         tableView.dataSource = context.coordinator
         tableView.delegate = context.coordinator
         tableView.register(ChatBubbleCapsuleCell.self, forCellReuseIdentifier: ChatBubbleCapsuleCell.reuseIdentifier)
         tableView.register(ChatBubbleRoundedCell.self, forCellReuseIdentifier: ChatBubbleRoundedCell.reuseIdentifier)
+        tableView.viewportDidResize = { [weak coordinator = context.coordinator] tableView in
+            coordinator?.restoreLatestPosition(afterResizing: tableView)
+        }
         return tableView
     }
 
@@ -62,7 +66,7 @@ struct ChatTableView: UIViewRepresentable {
         private var messages: [ChatMessage] = []
         private var messageIDs: [UUID] = []
         private var userHasScrolledUp = false  // 用户主动上滑了
-        private var isProgrammaticScroll = false  // 正在程序化滚动（非用户触发）
+        private var isScrollingToLatest = false
         private var cachedCellTypes: [UUID: Bool] = [:] // true = capsule, false = rounded
         private var lastTableWidth: CGFloat = 0
         var setShowJumpToLatest: ((Bool) -> Void)?
@@ -113,13 +117,59 @@ struct ChatTableView: UIViewRepresentable {
         /// 程序化滚动到底部（不触发 userHasScrolledUp）
         private func programmaticScrollToBottom(in tableView: UITableView, animated: Bool) {
             let row = messages.count - 1
-            guard row >= 0 else { return }
-            isProgrammaticScroll = true
-            tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .bottom, animated: animated)
-            if !animated {
-                isProgrammaticScroll = false
+            guard row >= 0, tableView.bounds.height > 0 else { return }
+            tableView.layoutIfNeeded()
+
+            func alignToLatest(animated: Bool) {
+                let top = tableView.adjustedContentInset.top
+                let systemBottom = tableView.adjustedContentInset.bottom - tableView.contentInset.bottom
+                let lastRow = tableView.rectForRow(at: IndexPath(row: row, section: 0))
+                let viewportHeight = tableView.bounds.height
+                let proposed = max(-top, lastRow.maxY - viewportHeight + systemBottom)
+                let aligned = rowAlignedOffset(proposed, in: tableView)
+                // Leave room after the last row when aligning the leading edge to a full bubble.
+                let bottomInset = max(0, aligned + viewportHeight - tableView.contentSize.height - systemBottom)
+                if tableView.contentInset.bottom != bottomInset {
+                    tableView.contentInset.bottom = bottomInset
+                }
+                let target = CGPoint(x: tableView.contentOffset.x, y: aligned)
+                isScrollingToLatest = animated && tableView.contentOffset != target
+                tableView.setContentOffset(target, animated: isScrollingToLatest)
+            }
+
+            alignToLatest(animated: animated)
+            if !isScrollingToLatest {
+                // Recheck after UIKit resolves the newly visible self-sizing rows.
+                tableView.layoutIfNeeded()
+                alignToLatest(animated: false)
             }
             setShowJumpToLatest?(false)
+        }
+
+        func restoreLatestPosition(afterResizing tableView: UITableView) {
+            if !userHasScrolledUp, !isScrollingToLatest {
+                programmaticScrollToBottom(in: tableView, animated: false)
+            }
+        }
+
+        private func rowAlignedOffset(
+            _ proposed: CGFloat, in tableView: UITableView, maximumOffset: CGFloat = .infinity
+        ) -> CGFloat {
+            let top = tableView.adjustedContentInset.top
+            let y = proposed + top
+            guard y > 0, let index = tableView.indexPathForRow(at: CGPoint(x: tableView.bounds.midX, y: y)) else {
+                return proposed
+            }
+            let row = tableView.rectForRow(at: index)
+            let viewportHeight = tableView.bounds.height - top
+            guard row.height <= viewportHeight else { return proposed }
+            if y - row.minY < 0.5 { return row.minY - top }
+            let next = IndexPath(row: index.row + 1, section: index.section)
+            guard next.row < messages.count, tableView.rectForRow(at: next).height <= viewportHeight else {
+                return proposed
+            }
+            let followingOffset = row.maxY - top
+            return followingOffset <= maximumOffset ? followingOffset : row.minY - top
         }
         
         /// 外部请求滚动到底部（点击"查看最新评论"）
@@ -227,8 +277,21 @@ struct ChatTableView: UIViewRepresentable {
         /// 用户开始手动拖拽 → 标记为用户主动滚动
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             // 只有用户手指触发的拖拽才标记
+            isScrollingToLatest = false
             userHasScrolledUp = true
             setShowJumpToLatest?(true)
+        }
+
+        func scrollViewWillEndDragging(
+            _ scrollView: UIScrollView, withVelocity velocity: CGPoint,
+            targetContentOffset: UnsafeMutablePointer<CGPoint>
+        ) {
+            guard let tableView = scrollView as? UITableView else { return }
+            let inset = tableView.adjustedContentInset
+            let bottom = max(-inset.top, tableView.contentSize.height - tableView.bounds.height + inset.bottom)
+            let proposed = targetContentOffset.pointee.y
+            let aligned = rowAlignedOffset(proposed, in: tableView, maximumOffset: bottom)
+            if aligned <= bottom { targetContentOffset.pointee.y = aligned }
         }
         
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -242,10 +305,9 @@ struct ChatTableView: UIViewRepresentable {
         }
         
         func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-            // 程序化滚动动画结束
-            isProgrammaticScroll = false
-            userHasScrolledUp = false
-            setShowJumpToLatest?(false)
+            if isScrollingToLatest, let tableView = scrollView as? UITableView {
+                programmaticScrollToBottom(in: tableView, animated: false)
+            }
         }
         
         /// 用户拖拽结束后，检查是否已经滚到底部附近，如果是则恢复自动滚动
@@ -261,12 +323,28 @@ struct ChatTableView: UIViewRepresentable {
             
             let threshold: CGFloat = 80
             let offsetY = scrollView.contentOffset.y
-            let maxOffset = contentHeight - visibleHeight
+            let maxOffset = contentHeight - visibleHeight + scrollView.adjustedContentInset.bottom
             
             if offsetY >= maxOffset - threshold {
                 userHasScrolledUp = false
                 setShowJumpToLatest?(false)
             }
+        }
+    }
+}
+
+private final class ChatListTableView: UITableView {
+    var viewportDidResize: ((UITableView) -> Void)?
+    private var viewportSize = CGSize.zero
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.size != viewportSize else { return }
+        viewportSize = bounds.size
+        let size = viewportSize
+        Task { @MainActor [weak self] in
+            guard let self, viewportSize == size else { return }
+            viewportDidResize?(self)
         }
     }
 }
@@ -320,7 +398,7 @@ class ChatBubbleBaseCell: UITableViewCell {
         contentView.addSubview(bubbleView)
 
         stackView.axis = .horizontal
-        stackView.alignment = .top
+        stackView.alignment = .firstBaseline
         stackView.spacing = 8
         stackView.translatesAutoresizingMaskIntoConstraints = false
         bubbleView.addSubview(stackView)
@@ -333,7 +411,7 @@ class ChatBubbleBaseCell: UITableViewCell {
 
         userNameLabel.numberOfLines = 1
         userNameLabel.setContentHuggingPriority(.required, for: .horizontal)
-        userNameLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        userNameLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         userNameLabel.adjustsFontForContentSizeCategory = true
         userNameLabel.font = UIFont.preferredFont(forTextStyle: .caption1).withWeight(.semibold)
 
@@ -386,8 +464,8 @@ class ChatBubbleBaseCell: UITableViewCell {
             stackView.addArrangedSubview(userNameLabel)
             stackView.addArrangedSubview(messageLabel)
 
-            bubbleView.backgroundColor = UIColor.black.withAlphaComponent(AppConstants.PlayerUI.Opacity.overlayMedium)
-            bubbleView.layer.borderColor = UIColor.white.withAlphaComponent(0.2).cgColor
+            bubbleView.backgroundColor = UIColor.black.withAlphaComponent(1 / 3)
+            bubbleView.layer.borderColor = UIColor.white.withAlphaComponent(0.086).cgColor
             bubbleView.layer.borderWidth = 0.5
         }
     }

@@ -240,6 +240,7 @@ struct FullUIPlaybackMenu: View {
     @State private var showCastOptions = false
     let state: FullUIPlaybackMenuState
     let timer: TimerManager
+    let showsRoomIdentity: Bool
 
     private var hasCastOptions: Bool {
         viewModel.canUseAirPlay || viewModel.dlnaCastResource != nil
@@ -262,6 +263,12 @@ struct FullUIPlaybackMenu: View {
 
     private var sections: some View {
         VStack(alignment: .leading, spacing: 2) {
+            if showsRoomIdentity {
+                FullUIPlayerRoomIdentity(room: viewModel.currentRoom)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                Divider()
+            }
             if showCastOptions {
                 menuSection("投屏") {
                     menuRow("返回", symbol: "chevron.backward", showsChevron: false) { showCastOptions = false }

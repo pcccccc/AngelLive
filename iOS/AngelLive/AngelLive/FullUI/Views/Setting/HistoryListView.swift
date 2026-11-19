@@ -78,7 +78,8 @@ struct HistoryListView: View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
+                categoryRooms: navigationState.categoryRooms,
+                entryRoomSource: .history
             )
                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
                 .fullUITabBarHidden()

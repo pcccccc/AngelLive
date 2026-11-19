@@ -1,5 +1,6 @@
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 import JXSegmentedView
 
 struct RoomSwitcherPanel: View {
@@ -7,7 +8,7 @@ struct RoomSwitcherPanel: View {
     let favorites: [LiveModel]
     let history: [LiveModel]
     let category: [LiveModel]
-    @Binding var selectedSourceIndex: Int
+    @Binding var selectedSource: RoomSwitchSource
     let switchingRoomID: String?
     let failedRoomID: String?
     let failureMessage: String?
@@ -16,6 +17,7 @@ struct RoomSwitcherPanel: View {
     let onLoadMoreCategory: (() async -> [LiveModel])?
     let onSelect: (LiveModel) -> Void
     let onClose: () -> Void
+    var isInline = false
     @Environment(AppFavoriteModel.self) private var favoriteModel
 
     private var availableSources: [RoomSwitchSource] {
@@ -55,6 +57,18 @@ struct RoomSwitcherPanel: View {
     }
 
     var body: some View {
+        Group {
+            if isInline {
+                inlineList
+            } else {
+                overlayPanel
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("快速换台")
+    }
+
+    private var overlayPanel: some View {
         VStack(spacing: 0) {
             currentRoomStrip
 
@@ -62,19 +76,103 @@ struct RoomSwitcherPanel: View {
 
             JXRoomSourcePager(
                 pages: pages,
-                selectedIndex: $selectedSourceIndex,
+                selectedIndex: Binding(
+                    get: { availableSources.firstIndex(of: selectedSource) ?? 0 },
+                    set: { index in
+                        let sources = availableSources
+                        if sources.indices.contains(index) { selectedSource = sources[index] }
+                    }
+                ),
                 favoriteModel: favoriteModel,
                 onSelectRoom: onSelect
             )
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("快速换台")
-        .onAppear {
-            normalizeSelectedSource()
+    }
+
+    private var inlineRooms: [LiveModel] {
+        let sourceRooms: [LiveModel]
+        switch selectedSource {
+        case .favorite:
+            sourceRooms = favorites.filter { $0.liveState == LiveState.live.rawValue }
+        case .history:
+            sourceRooms = history
+        case .category:
+            sourceRooms = category
         }
-        .onChange(of: availableSources) { _, _ in
-            normalizeSelectedSource()
+        var rooms = candidates(for: selectedSource)
+        if let currentIndex = sourceRooms.firstIndex(of: currentRoom) {
+            let precedingRooms = Set(sourceRooms[..<currentIndex])
+            let insertIndex = rooms.firstIndex { !precedingRooms.contains($0) } ?? rooms.endIndex
+            rooms.insert(currentRoom, at: insertIndex)
         }
+        return rooms
+    }
+
+    private var inlineList: some View {
+        let rooms = inlineRooms
+        return GeometryReader { geometry in
+            let rowWidth = geometry.size.width - 2 * FullUIPlayerDetailChrome.inset
+            let coverWidth = min(104, max(0, rowWidth - 16) * 0.28)
+            inlineScrollView(rooms: rooms, coverWidth: coverWidth)
+        }
+        .id(selectedSource)
+    }
+
+    private func inlineScrollView(rooms: [LiveModel], coverWidth: CGFloat) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                if rooms.isEmpty {
+                    inlineEmptyState
+                }
+
+                ForEach(rooms) { room in
+                    let row = InlineRoomSwitchRow(
+                        room: room,
+                        coverWidth: coverWidth,
+                        isCurrent: room == currentRoom,
+                        isSwitching: room.id == switchingRoomID,
+                        failureMessage: room.id == failedRoomID ? failureMessage : nil
+                    )
+                    if room == currentRoom {
+                        row
+                    } else {
+                        Button { onSelect(room) } label: { row }
+                            .buttonStyle(.plain)
+                            .disabled(room.id == switchingRoomID)
+                    }
+                }
+
+                if selectedSource == .category, canLoadMoreCategory(), let onLoadMoreCategory {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(8)
+                        .accessibilityLabel("正在加载更多直播间")
+                        .task {
+                            guard !isLoadingMoreCategory else { return }
+                            _ = await onLoadMoreCategory()
+                        }
+                }
+            }
+            .padding(.horizontal, FullUIPlayerDetailChrome.inset)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var inlineEmptyState: some View {
+        VStack(spacing: 6) {
+            Image(systemName: selectedSource.systemImage)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("暂无可切换直播间")
+                .font(.subheadline.weight(.semibold))
+            Text(emptyDescription(for: selectedSource))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 150)
     }
 
     private var currentRoomStrip: some View {
@@ -174,10 +272,100 @@ struct RoomSwitcherPanel: View {
             )
         }
     }
+}
 
-    private func normalizeSelectedSource() {
-        let safeIndex = min(max(selectedSourceIndex, 0), max(availableSources.count - 1, 0))
-        selectedSourceIndex = safeIndex
+private struct InlineRoomSwitchRow: View {
+    let room: LiveModel
+    let coverWidth: CGFloat
+    let isCurrent: Bool
+    let isSwitching: Bool
+    let failureMessage: String?
+
+    private let shape = RoundedRectangle(cornerRadius: 12)
+    private let selectionColor = Color(red: 131 / 255, green: 196 / 255, blue: 1)
+
+    var body: some View {
+        HStack(spacing: 12) {
+            cover
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(room.userName.orDash)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
+
+                    if isCurrent {
+                        Label("正在看", systemImage: "checkmark")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(FullUIPlayerDetailChrome.accent)
+                            .fixedSize()
+                    } else if isSwitching {
+                        ProgressView()
+                            .controlSize(.small)
+                            .accessibilityLabel("正在切换直播间")
+                    }
+                }
+                .frame(minHeight: 20)
+
+                Group {
+                    if let failureMessage {
+                        Text(failureMessage)
+                            .foregroundStyle(.red)
+                    } else {
+                        TranslatedRoomTitle(room.roomTitle.orDash)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.footnote)
+                .lineLimit(1)
+                .frame(minHeight: 16)
+
+                FullUIRoomPopularity(count: room.liveWatchedCount)
+            }
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading)
+        }
+        .padding(8)
+        .frame(minHeight: 76)
+        .background(isCurrent ? selectionColor.opacity(0.09) : Color.primary.opacity(0.04), in: shape)
+        .overlay {
+            if isCurrent {
+                shape.strokeBorder(selectionColor.opacity(0.32), lineWidth: 1)
+            }
+        }
+        .contentShape(shape)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var cover: some View {
+        KFImage(URL(string: room.roomCover))
+            .placeholder { Color.primary.opacity(0.05) }
+            .resizable()
+            .scaledToFill()
+            .frame(width: coverWidth, height: coverWidth * 9 / 16)
+            .background(Color.primary.opacity(0.05))
+            .clipShape(.rect(cornerRadius: 7))
+            .accessibilityHidden(true)
+            .overlay(alignment: .bottomLeading) {
+                if isCurrent || room.liveState == LiveState.live.rawValue {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 5, height: 5)
+                            .accessibilityHidden(true)
+                        Text("直播中")
+                            .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.black.opacity(0.85), in: .rect(cornerRadius: 4))
+                    .padding(4)
+                }
+            }
     }
 }
 
@@ -398,45 +586,97 @@ extension JXRoomSourcePagerViewController: JXSegmentedListContainerViewDataSourc
 
 struct RoomActionDock: View {
     let isSwitcherPresented: Bool
+    @Binding var selectedSource: RoomSwitchSource
     let room: LiveModel
     let onToggleSwitcher: () -> Void
     let onClearChat: () -> Void
+    var onJumpToLatestChat: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 8) {
+            Text(isSwitcherPresented ? "换台" : "聊天")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+
+            if isSwitcherPresented {
+                sourceMenu
+            }
+
+            Spacer(minLength: 0)
+
             Button(action: onToggleSwitcher) {
-                HStack(spacing: 7) {
-                    Image(systemName: "rectangle.stack.fill")
-                        .symbolRenderingMode(.hierarchical)
+                HStack(spacing: 4) {
                     Text(isSwitcherPresented ? "聊天" : "换台")
-                        .font(.subheadline.weight(.semibold))
+                        .font(.footnote.weight(.semibold))
+                    if !isSwitcherPresented {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
                 }
-                .padding(.leading, 14)
-                .padding(.trailing, 12)
-                .frame(minHeight: 48)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .frame(minHeight: FullUIPlayerDetailChrome.pillHeight)
+                .background(FullUIPlayerDetailChrome.pillFill, in: Capsule())
+                .frame(minWidth: FullUIPlayerChrome.controlSize, minHeight: FullUIPlayerChrome.controlSize)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isSwitcherPresented ? "返回聊天" : "快速换台")
+            .accessibilityLabel(isSwitcherPresented ? "返回聊天" : "换台")
 
-            Divider()
-                .frame(height: 22)
+            if !isSwitcherPresented {
+                MoreActionsButton(
+                    room: room,
+                    onClearChat: onClearChat,
+                    usesDetailPill: true,
+                    onJumpToLatestChat: onJumpToLatestChat
+                )
+                .padding(.leading, -6)
+                .padding(.trailing, -6)
+            }
+        }
+        .frame(minHeight: FullUIPlayerChrome.controlSize)
+        .padding(.horizontal, FullUIPlayerDetailChrome.inset)
+    }
 
-            MoreActionsButton(
-                room: room,
-                onClearChat: onClearChat,
-                embeddedInDock: true
-            )
+    private var sourceMenu: some View {
+        Menu {
+            Picker("来源", selection: $selectedSource) {
+                ForEach(RoomSwitchSource.allCases, id: \.self) { source in
+                    Label(source.title, systemImage: source.systemImage)
+                        .tag(source)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("·")
+                    .accessibilityHidden(true)
+                Text(selectedSource.inlineTitle)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
         }
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay {
-            Capsule().stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+        .menuIndicator(.hidden)
+        .accessibilityLabel("换台来源")
+        .accessibilityValue(selectedSource.inlineTitle)
     }
 }
 
 private extension RoomSwitchSource {
+    var inlineTitle: String {
+        switch self {
+        case .favorite: "收藏中正在直播"
+        case .history: "最近观看"
+        case .category: "当前分区"
+        }
+    }
+
     var title: String {
         switch self {
         case .favorite: "收藏"

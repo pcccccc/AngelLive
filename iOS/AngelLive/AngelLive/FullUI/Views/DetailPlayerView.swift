@@ -16,17 +16,20 @@ struct DetailPlayerView: View {
     let categoryRooms: [LiveModel]
     let canLoadMoreCategoryRooms: () -> Bool
     let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
+    let entryRoomSource: RoomSwitchSource?
 
     init(
         viewModel: RoomInfoViewModel,
         categoryRooms: [LiveModel] = [],
         canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
-        onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil
+        onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil,
+        entryRoomSource: RoomSwitchSource? = nil
     ) {
         self.viewModel = viewModel
         self.categoryRooms = categoryRooms
         self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
         self.onLoadMoreCategoryRooms = onLoadMoreCategoryRooms
+        self.entryRoomSource = entryRoomSource
     }
 
     var body: some View {
@@ -39,7 +42,8 @@ struct DetailPlayerView: View {
                     viewModel: viewModel,
                     categoryRooms: categoryRooms,
                     canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
-                    onLoadMoreCategoryRooms: onLoadMoreCategoryRooms
+                    onLoadMoreCategoryRooms: onLoadMoreCategoryRooms,
+                    entryRoomSource: entryRoomSource
                 )
             }
         }
@@ -56,6 +60,7 @@ struct LiveDetailPlayerView: View {
     @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(HistoryModel.self) private var historyModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
@@ -115,11 +120,16 @@ struct LiveDetailPlayerView: View {
     @State private var scrollToBottomRequest: Bool = false
 
     @State private var isRoomSwitcherPresented = false
-    @State private var selectedRoomSourceIndex: Int
+    @State private var isDetailRoomSwitcherPresented = false
+    @State private var selectedRoomSource: RoomSwitchSource
     @State private var switchingRoomID: String?
     @State private var failedRoomID: String?
     @State private var roomSwitchFailureMessage: String?
     @State private var roomSwitchTask: Task<Void, Never>?
+    @State private var roomSwitchToast: LiveModel?
+    @State private var roomBannerID: String?
+    @State private var lastBannerRoomID: String?
+    @State private var roomBannerTask: Task<Void, Never>?
     @State private var switcherCategoryRooms: [LiveModel]
     @State private var isLoadingMoreCategoryRooms = false
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
@@ -129,15 +139,15 @@ struct LiveDetailPlayerView: View {
         viewModel: RoomInfoViewModel,
         categoryRooms: [LiveModel] = [],
         canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
-        onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil
+        onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil,
+        entryRoomSource: RoomSwitchSource? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.categoryRooms = categoryRooms
         self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
         self.onLoadMoreCategoryRooms = onLoadMoreCategoryRooms
-        let hasCategoryRooms = categoryRooms.contains(viewModel.currentRoom)
-            && categoryRooms.contains { $0 != viewModel.currentRoom }
-        _selectedRoomSourceIndex = State(initialValue: hasCategoryRooms ? 2 : 0)
+        let enteredFromCategory = categoryRooms.contains(viewModel.currentRoom)
+        _selectedRoomSource = State(initialValue: entryRoomSource ?? (enteredFromCategory ? .category : .favorite))
         _switcherCategoryRooms = State(initialValue: categoryRooms)
     }
 
@@ -197,6 +207,13 @@ struct LiveDetailPlayerView: View {
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
+            let landscapeLayout = isFullscreen && isLandscape ? FullUILandscapePlayerLayout(
+                geometry: geometry, window: windowContext?.window, direction: layoutDirection
+            ) : nil
+            let streamAvailable = viewModel.currentPlayURL != nil && currentPlaybackError == nil
+                && viewModel.playErrorMessage == nil && viewModel.displayState != .streamerOffline
+            let canShowRoomBanner = landscapeLayout != nil && !viewModel.isOnDemand
+            let bannerCandidate = canShowRoomBanner && streamAvailable ? viewModel.currentRoom.id : nil
             let iPhoneLandscapeMode = isIPhoneLandscape
             // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
             let showInfoPanel = !isVerticalLiveMode && !isFullscreen
@@ -304,6 +321,12 @@ struct LiveDetailPlayerView: View {
                             width: playerWidth,
                             height: playerHeight
                         )
+                        .overlay {
+                            if showInfoPanel, let roomSwitchToast {
+                                roomSwitchConfirmation(for: roomSwitchToast)
+                                    .transition(.opacity)
+                            }
+                        }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         // 新画面手势桥接未启用的系统或内核，保留原有播放器手势处理。
                         .simultaneousGesture(
@@ -346,9 +369,20 @@ struct LiveDetailPlayerView: View {
                     }
                 }
 
-                if isRoomSwitcherPresented {
+                if isRoomSwitcherPresented && !showInfoPanel {
                     roomSwitcherOverlay(availableSize: geometry.size)
                     .zIndex(200)
+                }
+            }
+            .environment(\.fullUILandscapePlayerLayout, landscapeLayout)
+            .environment(\.fullUIPlayerShowsRoomBanner, roomBannerID == viewModel.currentRoom.id)
+            .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true && streamAvailable
+                && !isRoomSwitcherPresented ? .all : [])
+            .onChange(of: bannerCandidate, initial: true) { _, roomID in
+                if let roomID, roomID != lastBannerRoomID {
+                    showRoomBanner(for: roomID)
+                } else if !canShowRoomBanner || (roomID == nil && lastBannerRoomID != viewModel.currentRoom.id) {
+                    cancelRoomBanner()
                 }
             }
         }
@@ -371,7 +405,13 @@ struct LiveDetailPlayerView: View {
                 isIPadFullscreen = false
             }
         }
-        .environment(\.roomSwitcherPresentation, $isRoomSwitcherPresented)
+        .onChange(of: isFullscreen || isVerticalLiveMode) { _, usesOverlay in
+            if !usesOverlay { isRoomSwitcherPresented = false }
+        }
+        .environment(
+            \.roomSwitcherPresentation,
+            isFullscreen || isVerticalLiveMode ? $isRoomSwitcherPresented : $isDetailRoomSwitcherPresented
+        )
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
@@ -381,6 +421,15 @@ struct LiveDetailPlayerView: View {
         .onChange(of: viewModel.currentRoom.id) { _, _ in
             verticalLiveControlsVisible = true
             verticalLiveControlPopupPresented = false
+            showJumpToLatest = false
+        }
+        .task(id: roomSwitchToast) {
+            guard roomSwitchToast != nil else { return }
+            try? await Task.sleep(for: .milliseconds(1850))
+            guard !Task.isCancelled else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.22)) {
+                roomSwitchToast = nil
+            }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             Logger.debug("[PlayerFlow] Detail scenePhase -> \(newPhase), roomId=\(viewModel.currentRoom.roomId)", category: .player)
@@ -457,6 +506,7 @@ struct LiveDetailPlayerView: View {
         }
         .onDisappear {
             roomSwitchTask?.cancel()
+            cancelRoomBanner()
             viewModel.subtitlePlayback.stop()
             viewModel.endPlaybackDiagnostics()
             SupportDiagnosticsService.shared.recordAction(
@@ -623,62 +673,83 @@ struct LiveDetailPlayerView: View {
     // MARK: - 播放器下方信息区
 
     private var informationArea: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 0) {
-                StreamerInfoView()
-                    .environment(viewModel)
-                chatListView
-            }
-
-            if showJumpToLatest {
-                jumpToLatestButton
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 72)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
+        VStack(spacing: 0) {
+            StreamerInfoView()
+                .padding(.bottom, 20)
             RoomActionDock(
-                isSwitcherPresented: isRoomSwitcherPresented,
+                isSwitcherPresented: isDetailRoomSwitcherPresented,
+                selectedSource: $selectedRoomSource,
                 room: viewModel.currentRoom,
-                onToggleSwitcher: toggleRoomSwitcher,
-                onClearChat: clearChat
+                onToggleSwitcher: { isDetailRoomSwitcherPresented.toggle() },
+                onClearChat: clearChat,
+                onJumpToLatestChat: showJumpToLatest ? { scrollToBottomRequest = true } : nil
             )
-            .environment(viewModel)
-            .padding(.trailing, 16)
-            .padding(.bottom, 16)
+
+            ZStack {
+                chatListView
+                    .id(viewModel.currentRoom.id)
+                    .opacity(isDetailRoomSwitcherPresented ? 0 : 1)
+                    .allowsHitTesting(!isDetailRoomSwitcherPresented)
+                    .accessibilityHidden(isDetailRoomSwitcherPresented)
+
+                if isDetailRoomSwitcherPresented {
+                    roomSwitcherPanel(isInline: true)
+                        .transition(.opacity)
+                }
+            }
+            .animation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.2), value: isDetailRoomSwitcherPresented)
         }
+        .environment(viewModel)
+        .environment(\.colorScheme, .dark)
     }
 
     private var chatListView: some View {
         ChatTableView(
             messages: viewModel.danmuMessages,
+            topSpacing: 8,
             showJumpToLatest: $showJumpToLatest,
             scrollToBottomRequest: $scrollToBottomRequest
         )
     }
 
-    private var jumpToLatestButton: some View {
-        Button {
-            scrollToBottomRequest = true
-        } label: {
-            HStack(spacing: 6) {
-                Text("查看最新评论")
-                Image(systemName: "arrow.down")
-            }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayMedium))
-            )
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-            )
-            .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+    private func roomSwitchConfirmation(for room: LiveModel) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: "checkmark")
+                .foregroundStyle(FullUIPlayerDetailChrome.accent)
+                .frame(width: 18)
+                .accessibilityHidden(true)
+            Text("已切换到 \(room.userName.orDash)")
+                .lineLimit(1)
+                .foregroundStyle(.white)
         }
+        .font(.footnote.weight(.semibold))
+        .padding(.horizontal, 13)
+        .padding(.vertical, 8)
+        .frame(minHeight: 38)
+        .background(.regularMaterial, in: Capsule())
+        .overlay { Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1) }
+        .environment(\.colorScheme, .dark)
+        .padding(.horizontal, FullUIPlayerDetailChrome.inset + FullUIPlayerChrome.controlSize)
+        .allowsHitTesting(false)
+    }
+
+    private func roomSwitcherPanel(isInline: Bool) -> RoomSwitcherPanel {
+        RoomSwitcherPanel(
+            currentRoom: viewModel.currentRoom,
+            favorites: favoriteModel.roomList,
+            history: historyModel.watchList,
+            category: switcherCategoryRooms,
+            selectedSource: $selectedRoomSource,
+            switchingRoomID: switchingRoomID,
+            failedRoomID: failedRoomID,
+            failureMessage: roomSwitchFailureMessage,
+            canLoadMoreCategory: canLoadMoreCategoryRooms,
+            isLoadingMoreCategory: isLoadingMoreCategoryRooms,
+            onLoadMoreCategory: loadMoreSwitcherCategoryRooms,
+            onSelect: { room in switchRoom(room, showsConfirmation: isInline) },
+            onClose: dismissRoomSwitcher,
+            isInline: isInline
+        )
     }
 
     private func roomSwitcherOverlay(availableSize: CGSize) -> some View {
@@ -690,21 +761,7 @@ struct LiveDetailPlayerView: View {
                 .accessibilityHidden(true)
                 .transition(.opacity)
 
-            RoomSwitcherPanel(
-                currentRoom: viewModel.currentRoom,
-                favorites: favoriteModel.roomList,
-                history: historyModel.watchList,
-                category: switcherCategoryRooms,
-                selectedSourceIndex: $selectedRoomSourceIndex,
-                switchingRoomID: switchingRoomID,
-                failedRoomID: failedRoomID,
-                failureMessage: roomSwitchFailureMessage,
-                canLoadMoreCategory: canLoadMoreCategoryRooms,
-                isLoadingMoreCategory: isLoadingMoreCategoryRooms,
-                onLoadMoreCategory: loadMoreSwitcherCategoryRooms,
-                onSelect: switchRoom,
-                onClose: dismissRoomSwitcher
-            )
+            roomSwitcherPanel(isInline: false)
             .frame(width: roomSwitcherPanelWidth(for: availableSize))
             .frame(maxHeight: .infinity)
             .background {
@@ -749,20 +806,16 @@ struct LiveDetailPlayerView: View {
         }
     }
 
-    private func toggleRoomSwitcher() {
-        withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.32)) {
-            isRoomSwitcherPresented.toggle()
-        }
-    }
-
     private func dismissRoomSwitcher() {
         withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.28)) {
             isRoomSwitcherPresented = false
         }
     }
 
-    private func switchRoom(_ room: LiveModel) {
+    private func switchRoom(_ room: LiveModel, showsConfirmation: Bool) {
+        guard room != viewModel.currentRoom, switchingRoomID != room.id else { return }
         roomSwitchTask?.cancel()
+        cancelRoomBanner()
         switchingRoomID = room.id
         failedRoomID = nil
         roomSwitchFailureMessage = nil
@@ -782,6 +835,12 @@ struct LiveDetailPlayerView: View {
 
                 if switchingRoomID == requestRoomID {
                     switchingRoomID = nil
+                    if showsConfirmation {
+                        withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.22)) {
+                            roomSwitchToast = room
+                        }
+                        AccessibilityNotification.Announcement("已切换到 \(room.userName.orDash)").post()
+                    }
                 }
             } catch is CancellationError {
                 // A newer room selection owns the visible switching state.
@@ -792,6 +851,26 @@ struct LiveDetailPlayerView: View {
                 roomSwitchFailureMessage = error.localizedDescription
             }
         }
+    }
+
+    private func showRoomBanner(for roomID: String) {
+        cancelRoomBanner()
+        lastBannerRoomID = roomID
+        roomBannerID = roomID
+        roomBannerTask = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            guard !Task.isCancelled, roomBannerID == roomID else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.22)) {
+                roomBannerID = nil
+            }
+            roomBannerTask = nil
+        }
+    }
+
+    private func cancelRoomBanner() {
+        roomBannerTask?.cancel()
+        roomBannerTask = nil
+        roomBannerID = nil
     }
 
     @MainActor

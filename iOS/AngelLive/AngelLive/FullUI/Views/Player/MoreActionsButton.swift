@@ -26,8 +26,9 @@ struct MoreActionsButton: View {
     var onRefreshPlayback: (() -> Void)? = nil
     var supportsPictureInPicture: Bool = false
     var onTogglePictureInPicture: (() -> Void)? = nil
-    var embeddedInDock: Bool = false
+    var usesDetailPill = false
     var showsDanmakuConnectionIssue = false
+    var onJumpToLatestChat: (() -> Void)?
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var presentedSheet: MoreActionsSheet?
@@ -95,7 +96,7 @@ struct MoreActionsButton: View {
                 if showQualityOption, let playArgs = viewModel.currentRoomPlayArgs {
                     Menu("清晰度 - \(viewModel.currentPlayQualityString)") {
                         ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
-                            Menu(FullUIPlayerDisplay.lineTitle(for: cdn, index: cdnIndex)) {
+                            Menu(PlaybackDisplay.lineTitle(for: cdn, index: cdnIndex)) {
                                 ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
                                     Button {
                                         viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
@@ -114,12 +115,22 @@ struct MoreActionsButton: View {
                 }
                 */
 
+                if let onJumpToLatestChat {
+                    Button("查看最新评论", action: onJumpToLatestChat)
+                }
+
                 Button("清屏") {
                     onClearChat()
                 }
             } label: {
-                if embeddedInDock {
-                    menuGlyph
+                if usesDetailPill {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: FullUIPlayerDetailChrome.pillHeight, height: FullUIPlayerDetailChrome.pillHeight)
+                        .background(FullUIPlayerDetailChrome.pillFill, in: Circle())
+                        .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                        .contentShape(Rectangle())
                 } else {
                     menuGlyph
                         .fullUIPlayerGlass(in: Circle())
@@ -170,10 +181,9 @@ struct MoreActionsButton: View {
     }
 
     private var menuGlyph: some View {
-        let usesDetailDock = embeddedInDock && !showsDanmakuConnectionIssue
-        return Image(systemName: "ellipsis")
-            .font(usesDetailDock ? .title2 : FullUIPlayerChrome.symbolFont)
-            .foregroundStyle(usesDetailDock ? Color.primary : Color.white)
+        Image(systemName: "ellipsis")
+            .font(FullUIPlayerChrome.symbolFont)
+            .foregroundStyle(.white)
             .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
             .contentShape(Rectangle())
             .overlay(alignment: .topTrailing) {

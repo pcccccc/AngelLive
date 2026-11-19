@@ -92,6 +92,7 @@ struct PlayerContentView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
+    @Environment(\.fullUILandscapePlayerLayout) private var landscapeLayout
     @Environment(\.fullUIPlayerUsesExpandedLayout) private var usesExpandedLayout
     @Environment(\.roomSwitcherPresentation) private var roomSwitcherPresentation: Binding<Bool>
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -139,12 +140,14 @@ struct PlayerContentView: View {
                 }
             }
             .simultaneousGesture(roomSwitcherGesture(in: geometry.size))
-            .accessibilityAction(named: Text("快速换台")) {
-                presentRoomSwitcher()
+            .accessibilityActions {
+                if !viewModel.isOnDemand {
+                    Button("快速换台", action: presentRoomSwitcher)
+                }
             }
         }
         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
-        .onChange(of: isVideoPortrait && !usesExpandedLayout, initial: true) { _, usesVerticalPresentation in
+        .onChange(of: isVideoPortrait && !usesExpandedLayout && landscapeLayout == nil, initial: true) { _, usesVerticalPresentation in
             isVerticalLiveMode = usesVerticalPresentation
             applyVideoFillMode(isVerticalLive: usesVerticalPresentation)
         }
@@ -288,6 +291,7 @@ struct PlayerContentView: View {
         DragGesture(minimumDistance: 20)
             .onEnded { dragValue in
                 guard isFullscreen,
+                      !viewModel.isOnDemand,
                       !isVerticalLiveMode,
                       !isControlLocked,
                       !isControlPopupOpen,
@@ -307,7 +311,7 @@ struct PlayerContentView: View {
     }
 
     private func presentRoomSwitcher() {
-        guard !isControlLocked,
+        guard !viewModel.isOnDemand, !isControlLocked,
               !isControlPopupOpen,
               !roomSwitcherPresentation.wrappedValue else {
             return
@@ -363,7 +367,7 @@ struct PlayerContentView: View {
                             showVideoSetting: $showVideoSetting,
                             showDanmakuSettings: $showDanmakuSettings,
                             isPopupPresented: $isControlPopupOpen,
-                            contrastPlayer: { useKSPlayer ? playerCoordinator.playerLayer?.player : nil }
+                            playerLayer: { useKSPlayer ? playerCoordinator.playerLayer : nil }
                         )
                     }
                     #else
@@ -568,7 +572,7 @@ struct PlayerContentView: View {
         // VLC 模式下的单击手势，切换控制层显示/隐藏
         .contentShape(Rectangle())
         .onTapGesture {
-            vlcMaskShow.toggle()
+            if !vlcIsLocked { vlcMaskShow.toggle() }
         }
         .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
         .clipped()

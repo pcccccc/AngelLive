@@ -31,9 +31,10 @@ struct ShortDramaPlayerView: View {
     @State private var seekOriginTime = 0.0
     @State private var seekRequestID = UUID()
     @State private var seekCommitInFlight = false
-    @State private var seekPreview = ShortDramaSeekPreviewModel()
+    @State private var seekPreview = SeekPreviewModel()
     @State private var orientation = ShortDramaOrientationController()
     @State private var controlsVisible = true
+    @State private var isLocked = false
     @State private var controlsHideID = UUID()
     @State private var playbackRate: Float = 1
     @State private var panel: ShortDramaPanel?
@@ -68,6 +69,8 @@ struct ShortDramaPlayerView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -83,6 +86,9 @@ struct ShortDramaPlayerView: View {
                 isRegularWidth: horizontalSizeClass == .regular
             )
             let landscape = geometry.size.width > geometry.size.height
+            let landscapeLayout = landscape ? FullUILandscapePlayerLayout(
+                geometry: geometry, window: windowContext?.window, direction: layoutDirection
+            ) : nil
             let dockInset = controlEdgeInset(geometry: geometry)
             let overlayInset = FullUIPlayerChrome.inset
             let videoCenterOffset = landscape ? (geometry.safeAreaInsets.bottom - geometry.safeAreaInsets.top) / 2 : 0
@@ -113,27 +119,22 @@ struct ShortDramaPlayerView: View {
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
 
-                if landscape {
-                    regularControls(bottomButtons(metrics: panelMetrics, landscape: true))
-                        .overlay(alignment: .top) {
-                            progressControl(landscape: true)
-                                .alignmentGuide(.top) {
-                                    $0[VerticalAlignment.center] + ShortDramaProgressSlider.visibleTrackHeight / 2 + 14
-                                }
-                        }
-                        .padding([.horizontal, .bottom], overlayInset)
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+                if let layout = landscapeLayout {
+                    landscapeControls(metrics: panelMetrics, layout: layout)
+                        .ignoresSafeArea(.container)
+                } else {
+                    regularControls(topControls(metrics: panelMetrics))
+                        .padding([.top, .horizontal], overlayInset)
                 }
-
-                // Controls share the window's safe geometry; only the media extends beyond it.
-                regularControls(topControls(metrics: panelMetrics))
-                    .padding([.top, .horizontal], overlayInset)
 
                 panelOverlay(metrics: panelMetrics)
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
                     .zIndex(10)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+            .statusBar(hidden: landscape)
+            .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true
+                && model.playback != nil && model.errorMessage == nil && controlsAvailable ? .all : [])
             .background(Color.black)
             .background { ShortDramaWindowProbe(controller: orientation) }
             .onAppear {
@@ -141,6 +142,7 @@ struct ShortDramaPlayerView: View {
             }
             .onChange(of: panelMetrics) { _, _ in
                 latestPanelMetrics = panelMetrics
+                if !landscape { isLocked = false }
                 orientation.geometryDidChange()
                 showControls()
                 cancelSeek()
@@ -150,7 +152,7 @@ struct ShortDramaPlayerView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
-        .fullUIPlayerContrast(while: controlsVisible && controlsAvailable) {
+        .fullUIPlayerContrast(while: (controlsVisible || isLocked) && controlsAvailable) {
             playerController.coordinator?.playerLayer?.player
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -283,13 +285,13 @@ struct ShortDramaPlayerView: View {
 
             episodeInteractionLayer(availableHeight: size.height, landscape: landscape)
                 .allowsHitTesting(
-                    panel == nil
+                    !isLocked && panel == nil
                         && !panelTransitioning
                         && !episodeSwipeTransitioning
                         && isCurrentPlaybackReady
                 )
                 .accessibilityHidden(
-                    panel != nil
+                    isLocked || panel != nil
                         || panelTransitioning
                         || !isCurrentPlaybackReady
                 )
@@ -309,7 +311,7 @@ struct ShortDramaPlayerView: View {
             }
 
             Group {
-                if model.errorMessage == nil,
+                if !isLocked, model.errorMessage == nil,
                    let playbackID = model.playback?.id,
                    (!playerController.wantsPlayback || (readyPlaybackID == playbackID && !isPlaying)),
                    !episodeSwipeHoldActive,
@@ -338,7 +340,8 @@ struct ShortDramaPlayerView: View {
 
             ZStack {
                 if isScrubbing {
-                    seekPreviewOverlay
+                    FullUIPlayerSeekReadout(time: seekValue, duration: duration, preview: seekPreview.state,
+                                            isHorizontalVideo: isHorizontalVideo)
                         .transition(.opacity)
                 }
             }
@@ -350,7 +353,7 @@ struct ShortDramaPlayerView: View {
                 value: isScrubbing
             )
 
-            if let boundaryMessage {
+            if !isLocked, let boundaryMessage {
                 Text(boundaryMessage)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.white)
@@ -917,6 +920,30 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
+    private func landscapeControls(metrics: ShortDramaPanelMetrics, layout: FullUILandscapePlayerLayout) -> some View {
+        GeometryReader { geometry in
+            if !isLocked {
+                VStack(spacing: 0) {
+                    regularControls(topControls(metrics: metrics))
+                    Spacer(minLength: 0)
+                    VStack(spacing: FullUILandscapePlayerLayout.progressGap) {
+                        progressControl(landscape: true)
+                        regularControls(bottomButtons(metrics: metrics, landscape: true))
+                    }
+                }
+                .padding(layout.insets)
+            }
+
+            if isLocked || (showsControls && controlsAcceptInput) {
+                FullUILandscapePlayerLock(isLocked: isLocked) {
+                    isLocked.toggle()
+                    showControls()
+                }
+                .position(x: layout.lockInset + FullUIPlayerChrome.controlSize / 2, y: geometry.size.height / 2)
+            }
+        }
+    }
+
     private func bottomButtons(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
         HStack(spacing: 8) {
             episodeDock(metrics: metrics)
@@ -946,7 +973,7 @@ struct ShortDramaPlayerView: View {
 
         return HStack(spacing: 8) {
             if reservesTimeLabels {
-                progressTime(currentTime)
+                progressTime(currentTime, landscape: landscape)
                     .transition(.opacity)
             }
 
@@ -966,7 +993,7 @@ struct ShortDramaPlayerView: View {
             .frame(maxWidth: .infinity)
 
             if reservesTimeLabels {
-                progressTime(duration)
+                progressTime(duration, landscape: landscape)
                     .transition(.opacity)
             }
         }
@@ -983,18 +1010,24 @@ struct ShortDramaPlayerView: View {
         }
         .onChange(of: seekValue) { _, value in
             if isSeeking, !seekCommitInFlight, let playback = model.playback {
-                seekPreview.update(playback: playback, targetTime: value)
+                seekPreview.update(id: playback.id, url: playback.url, quality: playback.quality, targetTime: value)
             }
         }
     }
 
-    private func progressTime(_ time: Double) -> some View {
-        Text(formatTime(time))
-            .font(.system(size: 12, weight: .semibold).monospacedDigit())
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .fixedSize()
-            .fullUIPlayerMediaText()
+    private func progressTime(_ time: Double, landscape: Bool) -> some View {
+        Group {
+            if landscape {
+                FullUIPlayerTimeLabel(time: time)
+            } else {
+                Text(formatTime(time))
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .fullUIPlayerMediaText()
+            }
+        }
             .opacity(isScrubbing ? 0 : 1)
             .animation(FullUIPlayerChrome.visibilityAnimation(!isScrubbing, reduceMotion: reduceMotion), value: isScrubbing)
             .allowsHitTesting(false)
@@ -1117,15 +1150,15 @@ struct ShortDramaPlayerView: View {
 
     private var controlsAcceptInput: Bool { !episodeSwipeHoldActive && !episodeSwipeTransitioning }
 
-    private var showsControls: Bool { controlsVisible && controlsAvailable && !isScrubbing }
+    private var showsControls: Bool { controlsVisible && controlsAvailable && !isScrubbing && !isLocked }
 
     private var canInteractWithProgress: Bool {
-        controlsVisible && controlsAvailable && controlsAcceptInput && canSeek
+        controlsVisible && controlsAvailable && controlsAcceptInput && canSeek && !isLocked
     }
 
     private var shouldAutoHideControls: Bool {
         controlsVisible && controlsAvailable && controlsAcceptInput
-            && scenePhase == .active && isPlaying && !isSeeking && !UIAccessibility.isVoiceOverRunning
+            && scenePhase == .active && isPlaying && !isSeeking && !isLocked && !UIAccessibility.isVoiceOverRunning
     }
 
     private func controlEdgeInset(geometry: GeometryProxy) -> CGFloat {
@@ -1162,7 +1195,7 @@ struct ShortDramaPlayerView: View {
         playerController.pause()
         showControls()
         if let playback = model.playback {
-            seekPreview.update(playback: playback, targetTime: seekValue)
+            seekPreview.update(id: playback.id, url: playback.url, quality: playback.quality, targetTime: seekValue)
         }
     }
 
@@ -1229,50 +1262,6 @@ struct ShortDramaPlayerView: View {
             }
         }
         showControls()
-    }
-
-    private var seekPreviewOverlay: some View {
-        HStack(spacing: 0) {
-            Text(formatTime(seekValue))
-                .foregroundStyle(.white)
-            Text(" / \(formatTime(duration))")
-                .foregroundStyle(.white.opacity(0.68))
-        }
-        .font(.system(size: 28, weight: .semibold).monospacedDigit())
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .fullUIPlayerMediaText()
-        .overlay(alignment: .top) {
-            seekPreviewImage
-                .alignmentGuide(.top) { $0[VerticalAlignment.bottom] + 8 }
-        }
-        .padding(.horizontal, FullUIPlayerChrome.inset)
-    }
-
-    private var seekPreviewImage: some View {
-        ZStack {
-            Color.black
-            switch seekPreview.state {
-            case .frame(let image, let actualTime):
-                Image(uiImage: image).resizable().scaledToFit()
-                if abs(actualTime - seekValue) > 0.5 {
-                    Text("预览约 \(formatTime(actualTime))")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .padding(4)
-                        .background(.black.opacity(0.7), in: Capsule())
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                }
-            case .unavailable:
-                Text("暂无法预览").font(.caption).foregroundStyle(.white.opacity(0.8))
-            case .idle, .loading:
-                ProgressView().tint(.white)
-            }
-        }
-        .frame(width: isHorizontalVideo ? 128 : 72, height: isHorizontalVideo ? 72 : 128)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
@@ -1680,13 +1669,7 @@ struct ShortDramaPlayerView: View {
     }
 
     private func formatTime(_ time: Double) -> String {
-        guard time.isFinite, time > 0 else { return "00:00" }
-        let totalSeconds = Int(time.rounded(.down))
-        let seconds = totalSeconds % 60
-        let minutes = (totalSeconds / 60) % 60
-        let hours = totalSeconds / 3_600
-        if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, seconds) }
-        return String(format: "%02d:%02d", totalSeconds / 60, seconds)
+        fullUIPlayerTime(time)
     }
 }
 

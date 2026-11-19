@@ -134,7 +134,7 @@ struct VerticalLiveControllerView: View {
                     FullUIPlayerName(viewModel.currentRoom.userName.orDash, font: .systemFont(ofSize: 13, weight: .semibold))
                         .layoutPriority(1)
 
-                    if let popularity = FullUIPlayerDisplay.popularityTitle(viewModel.currentRoom.liveWatchedCount) {
+                    if let popularity = PlaybackDisplay.popularityTitle(viewModel.currentRoom.liveWatchedCount) {
                         Label(popularity, systemImage: "flame.fill")
                             .labelStyle(FullUIPlayerHeatLabelStyle())
                             .fixedSize()

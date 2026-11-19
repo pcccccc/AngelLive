@@ -33,30 +33,6 @@ enum RoomSwitchError: LocalizedError {
     }
 }
 
-enum DanmakuConnectionStatus: Equatable {
-    case connecting
-    case connected
-    case reconnecting
-    case failed
-
-    var title: String {
-        switch self {
-        case .connecting: String(localized: "正在连接弹幕")
-        case .connected: String(localized: "弹幕已连接")
-        case .reconnecting: String(localized: "正在重新连接")
-        case .failed: String(localized: "弹幕连接失败")
-        }
-    }
-
-    var visibleDuration: Duration? {
-        switch self {
-        case .connecting: nil
-        case .connected: .milliseconds(1500)
-        case .reconnecting, .failed: .seconds(4)
-        }
-    }
-}
-
 // MARK: - 播放器常量配置
 private enum PlayerConstants {
     /// 弹幕消息最大数量限制
@@ -92,6 +68,7 @@ final class RoomInfoViewModel {
     var currentCdnIndex = 0  // 当前选中的线路索引
     var currentQualityIndex = 0  // 当前选中的清晰度索引
     var isPlaying = false
+    private(set) var isOnDemand = false
     /// KSPlayer state normalized for shared recovery and presentation logic.
     private(set) var engineState: PlaybackEngineState = .initialized
     var isHLSStream = false  // 当前是否为 HLS 流（支持 AirPlay 投屏）
@@ -358,6 +335,7 @@ final class RoomInfoViewModel {
 
         subtitlePlayback.stop()
         currentRoom = room
+        isOnDemand = false
         _playbackDiagnostics?.end()
         _playbackDiagnostics = nil
         _recoveryCoordinator?.stop()
@@ -595,7 +573,7 @@ final class RoomInfoViewModel {
                 tappedSelection: tappedSelection,
                 effectiveSelection: tappedSelection
             )
-            currentPlayQualityString = FullUIPlayerDisplay.qualityTitle(currentQuality, in: playArgs)
+            currentPlayQualityString = PlaybackDisplay.qualityTitle(currentQuality, in: playArgs)
             currentPlayQualityQn = currentQuality.qn
             self.currentCdnIndex = cdnIndex
             self.currentQualityIndex = urlIndex
@@ -626,7 +604,7 @@ final class RoomInfoViewModel {
         let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
         let effectiveSelection = resolved.resolvedSelection ?? tappedSelection
         let effectiveQuality = effectiveSelection?.quality ?? currentQuality
-        let effectiveDisplayTitle = FullUIPlayerDisplay.qualityTitle(effectiveQuality, in: playArgs)
+        let effectiveDisplayTitle = PlaybackDisplay.qualityTitle(effectiveQuality, in: playArgs)
         let debugContext = RoomPlaybackDebugContext(
             tappedSelection: tappedSelection,
             effectiveSelection: effectiveSelection
@@ -718,6 +696,7 @@ final class RoomInfoViewModel {
             liveReconnectPolicy: .playerManaged
         )
         let plan = applied.plan
+        isOnDemand = !plan.isLive
         hasCompanionAudio = plan.audioURL != nil
         recoveryCoordinator.playbackConfigured(isLive: plan.isLive)
 
@@ -922,7 +901,7 @@ final class RoomInfoViewModel {
         debugContext: RoomPlaybackDebugContext
     ) {
         let resolved = resolvePlayerTypes(quality: quality, cdnIndex: cdnIndex, urlIndex: urlIndex)
-        let displayTitle = FullUIPlayerDisplay.qualityTitle(quality, in: currentRoomPlayArgs)
+        let displayTitle = PlaybackDisplay.qualityTitle(quality, in: currentRoomPlayArgs)
 
         currentPlayQualityString = resolved.overrideTitle ?? displayTitle
         currentPlayQualityQn = quality.qn

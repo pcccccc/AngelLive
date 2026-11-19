@@ -1,3 +1,6 @@
+import AngelLiveCore
+import Kingfisher
+import SharedAssets
 import SwiftUI
 import UIKit
 
@@ -13,6 +16,13 @@ enum FullUIPlayerChrome {
         if reduceMotion { return .easeOut(duration: 0.15) }
         return visible ? .easeOut(duration: 0.22) : .easeIn(duration: 0.28)
     }
+}
+
+enum FullUIPlayerDetailChrome {
+    static let inset: CGFloat = 16
+    static let pillHeight: CGFloat = 32
+    static let pillFill = Color.primary.opacity(0.075)
+    static var accent: Color { SharedAssets.Colors.appAccent }
 }
 
 extension EnvironmentValues {
@@ -33,10 +43,10 @@ extension View {
         modifier(FullUIPlayerGlassModifier(glassShape: shape, interactive: interactive))
     }
 
-    func fullUIPlayerShadow(in shape: some Shape) -> some View {
+    func fullUIPlayerShadow(in shape: some Shape, opacity: Double = 0.22) -> some View {
         background {
             shape
-                .fill(.black.opacity(0.22))
+                .fill(.black.opacity(opacity))
                 .padding(-8)
                 .blur(radius: 16)
                 .allowsHitTesting(false)
@@ -47,6 +57,66 @@ extension View {
     func fullUIPlayerMediaText() -> some View {
         modifier(FullUIPlayerMediaTextModifier())
             .fullUIPlayerShadow(in: Capsule())
+    }
+}
+
+struct FullUIPlayerTimeLabel: View {
+    @Environment(\.fullUIPlayerPrefersRegularGlass) private var brightScene
+    @Environment(\.colorSchemeContrast) private var contrast
+    let time: Double
+
+    var body: some View {
+        let strong = brightScene || contrast == .increased
+        Text(fullUIPlayerTime(time))
+            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .fixedSize()
+            .shadow(color: .black.opacity(strong ? 0.85 : 0.6), radius: strong ? 3 : 2, y: 1)
+            .fullUIPlayerShadow(in: Capsule(), opacity: strong ? 0.32 : 0.22)
+    }
+}
+
+func fullUIPlayerTime(_ time: Double) -> String {
+    let seconds = Int(exactly: max(0, time).rounded(.down)) ?? 0
+    if seconds >= 3_600 {
+        return String(format: "%d:%02d:%02d", seconds / 3_600, seconds / 60 % 60, seconds % 60)
+    }
+    return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+}
+
+struct FullUIPlayerRoomIdentity: View {
+    let room: LiveModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            KFImage(URL(string: room.userHeadImg))
+                .placeholder {
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable()
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .resizable()
+                .scaledToFill()
+                .frame(width: 28, height: 28)
+                .clipShape(Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                if !room.userName.isEmpty {
+                    FullUIPlayerName(room.userName, font: .systemFont(ofSize: 15, weight: .semibold))
+                }
+                let title = RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle)
+                if !title.isEmpty {
+                    Text(verbatim: title)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineLimit(1)
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .accessibilityElement(children: .combine)
+        .roomTitleTranslationTask(room.roomTitle)
     }
 }
 
