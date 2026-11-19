@@ -29,6 +29,7 @@ struct VerticalLiveControllerView: View {
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
     @State private var showQualityPanel = false
+    private let onOpenRoomSwitcher: (() -> Void)?
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
@@ -40,8 +41,9 @@ struct VerticalLiveControllerView: View {
         })
     }
 
-    init(model: KSVideoPlayerModel) {
+    init(model: KSVideoPlayerModel, onOpenRoomSwitcher: (() -> Void)? = nil) {
         self.model = model
+        self.onOpenRoomSwitcher = onOpenRoomSwitcher
     }
 
     var body: some View {
@@ -259,23 +261,49 @@ struct VerticalLiveControllerView: View {
             HStack {
                 Spacer()
 
-                MoreActionsButton(
-                    room: viewModel.currentRoom,
-                    onClearChat: {
-                        controlsVisible.wrappedValue = false
-                    },
-                    showQualityOption: true,
-                    onShowQualityPanel: {
-                        showQualityPanel = true
-                    },
-                    onRefreshPlayback: refreshPlayback,
-                    supportsPictureInPicture: supportsPictureInPicture,
-                    onTogglePictureInPicture: togglePictureInPicture,
-                    showsDanmakuConnectionIssue: true
-                )
+                if let onOpenRoomSwitcher {
+                    FullUIPlayerGlassGroup {
+                        Button(action: onOpenRoomSwitcher) {
+                            Text("换台")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .frame(minWidth: FullUIPlayerChrome.controlSize, minHeight: FullUIPlayerChrome.controlSize)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        Rectangle()
+                            .fill(.white.opacity(0.22))
+                            .frame(width: 1, height: 18)
+                            .accessibilityHidden(true)
+
+                        moreActionsButton(usesSharedPlayerGlass: true)
+                    }
+                } else {
+                    moreActionsButton(usesSharedPlayerGlass: false)
+                }
             }
             .padding(.trailing, FullUIPlayerChrome.inset)
         }
+    }
+
+    private func moreActionsButton(usesSharedPlayerGlass: Bool) -> MoreActionsButton {
+        MoreActionsButton(
+            room: viewModel.currentRoom,
+            onClearChat: {
+                controlsVisible.wrappedValue = false
+            },
+            showQualityOption: true,
+            onShowQualityPanel: {
+                showQualityPanel = true
+            },
+            onRefreshPlayback: refreshPlayback,
+            supportsPictureInPicture: supportsPictureInPicture,
+            onTogglePictureInPicture: togglePictureInPicture,
+            showsDanmakuConnectionIssue: true,
+            usesSharedPlayerGlass: usesSharedPlayerGlass
+        )
     }
 
     private var supportsPictureInPicture: Bool {

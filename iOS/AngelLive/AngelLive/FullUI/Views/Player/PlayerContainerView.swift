@@ -62,6 +62,7 @@ struct PlayerContentView: View {
     /// 与外层信息布局共用模式状态，控制层、弹幕和手势始终读取同一来源。
     @Binding var isVerticalLiveMode: Bool
     @Binding var videoAspectRatio: CGFloat
+    var showsPortraitRoomSwitcher = false
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var detectedVideoSize: CGSize?
@@ -95,6 +96,8 @@ struct PlayerContentView: View {
     @Environment(\.fullUILandscapePlayerLayout) private var landscapeLayout
     @Environment(\.fullUIPlayerUsesExpandedLayout) private var usesExpandedLayout
     @Environment(\.roomSwitcherPresentation) private var roomSwitcherPresentation: Binding<Bool>
+    @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
+    @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     // 检测设备是否为横屏
@@ -142,7 +145,7 @@ struct PlayerContentView: View {
             }
             .simultaneousGesture(roomSwitcherGesture(in: geometry.size))
             .accessibilityActions {
-                if !viewModel.isOnDemand {
+                if !viewModel.isOnDemand, !showsPortraitRoomSwitcher || verticalLiveControlsVisible.wrappedValue {
                     Button("快速换台", action: presentRoomSwitcher)
                 }
             }
@@ -321,11 +324,24 @@ struct PlayerContentView: View {
               !roomSwitcherPresentation.wrappedValue else {
             return
         }
+        if showsPortraitRoomSwitcher,
+           !verticalLiveControlsVisible.wrappedValue || verticalLiveControlPopupPresented.wrappedValue {
+            return
+        }
 
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.32)) {
+        if showsPortraitRoomSwitcher {
             roomSwitcherPresentation.wrappedValue = true
+        } else {
+            withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.32)) {
+                roomSwitcherPresentation.wrappedValue = true
+            }
         }
+    }
+
+    private var portraitRoomSwitcherAction: (() -> Void)? {
+        guard showsPortraitRoomSwitcher, !viewModel.isOnDemand else { return nil }
+        return presentRoomSwitcher
     }
 
     // MARK: - Player Content
@@ -365,7 +381,10 @@ struct PlayerContentView: View {
                     // 竖屏直播模式使用专用控制层，普通模式使用统一控制层
                     #if canImport(KSPlayer)
                     if isVerticalLiveMode && useKSPlayer {
-                        VerticalLiveControllerView(model: playerModel)
+                        VerticalLiveControllerView(
+                            model: playerModel,
+                            onOpenRoomSwitcher: portraitRoomSwitcherAction
+                        )
                     } else {
                         UnifiedPlayerControlOverlay(
                             bridge: controlBridge,

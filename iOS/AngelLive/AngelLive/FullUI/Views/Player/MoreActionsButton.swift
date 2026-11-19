@@ -29,6 +29,7 @@ struct MoreActionsButton: View {
     var usesDetailPill = false
     var showsDanmakuConnectionIssue = false
     var onJumpToLatestChat: (() -> Void)?
+    var usesSharedPlayerGlass = false
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var presentedSheet: MoreActionsSheet?
@@ -131,6 +132,8 @@ struct MoreActionsButton: View {
                         .background(FullUIPlayerDetailChrome.pillFill, in: Circle())
                         .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
                         .contentShape(Rectangle())
+                } else if usesSharedPlayerGlass {
+                    menuGlyph
                 } else {
                     menuGlyph
                         .fullUIPlayerGlass(in: Circle())

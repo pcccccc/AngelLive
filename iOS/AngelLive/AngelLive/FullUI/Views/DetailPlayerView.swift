@@ -123,6 +123,9 @@ struct LiveDetailPlayerView: View {
     @State private var scrollToBottomRequest: Bool = false
 
     @State private var isRoomSwitcherPresented = false
+    @State private var isPortraitRoomSwitcherPresented = false
+    @State private var portraitRoomSwitcherDetent = Self.portraitRoomSwitcherHalfDetent
+    @State private var pendingPortraitRoom: LiveModel?
     @State private var isDetailRoomSwitcherPresented = false
     @State private var selectedRoomSource: RoomSwitchSource
     @State private var switchingRoomID: String?
@@ -137,6 +140,8 @@ struct LiveDetailPlayerView: View {
     @State private var isLoadingMoreCategoryRooms = false
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
     @Environment(\.presentToast) private var presentToast
+
+    private static let portraitRoomSwitcherHalfDetent = PresentationDetent.fraction(0.52)
 
     init(
         viewModel: RoomInfoViewModel,
@@ -210,6 +215,8 @@ struct LiveDetailPlayerView: View {
     var body: some View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
+            let usesPortraitRoomSwitcher = usesPhoneOrientationPolicy && isVerticalLiveMode
+                && !isFullscreen && !isLandscape
             let landscapeLayout = isFullscreen && isLandscape ? FullUILandscapePlayerLayout(
                 geometry: geometry, window: windowContext?.window, direction: layoutDirection
             ) : nil
@@ -316,7 +323,8 @@ struct LiveDetailPlayerView: View {
                         playerCoordinator: playerCoordinator,
                         playerModel: playerModel,
                         isVerticalLiveMode: $isVerticalLiveMode,
-                        videoAspectRatio: $videoAspectRatio
+                        videoAspectRatio: $videoAspectRatio,
+                        showsPortraitRoomSwitcher: usesPortraitRoomSwitcher
                     )
                         .id("stable_player")
                         .environment(viewModel)
@@ -324,9 +332,11 @@ struct LiveDetailPlayerView: View {
                             width: playerWidth,
                             height: playerHeight
                         )
-                        .overlay {
-                            if showInfoPanel, let roomSwitchToast {
+                        .overlay(alignment: usesPortraitRoomSwitcher ? .top : .center) {
+                            if showInfoPanel || usesPortraitRoomSwitcher, let roomSwitchToast {
                                 roomSwitchConfirmation(for: roomSwitchToast)
+                                    .padding(.top, usesPortraitRoomSwitcher
+                                        ? FullUIPlayerChrome.inset + FullUIPlayerChrome.controlSize + 12 : 0)
                                     .transition(.opacity)
                             }
                         }
@@ -371,12 +381,23 @@ struct LiveDetailPlayerView: View {
                         .frame(maxHeight: .infinity, alignment: .leading)
                     }
                 }
-
-                if isRoomSwitcherPresented && !showInfoPanel {
-                    roomSwitcherOverlay(availableSize: geometry.size)
-                    .zIndex(200)
+            }
+            .accessibilityHidden(isRoomSwitcherPresented || isPortraitRoomSwitcherPresented)
+            .overlay {
+                if isPortraitRoomSwitcherPresented && portraitRoomSwitcherDetent == Self.portraitRoomSwitcherHalfDetent {
+                    roomSwitcherBackdrop { isPortraitRoomSwitcherPresented = false }
+                } else if isRoomSwitcherPresented && !showInfoPanel && !usesPortraitRoomSwitcher {
+                    roomSwitcherOverlay(
+                        availableSize: geometry.size,
+                        trailingSafeArea: geometry.safeAreaInsets.trailing
+                    )
                 }
             }
+            .environment(
+                \.roomSwitcherPresentation,
+                usesPortraitRoomSwitcher ? $isPortraitRoomSwitcherPresented
+                    : (showInfoPanel ? $isDetailRoomSwitcherPresented : $isRoomSwitcherPresented)
+            )
             .environment(\.fullUILandscapePlayerLayout, landscapeLayout)
             .environment(\.fullUIPlayerShowsRoomBanner, roomBannerID == viewModel.currentRoom.id)
             .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true && streamAvailable
@@ -388,6 +409,22 @@ struct LiveDetailPlayerView: View {
                     cancelRoomBanner()
                 }
             }
+            .onChange(of: usesPortraitRoomSwitcher) { _, usesSheet in
+                if usesSheet {
+                    isRoomSwitcherPresented = false
+                } else {
+                    isPortraitRoomSwitcherPresented = false
+                }
+            }
+            .onChange(of: isLandscape) { _, _ in closeFullscreenRoomSwitchers() }
+            .onChange(of: windowContext?.windowScene?.effectiveGeometry.interfaceOrientation) { previous, current in
+                if let previous, let current, previous != .unknown, current != .unknown {
+                    closeFullscreenRoomSwitchers()
+                }
+            }
+        }
+        .sheet(isPresented: $isPortraitRoomSwitcherPresented, onDismiss: switchToPendingPortraitRoom) {
+            portraitRoomSwitcherSheet
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
         .environment(\.fullUIPlayerIsFullscreen, isFullscreen)
@@ -411,10 +448,6 @@ struct LiveDetailPlayerView: View {
         .onChange(of: isFullscreen || isVerticalLiveMode) { _, usesOverlay in
             if !usesOverlay { isRoomSwitcherPresented = false }
         }
-        .environment(
-            \.roomSwitcherPresentation,
-            isFullscreen || isVerticalLiveMode ? $isRoomSwitcherPresented : $isDetailRoomSwitcherPresented
-        )
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
         #if canImport(KSPlayer)
@@ -511,6 +544,7 @@ struct LiveDetailPlayerView: View {
             )
         }
         .onDisappear {
+            pendingPortraitRoom = nil
             roomSwitchTask?.cancel()
             cancelRoomBanner()
             viewModel.subtitlePlayback.stop()
@@ -699,7 +733,7 @@ struct LiveDetailPlayerView: View {
                     .accessibilityHidden(isDetailRoomSwitcherPresented)
 
                 if isDetailRoomSwitcherPresented {
-                    roomSwitcherPanel(isInline: true)
+                    RoomSwitcherPanel(content: roomSwitcherContent, onSelect: selectInlineRoom)
                         .transition(.opacity)
                 }
             }
@@ -739,36 +773,71 @@ struct LiveDetailPlayerView: View {
         .allowsHitTesting(false)
     }
 
-    private func roomSwitcherPanel(isInline: Bool) -> RoomSwitcherPanel {
-        RoomSwitcherPanel(
+    private var roomSwitcherContent: RoomSwitcherListContent {
+        RoomSwitcherListContent(
             currentRoom: viewModel.currentRoom,
             favorites: favoriteModel.roomList,
             history: historyModel.watchList,
             category: switcherCategoryRooms,
-            selectedSource: $selectedRoomSource,
+            source: selectedRoomSource,
             switchingRoomID: switchingRoomID,
             failedRoomID: failedRoomID,
             failureMessage: roomSwitchFailureMessage,
             canLoadMoreCategory: canLoadMoreCategoryRooms,
             isLoadingMoreCategory: isLoadingMoreCategoryRooms,
-            onLoadMoreCategory: loadMoreSwitcherCategoryRooms,
-            onSelect: { room in switchRoom(room, showsConfirmation: isInline) },
-            onClose: dismissRoomSwitcher,
-            isInline: isInline
+            onLoadMoreCategory: loadMoreSwitcherCategoryRooms
         )
     }
 
-    private func roomSwitcherOverlay(availableSize: CGSize) -> some View {
-        ZStack(alignment: .trailing) {
-            Color.black.opacity(0.46)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture(perform: dismissRoomSwitcher)
-                .accessibilityHidden(true)
-                .transition(.opacity)
+    private var portraitRoomSwitcherSheet: some View {
+        FullscreenRoomSwitcherPanel(
+            content: roomSwitcherContent,
+            selectedSource: $selectedRoomSource,
+            onSelect: selectPortraitRoom,
+            onClose: { isPortraitRoomSwitcherPresented = false }
+        )
+        .padding(.top, FullUIPlayerDetailChrome.inset)
+        .preferredColorScheme(.dark)
+        .presentationDetents([Self.portraitRoomSwitcherHalfDetent, .large], selection: $portraitRoomSwitcherDetent)
+        .presentationDragIndicator(.visible)
+        // Route taps on the exposed portion of the player to the dismiss backdrop.
+        .presentationBackgroundInteraction(.enabled(upThrough: Self.portraitRoomSwitcherHalfDetent))
+    }
 
-            roomSwitcherPanel(isInline: false)
-            .frame(width: roomSwitcherPanelWidth(for: availableSize))
+    private func selectPortraitRoom(_ room: LiveModel) {
+        guard isPortraitRoomSwitcherPresented else { return }
+        pendingPortraitRoom = room
+        isPortraitRoomSwitcherPresented = false
+    }
+
+    private func switchToPendingPortraitRoom() {
+        portraitRoomSwitcherDetent = Self.portraitRoomSwitcherHalfDetent
+        guard let room = pendingPortraitRoom else { return }
+        pendingPortraitRoom = nil
+        switchRoom(room, showsConfirmation: true)
+    }
+
+    private func roomSwitcherBackdrop(onTap: @escaping () -> Void) -> some View {
+        Color.black.opacity(0.46)
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+            .accessibilityHidden(true)
+            .transition(.opacity)
+    }
+
+    private func roomSwitcherOverlay(availableSize: CGSize, trailingSafeArea: CGFloat) -> some View {
+        let width = roomSwitcherPanelWidth(for: availableSize)
+        return ZStack(alignment: .trailing) {
+            roomSwitcherBackdrop(onTap: dismissRoomSwitcher)
+
+            FullscreenRoomSwitcherPanel(
+                content: roomSwitcherContent,
+                selectedSource: $selectedRoomSource,
+                onSelect: selectDrawerRoom,
+                onClose: dismissRoomSwitcher
+            )
+            .frame(width: width)
             .frame(maxHeight: .infinity)
             .background {
                 ZStack {
@@ -788,6 +857,9 @@ struct LiveDetailPlayerView: View {
             )
             .shadow(color: .black.opacity(0.34), radius: 24, x: -10)
             .environment(\.colorScheme, .dark)
+            .modifier(RoomSwitcherDrawerSwipe(
+                width: width, trailingSafeArea: trailingSafeArea, onDismiss: dismissRoomSwitcher
+            ))
             .transition(.move(edge: .trailing).combined(with: .opacity))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -816,6 +888,21 @@ struct LiveDetailPlayerView: View {
         withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.28)) {
             isRoomSwitcherPresented = false
         }
+    }
+
+    private func closeFullscreenRoomSwitchers() {
+        isRoomSwitcherPresented = false
+        isPortraitRoomSwitcherPresented = false
+    }
+
+    private func selectDrawerRoom(_ room: LiveModel) {
+        guard isRoomSwitcherPresented else { return }
+        dismissRoomSwitcher()
+        switchRoom(room, showsConfirmation: false)
+    }
+
+    private func selectInlineRoom(_ room: LiveModel) {
+        switchRoom(room, showsConfirmation: true)
     }
 
     private func switchRoom(_ room: LiveModel, showsConfirmation: Bool) {
