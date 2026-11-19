@@ -8,11 +8,8 @@ struct PluginDiscoveryShelf: View {
     let sourcesVerified: Bool
     let searchIsEmpty: Bool
     let canOperate: Bool
-    let canStop: Bool
-    let consentHostID: UUID
-    let consentAnchor: String
     let open: (ManagedPluginItem) -> Void
-    let action: (ManagedPluginItem) -> Void
+    let action: (ManagedPluginItem, UUID) -> Void
     let addSource: () -> Void
 
     var body: some View {
@@ -33,7 +30,7 @@ struct PluginDiscoveryShelf: View {
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: PluginManagementLayout.iconTextSpacing) {
                         ForEach(items) { item in
-                            PluginDiscoveryCard(item: item, canOperate: canOperate, canStop: canStop, consentHostID: consentHostID, showsConsent: consentAnchor == item.id, open: { open(item) }, action: { action(item) })
+                            PluginDiscoveryCard(item: item, canOperate: canOperate, open: { open(item) }, action: { action(item, $0) })
                         }
                     }.fixedSize(horizontal: false, vertical: true).scrollTargetLayout()
                 }.fixedSize(horizontal: false, vertical: true)
@@ -44,18 +41,13 @@ struct PluginDiscoveryShelf: View {
 }
 
 struct PluginDiscoveryCard: View {
-    @Environment(PluginInstallConsentService.self) private var consent
+    @Environment(PluginSourceManager.self) private var manager
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var maximumReadingWidth: CGFloat = 266
     let item: ManagedPluginItem
     let canOperate: Bool
-    let canStop: Bool
-    let consentHostID: UUID
-    let showsConsent: Bool
     let open: () -> Void
-    let action: () -> Void
-    private var confirming: Bool { showsConsent && consent.isPresenting(for: consentHostID) }
+    let action: (UUID) -> Void
     private var installationMetadata: String {
         let login = item.remote?.item.auth?.required == true ? "需要登录" : "不需要登录"
         guard let version = item.remote?.item.version, !version.isEmpty else { return login }
@@ -64,34 +56,28 @@ struct PluginDiscoveryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if confirming {
-                PluginInstallConsentPanel(hostID: consentHostID).padding(-PluginManagementLayout.contentInset)
-            } else {
-                Button(action: open) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        PluginManagementIcon(pluginID: item.pluginID, displayName: item.name, remoteIcon: item.remote?.item.icon)
-                        Text(item.name).font(.headline).foregroundStyle(.primary)
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 6) {
+                    PluginManagementIcon(pluginID: item.pluginID, displayName: item.name, remoteIcon: item.remote?.item.icon)
+                    Text(item.name).font(.headline).foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let description = item.remote?.item.platformDescription, !description.isEmpty {
+                        Text(description).font(.footnote).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                             .fixedSize(horizontal: false, vertical: true)
-                        if let description = item.remote?.item.platformDescription, !description.isEmpty {
-                            Text(description).font(.footnote).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        } else if let source = item.sourceURL {
-                            Text(pluginSourceHost(source)).font(.footnote).foregroundStyle(.secondary)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                }.buttonStyle(PluginPressButtonStyle())
-                ViewThatFits(in: .horizontal) {
-                    HStack {
-                        Text(installationMetadata).font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: true, vertical: false)
-                        Spacer(minLength: 8)
-                        PluginActionButton(item: item, canOperate: canOperate, canStop: canStop, action: action)
+                    } else if let source = item.sourceURL {
+                        Text(pluginSourceHost(source)).font(.footnote).foregroundStyle(.secondary)
                     }
-                    VStack(alignment: .leading) {
-                        Text(installationMetadata).font(.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        PluginActionButton(item: item, canOperate: canOperate, canStop: canStop, action: action)
-                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(PluginPressButtonStyle())
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    metadata(wraps: false).layoutPriority(1)
+                    Spacer(minLength: PluginManagementLayout.itemSpacing)
+                    PluginActionButton(item: item, canOperate: canOperate, action: action)
+                }
+                VStack(alignment: .leading) {
+                    metadata(wraps: true)
+                    PluginActionButton(item: item, canOperate: canOperate, action: action)
                 }
             }
         }
@@ -101,6 +87,16 @@ struct PluginDiscoveryCard: View {
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(PluginManagementLayout.cardBackground, in: RoundedRectangle(cornerRadius: PluginManagementLayout.cardRadius, style: .continuous))
-        .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4), value: confirming)
+    }
+
+    private func metadata(wraps: Bool) -> some View {
+        let reason = item.installationFailure(in: manager)
+        return Text(installationMetadata).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: !wraps, vertical: wraps)
+            .opacity(reason == nil ? 1 : 0).accessibilityHidden(reason != nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .leading) {
+                if let reason { PluginInstallationFailureReason(reason: reason, font: .caption) }
+            }
     }
 }

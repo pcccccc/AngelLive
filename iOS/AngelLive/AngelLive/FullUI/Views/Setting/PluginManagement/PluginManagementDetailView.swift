@@ -10,10 +10,8 @@ struct PluginManagementDetailView: View {
     @ObservedObject private var credentials = PlatformCredentialSyncService.shared
     let item: ManagedPluginItem
     let canOperate: Bool
-    let canStop: Bool
     let consentHostID: UUID
-    let showsConsent: Bool
-    let action: (ManagedPluginItem) -> Void
+    let action: (UUID) -> Void
     let uninstall: (String) -> Void
     @State private var features: [PlatformFeature] = []
     @State private var showsLogin = false
@@ -34,8 +32,10 @@ struct PluginManagementDetailView: View {
             VStack(spacing: PluginManagementLayout.detailSpacing) {
                 PluginDetailHero(item: item)
                 VStack(spacing: 8) {
-                    PluginActionButton(item: item, canOperate: canOperate, canStop: canStop, large: true) { action(item) }
-                    if state == .installed, !feedback.recentSuccessIDs.contains(item.pluginID) {
+                    PluginActionButton(item: item, canOperate: canOperate, large: true, action: action)
+                    if let reason = item.installationFailure(in: manager) {
+                        PluginInstallationFailureReason(reason: reason)
+                    } else if state == .installed, item.namespace == .installed, !feedback.recentSuccessIDs.contains(item.pluginID) {
                         if verifiedCurrent {
                             Label {
                                 Text("已是最新版本").foregroundStyle(.secondary)
@@ -46,17 +46,11 @@ struct PluginManagementDetailView: View {
                             Text("当前版本 \(version)").font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
-                    if showsConsent { PluginInstallConsentPanel(hostID: consentHostID) }
                 }.padding(.horizontal, 8)
-                if case .failed(let reason) = state {
-                    FullUIPluginSourceErrorCard(title: installed ? "更新失败，旧版本仍可用" : "安装失败", message: installed ? "当前仍在使用 \(version)。\(reason)" : reason)
-                        .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: PluginManagementLayout.cardRadius, style: .continuous))
-                }
                 PluginDetailInformation(pluginName: item.name, version: version, capabilityCount: features.isEmpty ? nil : features.count, needsLogin: needsLogin, loggedIn: credentials.isLoggedIn(pluginId: item.pluginID), canLogin: installed) { showsLogin = true }
                 if !features.isEmpty { PluginDetailCapabilities(features: features) }
                 if installed {
-                    if !canOperate {
+                    if !canOperate && !manager.isPendingInstallation(for: item.pluginID) {
                         Text("正在处理插件，完成后可以卸载。").font(.footnote).foregroundStyle(.secondary)
                     }
                     PluginInlineRemoval(

@@ -8,6 +8,27 @@ import Observation
 final class PluginManagementFeedback {
     var recentSuccessIDs: Set<String> = []
     var recentInstallIDs: Set<String> = []
+    var consentOrigin: PluginActionConsentOrigin?
+}
+
+struct PluginActionConsentOrigin {
+    enum Surface { case row, detail }
+    let buttonID: UUID
+    let itemID: String
+    let pluginID: String
+    let surface: Surface
+
+    func matches(_ reason: PluginInstallConsentReason?) -> Bool {
+        switch reason {
+        case .installingLoginPlugin(let id, _): id == pluginID
+        case .installingLoginPluginsBatch(let plugins): plugins.count == 1 && plugins.first?.pluginId == pluginID
+        default: false
+        }
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var pluginConsentButton: (@MainActor @Sendable () -> UUID?)? = nil
 }
 
 struct ManagedPluginItem: Identifiable {
@@ -22,6 +43,24 @@ struct ManagedPluginItem: Identifiable {
         case .installed: "installed:\(pluginID)"
         case .catalog: "catalog:\(sourceURL ?? "unresolved"):\(pluginID)"
         }
+    }
+
+    @MainActor func installationFailure(in manager: PluginSourceManager) -> String? {
+        guard !manager.isPendingInstallation(for: pluginID),
+              case .failed(let reason) = manager.managementActionState(for: pluginID, remote: remote) else { return nil }
+        return reason
+    }
+}
+
+struct PluginInstallationFailureReason: View {
+    let reason: String
+    var font: Font = .footnote
+
+    var body: some View {
+        let message = SupportDiagnosticSanitizer.text(reason, limit: 512)
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        (message.isEmpty ? Text("操作失败，请重试") : Text(message))
+            .font(font).foregroundStyle(.secondary).lineLimit(1)
     }
 }
 
@@ -159,27 +198,24 @@ struct PluginManagementIcon: View {
     }
 }
 
-struct PluginInstallConsentPanel: View {
-    @Environment(PluginInstallConsentService.self) private var consent
-    let hostID: UUID
-    var body: some View {
-        if consent.isPresenting(for: hostID) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(consent.alertTitle).font(.headline)
-                Text(consent.alertMessage).font(.subheadline).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                ViewThatFits {
-                    HStack {
-                        Button(consent.cancelButtonTitle) { consent.resolve(false) }.buttonStyle(.bordered)
-                        Button(consent.continueButtonTitle) { consent.resolve(true) }.buttonStyle(.borderedProminent)
-                    }
-                    VStack(alignment: .leading) {
-                        Button(consent.cancelButtonTitle) { consent.resolve(false) }.buttonStyle(.bordered)
-                        Button(consent.continueButtonTitle) { consent.resolve(true) }.buttonStyle(.borderedProminent)
-                    }
-                }.controlSize(.large)
-            }.padding(PluginManagementLayout.contentInset).accessibilityElement(children: .contain)
-                .transition(.opacity)
+extension View {
+    func pluginInstallConsentAlert(
+        _ consent: PluginInstallConsentService,
+        isActive: @escaping @MainActor () -> Bool
+    ) -> some View {
+        let reason = consent.pendingReason
+        let isSelectedPresenter = isActive()
+        func presentsRequest() -> Bool {
+            isActive() && consent.isPresenting && reason != nil && consent.pendingReason == reason
+        }
+        return alert(consent.alertTitle, isPresented: Binding(
+            get: { isSelectedPresenter && presentsRequest() },
+            set: { if !$0, presentsRequest() { consent.resolve(false) } }
+        )) {
+            Button(consent.continueButtonTitle) { if presentsRequest() { consent.resolve(true) } }
+            Button(consent.cancelButtonTitle, role: .cancel) { if presentsRequest() { consent.resolve(false) } }
+        } message: {
+            Text(consent.alertMessage)
         }
     }
 }

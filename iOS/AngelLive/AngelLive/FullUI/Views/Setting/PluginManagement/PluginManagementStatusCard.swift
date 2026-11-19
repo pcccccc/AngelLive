@@ -14,15 +14,13 @@ struct PluginManagementStatusCard: View {
     let check: () -> Void
     let retryPreparation: () -> Void
     let stop: () -> Void
-    let consentHostID: UUID
-    let showsConsent: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var updates: [String] { installedIDs.filter { $0 != manager.pendingUninstallPluginId && manager.hasUpdate(for: $0) } }
     private var sourceFailures: [String] { manager.sourceURLs.filter { manager.health(for: $0).isFailed } }
     private var hasFailures: Bool { preparationError != nil || manager.errorMessage != nil || !sourceFailures.isEmpty || !manager.installBatch.failedPluginIds.isEmpty || !manager.updateBatch.failedPluginIds.isEmpty }
-    private var running: Bool { manager.installBatch.isRunning || manager.updateBatch.isRunning }
+    private var running: Bool { manager.activeInstallationCount > 0 }
     private var state: PluginManagementSummaryState {
         .resolve(isRunning: running, hasFailures: hasFailures, updateCount: updates.count,
                  isChecking: isPreparing || manager.isFetchingIndex || manager.isCheckingUpdates,
@@ -30,7 +28,7 @@ struct PluginManagementStatusCard: View {
     }
     private var title: LocalizedStringResource {
         switch state {
-        case .running: manager.installBatch.isRunning ? "正在安装插件" : "正在更新插件"
+        case .running: "正在安装 \(manager.activeInstallationCount) 个插件"
         case .failed:
             if preparationError != nil { "准备安装失败" }
             else if !manager.installBatch.failedPluginIds.isEmpty { "\(manager.installBatch.failedPluginIds.count) 个插件安装失败" }
@@ -44,14 +42,6 @@ struct PluginManagementStatusCard: View {
         }
     }
     private var subtitle: String {
-        if manager.installBatch.isRunning {
-            let batch = manager.installBatch
-            return "\(batch.completedCount) / \(batch.pluginIds.count) · \(batch.currentPluginId.flatMap { batch.displayNames[$0] } ?? "准备中")"
-        }
-        if manager.updateBatch.isRunning {
-            let batch = manager.updateBatch
-            return "\(batch.completedCount) / \(batch.pluginIds.count) · \(batch.currentPluginId.map { manager.managementDisplayName(for: $0) } ?? "准备中")"
-        }
         if let preparationError { return SupportDiagnosticSanitizer.text(preparationError) }
         if let error = manager.errorMessage { return SupportDiagnosticSanitizer.text(error) }
         if !manager.installBatch.failedPluginIds.isEmpty { return "安装结果：\(manager.installBatch.successCount) 成功 · \(manager.installBatch.failedPluginIds.count) 失败 · \(manager.installBatch.cancelledCount) 取消" }
@@ -78,75 +68,79 @@ struct PluginManagementStatusCard: View {
     private var color: Color { state == .failed ? .red : state == .current ? .green : PluginManagementLayout.primaryAction }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: PluginManagementLayout.iconTextSpacing)) : AnyLayout(HStackLayout(spacing: PluginManagementLayout.iconTextSpacing))
-            layout {
-                if case .updates = state {
-                    HStack(spacing: -12) {
-                        ForEach(Array(updates.prefix(3)), id: \.self) { id in
-                            PluginManagementIcon(pluginID: id, displayName: manager.managementDisplayName(for: id), remoteIcon: manager.latestRemoteItemsByPluginId[id]?.icon, size: 36)
-                                .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(uiColor: .secondarySystemGroupedBackground), lineWidth: 2.5))
-                        }
-                    }.accessibilityHidden(true).transition(.opacity)
-                } else {
-                    Image(systemName: symbol).font(.body.weight(.semibold)).foregroundStyle(color)
-                        .frame(width: 36, height: 36).background(color.opacity(0.12), in: Circle()).accessibilityHidden(true)
-                        .contentTransition(.opacity).transition(.opacity)
-                }
-                VStack(alignment: .leading, spacing: PluginManagementLayout.textSpacing) {
-                    Text(title).font(.headline).contentTransition(.opacity)
-                    Text(subtitle).font(.footnote).foregroundStyle(.secondary)
-                        .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
-                        .fixedSize(horizontal: false, vertical: true).monospacedDigit()
-                        .contentTransition(.opacity)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                PluginSummaryAction(state: state, manager: manager, canStop: canStop,
-                                    updateIDs: updates, preparationFailed: preparationError != nil,
-                                    update: update, retryInstall: retryInstall, check: check,
-                                    retryPreparation: retryPreparation, stop: stop)
-            }.padding(.horizontal, PluginManagementLayout.contentInset).padding(.vertical, PluginManagementLayout.summaryVerticalInset)
+        Group {
             if running {
-                ProgressView(value: Double(manager.installBatch.isRunning ? manager.installBatch.completedCount : manager.updateBatch.completedCount), total: Double(max(1, manager.installBatch.isRunning ? manager.installBatch.pluginIds.count : manager.updateBatch.pluginIds.count)))
-                    .padding(.horizontal, PluginManagementLayout.contentInset).padding(.bottom, PluginManagementLayout.summaryVerticalInset)
-                    .transition(.opacity)
+                runningSummary
+            } else {
+                idleSummary
             }
-            if state == .failed && (!manager.installBatch.failedPluginIds.isEmpty || !manager.updateBatch.failedPluginIds.isEmpty) {
-                PluginBatchFailures(manager: manager).padding(.horizontal, PluginManagementLayout.contentInset)
-                    .transition(.opacity)
-            }
-            if !running && !manager.installBatch.pluginIds.isEmpty {
-                Text("安装：\(manager.installBatch.successCount) 成功 · \(manager.installBatch.failedPluginIds.count) 失败 · \(manager.installBatch.cancelledCount) 取消")
-                    .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, PluginManagementLayout.contentInset).padding(.bottom, PluginManagementLayout.summaryVerticalInset)
-            }
-            if !running && !manager.updateBatch.pluginIds.isEmpty {
-                Text("更新：\(manager.updateBatch.successCount) 成功 · \(manager.updateBatch.failedPluginIds.count) 失败 · \(manager.updateBatch.outcomes.values.filter { $0 == .cancelled }.count) 取消")
-                    .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, PluginManagementLayout.contentInset).padding(.bottom, PluginManagementLayout.summaryVerticalInset)
-            }
-            if showsConsent { PluginInstallConsentPanel(hostID: consentHostID) }
         }
+        .padding(.horizontal, PluginManagementLayout.contentInset).padding(.vertical, PluginManagementLayout.summaryVerticalInset)
         .background(PluginManagementLayout.cardBackground, in: RoundedRectangle(cornerRadius: PluginManagementLayout.cardRadius, style: .continuous))
         .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4), value: state)
-        .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4), value: subtitle)
+    }
+
+    private var runningSummary: some View {
+        let heading = Text(title).font(.headline)
+        let stopButton = PluginSummaryButton(title: "全部停止", color: .secondary, isSecondary: true, action: stop)
+            .disabled(!canStop)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: PluginManagementLayout.iconTextSpacing) {
+                heading.fixedSize()
+                Spacer(minLength: 0)
+                stopButton.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: PluginManagementLayout.itemSpacing) {
+                heading.fixedSize(horizontal: false, vertical: true)
+                stopButton
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var idleSummary: some View {
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: PluginManagementLayout.iconTextSpacing)) : AnyLayout(HStackLayout(spacing: PluginManagementLayout.iconTextSpacing))
+        return layout {
+            if case .updates = state {
+                HStack(spacing: -12) {
+                    ForEach(Array(updates.prefix(3)), id: \.self) { id in
+                        PluginManagementIcon(pluginID: id, displayName: manager.managementDisplayName(for: id), remoteIcon: manager.latestRemoteItemsByPluginId[id]?.icon, size: 36)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(uiColor: .secondarySystemGroupedBackground), lineWidth: 2.5))
+                    }
+                }.accessibilityHidden(true).transition(.opacity)
+            } else {
+                Image(systemName: symbol).font(.body.weight(.semibold)).foregroundStyle(color)
+                    .frame(width: 36, height: 36).background(color.opacity(0.12), in: Circle()).accessibilityHidden(true)
+                    .contentTransition(.opacity).transition(.opacity)
+            }
+            VStack(alignment: .leading, spacing: PluginManagementLayout.textSpacing) {
+                Text(title).font(.headline).contentTransition(.opacity)
+                Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true).monospacedDigit()
+                    .contentTransition(.opacity)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            PluginSummaryAction(state: state, manager: manager,
+                                updateIDs: updates, preparationFailed: preparationError != nil,
+                                update: update, retryInstall: retryInstall, check: check,
+                                retryPreparation: retryPreparation)
+        }.animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4), value: subtitle)
     }
 }
 
 private struct PluginSummaryAction: View {
     let state: PluginManagementSummaryState
     let manager: PluginSourceManager
-    let canStop: Bool
     let updateIDs: [String]
     let preparationFailed: Bool
     let update: ([String]) -> Void
     let retryInstall: () -> Void
     let check: () -> Void
     let retryPreparation: () -> Void
-    let stop: () -> Void
     var body: some View {
         VStack {
             switch state {
-            case .running:
-                if canStop { PluginSummaryButton(title: "停止", color: .secondary, isSecondary: true, action: stop) }
+            case .running: EmptyView()
             case .failed:
                 PluginSummaryButton(title: "重试", color: .red) {
                     if preparationFailed { retryPreparation() }
@@ -182,24 +176,6 @@ private struct PluginSummaryButton: View {
                 .frame(minHeight: PluginManagementLayout.minimumTarget)
                 .contentShape(Rectangle())
         }.buttonStyle(PluginPressButtonStyle()).opacity(isEnabled ? 1 : 0.45)
-    }
-}
-
-private struct PluginBatchFailures: View {
-    let manager: PluginSourceManager
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(manager.installBatch.failedPluginIds, id: \.self) { id in
-                if case .failed(let reason) = manager.installBatch.outcomes[id] {
-                    Text("\(manager.installBatch.displayNames[id] ?? id)：\(SupportDiagnosticSanitizer.text(reason))")
-                }
-            }
-            ForEach(manager.updateBatch.failedPluginIds, id: \.self) { id in
-                if case .failed(let reason) = manager.updateBatch.outcomes[id] {
-                    Text("\(manager.managementDisplayName(for: id))：\(SupportDiagnosticSanitizer.text(reason))")
-                }
-            }
-        }.font(.footnote).foregroundStyle(.secondary).padding(.bottom, PluginManagementLayout.summaryVerticalInset)
     }
 }
 

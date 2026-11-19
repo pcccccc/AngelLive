@@ -19,12 +19,12 @@ struct PluginManagementView: View {
     @State private var didPrepare = false
     @State private var context = PluginInstallationContext()
     @State private var consentHostID = UUID()
-    @State private var consentAnchor = "summary"
     @State private var operationTask: Task<Void, Never>?
     @State private var installedItems: [ManagedPluginItem] = []
     @State private var discoveredItems: [ManagedPluginItem] = []
     @State private var highlightedIDs: Set<String> = []
     @State private var feedback = PluginManagementFeedback()
+    @State private var recordedInstallSuccessIDs: Set<String>?
     @State private var lastChecked: Date?
     @State private var refreshTask: Task<Void, Never>?
     @State private var playlistCount = PlaylistInstanceStore.shared.all().count
@@ -35,6 +35,17 @@ struct PluginManagementView: View {
     }
     private var canOperate: Bool { operationTask == nil && !manager.isManagementBusy && !installation.isPreparing && !installation.isInstalling }
     private var consentLocked: Bool { consent.isPresenting(for: consentHostID) }
+    private var consentButtonID: UUID? {
+        guard consentLocked, let origin = feedback.consentOrigin, origin.matches(consent.pendingReason) else { return nil }
+        switch origin.surface {
+        case .row:
+            guard detail == nil,
+                  installedItems.contains(where: { $0.id == origin.itemID }) || discoveredItems.contains(where: { $0.id == origin.itemID }) else { return nil }
+        case .detail:
+            guard detail?.id == origin.itemID else { return nil }
+        }
+        return origin.buttonID
+    }
     private var installSuccessfulIDs: Set<String> { Set(manager.installBatch.pluginIds.filter { manager.installBatch.outcomes[$0] == .installed }) }
     private var updateSuccessfulIDs: Set<String> { Set(manager.updateBatch.pluginIds.filter { manager.updateBatch.outcomes[$0] == .updated }) }
 
@@ -45,9 +56,8 @@ struct PluginManagementView: View {
                     manager: manager, installedIDs: availability.installedPluginIds,
                     isPreparing: installation.isPreparing, preparationTitle: context.preparationTitle,
                     preparationError: context.errorMessage, lastChecked: lastChecked, canStop: operationTask != nil,
-                    update: update, retryInstall: retryInstall, check: check,
-                    retryPreparation: retryPreparation, stop: stop,
-                    consentHostID: consentHostID, showsConsent: consentAnchor == "summary"
+                    update: { update($0) }, retryInstall: retryInstall, check: check,
+                    retryPreparation: retryPreparation, stop: stop
                 )
             }.listRowInsets(PluginManagementLayout.zeroInsets)
             if let urls = context.sourceURLs {
@@ -55,22 +65,17 @@ struct PluginManagementView: View {
             }
             PluginInstalledSection(
                 items: installedItems, highlightedIDs: highlightedIDs, searchIsEmpty: searchText.isEmpty,
-                canOperate: canOperate, canStop: operationTask != nil,
-                open: { detail = $0 }, action: { perform($0) },
-                uninstall: stageUninstall, login: { loginPluginID = $0 }
+                canOperate: canOperate,
+                open: { detail = $0 }, action: { perform($0, buttonID: $1) },
+                uninstall: stageUninstall, login: { if canOperate { loginPluginID = $0 } }
             )
             Section {
-                if consentAnchor == "discoveryBatch", consentLocked {
-                    PluginInstallConsentPanel(hostID: consentHostID)
-                        .background(PluginManagementLayout.cardBackground, in: RoundedRectangle(cornerRadius: PluginManagementLayout.cardRadius, style: .continuous))
-                }
                 PluginDiscoveryShelf(
                     items: discoveredItems, isLoading: installation.isPreparing || manager.isFetchingIndex,
                     hasSources: !(context.sourceURLs ?? manager.sourceURLs).isEmpty,
                     sourcesVerified: !(context.sourceURLs ?? manager.sourceURLs).isEmpty && (context.sourceURLs ?? manager.sourceURLs).allSatisfy { if case .healthy = manager.health(for: $0) { true } else { false } },
-                    searchIsEmpty: searchText.isEmpty, canOperate: canOperate, canStop: operationTask != nil,
-                    consentHostID: consentHostID, consentAnchor: consentAnchor,
-                    open: { detail = $0 }, action: { perform($0) }, addSource: { showAddSource = true }
+                    searchIsEmpty: searchText.isEmpty, canOperate: canOperate,
+                    open: { detail = $0 }, action: { perform($0, buttonID: $1) }, addSource: { showAddSource = true }
                 )
             } header: {
                 PluginManagementSectionHeading(
@@ -90,6 +95,7 @@ struct PluginManagementView: View {
                         Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                     }.frame(minHeight: PluginManagementLayout.minimumTarget).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityIdentifier("plugins.sources")
+                .disabled(!canOperate)
                 .listRowInsets(EdgeInsets(top: PluginManagementLayout.itemSpacing, leading: PluginManagementLayout.contentInset, bottom: PluginManagementLayout.itemSpacing, trailing: PluginManagementLayout.contentInset))
             } header: { PluginManagementSectionGap() }
               footer: { PluginManagementFooter(text: "下拉页面检查更新") }
@@ -99,11 +105,13 @@ struct PluginManagementView: View {
         .environment(\.defaultMinListHeaderHeight, 0)
         .tint(PluginManagementLayout.primaryAction)
         .environment(feedback)
+        .environment(\.pluginConsentButton, { consentButtonID })
         .contentMargins(.horizontal, PluginManagementLayout.pageInset, for: .scrollContent)
         .contentMargins(.top, PluginManagementLayout.itemSpacing, for: .scrollContent)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索插件")
         .navigationTitle("插件").navigationBarTitleDisplayMode(.large).fullUITabBarHidden()
         .navigationBarBackButtonHidden(consentLocked).interactiveDismissDisabled(consentLocked)
+        .pluginInstallConsentAlert(consent, isActive: { consentLocked && detail == nil && consentButtonID == nil })
         .toolbar {
             if isPresentedModally {
                 ToolbarItem(placement: .cancellationAction) {
@@ -147,11 +155,7 @@ struct PluginManagementView: View {
             do { try await Task.sleep(for: .milliseconds(1800)) } catch { return }
             highlightedIDs = []
         }
-        .onChange(of: installSuccessfulIDs) { old, new in
-            let completed = new.subtracting(old)
-            feedback.recentSuccessIDs.formUnion(completed)
-            feedback.recentInstallIDs.formUnion(completed)
-        }
+        .onChange(of: installSuccessfulIDs) { _, _ in recordInstallSuccess() }
         .onChange(of: updateSuccessfulIDs) { old, new in feedback.recentSuccessIDs.formUnion(new.subtracting(old)) }
         .task(id: feedback.recentSuccessIDs) {
             guard !feedback.recentSuccessIDs.isEmpty else { return }
@@ -189,13 +193,14 @@ struct PluginManagementView: View {
         .sheet(item: $detail) { item in
             NavigationStack {
                 PluginManagementDetailView(
-                    item: item, canOperate: canOperate, canStop: operationTask != nil,
-                    consentHostID: consentHostID, showsConsent: consentAnchor == "detail:\(item.id)",
-                    action: { perform($0, anchor: "detail:\(item.id)") },
+                    item: item, canOperate: canOperate,
+                    consentHostID: consentHostID, action: { perform(item, buttonID: $0, surface: .detail) },
                     uninstall: { stageUninstall($0); detail = nil }
                 )
             }
+            .pluginInstallConsentAlert(consent, isActive: { consentLocked && detail?.id == item.id && consentButtonID == nil })
             .environment(feedback)
+            .environment(\.pluginConsentButton, { consentButtonID })
             .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             .interactiveDismissDisabled(consentLocked)
         }
@@ -214,6 +219,7 @@ struct PluginManagementView: View {
         if !Task.isCancelled { lastChecked = Date() }
     }
     private func refreshItems() {
+        recordInstallSuccess()
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         func matches(_ item: ManagedPluginItem) -> Bool {
             query.isEmpty || item.name.localizedCaseInsensitiveContains(query) || item.pluginID.localizedCaseInsensitiveContains(query)
@@ -225,30 +231,47 @@ struct PluginManagementView: View {
         let installed = availability.installedPluginIds.filter { $0 != manager.pendingUninstallPluginId }.map { id in
             ManagedPluginItem(pluginID: id, name: manager.managementDisplayName(for: id), sourceURL: source(for: id), remote: catalog.first { $0.id == id }, namespace: .installed)
         }.filter(matches)
-        let discovered = catalog.filter { manager.installedVersion(for: $0.id) == nil || feedback.recentInstallIDs.contains($0.id) }.map {
+        let batch = manager.installBatch
+        let pendingInstallIDs = batch.isRunning ? batch.pluginIds.filter { batch.outcomes[$0] == nil } : []
+        let retainedDiscoveryIDs = feedback.recentInstallIDs.union(pendingInstallIDs)
+        let discovered = catalog.filter { manager.installedVersion(for: $0.id) == nil || retainedDiscoveryIDs.contains($0.id) }.map {
             ManagedPluginItem(pluginID: $0.id, name: $0.displayName, sourceURL: source(for: $0.id), remote: $0)
         }.filter(matches)
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4)) {
             installedItems = installed; discoveredItems = discovered
         }
     }
-    private func perform(_ item: ManagedPluginItem, anchor: String? = nil) {
-        let state = manager.managementActionState(for: item.pluginID, remote: item.remote)
-        if state == .installing || state == .updating || manager.isWaitingForUpdate(for: item.pluginID) { stop(); return }
-        if manager.installedVersion(for: item.pluginID) != nil { update([item.pluginID]); return }
+    private func recordInstallSuccess() {
+        let previous = recordedInstallSuccessIDs
+        let current = installSuccessfulIDs
+        guard previous != current else { return }
+        recordedInstallSuccessIDs = current
+        guard let previous else { return }
+        let completed = current.subtracting(previous)
+        feedback.recentSuccessIDs.formUnion(completed)
+        feedback.recentInstallIDs.formUnion(completed)
+    }
+
+    private func perform(_ item: ManagedPluginItem, buttonID: UUID?, surface: PluginActionConsentOrigin.Surface = .row) {
         guard canOperate else { return }
-        consentAnchor = anchor ?? item.id
+        let origin = buttonID.map { PluginActionConsentOrigin(buttonID: $0, itemID: item.id, pluginID: item.pluginID, surface: surface) }
+        if manager.installedVersion(for: item.pluginID) != nil {
+            update([item.pluginID], consentOrigin: origin)
+            return
+        }
         guard commitPending() else { return }
+        feedback.consentOrigin = origin
         operationTask = Task {
-            defer { operationTask = nil; refreshItems() }
+            defer { feedback.consentOrigin = nil; operationTask = nil; refreshItems() }
             await installation.install(pluginIds: [item.pluginID], sourceURLs: item.sourceURL.map { [$0] } ?? context.sourceURLs, manager: manager, availability: availability)
         }
     }
-    private func update(_ ids: [String]) {
+    private func update(_ ids: [String], consentOrigin: PluginActionConsentOrigin? = nil) {
         guard canOperate, !ids.isEmpty else { return }
         guard commitPending() else { return }
+        feedback.consentOrigin = consentOrigin
         operationTask = Task {
-            defer { operationTask = nil; refreshItems() }
+            defer { feedback.consentOrigin = nil; operationTask = nil; refreshItems() }
             _ = await manager.updateAllPlugins(pluginIds: ids)
             await availability.refresh(); await manager.refreshAvailableUpdates()
         }
@@ -256,7 +279,6 @@ struct PluginManagementView: View {
     private func retryInstall() {
         guard canOperate else { return }
         guard commitPending() else { return }
-        consentAnchor = "summary"
         operationTask = Task {
             defer { operationTask = nil; refreshItems() }
             await installation.retryFailed(manager: manager, availability: availability)
@@ -268,7 +290,6 @@ struct PluginManagementView: View {
             .filter { manager.installedVersion(for: $0.id) == nil }.map(\.id)
         let sourceURLs = context.sourceURLs
         guard !ids.isEmpty else { return }
-        consentAnchor = "discoveryBatch"
         operationTask = Task {
             defer { operationTask = nil; refreshItems() }
             await installation.install(pluginIds: ids, sourceURLs: sourceURLs, manager: manager, availability: availability)

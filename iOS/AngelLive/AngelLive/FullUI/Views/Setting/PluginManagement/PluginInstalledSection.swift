@@ -9,9 +9,8 @@ struct PluginInstalledSection: View {
     let highlightedIDs: Set<String>
     let searchIsEmpty: Bool
     let canOperate: Bool
-    let canStop: Bool
     let open: (ManagedPluginItem) -> Void
-    let action: (ManagedPluginItem) -> Void
+    let action: (ManagedPluginItem, UUID?) -> Void
     let uninstall: (String) -> Void
     let login: (String) -> Void
 
@@ -24,7 +23,7 @@ struct PluginInstalledSection: View {
                     .listRowInsets(PluginManagementLayout.zeroInsets)
             }
             ForEach(items) { item in
-                PluginManagementInstalledRow(item: item, highlighted: highlightedIDs.contains(item.pluginID), canOperate: canOperate, canStop: canStop, open: { open(item) }, action: { action(item) })
+                PluginManagementInstalledRow(item: item, highlighted: highlightedIDs.contains(item.pluginID), canOperate: canOperate, open: { open(item) }, action: { action(item, $0) })
                     .listRowInsets(PluginManagementLayout.rowInsets)
                     .alignmentGuide(.listRowSeparatorLeading) { _ in separatorLeading }
                     .alignmentGuide(.listRowSeparatorTrailing) { dimensions in dimensions.width + separatorTrailingInset }
@@ -33,7 +32,7 @@ struct PluginInstalledSection: View {
                             .tint(.red).disabled(!canOperate)
                             .accessibilityLabel("卸载 \(item.name)")
                         if manager.hasUpdate(for: item.pluginID) {
-                            Button { action(item) } label: { Label("更新", systemImage: "arrow.down") }
+                            Button { action(item, nil) } label: { Label("更新", systemImage: "arrow.down") }
                                 .tint(.blue).disabled(!canOperate)
                                 .accessibilityLabel("更新 \(item.name)")
                         }
@@ -41,7 +40,7 @@ struct PluginInstalledSection: View {
                     .contextMenu {
                         if manager.hasUpdate(for: item.pluginID) {
                             Button {
-                                action(item)
+                                action(item, nil)
                             } label: {
                                 Label(manager.updateBatch.failedPluginIds.contains(item.pluginID) ? "重试更新" : "更新到 \(manager.latestVersion(for: item.pluginID) ?? "")", systemImage: "arrow.down")
                             }.disabled(!canOperate)
@@ -80,14 +79,13 @@ struct PluginManagementInstalledRow: View {
     let item: ManagedPluginItem
     let highlighted: Bool
     let canOperate: Bool
-    let canStop: Bool
     let open: () -> Void
-    let action: () -> Void
+    let action: (UUID) -> Void
     @State private var flash = false
 
     private var showsAction: Bool {
         manager.managementActionState(for: item.pluginID, remote: item.remote) != .installed
-            || manager.isWaitingForUpdate(for: item.pluginID)
+            || manager.isPendingInstallation(for: item.pluginID)
             || feedback.recentSuccessIDs.contains(item.pluginID)
     }
 
@@ -99,7 +97,7 @@ struct PluginManagementInstalledRow: View {
                         HStack(spacing: PluginManagementLayout.iconTextSpacing) { PluginManagementRowContent(item: item); chevron }
                     }.buttonStyle(PluginPressButtonStyle())
                     if showsAction {
-                        PluginActionButton(item: item, canOperate: canOperate, canStop: canStop, action: action)
+                        PluginActionButton(item: item, canOperate: canOperate, action: action)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                             .transition(actionTransition)
                     }
@@ -109,7 +107,7 @@ struct PluginManagementInstalledRow: View {
                     Button(action: open) { PluginManagementRowContent(item: item) }
                         .buttonStyle(PluginPressButtonStyle())
                     if showsAction {
-                        PluginActionButton(item: item, canOperate: canOperate, canStop: canStop, action: action)
+                        PluginActionButton(item: item, canOperate: canOperate, action: action)
                             .transition(actionTransition)
                     }
                     chevron
@@ -152,8 +150,6 @@ struct PluginManagementRowContent: View {
         if availability.requiresLogin(for: item.pluginID) || item.remote?.item.auth?.required == true {
             parts.append(credentials.isLoggedIn(pluginId: item.pluginID) ? "已登录" : "需要登录")
         }
-        if manager.isWaitingForUpdate(for: item.pluginID) { parts.append("等待中") }
-        if manager.updateBatch.currentPluginId == item.pluginID { parts.append("正在更新") }
         return parts.joined(separator: " · ")
     }
     var body: some View {
@@ -162,11 +158,11 @@ struct PluginManagementRowContent: View {
             VStack(alignment: .leading, spacing: PluginManagementLayout.textSpacing) {
                 Text(item.name).font(.headline).foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(metadata).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true).contentTransition(.opacity)
-                if case .failed = manager.managementActionState(for: item.pluginID, remote: item.remote) {
-                    Label("更新失败 · 旧版本仍可用", systemImage: "exclamationmark.circle")
-                        .font(.footnote).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                if let reason = item.installationFailure(in: manager) {
+                    PluginInstallationFailureReason(reason: reason)
+                } else {
+                    Text(metadata).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true).contentTransition(.opacity)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
