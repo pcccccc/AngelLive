@@ -11,6 +11,13 @@ import AngelLiveCore
 
 final class TVDanmakuContainerView: UIView {
     let danmakuView = DanmakuView(frame: .zero)
+    var bottomControlBand: CGFloat = 0 {
+        didSet {
+            guard bottomControlBand != oldValue else { return }
+            danmakuView.clipsToBounds = bottomControlBand > 0
+            setNeedsLayout()
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -27,7 +34,11 @@ final class TVDanmakuContainerView: UIView {
 
         let innerFrame: CGRect
         if let window {
-            let safeAreaFrame = window.safeAreaLayoutGuide.layoutFrame
+            var safeAreaFrame = window.safeAreaLayoutGuide.layoutFrame
+            if bottomControlBand > 0 {
+                safeAreaFrame.size.height = max(0, min(safeAreaFrame.maxY, window.bounds.maxY - bottomControlBand)
+                                                - safeAreaFrame.minY)
+            }
             let safeAreaFrameInContainer = convert(safeAreaFrame, from: window)
             let intersection = bounds.intersection(safeAreaFrameInContainer)
             if intersection.isNull {
@@ -69,6 +80,7 @@ final class TVDanmakuContainerView: UIView {
 struct DanmuView: UIViewRepresentable {
     var coordinator: Coordinator
     var height: CGFloat
+    var bottomControlBand: CGFloat = 0
     @Environment(AppState.self) var appViewModel
 
     func makeUIView(context: Context) -> TVDanmakuContainerView {
@@ -85,6 +97,7 @@ struct DanmuView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: TVDanmakuContainerView, context: Context) {
+        uiView.bottomControlBand = bottomControlBand
         let danmakuView = uiView.danmakuView
         danmakuView.paddingTop = 5
         danmakuView.trackHeight = CGFloat(Double(appViewModel.danmuSettingsViewModel.danmuFontSize) * 1.35)
