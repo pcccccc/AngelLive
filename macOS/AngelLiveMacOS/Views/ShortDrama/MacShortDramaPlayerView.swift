@@ -87,7 +87,7 @@ struct MacShortDramaPlayerView: View {
 
     private var isSeekable: Bool { controller.isSeekable(for: model.playback?.id) }
     private var isScrubbing: Bool { isSeeking && !seekCommitInFlight }
-    private var inset: CGFloat { MacPlayerChrome.inset(fullscreen: isFullscreen) }
+    private var inset: CGFloat { MacPlayerChrome.inset }
     private var chromeVisible: Bool { controlsVisible && !isScrubbing }
     private var playerLayer: KSPlayerLayer? { controller.coordinator?.playerLayer }
     private var airPlayPlayer: AVPlayer? {

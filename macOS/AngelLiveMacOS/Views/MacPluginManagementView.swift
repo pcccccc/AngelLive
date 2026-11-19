@@ -17,8 +17,8 @@ struct MacPluginManagementView: View {
     @State private var showSources = false
     @State private var showAddSource = false
     @State private var loginPluginID: String?
-    @State private var consentAnchor = "summary"
     @State private var consentHostID = UUID()
+    @State private var consentOrigin: MacPluginConsentOrigin?
     @State private var operationTask: Task<Void, Never>?
     @State private var refreshTask: Task<Void, Never>?
     @State private var lastChecked: Date?
@@ -70,7 +70,7 @@ struct MacPluginManagementView: View {
             MacPluginManagementHeader(
                 searchText: $searchText, searchFocusRequest: searchFocusRequest,
                 showSources: $showSources, showAddSource: $showAddSource,
-                canAdd: canOperate, consentAnchor: consentAnchor,
+                canAdd: canOperate,
                 lastChecked: lastChecked, preparationError: preparationError,
                 installedIDs: installedIDs, update: { update(updates) },
                 retry: retry, check: check, stop: stop,
@@ -81,8 +81,8 @@ struct MacPluginManagementView: View {
                     selection: $selection, installed: installedItems, discovered: discoveredItems,
                     installedCount: installedIDs.count, query: query,
                     discoverySourceLabels: discoverySourceLabels,
-                    canOperate: canOperate, canStop: operationTask != nil,
-                    recentSuccessIDs: recentSuccessIDs, consentAnchor: consentAnchor,
+                    canOperate: canOperate,
+                    recentSuccessIDs: recentSuccessIDs,
                     clearSearch: { searchText = "" }, addSource: { showAddSource = true },
                     retrySources: check,
                     action: perform, uninstall: stageUninstall,
@@ -97,10 +97,8 @@ struct MacPluginManagementView: View {
                 if let selectedItem {
                     MacPluginDetail(
                         item: selectedItem, canOperate: canOperate,
-                        canStop: operationTask != nil,
                         isSuccessful: recentSuccessIDs.contains(selectedItem.id),
-                        consentAnchor: consentAnchor,
-                        action: { perform(selectedItem, "detail:\(selectedItem.id)") },
+                        action: { perform(selectedItem, $0) },
                         uninstall: { stageUninstall(selectedItem.id) },
                         login: { loginPluginID = selectedItem.id }
                     )
@@ -124,6 +122,7 @@ struct MacPluginManagementView: View {
             )
         }
         .environment(\.macPluginConsentHost, consentHostID)
+        .environment(\.macPluginConsentOrigin, $consentOrigin)
         .background(.background)
         .toolbarVisibility(.hidden, for: .windowToolbar)
         .frame(
@@ -156,13 +155,11 @@ struct MacPluginManagementView: View {
         .onAppear { consent.presentationDidAppear(consentHostID) }
         .task { await reloadCatalog(); reconcileSelection() }
         .onChange(of: visibleItems.map(\.id)) { _, _ in reconcileSelection() }
-        .onChange(of: selection) { previous, _ in
-            if let previous, consentAnchor == "detail:\(previous)" {
-                consentAnchor = "row:\(previous)"
-            }
-        }
         .onChange(of: consent.isPresenting) { _, presenting in
-            if presenting && operationTask == nil { consentAnchor = "summary" }
+            if presenting {
+                showSources = false
+                showAddSource = false
+            }
         }
         .onChange(of: successfulIDs) { previous, current in
             recentSuccessIDs.formUnion(current.subtracting(previous))
@@ -183,6 +180,7 @@ struct MacPluginManagementView: View {
             _ = commitPending()
             undoManager?.removeAllActions(withTarget: undoRegistration)
             consent.presentationDidDisappear(consentHostID)
+            operationTask?.cancel()
             refreshTask?.cancel()
         }
     }
@@ -207,20 +205,17 @@ struct MacPluginManagementView: View {
         if !visibleItems.contains(where: { $0.id == selection }) { selection = visibleItems.first?.id }
     }
 
-    private func perform(_ item: MacManagedPlugin, _ anchor: String) {
-        let state = manager.managementActionState(for: item.id, remote: item.remote)
-        if state == .installing || state == .updating || manager.isWaitingForUpdate(for: item.id) ||
-            (manager.installBatch.isRunning && manager.installBatch.pluginIds.contains(item.id) &&
-             manager.installBatch.outcomes[item.id] == nil) {
-            stop(); return
-        }
+    private func perform(_ item: MacManagedPlugin, _ buttonID: UUID?) {
         if item.installed { update([item.id]); return }
         guard canOperate, commitPending() else { return }
-        consentAnchor = anchor
+        consentOrigin = buttonID.map { MacPluginConsentOrigin(buttonID: $0, pluginID: item.id) }
         preparationError = nil
         pendingPreparationIDs = []
         operationTask = Task {
-            defer { operationTask = nil }
+            defer {
+                consentOrigin = nil
+                operationTask = nil
+            }
             if item.remote == nil {
                 await reloadCatalog()
                 guard !Task.isCancelled else { return }
@@ -255,7 +250,6 @@ struct MacPluginManagementView: View {
         if !pendingPreparationIDs.isEmpty || !manager.installBatch.failedPluginIds.isEmpty {
             let ids = pendingPreparationIDs.isEmpty ? manager.installBatch.failedPluginIds : pendingPreparationIDs
             guard canOperate, commitPending() else { return }
-            consentAnchor = "summary"
             preparationError = nil
             operationTask = Task {
                 defer { operationTask = nil }

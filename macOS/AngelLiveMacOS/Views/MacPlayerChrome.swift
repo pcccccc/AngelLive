@@ -8,13 +8,13 @@ import KSPlayer
 #endif
 
 enum MacPlayerChrome {
+    static let inset: CGFloat = 16
     static let controlSize: CGFloat = 44
     static let symbolFont: Font = .system(size: 18, weight: .semibold)
     static let topControlSpacing: CGFloat = 12
     static let titleWidthFraction: CGFloat = 0.40
+    static let titleHorizontalPadding: CGFloat = 16
     static let hoverSpace = "MacPlayerChrome.hoverSpace"
-
-    static func inset(fullscreen: Bool) -> CGFloat { fullscreen ? 24 : 16 }
 
     static func isPointerOverControls(_ point: CGPoint, inset: CGFloat, bottomFrame: CGRect) -> Bool {
         (0..<(inset + controlSize)).contains(point.y) || bottomFrame.contains(point)
@@ -66,16 +66,15 @@ extension View {
     }
 
     func macPlayerTitleCapsule(
-        maximumWidth: CGFloat? = nil,
         hasSubtitle: Bool = false,
         interactive: Bool = false
     ) -> some View {
         let shape = hasSubtitle
             ? AnyShape(RoundedRectangle(cornerRadius: MacPlayerChrome.controlSize / 2))
             : AnyShape(Capsule())
-        return padding(.horizontal, 16)
+        return padding(.horizontal, MacPlayerChrome.titleHorizontalPadding)
             .padding(.vertical, 6)
-            .frame(maxWidth: maximumWidth, minHeight: MacPlayerChrome.controlSize, alignment: .leading)
+            .frame(minHeight: MacPlayerChrome.controlSize, alignment: .leading)
             .contentShape(shape)
             .macPlayerTopControlGlass(in: shape, interactive: interactive)
     }
@@ -324,6 +323,17 @@ struct MacPlayerTitle: View {
     let maximumWidth: CGFloat
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            labels.fixedSize(horizontal: true, vertical: false)
+            labels
+        }
+        .macPlayerTitleCapsule(hasSubtitle: subtitle != nil)
+        .accessibilityElement(children: .combine)
+        .frame(maxWidth: maximumWidth, alignment: .leading)
+        .allowsHitTesting(false)
+    }
+
+    private var labels: some View {
         VStack(alignment: .leading, spacing: 2) {
             // Compact line boxes keep both lines and their padding within the 44-point chrome.
             Text(verbatim: title)
@@ -341,9 +351,6 @@ struct MacPlayerTitle: View {
         }
         .lineLimit(1)
         .truncationMode(.tail)
-        .macPlayerTitleCapsule(maximumWidth: maximumWidth, hasSubtitle: subtitle != nil)
-        .accessibilityElement(children: .combine)
-        .allowsHitTesting(false)
     }
 }
 

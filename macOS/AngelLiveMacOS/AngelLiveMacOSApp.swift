@@ -213,6 +213,10 @@ struct AngelLiveMacOSApp: App {
         WindowGroup(for: LiveModel.self) { $room in
             if !isUITesting, let room = room {
                 MacRoomPlaybackDestination(room: room, presentation: .playerWindow)
+                    .toolbarVisibility(
+                        production.pluginAvailability.hasAvailablePlugins ? .hidden : .automatic,
+                        for: .windowToolbar
+                    )
                     .environment(\.usesFullUI, production.pluginAvailability.hasAvailablePlugins)
                     .environment(production.pluginAvailability)
                     .environment(production.favorite)

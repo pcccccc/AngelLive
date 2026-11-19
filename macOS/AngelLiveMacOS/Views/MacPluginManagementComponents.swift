@@ -35,6 +35,20 @@ nonisolated enum MacPluginLayout {
 
 extension EnvironmentValues {
     @Entry var macPluginConsentHost: UUID?
+    @Entry var macPluginConsentOrigin: Binding<MacPluginConsentOrigin?>?
+}
+
+struct MacPluginConsentOrigin {
+    let buttonID: UUID
+    let pluginID: String
+
+    func matches(_ reason: PluginInstallConsentReason?) -> Bool {
+        switch reason {
+        case .installingLoginPlugin(let id, _): id == pluginID
+        case .installingLoginPluginsBatch(let plugins): plugins.count == 1 && plugins.first?.pluginId == pluginID
+        default: false
+        }
+    }
 }
 
 struct MacManagedPlugin: Identifiable {
@@ -44,6 +58,14 @@ struct MacManagedPlugin: Identifiable {
     let remote: RemotePluginDisplayItem?
     let installed: Bool
     var host: String { sourceURL.flatMap { URL(string: $0)?.host() } ?? "本地插件" }
+
+    @MainActor func phase(in manager: PluginSourceManager, isSuccessful: Bool) -> PluginManagementRowPhase {
+        if manager.installationProgress(for: id) != nil { return .progress }
+        let state = manager.managementActionState(for: id, remote: remote)
+        let isWaiting = manager.isPendingInstallation(for: id)
+            && manager.installBatch.currentPluginId != id && manager.updateBatch.currentPluginId != id
+        return .resolve(actionState: state, isWaiting: isWaiting, isSuccessful: isSuccessful)
+    }
 }
 
 struct MacPluginManagementHeader: View {
@@ -53,7 +75,6 @@ struct MacPluginManagementHeader: View {
     @Binding var showSources: Bool
     @Binding var showAddSource: Bool
     let canAdd: Bool
-    let consentAnchor: String
     let lastChecked: Date?
     let preparationError: String?
     let installedIDs: [String]
@@ -69,7 +90,7 @@ struct MacPluginManagementHeader: View {
             Text("插件").font(.headline).fixedSize()
             MacPluginActivity(
                 installedIDs: installedIDs, lastChecked: lastChecked,
-                preparationError: preparationError, consentAnchor: consentAnchor,
+                preparationError: preparationError,
                 update: update, retry: retry, check: check, stop: stop
             )
             HStack(spacing: MacPluginLayout.headerGap) {
@@ -82,6 +103,7 @@ struct MacPluginManagementHeader: View {
                     Image(systemName: "link").frame(width: 24, height: MacPluginLayout.toolbarControlHeight)
                 }
                 .buttonStyle(.borderless).help("来源").accessibilityLabel("来源")
+                .disabled(!canAdd)
                 .popover(isPresented: $showSources, arrowEdge: .bottom) {
                     MacPluginSourcesView(reloadCatalog: reloadCatalog, commitPending: commitPending)
                         .frame(width: 360)
@@ -155,12 +177,9 @@ private struct MacPluginHeaderLayout: Layout {
 
 struct MacPluginActivity: View {
     @Environment(PluginSourceManager.self) private var manager
-    @Environment(PluginInstallConsentService.self) private var consent
-    @Environment(\.macPluginConsentHost) private var hostID
     let installedIDs: [String]
     let lastChecked: Date?
     let preparationError: String?
-    let consentAnchor: String
     let update: () -> Void
     let retry: () -> Void
     let check: () -> Void
@@ -174,7 +193,7 @@ struct MacPluginActivity: View {
     }
     private var state: PluginManagementSummaryState {
         .resolve(
-            isRunning: manager.updateBatch.isRunning || manager.installBatch.isRunning,
+            isRunning: manager.activeInstallationCount > 0,
             hasFailures: hasFailures, updateCount: updateCount,
             isChecking: manager.isFetchingIndex || manager.isCheckingUpdates,
             isVerifiedCurrent: !installedIDs.isEmpty && !manager.sourceURLs.isEmpty &&
@@ -182,19 +201,9 @@ struct MacPluginActivity: View {
                 installedIDs.allSatisfy { manager.latestVersion(for: $0) != nil }
         )
     }
-    private var total: Int {
-        manager.installBatch.isRunning ? manager.installBatch.pluginIds.count : manager.updateBatch.pluginIds.count
-    }
-    private var completed: Int {
-        manager.installBatch.isRunning ? manager.installBatch.completedCount : manager.updateBatch.completedCount
-    }
-    private var currentName: String {
-        let id = manager.installBatch.isRunning ? manager.installBatch.currentPluginId : manager.updateBatch.currentPluginId
-        return id.map { manager.managementDisplayName(for: $0) } ?? "准备中"
-    }
     private var title: LocalizedStringResource {
         switch state {
-        case .running: manager.installBatch.isRunning ? "正在安装 \(currentName)" : "正在更新 \(currentName)"
+        case .running: "正在安装 \(manager.activeInstallationCount) 个插件"
         case .failed:
             if preparationError != nil { "准备安装失败" }
             else if !manager.installBatch.failedPluginIds.isEmpty { "\(manager.installBatch.failedPluginIds.count) 个安装失败" }
@@ -208,8 +217,11 @@ struct MacPluginActivity: View {
         }
     }
     private var subtitle: String {
-        switch state {
-        case .running: "\(min(completed + 1, total)) / \(total) · 批次 \(Int(Double(completed) / Double(max(1, total)) * 100))%"
+        let cancelled = manager.installBatch.cancelledCount
+        if !manager.installBatch.isRunning, state != .running, state != .failed, cancelled > 0 {
+            return "\(cancelled) 个安装已取消"
+        }
+        return switch state {
         case .current: lastChecked.map { $0.formatted(date: .omitted, time: .shortened) } ?? ""
         case .checking: "\(manager.sourceURLs.count) 个来源"
         case .failed: SupportDiagnosticSanitizer.text(preparationError ?? manager.errorMessage ?? "可以重试")
@@ -219,16 +231,18 @@ struct MacPluginActivity: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Group {
-                if state == .checking || state == .running {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: state == .failed ? "exclamationmark.triangle" :
-                            state == .current ? "checkmark.circle" : "arrow.down.circle")
-                        .foregroundStyle(state == .failed ? Color.red : state == .current ? Color.green : Color.accentColor)
+            if state != .running {
+                Group {
+                    if state == .checking {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: state == .failed ? "exclamationmark.triangle" :
+                                state == .current ? "checkmark.circle" : "arrow.down.circle")
+                            .foregroundStyle(state == .failed ? Color.red : state == .current ? Color.green : Color.accentColor)
+                    }
                 }
+                .frame(width: 16)
             }
-            .frame(width: 16)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(title).font(.callout).lineLimit(1).layoutPriority(1)
                 if !subtitle.isEmpty {
@@ -239,7 +253,7 @@ struct MacPluginActivity: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Group {
                 switch state {
-                case .running: Button("停止", action: stop)
+                case .running: Button("全部停止", action: stop)
                 case .failed: Button("重试", action: retry).foregroundStyle(.red).disabled(manager.isManagementBusy)
                 case .updates: Button("全部更新", action: update).disabled(manager.isManagementBusy)
                 case .checking: EmptyView()
@@ -253,25 +267,11 @@ struct MacPluginActivity: View {
         .frame(height: MacPluginLayout.toolbarControlHeight)
         .background(state == .failed ? Color.red.opacity(0.1) : Color.primary.opacity(0.05),
                     in: RoundedRectangle(cornerRadius: MacPluginLayout.cornerRadius))
-        .overlay(alignment: .bottomLeading) {
-            if state == .running {
-                ProgressView(value: Double(completed), total: Double(max(1, total)))
-                    .progressViewStyle(.linear).controlSize(.mini)
-                    .padding(.horizontal, 8)
-            }
-        }
         .contentTransition(.numericText())
         .help(SupportDiagnosticSanitizer.text(subtitle))
-        .popover(isPresented: consentBinding(anchor: "summary"), arrowEdge: .bottom) {
-            MacPluginConsentPanel()
-        }
+        .modifier(MacPluginConsentPopover(buttonID: nil))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("plugins.activity")
-    }
-
-    private func consentBinding(anchor: String) -> Binding<Bool> {
-        Binding(get: { consentAnchor == anchor && hostID.map { consent.isPresenting(for: $0) } == true },
-                set: { if !$0, consentAnchor == anchor { consent.resolve(false) } })
     }
 }
 
@@ -286,13 +286,11 @@ struct MacPluginSidebar: View {
     let query: String
     let discoverySourceLabels: [String: String]
     let canOperate: Bool
-    let canStop: Bool
     let recentSuccessIDs: Set<String>
-    let consentAnchor: String
     let clearSearch: () -> Void
     let addSource: () -> Void
     let retrySources: () -> Void
-    let action: (MacManagedPlugin, String) -> Void
+    let action: (MacManagedPlugin, UUID?) -> Void
     let uninstall: (String) -> Void
     let login: (String) -> Void
 
@@ -310,11 +308,11 @@ struct MacPluginSidebar: View {
                     }
                     ForEach(installed) { item in
                         MacPluginSidebarRow(
-                            item: item, canOperate: canOperate, canStop: canStop,
+                            item: item, canOperate: canOperate,
                             sourceLabel: nil,
                             isSelected: selection == item.id,
-                            isSuccessful: recentSuccessIDs.contains(item.id), consentAnchor: consentAnchor,
-                            action: { action(item, "row:\(item.id)") }, uninstall: { uninstall(item.id) },
+                            isSuccessful: recentSuccessIDs.contains(item.id),
+                            action: { action(item, $0) }, uninstall: { uninstall(item.id) },
                             login: { login(item.id) }
                         )
                         .tag(item.id)
@@ -335,11 +333,11 @@ struct MacPluginSidebar: View {
                     }
                     ForEach(discovered) { item in
                         MacPluginSidebarRow(
-                            item: item, canOperate: canOperate, canStop: canStop,
+                            item: item, canOperate: canOperate,
                             sourceLabel: discoverySourceLabels[item.id],
                             isSelected: selection == item.id,
-                            isSuccessful: recentSuccessIDs.contains(item.id), consentAnchor: consentAnchor,
-                            action: { action(item, "row:\(item.id)") }, uninstall: { uninstall(item.id) },
+                            isSuccessful: recentSuccessIDs.contains(item.id),
+                            action: { action(item, $0) }, uninstall: { uninstall(item.id) },
                             login: { login(item.id) }
                         )
                         .tag(item.id)
@@ -391,21 +389,15 @@ struct MacPluginSidebarRow: View {
     @ObservedObject private var credentials = PlatformCredentialSyncService.shared
     let item: MacManagedPlugin
     let canOperate: Bool
-    let canStop: Bool
     let sourceLabel: String?
     let isSelected: Bool
     let isSuccessful: Bool
-    let consentAnchor: String
-    let action: () -> Void
+    let action: (UUID?) -> Void
     let uninstall: () -> Void
     let login: () -> Void
 
     private var phase: PluginManagementRowPhase {
-        .resolve(actionState: manager.managementActionState(for: item.id, remote: item.remote),
-                 isWaiting: manager.isWaitingForUpdate(for: item.id) ||
-                    (manager.installBatch.isRunning && manager.installBatch.pluginIds.contains(item.id) &&
-                     manager.installBatch.currentPluginId != item.id && manager.installBatch.outcomes[item.id] == nil),
-                 isSuccessful: isSuccessful)
+        item.phase(in: manager, isSuccessful: isSuccessful)
     }
     private var version: String { manager.installedVersion(for: item.id) ?? item.remote?.item.version ?? "未知" }
     private var metadata: String {
@@ -424,34 +416,34 @@ struct MacPluginSidebarRow: View {
                 Text(item.name).font(.body.weight(.medium)).lineLimit(1)
                 Text(metadata).font(.caption).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle).contentTransition(.numericText())
-                if case .failed = phase {
-                    Text(item.installed ? "更新失败" : "安装失败").font(.caption).foregroundStyle(.red).lineLimit(1)
+                if case .failed(let reason) = phase {
+                    MacPluginInstallationFailure(reason: reason)
                 }
             }
             Spacer(minLength: 2)
             MacPluginActionButton(
-                name: item.name, phase: phase, latestVersion: manager.latestVersion(for: item.id),
-                installed: item.installed, large: false, isSelected: isSelected,
-                canOperate: canOperate, canStop: canStop,
-                consentAnchor: consentAnchor == "row:\(item.id)", action: action
+                item: item, phase: phase, large: false, isSelected: isSelected,
+                canOperate: canOperate,
+                action: action
             )
         }
         .padding(.vertical, 5)
         .contentShape(Rectangle())
         .contextMenu {
             MacPluginContextActions(item: item, phase: phase, canOperate: canOperate,
-                                    canStop: canStop, action: action, uninstall: uninstall, login: login)
+                                    action: { action(nil) }, uninstall: uninstall, login: login)
         }
     }
 }
 
 struct MacPluginContextActions: View {
+    @Environment(PluginSourceManager.self) private var manager
+    @Environment(PluginInstallConsentService.self) private var consent
     @Environment(PluginAvailabilityService.self) private var availability
     @ObservedObject private var credentials = PlatformCredentialSyncService.shared
     let item: MacManagedPlugin
     let phase: PluginManagementRowPhase
     let canOperate: Bool
-    let canStop: Bool
     let action: () -> Void
     let uninstall: () -> Void
     let login: () -> Void
@@ -462,7 +454,9 @@ struct MacPluginContextActions: View {
             case .update: Button("更新", action: action).disabled(!canOperate)
             case .failed: Button("重试", action: action).disabled(!canOperate)
             case .install: Button("安装", action: action).disabled(!canOperate)
-            case .progress, .queued: Button("停止当前批次", action: action).disabled(!canStop)
+            case .progress, .queued:
+                Button("停止") { manager.cancelInstallation(pluginId: item.id) }
+                    .disabled(consent.isPresenting || !manager.isPendingInstallation(for: item.id))
             default: EmptyView()
             }
             if item.installed, availability.requiresLogin(for: item.id), !credentials.isLoggedIn(pluginId: item.id) {
@@ -484,90 +478,116 @@ struct MacPluginContextActions: View {
 }
 
 struct MacPluginActionButton: View {
+    @Environment(PluginSourceManager.self) private var manager
     @Environment(PluginInstallConsentService.self) private var consent
-    @Environment(\.macPluginConsentHost) private var hostID
+    @Environment(\.macPluginConsentOrigin) private var consentOrigin
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let name: String
+    let item: MacManagedPlugin
     let phase: PluginManagementRowPhase
-    let latestVersion: String?
-    let installed: Bool
     let large: Bool
     let isSelected: Bool
     let canOperate: Bool
-    let canStop: Bool
-    let consentAnchor: Bool
-    let action: () -> Void
+    let action: (UUID) -> Void
+    @State private var buttonID = UUID()
+    @State private var isHovered = false
 
     private var title: LocalizedStringResource {
         switch phase {
         case .install: "安装"
-        case .update: large ? "更新到 \(latestVersion ?? "")" : "更新"
-        case .failed: large ? (installed ? "重试更新" : "重试安装") : "重试"
-        case .queued: "等待中"
-        case .progress: installed ? "正在更新" : "正在安装"
-        case .success: "已完成"
-        case .idle: "已安装"
+        case .update: large ? "更新到 \(manager.latestVersion(for: item.id) ?? "")" : "更新"
+        case .failed: "重试"
+        case .queued: "取消排队"
+        case .progress: pending ? "停止" : "正在处理"
+        case .success, .idle: "已安装"
+        }
+    }
+
+    private var progress: PluginInstallationProgress? { manager.installationProgress(for: item.id) }
+    private var busy: Bool { phase == .queued || phase == .progress }
+    private var pending: Bool { manager.isPendingInstallation(for: item.id) }
+    private var isEnabled: Bool { busy ? pending && !consent.isPresenting : canOperate && phase != .success }
+    private var progressDescription: Text {
+        if phase == .queued { return Text("等待中") }
+        switch progress {
+        case .downloading(let fraction):
+            if let fraction { return Text("已下载 \(fraction, format: .percent.precision(.fractionLength(0)))") }
+            return Text("正在下载")
+        case .verifyingAndExtracting: return Text("正在校验和解压")
+        case .activating: return Text("正在激活")
+        case nil: return busy ? Text("正在准备") : Text("")
         }
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                if phase == .queued || phase == .progress {
-                    ZStack {
-                        ProgressView().controlSize(.small)
-                        if phase == .progress {
-                            Image(systemName: "stop.fill").font(.system(size: 6))
-                        }
-                    }
-                    .frame(width: 22, height: 22)
-                } else if phase == .success {
-                    Image(systemName: "checkmark").foregroundStyle(.green).frame(width: 22, height: 22)
+        if phase != .idle {
+            button
+                .onScrollVisibilityChange(threshold: 0.01) { visible in
+                    if !visible { clearConsentOrigin() }
                 }
-                if large || phase == .install || phase == .update || isFailed {
+                .onDisappear(perform: clearConsentOrigin)
+        }
+    }
+
+    private var button: some View {
+        let shape = RoundedRectangle(cornerRadius: large ? 7 : 11)
+        return Button {
+            if busy {
+                manager.cancelInstallation(pluginId: item.id)
+            } else {
+                action(buttonID)
+            }
+        } label: {
+            Group {
+                if busy {
+                    MacPluginInstallationRing(
+                        fraction: phase == .queued ? 0 : progress?.fractionCompleted,
+                        showsStop: pending
+                    )
+                    .frame(width: large ? 22 : 18, height: large ? 22 : 18)
+                } else {
                     Text(title).lineLimit(1)
+                        .padding(.horizontal, large ? 14 : 10)
                 }
             }
             .font(.callout.weight(.semibold))
-            .padding(.horizontal, large ? 14 : (isPill ? 10 : 0))
-            .frame(minWidth: large ? 132 : (isPill ? 48 : 22), minHeight: large ? 28 : 22)
+            .frame(minWidth: large ? 132 : 48, minHeight: large ? 28 : 22)
             .foregroundStyle(buttonForeground)
-            .background(buttonBackground,
-                        in: RoundedRectangle(cornerRadius: large ? 7 : 11))
+            .background(buttonBackground, in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: large ? 7 : 11)
-                    .strokeBorder(
-                        Color(nsColor: .controlTextColor).opacity(isSelected && isPill ? 0.6 : 0),
-                        lineWidth: 1
-                    )
+                shape.strokeBorder(Color(nsColor: .controlTextColor).opacity(isSelected && isPill ? 0.6 : 0))
             }
+            .overlay {
+                shape.fill(Color.primary.opacity(isHovered && isEnabled ? 0.08 : 0))
+                    .allowsHitTesting(false)
+            }
+            .contentShape(shape)
+            .contentShape(.focusEffect, shape)
         }
         .buttonStyle(.plain)
-        .disabled((phase == .queued || phase == .progress) ? !canStop : (!canOperate || phase == .success || phase == .idle))
-        .opacity(phase == .idle ? 0 : 1)
-        .frame(width: phase == .idle && !large ? 0 : nil)
-        .popover(isPresented: Binding(
-            get: { consentAnchor && hostID.map { consent.isPresenting(for: $0) } == true },
-            set: { if !$0 && consentAnchor { consent.resolve(false) } }
-        ), arrowEdge: .bottom) {
-            MacPluginConsentPanel()
-        }
-        .help(phase == .progress || phase == .queued ? "停止当前安装或更新批次" : String(localized: title))
-        .accessibilityLabel(phase == .progress || phase == .queued ? "停止当前安装或更新批次" : "\(String(localized: title)) \(name)")
-        .accessibilityIdentifier("plugins.action.\(name)")
+        .disabled(!isEnabled)
+        .onHover { isHovered = $0 }
+        .modifier(MacPluginConsentPopover(buttonID: buttonID))
+        .help(Text(title))
+        .accessibilityLabel(Text("\(String(localized: title)) \(item.name)"))
+        .accessibilityValue(progressDescription)
+        .accessibilityIdentifier("plugins.action.\(item.name)")
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: phase)
+    }
+
+    private func clearConsentOrigin() {
+        if consentOrigin?.wrappedValue?.buttonID == buttonID { consentOrigin?.wrappedValue = nil }
     }
 
     private var buttonBackground: Color {
         if isSelected && isPill { return Color(nsColor: .controlBackgroundColor) }
         if isPill { return large ? (isFailed ? .red : .accentColor) : (isFailed ? .red.opacity(0.1) : .accentColor.opacity(0.12)) }
-        if large && (phase == .progress || phase == .queued) { return .primary.opacity(0.07) }
-        if large && phase == .success { return .green.opacity(0.1) }
+        if busy { return .primary.opacity(0.07) }
         return .clear
     }
 
     private var buttonForeground: Color {
         if isSelected { return Color(nsColor: .controlTextColor) }
+        if phase == .success { return .secondary }
         return large && isPill ? .white : isFailed ? .red : .accentColor
     }
 
@@ -577,21 +597,93 @@ struct MacPluginActionButton: View {
     }
 }
 
-struct MacPluginConsentPanel: View {
+private struct MacPluginInstallationRing: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let fraction: Double?
+    let showsStop: Bool
+
+    var body: some View {
+        ZStack {
+            Circle().strokeBorder(lineWidth: 2).opacity(0.18)
+            if let fraction {
+                arc(fraction).rotationEffect(.degrees(-90))
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+                    let rotation = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1) * 360
+                    arc(0.72).rotationEffect(.degrees(reduceMotion ? -90 : rotation))
+                }
+            }
+            if showsStop {
+                Image(systemName: "stop.fill").font(.system(size: 7))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func arc(_ fraction: Double) -> some View {
+        Circle().inset(by: 1).trim(from: 0, to: CGFloat(fraction))
+            .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round))
+    }
+}
+
+private struct MacPluginInstallationFailure: View {
+    let reason: String
+
+    var body: some View {
+        let message = SupportDiagnosticSanitizer.text(reason, limit: 512)
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        (message.isEmpty ? Text("操作失败，请重试") : Text(message))
+            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+    }
+}
+
+private struct MacPluginConsentPopover: ViewModifier {
     @Environment(PluginInstallConsentService.self) private var consent
+    @Environment(\.macPluginConsentHost) private var hostID
+    @Environment(\.macPluginConsentOrigin) private var consentOrigin
+    let buttonID: UUID?
+
+    private var presentsConsent: Bool {
+        guard let hostID, consent.isPresenting(for: hostID) else { return false }
+        let origin = consentOrigin?.wrappedValue
+        let activeButton = origin?.matches(consent.pendingReason) == true ? origin?.buttonID : nil
+        return activeButton == buttonID
+    }
+
+    func body(content: Content) -> some View {
+        let reason = consent.pendingReason
+        let isPresenter = presentsConsent
+        func presentsRequest() -> Bool {
+            isPresenter && presentsConsent && reason != nil && consent.pendingReason == reason
+        }
+        return content.popover(isPresented: Binding(
+            get: presentsRequest,
+            set: { if !$0, presentsRequest() { consent.resolve(false) } }
+        ), arrowEdge: .bottom) {
+            MacPluginConsentPanel { approved in
+                if presentsRequest() { consent.resolve(approved) }
+            }
+        }
+    }
+}
+
+private struct MacPluginConsentPanel: View {
+    @Environment(PluginInstallConsentService.self) private var consent
+    let resolve: (Bool) -> Void
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(consent.alertTitle).font(.headline)
             Text(consent.alertMessage).font(.callout).foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("取消安装") { consent.resolve(false) }
-                Button(consent.continueButtonTitle) { consent.resolve(true) }
+                Button("取消安装") { resolve(false) }
+                Button(consent.continueButtonTitle) { resolve(true) }
                     .buttonStyle(.borderedProminent)
             }
         }
         .padding(16).frame(width: 320)
-        .onExitCommand { consent.resolve(false) }
+        .onExitCommand { resolve(false) }
     }
 }
 
@@ -601,21 +693,15 @@ struct MacPluginDetail: View {
     @ObservedObject private var credentials = PlatformCredentialSyncService.shared
     let item: MacManagedPlugin
     let canOperate: Bool
-    let canStop: Bool
     let isSuccessful: Bool
-    let consentAnchor: String
-    let action: () -> Void
+    let action: (UUID?) -> Void
     let uninstall: () -> Void
     let login: () -> Void
     @State private var features: [PlatformFeature] = []
 
     private var version: String { manager.installedVersion(for: item.id) ?? item.remote?.item.version ?? "未知" }
     private var phase: PluginManagementRowPhase {
-        .resolve(actionState: manager.managementActionState(for: item.id, remote: item.remote),
-                 isWaiting: manager.isWaitingForUpdate(for: item.id) ||
-                    (manager.installBatch.isRunning && manager.installBatch.pluginIds.contains(item.id) &&
-                     manager.installBatch.currentPluginId != item.id && manager.installBatch.outcomes[item.id] == nil),
-                 isSuccessful: isSuccessful)
+        item.phase(in: manager, isSuccessful: isSuccessful)
     }
     private var needsLogin: Bool { availability.requiresLogin(for: item.id) || item.remote?.item.auth?.required == true }
     private var verifiedCurrent: Bool {
@@ -630,17 +716,10 @@ struct MacPluginDetail: View {
             VStack(alignment: .leading, spacing: MacPluginLayout.sectionSpacing) {
                 MacPluginDetailHero(
                     item: item, phase: phase, version: version,
-                    latestVersion: manager.latestVersion(for: item.id),
                     verifiedCurrent: verifiedCurrent, needsLogin: needsLogin,
-                    canOperate: canOperate, canStop: canStop,
-                    consentAnchor: consentAnchor == "detail:\(item.id)", action: action
+                    canOperate: canOperate,
+                    action: action
                 )
-                if case .failed(let reason) = phase {
-                    MacPluginFailureCard(
-                        title: item.installed ? "更新失败，旧版本仍可用" : "安装失败",
-                        message: item.installed ? "当前仍在使用 \(version)。\(reason)" : reason
-                    )
-                }
                 MacPluginDetailInformation(
                     version: version, capabilityCount: features.isEmpty ? nil : features.count,
                     needsLogin: needsLogin, loggedIn: credentials.isLoggedIn(pluginId: item.id),
@@ -660,13 +739,10 @@ struct MacPluginDetailHero: View {
     let item: MacManagedPlugin
     let phase: PluginManagementRowPhase
     let version: String
-    let latestVersion: String?
     let verifiedCurrent: Bool
     let needsLogin: Bool
     let canOperate: Bool
-    let canStop: Bool
-    let consentAnchor: Bool
-    let action: () -> Void
+    let action: (UUID?) -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 18) {
@@ -682,9 +758,8 @@ struct MacPluginDetailHero: View {
                         } else { Text("当前版本 \(version)").foregroundStyle(.secondary) }
                     } else {
                         MacPluginActionButton(
-                            name: item.name, phase: phase, latestVersion: latestVersion,
-                            installed: item.installed, large: true, isSelected: false, canOperate: canOperate,
-                            canStop: canStop, consentAnchor: consentAnchor, action: action
+                            item: item, phase: phase, large: true, isSelected: false,
+                            canOperate: canOperate, action: action
                         )
                     }
                     if !item.installed && needsLogin {
@@ -692,6 +767,9 @@ struct MacPluginDetailHero: View {
                     }
                 }
                 .font(.callout).padding(.top, 9)
+                if case .failed(let reason) = phase {
+                    MacPluginInstallationFailure(reason: reason)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             MacPluginIcon(pluginID: item.id, displayName: item.name, remoteIcon: item.remote?.item.icon, size: MacPluginLayout.detailIcon)

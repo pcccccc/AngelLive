@@ -30,6 +30,7 @@ struct MacRoomPlaybackDestination: View {
     let presentation: MacPlaybackPresentation
     @Environment(\.dismiss) private var dismiss
     @Environment(\.usesFullUI) private var usesFullUI
+    @Environment(\.macPlayerAcceptsCommands) private var acceptsCommands
     @State private var playerWindow: NSWindow?
     @State private var closeCoordinator = MacPlayerCloseCoordinator()
     @State private var routedRoom: LiveModel
@@ -68,6 +69,9 @@ struct MacRoomPlaybackDestination: View {
         }
         .onChange(of: usesFullUI) { _, enabled in
             closeCoordinator.bind(to: enabled ? playerWindow : nil)
+        }
+        .onChange(of: acceptsCommands, initial: true) { _, acceptsCommands in
+            closeCoordinator.suppressesFullscreenToolbar = acceptsCommands
         }
         .onChange(of: routedRoom.id) { _, _ in closeCoordinator.cancelPendingClose() }
         .onChange(of: room) { _, newRoom in routedRoom = newRoom }

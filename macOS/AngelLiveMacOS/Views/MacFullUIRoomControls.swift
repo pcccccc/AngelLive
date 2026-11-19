@@ -59,7 +59,7 @@ struct MacFullUIRoomControls: View {
 
     private var room: LiveModel { viewModel.currentRoom }
     private var isFavorite: Bool { favorites.roomList.contains(room) }
-    private var inset: CGFloat { MacPlayerChrome.inset(fullscreen: isFullscreen) }
+    private var inset: CGFloat { MacPlayerChrome.inset }
     private var isOnDemand: Bool {
         #if canImport(KSPlayer)
         viewModel.isOnDemand
@@ -244,18 +244,19 @@ struct MacFullUIRoomControls: View {
     }
 
     private func topRow(width: CGFloat) -> some View {
-        HStack(alignment: .center, spacing: MacPlayerChrome.topControlSpacing) {
+        let titleWidth = width * MacPlayerChrome.titleWidthFraction
+        return HStack(alignment: .center, spacing: MacPlayerChrome.topControlSpacing) {
             MacPlayerCloseButton(action: closePlayer)
             if isOnDemand {
                 MacPlayerTitle(
                     title: room.roomTitle.isEmpty ? room.userName.orDash : room.roomTitle,
-                    maximumWidth: width * MacPlayerChrome.titleWidthFraction
+                    maximumWidth: titleWidth
                 )
             } else {
                 Button { showStreamer = true } label: {
                     MacPlayerName(
                         room.userName.orDash, font: .systemFont(ofSize: 13, weight: .semibold),
-                        maximumWidth: width * 0.46
+                        maximumWidth: max(0, titleWidth - 2 * MacPlayerChrome.titleHorizontalPadding)
                     )
                     .macPlayerTitleCapsule(interactive: true)
                 }
