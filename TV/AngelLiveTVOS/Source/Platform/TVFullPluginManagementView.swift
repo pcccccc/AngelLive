@@ -136,6 +136,7 @@ struct TVFullPluginManagementView: View {
     }
 
     private func openPlugin(_ id: String, _ focus: TVFullPluginFocus = .detailAction) {
+        guard !pluginSourceManager.installBatch.isRunning, !consentService.isPresenting else { return }
         commitUninstall()
         focusToRestore = pluginSourceManager.installedVersion(for: id) == nil ? .available(id) : .installed(id)
         selectedPlugin = TVFullPluginSelection(id: id, focus: focus)
@@ -150,12 +151,14 @@ struct TVFullPluginManagementView: View {
     }
 
     private func openSources() {
+        guard !pluginSourceManager.isManagementBusy, !consentService.isPresenting else { return }
         commitUninstall()
         focusToRestore = focusedAction ?? .sources
         showSources = true
     }
 
     private func closeManagement() {
+        operation?.cancel()
         consentService.resolve(false)
         commitUninstall()
         onClose()
