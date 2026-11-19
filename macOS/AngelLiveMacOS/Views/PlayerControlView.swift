@@ -1007,6 +1007,7 @@ final class DraggableView: NSView {
 
 struct PlayerCursorAutoHide: NSViewRepresentable {
     let hideDelay: TimeInterval
+    var keepsCursorVisible = false
 
     func makeNSView(context: Context) -> CursorAutoHideNSView {
         CursorAutoHideNSView(hideDelay: hideDelay)
@@ -1014,6 +1015,7 @@ struct PlayerCursorAutoHide: NSViewRepresentable {
 
     func updateNSView(_ nsView: CursorAutoHideNSView, context: Context) {
         nsView.hideDelay = hideDelay
+        nsView.setKeepsCursorVisible(keepsCursorVisible)
     }
 }
 
@@ -1022,6 +1024,7 @@ final class CursorAutoHideNSView: NSView {
     private var monitor: Any?
     private var hideTimer: Timer?
     private var didHide = false
+    private var keepsCursorVisible = false
 
     init(hideDelay: TimeInterval) {
         self.hideDelay = hideDelay
@@ -1087,6 +1090,12 @@ final class CursorAutoHideNSView: NSView {
 
     // MARK: handlers
 
+    func setKeepsCursorVisible(_ keepsVisible: Bool) {
+        guard keepsCursorVisible != keepsVisible else { return }
+        keepsCursorVisible = keepsVisible
+        handleActivity()
+    }
+
     private func handleActivity() {
         showCursorNow()
         scheduleHide()
@@ -1094,6 +1103,7 @@ final class CursorAutoHideNSView: NSView {
 
     private func scheduleHide() {
         hideTimer?.invalidate()
+        guard !keepsCursorVisible else { return }
         hideTimer = Timer.scheduledTimer(withTimeInterval: hideDelay, repeats: false) { [weak self] _ in
             // 线程前提:scheduledTimer 挂在当前(主)RunLoop,回调必在主线程,判断错误会 trap。
             MainActor.assumeIsolated {

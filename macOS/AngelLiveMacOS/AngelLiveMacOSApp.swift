@@ -155,6 +155,7 @@ struct AngelLiveMacOSApp: App {
         }
         .commands {
             MacPluginManagementCommands()
+            MacPlayerCommands()
             CommandGroup(replacing: .appInfo) {
                 Button("关于 AngelLive") {
                     if production.pluginAvailability.hasAvailablePlugins {
@@ -230,6 +231,7 @@ struct AngelLiveMacOSApp: App {
         // .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
+            MacPlayerCommands()
             CommandGroup(replacing: .windowSize) {
                 EmptyView()
             }

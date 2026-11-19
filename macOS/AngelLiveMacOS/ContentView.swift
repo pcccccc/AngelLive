@@ -222,6 +222,7 @@ struct ContentView: View {
                     .background(SidebarWidthEnforcer(min: 180, ideal: 200, max: 260))
                     .navigationDestination(for: LiveModel.self) { room in
                         MacRoomPlaybackDestination(room: room, presentation: .navigation)
+                            .environment(\.macPlayerAcceptsCommands, !fullscreenPlayerManager.showFullscreenPlayer)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
                         selectedTab = .settings

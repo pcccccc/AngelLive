@@ -99,18 +99,19 @@ struct RoomPlayerView: View {
                 }
                 #endif
 
-                // 控制层
-                PlayerControlView(
-                    room: viewModel.currentRoom,
-                    viewModel: viewModel,
-                    coordinator: coordinator,
-                    volume: $volume,
-                    isMuted: $isMuted,
-                    showSettings: $showVideoSettings,
-                    playerWindow: playerWindow,
-                    onClose: onClose,
-                    onShowRoomSwitcher: usesFullUI ? { showRoomSwitcher = true } : nil
-                )
+                if usesFullUI {
+                    MacFullUIRoomControls(
+                        viewModel: viewModel, coordinator: coordinator, volume: $volume, isMuted: $isMuted,
+                        showVideoInfo: $showVideoSettings, roomSwitcherVisible: $showRoomSwitcher,
+                        window: playerWindow, onClose: onClose, onExitFullscreen: onExitFullscreen
+                    )
+                } else {
+                    PlayerControlView(
+                        room: viewModel.currentRoom, viewModel: viewModel, coordinator: coordinator,
+                        volume: $volume, isMuted: $isMuted, showSettings: $showVideoSettings,
+                        playerWindow: playerWindow, onClose: onClose
+                    )
+                }
 
                 if let notice = visibleRecoveryNotice {
                     VStack {
@@ -165,6 +166,7 @@ struct RoomPlayerView: View {
             historyModel.addHistory(room: viewModel.currentRoom)
         }
         .onKeyPress(.space) {
+            guard !usesFullUI else { return .ignored }
             if viewModel.isPlaying {
                 coordinator.playerLayer?.pause()
             } else {
@@ -178,30 +180,24 @@ struct RoomPlayerView: View {
             }
             return .handled
         }
-        .onTapGesture(count: 2) {
-            if let window = playerWindow {
-                window.toggleFullScreen(nil)
-            }
-        }
+        .gesture(TapGesture(count: 2).onEnded { playerWindow?.toggleFullScreen(nil) },
+                 including: usesFullUI ? .subviews : .all)
         .onKeyPress(.escape) {
+            guard !usesFullUI else { return .ignored }
             if showRoomSwitcher {
                 showRoomSwitcher = false
-            } else if usesFullUI, showVideoSettings {
-                showVideoSettings = false
-            } else if usesFullUI, onExitFullscreen?() == true {
-                // Keep playback until a subsequent Esc requests the destination's close action.
             } else if let window = playerWindow, window.styleMask.contains(.fullScreen) {
                 if onExitFullscreen == nil { window.toggleFullScreen(nil) }
-            } else if usesFullUI {
-                onClose?()
             }
             return .handled
         }
         .onKeyPress(.upArrow) {
+            guard !usesFullUI else { return .ignored }
             adjustVolume(by: 0.05)
             return .handled
         }
         .onKeyPress(.downArrow) {
+            guard !usesFullUI else { return .ignored }
             adjustVolume(by: -0.05)
             return .handled
         }
