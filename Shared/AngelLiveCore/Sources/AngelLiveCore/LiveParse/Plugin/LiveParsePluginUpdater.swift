@@ -90,6 +90,33 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         return data
     }
 
+    private func downloadZip(url: URL, progress: PluginInstallationProgressHandler) async throws -> Data {
+        let (events, continuation) = AsyncThrowingStream<PluginZipDownloadDelegate.Event, Error>.makeStream(
+            bufferingPolicy: .bufferingNewest(8)
+        )
+        let download = session.downloadTask(with: url)
+        download.delegate = PluginZipDownloadDelegate(continuation: continuation)
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            download.resume()
+            for try await event in events {
+                try Task.checkCancellation()
+                switch event {
+                case .bytes(let received, let expected):
+                    guard expected > 0 else { continue }
+                    let fraction = min(1, Double(received) / Double(expected))
+                    await progress(.downloading(fraction))
+                case .archive(let data):
+                    return data
+                }
+            }
+            try Task.checkCancellation()
+            throw URLError(.cannotDecodeContentData)
+        } onCancel: {
+            download.cancel()
+        }
+    }
+
     /// Check whether the specified plugin has a newer version in remote index.
     /// - Returns: nil when plugin does not exist in the index.
     public func checkUpdate(
@@ -120,14 +147,31 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
     }
 
     public func install(item: LiveParseRemotePluginItem) async throws -> LiveParsePluginManifest {
+        try await install(item: item, stagingDirectory: nil)
+    }
+
+    func install(
+        item: LiveParseRemotePluginItem,
+        stagingDirectory: URL?,
+        progress: PluginInstallationProgressHandler? = nil
+    ) async throws -> LiveParsePluginManifest {
         let entryId = await Self.consoleBegin(
             method: "install",
             request: Self.consoleRequestBody(for: item)
         )
         let start = Date()
         do {
-            let zipData = try await downloadVerifiedZip(item: item)
-            let manifest = try LiveParsePluginInstaller.install(zipData: zipData, storage: storage)
+            let zipData = try await downloadVerifiedZip(item: item, progress: progress)
+            try Task.checkCancellation()
+            let manifest: LiveParsePluginManifest
+            if let stagingDirectory {
+                manifest = try LiveParsePluginInstaller.extractPlugin(zipData: zipData, to: stagingDirectory)
+                guard manifest.pluginId == item.pluginId, manifest.version == item.version else {
+                    throw LiveParsePluginError.installFailed("Archive manifest does not match the catalog entry")
+                }
+            } else {
+                manifest = try LiveParsePluginInstaller.install(zipData: zipData, storage: storage)
+            }
             await Self.consoleFinish(
                 id: entryId,
                 start: start,
@@ -169,6 +213,7 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         do {
             let manifest = try await install(item: item)
             installedManifest = manifest
+            try Task.checkCancellation()
 
             if let afterInstallConsent {
                 let approved = await afterInstallConsent(manifest)
@@ -206,6 +251,24 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         }
     }
 
+    func activateStaged(
+        manifest: LiveParsePluginManifest,
+        directory: URL,
+        manager: LiveParsePluginManager,
+        progress: PluginInstallationProgressHandler?
+    ) async throws {
+        await progress?(.activating)
+        try Task.checkCancellation()
+        let plugin = makePluginForSmokeTest(manifest: manifest, directory: directory, session: manager.session)
+        defer { plugin.runtime.invalidateOwnedResources() }
+        try await plugin.load()
+        try Task.checkCancellation()
+        try LiveParsePluginInstaller.placeExtractedPlugin(
+            at: directory, manifest: manifest, storage: storage, replacingExisting: false
+        )
+        try await activateInstalled(manifest: manifest, manager: manager)
+    }
+
     /// 完成已落盘插件的 smoke test 并写入 `lastGoodVersion`。
     /// 用于"先批量下载、再统一确认、最后激活"的两阶段安装流程。
     /// smoke test 失败时会自动回滚该版本并抛出错误。
@@ -225,12 +288,16 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         )
         let start = Date()
         do {
+            try Task.checkCancellation()
             try await smokeTestInstalledPlugin(
                 manifest: manifest,
                 function: smokeFunction,
                 payload: smokePayload,
                 session: manager?.session ?? session
             )
+            // Cancellation before the last-good commit rolls back the staged
+            // version. After the commit, the operation has succeeded.
+            try Task.checkCancellation()
 
             if let manager {
                 try manager.setLastGoodVersion(pluginId: manifest.pluginId, version: manifest.version)
@@ -240,7 +307,7 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
             }
 
             // 新版本激活成功后,清理同 pluginId 的旧版本目录(保留 pinned + lastGood + 最新版)
-            let prunedVersions = CacheMaintenanceService.prunePluginOldVersions(pluginId: manifest.pluginId)
+            let prunedVersions = CacheMaintenanceService.prunePluginOldVersions(pluginId: manifest.pluginId, storage: storage)
             let prunedDescription = prunedVersions.isEmpty
                 ? "lastGood 已写入"
                 : "lastGood 已写入,已清理旧版本: \(prunedVersions.joined(separator: ", "))"
@@ -271,7 +338,10 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         manager?.evict(pluginId: manifest.pluginId)
     }
 
-    func downloadVerifiedZip(item: LiveParseRemotePluginItem) async throws -> Data {
+    func downloadVerifiedZip(
+        item: LiveParseRemotePluginItem,
+        progress: PluginInstallationProgressHandler? = nil
+    ) async throws -> Data {
         let expected = item.sha256.lowercased()
         let candidates = item.downloadURLs
         guard !candidates.isEmpty else {
@@ -280,14 +350,27 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
 
         var diagnostics: [String] = []
 
-        for raw in candidates {
+        for (index, raw) in candidates.enumerated() {
+            try Task.checkCancellation()
             guard let url = URL(string: raw) else {
                 diagnostics.append("invalid-url(\(raw))")
                 continue
             }
 
             do {
-                let zipData = try await downloadZip(url: url)
+                // A mirror retry has a different byte count. Show activity
+                // until a valid archive arrives without rewinding a known ring.
+                await progress?(.downloading(nil))
+                try Task.checkCancellation()
+                let zipData: Data
+                if index == 0, let progress {
+                    zipData = try await downloadZip(url: url, progress: progress)
+                } else {
+                    zipData = try await downloadZip(url: url)
+                }
+                try Task.checkCancellation()
+                await progress?(.verifyingAndExtracting)
+                try Task.checkCancellation()
                 let actual = sha256Hex(zipData)
                 guard actual == expected else {
                     diagnostics.append("checksum-mismatch(\(url.absoluteString))")
@@ -295,6 +378,7 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
                 }
                 return zipData
             } catch {
+                try Task.checkCancellation()
                 diagnostics.append("download-failed(\(url.absoluteString)): \(error.localizedDescription)")
             }
         }
@@ -332,9 +416,20 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         let smoke = function.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !smoke.isEmpty else { return }
 
-        let plugin = LiveParseLoadedPlugin(
+        let directory = storage.pluginVersionDirectory(pluginId: manifest.pluginId, version: manifest.version)
+        let plugin = makePluginForSmokeTest(manifest: manifest, directory: directory, session: session)
+        try await plugin.load()
+        _ = try await plugin.runtime.callPluginFunction(name: smoke, payload: payload)
+    }
+
+    private func makePluginForSmokeTest(
+        manifest: LiveParsePluginManifest,
+        directory: URL,
+        session: URLSession
+    ) -> LiveParseLoadedPlugin {
+        LiveParseLoadedPlugin(
             manifest: manifest,
-            rootDirectory: storage.pluginVersionDirectory(pluginId: manifest.pluginId, version: manifest.version),
+            rootDirectory: directory,
             location: .sandbox,
             runtime: JSRuntime(
                 pluginId: manifest.pluginId,
@@ -343,8 +438,6 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
                 credentialDomains: manifest.hostManagedCredentialDomains
             )
         )
-        try await plugin.load()
-        _ = try await plugin.runtime.callPluginFunction(name: smoke, payload: payload)
     }
 
     func semverCompare(_ lhs: String, _ rhs: String) -> Int {
@@ -426,6 +519,55 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
         @unknown default:
             return error.localizedDescription
         }
+    }
+}
+
+/// Forwards native download events in delegate order. Only the stream consumer
+/// publishes progress, so byte callbacks cannot arrive after the install moves
+/// on to verification or cancellation cleanup.
+private final class PluginZipDownloadDelegate: NSObject, URLSessionDownloadDelegate {
+    enum Event: Sendable {
+        case bytes(received: Int64, expected: Int64)
+        case archive(Data)
+    }
+
+    let continuation: AsyncThrowingStream<Event, Error>.Continuation
+
+    init(continuation: AsyncThrowingStream<Event, Error>.Continuation) {
+        self.continuation = continuation
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        continuation.yield(.bytes(received: totalBytesWritten, expected: totalBytesExpectedToWrite))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        do {
+            if let response = downloadTask.response as? HTTPURLResponse, !(200...299).contains(response.statusCode) {
+                throw URLError(.badServerResponse, userInfo: [
+                    NSLocalizedDescriptionKey: "HTTP \(response.statusCode)",
+                    LiveParsePluginUpdater.httpStatusCodeUserInfoKey: response.statusCode
+                ])
+            }
+            // The temporary URL is only valid for the duration of this callback.
+            continuation.yield(.archive(try Data(contentsOf: location)))
+        } catch {
+            continuation.finish(throwing: error)
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        continuation.finish(throwing: error)
     }
 }
 

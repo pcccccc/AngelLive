@@ -8,105 +8,99 @@ public struct PluginUpdateOverview: View {
     let update: ([String]) -> Void
     let check: () -> Void
     let showsCheckAction: Bool
+    let stop: (() -> Void)?
 
     public init(
         manager: PluginSourceManager,
         installedPluginIds: [String],
         update: @escaping ([String]) -> Void,
         check: @escaping () -> Void,
-        showsCheckAction: Bool = true
+        showsCheckAction: Bool = true,
+        stop: (() -> Void)? = nil
     ) {
         self.manager = manager
         self.installedPluginIds = installedPluginIds
         self.update = update
         self.check = check
         self.showsCheckAction = showsCheckAction
+        self.stop = stop
     }
 
     public var body: some View {
         let batch = manager.updateBatch
         let candidates = installedPluginIds.filter { manager.hasUpdate(for: $0) }
-        let isInstalling = manager.installTotalCount > 0
-        let progressCompleted = batch.isRunning ? batch.completedCount : manager.installCompletedCount
-        let progressTotal = batch.isRunning ? batch.pluginIds.count : manager.installTotalCount
-        let installingName = manager.remotePlugins.first(where: { $0.installState == .installing })?.displayName
-        let shouldShowUpdateActions = batch.isRunning || !candidates.isEmpty
+        let remaining = manager.activeInstallationCount
 
         VStack(alignment: .leading, spacing: 12) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    statusView(batch: batch, candidates: candidates, isInstalling: isInstalling)
-                    Spacer(minLength: 8)
-                    if showsCheckAction {
-                        checkButton
-                    }
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    statusView(batch: batch, candidates: candidates, isInstalling: isInstalling)
-                    if showsCheckAction {
-                        checkButton
-                    }
-                }
-            }
-
-            if batch.isRunning || isInstalling {
-                VStack(alignment: .leading, spacing: 6) {
-                    ProgressView(value: Double(progressCompleted), total: Double(max(1, progressTotal)))
-                    HStack {
-                        if batch.isRunning, let id = batch.currentPluginId {
-                            Text("正在更新 \(manager.managementDisplayName(for: id))", bundle: Bundle.main)
-                                .lineLimit(1)
-                        } else if isInstalling {
-                            Text(verbatim: installingName.map { "正在安装 \($0)" } ?? "正在安装插件")
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Text("\(progressCompleted) / \(progressTotal)")
-                            .monospacedDigit()
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
-
-            if shouldShowUpdateActions {
+            if remaining > 0 {
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { updateButtons(candidates: candidates) }
-                    VStack(alignment: .leading, spacing: 8) { updateButtons(candidates: candidates) }
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        operationStatus(remaining: remaining)
+                        Spacer(minLength: 8)
+                        stopButton
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        operationStatus(remaining: remaining)
+                        stopButton
+                    }
                 }
-                #if os(tvOS)
-                .focusSection()
-                #endif
-            }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        statusView(batch: batch, candidates: candidates)
+                        Spacer(minLength: 8)
+                        if showsCheckAction { checkButton }
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        statusView(batch: batch, candidates: candidates)
+                        if showsCheckAction { checkButton }
+                    }
+                }
 
-            if !batch.isRunning, !batch.failedPluginIds.isEmpty {
-                PluginUpdateFailures(batch: batch, manager: manager)
+                if !candidates.isEmpty {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { updateButtons(candidates: candidates) }
+                        VStack(alignment: .leading, spacing: 8) { updateButtons(candidates: candidates) }
+                    }
+                    #if os(tvOS)
+                    .focusSection()
+                    #endif
+                }
+
+                if !batch.isRunning, !batch.failedPluginIds.isEmpty {
+                    PluginUpdateFailures(batch: batch, manager: manager)
+                }
             }
         }
         .padding(.vertical, 4)
     }
 
+    private func operationStatus(remaining: Int) -> some View {
+        Text("正在安装 \(remaining) 个插件", bundle: .main).font(.headline)
+    }
+
+    @ViewBuilder
+    private var stopButton: some View {
+        if let stop {
+            Button(action: stop) { Text("全部停止", bundle: .main) }.buttonStyle(.bordered)
+        }
+    }
+
     @ViewBuilder
     private func statusView(
         batch: PluginUpdateBatch,
-        candidates: [String],
-        isInstalling: Bool
+        candidates: [String]
     ) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            if isInstalling {
-                Text("正在安装插件", bundle: Bundle.main)
-                    .font(.headline)
-            } else {
-                PluginUpdateHeadline(
-                    batch: batch,
-                    candidateCount: candidates.count,
-                    installedCount: installedPluginIds.count,
-                    isChecking: manager.isFetchingIndex || manager.isCheckingUpdates,
-                    hasFailedSources: manager.sourceHealth.values.contains { $0.isFailed },
-                    hasSources: !manager.sourceURLs.isEmpty
-                )
-                .font(.headline)
-            }
+            PluginUpdateHeadline(
+                batch: batch,
+                candidateCount: candidates.count,
+                installedCount: installedPluginIds.count,
+                isChecking: manager.isFetchingIndex || manager.isCheckingUpdates,
+                hasFailedSources: manager.sourceHealth.values.contains { $0.isFailed },
+                hasSources: !manager.sourceURLs.isEmpty
+            )
+            .font(.headline)
 
             Text("已安装 \(installedPluginIds.count) 个 · \(manager.sourceURLs.count + PlaylistInstanceStore.shared.all().count) 个订阅源", bundle: Bundle.main)
                 .font(.subheadline)
@@ -128,23 +122,10 @@ public struct PluginUpdateOverview: View {
         Button {
             update(candidates)
         } label: {
-            Label {
-                if manager.updateBatch.isRunning {
-                    Text("正在更新", bundle: Bundle.main)
-                } else {
-                    Text("全部更新", bundle: Bundle.main)
-                }
-            } icon: {
-                Image(systemName: "arrow.down.circle")
-            }
+            Label("全部更新", systemImage: "arrow.down.circle")
         }
         .buttonStyle(.borderedProminent)
-        #if os(tvOS)
-        // Retain remote focus on the same button throughout the operation.
-        .disabled(!manager.updateBatch.isRunning && (candidates.isEmpty || manager.isManagementBusy))
-        #else
         .disabled(candidates.isEmpty || manager.isManagementBusy)
-        #endif
         .accessibilityIdentifier("plugins.updateAll")
 
         if !manager.updateBatch.failedPluginIds.isEmpty && !manager.updateBatch.isRunning {
@@ -246,18 +227,22 @@ extension PluginSourceManager {
             switch result {
             case .updated: return .installed
             case .failed(let reason): return .failed(reason)
-            case .cancelled: break
+            case .cancelled: return hasUpdate(for: pluginId) ? .update : .installed
             }
         }
         if updatingPluginIds.contains(pluginId) { return .updating }
         if hasUpdate(for: pluginId), case .failed(let reason) = updateBatch.outcomes[pluginId] {
             return .failed(reason)
         }
-        // Catalog refresh replaces display items, but the install batch still
-        // owns its failed result until a retry or explicit result reset.
-        if !installBatch.isRunning, installedVersion(for: pluginId) == nil,
-           case .failed(let reason) = installBatch.outcomes[pluginId] {
-            return .failed(reason)
+        if installBatch.isPending(pluginId) { return .installing }
+        // Catalog items can be replaced while a batch is running. Keep its
+        // result authoritative for failed or cancelled installs.
+        if installedVersion(for: pluginId) == nil, let result = installBatch.outcomes[pluginId] {
+            switch result {
+            case .failed(let reason): return .failed(reason)
+            case .cancelled: return .install
+            case .installed: break
+            }
         }
         if let remote { return catalogActionState(for: remote) }
         return hasUpdate(for: pluginId) ? .update : .installed

@@ -104,9 +104,12 @@ public struct CacheMaintenanceService: Sendable {
     /// - Returns: 被删除的版本号列表
     @discardableResult
     public static func prunePluginOldVersions(pluginId: String) -> [String] {
-        let storage = LiveParsePlugins.shared.storage
+        prunePluginOldVersions(pluginId: pluginId, storage: LiveParsePlugins.shared.storage)
+    }
+
+    static func prunePluginOldVersions(pluginId: String, storage: LiveParsePluginStorage) -> [String] {
         let record = storage.loadState().plugins[pluginId]
-        return pruneOldVersions(pluginId: pluginId, state: record)
+        return pruneOldVersions(pluginId: pluginId, state: record, storage: storage)
     }
 
     // MARK: - 工具方法
@@ -249,9 +252,9 @@ public struct CacheMaintenanceService: Sendable {
     /// 选出"应该被清理的"版本目录(保留 pinned + lastGood + 最新 semver)。
     private static func staleVersionDirectories(
         pluginId: String,
-        state: LiveParsePluginState.PluginRecord?
+        state: LiveParsePluginState.PluginRecord?,
+        storage: LiveParsePluginStorage = LiveParsePlugins.shared.storage
     ) -> [URL] {
-        let storage = LiveParsePlugins.shared.storage
         let versions = storage.listInstalledVersions(pluginId: pluginId)
         guard versions.count > 1 else { return [] }
 
@@ -275,8 +278,12 @@ public struct CacheMaintenanceService: Sendable {
     }
 
     @discardableResult
-    private static func pruneOldVersions(pluginId: String, state: LiveParsePluginState.PluginRecord?) -> [String] {
-        let stale = staleVersionDirectories(pluginId: pluginId, state: state)
+    private static func pruneOldVersions(
+        pluginId: String,
+        state: LiveParsePluginState.PluginRecord?,
+        storage: LiveParsePluginStorage = LiveParsePlugins.shared.storage
+    ) -> [String] {
+        let stale = staleVersionDirectories(pluginId: pluginId, state: state, storage: storage)
         guard !stale.isEmpty else { return [] }
 
         let fm = FileManager.default

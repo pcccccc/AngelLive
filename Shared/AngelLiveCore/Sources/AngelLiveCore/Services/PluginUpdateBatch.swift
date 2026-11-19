@@ -17,11 +17,15 @@ public final class PluginUpdateBatch {
     public private(set) var currentPluginId: String?
     public private(set) var isRunning = false
 
+    @available(*, deprecated, message: "Use remainingCount for the batch summary and per-plugin installation progress for the ring.")
     public var completedCount: Int { outcomes.count }
+    public var remainingCount: Int { isRunning ? pluginIds.count - outcomes.count : 0 }
     public var successCount: Int { outcomes.values.filter { $0 == .updated }.count }
     public var failedPluginIds: [String] {
         pluginIds.filter { if case .failed = outcomes[$0] { true } else { false } }
     }
+
+    @ObservationIgnored private let operation = PluginBatchOperation<Outcome>()
 
     public init() {}
 
@@ -31,12 +35,25 @@ public final class PluginUpdateBatch {
         outcomes = [:]
     }
 
+    func isPending(_ pluginId: String) -> Bool {
+        isRunning && outcomes[pluginId] == nil && pluginIds.contains(pluginId)
+    }
+
+    func cancel(_ pluginId: String) {
+        guard isPending(pluginId) else { return }
+        if currentPluginId == pluginId {
+            operation.cancel()
+        } else {
+            outcomes[pluginId] = .cancelled
+        }
+    }
+
     /// Runs a stable, deduplicated queue serially. Each failure is retained even
     /// when later updates succeed; cancellation stops before the next plugin.
     @discardableResult
     func run(
         pluginIds: [String],
-        update: @MainActor (String) async -> Outcome
+        update: @escaping @MainActor (String) async -> Outcome
     ) async -> Int {
         guard !isRunning, !pluginIds.isEmpty else { return 0 }
         var seen = Set<String>()
@@ -48,21 +65,15 @@ public final class PluginUpdateBatch {
             isRunning = false
         }
 
-        for id in self.pluginIds {
-            guard !Task.isCancelled else {
-                for pendingId in self.pluginIds where outcomes[pendingId] == nil {
-                    outcomes[pendingId] = .cancelled
-                }
-                break
-            }
+        for id in self.pluginIds where outcomes[id] == nil {
+            guard !Task.isCancelled else { break }
             currentPluginId = id
-            outcomes[id] = await update(id)
-            if outcomes[id] == .cancelled {
-                for pendingId in self.pluginIds where outcomes[pendingId] == nil {
-                    outcomes[pendingId] = .cancelled
-                }
-                break
-            }
+            let outcome = await operation.run { await update(id) }
+            outcomes[id] = outcome
+            if operation.shouldStopQueue || (outcome == .cancelled && !operation.wasCancelledIndividually) { break }
+        }
+        for id in self.pluginIds where outcomes[id] == nil {
+            outcomes[id] = .cancelled
         }
         return successCount
     }
