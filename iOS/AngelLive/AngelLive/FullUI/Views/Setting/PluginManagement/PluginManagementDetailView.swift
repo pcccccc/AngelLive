@@ -5,9 +5,7 @@ struct PluginManagementDetailView: View {
     @Environment(PluginSourceManager.self) private var manager
     @Environment(PluginAvailabilityService.self) private var availability
     @Environment(PluginInstallConsentService.self) private var consent
-    @Environment(PluginManagementFeedback.self) private var feedback
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var credentials = PlatformCredentialSyncService.shared
     let item: ManagedPluginItem
     let canOperate: Bool
     let consentHostID: UUID
@@ -15,14 +13,13 @@ struct PluginManagementDetailView: View {
     let uninstall: (String) -> Void
     @State private var features: [PlatformFeature] = []
     @State private var showsLogin = false
-    private var version: String { manager.installedVersion(for: item.pluginID) ?? item.remote?.item.version ?? "未知" }
-    private var installed: Bool { manager.installedVersion(for: item.pluginID) != nil }
-    private var needsLogin: Bool { availability.requiresLogin(for: item.pluginID) || item.remote?.item.auth?.required == true }
-    private var state: RemotePluginCatalogActionState { manager.managementActionState(for: item.pluginID, remote: item.remote) }
+    private var version: String { item.row.metadata.version }
+    private var installed: Bool { item.row.metadata.isInstalled }
+    private var needsLogin: Bool { item.row.metadata.requiresLogin || item.remote?.item.auth?.required == true }
     private var verifiedCurrent: Bool {
         guard let source = item.sourceURL, item.remote != nil,
               manager.latestVersion(for: item.pluginID) != nil,
-              !manager.hasUpdate(for: item.pluginID),
+              item.row.action.updateVersion == nil,
               case .healthy = manager.health(for: source) else { return false }
         return true
     }
@@ -33,9 +30,9 @@ struct PluginManagementDetailView: View {
                 PluginDetailHero(item: item)
                 VStack(spacing: 8) {
                     PluginActionButton(item: item, canOperate: canOperate, large: true, action: action)
-                    if let reason = item.installationFailure(in: manager) {
+                    if let reason = item.row.action.failure {
                         PluginInstallationFailureReason(reason: reason)
-                    } else if state == .installed, item.namespace == .installed, !feedback.recentSuccessIDs.contains(item.pluginID) {
+                    } else if item.row.action.state == .installed, item.namespace == .installed, !item.row.action.succeeded {
                         if verifiedCurrent {
                             Label {
                                 Text("已是最新版本").foregroundStyle(.secondary)
@@ -47,10 +44,10 @@ struct PluginManagementDetailView: View {
                         }
                     }
                 }.padding(.horizontal, 8)
-                PluginDetailInformation(pluginName: item.name, version: version, capabilityCount: features.isEmpty ? nil : features.count, needsLogin: needsLogin, loggedIn: credentials.isLoggedIn(pluginId: item.pluginID), canLogin: installed) { showsLogin = true }
+                PluginDetailInformation(pluginName: item.name, version: version, capabilityCount: features.isEmpty ? nil : features.count, needsLogin: needsLogin, loggedIn: item.row.loggedIn, canLogin: installed) { showsLogin = true }
                 if !features.isEmpty { PluginDetailCapabilities(features: features) }
                 if installed {
-                    if !canOperate && !manager.isPendingInstallation(for: item.pluginID) {
+                    if !canOperate && !item.row.action.pending {
                         Text("正在处理插件，完成后可以卸载。").font(.footnote).foregroundStyle(.secondary)
                     }
                     PluginInlineRemoval(

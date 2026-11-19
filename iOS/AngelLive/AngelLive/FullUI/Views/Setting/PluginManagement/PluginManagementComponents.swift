@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 import AngelLiveCore
+import Combine
+import Kingfisher
 import Observation
 
 @MainActor
@@ -9,6 +11,18 @@ final class PluginManagementFeedback {
     var recentSuccessIDs: Set<String> = []
     var recentInstallIDs: Set<String> = []
     var consentOrigin: PluginActionConsentOrigin?
+    @ObservationIgnored private var rows: [String: PluginManagementRowState] = [:]
+
+    func row(for pluginID: String, namespace: ManagedPluginItem.Namespace) -> PluginManagementRowState {
+        let id = namespace.itemID(pluginID)
+        if let row = rows[id] { return row }
+        let row = PluginManagementRowState(
+            action: namespace == .installed ? .installed : .install,
+            loggedIn: PlatformCredentialSyncService.shared.isLoggedIn(pluginId: pluginID)
+        )
+        rows[id] = row
+        return row
+    }
 }
 
 struct PluginActionConsentOrigin {
@@ -28,27 +42,158 @@ struct PluginActionConsentOrigin {
 }
 
 extension EnvironmentValues {
-    @Entry var pluginConsentButton: (@MainActor @Sendable () -> UUID?)? = nil
+    @Entry var pluginConsentButtonID: UUID? = nil
 }
 
-struct ManagedPluginItem: Identifiable {
-    enum Namespace { case installed, catalog }
+struct ManagedPluginItem: Identifiable, Equatable {
+    enum Namespace: String {
+        case installed, catalog
+
+        // The catalog is already deduplicated by plugin ID. A source or
+        // version change updates the card in place.
+        func itemID(_ pluginID: String) -> String { "\(rawValue):\(pluginID)" }
+    }
     let pluginID: String
     let name: String
     let sourceURL: String?
     let remote: RemotePluginDisplayItem?
-    var namespace: Namespace = .catalog
-    var id: String {
-        switch namespace {
-        case .installed: "installed:\(pluginID)"
-        case .catalog: "catalog:\(sourceURL ?? "unresolved"):\(pluginID)"
+    let namespace: Namespace
+    let row: PluginManagementRowState
+    var id: String { namespace.itemID(pluginID) }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.name == rhs.name && lhs.sourceURL == rhs.sourceURL && lhs.remote === rhs.remote
+    }
+}
+
+@MainActor
+@Observable
+final class PluginManagementRowState {
+    struct Action: Equatable {
+        var state: RemotePluginCatalogActionState
+        var pending = false
+        var succeeded = false
+        var updateVersion: String?
+        var updateFailed = false
+
+        var failure: String? {
+            guard !pending, case .failed(let reason) = state else { return nil }
+            return reason
         }
     }
 
-    @MainActor func installationFailure(in manager: PluginSourceManager) -> String? {
-        guard !manager.isPendingInstallation(for: pluginID),
-              case .failed(let reason) = manager.managementActionState(for: pluginID, remote: remote) else { return nil }
-        return reason
+    struct Metadata: Equatable {
+        var version = "未知"
+        var isInstalled = false
+        var requiresLogin = false
+    }
+
+    var action: Action
+    var metadata = Metadata()
+    var progress: PluginInstallationProgress?
+    var loggedIn: Bool
+
+    init(action: RemotePluginCatalogActionState, loggedIn: Bool) {
+        self.action = Action(state: action)
+        self.loggedIn = loggedIn
+    }
+}
+
+/// Subscribes once for the page and writes only changed row values. Keep
+/// metadata and progress in separate views so download ticks do not scan disk.
+struct PluginManagementRowUpdates: View {
+    let items: [ManagedPluginItem]
+
+    var body: some View {
+        ZStack {
+            PluginManagementMetadataUpdates(items: items)
+            PluginManagementProgressUpdates(items: items)
+        }.allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private struct PluginManagementMetadataUpdates: View {
+    @Environment(PluginSourceManager.self) private var manager
+    @Environment(PluginAvailabilityService.self) private var availability
+    @Environment(PluginManagementFeedback.self) private var feedback
+    let items: [ManagedPluginItem]
+
+    private struct Update {
+        let metadata: PluginManagementRowState.Metadata
+        let action: PluginManagementRowState.Action
+    }
+
+    var body: some View {
+        Color.clear
+            .task(id: items) { await observeMetadata() }
+            .onReceive(PlatformCredentialSyncService.shared.$loggedInByPluginId.removeDuplicates()) { statuses in
+                for item in items {
+                    let loggedIn = statuses[item.pluginID] ?? false
+                    if item.row.loggedIn != loggedIn { item.row.loggedIn = loggedIn }
+                }
+            }
+    }
+
+    private func observeMetadata() async {
+        while !Task.isCancelled {
+            let (changes, continuation) = AsyncStream<Void>.makeStream()
+            let updates = withObservationTracking {
+                metadataUpdates()
+            } onChange: {
+                continuation.finish()
+            }
+            for (item, update) in zip(items, updates) {
+                if item.row.metadata != update.metadata { item.row.metadata = update.metadata }
+                if item.row.action != update.action { item.row.action = update.action }
+            }
+            // Observation's callback is leading-edge. Computing again in
+            // this task reads the completed main-actor changes.
+            var iterator = changes.makeAsyncIterator()
+            _ = await iterator.next()
+        }
+    }
+
+    private func metadataUpdates() -> [Update] {
+        // Re-read installed versions after local installs and in-place updates.
+        _ = availability.catalogRevision
+        let successes = feedback.recentSuccessIDs
+        let failedUpdates = Set(manager.updateBatch.failedPluginIds)
+        return items.map { item in
+            let id = item.pluginID
+            let installedVersion = manager.installedVersion(for: id)
+            let latest = manager.latestVersion(for: id)
+            let updateVersion = latest.flatMap { candidate in
+                installedVersion.flatMap { semverCompare(candidate, $0) > 0 ? candidate : nil }
+            }
+            return Update(
+                metadata: .init(version: installedVersion ?? item.remote?.item.version ?? "未知",
+                                isInstalled: installedVersion != nil,
+                                requiresLogin: availability.requiresLogin(for: id)),
+                action: .init(state: manager.managementActionState(for: id, remote: item.remote),
+                              pending: manager.isPendingInstallation(for: id),
+                              succeeded: successes.contains(id),
+                              updateVersion: updateVersion, updateFailed: failedUpdates.contains(id))
+            )
+        }
+    }
+}
+
+private struct PluginManagementProgressUpdates: View {
+    @Environment(PluginSourceManager.self) private var manager
+    let items: [ManagedPluginItem]
+
+    private struct Update: Equatable {
+        let id: String
+        let progress: PluginInstallationProgress?
+    }
+
+    var body: some View {
+        let updates = items.map { Update(id: $0.id, progress: manager.installationProgress(for: $0.pluginID)) }
+        Color.clear.onChange(of: updates, initial: true) { _, updates in
+            for (item, update) in zip(items, updates) where item.row.progress != update.progress {
+                item.row.progress = update.progress
+            }
+        }
     }
 }
 
@@ -69,11 +214,16 @@ struct PluginManagementSectionHeading: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: LocalizedStringResource
     var subtitle: LocalizedStringKey? = nil
+    var subtitleCount: Int? = nil
     var actionTitle: LocalizedStringKey? = nil
     var actionDisabled = false
     var action: (() -> Void)? = nil
     var includesSectionSpacing = false
-    private var hasAccessory: Bool { subtitle != nil || (actionTitle != nil && action != nil) }
+    private var hasAccessory: Bool { subtitle != nil || subtitleCount != nil || (actionTitle != nil && action != nil) }
+    private var accessory: some View {
+        PluginManagementHeadingAccessory(subtitle: subtitle, subtitleCount: subtitleCount,
+                                          actionTitle: actionTitle, disabled: actionDisabled, action: action)
+    }
     var body: some View {
         let metrics = PluginManagementTextMetrics(text: title, style: .sectionTitle, locale: locale, dynamicTypeSize: dynamicTypeSize)
         ViewThatFits(in: .horizontal) {
@@ -82,7 +232,7 @@ struct PluginManagementSectionHeading: View {
                     PluginManagementEdgeText(text: title, style: .sectionTitle).foregroundStyle(PluginManagementLayout.primaryText)
                     Spacer(minLength: PluginManagementLayout.itemSpacing)
                     if hasAccessory {
-                        PluginManagementHeadingAccessory(subtitle: subtitle, actionTitle: actionTitle, disabled: actionDisabled, action: action)
+                        accessory
                     }
                 }
             }
@@ -90,7 +240,7 @@ struct PluginManagementSectionHeading: View {
                 VStack(alignment: .leading, spacing: PluginManagementLayout.itemSpacing) {
                     PluginManagementEdgeText(text: title, style: .sectionTitle).foregroundStyle(PluginManagementLayout.primaryText)
                     if hasAccessory {
-                        PluginManagementHeadingAccessory(subtitle: subtitle, actionTitle: actionTitle, disabled: actionDisabled, action: action)
+                        accessory
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
@@ -104,7 +254,9 @@ struct PluginManagementSectionHeading: View {
 }
 
 private struct PluginManagementHeadingAccessory: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let subtitle: LocalizedStringKey?
+    let subtitleCount: Int?
     let actionTitle: LocalizedStringKey?
     let disabled: Bool
     let action: (() -> Void)?
@@ -117,6 +269,10 @@ private struct PluginManagementHeadingAccessory: View {
                         .contentShape(Rectangle())
                 }.disabled(disabled)
                     .accessibilityIdentifier("plugins.installAll")
+            } else if let subtitleCount {
+                Text("\(subtitleCount) 个").foregroundStyle(PluginManagementLayout.secondaryText)
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4), value: subtitleCount)
             } else if let subtitle {
                 Text(subtitle).foregroundStyle(PluginManagementLayout.secondaryText)
             }
@@ -141,60 +297,91 @@ struct PluginManagementIcon: View {
     let displayName: String
     var remoteIcon: String? = nil
     var size: CGFloat = PluginManagementLayout.iconSize
-    @State private var image: UIImage?
-    @State private var isLoading = true
+    @State private var localIcon: LocalIcon?
+    @State private var failedRemoteIcon: URL?
+
+    private final class LocalIcon {
+        let image: UIImage?
+
+        init(_ image: UIImage?) { self.image = image }
+    }
+
+    private static let localCache: NSCache<NSString, LocalIcon> = {
+        let cache = NSCache<NSString, LocalIcon>()
+        cache.countLimit = 128
+        cache.totalCostLimit = 16 * 1024 * 1024
+        return cache
+    }()
+
+    private var localCacheKey: String {
+        "\(availability.catalogRevision):\(size):\(displayScale):\(pluginID)"
+    }
+
+    private var remoteURL: URL? {
+        guard let remoteIcon, let url = URL(string: remoteIcon),
+              ["http", "https"].contains(url.scheme ?? "") else { return nil }
+        return url
+    }
+
     var body: some View {
         ZStack {
-            if let image {
+            if let image = localIcon?.image {
                 Image(uiImage: image).resizable().scaledToFit()
                     .frame(width: size, height: size)
-            } else if isLoading {
-                RoundedRectangle(cornerRadius: size * PluginManagementLayout.iconRadius / PluginManagementLayout.iconSize, style: .continuous)
-                    .fill(Color(uiColor: .tertiarySystemFill).opacity(0.45))
-                Image(systemName: "puzzlepiece.extension.fill").resizable().scaledToFit()
-                    .foregroundStyle(PluginManagementLayout.secondaryText).padding(size * 0.22)
+            } else if localIcon == nil {
+                placeholder
+            } else if let remoteURL {
+                KFImage(remoteURL)
+                    .setProcessor(DownsamplingImageProcessor(size: CGSize(width: size, height: size)))
+                    .scaleFactor(displayScale)
+                    .cacheMemoryOnly()
+                    .cancelOnDisappear(true)
+                    .placeholder {
+                        if failedRemoteIcon == remoteURL { monogram } else { placeholder }
+                    }
+                    .onFailure { error in
+                        if !error.isTaskCancelled { failedRemoteIcon = remoteURL }
+                    }
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size, height: size)
             } else {
-                PluginManagementMonogram(pluginID: pluginID, displayName: displayName, size: size)
+                monogram
             }
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * PluginManagementLayout.iconRadius / PluginManagementLayout.iconSize, style: .continuous))
         .accessibilityHidden(true)
-        .task(id: [pluginID, String(availability.catalogRevision), remoteIcon ?? "", String(Double(size)), String(Double(displayScale))]) {
-            await loadImage()
+        .task(id: localCacheKey) {
+            guard !Task.isCancelled else { return }
+            let key = localCacheKey as NSString
+            if let cached = Self.localCache.object(forKey: key) {
+                localIcon = cached
+                return
+            }
+            let platform = LiveParseJSPlatformManager.availablePlatforms.first { $0.pluginId == pluginID }
+            let image = platform.flatMap {
+                PlatformIconProvider.pluginManagementImage(for: $0.liveType, targetSide: size, displayScale: displayScale)
+            }
+            let bitmap = image?.cgImage
+            let local = LocalIcon(bitmap == nil ? nil : image)
+            let cost = bitmap.map { $0.bytesPerRow * $0.height } ?? 0
+            Self.localCache.setObject(local, forKey: key, cost: cost)
+            localIcon = local
         }
     }
 
-    private func loadImage() async {
-        guard !Task.isCancelled else { return }
-        image = nil
-        isLoading = true
-        if let platform = LiveParseJSPlatformManager.availablePlatforms.first(where: { $0.pluginId == pluginID }),
-           let local = PlatformIconProvider.pluginManagementImage(
-               for: platform.liveType, targetSide: size, displayScale: displayScale
-           ), local.cgImage != nil {
-            image = local
-            isLoading = false
-            return
+    private var placeholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * PluginManagementLayout.iconRadius / PluginManagementLayout.iconSize, style: .continuous)
+                .fill(Color(uiColor: .tertiarySystemFill).opacity(0.45))
+            Image(systemName: "puzzlepiece.extension.fill").resizable().scaledToFit()
+                .foregroundStyle(PluginManagementLayout.secondaryText).padding(size * 0.22)
         }
-        guard let remoteIcon, let url = URL(string: remoteIcon), ["http", "https"].contains(url.scheme ?? "") else {
-            isLoading = false
-            return
-        }
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard !Task.isCancelled else { return }
-            if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
-                isLoading = false
-                return
-            }
-            let remote = UIImage(data: data)
-            image = remote?.cgImage == nil ? nil : remote
-            isLoading = false
-        } catch {
-            guard !Task.isCancelled else { return }
-            isLoading = false
-        }
+    }
+
+    private var monogram: some View {
+        PluginManagementMonogram(pluginID: pluginID, displayName: displayName, size: size)
     }
 }
 

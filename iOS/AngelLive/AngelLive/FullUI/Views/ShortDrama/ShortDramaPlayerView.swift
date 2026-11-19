@@ -132,7 +132,7 @@ struct ShortDramaPlayerView: View {
                     .zIndex(10)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-            .statusBar(hidden: landscape)
+            .modifier(FullUIPlayerStatusBar(isLandscapeFullscreen: landscape))
             .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true
                 && model.playback != nil && model.errorMessage == nil && controlsAvailable ? .all : [])
             .background(Color.black)
@@ -152,8 +152,14 @@ struct ShortDramaPlayerView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
-        .fullUIPlayerContrast(while: (controlsVisible || isLocked) && controlsAvailable) {
-            playerController.coordinator?.playerLayer?.player
+        .fullUIPlayerContrast(
+            while: (controlsVisible || isLocked) && controlsAvailable,
+            source: FullUIPlayerContrastSource(roomID: room.id, url: model.playback?.url,
+                                               kernel: .ksplayer, episodeID: model.selectedEpisodeID)
+        ) {
+            guard let playback = model.playback, playerController.playbackID == playback.id,
+                  let layer = playerController.coordinator?.playerLayer, layer.url == playback.url else { return nil }
+            return layer.player
         }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: panel?.id) { _, newValue in
@@ -941,6 +947,9 @@ struct ShortDramaPlayerView: View {
                 }
                 .position(x: layout.lockInset + FullUIPlayerChrome.controlSize / 2, y: geometry.size.height / 2)
             }
+        }
+        .overlay(alignment: .top) {
+            FullUILandscapePlayerStatus(isVisible: showsControls)
         }
     }
 

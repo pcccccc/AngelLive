@@ -154,7 +154,6 @@ public struct KSVideoPlayerView: View {
             .toolbar(.hidden, for: .navigationBar)
             .fullUITabBarHidden()
             .focusedObject(model.config)
-            .statusBar(hidden: isFullscreen)
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
                     model.focusableView = .slider

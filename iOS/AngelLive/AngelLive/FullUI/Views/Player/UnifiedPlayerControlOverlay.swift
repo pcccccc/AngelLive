@@ -75,7 +75,11 @@ struct UnifiedPlayerControlOverlay: View {
     var body: some View {
         #if canImport(KSPlayer)
         overlayContent
-            .fullUIPlayerContrast(while: isMaskVisible || bridge.isLocked.wrappedValue) { playerLayer()?.player }
+            .fullUIPlayerContrast(
+                while: isMaskVisible || bridge.isLocked.wrappedValue,
+                source: FullUIPlayerContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
+                                                   kernel: viewModel.selectedPlayerKernel)
+            ) { currentTimelineLayer?.player }
             .task(id: isFullscreen && landscapeLayout != nil && viewModel.isOnDemand && isMaskVisible
                   ? viewModel.currentPlayURL : nil) {
                 guard landscapeLayout != nil, viewModel.isOnDemand, isMaskVisible,
@@ -230,7 +234,7 @@ struct UnifiedPlayerControlOverlay: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 12) {
                         if showsRoomBanner {
-                            roomBanner(maximumWidth: min(320, geometry.size.width * 0.52))
+                            roomBanner(maximumWidth: roomBannerWidth(in: geometry.size.width, layout: layout))
                                 .transition(.opacity)
                         } else {
                             chromeButton("chevron.backward", label: "返回", action: handleBackButton)
@@ -281,6 +285,17 @@ struct UnifiedPlayerControlOverlay: View {
                 .position(x: layout.lockInset + FullUIPlayerChrome.controlSize / 2, y: geometry.size.height / 2)
             }
         }
+        .overlay(alignment: .top) {
+            FullUILandscapePlayerStatus(isVisible: showsControls && !locked)
+        }
+    }
+
+    private func roomBannerWidth(in viewportWidth: CGFloat, layout: FullUILandscapePlayerLayout) -> CGFloat {
+        let preferredWidth = min(320, viewportWidth * 0.52)
+        // Keep the existing concentric inset on displays with shallow corners.
+        guard layout.insets.top < FullUILandscapePlayerStatus.bottomEdge else { return preferredWidth }
+        let widthBeforeStatus = viewportWidth / 2 - FullUILandscapePlayerStatus.halfWidthWithClearance - layout.insets.leading
+        return min(preferredWidth, max(0, widthBeforeStatus))
     }
 
     private func roomBanner(maximumWidth: CGFloat) -> some View {

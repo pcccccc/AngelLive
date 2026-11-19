@@ -117,6 +117,7 @@ struct PlayerContentView: View {
     }
 
     var body: some View {
+        let hasStream = viewModel.currentPlayURL != nil
         GeometryReader { geometry in
             let playerHeight = calculatedHeight(for: geometry.size)
 
@@ -146,6 +147,10 @@ struct PlayerContentView: View {
                 }
             }
         }
+        .modifier(FullUIPlayerStatusBar(
+            isLandscapeFullscreen: landscapeLayout != nil,
+            hidesOutsideLandscape: hasStream && useKSPlayer && isFullscreen
+        ))
         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
         .onChange(of: isVideoPortrait && !usesExpandedLayout && landscapeLayout == nil, initial: true) { _, usesVerticalPresentation in
             isVerticalLiveMode = usesVerticalPresentation

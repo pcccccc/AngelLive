@@ -3,7 +3,8 @@ import AngelLiveCore
 
 struct PluginManagementStatusCard: View {
     let manager: PluginSourceManager
-    let installedIDs: [String]
+    let installedItems: [ManagedPluginItem]
+    let hiddenInstalledIDs: Set<String>
     let isPreparing: Bool
     let preparationTitle: String?
     let preparationError: String?
@@ -17,7 +18,13 @@ struct PluginManagementStatusCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private var updates: [String] { installedIDs.filter { $0 != manager.pendingUninstallPluginId && manager.hasUpdate(for: $0) } }
+    private var installedIDs: [String] { installedItems.map(\.pluginID) }
+    private var updates: [ManagedPluginItem] {
+        let pending = manager.pendingUninstallPluginId
+        return installedItems.filter {
+            $0.pluginID != pending && !hiddenInstalledIDs.contains($0.pluginID) && $0.row.action.updateVersion != nil
+        }
+    }
     private var sourceFailures: [String] { manager.sourceURLs.filter { manager.health(for: $0).isFailed } }
     private var hasFailures: Bool { preparationError != nil || manager.errorMessage != nil || !sourceFailures.isEmpty || !manager.installBatch.failedPluginIds.isEmpty || !manager.updateBatch.failedPluginIds.isEmpty }
     private var running: Bool { manager.activeInstallationCount > 0 }
@@ -47,7 +54,7 @@ struct PluginManagementStatusCard: View {
         if !manager.installBatch.failedPluginIds.isEmpty { return "安装结果：\(manager.installBatch.successCount) 成功 · \(manager.installBatch.failedPluginIds.count) 失败 · \(manager.installBatch.cancelledCount) 取消" }
         if !manager.updateBatch.failedPluginIds.isEmpty { return "旧版本仍可用，可以重试失败项" }
         if !sourceFailures.isEmpty { return "\(sourceFailures.count) 个来源异常，请重试" }
-        if !updates.isEmpty { return updates.map { manager.managementDisplayName(for: $0) }.joined(separator: "、") }
+        if !updates.isEmpty { return updates.map(\.name).joined(separator: "、") }
         if isPreparing { return preparationTitle ?? "正在读取插件列表…" }
         if manager.isFetchingIndex || manager.isCheckingUpdates { return "正在读取 \(manager.sourceURLs.count) 个来源" }
         if !manager.installBatch.pluginIds.isEmpty { return "安装结果：\(manager.installBatch.successCount) 成功 · \(manager.installBatch.failedPluginIds.count) 失败 · \(manager.installBatch.cancelledCount) 取消" }
@@ -102,8 +109,9 @@ struct PluginManagementStatusCard: View {
         return layout {
             if case .updates = state {
                 HStack(spacing: -12) {
-                    ForEach(Array(updates.prefix(3)), id: \.self) { id in
-                        PluginManagementIcon(pluginID: id, displayName: manager.managementDisplayName(for: id), remoteIcon: manager.latestRemoteItemsByPluginId[id]?.icon, size: 36)
+                    ForEach(Array(updates.prefix(3))) { item in
+                        PluginManagementIcon(pluginID: item.pluginID, displayName: item.name,
+                                             remoteIcon: manager.latestRemoteItemsByPluginId[item.pluginID]?.icon, size: 36)
                             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(uiColor: .secondarySystemGroupedBackground), lineWidth: 2.5))
                     }
@@ -121,7 +129,7 @@ struct PluginManagementStatusCard: View {
                     .contentTransition(.opacity)
             }.frame(maxWidth: .infinity, alignment: .leading)
             PluginSummaryAction(state: state, manager: manager,
-                                updateIDs: updates, preparationFailed: preparationError != nil,
+                                updateIDs: updates.map(\.pluginID), preparationFailed: preparationError != nil,
                                 update: update, retryInstall: retryInstall, check: check,
                                 retryPreparation: retryPreparation)
         }.animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.4), value: subtitle)

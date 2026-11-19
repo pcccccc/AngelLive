@@ -7,6 +7,7 @@ import UIKit
 enum FullUIPlayerChrome {
     static let controlSize: CGFloat = 44
     static let symbolFont: Font = .system(size: 18, weight: .semibold)
+    static let glassTransitionAnimation = Animation.easeInOut(duration: 0.35)
 
     static var inset: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad ? 20 : 16
@@ -74,6 +75,7 @@ struct FullUIPlayerTimeLabel: View {
             .fixedSize()
             .shadow(color: .black.opacity(strong ? 0.85 : 0.6), radius: strong ? 3 : 2, y: 1)
             .fullUIPlayerShadow(in: Capsule(), opacity: strong ? 0.32 : 0.22)
+            .animation(FullUIPlayerChrome.glassTransitionAnimation, value: strong)
     }
 }
 
@@ -125,14 +127,18 @@ private struct FullUIPlayerMediaTextModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background {
-            if needsContrast {
-                Color.clear
-                    .fullUIPlayerGlass(in: Capsule(), interactive: false)
-                    .padding(.horizontal, -4)
-                    .padding(.vertical, -2)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+            ZStack {
+                if needsContrast {
+                    Color.clear
+                        .fullUIPlayerGlass(in: Capsule(), interactive: false)
+                        .padding(.horizontal, -4)
+                        .padding(.vertical, -2)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                }
             }
+            .animation(FullUIPlayerChrome.glassTransitionAnimation, value: needsContrast)
         }
     }
 }
@@ -145,10 +151,20 @@ private struct FullUIPlayerGlassModifier<GlassShape: Shape>: ViewModifier {
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            let glass: Glass = prefersRegularGlass || contrast == .increased
-                ? .regular.tint(.black.opacity(0.45))
-                : .clear
-            content.glassEffect(glass.interactive(interactive), in: glassShape)
+            let regular = prefersRegularGlass || contrast == .increased
+            let glass: Glass = regular ? .regular.tint(.black.opacity(0.45)) : .clear
+            content.background {
+                // Only the material is replaced. Keep the controls, labels
+                // and hit targets mounted for the entire transition.
+                ZStack {
+                    Color.clear
+                        .glassEffect(glass.interactive(interactive), in: glassShape)
+                        .glassEffectTransition(.materialize)
+                        .id(regular)
+                        .transition(.opacity)
+                }
+                .animation(FullUIPlayerChrome.glassTransitionAnimation, value: regular)
+            }
         } else {
             content.background(.ultraThinMaterial, in: glassShape)
         }

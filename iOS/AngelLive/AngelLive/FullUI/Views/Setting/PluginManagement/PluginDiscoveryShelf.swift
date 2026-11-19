@@ -41,7 +41,6 @@ struct PluginDiscoveryShelf: View {
 }
 
 struct PluginDiscoveryCard: View {
-    @Environment(PluginSourceManager.self) private var manager
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .body) private var maximumReadingWidth: CGFloat = 266
     let item: ManagedPluginItem
@@ -90,7 +89,7 @@ struct PluginDiscoveryCard: View {
     }
 
     private func metadata(wraps: Bool) -> some View {
-        let reason = item.installationFailure(in: manager)
+        let reason = item.row.action.failure
         return Text(installationMetadata).font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: !wraps, vertical: wraps)
             .opacity(reason == nil ? 1 : 0).accessibilityHidden(reason != nil)

@@ -86,6 +86,9 @@ struct LiveDetailPlayerView: View {
     /// 用户主动控制竖屏清屏状态，不随播放器的自动隐藏或播放状态改变。
     @State private var verticalLiveControlsVisible = true
     @State private var verticalLiveControlPopupPresented = false
+    #if canImport(KSPlayer)
+    @State private var playerContrast = FullUIPlayerContrastState()
+    #endif
 
     /// Only a vertically compact phone layout needs to hide the information panel.
     private var isIPhoneLandscape: Bool {
@@ -414,6 +417,9 @@ struct LiveDetailPlayerView: View {
         )
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
+        #if canImport(KSPlayer)
+        .environment(\.fullUIPlayerContrastState, playerContrast)
+        #endif
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
         // 竖屏的左右滑动用于清屏/恢复，避免全屏 zoom 转场先接管右滑。

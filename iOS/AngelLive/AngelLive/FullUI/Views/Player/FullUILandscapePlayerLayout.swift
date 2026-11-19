@@ -42,7 +42,8 @@ struct FullUILandscapePlayerLayout {
         let leading = direction == .leftToRight ? windowSafe.left : windowSafe.right
         let trailing = direction == .leftToRight ? windowSafe.right : windowSafe.left
         // The bottom safe area already provides clearance for the home indicator.
-        insets = EdgeInsets(top: max(safe.top, windowSafe.top) + Self.edgeInset,
+        insets = EdgeInsets(top: max(max(safe.top, windowSafe.top) + Self.edgeInset,
+                                    FullUILandscapePlayerStatus.bottomEdge),
                             leading: max(safe.leading, leading) + Self.edgeInset,
                             bottom: max(safe.bottom, windowSafe.bottom, Self.edgeInset),
                             trailing: max(safe.trailing, trailing) + Self.edgeInset)
@@ -62,6 +63,20 @@ struct FullUILandscapePlayerLayout {
 extension EnvironmentValues {
     @Entry var fullUILandscapePlayerLayout: FullUILandscapePlayerLayout? = nil
     @Entry var fullUIPlayerShowsRoomBanner = false
+}
+
+struct FullUIPlayerStatusBar: ViewModifier {
+    let isLandscapeFullscreen: Bool
+    var hidesOutsideLandscape = false
+
+    func body(content: Content) -> some View {
+        let hidden = isLandscapeFullscreen || hidesOutsideLandscape
+        if #available(iOS 27.0, *) {
+            content.toolbarVisibility(hidden ? .hidden : .automatic, for: .statusBar)
+        } else {
+            content.statusBarHidden(hidden)
+        }
+    }
 }
 
 struct FullUILandscapePlayerLock: View {

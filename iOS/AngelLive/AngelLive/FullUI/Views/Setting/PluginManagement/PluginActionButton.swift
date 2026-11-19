@@ -5,7 +5,7 @@ struct PluginActionButton: View {
     @Environment(PluginSourceManager.self) private var manager
     @Environment(PluginManagementFeedback.self) private var feedback
     @Environment(PluginInstallConsentService.self) private var consent
-    @Environment(\.pluginConsentButton) private var consentButton
+    @Environment(\.pluginConsentButtonID) private var consentButtonID
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: ManagedPluginItem
     let canOperate: Bool
@@ -14,21 +14,21 @@ struct PluginActionButton: View {
     @State private var buttonID = UUID()
     @State private var shakeTrigger = 0
 
-    private var actionState: RemotePluginCatalogActionState { manager.managementActionState(for: item.pluginID, remote: item.remote) }
-    private var pending: Bool { manager.isPendingInstallation(for: item.pluginID) }
-    private var progress: PluginInstallationProgress? { manager.installationProgress(for: item.pluginID) }
+    private var actionState: RemotePluginCatalogActionState { item.row.action.state }
+    private var pending: Bool { item.row.action.pending }
+    private var progress: PluginInstallationProgress? { item.row.progress }
     private var phase: PluginManagementRowPhase {
         if progress != nil { return .progress }
         let showsInstalled = large && item.namespace == .catalog && actionState == .installed
         return .resolve(actionState: actionState, isWaiting: pending, isSuccessful: succeeded || showsInstalled)
     }
     private var busy: Bool { phase == .queued || phase == .progress }
-    private var succeeded: Bool { feedback.recentSuccessIDs.contains(item.pluginID) }
+    private var succeeded: Bool { item.row.action.succeeded }
     private var failed: Bool { if case .failed = phase { true } else { false } }
     private var label: LocalizedStringResource {
         switch phase {
         case .install: "安装"
-        case .update: large ? "更新到 \(manager.latestVersion(for: item.pluginID) ?? "")" : "更新"
+        case .update: large ? "更新到 \(item.row.action.updateVersion ?? "")" : "更新"
         case .failed: "重试"
         case .queued: "取消排队"
         case .progress: pending ? "停止" : "正在处理"
@@ -62,7 +62,9 @@ struct PluginActionButton: View {
     }
 
     @ViewBuilder private var consentAnchor: some View {
-        let button = visibleButton.pluginInstallConsentAlert(consent, isActive: { consentButton?() == buttonID })
+        let button = visibleButton.pluginInstallConsentAlert(consent, isActive: {
+            consentButtonID == buttonID && feedback.consentOrigin?.buttonID == buttonID
+        })
         if #available(iOS 18, *) {
             button.onScrollVisibilityChange(threshold: 0.01) { visible in
                 if !visible { clearConsentAnchor() }
