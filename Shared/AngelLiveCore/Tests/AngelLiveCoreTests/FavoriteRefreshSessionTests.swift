@@ -275,8 +275,9 @@ struct FavoriteRefreshSessionTests {
             "slow": [.gatedSuccess("2")]
         ])
         let session = makeSession(harness: harness, foregroundBudget: .milliseconds(30))
-        let model = AppFavoriteModel(refreshSession: session)
-        model.favoriteICloudSyncEnabled = false
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: session)
         let fast = sessionRoom(plugin: "a", id: "fast", state: "0")
         let slow = sessionRoom(plugin: "b", id: "slow", state: "1")
         model.roomList = [fast, slow]
@@ -308,7 +309,9 @@ struct FavoriteRefreshSessionTests {
             "r1": [.gatedSuccess("1")]
         ])
         let session = makeSession(harness: harness, foregroundBudget: .seconds(2))
-        let model = AppFavoriteModel(refreshSession: session)
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: session)
         let room = sessionRoom(plugin: "a", id: "r1", state: "0")
         model.roomList = [room]
 
@@ -339,7 +342,9 @@ struct FavoriteRefreshSessionTests {
         let session = makeSession(harness: harness, resolver: FavoritePluginIDResolver(batch: { rooms in
             await gate.resolve(rooms)
         }))
-        let model = AppFavoriteModel(refreshSession: session)
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: session)
         let room = sessionRoom(plugin: "source-a", id: "r1")
         model.roomList = [room]
 
@@ -377,7 +382,9 @@ struct FavoriteRefreshSessionTests {
         let session = makeSession(harness: harness, foregroundBudget: .seconds(60), resolver: FavoritePluginIDResolver(batch: { rooms in
             await gate.resolve(rooms)
         }))
-        let model = AppFavoriteModel(refreshSession: session)
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: session)
         let oldRoom = sessionRoom(plugin: "source-a", id: "old")
         let newRoom = sessionRoom(plugin: "source-a", id: "new")
         model.roomList = [oldRoom, newRoom]
@@ -412,10 +419,9 @@ struct FavoriteRefreshSessionTests {
         let gate = FavoriteStartupResolverGate()
         let harness = FavoriteSessionOperationHarness(defaultBehavior: .success("1"))
         let session = makeSession(harness: harness, resolver: FavoritePluginIDResolver(batch: { await gate.resolve($0) }))
-        let model = AppFavoriteModel(refreshSession: session)
-        let originalCloudSetting = model.favoriteICloudSyncEnabled
-        model.favoriteICloudSyncEnabled = false
-        defer { model.favoriteICloudSyncEnabled = originalCloudSetting }
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: session)
         model.roomList = [sessionRoom(plugin: "source-a", id: "r1")]
         let (entered, signal) = AsyncStream.makeStream(of: Void.self)
         let callers = (0..<24).map { _ in
@@ -446,7 +452,9 @@ struct FavoriteRefreshSessionTests {
     func automaticRefreshForegroundAndCompletion() async throws {
         let harness = FavoriteSessionOperationHarness(defaultBehavior: .gatedSuccess("1"))
         let session = makeSession(harness: harness, foregroundBudget: .milliseconds(10))
-        let model = AppFavoriteModel(refreshSession: session)
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: session)
         let room = sessionRoom(plugin: "source-a", id: "r1")
         model.roomList = [room]
         await model.refreshStatesAndApply(members: [room], trigger: .automatic)
@@ -468,7 +476,9 @@ struct FavoriteRefreshSessionTests {
     func automaticRefreshFreshness() async throws {
         var now = Date(timeIntervalSince1970: 1_000)
         let harness = FavoriteSessionOperationHarness(defaultBehavior: .success("1"))
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness), refreshNow: { now })
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness), refreshNow: { now })
         let room = sessionRoom(plugin: "source-a", id: "r1")
         model.roomList = [room]
         await model.refreshStatesAndApply(members: [room], trigger: .automatic)
@@ -499,8 +509,9 @@ struct FavoriteRefreshSessionTests {
             "room-1": [.replacement(userId: "0", roomId: "shared-placeholder", state: "1")],
             "room-2": [.replacement(userId: "0", roomId: "shared-placeholder", state: "2")]
         ])
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness))
-        model.favoriteICloudSyncEnabled = false
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness))
         let first = sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "user-1")
         let second = sessionRoom(plugin: "fixture.plugin", id: "room-2", userId: "user-2")
         model.roomList = [first, second]
@@ -524,8 +535,9 @@ struct FavoriteRefreshSessionTests {
         let resolver = FavoritePluginIDResolver(batch: { rooms in
             rooms.map { _ in FavoriteResolvedPlugin(pluginId: "fixture.plugin", identityKey: .userId) }
         })
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness, resolver: resolver))
-        model.favoriteICloudSyncEnabled = false
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness, resolver: resolver))
         model.roomList = [
             sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "user-1"),
             sessionRoom(plugin: "fixture.plugin", id: "room-2", userId: "user-2")
@@ -553,10 +565,11 @@ struct FavoriteRefreshSessionTests {
                 )
             }
         })
-        let model = AppFavoriteModel(
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(
             refreshSession: makeSession(harness: harness, resolver: resolver)
         )
-        model.favoriteICloudSyncEnabled = false
         let original = sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "0")
         model.roomList = [original]
 
@@ -584,8 +597,9 @@ struct FavoriteRefreshSessionTests {
         let harness = FavoriteSessionOperationHarness([
             "room-1": [.replacement(userId: "user-completed", roomId: "unexpected-room", state: "1")]
         ])
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness))
-        model.favoriteICloudSyncEnabled = false
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness))
         model.roomList = [sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "0")]
 
         await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
@@ -612,8 +626,9 @@ struct FavoriteRefreshSessionTests {
                 )
             }
         })
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness, resolver: resolver))
-        model.favoriteICloudSyncEnabled = false
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness, resolver: resolver))
         model.roomList = [sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "user-old")]
 
         await model.refreshStatesAndApply(members: model.roomList, trigger: .automatic)
@@ -633,8 +648,9 @@ struct FavoriteRefreshSessionTests {
         let resolver = FavoritePluginIDResolver(batch: { rooms in
             rooms.map { _ in FavoriteResolvedPlugin(pluginId: "fixture.plugin", identityKey: .userId) }
         })
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness, resolver: resolver))
-        model.favoriteICloudSyncEnabled = false
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness, resolver: resolver))
         let original = sessionRoom(plugin: "fixture.plugin", id: "room-1", userId: "0")
         model.roomList = [original]
 
@@ -660,7 +676,9 @@ struct FavoriteRefreshSessionTests {
     @MainActor
     func automaticRefreshCatalogChanges() async throws {
         let harness = FavoriteSessionOperationHarness(defaultBehavior: .success("1"))
-        let model = AppFavoriteModel(refreshSession: makeSession(harness: harness))
+        let fixture = try FavoriteModelFixture()
+        defer { fixture.cleanUp() }
+        let model = fixture.makeModel(refreshSession: makeSession(harness: harness))
         let room = sessionRoom(plugin: "source-a", id: "r1")
         model.roomList = [room]
         func catalog(_ version: String) -> [String: SandboxPluginMetadata] {

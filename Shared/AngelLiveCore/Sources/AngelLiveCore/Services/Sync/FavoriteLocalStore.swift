@@ -18,7 +18,7 @@ public actor FavoriteLocalStore {
     public static let shared: FavoriteLocalStore = {
         #if DEBUG
         if let configuration = UITestLaunchConfiguration.process {
-            return FavoriteLocalStore(directory: configuration.directory.appendingPathComponent("Favorites", isDirectory: true))
+            return FavoriteLocalStore(directory: configuration.favoritesDirectory)
         }
         #endif
         return FavoriteLocalStore()
@@ -26,6 +26,7 @@ public actor FavoriteLocalStore {
 
     private let fileName = "favorites.json"
     private let directoryOverride: URL?
+    private let createDirectoryIfNeeded: Bool
     private var revision: UInt64 = 0
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -36,10 +37,12 @@ public actor FavoriteLocalStore {
 
     public init() {
         directoryOverride = nil
+        createDirectoryIfNeeded = true
     }
 
-    init(directory: URL) {
+    init(directory: URL, createDirectoryIfNeeded: Bool = true) {
         directoryOverride = directory
+        self.createDirectoryIfNeeded = createDirectoryIfNeeded
     }
 
     // MARK: - 路径
@@ -48,7 +51,7 @@ public actor FavoriteLocalStore {
     private func storeDirectory() -> URL {
         let fm = FileManager.default
         if let directoryOverride {
-            if !fm.fileExists(atPath: directoryOverride.path) {
+            if createDirectoryIfNeeded, !fm.fileExists(atPath: directoryOverride.path) {
                 try? fm.createDirectory(at: directoryOverride, withIntermediateDirectories: true)
             }
             return directoryOverride

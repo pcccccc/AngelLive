@@ -34,12 +34,19 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// manifest、平台元数据和首页能力，因此不能只依赖 ID 列表作为失效信号。
     public private(set) var catalogRevision: UInt = 0
 
-    @ObservationIgnored private var managesAPICredentialPolicy = false
+    @ObservationIgnored private let pluginManager: @Sendable () -> LiveParsePluginManager
+    @ObservationIgnored private var updateHostPolicy: (@MainActor (Bool) -> Void)?
 
-    public init() {}
+    public convenience init() {
+        self.init(initialInstalledPluginIds: [])
+    }
 
     /// 根页面首帧使用本地安装快照；运行时能力仍由后续检查确认。
-    init(initialInstalledPluginIds: [String]) {
+    init(
+        initialInstalledPluginIds: [String],
+        pluginManager: @escaping @Sendable () -> LiveParsePluginManager = { LiveParsePlugins.shared }
+    ) {
+        self.pluginManager = pluginManager
         installedPluginIds = initialInstalledPluginIds.sorted()
         hasAvailablePlugins = !installedPluginIds.isEmpty
     }
@@ -48,16 +55,35 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// local policy synchronously prevents the first request racing a view task.
     @MainActor
     public convenience init(managesAPICredentialPolicy: Bool) {
-        self.init(initialInstalledPluginIds: managesAPICredentialPolicy
-            ? SandboxPluginCatalog.installedPluginIds()
-            : [])
-        self.managesAPICredentialPolicy = managesAPICredentialPolicy
-        if managesAPICredentialPolicy {
-            PlatformAPICredentialHostPolicy.shared.initializeIfNeeded(
-                hasInstalledPlugins: hasAvailablePlugins
-            )
-            PersistentSyncRetryCoordinator.shared.setFullUIEnabled(hasAvailablePlugins)
+        if !managesAPICredentialPolicy {
+            self.init()
+            return
         }
+        self.init(
+            pluginManager: LiveParsePlugins.shared,
+            initializeHostPolicy: { enabled in
+                PlatformAPICredentialHostPolicy.shared.initializeIfNeeded(hasInstalledPlugins: enabled)
+                PersistentSyncRetryCoordinator.shared.setFullUIEnabled(enabled)
+            },
+            updateHostPolicy: { enabled in
+                PlatformAPICredentialHostPolicy.shared.update(hasInstalledPlugins: enabled)
+                PersistentSyncRetryCoordinator.shared.setFullUIEnabled(enabled)
+            }
+        )
+    }
+
+    @MainActor
+    convenience init(
+        pluginManager: LiveParsePluginManager,
+        initializeHostPolicy: @MainActor (Bool) -> Void,
+        updateHostPolicy: @escaping @MainActor (Bool) -> Void
+    ) {
+        self.init(
+            initialInstalledPluginIds: Array(SandboxPluginCatalog.installedPluginMap(storage: pluginManager.storage).keys),
+            pluginManager: { pluginManager }
+        )
+        self.updateHostPolicy = updateHostPolicy
+        initializeHostPolicy(hasAvailablePlugins)
     }
 
     /// 检测 sandbox 目录下是否有任何已安装的插件
@@ -71,18 +97,16 @@ public final class PluginAvailabilityService: @unchecked Sendable {
         }
 
         // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
-        let pluginMap = SandboxPluginCatalog.installedPluginMap()
-        if managesAPICredentialPolicy {
-            // Publish authorization policy before publishing a mode/catalog change.
-            PlatformAPICredentialHostPolicy.shared.update(hasInstalledPlugins: !pluginMap.isEmpty)
-            PersistentSyncRetryCoordinator.shared.setFullUIEnabled(!pluginMap.isEmpty)
-        }
+        let manager = pluginManager()
+        let pluginMap = SandboxPluginCatalog.installedPluginMap(storage: manager.storage)
+        // Publish authorization policy before publishing a mode/catalog change.
+        updateHostPolicy?(!pluginMap.isEmpty)
         installedPluginIds = pluginMap.keys.sorted()
         // Keep Shell/Full UI availability driven strictly by sandbox presence,
         // but derive login metadata from the same effective version that will
         // execute (enabled, pinned, last-good, sandbox/built-in precedence).
         loginRequiredInstalledPluginIds = Set(pluginMap.keys.compactMap { pluginId in
-            try? LiveParsePlugins.shared.resolve(pluginId: pluginId).manifest
+            try? manager.resolve(pluginId: pluginId).manifest
         }
         .filter { $0.requiresLogin }
         .map { $0.pluginId })
