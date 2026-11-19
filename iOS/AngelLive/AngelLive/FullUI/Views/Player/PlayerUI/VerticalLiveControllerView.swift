@@ -75,8 +75,8 @@ struct VerticalLiveControllerView: View {
         }
         .fullUIPlayerContrast(
             while: controlsVisible.wrappedValue,
-            source: FullUIPlayerContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
-                                               kernel: viewModel.selectedPlayerKernel)
+            source: PlaybackGlassContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
+                                                kernel: viewModel.selectedPlayerKernel)
         ) {
             guard let layer = model.config.playerLayer, layer.url == viewModel.currentPlayURL else { return nil }
             return layer.player

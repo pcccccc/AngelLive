@@ -154,8 +154,8 @@ struct ShortDramaPlayerView: View {
         .environment(\.colorScheme, .dark)
         .fullUIPlayerContrast(
             while: (controlsVisible || isLocked) && controlsAvailable,
-            source: FullUIPlayerContrastSource(roomID: room.id, url: model.playback?.url,
-                                               kernel: .ksplayer, episodeID: model.selectedEpisodeID)
+            source: PlaybackGlassContrastSource(roomID: room.id, url: model.playback?.url,
+                                                kernel: .ksplayer, episodeID: model.selectedEpisodeID)
         ) {
             guard let playback = model.playback, playerController.playbackID == playback.id,
                   let layer = playerController.coordinator?.playerLayer, layer.url == playback.url else { return nil }

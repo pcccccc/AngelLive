@@ -77,8 +77,8 @@ struct UnifiedPlayerControlOverlay: View {
         overlayContent
             .fullUIPlayerContrast(
                 while: isMaskVisible || bridge.isLocked.wrappedValue,
-                source: FullUIPlayerContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
-                                                   kernel: viewModel.selectedPlayerKernel)
+                source: PlaybackGlassContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
+                                                    kernel: viewModel.selectedPlayerKernel)
             ) { currentTimelineLayer?.player }
             .task(id: isFullscreen && landscapeLayout != nil && viewModel.isOnDemand && isMaskVisible
                   ? viewModel.currentPlayURL : nil) {
