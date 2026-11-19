@@ -138,71 +138,29 @@ struct TVPlayerName: View {
 extension View {
     func tvPlayerContrast(
         while controlsAreVisible: Bool,
-        sourceID: AnyHashable?,
-        player: @escaping () -> (any MediaPlayerProtocol)?
+        source: PlaybackGlassContrastSource?,
+        player: @escaping @MainActor () -> (any MediaPlayerProtocol)?
     ) -> some View {
-        modifier(TVPlayerContrastModifier(controlsAreVisible: controlsAreVisible, sourceID: sourceID, player: player))
+        modifier(TVPlayerContrastModifier(controlsAreVisible: controlsAreVisible, source: source, player: player))
     }
 }
 
 private struct TVPlayerContrastModifier: ViewModifier {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var prefersRegularGlass = false
+    @State private var contrast = PlaybackGlassContrastState()
 
     let controlsAreVisible: Bool
-    let sourceID: AnyHashable?
-    let player: () -> (any MediaPlayerProtocol)?
+    let source: PlaybackGlassContrastSource?
+    let player: @MainActor () -> (any MediaPlayerProtocol)?
 
     func body(content: Content) -> some View {
         content
-            .environment(\.tvPlayerPrefersRegularGlass, prefersRegularGlass)
-            .onChange(of: sourceID) { _, _ in prefersRegularGlass = false }
-            .task(id: controlsAreVisible && scenePhase == .active ? sourceID : nil) {
-                guard #available(tvOS 26.0, *), sourceID != nil,
-                      controlsAreVisible, scenePhase == .active else { return }
-                await sampleContrast()
+            .environment(\.tvPlayerPrefersRegularGlass, contrast.usesRegularGlass(for: source))
+            .onChange(of: source, initial: true) { contrast.select(source) }
+            .task(id: controlsAreVisible && scenePhase == .active ? source : nil) {
+                guard #available(tvOS 26.0, *), controlsAreVisible, scenePhase == .active, let source else { return }
+                await contrast.sample(for: source, player: player)
             }
-    }
-
-    private func sampleContrast() async {
-        let probe = PlaybackLuminanceProbe()
-        defer { probe.detach() }
-        var darkSamples = 0
-        var unreadableSamples = 0
-        var nextConversion = ContinuousClock.now
-        while !Task.isCancelled {
-            let source = player()
-            let frame = probe.frame(from: source)
-            var brightCells = frame.flatMap { probe.brightCells(in: $0) }
-            var didSample = true
-            if brightCells == nil, let frame {
-                let now = ContinuousClock.now
-                didSample = now >= nextConversion
-                if didSample {
-                    nextConversion = now + .milliseconds(1200)
-                    brightCells = probe.convertedBrightCells(in: frame)
-                }
-            }
-            if let brightCells {
-                unreadableSamples = 0
-                if brightCells >= 4 {
-                    prefersRegularGlass = true
-                    darkSamples = 0
-                } else if prefersRegularGlass {
-                    darkSamples += 1
-                    if darkSamples >= 2 { prefersRegularGlass = false }
-                }
-            } else if didSample, source?.isReadyToPlay == true {
-                darkSamples = 0
-                unreadableSamples += 1
-                if unreadableSamples == 3 { prefersRegularGlass = true }
-            }
-            do {
-                try await Task.sleep(for: .milliseconds(400))
-            } catch {
-                return
-            }
-        }
     }
 }
 #endif

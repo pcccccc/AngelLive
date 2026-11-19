@@ -569,11 +569,14 @@ struct PlayerControlView: View {
             }
         }
         #if canImport(KSPlayer)
-        .tvPlayerContrast(while: usesFullUI && !roomInfoViewModel.showTop
-                          && (roomInfoViewModel.showControl || roomInfoViewModel.showsFullUIDanmakuHint
-                              || roomInfoViewModel.danmuStatusHint != nil),
-                          sourceID: roomInfoViewModel.currentPlayURL) {
-            playerCoordinator.playerLayer?.player
+        .tvPlayerContrast(
+            while: usesFullUI && !roomInfoViewModel.showTop
+                && (roomInfoViewModel.showControl || roomInfoViewModel.showsFullUIDanmakuHint
+                    || roomInfoViewModel.danmuStatusHint != nil),
+            source: usesFullUI ? PlaybackGlassContrastSource(roomID: roomInfoViewModel.currentRoom.id,
+                                                             url: roomInfoViewModel.currentPlayURL, kernel: .ksplayer) : nil
+        ) {
+            currentTimelineLayer?.player
         }
         #endif
         .onAppear {

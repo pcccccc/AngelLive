@@ -160,8 +160,14 @@ struct TVShortDramaPlayerView: View {
         playbackLayout
             .ignoresSafeArea()
             .environment(\.colorScheme, .dark)
-            .tvPlayerContrast(while: showsControls && panel == nil && !showsStatus, sourceID: model.playback?.id) {
-                controller.coordinator?.playerLayer?.player
+            .tvPlayerContrast(
+                while: showsControls && panel == nil && !showsStatus,
+                source: PlaybackGlassContrastSource(roomID: room.id, url: model.playback?.url,
+                                                    kernel: .ksplayer, episodeID: model.selectedEpisodeID)
+            ) {
+                guard let playback = model.playback, controller.playbackID == playback.id,
+                      let layer = controller.coordinator?.playerLayer, layer.url == playback.url else { return nil }
+                return layer.player
             }
             .task {
                 await model.load()
