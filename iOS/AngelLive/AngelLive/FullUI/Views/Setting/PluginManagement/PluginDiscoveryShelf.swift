@@ -95,7 +95,7 @@ struct PluginDiscoveryCard: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(PluginPressButtonStyle())
-            Spacer(minLength: 0)
+            Spacer(minLength: 6)
             ViewThatFits(in: .horizontal) {
                 HStack {
                     metadata(wraps: false).layoutPriority(1)
