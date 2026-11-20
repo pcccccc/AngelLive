@@ -15,6 +15,7 @@ struct ShortDramaPlayerView: View {
     private static let portraitDockFill = Color(.sRGB, white: 0.12)
 
     let room: LiveModel
+    let presentsOverSource: Bool
 
     @State private var model: ShortDramaPlaybackModel
     @State private var playerController = KSShortDramaPlayerController()
@@ -76,9 +77,14 @@ struct ShortDramaPlayerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    init(room: LiveModel) {
+    init(room: LiveModel, presentsOverSource: Bool) {
         self.room = room
+        self.presentsOverSource = presentsOverSource
         _model = State(initialValue: ShortDramaPlaybackModel(room: room))
+    }
+
+    private var exitsLandscapeFullscreen: Bool {
+        verticalSizeClass == .compact && orientation.permitsOrientationRequests
     }
 
     var body: some View {
@@ -94,6 +100,8 @@ struct ShortDramaPlayerView: View {
             let dockInset = controlEdgeInset(geometry: geometry)
             let overlayInset = FullUIPlayerChrome.inset
             let videoCenterOffset = landscape ? (geometry.safeAreaInsets.bottom - geometry.safeAreaInsets.top) / 2 : 0
+            // The video interaction layer already starts at the horizontal safe area.
+            let swipeInset = max(0, LiveRoomNavigationState.playerBackEdgeWidth - geometry.safeAreaInsets.leading)
 
             ZStack(alignment: .topLeading) {
                 Color.black.ignoresSafeArea()
@@ -103,7 +111,8 @@ struct ShortDramaPlayerView: View {
                         videoRegion(
                             size: videoGeometry.size,
                             landscape: landscape,
-                            centerOffset: videoCenterOffset
+                            centerOffset: videoCenterOffset,
+                            episodeSwipeLeadingInset: swipeInset
                         )
                     }
 
@@ -137,7 +146,7 @@ struct ShortDramaPlayerView: View {
             .modifier(FullUIPlayerStatusBar(isLandscapeFullscreen: landscape))
             .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true
                 && model.playback != nil && model.errorMessage == nil && controlsAvailable ? .all : [])
-            .background(Color.black)
+            .background(Color.black.ignoresSafeArea())
             .background { ShortDramaWindowProbe(controller: orientation) }
             .onAppear {
                 latestPanelMetrics = panelMetrics
@@ -151,10 +160,18 @@ struct ShortDramaPlayerView: View {
                 cancelEpisodeSwipe()
                 cancelPanelDetentDrag(using: panelMetrics)
             }
+            .modifier(PlayerBackSwipe(
+                enabled: scenePhase == .active && !isLocked && !isLeavingPage
+                    && panel == nil && !panelTransitioning && !isSeeking,
+                width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                exitsFullscreen: exitsLandscapeFullscreen,
+                revealsRoomList: presentsOverSource && !exitsLandscapeFullscreen,
+                onReturn: finishEdgeReturn
+            ))
         }
-        .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
         .toolbar(.hidden, for: .navigationBar)
+        .interactiveDismissDisabled()
         .onChange(of: panel?.id) { _, newValue in
             guard let newValue else { return }
             Task { @MainActor in
@@ -271,7 +288,8 @@ struct ShortDramaPlayerView: View {
     private func videoRegion(
         size: CGSize,
         landscape: Bool,
-        centerOffset: CGFloat
+        centerOffset: CGFloat,
+        episodeSwipeLeadingInset: CGFloat
     ) -> some View {
         ZStack {
             GeometryReader { mediaGeometry in
@@ -282,18 +300,22 @@ struct ShortDramaPlayerView: View {
             }
             .ignoresSafeArea(.container, edges: .all)
 
-            episodeInteractionLayer(availableHeight: size.height, landscape: landscape)
-                .allowsHitTesting(
-                    !isLocked && panel == nil
-                        && !panelTransitioning
-                        && !episodeSwipeTransitioning
-                        && isCurrentPlaybackReady
-                )
-                .accessibilityHidden(
-                    isLocked || panel != nil
-                        || panelTransitioning
-                        || !isCurrentPlaybackReady
-                )
+            episodeInteractionLayer(
+                availableHeight: size.height,
+                landscape: landscape,
+                leadingInset: episodeSwipeLeadingInset
+            )
+            .allowsHitTesting(
+                !isLocked && panel == nil
+                    && !panelTransitioning
+                    && !episodeSwipeTransitioning
+                    && isCurrentPlaybackReady
+            )
+            .accessibilityHidden(
+                isLocked || panel != nil
+                    || panelTransitioning
+                    || !isCurrentPlaybackReady
+            )
 
             if !landscape, isHorizontalVideo, isCurrentPlaybackReady, orientation.permitsOrientationRequests {
                 GeometryReader { mediaGeometry in
@@ -488,7 +510,7 @@ struct ShortDramaPlayerView: View {
         .allowsHitTesting(false)
     }
 
-    private func episodeInteractionLayer(availableHeight: CGFloat, landscape: Bool) -> some View {
+    private func episodeInteractionLayer(availableHeight: CGFloat, landscape: Bool, leadingInset: CGFloat) -> some View {
         let progressOverlap = !landscape && canInteractWithProgress ? ShortDramaProgressSlider.hitHeight / 2 : 0
 
         return Color.clear
@@ -505,6 +527,7 @@ struct ShortDramaPlayerView: View {
             .accessibilityAction(named: Text("上一集")) { changeEpisode(by: -1) }
             .accessibilityAction(named: Text("下一集")) { changeEpisode(by: 1) }
             .simultaneousGesture(episodeSwipeGestureForVideo(availableHeight: availableHeight))
+            .padding(.leading, leadingInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
@@ -847,12 +870,21 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func topControls(metrics: ShortDramaPanelMetrics, centersBackSymbol: Bool = false) -> some View {
-        let exitsLandscape = verticalSizeClass == .compact && orientation.permitsOrientationRequests
+    private func finishEdgeReturn() {
+        if exitsLandscapeFullscreen {
+            orientation.exitLandscape()
+            return
+        }
 
-        return HStack {
-            FullUIPlayerBackButton(centersSymbol: centersBackSymbol, label: exitsLandscape ? "退出全屏" : "返回") {
-                if exitsLandscape {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { dismiss() }
+    }
+
+    private func topControls(metrics: ShortDramaPanelMetrics, centersBackSymbol: Bool = false) -> some View {
+        HStack {
+            FullUIPlayerBackButton(centersSymbol: centersBackSymbol, label: exitsLandscapeFullscreen ? "退出全屏" : "返回") {
+                if exitsLandscapeFullscreen {
                     orientation.exitLandscape()
                 } else {
                     dismiss()
@@ -1828,9 +1860,11 @@ private struct ShortDramaPlayerSurface: View {
 #else
 struct ShortDramaPlayerView: View {
     let room: LiveModel
+    let presentsOverSource: Bool
 
     var body: some View {
-        LiveDetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+        LiveDetailPlayerView(viewModel: RoomInfoViewModel(room: room), presentsOverRoomList: presentsOverSource)
+            .interactiveDismissDisabled()
     }
 }
 #endif

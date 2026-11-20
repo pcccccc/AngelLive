@@ -12,7 +12,6 @@ import Combine
 
 /// FullUI routes explicitly declared episodic content to its own player surface.
 struct DetailPlayerView: View {
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.fullUIRoomPlayerPushed) private var isPushed
     let viewModel: RoomInfoViewModel
     let categoryRooms: [LiveModel]
@@ -42,10 +41,14 @@ struct DetailPlayerView: View {
     var body: some View {
         Group {
             if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
-                ShortDramaPlayerView(room: viewModel.currentRoom)
+                let player = ShortDramaPlayerView(room: viewModel.currentRoom, presentsOverSource: presentsOverRoomList)
                     .id(viewModel.currentRoom.id)
-                    .interactivePopGestureEnabled(isPushed && verticalSizeClass != .compact, edgeOnly: isPushed)
-                    .interactiveDismissDisabled(!isPushed)
+                    .interactivePopGestureEnabled(false, edgeOnly: true)
+                if presentsOverRoomList {
+                    player.presentationBackground(.clear)
+                } else {
+                    player
+                }
             } else {
                 let player = LiveDetailPlayerView(
                     viewModel: viewModel,

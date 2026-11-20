@@ -6,6 +6,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
     static let visibleTrackHeight: CGFloat = 4
 
     @Binding var value: Double
+    @Environment(\.layoutDirection) private var layoutDirection
     let range: ClosedRange<Double>
     let isEnabled: Bool
     let accessibilityLabel: String
@@ -57,6 +58,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
         slider.accessibilityValue = accessibilityValue
         slider.isEnabled = isEnabled
         slider.isUserInteractionEnabled = isEnabled
+        slider.layoutDirection = layoutDirection
 
         slider.onValueChanged = { [weak coordinator = context.coordinator] value in
             coordinator?.valueChanged(value)
@@ -84,6 +86,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
         }
         slider.isEnabled = isEnabled
         slider.isUserInteractionEnabled = isEnabled
+        slider.layoutDirection = layoutDirection
 
         // Playback sampling can continue while the user drags. Keep the value
         // owned by the active touch until the interaction ends or is cancelled.
@@ -128,6 +131,7 @@ struct ShortDramaProgressSlider: UIViewRepresentable {
 
 @MainActor
 final class ShortDramaAccessibleSlider: UIControl {
+    var layoutDirection: LayoutDirection = .leftToRight
     var onValueChanged: ((Double) -> Void)?
     var onEditingChanged: ((Bool) -> Void)?
     var onCommit: ((Double) -> Void)?
@@ -237,6 +241,10 @@ final class ShortDramaAccessibleSlider: UIControl {
 
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         guard isEnabled else { return false }
+        if let window,
+           PlayerBackSwipe.isAtLeadingEdge(touch.location(in: window), in: window, layoutDirection: layoutDirection) {
+            return false
+        }
 
         suspendNavigationGestures()
         isEditing = true

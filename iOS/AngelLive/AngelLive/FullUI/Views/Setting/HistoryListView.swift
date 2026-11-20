@@ -17,6 +17,7 @@ struct HistoryListView: View {
     @State private var selectedType = 0
     @State private var progressStore: ShortDramaProgressStore
     @State private var shortDramaRoom: LiveModel?
+    @State private var shortDramaReturnPreview: RoomPlayerReturnPreview?
     @State private var historyError: String?
     @State private var liveRooms: [LiveModel] = []
     @State private var classification: ShortDramaHistoryClassification?
@@ -90,6 +91,7 @@ struct HistoryListView: View {
             selectedType: $selectedType,
             onOpenShortDrama: { room in
                 #if canImport(KSPlayer)
+                shortDramaReturnPreview = navigationState.returnSource.capture()
                 shortDramaRoom = room
                 #else
                 historyError = "当前播放器不支持短剧播放。"
@@ -137,8 +139,11 @@ struct HistoryListView: View {
             Text(historyError ?? "")
         }
         #if canImport(KSPlayer)
-        .fullScreenCover(item: $shortDramaRoom) { room in
-            ShortDramaPlayerView(room: room)
+        .fullScreenCover(item: $shortDramaRoom, onDismiss: { shortDramaReturnPreview = nil }) { room in
+            ShortDramaPlayerView(room: room, presentsOverSource: true)
+                .presentationBackground(.clear)
+                .environment(\.fullUIRoomPlayerReturnPreview, shortDramaReturnPreview)
+                .fullUIWindowContext()
                 .fullUITabBarHidden()
                 .fullUIArcLoadingStyle()
         }
