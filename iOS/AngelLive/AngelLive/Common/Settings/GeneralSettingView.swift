@@ -90,6 +90,20 @@ struct GeneralSettingView: View {
 
             Section {
                 if pluginAvailability.hasAvailablePlugins {
+                    if #available(iOS 18.0, *) {
+                        Picker(selection: $generalSettingModel.roomEntryAnimation) {
+                            Text("缩放").tag(RoomEntryAnimation.zoom)
+                            Text("推入").tag(RoomEntryAnimation.push)
+                        } label: {
+                            GeneralSettingLabel(
+                                title: "进入房间动画",
+                                systemImage: "rectangle.portrait.and.arrow.forward",
+                                tint: .blue
+                            )
+                        }
+                        .pickerStyle(.navigationLink)
+                    }
+
                     Picker(selection: $playerSettingModel.defaultPlaybackQuality) {
                         ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
                             Text(quality.title)

@@ -97,16 +97,11 @@ private extension HomeView {
         return selectedPluginId.isEmpty ? nil : selectedPluginId
     }
 
-    @ViewBuilder
     var playerPresentation: some View {
-        if #available(iOS 18.0, *) {
-            homeNavigation
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        } else {
-            homeNavigation
-        }
+        homeNavigation
+            .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+                playerDestination(.zoom)
+            }
     }
 
     var homeNavigation: some View {
@@ -130,10 +125,9 @@ private extension HomeView {
         }
     }
 
-    @ViewBuilder
     func homeNavigationContent(containerSize: CGSize, backgroundTopExtension: CGFloat) -> some View {
         let showsNavigationTitle = homeNavigationModel.scrollOffset > 0.5
-        let content = homeScrollView(containerSize: containerSize, backgroundTopExtension: backgroundTopExtension)
+        return homeScrollView(containerSize: containerSize, backgroundTopExtension: backgroundTopExtension)
             .navigationTitle(showsNavigationTitle ? "首页" : "")
             .navigationBarTitleDisplayMode(.inline)
             // Keep the native bar's geometry stable while its title/background
@@ -141,16 +135,10 @@ private extension HomeView {
             // the scroll offset used to decide visibility.
             .toolbar(.visible, for: .navigationBar)
             .homeNavigationEdgeEffect(isScrolled: showsNavigationTitle)
-
-        if #available(iOS 18.0, *) {
-            content
-        } else {
-            content
-                .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination
-                        .toolbar(.hidden, for: .navigationBar)
-                }
-        }
+            .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+                playerDestination(.push)
+                    .toolbar(.hidden, for: .navigationBar)
+            }
     }
 
     var visibleSectionIDs: Set<String> {
@@ -306,7 +294,6 @@ private extension HomeView {
         .navigationDestination(for: HomeCategoryRoute.self) { route in
             HomeCategoryView(
                 route: route,
-                navigationState: navigationState,
                 namespace: roomTransitionNamespace
             )
             .apiCredentialContentIdentity(pluginId: route.pluginId)
@@ -326,27 +313,17 @@ private extension HomeView {
         min(max((containerWidth - 56) / 2.05, 156), 240)
     }
 
-    var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { isPresented in
-                if !isPresented { navigationState.dismiss() }
-            }
-        )
-    }
-
     @ViewBuilder
-    var playerDestination: some View {
+    func playerDestination(_ animation: RoomEntryAnimation) -> some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
                 categoryRooms: navigationState.categoryRooms
             )
-            .modifier(
-                ZoomTransitionModifier(
-                    sourceID: navigationState.transitionSourceID ?? room.roomId,
-                    namespace: roomTransitionNamespace
-                )
+            .roomEntryTransition(
+                animation,
+                sourceID: navigationState.transitionSourceID ?? room.roomId,
+                namespace: roomTransitionNamespace
             )
             .fullUITabBarHidden()
         }
@@ -1988,19 +1965,17 @@ typealias HomeCategoryRoute = PluginHomeCategoryRoute
 
 private struct HomeCategoryView: View {
     let route: HomeCategoryRoute
-    let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
+    @State private var navigationState = LiveRoomNavigationState()
     @State private var model: PluginHomeCategoryModel
     @State private var isPullRefreshing = false
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
     init(
         route: HomeCategoryRoute,
-        navigationState: LiveRoomNavigationState,
         namespace: Namespace.ID
     ) {
         self.route = route
-        self.navigationState = navigationState
         self.namespace = namespace
         model = PluginHomeCategoryModel(route: route)
     }
@@ -2014,7 +1989,29 @@ private struct HomeCategoryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .fullUITabBarHidden()
-        .task { await model.load(refresh: true) }
+        .task {
+            guard model.rooms.isEmpty else { return }
+            await model.load(refresh: true)
+        }
+        .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+            playerDestination(.push)
+                .toolbar(.hidden, for: .navigationBar)
+        }
+        .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            playerDestination(.zoom)
+        }
+    }
+
+    @ViewBuilder
+    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
+        if let room = navigationState.currentRoom {
+            DetailPlayerView(
+                viewModel: RoomInfoViewModel(room: room),
+                categoryRooms: navigationState.categoryRooms
+            )
+            .roomEntryTransition(animation, sourceID: room.roomId, namespace: namespace)
+            .fullUITabBarHidden()
+        }
     }
 
     private func roomList(containerWidth: CGFloat) -> some View {

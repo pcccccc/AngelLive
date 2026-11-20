@@ -12,6 +12,8 @@ import Combine
 
 /// FullUI routes explicitly declared episodic content to its own player surface.
 struct DetailPlayerView: View {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
     let viewModel: RoomInfoViewModel
     let categoryRooms: [LiveModel]
     let canLoadMoreCategoryRooms: () -> Bool
@@ -37,6 +39,7 @@ struct DetailPlayerView: View {
             if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
                 ShortDramaPlayerView(room: viewModel.currentRoom)
                     .id(viewModel.currentRoom.id)
+                    .interactivePopGestureEnabled(isPushed && verticalSizeClass != .compact, edgeOnly: isPushed)
             } else {
                 LiveDetailPlayerView(
                     viewModel: viewModel,
@@ -67,6 +70,7 @@ struct LiveDetailPlayerView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
@@ -192,6 +196,7 @@ struct LiveDetailPlayerView: View {
     }
 
     private var shouldEnableInteractivePopGesture: Bool {
+        if isPushed { return !isFullscreen }
         if #available(iOS 18.0, *) {
             return false
         }
@@ -387,9 +392,9 @@ struct LiveDetailPlayerView: View {
             ))
             .overlay(alignment: .leading) {
                 // Keep the invisible back gesture in the viewport while the player page moves.
-                if #available(iOS 18.0, *), !iPhoneLandscapeMode, allowsEdgeDismiss, !portraitPlayback.hasFailed {
+                if #available(iOS 18.0, *), !isPushed, !iPhoneLandscapeMode, allowsEdgeDismiss, !portraitPlayback.hasFailed {
                     Color.clear
-                        .frame(width: 20)
+                        .frame(width: LiveRoomNavigationState.playerBackEdgeWidth)
                         .frame(maxHeight: .infinity)
                         .contentShape(Rectangle())
                         .gesture(edgeDismissGesture)
@@ -465,7 +470,7 @@ struct LiveDetailPlayerView: View {
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
         .navigationBarBackButtonHidden(shouldHideSystemBackButton)
-        .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
+        .interactivePopGestureEnabled(shouldEnableInteractivePopGesture, edgeOnly: isPushed)
         .onChange(of: viewModel.currentRoom.id) { _, _ in
             verticalLiveControlsVisible = true
             verticalLiveControlPopupPresented = false

@@ -27,6 +27,7 @@ struct PortraitRoomPager: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
     @State private var motion = PortraitPageMotion()
     @State private var pages: AdjacentPages?
     @State private var cover: Cover?
@@ -106,6 +107,7 @@ struct PortraitRoomPager: ViewModifier {
         if #available(iOS 18.0, *) {
             content.gesture(PortraitRoomPan(
                 shouldBegin: { canStartDrag },
+                reservesBackEdge: isPushed,
                 onBegan: beginDrag,
                 onChanged: updateDrag,
                 onEnded: endDrag,
@@ -422,6 +424,7 @@ final class PortraitRoomPanGestureRecognizer: UIPanGestureRecognizer {}
 @available(iOS 18.0, *)
 private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     let shouldBegin: () -> Bool
+    let reservesBackEdge: Bool
     let onBegan: (CGFloat) -> Void
     let onChanged: (CGFloat) -> Void
     let onEnded: (CGFloat, CGFloat) -> Void
@@ -440,6 +443,7 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         context.coordinator.shouldBegin = shouldBegin
+        context.coordinator.reservesBackEdge = reservesBackEdge
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
@@ -456,6 +460,7 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var shouldBegin: () -> Bool
+        var reservesBackEdge = false
 
         init(shouldBegin: @escaping () -> Bool) {
             self.shouldBegin = shouldBegin
@@ -464,6 +469,11 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard shouldBegin(), let window = gestureRecognizer.view?.window else { return false }
             let point = touch.location(in: window)
+            if reservesBackEdge {
+                let distance = window.effectiveUserInterfaceLayoutDirection == .rightToLeft
+                    ? window.bounds.maxX - point.x : point.x - window.bounds.minX
+                guard distance >= LiveRoomNavigationState.playerBackEdgeWidth else { return false }
+            }
             return point.y > window.bounds.minY + 44 && point.y < window.bounds.maxY - 44
         }
 

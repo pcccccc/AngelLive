@@ -29,6 +29,7 @@ public struct KSVideoPlayerView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
+    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
     @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
     @Environment(\.portraitRoomPageActions) private var portraitRoomPageActions
     @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
@@ -190,12 +191,13 @@ public struct KSVideoPlayerView: View {
     }
 
     private var playerGestureLayer: some View {
+        let reservesBackEdge = isPushed || !isVerticalLiveMode || verticalLiveControlsVisible.wrappedValue
         let gestures = PlayerGestureView(
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
             onHorizontalSwipe: verticalLiveSwipeAction,
             adjustsBrightnessAndVolumeWithDrag: !isVerticalLiveMode,
-            edgePassthroughWidth: isVerticalLiveMode && !verticalLiveControlsVisible.wrappedValue ? 0 : 20,
+            edgePassthroughWidth: reservesBackEdge ? LiveRoomNavigationState.playerBackEdgeWidth : 0,
             preventsInteractiveDismissal: true,
             orientationErrorHandler: { @Sendable error in
                 Logger.warning("切换屏幕方向失败: \(error)", category: .ui)

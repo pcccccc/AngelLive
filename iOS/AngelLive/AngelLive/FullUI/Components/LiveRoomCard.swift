@@ -192,6 +192,7 @@ struct LiveRoomCard: View {
             if disableTapGesture || useExternalNavigation {
                 baseTappable
             } else {
+                // A standalone card can also be hosted in a UIKit cell without a NavigationStack.
                 if #available(iOS 18.0, *) {
                     baseTappable
                         .fullScreenCover(isPresented: showPlayerBinding) {

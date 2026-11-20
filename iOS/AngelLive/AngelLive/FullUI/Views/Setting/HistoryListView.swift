@@ -66,22 +66,15 @@ struct HistoryListView: View {
         Binding(get: { historyError != nil }, set: { if !$0 { historyError = nil } })
     }
 
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
-    }
-
     @ViewBuilder
-    private var playerDestination: some View {
+    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
                 categoryRooms: navigationState.categoryRooms,
                 entryRoomSource: .history
             )
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
                 .fullUITabBarHidden()
         }
     }
@@ -151,17 +144,13 @@ struct HistoryListView: View {
         }
         #endif
 
-        if #available(iOS 18.0, *) {
-            baseView
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        } else {
-            baseView
-                .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        }
+        baseView
+            .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+                playerDestination(.push)
+            }
+            .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+                playerDestination(.zoom)
+            }
     }
 }
 

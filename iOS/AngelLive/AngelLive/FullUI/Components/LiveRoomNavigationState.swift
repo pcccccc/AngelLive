@@ -18,8 +18,11 @@ struct LiveRoomCategoryContext: Equatable {
 /// 将导航状态从视图的 @State 移到外部可观察对象，确保在 PiP 背景/前台切换时不会丢失
 @Observable
 class LiveRoomNavigationState {
+    static let playerBackEdgeWidth: CGFloat = 20
+
     /// 是否显示播放器
-    var showPlayer: Bool = false
+    private(set) var showPlayer = false
+    private var entryAnimation: RoomEntryAnimation = .zoom
 
     /// 当前选中的房间
     var currentRoom: LiveModel?
@@ -40,11 +43,25 @@ class LiveRoomNavigationState {
         categoryContext: LiveRoomCategoryContext? = nil,
         transitionSourceID: String? = nil
     ) {
+        if #available(iOS 18.0, *) {
+            entryAnimation = GeneralSettingModel().roomEntryAnimation
+        } else {
+            entryAnimation = .push
+        }
         currentRoom = room
         self.categoryRooms = categoryRooms
         self.categoryContext = categoryContext
         self.transitionSourceID = transitionSourceID
         showPlayer = true
+    }
+
+    func playerBinding(for animation: RoomEntryAnimation) -> Binding<Bool> {
+        Binding(
+            get: { self.showPlayer && self.entryAnimation == animation },
+            set: { isPresented in
+                if !isPresented, self.entryAnimation == animation { self.dismiss() }
+            }
+        )
     }
 
     /// 关闭播放器
@@ -78,8 +95,26 @@ private struct LiveRoomNavigationStateKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
+    @Entry var fullUIRoomPlayerPushed = false
+
     var liveRoomNavigationState: LiveRoomNavigationState? {
         get { self[LiveRoomNavigationStateKey.self] }
         set { self[LiveRoomNavigationStateKey.self] = newValue }
+    }
+}
+
+extension DetailPlayerView {
+    @ViewBuilder
+    func roomEntryTransition(_ animation: RoomEntryAnimation, sourceID: String, namespace: Namespace.ID) -> some View {
+        if #available(iOS 18.0, *) {
+            if animation == .zoom {
+                modifier(ZoomTransitionModifier(sourceID: sourceID, namespace: namespace))
+            } else {
+                environment(\.fullUIRoomPlayerPushed, true)
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+        } else {
+            self
+        }
     }
 }

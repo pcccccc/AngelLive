@@ -51,40 +51,18 @@ struct FavoriteView: View {
 
     @ViewBuilder
     private var playerPresentation: some View {
-        if #available(iOS 18.0, *) {
+        Group {
             if embeddedInNavigationStack {
                 favoriteList
-                    .fullScreenCover(isPresented: playerPresentedBinding) {
-                        playerDestination
-                    }
             } else {
-                baseNavigation
-                    .fullScreenCover(isPresented: playerPresentedBinding) {
-                        playerDestination
-                    }
-            }
-        } else {
-            if embeddedInNavigationStack {
-                favoriteList
-                    .navigationDestination(isPresented: playerPresentedBinding) {
-                        playerDestination
-                    }
-            } else {
-                // iOS 17: navigationDestination 必须在 NavigationStack 内部
                 NavigationStack {
                     favoriteList
-                        .navigationDestination(isPresented: playerPresentedBinding) {
-                            playerDestination
-                        }
+                        .fullUITabBarVisibilityRoot()
                 }
             }
         }
-    }
-
-    private var baseNavigation: some View {
-        NavigationStack {
-            favoriteList
-                .fullUITabBarVisibilityRoot()
+        .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            playerDestination(.zoom)
         }
     }
 
@@ -139,23 +117,19 @@ struct FavoriteView: View {
         .onChange(of: viewModel.cloudKitReady) { _, isReady in
             if isReady { showsCloudSyncDetails = false }
         }
-    }
-
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
+        .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+            playerDestination(.push)
+        }
     }
 
     @ViewBuilder
-    private var playerDestination: some View {
+    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
                 categoryRooms: navigationState.categoryRooms
             )
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
                 .fullUITabBarHidden()
         }
     }

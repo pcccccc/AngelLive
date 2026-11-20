@@ -49,34 +49,56 @@ struct WelcomePresentationModifier: ViewModifier {
 
 private struct InteractivePopGestureConfigurator: UIViewControllerRepresentable {
     let isEnabled: Bool
+    let edgeOnly: Bool
 
     func makeUIViewController(context: Context) -> Controller {
         Controller()
     }
 
     func updateUIViewController(_ uiViewController: Controller, context: Context) {
-        uiViewController.isGestureEnabled = isEnabled
-        uiViewController.applyInteractivePopConfiguration()
+        uiViewController.updateConfiguration(isEnabled: isEnabled, edgeOnly: edgeOnly)
+    }
+
+    static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
+        controller.restoreInteractivePopConfiguration()
     }
 
     final class Controller: UIViewController {
-        var isGestureEnabled = false
+        private var isGestureEnabled = false
+        private var edgeOnly = false
+        private var isVisible = false
         private weak var trackedGestureRecognizer: UIGestureRecognizer?
         private weak var originalDelegate: UIGestureRecognizerDelegate?
         private var originalIsEnabled = true
+        private weak var contentPopGestureRecognizer: UIGestureRecognizer?
+        private var originalContentPopEnabled = true
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
+            isVisible = true
             applyInteractivePopConfiguration()
         }
 
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
+        override func viewDidDisappear(_ animated: Bool) {
+            super.viewDidDisappear(animated)
+            isVisible = false
             restoreInteractivePopConfiguration()
         }
 
-        func applyInteractivePopConfiguration() {
-            guard let gestureRecognizer = navigationController?.interactivePopGestureRecognizer else {
+        func updateConfiguration(isEnabled: Bool, edgeOnly: Bool) {
+            isGestureEnabled = isEnabled
+            self.edgeOnly = edgeOnly
+            if isVisible { applyInteractivePopConfiguration() }
+        }
+
+        private func applyInteractivePopConfiguration() {
+            guard let navigationController, navigationController.viewControllers.count > 1,
+                  let gestureRecognizer = navigationController.interactivePopGestureRecognizer else {
+                return
+            }
+
+            guard isGestureEnabled || edgeOnly else {
+                restoreInteractivePopConfiguration()
                 return
             }
 
@@ -86,28 +108,36 @@ private struct InteractivePopGestureConfigurator: UIViewControllerRepresentable 
                 originalIsEnabled = gestureRecognizer.isEnabled
             }
 
-            if isGestureEnabled {
-                gestureRecognizer.delegate = nil
-                gestureRecognizer.isEnabled = true
-            } else {
-                restoreInteractivePopConfiguration()
+            gestureRecognizer.delegate = isGestureEnabled ? nil : originalDelegate
+            gestureRecognizer.isEnabled = isGestureEnabled
+
+            // Keep horizontal drags inside the player available to its own controls.
+            if edgeOnly, #available(iOS 26.0, *),
+               let contentPop = navigationController.interactiveContentPopGestureRecognizer {
+                if contentPopGestureRecognizer !== contentPop {
+                    contentPopGestureRecognizer = contentPop
+                    originalContentPopEnabled = contentPop.isEnabled
+                }
+                contentPop.isEnabled = false
             }
         }
 
-        private func restoreInteractivePopConfiguration() {
-            guard let gestureRecognizer = trackedGestureRecognizer else {
-                return
+        func restoreInteractivePopConfiguration() {
+            if let gestureRecognizer = trackedGestureRecognizer {
+                gestureRecognizer.delegate = originalDelegate
+                gestureRecognizer.isEnabled = originalIsEnabled
             }
-            gestureRecognizer.delegate = originalDelegate
-            gestureRecognizer.isEnabled = originalIsEnabled
+            trackedGestureRecognizer = nil
+            contentPopGestureRecognizer?.isEnabled = originalContentPopEnabled
+            contentPopGestureRecognizer = nil
         }
     }
 }
 
 extension View {
-    func interactivePopGestureEnabled(_ isEnabled: Bool) -> some View {
+    func interactivePopGestureEnabled(_ isEnabled: Bool, edgeOnly: Bool = false) -> some View {
         background(
-            InteractivePopGestureConfigurator(isEnabled: isEnabled)
+            InteractivePopGestureConfigurator(isEnabled: isEnabled, edgeOnly: edgeOnly)
                 .frame(width: 0, height: 0)
         )
     }
