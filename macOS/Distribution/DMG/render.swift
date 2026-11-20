@@ -110,7 +110,7 @@ func drawBackground() {
 @MainActor
 func drawPreviewIcons() throws {
     let canvas = Canvas(height: layout.height)
-    let artwork = repository.appendingPathComponent("macOS/AngelLiveMacOS/XiaoShengBB.icon/Assets/AngelLive_XiaoShengBB.png")
+    let artwork = repository.appendingPathComponent("macOS/AngelLiveMacOS/Assets.xcassets/AngelLiveClassicRuntime.imageset/AngelLiveClassic.png")
     guard let app = NSImage(contentsOf: artwork),
           let applications = NSImage(contentsOfFile: "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns") else {
         throw NSError(domain: "DMGDesign", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing app artwork or macOS Applications icon."])
@@ -123,11 +123,6 @@ func drawPreviewIcons() throws {
     shadow.shadowOffset = NSSize(width: 0, height: -5)
     shadow.shadowColor = color(0x6D2A39, alpha: 0.12)
     shadow.set()
-    color(0xF43F72).setFill()
-    NSBezierPath(roundedRect: appBounds, xRadius: size * 0.224, yRadius: size * 0.224).fill()
-    NSGraphicsContext.restoreGraphicsState()
-    NSGraphicsContext.saveGraphicsState()
-    NSBezierPath(roundedRect: appBounds, xRadius: size * 0.224, yRadius: size * 0.224).addClip()
     app.draw(in: appBounds, from: .zero, operation: .sourceOver, fraction: 1)
     NSGraphicsContext.restoreGraphicsState()
 

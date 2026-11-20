@@ -17,7 +17,7 @@ struct SettingView: View {
     #endif
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @AppStorage(MacDockIconPreference.storageKey)
-    private var dockIconPreference = MacDockIconPreference.xiaoShengBiBi
+    private var dockIconPreference = MacDockIconPreference.classic
     @AppStorage(MacPlaybackPresentationPreference.singlePageModeKey)
     private var singlePagePlayback = false
 
