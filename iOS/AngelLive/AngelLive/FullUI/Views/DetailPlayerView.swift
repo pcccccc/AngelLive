@@ -125,7 +125,6 @@ struct LiveDetailPlayerView: View {
     @State private var isPortraitRoomSwitcherPresented = false
     @State private var portraitRoomSwitcherDetent = Self.portraitRoomSwitcherHalfDetent
     @State private var pendingPortraitRoom: LiveModel?
-    @State private var isDetailRoomSwitcherPresented = false
     @State private var selectedRoomSource: RoomSwitchSource
     @State private var switchingRoomID: String?
     @State private var failedRoomID: String?
@@ -229,6 +228,7 @@ struct LiveDetailPlayerView: View {
             let iPhoneLandscapeMode = isIPhoneLandscape
             // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
             let showInfoPanel = !isVerticalLiveMode && !isFullscreen
+            let usesRoomSwitcherSheet = showInfoPanel || usesPortraitRoomSwitcher
             // Reuse the 400pt information panel only with at least a compact
             // 320pt playback surface beside it; regular traits alone are not a width guarantee.
             let showsSidePanel = showInfoPanel && usesExpandedLayout && isLandscape
@@ -372,8 +372,7 @@ struct LiveDetailPlayerView: View {
                 enabled: isVerticalLiveMode && !isLandscape && !isFullscreen && !viewModel.isOnDemand
                     && scenePhase == .active && !portraitPlayback.hasFailed
                     && !playerModel.isLocked && !verticalLiveControlPopupPresented
-                    && !isPortraitRoomSwitcherPresented && !isRoomSwitcherPresented
-                    && !isDetailRoomSwitcherPresented && pendingPortraitRoom == nil,
+                    && !isPortraitRoomSwitcherPresented && !isRoomSwitcherPresented && pendingPortraitRoom == nil,
                 viewportHeight: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom,
                 availableHeight: geometry.size.height,
                 playback: portraitPlayback,
@@ -410,8 +409,8 @@ struct LiveDetailPlayerView: View {
             }
             .environment(
                 \.roomSwitcherPresentation,
-                usesPortraitRoomSwitcher ? $isPortraitRoomSwitcherPresented
-                    : (showInfoPanel ? $isDetailRoomSwitcherPresented : $isRoomSwitcherPresented.animation(roomSwitcherDrawerAnimation))
+                usesRoomSwitcherSheet ? $isPortraitRoomSwitcherPresented
+                    : $isRoomSwitcherPresented.animation(roomSwitcherDrawerAnimation)
             )
             .environment(\.fullUILandscapePlayerLayout, landscapeLayout)
             .environment(\.fullUIPlayerShowsRoomBanner, roomBannerID == viewModel.currentRoom.id)
@@ -424,7 +423,7 @@ struct LiveDetailPlayerView: View {
                     cancelRoomBanner()
                 }
             }
-            .onChange(of: usesPortraitRoomSwitcher) { _, usesSheet in
+            .onChange(of: usesRoomSwitcherSheet) { _, usesSheet in
                 if usesSheet {
                     isRoomSwitcherPresented = false
                 } else {
@@ -743,31 +742,13 @@ struct LiveDetailPlayerView: View {
             StreamerInfoView()
                 .padding(.bottom, 20)
 
-            ZStack {
-                VStack(spacing: 0) {
-                    RoomActionDock(
-                        room: viewModel.currentRoom,
-                        onToggleSwitcher: { isDetailRoomSwitcherPresented = true },
-                        onClearChat: clearChat,
-                        onJumpToLatestChat: showJumpToLatest ? { scrollToBottomRequest = true } : nil
-                    )
-                    chatListView.id(viewModel.currentRoom.id)
-                }
-                .opacity(isDetailRoomSwitcherPresented ? 0 : 1)
-                .allowsHitTesting(!isDetailRoomSwitcherPresented)
-                .accessibilityHidden(isDetailRoomSwitcherPresented)
-
-                if isDetailRoomSwitcherPresented {
-                    RoomSwitcherPanel(
-                        content: roomSwitcherContent,
-                        selectedSource: $selectedRoomSource,
-                        onSelect: selectInlineRoom,
-                        dismissal: .chat { isDetailRoomSwitcherPresented = false }
-                    )
-                    .transition(.opacity)
-                }
-            }
-            .animation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.2), value: isDetailRoomSwitcherPresented)
+            RoomActionDock(
+                room: viewModel.currentRoom,
+                onOpenSwitcher: { isPortraitRoomSwitcherPresented = true },
+                onClearChat: clearChat,
+                onJumpToLatestChat: showJumpToLatest ? { scrollToBottomRequest = true } : nil
+            )
+            chatListView.id(viewModel.currentRoom.id)
         }
         .environment(viewModel)
         .environment(\.colorScheme, .dark)
@@ -874,7 +855,7 @@ struct LiveDetailPlayerView: View {
             content: roomSwitcherContent,
             selectedSource: $selectedRoomSource,
             onSelect: selectPortraitRoom,
-            dismissal: .close { isPortraitRoomSwitcherPresented = false }
+            onDismiss: { isPortraitRoomSwitcherPresented = false }
         )
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape) { isPortraitRoomSwitcherPresented = false }
@@ -933,7 +914,7 @@ struct LiveDetailPlayerView: View {
             content: roomSwitcherContent,
             selectedSource: $selectedRoomSource,
             onSelect: selectDrawerRoom,
-            dismissal: .close(dismissRoomSwitcher)
+            onDismiss: dismissRoomSwitcher
         )
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape, dismissRoomSwitcher)
@@ -1009,10 +990,6 @@ struct LiveDetailPlayerView: View {
         guard isRoomSwitcherPresented else { return }
         dismissRoomSwitcher()
         switchRoom(room, showsConfirmation: false)
-    }
-
-    private func selectInlineRoom(_ room: LiveModel) {
-        switchRoom(room, showsConfirmation: true)
     }
 
     private func switchRoom(

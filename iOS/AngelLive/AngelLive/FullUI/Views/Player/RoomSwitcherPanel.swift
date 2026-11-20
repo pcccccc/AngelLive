@@ -6,31 +6,21 @@ struct RoomSwitcherPanel: View {
     let content: RoomSwitcherListContent
     @Binding var selectedSource: RoomSwitchSource
     let onSelect: (LiveModel) -> Void
-    let dismissal: Dismissal
-
-    enum Dismissal {
-        case chat(() -> Void)
-        case close(() -> Void)
-    }
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             RoomSwitcherHeader(title: "换台", selectedSource: $selectedSource) {
-                switch dismissal {
-                case .chat(let action):
-                    RoomSwitcherChatButton(showsChat: false, action: action)
-                case .close(let action):
-                    Button(action: action) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                            .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("关闭换台")
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                        .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("关闭换台")
             }
 
             GeometryReader { geometry in
@@ -50,9 +40,7 @@ struct RoomSwitcherPanel: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("快速换台")
         .accessibilityActions {
-            if case .close(let action) = dismissal {
-                Button("关闭换台", action: action)
-            }
+            Button("关闭换台", action: onDismiss)
         }
     }
 }
@@ -98,7 +86,7 @@ struct RoomSwitcherRows: View {
             }
 
             ForEach(rooms) { room in
-                let row = InlineRoomSwitchRow(
+                let row = RoomSwitcherRow(
                     room: room,
                     coverWidth: coverWidth,
                     isCurrent: room == content.currentRoom,
@@ -150,7 +138,7 @@ struct RoomSwitcherRows: View {
     }
 }
 
-private struct InlineRoomSwitchRow: View {
+private struct RoomSwitcherRow: View {
     let room: LiveModel
     let coverWidth: CGFloat
     let isCurrent: Bool
@@ -247,13 +235,13 @@ private struct InlineRoomSwitchRow: View {
 
 struct RoomActionDock: View {
     let room: LiveModel
-    let onToggleSwitcher: () -> Void
+    let onOpenSwitcher: () -> Void
     let onClearChat: () -> Void
     var onJumpToLatestChat: (() -> Void)?
 
     var body: some View {
         RoomSwitcherHeader(title: "聊天", selectedSource: nil) {
-            RoomSwitcherChatButton(showsChat: true, action: onToggleSwitcher)
+            RoomSwitcherOpenButton(action: onOpenSwitcher)
             MoreActionsButton(
                 room: room,
                 onClearChat: onClearChat,
@@ -266,19 +254,16 @@ struct RoomActionDock: View {
     }
 }
 
-private struct RoomSwitcherChatButton: View {
-    let showsChat: Bool
+private struct RoomSwitcherOpenButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                Text(showsChat ? "换台" : "聊天")
+                Text("换台")
                     .font(.footnote.weight(.semibold))
-                if showsChat {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
-                }
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
             }
             .lineLimit(1)
             .padding(.horizontal, 12)
@@ -288,7 +273,7 @@ private struct RoomSwitcherChatButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(showsChat ? "换台" : "返回聊天")
+        .accessibilityLabel("换台")
     }
 }
 
