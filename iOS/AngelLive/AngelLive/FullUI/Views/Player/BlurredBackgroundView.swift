@@ -47,6 +47,7 @@ struct BlurredBackgroundView: View {
                 }
             
         }
+        .background(.black)
     }
 }
 

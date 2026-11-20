@@ -1294,6 +1294,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     }
 
     func player(layer: KSPlayer.KSPlayerLayer, finish error: Error?) {
+        guard layer.url == currentPlayURL, !playbackDiagnosticsEnded else { return }
         // 直播 EOF 交给协调器恢复；点播正常结束不重取播放地址。
         guard let error else {
             if recoveryCoordinator.isLive {
@@ -1335,13 +1336,16 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     func checkLiveStatusOnError(error: Error) {
         // 恢复阶梯未结束时不进错误页,避免无感续播被打断
         if isPlaybackRecovering { return }
+        let room = currentRoom
+        let selectionGeneration = playbackSelectionGeneration
         Task {
             do {
                 let state = try await ApiManager.getCurrentRoomLiveState(
-                    roomId: currentRoom.roomId,
-                    userId: currentRoom.userId,
-                    liveType: currentRoom.liveType
+                    roomId: room.roomId,
+                    userId: room.userId,
+                    liveType: room.liveType
                 )
+                guard selectionGeneration == playbackSelectionGeneration, !playbackDiagnosticsEnded else { return }
                 if state == .close || state == .unknow {
                     // 主播已下播
                     displayState = .streamerOffline
@@ -1352,9 +1356,11 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
                     displayState = .error
                 }
             } catch let statusError where statusError.isNotLive {
+                guard selectionGeneration == playbackSelectionGeneration, !playbackDiagnosticsEnded else { return }
                 // 插件明确返回 NOT_LIVE，按已下播处理
                 displayState = .streamerOffline
             } catch {
+                guard selectionGeneration == playbackSelectionGeneration, !playbackDiagnosticsEnded else { return }
                 // 检查状态失败，显示原始错误
                 playError = error
                 playErrorMessage = error.localizedDescription

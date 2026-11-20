@@ -4,23 +4,56 @@ import AngelLiveDependencies
 
 struct RoomSwitcherPanel: View {
     let content: RoomSwitcherListContent
+    @Binding var selectedSource: RoomSwitchSource
     let onSelect: (LiveModel) -> Void
+    let dismissal: Dismissal
+
+    enum Dismissal {
+        case chat(() -> Void)
+        case close(() -> Void)
+    }
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                RoomSwitcherRows(
-                    content: content,
-                    coverWidth: RoomSwitcherRows.coverWidth(in: geometry.size.width),
-                    onSelect: onSelect
-                )
-                .padding(.horizontal, FullUIPlayerDetailChrome.inset)
-                .padding(.vertical, 8)
+        VStack(spacing: 0) {
+            RoomSwitcherHeader(title: "换台", selectedSource: $selectedSource) {
+                switch dismissal {
+                case .chat(let action):
+                    RoomSwitcherChatButton(showsChat: false, action: action)
+                case .close(let action):
+                    Button(action: action) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(.secondary)
+                            .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("关闭换台")
+                }
+            }
+
+            GeometryReader { geometry in
+                ScrollView {
+                    RoomSwitcherRows(
+                        content: content,
+                        coverWidth: RoomSwitcherRows.coverWidth(in: geometry.size.width),
+                        onSelect: onSelect
+                    )
+                    .padding(.horizontal, FullUIPlayerDetailChrome.inset)
+                    .padding(.vertical, 8)
+                }
+                .id(selectedSource)
             }
         }
-        .id(content.source)
+        .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("快速换台")
+        .accessibilityActions {
+            if case .close(let action) = dismissal {
+                Button("关闭换台", action: action)
+            }
+        }
     }
 }
 
@@ -38,29 +71,8 @@ struct RoomSwitcherListContent {
     let onLoadMoreCategory: (() async -> [LiveModel])?
 
     var rooms: [LiveModel] {
-        let sourceRooms: [LiveModel]
-        switch source {
-        case .favorite:
-            sourceRooms = favorites.filter { $0.liveState == LiveState.live.rawValue }
-        case .history:
-            sourceRooms = history
-        case .category:
-            sourceRooms = category
-        }
-
-        var rooms = RoomSwitchCandidates.rooms(
-            for: source,
-            currentRoom: currentRoom,
-            favorites: favorites,
-            history: history,
-            category: category
-        )
-        if let currentIndex = sourceRooms.firstIndex(of: currentRoom) {
-            let precedingRooms = Set(sourceRooms[..<currentIndex])
-            let insertIndex = rooms.firstIndex { !precedingRooms.contains($0) } ?? rooms.endIndex
-            rooms.insert(currentRoom, at: insertIndex)
-        }
-        return rooms
+        RoomSwitchCandidates.orderedRooms(for: source, favorites: favorites, history: history, category: category)
+            .map { $0 == currentRoom ? currentRoom : $0 }
     }
 
     var emptyDescription: String {
@@ -234,52 +246,53 @@ private struct InlineRoomSwitchRow: View {
 }
 
 struct RoomActionDock: View {
-    let isSwitcherPresented: Bool
-    @Binding var selectedSource: RoomSwitchSource
     let room: LiveModel
     let onToggleSwitcher: () -> Void
     let onClearChat: () -> Void
     var onJumpToLatestChat: (() -> Void)?
 
     var body: some View {
-        RoomSwitcherHeader(
-            title: isSwitcherPresented ? "换台" : "聊天",
-            selectedSource: isSwitcherPresented ? $selectedSource : nil
-        ) {
-            Button(action: onToggleSwitcher) {
-                HStack(spacing: 4) {
-                    Text(isSwitcherPresented ? "聊天" : "换台")
-                        .font(.footnote.weight(.semibold))
-                    if !isSwitcherPresented {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                }
-                .lineLimit(1)
-                .padding(.horizontal, 12)
-                .frame(minHeight: FullUIPlayerDetailChrome.pillHeight)
-                .background(FullUIPlayerDetailChrome.pillFill, in: Capsule())
-                .frame(minWidth: FullUIPlayerChrome.controlSize, minHeight: FullUIPlayerChrome.controlSize)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isSwitcherPresented ? "返回聊天" : "换台")
-
-            if !isSwitcherPresented {
-                MoreActionsButton(
-                    room: room,
-                    onClearChat: onClearChat,
-                    usesDetailPill: true,
-                    onJumpToLatestChat: onJumpToLatestChat
-                )
-                .padding(.leading, -6)
-                .padding(.trailing, -6)
-            }
+        RoomSwitcherHeader(title: "聊天", selectedSource: nil) {
+            RoomSwitcherChatButton(showsChat: true, action: onToggleSwitcher)
+            MoreActionsButton(
+                room: room,
+                onClearChat: onClearChat,
+                usesDetailPill: true,
+                onJumpToLatestChat: onJumpToLatestChat
+            )
+            .padding(.leading, -6)
+            .padding(.trailing, -6)
         }
     }
 }
 
-struct RoomSwitcherHeader<Actions: View>: View {
+private struct RoomSwitcherChatButton: View {
+    let showsChat: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(showsChat ? "换台" : "聊天")
+                    .font(.footnote.weight(.semibold))
+                if showsChat {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .frame(minHeight: FullUIPlayerDetailChrome.pillHeight)
+            .background(FullUIPlayerDetailChrome.pillFill, in: Capsule())
+            .frame(minWidth: FullUIPlayerChrome.controlSize, minHeight: FullUIPlayerChrome.controlSize)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showsChat ? "换台" : "返回聊天")
+    }
+}
+
+private struct RoomSwitcherHeader<Actions: View>: View {
     let title: LocalizedStringKey
     let selectedSource: Binding<RoomSwitchSource>?
     @ViewBuilder let actions: () -> Actions
@@ -288,6 +301,7 @@ struct RoomSwitcherHeader<Actions: View>: View {
         HStack(spacing: 8) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
 
@@ -326,6 +340,7 @@ struct RoomSwitcherHeader<Actions: View>: View {
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
         }
+        .tint(FullUIPlayerDetailChrome.accent)
         .menuIndicator(.hidden)
         .accessibilityLabel("换台来源")
         .accessibilityValue(selection.wrappedValue.inlineTitle)

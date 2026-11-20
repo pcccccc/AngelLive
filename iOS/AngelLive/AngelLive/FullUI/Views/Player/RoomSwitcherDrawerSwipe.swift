@@ -105,8 +105,12 @@ struct RoomSwitcherDrawerSwipe: ViewModifier {
     private func settle(to target: CGFloat, velocity: CGFloat) {
         dragOrigin = nil
         if reduceMotion || offset == target {
-            offset = target
-            if target > 0 { onDismiss() }
+            if target > 0 {
+                // With Reduce Motion, fade out from the point where the user released the drawer.
+                onDismiss()
+            } else {
+                offset = target
+            }
         } else {
             settlement = Settlement(from: offset, target: target, velocity: velocity)
         }

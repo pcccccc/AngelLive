@@ -30,6 +30,7 @@ public struct KSVideoPlayerView: View {
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
     @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
+    @Environment(\.portraitRoomPageActions) private var portraitRoomPageActions
     @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
     @Environment(\.fullUILandscapePlayerLayout) private var landscapeLayout
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -193,6 +194,7 @@ public struct KSVideoPlayerView: View {
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
             onHorizontalSwipe: verticalLiveSwipeAction,
+            adjustsBrightnessAndVolumeWithDrag: !isVerticalLiveMode,
             edgePassthroughWidth: isVerticalLiveMode && !verticalLiveControlsVisible.wrappedValue ? 0 : 20,
             preventsInteractiveDismissal: true,
             orientationErrorHandler: { @Sendable error in
@@ -212,6 +214,12 @@ public struct KSVideoPlayerView: View {
                     }
                     .accessibilityAction(named: Text(viewModel.isPlaying ? "暂停播放" : "继续播放")) {
                         toggleVerticalLivePlayback()
+                    }
+                    .accessibilityActions {
+                        if let turnPage = portraitRoomPageActions?.turnPage {
+                            Button("下一个房间") { turnPage(.next) }
+                            Button("上一个房间") { turnPage(.previous) }
+                        }
                     }
             } else {
                 gestures
@@ -241,6 +249,7 @@ public struct KSVideoPlayerView: View {
     private func handleVerticalLiveSwipe(_ direction: PlayerHorizontalSwipeDirection) {
         guard isVerticalLiveMode,
               !model.isLocked,
+              portraitRoomPageActions?.isMoving() != true,
               !verticalLiveControlPopupPresented.wrappedValue else { return }
         verticalLiveControlsVisible.wrappedValue = direction == .right
     }

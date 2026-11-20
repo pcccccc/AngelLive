@@ -105,6 +105,7 @@ struct PlayerGestureView: View {
     var onDoubleTap: (() -> Void)?
     /// 仅在宿主显式注入时启用横向手势；默认入口保持原有亮度/音量行为。
     var onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)?
+    private let adjustsBrightnessAndVolumeWithDrag: Bool
     private let edgePassthroughWidth: CGFloat
     /// FullUI 仅在触摸播放画面期间阻止交互式返回。
     private let preventsInteractiveDismissal: Bool
@@ -117,6 +118,7 @@ struct PlayerGestureView: View {
         onSingleTap: (() -> Void)? = nil,
         onDoubleTap: (() -> Void)? = nil,
         onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)? = nil,
+        adjustsBrightnessAndVolumeWithDrag: Bool = true,
         edgePassthroughWidth: CGFloat = 20,
         preventsInteractiveDismissal: Bool = false,
         orientationErrorHandler: (@Sendable (Error) -> Void)? = nil,
@@ -125,6 +127,7 @@ struct PlayerGestureView: View {
         self.onSingleTap = onSingleTap
         self.onDoubleTap = onDoubleTap
         self.onHorizontalSwipe = onHorizontalSwipe
+        self.adjustsBrightnessAndVolumeWithDrag = adjustsBrightnessAndVolumeWithDrag
         self.edgePassthroughWidth = edgePassthroughWidth
         self.preventsInteractiveDismissal = preventsInteractiveDismissal
         self.orientationErrorHandler = orientationErrorHandler
@@ -228,7 +231,7 @@ struct PlayerGestureView: View {
                                           value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
                                     if onHorizontalSwipe != nil {
                                         handleDirectionalDragChanged(value: value, in: geometry.size)
-                                    } else if GeneralSettingModel().enablePlayerGesture {
+                                    } else if adjustsBrightnessAndVolumeWithDrag && GeneralSettingModel().enablePlayerGesture {
                                         handleDragChanged(value: value, in: geometry.size)
                                     }
                                 }
@@ -505,7 +508,7 @@ struct PlayerGestureView: View {
         }
 
         isDragging = true
-        if dragAxis == .vertical && GeneralSettingModel().enablePlayerGesture {
+        if dragAxis == .vertical && adjustsBrightnessAndVolumeWithDrag && GeneralSettingModel().enablePlayerGesture {
             handleDragChanged(
                 value: value,
                 in: CGSize(width: max(1, size.width - edgePassthroughWidth), height: size.height),

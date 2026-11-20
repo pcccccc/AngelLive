@@ -30,6 +30,7 @@ struct MoreActionsButton: View {
     var showsDanmakuConnectionIssue = false
     var onJumpToLatestChat: (() -> Void)?
     var usesSharedPlayerGlass = false
+    var popupPresented: Binding<Bool>?
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var presentedSheet: MoreActionsSheet?
@@ -179,6 +180,9 @@ struct MoreActionsButton: View {
         }
         .onChange(of: viewModel.subtitlePlayback.activationID) { _, _ in
             showSubtitleLanguages = false
+        }
+        .onChange(of: presentedSheet != nil || showSubtitleLanguages || presentedDanmakuIssue != nil) { _, presented in
+            popupPresented?.wrappedValue = presented
         }
         .tint(.primary)
     }

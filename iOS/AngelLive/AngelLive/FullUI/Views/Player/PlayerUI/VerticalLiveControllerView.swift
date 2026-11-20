@@ -29,6 +29,8 @@ struct VerticalLiveControllerView: View {
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
     @State private var showQualityPanel = false
+    @State private var moreActionSheetPresented = false
+    @State private var railWidth = FullUIPlayerChrome.controlSize
     private let onOpenRoomSwitcher: (() -> Void)?
 
     /// 判断是否已收藏
@@ -53,7 +55,8 @@ struct VerticalLiveControllerView: View {
                 ZStack {
                     topBar(maximumStreamerWidth: max(0, geometry.size.width - 2 * FullUIPlayerChrome.inset) * 0.46)
 
-                    bottomLeftArea
+                    bottomLeftArea(maximumWidth: max(0, geometry.size.width
+                        - 2 * FullUIPlayerChrome.inset - railWidth - 8))
                         .allowsHitTesting(false)
 
                     bottomRightArea
@@ -89,7 +92,7 @@ struct VerticalLiveControllerView: View {
         )
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         .environment(\.colorScheme, .dark)
-        .onChange(of: showQualityPanel || showStreamerInfo, initial: true) { _, presented in
+        .onChange(of: showQualityPanel || showStreamerInfo || moreActionSheetPresented, initial: true) { _, presented in
             controlPopupPresented.wrappedValue = presented
         }
         .onDisappear {
@@ -175,22 +178,19 @@ struct VerticalLiveControllerView: View {
 
     // MARK: - 左下角区域：弹幕气泡
 
-    private var bottomLeftArea: some View {
+    private func bottomLeftArea(maximumWidth: CGFloat) -> some View {
         VStack {
             Spacer()
 
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if scenePhase == .active {
-                        // 弹幕气泡（显示最近6条）- 使用 ChatBubbleView
-                        ForEach(viewModel.danmuMessages.suffix(6)) { message in
-                            ChatBubbleView(message: message)
-                        }
+            VStack(alignment: .leading, spacing: 8) {
+                if scenePhase == .active {
+                    ForEach(viewModel.danmuMessages.suffix(6)) { message in
+                        ChatBubbleView(message: message)
                     }
                 }
-
-                Spacer()
             }
+            .frame(maxWidth: maximumWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, FullUIPlayerChrome.inset)
         }
     }
@@ -252,57 +252,80 @@ struct VerticalLiveControllerView: View {
         }
     }
 
-    // MARK: - 右下角区域：更多按钮
+    // MARK: - 右下角区域
 
     private var bottomRightArea: some View {
-        VStack {
-            Spacer()
+        VStack(alignment: .trailing, spacing: 12) {
+            qualityButton
 
-            HStack {
-                Spacer()
-
-                if let onOpenRoomSwitcher {
-                    FullUIPlayerGlassGroup {
-                        Button(action: onOpenRoomSwitcher) {
-                            Text("换台")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .frame(minWidth: FullUIPlayerChrome.controlSize, minHeight: FullUIPlayerChrome.controlSize)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        Rectangle()
-                            .fill(.white.opacity(0.22))
-                            .frame(width: 1, height: 18)
-                            .accessibilityHidden(true)
-
-                        moreActionsButton(usesSharedPlayerGlass: true)
-                    }
-                } else {
-                    moreActionsButton(usesSharedPlayerGlass: false)
+            if let onOpenRoomSwitcher {
+                Button(action: onOpenRoomSwitcher) {
+                    Image(systemName: "rectangle.stack")
+                        .font(FullUIPlayerChrome.symbolFont)
+                        .foregroundStyle(.white)
+                        .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                        .fullUIPlayerGlass(in: Circle())
+                        .fullUIPlayerShadow(in: Circle())
+                        .contentShape(Circle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("换台")
+            } else {
+                Color.clear
+                    .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
-            .padding(.trailing, FullUIPlayerChrome.inset)
+
+            moreActionsButton
         }
+        .fixedSize()
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            railWidth = width
+        }
+        .padding(.trailing, FullUIPlayerChrome.inset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
     }
 
-    private func moreActionsButton(usesSharedPlayerGlass: Bool) -> MoreActionsButton {
+    private var qualityButton: some View {
+        let quality = viewModel.currentPlayQualityString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = quality.isEmpty ? "清晰度" : quality
+        let isLong = title.count > 2
+        return Button {
+            showQualityPanel = true
+        } label: {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .padding(.horizontal, isLong ? 10 : 0)
+                .frame(
+                    minWidth: FullUIPlayerChrome.controlSize,
+                    maxWidth: isLong ? 76 : FullUIPlayerChrome.controlSize,
+                    minHeight: FullUIPlayerChrome.controlSize,
+                    maxHeight: FullUIPlayerChrome.controlSize
+                )
+                .fullUIPlayerGlass(in: Capsule())
+                .fullUIPlayerShadow(in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("清晰度")
+        .accessibilityValue(title)
+    }
+
+    private var moreActionsButton: MoreActionsButton {
         MoreActionsButton(
             room: viewModel.currentRoom,
             onClearChat: {
                 controlsVisible.wrappedValue = false
             },
-            showQualityOption: true,
-            onShowQualityPanel: {
-                showQualityPanel = true
-            },
+            showQualityOption: false,
             onRefreshPlayback: refreshPlayback,
             supportsPictureInPicture: supportsPictureInPicture,
             onTogglePictureInPicture: togglePictureInPicture,
             showsDanmakuConnectionIssue: true,
-            usesSharedPlayerGlass: usesSharedPlayerGlass
+            popupPresented: $moreActionSheetPresented
         )
     }
 

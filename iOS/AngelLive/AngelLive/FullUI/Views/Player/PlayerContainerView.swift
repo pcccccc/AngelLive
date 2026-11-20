@@ -63,6 +63,7 @@ struct PlayerContentView: View {
     @Binding var isVerticalLiveMode: Bool
     @Binding var videoAspectRatio: CGFloat
     var showsPortraitRoomSwitcher = false
+    var keepsPortraitLayoutWhileDetecting = false
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var detectedVideoSize: CGSize?
@@ -330,13 +331,7 @@ struct PlayerContentView: View {
         }
 
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        if showsPortraitRoomSwitcher {
-            roomSwitcherPresentation.wrappedValue = true
-        } else {
-            withAnimation(accessibilityReduceMotion ? nil : .snappy(duration: 0.32)) {
-                roomSwitcherPresentation.wrappedValue = true
-            }
-        }
+        roomSwitcherPresentation.wrappedValue = true
     }
 
     private var portraitRoomSwitcherAction: (() -> Void)? {
@@ -431,11 +426,10 @@ struct PlayerContentView: View {
                         #if canImport(KSPlayer)
                         // Reset for every URL/kernel task before touching the player. The
                         // layer can still expose the previous URL while the new one loads.
-                        videoAspectRatio = 16.0 / 9.0
-                        isVideoPortrait = false
-                        isVerticalLiveMode = false
+                        if !keepsPortraitLayoutWhileDetecting {
+                            resetVideoGeometry()
+                        }
                         hasDetectedSize = false
-                        applyVideoFillMode(isVerticalLive: false)
                         configureModelIfNeeded(playURL: playURL)
                         viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
 
@@ -468,7 +462,7 @@ struct PlayerContentView: View {
                                 guard !Task.isCancelled,
                                       viewModel.currentPlayURL == playURL,
                                       !hasDetectedSize else { return }
-                                applyVideoFillMode(isVerticalLive: false)
+                                resetVideoGeometry()
                                 Logger.warning(
                                     "视频尺寸检测超时，保持默认 16:9: \(compactURL(playURL))",
                                     category: .player
@@ -492,13 +486,15 @@ struct PlayerContentView: View {
                 .onChange(of: playURL) { _ in
                     Logger.debug("[PlayerFlow] playURL changed -> \(compactURL(playURL)), reset detect states", category: .player)
                     // 切换视频时重置为默认 16:9 比例并重新检测
-                    videoAspectRatio = 16.0 / 9.0
-                    isVideoPortrait = false
-                    isVerticalLiveMode = false
+                    if !keepsPortraitLayoutWhileDetecting {
+                        videoAspectRatio = 16.0 / 9.0
+                        isVideoPortrait = false
+                        isVerticalLiveMode = false
+                    }
                     hasDetectedSize = false
                     detectedVideoSize = nil
                     hasVLCStartedPlayback = false
-                    if useKSPlayer {
+                    if useKSPlayer && !keepsPortraitLayoutWhileDetecting {
                         applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
                     }
                     // task(id: playURL.absoluteString) 会自动触发重新检测
@@ -727,6 +723,14 @@ struct PlayerContentView: View {
     }
 
     #if canImport(KSPlayer)
+    @MainActor
+    private func resetVideoGeometry() {
+        videoAspectRatio = 16.0 / 9.0
+        isVideoPortrait = false
+        isVerticalLiveMode = false
+        applyVideoFillMode(isVerticalLive: false)
+    }
+
     /// KSMEPlayer 在媒体未就绪时会以窗口尺寸作为 naturalSize，不能据此决定直播画幅。
     @MainActor
     @discardableResult
@@ -737,11 +741,17 @@ struct PlayerContentView: View {
               playerLayer.url == expectedURL else { return false }
 
         guard let naturalSize = PlayerVideoGeometry.readyNaturalSize(of: playerLayer) else { return false }
-        if detectedVideoSize == naturalSize { return true }
 
         // 已校正旋转的显示尺寸决定画幅；播放推进时也允许校正迟到的尺寸。
         let ratio = naturalSize.width / naturalSize.height
         let isPortrait = ratio < 1
+        if isPortrait, isVerticalLiveMode,
+           playerLayer.player.contentMode != .scaleAspectFill || playerLayer.player.view.clipsToBounds == false {
+            // A replacement player starts in fit even when the portrait layout stayed active.
+            applyVideoFillMode(isVerticalLive: true)
+        }
+        if detectedVideoSize == naturalSize { return true }
+
         withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.2)) {
             videoAspectRatio = ratio
             isVideoPortrait = isPortrait
