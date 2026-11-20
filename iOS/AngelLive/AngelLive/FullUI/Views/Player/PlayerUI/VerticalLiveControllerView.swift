@@ -12,6 +12,7 @@ import KSPlayer
 import KSPlayerUI
 import AngelLiveCore
 import AngelLiveDependencies
+import UIKit
 
 /// 竖屏直播专用控制层
 /// 设计参考沉浸式竖屏直播布局
@@ -279,28 +280,29 @@ struct VerticalLiveControllerView: View {
 
     private var qualityButton: some View {
         let quality = viewModel.currentPlayQualityString.trimmingCharacters(in: .whitespacesAndNewlines)
-        let title = quality.isEmpty ? "清晰度" : quality
-        let isLong = title.count > 2
+        let fullTitle = quality.isEmpty ? String(localized: "清晰度") : quality
+        let title = PlaybackDisplay.compactQualityTitle(fullTitle)
+        let size = FullUIPlayerChrome.controlSize
+        let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        let titleWidth = (title as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
+        let fitsCircle = titleWidth <= size
+        let width = fitsCircle ? size : min(76, titleWidth + 12)
+        let shape = Capsule()
         return Button {
             showQualityPanel = true
         } label: {
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
+            Text(verbatim: title)
+                .font(Font(font))
                 .foregroundStyle(.white)
                 .lineLimit(1)
-                .padding(.horizontal, isLong ? 10 : 0)
-                .frame(
-                    minWidth: FullUIPlayerChrome.controlSize,
-                    maxWidth: isLong ? 76 : FullUIPlayerChrome.controlSize,
-                    minHeight: FullUIPlayerChrome.controlSize,
-                    maxHeight: FullUIPlayerChrome.controlSize
-                )
-                .fullUIPlayerGlass(in: Capsule())
-                .contentShape(Capsule())
+                .padding(.horizontal, fitsCircle ? 0 : min(6, max(4, (width - titleWidth) / 2)))
+                .frame(width: width, height: size)
+                .fullUIPlayerGlass(in: shape)
+                .contentShape(shape)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("清晰度")
-        .accessibilityValue(title)
+        .accessibilityValue(fullTitle)
     }
 
     private var moreActionsButton: MoreActionsButton {

@@ -1,6 +1,12 @@
 import Foundation
 
 public enum PlaybackDisplay {
+    public static func compactQualityTitle(_ title: String) -> String {
+        let separators: Set<Character> = ["_", " ", "-", "·", "(", "（", "/"]
+        let prefix = title.prefix { !separators.contains($0) }
+        return prefix.isEmpty ? title : String(prefix)
+    }
+
     public static func popularityTitle(_ count: String?) -> String? {
         guard let value = count?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil

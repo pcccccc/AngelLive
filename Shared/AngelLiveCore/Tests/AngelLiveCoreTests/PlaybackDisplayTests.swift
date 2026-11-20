@@ -2,6 +2,23 @@ import Testing
 @testable import AngelLiveCore
 
 struct PlaybackDisplayTests {
+    @Test(arguments: [
+        ("蓝光_4M", "蓝光"),
+        ("超清 1080P", "超清"),
+        ("高清", "高清"),
+        ("1080P60", "1080P60"),
+        ("原画(推荐)", "原画"),
+        ("原画（推荐）", "原画"),
+        ("高清-高帧率", "高清"),
+        ("流畅·省流", "流畅"),
+        ("超清/高帧率_4M", "超清"),
+        ("_备用", "_备用"),
+        ("", "")
+    ])
+    func compactQualityTitleUsesFirstSegmentOrKeepsEmptyPrefix(_ title: String, expected: String) {
+        #expect(PlaybackDisplay.compactQualityTitle(title) == expected)
+    }
+
     @Test func popularityHidesZeroAndFormatsPositiveValues() {
         #expect(PlaybackDisplay.popularityTitle(nil) == nil)
         #expect(PlaybackDisplay.popularityTitle("  ") == nil)
