@@ -20,6 +20,11 @@ struct DetailPlayerView: View {
     let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
     let entryRoomSource: RoomSwitchSource?
 
+    private var presentsOverRoomList: Bool {
+        if #available(iOS 18.0, *) { return !isPushed }
+        return false
+    }
+
     init(
         viewModel: RoomInfoViewModel,
         categoryRooms: [LiveModel] = [],
@@ -42,14 +47,20 @@ struct DetailPlayerView: View {
                     .interactivePopGestureEnabled(isPushed && verticalSizeClass != .compact, edgeOnly: isPushed)
                     .interactiveDismissDisabled(!isPushed)
             } else {
-                LiveDetailPlayerView(
+                let player = LiveDetailPlayerView(
                     viewModel: viewModel,
                     categoryRooms: categoryRooms,
                     canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
                     onLoadMoreCategoryRooms: onLoadMoreCategoryRooms,
-                    entryRoomSource: entryRoomSource
+                    entryRoomSource: entryRoomSource,
+                    presentsOverRoomList: presentsOverRoomList
                 )
                 .interactiveDismissDisabled()
+                if presentsOverRoomList {
+                    player.presentationBackground(.clear)
+                } else {
+                    player
+                }
             }
         }
         .fullUIWindowContext()
@@ -73,6 +84,7 @@ struct LiveDetailPlayerView: View {
     let categoryRooms: [LiveModel]
     let canLoadMoreCategoryRooms: () -> Bool
     let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
+    let presentsOverRoomList: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -174,12 +186,14 @@ struct LiveDetailPlayerView: View {
         categoryRooms: [LiveModel] = [],
         canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
         onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil,
-        entryRoomSource: RoomSwitchSource? = nil
+        entryRoomSource: RoomSwitchSource? = nil,
+        presentsOverRoomList: Bool = false
     ) {
         _viewModel = State(initialValue: viewModel)
         self.categoryRooms = categoryRooms
         self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
         self.onLoadMoreCategoryRooms = onLoadMoreCategoryRooms
+        self.presentsOverRoomList = presentsOverRoomList
         let enteredFromCategory = categoryRooms.contains(viewModel.currentRoom)
         _selectedRoomSource = State(initialValue: entryRoomSource ?? (enteredFromCategory ? .category : .favorite))
         _switcherCategoryRooms = State(initialValue: categoryRooms)
@@ -459,6 +473,7 @@ struct LiveDetailPlayerView: View {
                 && authenticationRecoveryRequest == nil,
             width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
             exitsFullscreen: isFullscreen,
+            revealsRoomList: presentsOverRoomList && !isFullscreen,
             onReturn: finishEdgeReturn
         ))
 
@@ -1105,7 +1120,7 @@ struct LiveDetailPlayerView: View {
             return
         }
 
-        // The player is already offscreen after the edge swipe. Skip the pop or zoom-out animation.
+        // The swipe already handled the visual movement. Complete the navigation in place.
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
         withTransaction(transaction) { dismiss() }

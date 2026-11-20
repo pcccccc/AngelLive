@@ -6,6 +6,7 @@ struct PlayerBackSwipe: ViewModifier {
     let enabled: Bool
     let width: CGFloat
     let exitsFullscreen: Bool
+    let revealsRoomList: Bool
     let onReturn: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -16,7 +17,7 @@ struct PlayerBackSwipe: ViewModifier {
         case idle
         case dragging(origin: CGFloat, position: CGFloat)
         case settling(spring: PortraitPlayerSpring, returns: Bool)
-        case dismissing
+        case dismissing(position: CGFloat)
     }
 
     private var direction: CGFloat { layoutDirection == .leftToRight ? 1 : -1 }
@@ -43,7 +44,7 @@ struct PlayerBackSwipe: ViewModifier {
             content
                 .offset(x: direction * offset)
                 .background {
-                    if offset > 0 {
+                    if !revealsRoomList && offset > 0 {
                         Color.black.ignoresSafeArea()
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
@@ -82,7 +83,7 @@ struct PlayerBackSwipe: ViewModifier {
         case .idle: 0
         case let .dragging(_, position): position
         case let .settling(spring, _): clamped(spring.position(at: date))
-        case .dismissing: reduceMotion ? 0 : width
+        case let .dismissing(position): position
         }
     }
 
@@ -115,10 +116,17 @@ struct PlayerBackSwipe: ViewModifier {
     }
 
     private func settle(from position: CGFloat, velocity: CGFloat, returns: Bool) {
+        // A pushed destination covers the list until the stack pops. Keep the
+        // current frame visible when handing the gesture back to navigation.
+        if returns && !exitsFullscreen && !revealsRoomList {
+            finish(returns: true, position: reduceMotion ? 0 : position)
+            return
+        }
+
         // Fullscreen returns to the same player. Restore its position before rotating.
         let target = returns && !exitsFullscreen ? width : 0
         if reduceMotion || position == target {
-            finish(returns: returns)
+            finish(returns: returns, position: reduceMotion ? 0 : target)
         } else {
             motion = .settling(
                 spring: PortraitPlayerSpring(from: position, to: target, velocity: velocity),
@@ -129,7 +137,7 @@ struct PlayerBackSwipe: ViewModifier {
 
     private func finishSettlement() {
         guard case let .settling(spring, returns) = motion, reachedTarget(spring, at: .now) else { return }
-        finish(returns: returns)
+        finish(returns: returns, position: spring.to)
     }
 
     private func reachedTarget(_ spring: PortraitPlayerSpring, at date: Date) -> Bool {
@@ -137,8 +145,8 @@ struct PlayerBackSwipe: ViewModifier {
         spring.isFinished(at: date) || (spring.to > 0 && spring.position(at: date) >= spring.to)
     }
 
-    private func finish(returns: Bool) {
-        motion = returns && !exitsFullscreen ? .dismissing : .idle
+    private func finish(returns: Bool, position: CGFloat) {
+        motion = returns && !exitsFullscreen ? .dismissing(position: position) : .idle
         if returns { onReturn() }
     }
 }
