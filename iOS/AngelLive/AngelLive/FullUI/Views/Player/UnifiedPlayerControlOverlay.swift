@@ -229,7 +229,7 @@ struct UnifiedPlayerControlOverlay: View {
             if !locked {
                 VStack(spacing: 0) {
                     HStack(spacing: topSpacing) {
-                        FullUIPlayerBackButton(symbolAlignment: .center, action: handleBackButton)
+                        FullUIPlayerBackButton(centersSymbol: true, action: handleBackButton)
                             .modifier(ChromeVisibility(visible: showsControls || showsRoomBanner, reduceMotion: reduceMotion))
 
                         if showsRoomBanner {

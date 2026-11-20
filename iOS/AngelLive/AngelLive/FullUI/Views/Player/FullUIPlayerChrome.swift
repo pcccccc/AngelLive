@@ -45,21 +45,28 @@ extension View {
 }
 
 struct FullUIPlayerBackButton: View {
-    var symbolAlignment: Alignment = .leading
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    var centersSymbol = false
     var label: LocalizedStringKey = "返回"
     let action: () -> Void
 
     var body: some View {
+        // At 18 pt semibold, chevron.backward has 1 pt leading and 3 pt
+        // trailing side bearings. Remove the leading bearing at the edge,
+        // or shift by half their difference to center the visible glyph.
+        let leadingBearing: CGFloat = 1
+        let trailingBearing: CGFloat = 3
+        let opticalShift = centersSymbol ? (trailingBearing - leadingBearing) / 2 : -leadingBearing
+
         Button(action: action) {
-            // Align the symbol's intrinsic bounds inside the 44 pt hit area.
-            // The leading alignment uses the existing edge inset, and center
-            // keeps the symbol on the former landscape circle's center.
             Image(systemName: "chevron.backward")
                 .font(FullUIPlayerChrome.symbolFont)
                 .foregroundStyle(.white)
                 .fullUIPlayerMediaText()
+                .offset(x: layoutDirection == .leftToRight ? opticalShift : -opticalShift)
                 .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize,
-                       alignment: symbolAlignment)
+                       alignment: centersSymbol ? .center : .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
