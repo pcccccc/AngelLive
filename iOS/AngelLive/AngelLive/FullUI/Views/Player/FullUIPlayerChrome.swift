@@ -47,8 +47,13 @@ extension View {
 struct FullUIPlayerBackButton: View {
     @Environment(\.layoutDirection) private var layoutDirection
 
+    // White glyph bounds in the 3× raster of the 18 pt semibold symbol.
+    static let visibleGlyphWidth: CGFloat = 28.0 / 3.0
+
     var centersSymbol = false
     var label: LocalizedStringKey = "返回"
+    var width = FullUIPlayerChrome.controlSize
+    var symbolLeadingInset: CGFloat = 0
     let action: () -> Void
 
     var body: some View {
@@ -65,7 +70,8 @@ struct FullUIPlayerBackButton: View {
                 .foregroundStyle(.white)
                 .fullUIPlayerMediaText()
                 .offset(x: layoutDirection == .leftToRight ? opticalShift : -opticalShift)
-                .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize,
+                .padding(.leading, symbolLeadingInset)
+                .frame(width: width, height: FullUIPlayerChrome.controlSize,
                        alignment: centersSymbol ? .center : .leading)
                 .contentShape(Rectangle())
         }

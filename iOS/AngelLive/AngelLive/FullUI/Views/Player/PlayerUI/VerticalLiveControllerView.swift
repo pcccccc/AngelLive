@@ -100,10 +100,11 @@ struct VerticalLiveControllerView: View {
     // MARK: - 顶部信息栏
 
     private func topBar(maximumStreamerWidth: CGFloat) -> some View {
-        VStack {
-            HStack(spacing: 12) {
-                // Keep the 44 pt slot so the capsule stays at inset + 44 + 12.
-                FullUIPlayerBackButton {
+        let inset = FullUIPlayerChrome.inset
+        let backWidth = inset + FullUIPlayerBackButton.visibleGlyphWidth + 12
+        return VStack {
+            HStack(spacing: 0) {
+                FullUIPlayerBackButton(width: backWidth, symbolLeadingInset: inset) {
                     dismiss()
                 }
 
@@ -118,8 +119,8 @@ struct VerticalLiveControllerView: View {
 
                 Spacer()
             }
-            .padding(.horizontal, FullUIPlayerChrome.inset)
-            .padding(.top, FullUIPlayerChrome.inset)
+            .padding(.trailing, inset)
+            .padding(.top, inset)
             Spacer()
         }
     }

@@ -29,7 +29,7 @@ struct PlayerLoadingScreen: View {
     var verticalCenter = Self.detailCenter
 
     static let detailCenter: CGFloat = 0.5
-    static let portraitCenter: CGFloat = 0.63
+    static let portraitCenter: CGFloat = 0.45
     static let fade = Animation.easeOut(duration: 0.2)
 
     var body: some View {
