@@ -12,8 +12,6 @@ struct TVPlayerTimeline: View {
     let duration: Double
     let target: Double?
     let isFocused: Bool
-    @Environment(\.tvPlayerPrefersRegularGlass) private var brightScene
-    @Environment(\.colorSchemeContrast) private var contrast
 
     private var isScrubbing: Bool { target != nil }
     private var fraction: CGFloat { CGFloat(min(max((target ?? elapsed) / duration, 0), 1)) }
@@ -43,14 +41,12 @@ struct TVPlayerTimeline: View {
     }
 
     private func time(_ value: Double) -> some View {
-        let strong = brightScene || contrast == .increased
-        return Text(tvPlayerTimeLabel(value))
+        Text(tvPlayerTimeLabel(value))
             .font(.system(size: 20, weight: .semibold).monospacedDigit())
             .foregroundStyle(.white)
             .lineLimit(1)
             .fixedSize()
-            .shadow(color: .black.opacity(strong ? 0.85 : 0.6), radius: strong ? 3 : 2, y: 1)
-            .tvPlayerShadow(in: Capsule(), opacity: strong ? 0.32 : 0.22)
+            .shadow(color: .black.opacity(0.85), radius: 3, y: 1)
             .opacity(isScrubbing ? 0 : 1)
             .accessibilityHidden(true)
     }

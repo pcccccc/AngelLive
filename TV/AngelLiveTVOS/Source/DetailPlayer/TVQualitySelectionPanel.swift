@@ -353,16 +353,13 @@ struct TVFullUIPlayerControlButtonModifier: ViewModifier {
 struct TVFullUIPlayerControlGroupModifier: ViewModifier {
     let enabled: Bool
     let legacyInsets: EdgeInsets
-    var usesPlaybackGlass = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
         let inset = TVFullUIPlayerControlMetrics.inset
         let group = content.padding(enabled ? EdgeInsets(top: inset, leading: inset, bottom: inset, trailing: inset) : legacyInsets)
-        if enabled && usesPlaybackGlass {
-            group
-                .tvPlayerGlass(in: Capsule())
-                .tvPlayerShadow(in: Capsule())
+        if enabled {
+            group.tvPlayerGlass(in: Capsule())
         } else {
             group.adaptiveGlassEffectCapsule()
         }
@@ -398,7 +395,7 @@ struct TVFullUIPlayerControlGroup<Content: View>: View {
 
     var body: some View {
         HStack(spacing: TVFullUIPlayerControlMetrics.spacing, content: content)
-            .modifier(TVFullUIPlayerControlGroupModifier(enabled: true, legacyInsets: EdgeInsets(), usesPlaybackGlass: true))
+            .modifier(TVFullUIPlayerControlGroupModifier(enabled: true, legacyInsets: EdgeInsets()))
             .focusSection()
     }
 }

@@ -568,17 +568,6 @@ struct PlayerControlView: View {
                 fullUIRoomBanner
             }
         }
-        #if canImport(KSPlayer)
-        .tvPlayerContrast(
-            while: usesFullUI && !roomInfoViewModel.showTop
-                && (roomInfoViewModel.showControl || roomInfoViewModel.showsFullUIDanmakuHint
-                    || roomInfoViewModel.danmuStatusHint != nil),
-            source: usesFullUI ? PlaybackGlassContrastSource(roomID: roomInfoViewModel.currentRoom.id,
-                                                             url: roomInfoViewModel.currentPlayURL, kernel: .ksplayer) : nil
-        ) {
-            currentTimelineLayer?.player
-        }
-        #endif
         .onAppear {
             Logger.debug("[VolumeHUD] PlayerControlView appeared, initial volume=\(systemVolumeObserver.volume)", category: .ui)
             roomInfoViewModel.showControl = true
@@ -802,8 +791,6 @@ struct PlayerControlView: View {
             .padding(.vertical, 10)
             .frame(maxWidth: 640, alignment: .leading)
             .tvPlayerGlass(in: Capsule(), interactive: false)
-            .tvPlayerShadow(in: Capsule())
-            .environment(\.tvPlayerPrefersRegularGlass, true)
             .environment(\.colorScheme, .dark)
             .padding(TVFullUIPlayerControlMetrics.screenInset)
             .allowsHitTesting(false)
@@ -922,7 +909,6 @@ struct PlayerControlView: View {
                     .padding(.horizontal, Self.fullUIDanmakuHintHorizontalInset)
                     .padding(.vertical, 14)
                     .tvPlayerGlass(in: Capsule(), interactive: false)
-                    .tvPlayerShadow(in: Capsule())
                     .padding(.bottom, bottom)
                     .transition(.opacity)
             }
