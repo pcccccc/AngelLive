@@ -56,7 +56,7 @@ struct VerticalLiveControllerView: View {
             let visible = controlsVisible.wrappedValue
             ZStack {
                 ZStack {
-                    topBar(maximumStreamerWidth: max(0, geometry.size.width - 2 * FullUIPlayerChrome.inset) * 0.46)
+                    topBar(availableWidth: geometry.size.width)
 
                     bottomLeftArea(maximumWidth: max(0, geometry.size.width
                         - 2 * FullUIPlayerChrome.inset - railWidth - 8))
@@ -99,9 +99,12 @@ struct VerticalLiveControllerView: View {
 
     // MARK: - 顶部信息栏
 
-    private func topBar(maximumStreamerWidth: CGFloat) -> some View {
+    private func topBar(availableWidth: CGFloat) -> some View {
         let inset = FullUIPlayerChrome.inset
         let backWidth = inset + FullUIPlayerBackButton.visibleGlyphWidth + 12
+        // Leave clear space at the trailing edge in addition to the standard inset.
+        let trailingClearance: CGFloat = 60
+        let maximumStreamerWidth = max(0, availableWidth - backWidth - inset - trailingClearance)
         return VStack {
             HStack(spacing: 0) {
                 FullUIPlayerBackButton(width: backWidth, symbolLeadingInset: inset) {
@@ -117,7 +120,7 @@ struct VerticalLiveControllerView: View {
                         .presentationDragIndicator(.visible)
                 }
 
-                Spacer()
+                Spacer(minLength: 0)
             }
             .padding(.trailing, inset)
             .padding(.top, inset)
@@ -125,23 +128,34 @@ struct VerticalLiveControllerView: View {
         }
     }
 
+    private static let avatarSize: CGFloat = 28
+
     private func streamerControls(maximumWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
+        let name = viewModel.currentRoom.userName.orDash
+        let nameFont = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        let nameWidth = (BracketSafeName(name).fullTitle as NSString)
+            .size(withAttributes: [.font: nameFont]).width.rounded(.up)
+        let spacing: CGFloat = 8
+        let maximumTextWidth = max(0, maximumWidth - Self.avatarSize - 2 * spacing - FullUIPlayerChrome.controlSize)
+        let preferredNameWidth = max(nameWidth, 6 * nameFont.pointSize)
+        let popularity = PlaybackDisplay.popularityTitle(viewModel.currentRoom.liveWatchedCount)
+
+        return HStack(spacing: 0) {
             Button {
                 showStreamerInfo = true
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: spacing) {
                     avatar
-                    FullUIPlayerName(viewModel.currentRoom.userName.orDash, font: .systemFont(ofSize: 13, weight: .semibold))
-                        .layoutPriority(1)
+                    FullUIPlayerName(name, font: nameFont, maximumWidth: min(nameWidth, maximumTextWidth))
 
-                    if let popularity = PlaybackDisplay.popularityTitle(viewModel.currentRoom.liveWatchedCount) {
-                        Label(popularity, systemImage: "flame.fill")
+                    if let popularity,
+                       preferredNameWidth + spacing + FullUIPlayerHeatLabelStyle.width(for: popularity) <= maximumTextWidth {
+                        Label(popularity, systemImage: FullUIPlayerHeatLabelStyle.symbol)
                             .labelStyle(FullUIPlayerHeatLabelStyle())
                             .fixedSize()
                     }
                 }
-                .padding(.leading, 8)
+                .padding(.leading, spacing)
                 .frame(minHeight: FullUIPlayerChrome.controlSize)
                 .contentShape(Rectangle())
             }
@@ -161,7 +175,6 @@ struct VerticalLiveControllerView: View {
             .accessibilityLabel(isFavorited ? "取消收藏" : "收藏")
         }
         .foregroundStyle(.white)
-        .frame(maxWidth: maximumWidth, alignment: .leading)
         .fixedSize(horizontal: true, vertical: false)
     }
 
@@ -198,7 +211,7 @@ struct VerticalLiveControllerView: View {
                 verticalAvatarFallback
             }
         }
-        .frame(width: 28, height: 28)
+        .frame(width: Self.avatarSize, height: Self.avatarSize)
         .clipShape(Circle())
         .accessibilityHidden(true)
     }
@@ -355,12 +368,23 @@ struct VerticalLiveControllerView: View {
 }
 
 private struct FullUIPlayerHeatLabelStyle: LabelStyle {
+    static let symbol = "flame.fill"
+    private static let font = UIFont.systemFont(ofSize: 12)
+    private static let spacing: CGFloat = 3
+    private static let symbolWidth = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(font: font))?
+        .size.width.rounded(.up) ?? font.pointSize
+
+    static func width(for title: String) -> CGFloat {
+        symbolWidth + spacing + (title as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
+    }
+
     func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: Self.spacing) {
             configuration.icon.foregroundStyle(.orange)
+                .frame(width: Self.symbolWidth)
             configuration.title
         }
-        .font(.system(size: 12))
+        .font(Font(Self.font))
     }
 }
 

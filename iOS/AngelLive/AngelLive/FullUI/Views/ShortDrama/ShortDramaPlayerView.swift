@@ -12,6 +12,8 @@ import Kingfisher
 
 /// FullUI short-drama playback. Episode resolution and completion policy stay in the model.
 struct ShortDramaPlayerView: View {
+    private static let portraitDockFill = Color(.sRGB, white: 0.12)
+
     let room: LiveModel
 
     @State private var model: ShortDramaPlaybackModel
@@ -917,7 +919,10 @@ struct ShortDramaPlayerView: View {
                     Spacer(minLength: 0)
                     VStack(spacing: FullUILandscapePlayerLayout.progressGap) {
                         progressControl(landscape: true)
-                        regularControls(bottomButtons(metrics: metrics, landscape: true))
+                        regularControls(
+                            bottomButtons(metrics: metrics, landscape: true)
+                                .fullUIPlayerGlassContainer(spacing: 0)
+                        )
                     }
                 }
                 .padding(layout.insets)
@@ -938,12 +943,11 @@ struct ShortDramaPlayerView: View {
 
     private func bottomButtons(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
         HStack(spacing: 8) {
-            episodeDock(metrics: metrics)
+            episodeDock(metrics: metrics, landscape: landscape)
                 .frame(maxWidth: landscape ? 240 : .infinity)
             if landscape { Spacer(minLength: 8) }
-            quickRateButton
+            quickRateButton(landscape: landscape)
         }
-        .fullUIPlayerGlassContainer(spacing: 0)
         .frame(maxWidth: .infinity)
     }
 
@@ -1052,7 +1056,7 @@ struct ShortDramaPlayerView: View {
             }
     }
 
-    private func episodeDock(metrics: ShortDramaPanelMetrics) -> some View {
+    private func episodeDock(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
         Button {
             present(.episodes, metrics: metrics)
         } label: {
@@ -1067,7 +1071,7 @@ struct ShortDramaPlayerView: View {
                 Spacer()
                 Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.74))
+                    .foregroundStyle(.white.opacity(landscape ? 0.74 : 1))
             }
             .foregroundStyle(.white)
             .lineLimit(1)
@@ -1075,7 +1079,13 @@ struct ShortDramaPlayerView: View {
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity)
             .frame(height: FullUIPlayerChrome.controlSize)
-            .fullUIPlayerGlass(in: Capsule())
+            .background {
+                if landscape {
+                    Color.clear.fullUIPlayerGlass(in: Capsule())
+                } else {
+                    Capsule().fill(Self.portraitDockFill)
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -1084,9 +1094,10 @@ struct ShortDramaPlayerView: View {
         .accessibilityFocused($accessibilityFocus, equals: .episodesTrigger)
     }
 
-    private var quickRateButton: some View {
+    private func quickRateButton(landscape: Bool) -> some View {
         let rateText = ShortDramaRateLabel.text(for: playbackRate)
         let nextRateText = ShortDramaRateLabel.text(for: ShortDramaRateLabel.nextCycleRate(after: playbackRate))
+        let diameter = FullUIPlayerChrome.controlSize
 
         return Button {
             playbackRate = ShortDramaRateLabel.nextCycleRate(after: playbackRate)
@@ -1099,7 +1110,14 @@ struct ShortDramaPlayerView: View {
                 .contentTransition(.numericText())
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: playbackRate)
                 .padding(.horizontal, 4)
-                .fullUIPlayerCircularControl()
+                .frame(width: diameter, height: diameter)
+                .background {
+                    if landscape {
+                        Color.clear.fullUIPlayerCircularControl()
+                    } else {
+                        Circle().fill(Self.portraitDockFill)
+                    }
+                }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
