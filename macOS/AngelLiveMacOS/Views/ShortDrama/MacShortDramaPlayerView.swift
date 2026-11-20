@@ -188,15 +188,6 @@ struct MacShortDramaPlayerView: View {
                 }
             }
         }
-        .macPlayerContrast(
-            while: controlsVisible,
-            source: PlaybackGlassContrastSource(roomID: room.id, url: model.playback?.url,
-                                                kernel: .ksplayer, episodeID: model.selectedEpisodeID)
-        ) {
-            guard let playback = model.playback, controller.playbackID == playback.id,
-                  let layer = playerLayer, layer.url == playback.url else { return nil }
-            return layer.player
-        }
         .background(PlayerWindowReferenceView(window: $playerWindow))
         .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: controlsHeld || pointerOverControls))
         .macPlayerWindowState(playerWindow) {

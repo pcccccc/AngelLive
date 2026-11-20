@@ -14,8 +14,6 @@ struct MacPlayerProgressRow: View {
     static let buttonGap: CGFloat = 8
     private static let hitHeight: CGFloat = 44
 
-    @Environment(\.macPlayerPrefersRegularGlass) private var brightScene
-    @Environment(\.colorSchemeContrast) private var contrast
     let currentTime: Double
     let duration: Double
     @Binding var position: Double
@@ -63,14 +61,12 @@ struct MacPlayerProgressRow: View {
     }
 
     private func progressLabel(_ value: Double) -> some View {
-        let strong = brightScene || contrast == .increased
-        return Text(macPlayerTime(value))
+        Text(macPlayerTime(value))
             .font(.system(size: 12, weight: .semibold).monospacedDigit())
             .foregroundStyle(.white)
             .lineLimit(1)
             .fixedSize()
-            .shadow(color: .black.opacity(strong ? 0.85 : 0.6), radius: strong ? 3 : 2, y: 1)
-            .macPlayerShadow(in: Capsule(), opacity: strong ? 0.32 : 0.22)
+            .macPlayerMediaText()
             .opacity(isScrubbing ? 0 : 1)
             .accessibilityHidden(isScrubbing)
     }

@@ -26,7 +26,6 @@ enum MacPlayerChrome {
 }
 
 extension EnvironmentValues {
-    @Entry var macPlayerPrefersRegularGlass = false
     @Entry var macPlayerAcceptsCommands = true
 }
 
@@ -44,27 +43,6 @@ extension View {
         modifier(MacPlayerGlassModifier(glassShape: shape, interactive: interactive))
     }
 
-    func macPlayerShadow(
-        in shape: some Shape,
-        opacity: Double = 0.22,
-        spread: CGFloat = 8,
-        radius: CGFloat = 16
-    ) -> some View {
-        background {
-            shape
-                .fill(.black.opacity(opacity))
-                .padding(-spread)
-                .blur(radius: radius)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-    }
-
-    func macPlayerTopControlGlass(in shape: some Shape, interactive: Bool = true) -> some View {
-        macPlayerGlass(in: shape, interactive: interactive)
-            .macPlayerShadow(in: shape, opacity: 0.14, spread: 0, radius: 6)
-    }
-
     func macPlayerTitleCapsule(
         hasSubtitle: Bool = false,
         interactive: Bool = false
@@ -76,44 +54,22 @@ extension View {
             .padding(.vertical, 6)
             .frame(minHeight: MacPlayerChrome.controlSize, alignment: .leading)
             .contentShape(shape)
-            .macPlayerTopControlGlass(in: shape, interactive: interactive)
+            .macPlayerGlass(in: shape, interactive: interactive)
     }
 
     func macPlayerMediaText() -> some View {
-        modifier(MacPlayerMediaTextModifier())
-            .macPlayerShadow(in: Capsule())
-    }
-}
-
-private struct MacPlayerMediaTextModifier: ViewModifier {
-    @Environment(\.macPlayerPrefersRegularGlass) private var needsContrast
-
-    func body(content: Content) -> some View {
-        content.background {
-            if needsContrast {
-                Color.clear
-                    .macPlayerGlass(in: Capsule(), interactive: false)
-                    .padding(.horizontal, -4)
-                    .padding(.vertical, -2)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
+        shadow(color: .black.opacity(0.85), radius: 3, y: 1)
     }
 }
 
 private struct MacPlayerGlassModifier<GlassShape: Shape>: ViewModifier {
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.macPlayerPrefersRegularGlass) private var prefersRegularGlass
     let glassShape: GlassShape
     let interactive: Bool
 
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
-            let glass: Glass = prefersRegularGlass || contrast == .increased
-                ? .regular.tint(.black.opacity(0.45))
-                : .clear
-            content.glassEffect(glass.interactive(interactive), in: glassShape)
+            let glass = Glass.regular.tint(.black.opacity(0.45)).interactive(interactive)
+            content.glassEffect(glass, in: glassShape)
         } else {
             content.background(.ultraThinMaterial, in: glassShape)
         }
@@ -127,7 +83,6 @@ struct MacPlayerGlassGroup<Content: View>: View {
         HStack(spacing: 0, content: content)
             .macPlayerGlass(in: Capsule())
             .macPlayerGlassContainer(spacing: 8)
-            .macPlayerShadow(in: Capsule())
             .environment(\.colorScheme, .dark)
     }
 }
@@ -148,7 +103,6 @@ struct MacPlayerDanmakuStatus: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .macPlayerGlass(in: Capsule(), interactive: false)
-                    .macPlayerShadow(in: Capsule())
                     .padding(.bottom, controlsVisible ? 52 + controlBottomInset : 24)
                     .transition(.opacity)
             }
@@ -311,7 +265,7 @@ struct MacPlayerCloseButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .macPlayerTopControlGlass(in: Circle())
+        .macPlayerGlass(in: Circle())
         .accessibilityLabel("关闭播放器")
         .help("关闭播放器")
     }
@@ -368,7 +322,6 @@ struct MacPlayerCenterPlayButton: View {
         }
         .buttonStyle(.plain)
         .macPlayerGlass(in: Circle())
-        .macPlayerShadow(in: Circle())
         .accessibilityLabel(title)
     }
 }

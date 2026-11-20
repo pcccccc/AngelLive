@@ -95,20 +95,6 @@ struct MacFullUIRoomControls: View {
     }
 
     var body: some View {
-        #if canImport(KSPlayer)
-        playerControls.macPlayerContrast(
-            while: controlsVisible,
-            source: PlaybackGlassContrastSource(roomID: room.id, url: viewModel.currentPlayURL, kernel: .ksplayer)
-        ) {
-            guard let layer = coordinator.playerLayer, layer.url == viewModel.currentPlayURL else { return nil }
-            return layer.player
-        }
-        #else
-        playerControls
-        #endif
-    }
-
-    private var playerControls: some View {
         GeometryReader { geometry in
             ZStack {
                 Color.clear
