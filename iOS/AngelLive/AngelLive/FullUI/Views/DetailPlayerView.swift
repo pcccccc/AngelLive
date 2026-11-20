@@ -121,6 +121,7 @@ struct LiveDetailPlayerView: View {
     /// 用户主动控制竖屏清屏状态，不随播放器的自动隐藏或播放状态改变。
     @State private var verticalLiveControlsVisible = true
     @State private var verticalLiveControlPopupPresented = false
+    @State private var playerContentBlocksSwipe = false
 
     /// Only a vertically compact phone layout needs to hide the information panel.
     private var isIPhoneLandscape: Bool {
@@ -265,6 +266,11 @@ struct LiveDetailPlayerView: View {
         let showInfoPanel = !waitsForEntrySize && !isFullscreen
             && (!isVerticalLiveMode || expandsEntryDetails)
         let usesRoomSwitcherSheet = showInfoPanel || usesPortraitRoomSwitcher
+        let allowsPlayerSwipe = scenePhase == .active && !playerModel.isLocked && !playerContentBlocksSwipe
+            && !verticalLiveControlPopupPresented && !isRoomSwitcherPresented && !isPortraitRoomSwitcherPresented
+            && pendingPortraitRoom == nil && authenticationRecoveryRequest == nil
+        let allowsDrawerSwipe = allowsPlayerSwipe && isFullscreen && !isVerticalLiveMode && !viewModel.isOnDemand
+            && !showsEntryCover && !playback.hasFailed && viewModel.displayState != .streamerOffline
         // Reuse the 400pt information panel only with at least a compact
         // 320pt playback surface beside it; regular traits alone are not a width guarantee.
         let showsSidePanel = showInfoPanel && usesExpandedLayout && isLandscape
@@ -321,7 +327,8 @@ struct LiveDetailPlayerView: View {
             pendingLoadingRoom: portraitSwitchRoomID == nil ? switchingRoom : nil,
             isCoveredByEntryLoading: showsEntryCover,
             onEntryVideoSize: entrySizeHandler,
-            entryVLCPlaybackStarted: entryActive ? $entryVLCPlaybackStarted : nil
+            entryVLCPlaybackStarted: entryActive ? $entryVLCPlaybackStarted : nil,
+            blocksPageSwipe: $playerContentBlocksSwipe
         )
         let fittedPlayer = playerSurface
             .id("stable_player")
@@ -440,11 +447,15 @@ struct LiveDetailPlayerView: View {
             }
         }
 
+        let openDrawerSwipe: ((CGPoint, UIWindow) -> PlayerPanAction?)? = if allowsDrawerSwipe {
+            { start, window in drawerSwipeAction(start: start, in: window, geometry: geometry) }
+        } else {
+            nil
+        }
         let interactivePage = pageWithEntryCover.modifier(PortraitRoomPager(
-            enabled: isVerticalLiveMode && !defersEntryError && !isLandscape && !isFullscreen && !viewModel.isOnDemand
-                && scenePhase == .active && !playback.hasFailed
-                && !playerModel.isLocked && !verticalLiveControlPopupPresented
-                && !isPortraitRoomSwitcherPresented && !isRoomSwitcherPresented && pendingPortraitRoom == nil,
+            enabled: allowsPlayerSwipe && isVerticalLiveMode && !isLandscape && !isFullscreen
+                && !viewModel.isOnDemand && !defersEntryError && !playback.hasFailed,
+            openDrawerSwipe: openDrawerSwipe,
             viewportWidth: geometry.size.width,
             viewportHeight: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom,
             availableHeight: geometry.size.height,
@@ -471,13 +482,11 @@ struct LiveDetailPlayerView: View {
             )
         }
         .modifier(PlayerBackSwipe(
-            enabled: scenePhase == .active && !playerModel.isLocked
-                && !verticalLiveControlPopupPresented && !isPortraitRoomSwitcherPresented
-                && authenticationRecoveryRequest == nil,
+            enabled: allowsPlayerSwipe,
             width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
             exitsFullscreen: isFullscreen,
             revealsRoomList: presentsOverRoomList && !isFullscreen,
-            onReturn: finishEdgeReturn
+            onReturn: finishSwipeReturn
         ))
 
         return interactivePage.environment(
@@ -1113,7 +1122,7 @@ struct LiveDetailPlayerView: View {
         }
     }
 
-    private func finishEdgeReturn() {
+    private func finishSwipeReturn() {
         if isFullscreen {
             closeFullscreenRoomSwitchers()
             isIPadFullscreen = false
@@ -1127,6 +1136,24 @@ struct LiveDetailPlayerView: View {
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
         withTransaction(transaction) { dismiss() }
+    }
+
+    private func drawerSwipeAction(start: CGPoint, in window: UIWindow, geometry: GeometryProxy) -> PlayerPanAction? {
+        let isLTR = layoutDirection == .leftToRight
+        let fromLeading = isLTR ? start.x - window.bounds.minX : window.bounds.maxX - start.x
+        guard GeneralSettingModel().enablePlayerGesture,
+              fromLeading >= geometry.safeAreaInsets.leading + geometry.size.width * 0.55 else { return nil }
+        return PlayerPanAction(
+            kind: .openDrawer, axis: .horizontal, sign: isLTR ? -1 : 1,
+            begin: { _ in }, update: { _ in },
+            canEnd: { abs($0.x) > abs($0.y) * 1.5 },
+            end: { travel, _ in
+                guard travel >= 70 else { return }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(roomSwitcherDrawerAnimation) { isRoomSwitcherPresented = true }
+            },
+            cancel: {}
+        )
     }
 
     private func dismissRoomSwitcher() {

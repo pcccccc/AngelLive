@@ -19,8 +19,6 @@ struct LiveRoomCategoryContext: Equatable {
 /// 将导航状态从视图的 @State 移到外部可观察对象，确保在 PiP 背景/前台切换时不会丢失
 @Observable
 class LiveRoomNavigationState {
-    static let playerBackEdgeWidth: CGFloat = 20
-
     /// 是否显示播放器
     private(set) var showPlayer = false
     private var entryAnimation: RoomEntryAnimation = .zoom

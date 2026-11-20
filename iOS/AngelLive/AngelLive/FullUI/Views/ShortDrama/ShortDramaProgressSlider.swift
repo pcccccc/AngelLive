@@ -241,10 +241,6 @@ final class ShortDramaAccessibleSlider: UIControl {
 
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         guard isEnabled else { return false }
-        if let window,
-           PlayerBackSwipe.isAtLeadingEdge(touch.location(in: window), in: window, layoutDirection: layoutDirection) {
-            return false
-        }
 
         suspendNavigationGestures()
         isEditing = true

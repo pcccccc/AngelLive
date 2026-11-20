@@ -67,6 +67,7 @@ struct PlayerContentView: View {
     var isCoveredByEntryLoading = false
     var onEntryVideoSize: (@MainActor (CGSize) -> Void)?
     var entryVLCPlaybackStarted: Binding<Bool>?
+    var blocksPageSwipe: Binding<Bool>?
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var detectedVideoSize: CGSize?
@@ -145,7 +146,6 @@ struct PlayerContentView: View {
                         .transition(accessibilityReduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                 }
             }
-            .simultaneousGesture(roomSwitcherGesture(in: geometry.size))
             .accessibilityActions {
                 if !isCoveredByEntryLoading, !viewModel.isOnDemand,
                    !showsPortraitRoomSwitcher || verticalLiveControlsVisible.wrappedValue {
@@ -280,7 +280,12 @@ struct PlayerContentView: View {
         } message: {
             Text("VLC 内核暂不支持视频信息统计。")
         }
+        .onChange(of: isControlLocked || isControlPopupOpen || showVideoSetting
+            || showDanmakuSettings || showVLCUnsupportedHint, initial: true) { _, blocked in
+            blocksPageSwipe?.wrappedValue = blocked
+        }
         .onDisappear {
+            blocksPageSwipe?.wrappedValue = false
             guard !useKSPlayer else { return }
             // 兜底关闭会话，真正停播在 VLC 视图 onDisappear 中处理，避免重复 stop。
             Logger.debug(
@@ -299,29 +304,6 @@ struct PlayerContentView: View {
         let calculatedByRatio = size.width / videoAspectRatio
 
         return shouldFillHeight ? size.height : calculatedByRatio
-    }
-
-    private func roomSwitcherGesture(in size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 20)
-            .onEnded { dragValue in
-                guard isFullscreen,
-                      !viewModel.isOnDemand,
-                      !isVerticalLiveMode,
-                      !isControlLocked,
-                      !isControlPopupOpen,
-                      GeneralSettingModel().enablePlayerGesture,
-                      dragValue.startLocation.x >= size.width * 0.55 else {
-                    return
-                }
-
-                let translation = dragValue.translation
-                guard translation.width <= -70,
-                      abs(translation.width) > abs(translation.height) * 1.5 else {
-                    return
-                }
-
-                presentRoomSwitcher()
-            }
     }
 
     private func presentRoomSwitcher() {

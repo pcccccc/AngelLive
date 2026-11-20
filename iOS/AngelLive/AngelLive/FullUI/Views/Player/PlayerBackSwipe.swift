@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import UIKit.UIGestureRecognizerSubclass
 
 struct PlayerBackSwipe: ViewModifier {
     let enabled: Bool
@@ -43,12 +42,6 @@ struct PlayerBackSwipe: ViewModifier {
         return enabled
     }
 
-    static func isAtLeadingEdge(_ point: CGPoint, in window: UIWindow, layoutDirection: LayoutDirection) -> Bool {
-        let distance = layoutDirection == .leftToRight
-            ? point.x - window.bounds.minX : window.bounds.maxX - point.x
-        return distance >= 0 && distance < LiveRoomNavigationState.playerBackEdgeWidth
-    }
-
     func body(content: Content) -> some View {
         TimelineView(.animation(paused: spring == nil)) { timeline in
             let offset = position(at: timeline.date)
@@ -88,21 +81,11 @@ struct PlayerBackSwipe: ViewModifier {
                     if finished { finishSettlement() }
                 }
         }
-        // The anchor stays in the viewport while the page moves. It doesn't take taps from the page.
-        .background {
-            PlayerBackPanAnchor(
-                enabled: canStart,
-                layoutDirection: layoutDirection,
-                canReverse: spring != nil,
-                onBegan: begin,
-                onChanged: update,
-                onEnded: end,
-                onCancelled: cancel
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
+        .environment(\.playerBackAction, canStart ? PlayerPanAction(
+            kind: .back, axis: .horizontal, sign: direction,
+            begin: begin, update: update, end: end, cancel: cancel
+        ) : nil)
+        .environment(\.playerBackIsSettling, spring != nil)
         .onChange(of: enabled) { _, enabled in
             if !enabled { motion = .idle }
         }
@@ -180,6 +163,9 @@ struct PlayerBackSwipe: ViewModifier {
 
     private func finish(returns: Bool, position: CGFloat) {
         motion = returns && !exitsFullscreen ? .dismissing(position: position) : .idle
+        #if DEBUG
+        PlayerPagePan.trace(returns ? (exitsFullscreen ? "exit fullscreen" : "return") : "rebound")
+        #endif
         if returns { onReturn() }
     }
 }
@@ -191,130 +177,7 @@ private struct PlayerBackSourcePreview: UIViewRepresentable {
     func updateUIView(_ view: UIView, context: Context) {}
 }
 
-/// The presentation dismissal guard permits this recognizer on the player canvas.
-final class PlayerBackPanGestureRecognizer: UIPanGestureRecognizer {
-    private var start: CGPoint?
-    private var end: CGPoint?
-
-    var travel: CGPoint {
-        guard let start, let window = view?.window else { return .zero }
-        let point = end ?? location(in: window)
-        return CGPoint(x: point.x - start.x, y: point.y - start.y)
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        if start == nil, let touch = touches.first, let window = view?.window {
-            start = touch.location(in: window)
-        }
-        super.touchesBegan(touches, with: event)
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        if let touch = touches.first, let window = view?.window {
-            end = touch.location(in: window)
-        }
-        super.touchesEnded(touches, with: event)
-    }
-
-    override func reset() {
-        super.reset()
-        start = nil
-        end = nil
-    }
-}
-
-private struct PlayerBackPanAnchor: UIViewRepresentable {
-    let enabled: Bool
-    let layoutDirection: LayoutDirection
-    let canReverse: Bool
-    let onBegan: (CGFloat) -> Void
-    let onChanged: (CGFloat) -> Void
-    let onEnded: (CGFloat, CGFloat) -> Void
-    let onCancelled: () -> Void
-
-    func makeUIView(context: Context) -> Anchor {
-        Anchor(configuration: self)
-    }
-
-    func updateUIView(_ view: Anchor, context: Context) {
-        view.configuration = self
-        view.attach()
-    }
-
-    static func dismantleUIView(_ view: Anchor, coordinator: ()) {
-        view.detach()
-    }
-
-    final class Anchor: UIView, UIGestureRecognizerDelegate {
-        private let pan = PlayerBackPanGestureRecognizer()
-        var configuration: PlayerBackPanAnchor
-
-        init(configuration: PlayerBackPanAnchor) {
-            self.configuration = configuration
-            super.init(frame: .zero)
-            isUserInteractionEnabled = false
-            pan.delegate = self
-            pan.maximumNumberOfTouches = 1
-            pan.addTarget(self, action: #selector(handlePan))
-        }
-
-        required init?(coder: NSCoder) { nil }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            if window == nil { detach() } else { attach() }
-        }
-
-        func attach() {
-            guard window != nil else { return }
-            // Use the hosting controller so the pan can observe touches on UIKit and SwiftUI children.
-            var responder = next
-            while let current = responder {
-                if let controller = current as? UIViewController,
-                   let host = controller.viewIfLoaded, isDescendant(of: host) {
-                    if pan.view !== host { host.addGestureRecognizer(pan) }
-                    return
-                }
-                responder = current.next
-            }
-        }
-
-        func detach() {
-            pan.view?.removeGestureRecognizer(pan)
-        }
-
-        private var direction: CGFloat { configuration.layoutDirection == .leftToRight ? 1 : -1 }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            guard configuration.enabled, let window, bounds.contains(touch.location(in: self)) else { return false }
-            return PlayerBackSwipe.isAtLeadingEdge(touch.location(in: window), in: window,
-                                                   layoutDirection: configuration.layoutDirection)
-        }
-
-        override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            let travel = pan.travel
-            return configuration.enabled && abs(travel.x) > abs(travel.y) * 1.25
-                && (travel.x * direction > 0 || configuration.canReverse)
-        }
-
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldBeRequiredToFailBy other: UIGestureRecognizer
-        ) -> Bool {
-            // UIKit scroll pans and the drawer wait for the edge pan to fail.
-            other is UIPanGestureRecognizer
-        }
-
-        @objc private func handlePan() {
-            let travel = pan.travel.x * direction
-            switch pan.state {
-            case .began: configuration.onBegan(travel)
-            case .changed: configuration.onChanged(travel)
-            case .ended where configuration.enabled:
-                configuration.onEnded(travel, pan.velocity(in: window).x * direction)
-            case .ended, .cancelled: configuration.onCancelled()
-            default: break
-            }
-        }
-    }
+extension EnvironmentValues {
+    @Entry var playerBackAction: PlayerPanAction?
+    @Entry var playerBackIsSettling = false
 }

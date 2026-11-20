@@ -13,6 +13,7 @@ import Kingfisher
 /// FullUI short-drama playback. Episode resolution and completion policy stay in the model.
 struct ShortDramaPlayerView: View {
     private static let portraitDockFill = Color(.sRGB, white: 0.12)
+    private static let episodeSwipeAxisRatio: CGFloat = 1.3
 
     let room: LiveModel
     let presentsOverSource: Bool
@@ -56,12 +57,12 @@ struct ShortDramaPlayerView: View {
     @State private var boundaryMessage: String?
     @State private var boundaryMessageToken = UUID()
     @State private var readyPlaybackID: UUID?
-    @GestureState private var episodeSwipeGesture = ShortDramaEpisodeSwipeGestureState()
+    @State private var episodeSwipeRegion = ShortDramaEpisodeSwipeRegion()
+    @State private var episodeSwipeGesture = ShortDramaEpisodeSwipeGestureState()
     @State private var episodeSwipeSettlementOffset: CGFloat = 0
     @State private var episodeSwipeSettlementOpacity = 1.0
     @State private var episodeSwipeTransitioning = false
     @State private var episodeSwipeSelecting = false
-    @State private var episodeSwipeAwaitingGestureReset = false
     @State private var episodeSwipeToken = UUID()
     @State private var episodeSwipeHoldActive = false
     @State private var episodeSwipeHoldTask: Task<Void, Never>?
@@ -87,6 +88,10 @@ struct ShortDramaPlayerView: View {
         verticalSizeClass == .compact && orientation.permitsOrientationRequests
     }
 
+    private var allowsPageSwipe: Bool {
+        scenePhase == .active && !isLocked && !isLeavingPage && panel == nil && !panelTransitioning && !isSeeking
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let panelMetrics = ShortDramaPanelMetrics(
@@ -100,8 +105,11 @@ struct ShortDramaPlayerView: View {
             let dockInset = controlEdgeInset(geometry: geometry)
             let overlayInset = FullUIPlayerChrome.inset
             let videoCenterOffset = landscape ? (geometry.safeAreaInsets.bottom - geometry.safeAreaInsets.top) / 2 : 0
-            // The video interaction layer already starts at the horizontal safe area.
-            let swipeInset = max(0, LiveRoomNavigationState.playerBackEdgeWidth - geometry.safeAreaInsets.leading)
+            let swipeRoute: PlayerPagePan.Route? = if allowsPageSwipe {
+                { direction, start, window, back in routeSwipe(direction, start, window, back) }
+            } else {
+                nil
+            }
 
             ZStack(alignment: .topLeading) {
                 Color.black.ignoresSafeArea()
@@ -111,8 +119,7 @@ struct ShortDramaPlayerView: View {
                         videoRegion(
                             size: videoGeometry.size,
                             landscape: landscape,
-                            centerOffset: videoCenterOffset,
-                            episodeSwipeLeadingInset: swipeInset
+                            centerOffset: videoCenterOffset
                         )
                     }
 
@@ -160,13 +167,16 @@ struct ShortDramaPlayerView: View {
                 cancelEpisodeSwipe()
                 cancelPanelDetentDrag(using: panelMetrics)
             }
+            .modifier(PlayerPagePan(
+                route: swipeRoute,
+                verticalRatio: Self.episodeSwipeAxisRatio
+            ))
             .modifier(PlayerBackSwipe(
-                enabled: scenePhase == .active && !isLocked && !isLeavingPage
-                    && panel == nil && !panelTransitioning && !isSeeking,
+                enabled: allowsPageSwipe,
                 width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
                 exitsFullscreen: exitsLandscapeFullscreen,
                 revealsRoomList: presentsOverSource && !exitsLandscapeFullscreen,
-                onReturn: finishEdgeReturn
+                onReturn: finishSwipeReturn
             ))
         }
         .environment(\.colorScheme, .dark)
@@ -222,31 +232,6 @@ struct ShortDramaPlayerView: View {
                 cancelPanelDetentDrag(using: latestPanelMetrics)
             }
         }
-        .onChange(of: episodeSwipeGesture) { oldValue, newValue in
-            if !newValue.isVerticalLocked, episodeSwipeAwaitingGestureReset {
-                episodeSwipeAwaitingGestureReset = false
-                if !episodeSwipeHoldActive {
-                    episodeSwipeTransitioning = false
-                }
-                return
-            }
-            guard oldValue.isVerticalLocked,
-                  !newValue.isVerticalLocked,
-                  !episodeSwipeTransitioning,
-                  !isLeavingPage else { return }
-            Task { @MainActor in
-                await Task.yield()
-                guard episodeSwipeHoldActive, !episodeSwipeTransitioning, !isLeavingPage else { return }
-                let opacity = reduceMotion
-                    ? 1 - min(abs(oldValue.rawVerticalTranslation) / 800, 0.15)
-                    : 1
-                settleEpisodeSwipeBack(
-                    from: oldValue.verticalOffset,
-                    message: nil,
-                    startingOpacity: opacity
-                )
-            }
-        }
         .onChange(of: model.playback?.id) { oldValue, newValue in
             if oldValue != newValue {
                 seekRequestID = UUID()
@@ -288,8 +273,7 @@ struct ShortDramaPlayerView: View {
     private func videoRegion(
         size: CGSize,
         landscape: Bool,
-        centerOffset: CGFloat,
-        episodeSwipeLeadingInset: CGFloat
+        centerOffset: CGFloat
     ) -> some View {
         ZStack {
             GeometryReader { mediaGeometry in
@@ -302,8 +286,7 @@ struct ShortDramaPlayerView: View {
 
             episodeInteractionLayer(
                 availableHeight: size.height,
-                landscape: landscape,
-                leadingInset: episodeSwipeLeadingInset
+                landscape: landscape
             )
             .allowsHitTesting(
                 !isLocked && panel == nil
@@ -510,11 +493,15 @@ struct ShortDramaPlayerView: View {
         .allowsHitTesting(false)
     }
 
-    private func episodeInteractionLayer(availableHeight: CGFloat, landscape: Bool, leadingInset: CGFloat) -> some View {
+    private func episodeInteractionLayer(availableHeight: CGFloat, landscape: Bool) -> some View {
         let progressOverlap = !landscape && canInteractWithProgress ? ShortDramaProgressSlider.hitHeight / 2 : 0
 
         return Color.clear
             .frame(height: max(0, availableHeight - progressOverlap))
+            .background {
+                ShortDramaEpisodeSwipeAnchor(region: episodeSwipeRegion, availableHeight: availableHeight)
+                    .allowsHitTesting(false)
+            }
             .contentShape(Rectangle())
             .onTapGesture {
                 if controlsVisible { togglePlayback() }
@@ -526,47 +513,39 @@ struct ShortDramaPlayerView: View {
             .accessibilityAction(.default, togglePlayback)
             .accessibilityAction(named: Text("上一集")) { changeEpisode(by: -1) }
             .accessibilityAction(named: Text("下一集")) { changeEpisode(by: 1) }
-            .simultaneousGesture(episodeSwipeGestureForVideo(availableHeight: availableHeight))
-            .padding(.leading, leadingInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func episodeSwipeGestureForVideo(availableHeight: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($episodeSwipeGesture) { value, state, transaction in
-                transaction.animation = nil
-                guard panel == nil,
-                      !isSeeking,
-                      !panelTransitioning,
-                      !episodeSwipeTransitioning else {
-                    state = .zero
-                    return
-                }
-                let translation = value.translation
-                if state.isVerticalLocked || abs(translation.height) > abs(translation.width) * 1.3 {
-                    state = ShortDramaEpisodeSwipeGestureState(
-                        isVerticalLocked: true,
-                        rawVerticalTranslation: translation.height,
-                        verticalOffset: episodeSwipeDragOffset(
-                            translation.height,
-                            availableHeight: availableHeight
-                        )
-                    )
-                } else {
-                    state = .zero
-                }
-            }
-            .onChanged { value in
-                guard panel == nil,
-                      !isSeeking,
-                      !panelTransitioning,
-                      !episodeSwipeTransitioning,
-                      abs(value.translation.height) > abs(value.translation.width) * 1.3 else { return }
+    private func routeSwipe(
+        _ direction: PlayerPagePan.Direction, _ start: CGPoint, _ window: UIWindow, _ back: PlayerPanAction?
+    ) -> PlayerPanAction? {
+        if direction == .back { return back }
+        guard direction == .vertical, isCurrentPlaybackReady, !episodeSwipeTransitioning,
+              let height = episodeSwipeRegion.height(at: start, in: window) else { return nil }
+        return PlayerPanAction(
+            kind: .episode, axis: .vertical,
+            begin: { translation in
                 beginEpisodeSwipeHold()
-            }
-            .onEnded { value in
-                finishEpisodeSwipe(value, availableHeight: availableHeight)
-            }
+                updateEpisodeSwipe(translation, availableHeight: height)
+            },
+            update: { updateEpisodeSwipe($0, availableHeight: height) },
+            canEnd: { abs($0.y) > abs($0.x) * Self.episodeSwipeAxisRatio },
+            end: { finishEpisodeSwipe($0, velocity: $1, availableHeight: height) },
+            cancel: cancelEpisodeDrag
+        )
+    }
+
+    private func updateEpisodeSwipe(_ translation: CGFloat, availableHeight: CGFloat) {
+        guard episodeSwipeHoldActive, !episodeSwipeTransitioning else { return }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            episodeSwipeGesture = ShortDramaEpisodeSwipeGestureState(
+                isVerticalLocked: true,
+                rawVerticalTranslation: translation,
+                verticalOffset: episodeSwipeDragOffset(translation, availableHeight: availableHeight)
+            )
+        }
     }
 
     private var playbackSurfaceOffset: CGFloat {
@@ -620,30 +599,23 @@ struct ShortDramaPlayerView: View {
         episodeSwipeHoldActive = false
     }
 
-    private func finishEpisodeSwipe(_ value: DragGesture.Value, availableHeight: CGFloat) {
+    private func finishEpisodeSwipe(_ translation: CGFloat, velocity: CGFloat, availableHeight: CGFloat) {
         guard !isLeavingPage,
               panel == nil,
               !panelTransitioning,
               !episodeSwipeTransitioning,
-              episodeSwipeHoldActive else { return }
+              episodeSwipeGesture.isVerticalLocked else { return }
+        updateEpisodeSwipe(translation, availableHeight: availableHeight)
+        defer { episodeSwipeGesture = .zero }
 
-        let translation = value.translation
-        guard abs(translation.height) > abs(translation.width) * 1.3 else {
-            settleEpisodeSwipeBack(from: episodeSwipeGesture.verticalOffset, message: nil)
-            return
-        }
-
-        let direction = translation.height < 0 ? 1 : -1
-        let magnitude = abs(translation.height)
+        let direction = translation < 0 ? 1 : -1
+        let magnitude = abs(translation)
         let minimumDistance = min(120, max(0, availableHeight) * 0.18)
         let sameDirectionFlick = magnitude >= 28
-            && abs(value.velocity.height) >= 650
-            && value.velocity.height.sign == translation.height.sign
+            && abs(velocity) >= 650
+            && velocity.sign == translation.sign
         let commits = magnitude >= minimumDistance || sameDirectionFlick
-        let currentOffset = episodeSwipeDragOffset(
-            translation.height,
-            availableHeight: availableHeight
-        )
+        let currentOffset = episodeSwipeGesture.verticalOffset
 
         guard let target = targetEpisode(for: direction) else {
             if commits {
@@ -669,15 +641,14 @@ struct ShortDramaPlayerView: View {
         )
     }
 
-    private func settleEpisodeSwipeBack(from offset: CGFloat, message: String?) {
-        settleEpisodeSwipeBack(from: offset, message: message, startingOpacity: playbackSurfaceOpacity)
+    private func cancelEpisodeDrag() {
+        guard !isLeavingPage, !episodeSwipeTransitioning, episodeSwipeGesture.isVerticalLocked else { return }
+        settleEpisodeSwipeBack(from: episodeSwipeGesture.verticalOffset, message: nil)
+        episodeSwipeGesture = .zero
     }
 
-    private func settleEpisodeSwipeBack(
-        from offset: CGFloat,
-        message: String?,
-        startingOpacity: Double
-    ) {
+    private func settleEpisodeSwipeBack(from offset: CGFloat, message: String?) {
+        let startingOpacity = playbackSurfaceOpacity
         let token = UUID()
         episodeSwipeToken = token
         episodeSwipeTransitioning = true
@@ -696,9 +667,7 @@ struct ShortDramaPlayerView: View {
             Task { @MainActor in
                 await releaseEpisodeSwipeHold()
                 guard episodeSwipeToken == token, !isLeavingPage else { return }
-                if !episodeSwipeAwaitingGestureReset {
-                    episodeSwipeTransitioning = false
-                }
+                episodeSwipeTransitioning = false
                 if let message { showBoundary(message) }
             }
         }
@@ -742,9 +711,7 @@ struct ShortDramaPlayerView: View {
                 await releaseEpisodeSwipeHold()
                 guard episodeSwipeToken == token, !isLeavingPage else { return }
                 episodeSwipeSelecting = false
-                if !episodeSwipeAwaitingGestureReset {
-                    episodeSwipeTransitioning = false
-                }
+                episodeSwipeTransitioning = false
                 withTransaction(Transaction(animation: nil)) {
                     episodeSwipeSettlementOffset = 0
                     episodeSwipeSettlementOpacity = 1
@@ -762,30 +729,23 @@ struct ShortDramaPlayerView: View {
 
     private func cancelEpisodeSwipe() {
         guard episodeSwipeTransitioning || episodeSwipeHoldActive || episodeSwipeGesture.isVerticalLocked else { return }
-        let gestureIsActive = episodeSwipeGesture.isVerticalLocked
         invalidateEpisodeSwipe()
-        if gestureIsActive {
-            episodeSwipeAwaitingGestureReset = true
-        }
-        if gestureIsActive || episodeSwipeHoldActive {
-            episodeSwipeTransitioning = true
-        }
+        guard episodeSwipeHoldActive else { return }
+        episodeSwipeTransitioning = true
         let token = episodeSwipeToken
         Task { @MainActor in
             await releaseEpisodeSwipeHold()
             guard episodeSwipeToken == token, !isLeavingPage else { return }
-            if !episodeSwipeAwaitingGestureReset {
-                episodeSwipeTransitioning = false
-            }
+            episodeSwipeTransitioning = false
         }
     }
 
     private func invalidateEpisodeSwipe() {
         episodeSwipeToken = UUID()
         episodeSwipeSelecting = false
-        episodeSwipeAwaitingGestureReset = false
         episodeSwipeTransitioning = false
         withTransaction(Transaction(animation: nil)) {
+            episodeSwipeGesture = .zero
             episodeSwipeSettlementOffset = 0
             episodeSwipeSettlementOpacity = 1
         }
@@ -870,7 +830,7 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func finishEdgeReturn() {
+    private func finishSwipeReturn() {
         if exitsLandscapeFullscreen {
             orientation.exitLandscape()
             return
@@ -1722,6 +1682,34 @@ enum ShortDramaPanel: String, Identifiable, Equatable {
 private struct PlaybackObservationKey: Equatable {
     let playbackID: UUID?
     let isActive: Bool
+}
+
+@MainActor
+private final class ShortDramaEpisodeSwipeRegion {
+    weak var view: UIView?
+    var availableHeight: CGFloat = 0
+
+    func height(at point: CGPoint, in window: UIWindow) -> CGFloat? {
+        guard let view, view.window === window, view.bounds.contains(view.convert(point, from: window))
+        else { return nil }
+        return availableHeight
+    }
+}
+
+private struct ShortDramaEpisodeSwipeAnchor: UIViewRepresentable {
+    let region: ShortDramaEpisodeSwipeRegion
+    let availableHeight: CGFloat
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        region.view = view
+        region.availableHeight = availableHeight
+    }
 }
 
 private struct ShortDramaEpisodeSwipeGestureState: Equatable {

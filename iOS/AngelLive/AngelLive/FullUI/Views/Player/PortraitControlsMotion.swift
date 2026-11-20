@@ -75,6 +75,7 @@ final class PortraitControlsMotion {
 }
 
 struct PortraitControlsOffset: ViewModifier {
+    @Environment(\.layoutDirection) private var layoutDirection
     let motion: PortraitControlsMotion?
     let width: CGFloat
     let visible: Bool
@@ -83,8 +84,9 @@ struct PortraitControlsOffset: ViewModifier {
     func body(content: Content) -> some View {
         if let motion, !reduceMotion {
             TimelineView(.animation(paused: motion.settlement == nil)) { timeline in
+                let position = motion.position(width: width, visible: visible, at: timeline.date)
                 content
-                    .offset(x: motion.position(width: width, visible: visible, at: timeline.date))
+                    .offset(x: layoutDirection == .leftToRight ? position : -position)
                     .onChange(of: motion.settlement?.isFinished(at: timeline.date) == true) { _, finished in
                         if finished { motion.finishSettlement() }
                     }

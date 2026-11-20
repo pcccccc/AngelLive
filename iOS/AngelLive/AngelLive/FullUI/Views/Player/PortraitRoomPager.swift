@@ -12,6 +12,7 @@ struct PortraitRoomPager: ViewModifier {
 
     typealias Direction = RoomSwitchCandidates.Direction
     let enabled: Bool
+    let openDrawerSwipe: ((CGPoint, UIWindow) -> PlayerPanAction?)?
     let viewportWidth: CGFloat
     let viewportHeight: CGFloat
     let availableHeight: CGFloat
@@ -27,7 +28,6 @@ struct PortraitRoomPager: ViewModifier {
     let showBoundary: (Direction) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.verticalLiveControlsVisible) private var controlsVisible
     @State private var motion = PortraitPageMotion()
@@ -36,9 +36,6 @@ struct PortraitRoomPager: ViewModifier {
     @State private var cover: Cover?
     @State private var categoryTask: Task<Void, Never>?
     @State private var prefetcher: ImagePrefetcher?
-    @State private var legacyDragAxis: Axis?
-    @State private var hasRejectedLegacyDrag = false
-    @GestureState private var legacyDragActive = false
 
     func body(content: Content) -> some View {
         let pageAction: ((Direction) -> Void)? = enabled && cover == nil ? { turnPage($0) } : nil
@@ -76,7 +73,14 @@ struct PortraitRoomPager: ViewModifier {
         .modifier(PortraitPageOffset(motion: motion, onSettled: finishSettlement))
         .contentShape(Rectangle())
 
-        return withPan(movingPage)
+        let route: PlayerPagePan.Route? = if enabled || openDrawerSwipe != nil {
+            { direction, start, window, back in routeSwipe(direction, start, window, back) }
+        } else {
+            nil
+        }
+        let swipePage = movingPage.modifier(PlayerPagePan(route: route))
+
+        return swipePage
         .background {
             if pages != nil || cover != nil {
                 Color.black.ignoresSafeArea()
@@ -116,110 +120,62 @@ struct PortraitRoomPager: ViewModifier {
         return result
     }
 
-    private func canStartDrag(_ axis: Axis) -> Bool {
-        guard enabled else { return false }
-        switch axis {
-        case .vertical: return GeneralSettingModel().enablePlayerGesture && categoryTask == nil
-        case .horizontal: return cover == nil && motion.dragOrigin == nil && motion.settlement == nil
+    private func routeSwipe(
+        _ direction: PlayerPagePan.Direction, _ start: CGPoint, _ window: UIWindow, _ back: PlayerPanAction?
+    ) -> PlayerPanAction? {
+        guard enabled else {
+            if direction == .back { return back }
+            return direction == .forward ? openDrawerSwipe?(start, window) : nil
         }
-    }
 
-    @ViewBuilder
-    private func withPan(_ content: some View) -> some View {
-        if #available(iOS 18.0, *) {
-            content.gesture(PortraitRoomPan(
-                isEnabled: enabled,
-                shouldBegin: canStartDrag,
-                layoutDirection: layoutDirection,
-                onBegan: beginDrag,
-                onChanged: updateDrag,
-                onEnded: endDrag,
-                onCancelled: cancelDrag
-            ))
-        } else {
-            content
-                .simultaneousGesture(legacyDrag)
-                .onChange(of: legacyDragActive) { _, active in
-                    if !active {
-                        hasRejectedLegacyDrag = false
-                        if let axis = legacyDragAxis { cancelDrag(axis) }
-                        legacyDragAxis = nil
-                    }
-                }
-        }
-    }
-
-    private var legacyDrag: some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .global)
-            .updating($legacyDragActive) { _, active, _ in active = true }
-            .onChanged { value in
-                guard !hasRejectedLegacyDrag else { return }
-                if let axis = legacyDragAxis {
-                    updateDrag(axis, value.translation[axis])
-                    return
-                }
-                guard let window = windowContext?.window,
-                      PortraitRoomDrag.accepts(value.startLocation, in: window, layoutDirection: layoutDirection),
-                      let axis = PortraitRoomDrag.axis(for: value.translation), canStartDrag(axis) else {
-                    hasRejectedLegacyDrag = true
-                    return
-                }
-                legacyDragAxis = axis
-                beginDrag(axis, value.translation[axis])
-            }
-            .onEnded { value in
-                if let axis = legacyDragAxis {
-                    endDrag(axis, value.translation[axis], value.velocity[axis])
-                }
-                legacyDragAxis = nil
-                hasRejectedLegacyDrag = false
-            }
-    }
-
-    private func beginDrag(_ axis: Axis, _ translation: CGFloat) {
-        switch axis {
-        case .vertical:
-            controlsMotion.reset()
-            beginDrag(translation)
-        case .horizontal:
-            controlsMotion.begin(
-                translation: translation, width: viewportWidth, visible: controlsVisible.wrappedValue
+        let visible = controlsVisible.wrappedValue
+        if direction == .vertical {
+            let viewport = window.bounds
+            guard GeneralSettingModel().enablePlayerGesture, categoryTask == nil,
+                  start.y > viewport.minY + 44, start.y < viewport.maxY - 44 else { return nil }
+            return PlayerPanAction(
+                kind: .page, axis: .vertical,
+                begin: {
+                    controlsMotion.reset()
+                    beginDrag($0)
+                },
+                update: updateDrag, end: endDrag, cancel: cancelDrag
             )
-            updateDrag(axis, translation)
         }
-    }
 
-    private func updateDrag(_ axis: Axis, _ translation: CGFloat) {
-        switch axis {
-        case .vertical: updateDrag(translation)
-        case .horizontal:
-            if !reduceMotion { controlsMotion.update(translation: translation, width: viewportWidth) }
-        }
-    }
+        guard motion.dragOrigin == nil, motion.settlement == nil else { return nil }
+        if direction == .back && visible { return back }
 
-    private func endDrag(_ axis: Axis, _ translation: CGFloat, _ velocity: CGFloat) {
-        switch axis {
-        case .vertical: endDrag(translation, velocity)
-        case .horizontal:
-            guard let position = controlsMotion.dragPosition(translation: translation, width: viewportWidth) else {
-                return
+        guard cover == nil, visible == (direction == .forward) else { return nil }
+        let sign: CGFloat = layoutDirection == .leftToRight ? 1 : -1
+        return PlayerPanAction(
+            kind: visible ? .hideControls : .restoreControls, axis: .horizontal, sign: sign,
+            begin: { translation in
+                controlsMotion.begin(translation: translation, width: viewportWidth, visible: visible)
+                updateControlsDrag(translation)
+            },
+            update: updateControlsDrag,
+            end: { endControlsDrag($0, $1, wasVisible: visible) },
+            cancel: {
+                guard controlsMotion.dragOrigin != nil else { return }
+                setControlsVisible(controlsVisible.wrappedValue)
             }
-            let visible = controlsVisible.wrappedValue
-            // Only the current drag counts, even when it interrupts a spring midway.
-            let distance = visible ? -translation : translation
-            let releaseSpeed = visible ? -velocity : velocity
-            let commits = distance > viewportWidth * 0.30 || releaseSpeed >= 600
-            setControlsVisible(commits ? !visible : visible, from: position, velocity: velocity)
-        }
+        )
     }
 
-    private func cancelDrag(_ axis: Axis) {
-        switch axis {
-        case .vertical: cancelDrag()
-        case .horizontal:
-            guard controlsMotion.dragOrigin != nil else { return }
-            setControlsVisible(controlsVisible.wrappedValue)
+    private func updateControlsDrag(_ translation: CGFloat) {
+        if !reduceMotion { controlsMotion.update(translation: translation, width: viewportWidth) }
+    }
+
+    private func endControlsDrag(_ translation: CGFloat, _ velocity: CGFloat, wasVisible: Bool) {
+        guard let position = controlsMotion.dragPosition(translation: translation, width: viewportWidth) else {
+            return
         }
+        // Only the current drag counts, even when it interrupts a spring midway.
+        let distance = wasVisible ? -translation : translation
+        let releaseSpeed = wasVisible ? -velocity : velocity
+        let commits = distance > viewportWidth * 0.30 || releaseSpeed >= 600
+        setControlsVisible(commits ? !wasVisible : wasVisible, from: position, velocity: velocity)
     }
 
     private func setControlsVisible(_ visible: Bool, from position: CGFloat? = nil, velocity: CGFloat = 0) {
@@ -492,106 +448,6 @@ private struct PortraitPageOffset: ViewModifier {
                 .onChange(of: motion.settlement?.isFinished(at: timeline.date) == true) { _, finished in
                     if finished { onSettled() }
                 }
-        }
-    }
-}
-
-final class PortraitRoomPanGestureRecognizer: UIPanGestureRecognizer {}
-
-private enum PortraitRoomDrag {
-    static func axis(for translation: CGSize) -> Axis? {
-        if abs(translation.height) > abs(translation.width) * 1.25 { return .vertical }
-        if abs(translation.width) > abs(translation.height) * 1.25 { return .horizontal }
-        return nil
-    }
-
-    static func accepts(_ point: CGPoint, in window: UIWindow, layoutDirection: LayoutDirection) -> Bool {
-        !PlayerBackSwipe.isAtLeadingEdge(point, in: window, layoutDirection: layoutDirection)
-            && point.y > window.bounds.minY + 44 && point.y < window.bounds.maxY - 44
-    }
-}
-
-private extension CGSize {
-    subscript(_ axis: Axis) -> CGFloat { axis == .horizontal ? width : height }
-}
-
-@available(iOS 18.0, *)
-private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
-    let isEnabled: Bool
-    let shouldBegin: (Axis) -> Bool
-    let layoutDirection: LayoutDirection
-    let onBegan: (Axis, CGFloat) -> Void
-    let onChanged: (Axis, CGFloat) -> Void
-    let onEnded: (Axis, CGFloat, CGFloat) -> Void
-    let onCancelled: (Axis) -> Void
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
-        let coordinator = Coordinator()
-        coordinator.isEnabled = isEnabled
-        coordinator.shouldBegin = shouldBegin
-        coordinator.layoutDirection = layoutDirection
-        return coordinator
-    }
-
-    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = PortraitRoomPanGestureRecognizer()
-        pan.maximumNumberOfTouches = 1
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        context.coordinator.isEnabled = isEnabled
-        context.coordinator.shouldBegin = shouldBegin
-        context.coordinator.layoutDirection = layoutDirection
-    }
-
-    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
-        guard let axis = context.coordinator.axis else { return }
-        let window = recognizer.view?.window
-        let point = recognizer.translation(in: window)
-        let translation = axis == .horizontal ? point.x : point.y
-        switch recognizer.state {
-        case .began: onBegan(axis, translation)
-        case .changed: onChanged(axis, translation)
-        case .ended:
-            context.coordinator.axis = nil
-            let velocity = recognizer.velocity(in: window)
-            onEnded(axis, translation, axis == .horizontal ? velocity.x : velocity.y)
-        case .cancelled:
-            context.coordinator.axis = nil
-            onCancelled(axis)
-        default: break
-        }
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var isEnabled = false
-        var shouldBegin: (Axis) -> Bool = { _ in false }
-        var layoutDirection: LayoutDirection = .leftToRight
-        var axis: Axis?
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            guard isEnabled, let window = gestureRecognizer.view?.window else { return false }
-            return PortraitRoomDrag.accepts(touch.location(in: window), in: window, layoutDirection: layoutDirection)
-        }
-
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            axis = nil
-            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
-            let translation = pan.translation(in: pan.view?.window)
-            guard let axis = PortraitRoomDrag.axis(for: CGSize(width: translation.x, height: translation.y)),
-                  shouldBegin(axis) else { return false }
-            self.axis = axis
-            return true
-        }
-
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
-        ) -> Bool {
-            // Keep the canvas tap gestures. The pager excludes the back edge before recognition.
-            true
         }
     }
 }
