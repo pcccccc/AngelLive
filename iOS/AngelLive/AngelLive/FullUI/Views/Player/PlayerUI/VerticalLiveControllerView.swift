@@ -256,7 +256,6 @@ struct VerticalLiveControllerView: View {
                         .foregroundStyle(.white)
                         .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
                         .fullUIPlayerGlass(in: Circle())
-                        .fullUIPlayerShadow(in: Circle())
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -297,7 +296,6 @@ struct VerticalLiveControllerView: View {
                     maxHeight: FullUIPlayerChrome.controlSize
                 )
                 .fullUIPlayerGlass(in: Capsule())
-                .fullUIPlayerShadow(in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
