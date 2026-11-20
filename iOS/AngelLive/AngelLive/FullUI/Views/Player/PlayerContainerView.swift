@@ -445,7 +445,12 @@ struct PlayerContentView: View {
     }
 
     private func configuredPlayerSurface(playURL: URL) -> some View {
-        compatiblePlayerSurface(playURL: playURL)
+        ZStack {
+            // KSVideoPlayerView is empty until this task assigns model.url.
+            // Keep an independent view mounted so the task can start.
+            Color.clear.allowsHitTesting(false)
+            compatiblePlayerSurface(playURL: playURL)
+        }
             .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") { @MainActor in
                 guard !Task.isCancelled, viewModel.currentPlayURL == playURL else { return }
                 Logger.debug(
