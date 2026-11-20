@@ -10,8 +10,6 @@ struct FullUILandscapePlayerStatus: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.fullUIPlayerPrefersRegularGlass) private var brightScene
 
     let isVisible: Bool
 
@@ -45,8 +43,6 @@ struct FullUILandscapePlayerStatus: View {
             timeZone: .autoupdatingCurrent,
             calendar: .autoupdatingCurrent
         ))
-        let strongShadow = brightScene || contrast == .increased
-
         return HStack(spacing: 4) {
             Text(verbatim: time)
                 .font(.system(size: 12, weight: .semibold).monospacedDigit())
@@ -60,9 +56,7 @@ struct FullUILandscapePlayerStatus: View {
         }
         .fixedSize()
         .frame(height: Self.rowHeight)
-        .shadow(color: .black.opacity(strongShadow ? 0.85 : 0.6), radius: strongShadow ? 3 : 2, y: 1)
-        .fullUIPlayerShadow(in: Capsule(), opacity: strongShadow ? 0.32 : 0.22)
-        .animation(FullUIPlayerChrome.glassTransitionAnimation, value: strongShadow)
+        .fullUIPlayerMediaText()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel(for: time, battery: battery))
     }

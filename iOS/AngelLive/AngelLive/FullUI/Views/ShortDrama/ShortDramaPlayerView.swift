@@ -152,15 +152,6 @@ struct ShortDramaPlayerView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
-        .fullUIPlayerContrast(
-            while: (controlsVisible || isLocked) && controlsAvailable,
-            source: PlaybackGlassContrastSource(roomID: room.id, url: model.playback?.url,
-                                                kernel: .ksplayer, episodeID: model.selectedEpisodeID)
-        ) {
-            guard let playback = model.playback, playerController.playbackID == playback.id,
-                  let layer = playerController.coordinator?.playerLayer, layer.url == playback.url else { return nil }
-            return layer.player
-        }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: panel?.id) { _, newValue in
             guard let newValue else { return }
@@ -331,7 +322,6 @@ struct ShortDramaPlayerView: View {
                             .foregroundStyle(.white)
                             .frame(width: 56, height: 56)
                             .fullUIPlayerGlass(in: Circle())
-                            .fullUIPlayerShadow(in: Circle())
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -892,7 +882,6 @@ struct ShortDramaPlayerView: View {
             .foregroundStyle(.white)
             .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
             .fullUIPlayerGlass(in: Circle())
-            .fullUIPlayerShadow(in: Circle())
             .contentShape(Circle())
     }
 
@@ -911,7 +900,6 @@ struct ShortDramaPlayerView: View {
             .padding(.horizontal, 16)
             .frame(height: FullUIPlayerChrome.controlSize)
             .fullUIPlayerGlass(in: Capsule())
-            .fullUIPlayerShadow(in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -982,7 +970,7 @@ struct ShortDramaPlayerView: View {
 
         return HStack(spacing: 8) {
             if reservesTimeLabels {
-                progressTime(currentTime, landscape: landscape)
+                progressTime(currentTime)
                     .transition(.opacity)
             }
 
@@ -991,7 +979,7 @@ struct ShortDramaPlayerView: View {
                 range: 0...max(duration, 1),
                 isEnabled: canInteractWithProgress,
                 accessibilityLabel: "播放进度",
-                accessibilityValue: "\(formatTime(isSeeking ? seekValue : currentTime)) / \(formatTime(duration))",
+                accessibilityValue: "\(fullUIPlayerTime(isSeeking ? seekValue : currentTime)) / \(fullUIPlayerTime(duration))",
                 onEditingChanged: { editing in
                     if editing { beginSeek() }
                 },
@@ -1002,7 +990,7 @@ struct ShortDramaPlayerView: View {
             .frame(maxWidth: .infinity)
 
             if reservesTimeLabels {
-                progressTime(duration, landscape: landscape)
+                progressTime(duration)
                     .transition(.opacity)
             }
         }
@@ -1024,19 +1012,8 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private func progressTime(_ time: Double, landscape: Bool) -> some View {
-        Group {
-            if landscape {
-                FullUIPlayerTimeLabel(time: time)
-            } else {
-                Text(formatTime(time))
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .fullUIPlayerMediaText()
-            }
-        }
+    private func progressTime(_ time: Double) -> some View {
+        FullUIPlayerTimeLabel(time: time)
             .opacity(isScrubbing ? 0 : 1)
             .animation(FullUIPlayerChrome.visibilityAnimation(!isScrubbing, reduceMotion: reduceMotion), value: isScrubbing)
             .allowsHitTesting(false)
@@ -1059,6 +1036,7 @@ struct ShortDramaPlayerView: View {
             }
         }
         .frame(minHeight: 24, alignment: .leading)
+        .fullUIPlayerMediaText()
     }
 
     private var episodeTitle: some View {
@@ -1103,7 +1081,6 @@ struct ShortDramaPlayerView: View {
             .frame(maxWidth: .infinity)
             .frame(height: FullUIPlayerChrome.controlSize)
             .fullUIPlayerGlass(in: Capsule())
-            .fullUIPlayerShadow(in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -1130,7 +1107,6 @@ struct ShortDramaPlayerView: View {
                 .padding(.horizontal, 4)
                 .frame(width: diameter, height: diameter)
                 .fullUIPlayerGlass(in: Circle())
-                .fullUIPlayerShadow(in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -1675,10 +1651,6 @@ struct ShortDramaPlayerView: View {
             model.recordProgress(id: id, position: sample.current, duration: sample.duration)
         }
         model.flushProgress()
-    }
-
-    private func formatTime(_ time: Double) -> String {
-        fullUIPlayerTime(time)
     }
 }
 

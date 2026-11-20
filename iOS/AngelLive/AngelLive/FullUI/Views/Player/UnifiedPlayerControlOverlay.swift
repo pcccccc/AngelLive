@@ -75,11 +75,6 @@ struct UnifiedPlayerControlOverlay: View {
     var body: some View {
         #if canImport(KSPlayer)
         overlayContent
-            .fullUIPlayerContrast(
-                while: isMaskVisible || bridge.isLocked.wrappedValue,
-                source: PlaybackGlassContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
-                                                    kernel: viewModel.selectedPlayerKernel)
-            ) { currentTimelineLayer?.player }
             .task(id: isFullscreen && landscapeLayout != nil && viewModel.isOnDemand && isMaskVisible
                   ? viewModel.currentPlayURL : nil) {
                 guard landscapeLayout != nil, viewModel.isOnDemand, isMaskVisible,
@@ -239,7 +234,6 @@ struct UnifiedPlayerControlOverlay: View {
                         } else {
                             chromeButton("chevron.backward", label: "返回", action: handleBackButton)
                                 .fullUIPlayerGlass(in: Circle())
-                                .fullUIPlayerShadow(in: Circle())
                                 .modifier(ChromeVisibility(visible: showsControls, reduceMotion: reduceMotion))
                         }
                         Spacer(minLength: 0)
@@ -310,8 +304,6 @@ struct UnifiedPlayerControlOverlay: View {
         .frame(maxWidth: maximumWidth, alignment: .leading)
         .accessibilityHint("返回")
         .fullUIPlayerGlass(in: Capsule(), interactive: false)
-        .fullUIPlayerShadow(in: Capsule())
-        .environment(\.fullUIPlayerPrefersRegularGlass, true)
     }
 
     #if canImport(KSPlayer)
@@ -361,7 +353,6 @@ struct UnifiedPlayerControlOverlay: View {
                 HStack(spacing: 0) {
                     chromeButton("chevron.backward", label: "返回", action: handleBackButton)
                         .fullUIPlayerGlass(in: Circle())
-                        .fullUIPlayerShadow(in: Circle())
                     Spacer(minLength: 0)
                     FullUIPlayerGlassGroup {
                         if bridge.supportsPictureInPicture {
@@ -391,7 +382,6 @@ struct UnifiedPlayerControlOverlay: View {
                 bridge.isLocked.wrappedValue.toggle()
             }
             .fullUIPlayerGlass(in: Circle())
-            .fullUIPlayerShadow(in: Circle())
             .offset(y: videoCenterOffset)
 
             if !locked {
@@ -421,7 +411,6 @@ struct UnifiedPlayerControlOverlay: View {
         }
         .buttonStyle(.plain)
         .fullUIPlayerGlass(in: Circle())
-        .fullUIPlayerShadow(in: Circle())
         .accessibilityLabel("播放")
     }
 
@@ -429,7 +418,6 @@ struct UnifiedPlayerControlOverlay: View {
         HStack(spacing: 12) {
             chromeButton("chevron.backward", label: "返回", action: handleBackButton)
                 .fullUIPlayerGlass(in: Circle())
-                .fullUIPlayerShadow(in: Circle())
 
             FullUIPlayerName(
                 viewModel.currentRoom.userName.isEmpty ? viewModel.currentRoom.roomTitle : viewModel.currentRoom.userName,

@@ -93,7 +93,6 @@ struct FullUILandscapePlayerLock: View {
         }
         .buttonStyle(.plain)
         .fullUIPlayerGlass(in: Circle())
-        .fullUIPlayerShadow(in: Circle())
         .accessibilityLabel(isLocked ? "解锁" : "锁定")
     }
 }

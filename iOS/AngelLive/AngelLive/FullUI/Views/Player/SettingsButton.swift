@@ -254,7 +254,6 @@ struct FullUIPlaybackMenu: View {
         .frame(width: 240)
         .foregroundStyle(.white)
         .fullUIPlayerGlass(in: RoundedRectangle(cornerRadius: 24), interactive: false)
-        .environment(\.fullUIPlayerPrefersRegularGlass, true)
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("播放器设置")

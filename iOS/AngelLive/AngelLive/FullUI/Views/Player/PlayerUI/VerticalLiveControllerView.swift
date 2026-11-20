@@ -78,14 +78,6 @@ struct VerticalLiveControllerView: View {
             }
             .clipped()
         }
-        .fullUIPlayerContrast(
-            while: controlsVisible.wrappedValue,
-            source: PlaybackGlassContrastSource(roomID: viewModel.currentRoom.id, url: viewModel.currentPlayURL,
-                                                kernel: viewModel.selectedPlayerKernel)
-        ) {
-            guard let layer = model.config.playerLayer, layer.url == viewModel.currentPlayURL else { return nil }
-            return layer.player
-        }
         .animation(
             FullUIPlayerChrome.visibilityAnimation(controlsVisible.wrappedValue, reduceMotion: reduceMotion),
             value: controlsVisible.wrappedValue
@@ -113,7 +105,6 @@ struct VerticalLiveControllerView: View {
                         .foregroundStyle(.white)
                         .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
                         .fullUIPlayerGlass(in: Circle())
-                        .fullUIPlayerShadow(in: Circle())
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)

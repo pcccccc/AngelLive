@@ -7,7 +7,6 @@ import UIKit
 enum FullUIPlayerChrome {
     static let controlSize: CGFloat = 44
     static let symbolFont: Font = .system(size: 18, weight: .semibold)
-    static let glassTransitionAnimation = Animation.easeInOut(duration: 0.35)
 
     static var inset: CGFloat {
         UIDevice.current.userInterfaceIdiom == .pad ? 20 : 16
@@ -26,10 +25,6 @@ enum FullUIPlayerDetailChrome {
     static var accent: Color { SharedAssets.Colors.appAccent }
 }
 
-extension EnvironmentValues {
-    @Entry var fullUIPlayerPrefersRegularGlass = false
-}
-
 extension View {
     @ViewBuilder
     func fullUIPlayerGlassContainer(spacing: CGFloat) -> some View {
@@ -44,38 +39,21 @@ extension View {
         modifier(FullUIPlayerGlassModifier(glassShape: shape, interactive: interactive))
     }
 
-    func fullUIPlayerShadow(in shape: some Shape, opacity: Double = 0.22) -> some View {
-        background {
-            shape
-                .fill(.black.opacity(opacity))
-                .padding(-8)
-                .blur(radius: 16)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-    }
-
     func fullUIPlayerMediaText() -> some View {
-        modifier(FullUIPlayerMediaTextModifier())
-            .fullUIPlayerShadow(in: Capsule())
+        shadow(color: .black.opacity(0.85), radius: 3, y: 1)
     }
 }
 
 struct FullUIPlayerTimeLabel: View {
-    @Environment(\.fullUIPlayerPrefersRegularGlass) private var brightScene
-    @Environment(\.colorSchemeContrast) private var contrast
     let time: Double
 
     var body: some View {
-        let strong = brightScene || contrast == .increased
         Text(fullUIPlayerTime(time))
             .font(.system(size: 12, weight: .semibold).monospacedDigit())
             .foregroundStyle(.white)
             .lineLimit(1)
             .fixedSize()
-            .shadow(color: .black.opacity(strong ? 0.85 : 0.6), radius: strong ? 3 : 2, y: 1)
-            .fullUIPlayerShadow(in: Capsule(), opacity: strong ? 0.32 : 0.22)
-            .animation(FullUIPlayerChrome.glassTransitionAnimation, value: strong)
+            .fullUIPlayerMediaText()
     }
 }
 
@@ -122,48 +100,15 @@ struct FullUIPlayerRoomIdentity: View {
     }
 }
 
-private struct FullUIPlayerMediaTextModifier: ViewModifier {
-    @Environment(\.fullUIPlayerPrefersRegularGlass) private var needsContrast
-
-    func body(content: Content) -> some View {
-        content.background {
-            ZStack {
-                if needsContrast {
-                    Color.clear
-                        .fullUIPlayerGlass(in: Capsule(), interactive: false)
-                        .padding(.horizontal, -4)
-                        .padding(.vertical, -2)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .transition(.opacity)
-                }
-            }
-            .animation(FullUIPlayerChrome.glassTransitionAnimation, value: needsContrast)
-        }
-    }
-}
-
 private struct FullUIPlayerGlassModifier<GlassShape: Shape>: ViewModifier {
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.fullUIPlayerPrefersRegularGlass) private var prefersRegularGlass
     let glassShape: GlassShape
     let interactive: Bool
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            let regular = prefersRegularGlass || contrast == .increased
-            let glass: Glass = regular ? .regular.tint(.black.opacity(0.45)) : .clear
+            let glass = Glass.regular.tint(.black.opacity(0.45)).interactive(interactive)
             content.background {
-                // Only the material is replaced. Keep the controls, labels
-                // and hit targets mounted for the entire transition.
-                ZStack {
-                    Color.clear
-                        .glassEffect(glass.interactive(interactive), in: glassShape)
-                        .glassEffectTransition(.materialize)
-                        .id(regular)
-                        .transition(.opacity)
-                }
-                .animation(FullUIPlayerChrome.glassTransitionAnimation, value: regular)
+                Color.clear.glassEffect(glass, in: glassShape)
             }
         } else {
             content.background(.ultraThinMaterial, in: glassShape)
@@ -178,7 +123,6 @@ struct FullUIPlayerGlassGroup<Content: View>: View {
         // A glass container makes this single capsule refract its own labels.
         HStack(spacing: 0, content: content)
             .fullUIPlayerGlass(in: Capsule())
-            .fullUIPlayerShadow(in: Capsule())
             .environment(\.colorScheme, .dark)
     }
 }
@@ -199,7 +143,6 @@ struct FullUIPlayerDanmakuStatus: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .fullUIPlayerGlass(in: Capsule(), interactive: false)
-                    .fullUIPlayerShadow(in: Capsule())
                     .padding(.bottom, controlsVisible ? 52 + controlBottomInset : 24)
                     .transition(.opacity)
             }
