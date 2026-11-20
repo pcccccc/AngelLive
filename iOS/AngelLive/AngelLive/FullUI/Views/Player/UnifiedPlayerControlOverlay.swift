@@ -223,18 +223,21 @@ struct UnifiedPlayerControlOverlay: View {
     private func landscapeControls(_ layout: FullUILandscapePlayerLayout) -> some View {
         let locked = bridge.isLocked.wrappedValue
         let showsControls = isMaskVisible && !isScrubbing
+        let topSpacing: CGFloat = 12
 
         return GeometryReader { geometry in
             if !locked {
                 VStack(spacing: 0) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: topSpacing) {
+                        FullUIPlayerBackButton(symbolAlignment: .center, action: handleBackButton)
+                            .modifier(ChromeVisibility(visible: showsControls || showsRoomBanner, reduceMotion: reduceMotion))
+
                         if showsRoomBanner {
-                            roomBanner(maximumWidth: roomBannerWidth(in: geometry.size.width, layout: layout))
-                                .transition(.opacity)
-                        } else {
-                            chromeButton("chevron.backward", label: "返回", action: handleBackButton)
-                                .fullUIPlayerGlass(in: Circle())
-                                .modifier(ChromeVisibility(visible: showsControls, reduceMotion: reduceMotion))
+                            roomBanner(
+                                maximumWidth: roomBannerWidth(in: geometry.size.width, layout: layout,
+                                                              reservedWidth: FullUIPlayerChrome.controlSize + topSpacing)
+                            )
+                            .transition(.opacity)
                         }
                         Spacer(minLength: 0)
                         fullscreenTopActions
@@ -284,26 +287,24 @@ struct UnifiedPlayerControlOverlay: View {
         }
     }
 
-    private func roomBannerWidth(in viewportWidth: CGFloat, layout: FullUILandscapePlayerLayout) -> CGFloat {
-        let preferredWidth = min(320, viewportWidth * 0.52)
+    private func roomBannerWidth(
+        in viewportWidth: CGFloat, layout: FullUILandscapePlayerLayout, reservedWidth: CGFloat
+    ) -> CGFloat {
+        let preferredWidth = max(0, min(320, viewportWidth * 0.52) - reservedWidth)
         // Keep the existing concentric inset on displays with shallow corners.
         guard layout.insets.top < FullUILandscapePlayerStatus.bottomEdge else { return preferredWidth }
-        let widthBeforeStatus = viewportWidth / 2 - FullUILandscapePlayerStatus.halfWidthWithClearance - layout.insets.leading
+        let widthBeforeStatus = viewportWidth / 2 - FullUILandscapePlayerStatus.halfWidthWithClearance
+            - layout.insets.leading - reservedWidth
         return min(preferredWidth, max(0, widthBeforeStatus))
     }
 
     private func roomBanner(maximumWidth: CGFloat) -> some View {
-        Button(action: handleBackButton) {
-            FullUIPlayerRoomIdentity(room: viewModel.currentRoom)
-                .padding(.leading, 8)
-                .padding(.trailing, 12)
-                .frame(height: FullUIPlayerChrome.controlSize)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: maximumWidth, alignment: .leading)
-        .accessibilityHint("返回")
-        .fullUIPlayerGlass(in: Capsule(), interactive: false)
+        FullUIPlayerRoomIdentity(room: viewModel.currentRoom)
+            .padding(.leading, 8)
+            .padding(.trailing, 12)
+            .frame(height: FullUIPlayerChrome.controlSize)
+            .frame(maxWidth: maximumWidth, alignment: .leading)
+            .fullUIPlayerGlass(in: Capsule(), interactive: false)
     }
 
     #if canImport(KSPlayer)
@@ -351,8 +352,7 @@ struct UnifiedPlayerControlOverlay: View {
         ZStack {
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    chromeButton("chevron.backward", label: "返回", action: handleBackButton)
-                        .fullUIPlayerGlass(in: Circle())
+                    FullUIPlayerBackButton(action: handleBackButton)
                     Spacer(minLength: 0)
                     FullUIPlayerGlassGroup {
                         if bridge.supportsPictureInPicture {
@@ -416,8 +416,7 @@ struct UnifiedPlayerControlOverlay: View {
 
     private var fullscreenTopBar: some View {
         HStack(spacing: 12) {
-            chromeButton("chevron.backward", label: "返回", action: handleBackButton)
-                .fullUIPlayerGlass(in: Circle())
+            FullUIPlayerBackButton(action: handleBackButton)
 
             FullUIPlayerName(
                 viewModel.currentRoom.userName.isEmpty ? viewModel.currentRoom.roomTitle : viewModel.currentRoom.userName,

@@ -102,18 +102,10 @@ struct VerticalLiveControllerView: View {
     private func topBar(maximumStreamerWidth: CGFloat) -> some View {
         VStack {
             HStack(spacing: 12) {
-                Button {
+                // Keep the 44 pt slot so the capsule stays at inset + 44 + 12.
+                FullUIPlayerBackButton {
                     dismiss()
-                } label: {
-                    Image(systemName: "chevron.backward")
-                        .font(FullUIPlayerChrome.symbolFont)
-                        .foregroundStyle(.white)
-                        .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
-                        .fullUIPlayerGlass(in: Circle())
-                        .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("返回")
 
                 FullUIPlayerGlassGroup {
                     streamerControls(maximumWidth: maximumStreamerWidth)

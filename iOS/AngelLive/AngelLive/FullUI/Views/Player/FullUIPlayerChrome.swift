@@ -44,6 +44,29 @@ extension View {
     }
 }
 
+struct FullUIPlayerBackButton: View {
+    var symbolAlignment: Alignment = .leading
+    var label: LocalizedStringKey = "返回"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            // Align the symbol's intrinsic bounds inside the 44 pt hit area.
+            // The leading alignment uses the existing edge inset, and center
+            // keeps the symbol on the former landscape circle's center.
+            Image(systemName: "chevron.backward")
+                .font(FullUIPlayerChrome.symbolFont)
+                .foregroundStyle(.white)
+                .fullUIPlayerMediaText()
+                .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize,
+                       alignment: symbolAlignment)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
 struct FullUIPlayerTimeLabel: View {
     let time: Double
 

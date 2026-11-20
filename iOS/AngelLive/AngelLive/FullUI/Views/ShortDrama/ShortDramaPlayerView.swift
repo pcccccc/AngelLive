@@ -845,21 +845,17 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func topControls(metrics: ShortDramaPanelMetrics) -> some View {
+    private func topControls(metrics: ShortDramaPanelMetrics, backAlignment: Alignment = .leading) -> some View {
         let exitsLandscape = verticalSizeClass == .compact && orientation.permitsOrientationRequests
 
         return HStack {
-            Button {
+            FullUIPlayerBackButton(symbolAlignment: backAlignment, label: exitsLandscape ? "退出全屏" : "返回") {
                 if exitsLandscape {
                     orientation.exitLandscape()
                 } else {
                     dismiss()
                 }
-            } label: {
-                topControlLabel("chevron.backward")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(exitsLandscape ? "退出全屏" : "返回")
 
             Spacer()
 
@@ -918,7 +914,7 @@ struct ShortDramaPlayerView: View {
         GeometryReader { geometry in
             if !isLocked {
                 VStack(spacing: 0) {
-                    regularControls(topControls(metrics: metrics))
+                    regularControls(topControls(metrics: metrics, backAlignment: .center))
                     Spacer(minLength: 0)
                     VStack(spacing: FullUILandscapePlayerLayout.progressGap) {
                         progressControl(landscape: true)
