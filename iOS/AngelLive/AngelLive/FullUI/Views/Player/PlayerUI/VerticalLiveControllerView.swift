@@ -65,7 +65,10 @@ struct VerticalLiveControllerView: View {
                     bottomRightArea
                 }
                 .modifier(PortraitControlsOffset(
-                    motion: controlsMotion, width: geometry.size.width, visible: visible, reduceMotion: reduceMotion
+                    motion: viewModel.isOnDemand ? nil : controlsMotion,
+                    width: geometry.size.width,
+                    visible: visible,
+                    reduceMotion: reduceMotion
                 ))
                 .allowsHitTesting(visible)
                 .accessibilityHidden(!visible)
@@ -310,7 +313,7 @@ struct VerticalLiveControllerView: View {
         MoreActionsButton(
             room: viewModel.currentRoom,
             onClearChat: {
-                if let portraitRoomPageActions {
+                if !viewModel.isOnDemand, let portraitRoomPageActions {
                     portraitRoomPageActions.setControlsVisible(false)
                 } else {
                     controlsVisible.wrappedValue = false

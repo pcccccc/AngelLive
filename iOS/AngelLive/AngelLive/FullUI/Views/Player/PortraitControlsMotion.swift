@@ -90,7 +90,12 @@ struct PortraitControlsOffset: ViewModifier {
         } else {
             content
                 .opacity(visible ? 1 : 0)
-                .animation(.easeInOut(duration: 0.2), value: visible)
+                .animation(
+                    motion == nil
+                        ? FullUIPlayerChrome.visibilityAnimation(visible, reduceMotion: reduceMotion)
+                        : .easeInOut(duration: 0.2),
+                    value: visible
+                )
         }
     }
 }

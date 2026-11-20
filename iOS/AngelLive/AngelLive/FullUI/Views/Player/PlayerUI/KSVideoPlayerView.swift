@@ -195,6 +195,7 @@ public struct KSVideoPlayerView: View {
         let gestures = PlayerGestureView(
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
+            onHorizontalSwipe: verticalOnDemandSwipeAction,
             adjustsBrightnessAndVolumeWithDrag: !isVerticalLiveMode,
             edgePassthroughWidth: reservesBackEdge ? LiveRoomNavigationState.playerBackEdgeWidth : 0,
             preventsInteractiveDismissal: true,
@@ -211,7 +212,7 @@ public struct KSVideoPlayerView: View {
                     .accessibilityLabel("直播画面")
                     .accessibilityValue(verticalLiveControlsVisible.wrappedValue ? "控制层已显示" : "已清屏")
                     .accessibilityAction(named: Text(verticalLiveControlsVisible.wrappedValue ? "清屏" : "显示控制层")) {
-                        toggleVerticalLiveControls()
+                        setVerticalControlsVisible(!verticalLiveControlsVisible.wrappedValue)
                     }
                     .accessibilityAction(named: Text(viewModel.isPlaying ? "暂停播放" : "继续播放")) {
                         toggleVerticalLivePlayback()
@@ -233,6 +234,11 @@ public struct KSVideoPlayerView: View {
         return toggleVerticalLivePlayback
     }
 
+    private var verticalOnDemandSwipeAction: ((PlayerHorizontalSwipeDirection) -> Void)? {
+        guard isVerticalLiveMode, viewModel.isOnDemand else { return nil }
+        return { setVerticalControlsVisible($0 == .right) }
+    }
+
     private func handleSingleTap() {
         guard !model.isLocked else { return }
         if model.showVideoSetting {
@@ -242,12 +248,16 @@ public struct KSVideoPlayerView: View {
         }
     }
 
-    private func toggleVerticalLiveControls() {
+    private func setVerticalControlsVisible(_ visible: Bool) {
         guard isVerticalLiveMode,
               !model.isLocked,
               portraitRoomPageActions?.isMoving() != true,
               !verticalLiveControlPopupPresented.wrappedValue else { return }
-        portraitRoomPageActions?.setControlsVisible(!verticalLiveControlsVisible.wrappedValue)
+        if viewModel.isOnDemand {
+            verticalLiveControlsVisible.wrappedValue = visible
+        } else {
+            portraitRoomPageActions?.setControlsVisible(visible)
+        }
     }
 
     @MainActor
