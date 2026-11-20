@@ -145,10 +145,10 @@ struct HistoryListView: View {
         #endif
 
         baseView
-            .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+            .roomPlayerPushDestination(navigationState) {
                 playerDestination(.push)
             }
-            .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            .roomPlayerZoomCover(navigationState) {
                 playerDestination(.zoom)
             }
     }

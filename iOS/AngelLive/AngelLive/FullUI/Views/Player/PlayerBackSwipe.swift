@@ -11,6 +11,8 @@ struct PlayerBackSwipe: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.fullUIRoomPlayerReturnPreview) private var returnPreview
+    @Environment(\.fullUIWindowContext) private var windowContext
     @State private var motion: Motion = .idle
 
     private enum Motion {
@@ -21,6 +23,15 @@ struct PlayerBackSwipe: ViewModifier {
     }
 
     private var direction: CGFloat { layoutDirection == .leftToRight ? 1 : -1 }
+
+    private var sourcePreview: RoomPlayerReturnPreview? {
+        guard !exitsFullscreen, let returnPreview, returnPreview.size == windowContext?.window?.bounds.size else {
+            return nil
+        }
+        return returnPreview
+    }
+
+    private var showsSource: Bool { revealsRoomList || sourcePreview != nil }
 
     private var spring: PortraitPlayerSpring? {
         guard case let .settling(spring, _) = motion else { return nil }
@@ -41,14 +52,37 @@ struct PlayerBackSwipe: ViewModifier {
     func body(content: Content) -> some View {
         TimelineView(.animation(paused: spring == nil)) { timeline in
             let offset = position(at: timeline.date)
+            let progress = width > 0 ? offset / width : 0
+            let source = sourcePreview
+            let showsSource = revealsRoomList || source != nil
             content
-                .offset(x: direction * offset)
-                .background {
-                    if !revealsRoomList && offset > 0 {
-                        Color.black.ignoresSafeArea()
+                .background(alignment: .leading) {
+                    if showsSource && progress > 0 {
+                        Rectangle()
+                            .fill(.black)
+                            .shadow(color: .black.opacity(0.25 * (1 - 0.3 * progress)), radius: 10, x: -4 * direction)
+                            .frame(width: 24)
+                            .ignoresSafeArea(edges: .vertical)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
+                }
+                .offset(x: direction * offset)
+                .background {
+                    ZStack {
+                        if let source {
+                            PlayerBackSourcePreview(snapshot: source.view)
+                                .frame(width: source.size.width, height: source.size.height)
+                                .offset(x: -direction * width * 0.3 * (1 - progress))
+                                .opacity(progress > 0 ? 1 : 0)
+                        }
+                        if progress > 0 {
+                            Color.black.opacity(showsSource ? 0.1 * (1 - progress) : 1)
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 }
                 .onChange(of: spring.map { reachedTarget($0, at: timeline.date) } == true) { _, finished in
                     if finished { finishSettlement() }
@@ -116,9 +150,8 @@ struct PlayerBackSwipe: ViewModifier {
     }
 
     private func settle(from position: CGFloat, velocity: CGFloat, returns: Bool) {
-        // A pushed destination covers the list until the stack pops. Keep the
-        // current frame visible when handing the gesture back to navigation.
-        if returns && !exitsFullscreen && !revealsRoomList {
+        // Without a visible source, commit at the current position instead of sliding to a blank page.
+        if returns && !exitsFullscreen && !showsSource {
             finish(returns: true, position: reduceMotion ? 0 : position)
             return
         }
@@ -149,6 +182,13 @@ struct PlayerBackSwipe: ViewModifier {
         motion = returns && !exitsFullscreen ? .dismissing(position: position) : .idle
         if returns { onReturn() }
     }
+}
+
+private struct PlayerBackSourcePreview: UIViewRepresentable {
+    let snapshot: UIView
+
+    func makeUIView(context: Context) -> UIView { snapshot }
+    func updateUIView(_ view: UIView, context: Context) {}
 }
 
 /// The presentation dismissal guard permits this recognizer on the player canvas.

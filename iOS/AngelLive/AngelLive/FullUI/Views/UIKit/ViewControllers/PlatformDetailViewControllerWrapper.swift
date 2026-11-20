@@ -109,10 +109,10 @@ struct PlatformDetailViewControllerWrapper: View {
 
     private var playerPresentation: some View {
         baseView
-            .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+            .roomPlayerPushDestination(navigationState) {
                 playerDestination(.push).fullUITabBarHidden()
             }
-            .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            .roomPlayerZoomCover(navigationState) {
                 playerDestination(.zoom)
             }
     }

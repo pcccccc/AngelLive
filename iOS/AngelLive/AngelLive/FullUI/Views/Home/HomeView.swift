@@ -99,7 +99,7 @@ private extension HomeView {
 
     var playerPresentation: some View {
         homeNavigation
-            .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            .roomPlayerZoomCover(navigationState) {
                 playerDestination(.zoom)
             }
     }
@@ -135,7 +135,7 @@ private extension HomeView {
             // the scroll offset used to decide visibility.
             .toolbar(.visible, for: .navigationBar)
             .homeNavigationEdgeEffect(isScrolled: showsNavigationTitle)
-            .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+            .roomPlayerPushDestination(navigationState) {
                 playerDestination(.push)
                     .toolbar(.hidden, for: .navigationBar)
             }
@@ -1993,11 +1993,11 @@ private struct HomeCategoryView: View {
             guard model.rooms.isEmpty else { return }
             await model.load(refresh: true)
         }
-        .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+        .roomPlayerPushDestination(navigationState) {
             playerDestination(.push)
                 .toolbar(.hidden, for: .navigationBar)
         }
-        .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+        .roomPlayerZoomCover(navigationState) {
             playerDestination(.zoom)
         }
     }

@@ -61,7 +61,7 @@ struct FavoriteView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+        .roomPlayerZoomCover(navigationState) {
             playerDestination(.zoom)
         }
     }
@@ -117,7 +117,7 @@ struct FavoriteView: View {
         .onChange(of: viewModel.cloudKitReady) { _, isReady in
             if isReady { showsCloudSyncDetails = false }
         }
-        .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+        .roomPlayerPushDestination(navigationState) {
             playerDestination(.push)
         }
     }

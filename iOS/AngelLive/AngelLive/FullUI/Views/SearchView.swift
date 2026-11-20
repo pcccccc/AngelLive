@@ -59,7 +59,7 @@ struct SearchView: View {
 
     var body: some View {
         searchPage
-            .fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            .roomPlayerZoomCover(navigationState) {
                 playerDestination(.zoom)
             }
     }
@@ -197,7 +197,7 @@ struct SearchView: View {
             }
         }
 
-        content.navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+        content.roomPlayerPushDestination(navigationState) {
             playerDestination(.push)
         }
     }

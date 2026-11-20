@@ -45,7 +45,8 @@ struct BlurredBackgroundView: View {
                         .blendMode(.darken)
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 }
-            
+                // The fill, blur and scale can otherwise spill past the moving player edge.
+                .clipped()
         }
         .background(.black)
     }

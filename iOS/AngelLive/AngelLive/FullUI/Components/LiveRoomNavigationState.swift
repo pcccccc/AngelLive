@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -23,6 +24,8 @@ class LiveRoomNavigationState {
     /// 是否显示播放器
     private(set) var showPlayer = false
     private var entryAnimation: RoomEntryAnimation = .zoom
+    @ObservationIgnored fileprivate weak var returnSourceView: UIView?
+    @ObservationIgnored fileprivate private(set) var returnPreview: RoomPlayerReturnPreview?
 
     /// 当前选中的房间
     var currentRoom: LiveModel?
@@ -48,6 +51,10 @@ class LiveRoomNavigationState {
         } else {
             entryAnimation = .push
         }
+        if !showPlayer, !ShortDramaRouting.isShortDrama(room), let window = returnSourceView?.window {
+            // Capture the rendered source before the player covers it or the stack detaches it.
+            returnPreview = RoomPlayerReturnPreview(window: window)
+        }
         currentRoom = room
         self.categoryRooms = categoryRooms
         self.categoryContext = categoryContext
@@ -67,10 +74,63 @@ class LiveRoomNavigationState {
     /// 关闭播放器
     func dismiss() {
         showPlayer = false
+        returnPreview = nil
         currentRoom = nil
         categoryRooms = []
         categoryContext = nil
         transitionSourceID = nil
+    }
+}
+
+struct RoomPlayerReturnPreview {
+    let view: UIView
+    let size: CGSize
+
+    init?(window: UIWindow) {
+        guard let snapshot = window.snapshotView(afterScreenUpdates: false) else { return nil }
+        view = snapshot
+        size = window.bounds.size
+    }
+}
+
+private struct RoomPlayerReturnSource: UIViewRepresentable {
+    let navigationState: LiveRoomNavigationState
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        navigationState.returnSourceView = view
+    }
+}
+
+extension View {
+    func roomPlayerPushDestination<Destination: View>(
+        _ navigationState: LiveRoomNavigationState,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        background {
+            RoomPlayerReturnSource(navigationState: navigationState)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
+            destination()
+                .environment(\.fullUIRoomPlayerReturnPreview, navigationState.returnPreview)
+        }
+    }
+
+    func roomPlayerZoomCover<Destination: View>(
+        _ navigationState: LiveRoomNavigationState,
+        @ViewBuilder destination: @escaping () -> Destination
+    ) -> some View {
+        fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
+            destination()
+                .environment(\.fullUIRoomPlayerReturnPreview, navigationState.returnPreview)
+        }
     }
 }
 
@@ -96,6 +156,7 @@ private struct LiveRoomNavigationStateKey: EnvironmentKey {
 
 extension EnvironmentValues {
     @Entry var fullUIRoomPlayerPushed = false
+    @Entry var fullUIRoomPlayerReturnPreview: RoomPlayerReturnPreview?
 
     var liveRoomNavigationState: LiveRoomNavigationState? {
         get { self[LiveRoomNavigationStateKey.self] }
