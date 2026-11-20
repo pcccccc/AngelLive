@@ -417,6 +417,8 @@ private struct PortraitPageOffset: ViewModifier {
     }
 }
 
+final class PortraitRoomPanGestureRecognizer: UIPanGestureRecognizer {}
+
 @available(iOS 18.0, *)
 private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     let shouldBegin: () -> Bool
@@ -430,7 +432,7 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     }
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
-        let pan = UIPanGestureRecognizer()
+        let pan = PortraitRoomPanGestureRecognizer()
         pan.maximumNumberOfTouches = 1
         pan.delegate = context.coordinator
         return pan
