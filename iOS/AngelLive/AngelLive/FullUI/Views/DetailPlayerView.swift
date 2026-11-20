@@ -51,8 +51,8 @@ struct DetailPlayerView: View {
             }
         }
         .fullUIWindowContext()
-        // 保留 zoom 转场，关闭系统的下拉和捏合退出手势，避免与播放器手势冲突。
-        .interactiveDismissDisabled()
+        // 缩放呈现关闭系统下拉和捏合退出。推入由导航栈处理交互返回。
+        .interactiveDismissDisabled(!isPushed)
     }
 }
 
@@ -189,10 +189,6 @@ struct LiveDetailPlayerView: View {
 
     private var currentPluginID: String? {
         SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)?.pluginId
-    }
-
-    private var shouldHideSystemBackButton: Bool {
-        true
     }
 
     private var shouldEnableInteractivePopGesture: Bool {
@@ -469,7 +465,8 @@ struct LiveDetailPlayerView: View {
         }
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
-        .navigationBarBackButtonHidden(shouldHideSystemBackButton)
+        // 推入时由外层隐藏整条导航栏，保留栈原生返回项对应的手势。
+        .navigationBarBackButtonHidden(!isPushed)
         .interactivePopGestureEnabled(shouldEnableInteractivePopGesture, edgeOnly: isPushed)
         .onChange(of: viewModel.currentRoom.id) { _, _ in
             verticalLiveControlsVisible = true
