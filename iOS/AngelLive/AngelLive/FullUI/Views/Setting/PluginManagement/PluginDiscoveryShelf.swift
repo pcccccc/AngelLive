@@ -28,14 +28,41 @@ struct PluginDiscoveryShelf: View {
                 }
             } else {
                 ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: PluginManagementLayout.iconTextSpacing) {
+                    PluginDiscoveryRow(spacing: PluginManagementLayout.iconTextSpacing) {
                         ForEach(items) { item in
                             PluginDiscoveryCard(item: item, canOperate: canOperate, open: { open(item) }, action: { action(item, $0) })
                         }
-                    }.fixedSize(horizontal: false, vertical: true).scrollTargetLayout()
+                    }.scrollTargetLayout()
                 }.fixedSize(horizontal: false, vertical: true)
                     .scrollIndicators(.hidden).scrollTargetBehavior(.viewAligned)
             }
+        }
+    }
+}
+
+private struct PluginDiscoveryRow: Layout {
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        var rowSize = CGSize(width: spacing * CGFloat(max(0, subviews.count - 1)), height: 0)
+        for card in subviews {
+            let naturalSize = card.sizeThatFits(.unspecified)
+            rowSize.width += naturalSize.width
+            rowSize.height = max(rowSize.height, naturalSize.height)
+        }
+        return rowSize
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for card in subviews {
+            let width = card.sizeThatFits(.unspecified).width
+            card.place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: width, height: bounds.height)
+            )
+            x += width + spacing
         }
     }
 }
@@ -54,7 +81,7 @@ struct PluginDiscoveryCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             Button(action: open) {
                 VStack(alignment: .leading, spacing: 6) {
                     PluginManagementIcon(pluginID: item.pluginID, displayName: item.name, remoteIcon: item.remote?.item.icon)
@@ -68,6 +95,7 @@ struct PluginDiscoveryCard: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(PluginPressButtonStyle())
+            Spacer(minLength: 0)
             ViewThatFits(in: .horizontal) {
                 HStack {
                     metadata(wraps: false).layoutPriority(1)
@@ -79,12 +107,13 @@ struct PluginDiscoveryCard: View {
                     PluginActionButton(item: item, canOperate: canOperate, action: action)
                 }
             }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 6)
         }
         .padding(PluginManagementLayout.contentInset)
         .containerRelativeFrame(.horizontal, alignment: .leading) { availableWidth, _ in
             min(availableWidth * (dynamicTypeSize.isAccessibilitySize ? 1 : 0.70), maximumReadingWidth)
         }
-        .fixedSize(horizontal: false, vertical: true)
         .background(PluginManagementLayout.cardBackground, in: RoundedRectangle(cornerRadius: PluginManagementLayout.cardRadius, style: .continuous))
     }
 
