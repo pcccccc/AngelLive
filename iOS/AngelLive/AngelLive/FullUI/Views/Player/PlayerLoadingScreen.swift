@@ -26,13 +26,15 @@ struct PlayerLoadingDiagnostics {
 struct PlayerLoadingScreen: View {
     let room: LiveModel
     var diagnostics = PlayerLoadingDiagnostics()
-    var prefersLowerAlignment = false
+    var verticalCenter = Self.detailCenter
 
+    static let detailCenter: CGFloat = 0.5
+    static let portraitCenter: CGFloat = 0.63
     static let fade = Animation.easeOut(duration: 0.2)
 
     var body: some View {
         GeometryReader { geometry in
-            let centerY = geometry.size.height * (prefersLowerAlignment ? 0.63 : 0.5)
+            let centerY = geometry.size.height * verticalCenter
             let contentHeight = 2 * min(centerY, geometry.size.height - centerY)
 
             ZStack {
@@ -116,6 +118,39 @@ struct PlayerLoadingScreen: View {
             .frame(width: 48, height: 48)
             .background(.white.opacity(0.15), in: Circle())
             .accessibilityHidden(true)
+    }
+}
+
+/// Resizes the existing loading screen as a viewport so the cover stays cropped
+/// and text can reflow at its normal size throughout the move to the small player.
+struct PlayerEntryLoadingViewport: View, Animatable {
+    let room: LiveModel
+    let diagnostics: PlayerLoadingDiagnostics
+    let size: CGSize
+    let safeArea: EdgeInsets
+    let playerHeight: CGFloat
+    var detailProgress: CGFloat
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    var animatableData: CGFloat {
+        get { detailProgress }
+        set { detailProgress = newValue }
+    }
+
+    var body: some View {
+        let full = 1 - min(1, max(0, detailProgress))
+        let fullHeight = size.height + safeArea.top + safeArea.bottom
+        let direction: CGFloat = layoutDirection == .leftToRight ? 1 : -1
+        PlayerLoadingScreen(
+            room: room, diagnostics: diagnostics,
+            verticalCenter: PlayerLoadingScreen.detailCenter
+                + full * (PlayerLoadingScreen.portraitCenter - PlayerLoadingScreen.detailCenter)
+        )
+        .frame(
+            width: size.width + full * (safeArea.leading + safeArea.trailing),
+            height: playerHeight + full * (fullHeight - playerHeight)
+        )
+        .offset(x: -direction * full * safeArea.leading, y: -full * safeArea.top)
     }
 }
 

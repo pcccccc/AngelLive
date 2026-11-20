@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct PortraitPlayerSpring {
-    private static let spring = Spring(response: 0.35, dampingRatio: 0.9)
+    static let response = 0.35
+    static let dampingRatio = 0.9
+    private static let spring = Spring(response: response, dampingRatio: dampingRatio)
     private let start = Date.now
     private let from: CGFloat
     let to: CGFloat

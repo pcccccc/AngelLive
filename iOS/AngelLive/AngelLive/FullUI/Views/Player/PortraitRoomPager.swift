@@ -55,7 +55,7 @@ struct PortraitRoomPager: ViewModifier {
             ForEach(loadingPages) { page in
                 let isCover = page.offset == 0
                 let diagnostics = isCover && page.room == playback.room ? loadingDiagnostics : PlayerLoadingDiagnostics()
-                PlayerLoadingScreen(room: page.room, diagnostics: diagnostics, prefersLowerAlignment: true)
+                PlayerLoadingScreen(room: page.room, diagnostics: diagnostics, verticalCenter: PlayerLoadingScreen.portraitCenter)
                     .ignoresSafeArea(.container)
                     .offset(y: page.offset)
                     .transition(.opacity)

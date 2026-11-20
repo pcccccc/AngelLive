@@ -64,6 +64,9 @@ struct PlayerContentView: View {
     var showsPortraitRoomSwitcher = false
     var keepsPortraitLayoutWhileDetecting = false
     var pendingLoadingRoom: LiveModel?
+    var isCoveredByEntryLoading = false
+    var onEntryVideoSize: (@MainActor (CGSize) -> Void)?
+    var entryVLCPlaybackStarted: Binding<Bool>?
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var detectedVideoSize: CGSize?
@@ -135,7 +138,7 @@ struct PlayerContentView: View {
             )
             .background(usesExpandedLayout || isFullscreen ? Color.black : Color.clear)
             .overlay(alignment: .top) {
-                if let notice = visibleRecoveryNotice {
+                if !isCoveredByEntryLoading, let notice = visibleRecoveryNotice {
                     PlayerRecoveryNoticeBanner(notice: notice)
                         .padding(.top, 16)
                         .padding(.horizontal, 16)
@@ -144,7 +147,8 @@ struct PlayerContentView: View {
             }
             .simultaneousGesture(roomSwitcherGesture(in: geometry.size))
             .accessibilityActions {
-                if !viewModel.isOnDemand, !showsPortraitRoomSwitcher || verticalLiveControlsVisible.wrappedValue {
+                if !isCoveredByEntryLoading, !viewModel.isOnDemand,
+                   !showsPortraitRoomSwitcher || verticalLiveControlsVisible.wrappedValue {
                     Button("快速换台", action: presentRoomSwitcher)
                 }
             }
@@ -350,20 +354,23 @@ struct PlayerContentView: View {
 
             loadingScreen
 
-            if let playURL = viewModel.currentPlayURL {
+            if !isCoveredByEntryLoading, let playURL = viewModel.currentPlayURL {
                 playerOverlays(playURL: playURL)
             }
         }
     }
 
     private var loadingScreen: some View {
-        let room = portraitRoomLoadingCovered ? nil : loadingRoom
+        let room = portraitRoomLoadingCovered || isCoveredByEntryLoading ? nil : loadingRoom
         return ZStack {
             if let room {
                 let diagnostics = room == viewModel.currentRoom
                     ? PlayerLoadingDiagnostics(viewModel: viewModel, layer: useKSPlayer ? playerCoordinator.playerLayer : nil)
                     : PlayerLoadingDiagnostics()
-                PlayerLoadingScreen(room: room, diagnostics: diagnostics, prefersLowerAlignment: isVerticalLiveMode)
+                PlayerLoadingScreen(
+                    room: room, diagnostics: diagnostics,
+                    verticalCenter: isVerticalLiveMode ? PlayerLoadingScreen.portraitCenter : PlayerLoadingScreen.detailCenter
+                )
                     .ignoresSafeArea(isFullscreen || isVerticalLiveMode ? .container : [], edges: .all)
                     .allowsHitTesting(false)
                     .transition(.asymmetric(insertion: .identity, removal: .opacity))
@@ -574,7 +581,16 @@ struct PlayerContentView: View {
             case .playing:
                 viewModel.isPlaying = true
                 hasVLCStartedPlayback = true
-            case .paused, .stopped, .error:
+                if viewModel.currentPlayURL == playURL {
+                    entryVLCPlaybackStarted?.wrappedValue = true
+                }
+            case .error:
+                viewModel.isPlaying = false
+                if isCoveredByEntryLoading, viewModel.currentPlayURL == playURL,
+                   vlcPlaybackController.isSessionActive {
+                    viewModel.playErrorMessage = "播放失败"
+                }
+            case .paused, .stopped:
                 viewModel.isPlaying = false
             case .buffering:
                 break
@@ -739,6 +755,7 @@ struct PlayerContentView: View {
             hasDetectedSize = true
             detectedVideoSize = naturalSize
         }
+        onEntryVideoSize?(naturalSize)
         Logger.debug("视频画幅已确认: \(naturalSize.width) x \(naturalSize.height), vertical=\(isPortrait)", category: .player)
         return true
     }
