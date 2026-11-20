@@ -128,10 +128,10 @@ struct ShortDramaPlayerView: View {
                         // The 16 pt gap starts at the visible track, inside that region.
                         let trackToTitle = 16 - (ShortDramaProgressSlider.hitHeight - ShortDramaProgressSlider.visibleTrackHeight) / 2
                         VStack(spacing: trackToTitle) {
-                            progressControl(landscape: false)
+                            progressControl(portraitGeometry: geometry)
                             regularControls(portraitDock(metrics: panelMetrics))
+                                .padding(.horizontal, dockInset)
                         }
-                        .padding(.horizontal, dockInset)
                         .padding(.bottom, dockInset)
                     }
                 }
@@ -910,7 +910,7 @@ struct ShortDramaPlayerView: View {
                     regularControls(topControls(metrics: metrics, centersBackSymbol: true))
                     Spacer(minLength: 0)
                     VStack(spacing: FullUILandscapePlayerLayout.progressGap) {
-                        progressControl(landscape: true)
+                        progressControl()
                         regularControls(
                             bottomButtons(metrics: metrics, landscape: true)
                                 .fullUIPlayerGlassContainer(spacing: 0)
@@ -954,45 +954,59 @@ struct ShortDramaPlayerView: View {
             )
     }
 
-    private func progressControl(landscape: Bool) -> some View {
+    private func progressControl(portraitGeometry: GeometryProxy? = nil) -> some View {
+        let landscape = portraitGeometry == nil
         let showsProgress = controlsAvailable && (controlsVisible || !landscape)
-        let reservesTimeLabels = controlsVisible || landscape
         let showsProgressControls = showsProgress && controlsVisible
+        let visibilityAnimation: Animation? = !landscape && reduceMotion
+            ? nil : FullUIPlayerChrome.visibilityAnimation(showsProgressControls, reduceMotion: reduceMotion)
 
-        return HStack(spacing: 8) {
-            if reservesTimeLabels {
-                progressTime(currentTime)
-                    .transition(.opacity)
-            }
+        let slider = ShortDramaProgressSlider(
+            value: $seekValue,
+            range: 0...max(duration, 1),
+            isEnabled: canInteractWithProgress,
+            accessibilityLabel: "播放进度",
+            accessibilityValue: "\(fullUIPlayerTime(isSeeking ? seekValue : currentTime)) / \(fullUIPlayerTime(duration))",
+            onEditingChanged: { editing in
+                if editing { beginSeek() }
+            },
+            onCommit: commitSeek,
+            showsCompactTrack: !controlsVisible && !landscape,
+            onCancel: cancelSeek
+        )
+        .frame(maxWidth: .infinity)
 
-            ShortDramaProgressSlider(
-                value: $seekValue,
-                range: 0...max(duration, 1),
-                isEnabled: canInteractWithProgress,
-                accessibilityLabel: "播放进度",
-                accessibilityValue: "\(fullUIPlayerTime(isSeeking ? seekValue : currentTime)) / \(fullUIPlayerTime(duration))",
-                onEditingChanged: { editing in
-                    if editing { beginSeek() }
-                },
-                onCommit: commitSeek,
-                showsCompactTrack: !controlsVisible && !landscape,
-                onCancel: cancelSeek
-            )
-            .frame(maxWidth: .infinity)
-
-            if reservesTimeLabels {
-                progressTime(duration)
-                    .transition(.opacity)
+        return Group {
+            if let geometry = portraitGeometry {
+                let safeArea = geometry.safeAreaInsets
+                let fullSize = CGSize(
+                    width: geometry.size.width + safeArea.leading + safeArea.trailing,
+                    height: ShortDramaProgressSlider.hitHeight
+                )
+                PortraitProgressLayout(size: fullSize, safeArea: safeArea, controlsVisibility: controlsVisible ? 1 : 0) {
+                    progressTime(currentTime)
+                        .opacity(controlsVisible ? 1 : 0)
+                    slider
+                    progressTime(duration)
+                        .opacity(controlsVisible ? 1 : 0)
+                }
+                // Expand the GeometryReader's safe-area width to the full viewport.
+                .padding(EdgeInsets(
+                    top: 0, leading: -safeArea.leading, bottom: 0, trailing: -safeArea.trailing
+                ))
+            } else {
+                HStack(spacing: 8) {
+                    progressTime(currentTime)
+                    slider
+                    progressTime(duration)
+                }
             }
         }
         .frame(height: ShortDramaProgressSlider.hitHeight)
         .opacity(showsProgress ? 1 : 0)
         .allowsHitTesting(canInteractWithProgress)
         .accessibilityHidden(!canInteractWithProgress)
-        .animation(
-            FullUIPlayerChrome.visibilityAnimation(showsProgressControls, reduceMotion: reduceMotion),
-            value: showsProgressControls
-        )
+        .animation(visibilityAnimation, value: showsProgressControls)
         .onChange(of: currentTime) { _, newValue in
             if !isSeeking { seekValue = min(max(newValue, 0), max(duration, 1)) }
         }
@@ -1000,6 +1014,47 @@ struct ShortDramaPlayerView: View {
             if isSeeking, !seekCommitInFlight, let playback = model.playback {
                 seekPreview.update(id: playback.id, url: playback.url, quality: playback.quality, targetTime: value)
             }
+        }
+    }
+
+    private struct PortraitProgressLayout: Layout {
+        private static let edgeInset: CGFloat = 16
+        private static let labelSpacing: CGFloat = 8
+
+        let size: CGSize
+        let safeArea: EdgeInsets
+        var controlsVisibility: CGFloat
+
+        var animatableData: CGFloat {
+            get { controlsVisibility }
+            set { controlsVisibility = newValue }
+        }
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            size
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let leading = safeArea.leading + Self.edgeInset
+            let trailing = safeArea.trailing + Self.edgeInset
+            let start = subviews[0]
+            let end = subviews[2]
+            let startWidth = start.sizeThatFits(.unspecified).width
+            let endWidth = end.sizeThatFits(.unspecified).width
+            let trackStart = bounds.minX + (leading + startWidth + Self.labelSpacing) * controlsVisibility
+            let trackEnd = bounds.maxX - (trailing + endWidth + Self.labelSpacing) * controlsVisibility
+
+            start.place(
+                at: CGPoint(x: bounds.minX + leading, y: bounds.midY), anchor: .leading, proposal: .unspecified
+            )
+            subviews[1].place(
+                at: CGPoint(x: trackStart, y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(width: max(0, trackEnd - trackStart), height: bounds.height)
+            )
+            end.place(
+                at: CGPoint(x: bounds.maxX - trailing, y: bounds.midY), anchor: .trailing, proposal: .unspecified
+            )
         }
     }
 

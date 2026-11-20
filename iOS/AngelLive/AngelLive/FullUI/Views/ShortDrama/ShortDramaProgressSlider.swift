@@ -212,7 +212,7 @@ final class ShortDramaAccessibleSlider: UIControl {
         guard let context = UIGraphicsGetCurrentContext() else { return }
 
         let track = trackRect
-        let cornerRadius = track.height / 2
+        let cornerRadius = showsCompactTrack ? 0 : track.height / 2
         let showsEnabledColors = isEnabled || showsCompactTrack
         let inactiveAlpha: CGFloat = showsEnabledColors ? 0.38 : 0.18
         context.setFillColor(UIColor.white.withAlphaComponent(inactiveAlpha).cgColor)
