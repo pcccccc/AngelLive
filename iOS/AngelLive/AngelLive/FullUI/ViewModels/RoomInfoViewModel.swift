@@ -125,6 +125,8 @@ final class RoomInfoViewModel {
     @ObservationIgnored private var playbackRequestGeneration = UUID()
     @ObservationIgnored private var playbackDiagnosticsEnded = false
     @ObservationIgnored private var playbackDiagnosticsSuspended = false
+    @ObservationIgnored private var reconnectPlayhead: TimeInterval?
+    private var awaitingReconnectProgress = false
 
     @MainActor
     var playbackDiagnostics: PlaybackDiagnosticsSession {
@@ -136,7 +138,34 @@ final class RoomInfoViewModel {
 
     @MainActor var startupStage: PlaybackStartupStage { playbackDiagnostics.startupStage }
     @MainActor var recoveryNotice: PlaybackRecoveryNotice? { playbackDiagnostics.recoveryNotice }
-    @MainActor var hasObservedPlaybackProgress: Bool { playbackDiagnostics.hasStartedPlayback }
+    @MainActor var isResolvingPlaybackSource: Bool { isFetchingPlayURL && startupStage == .fetchingSource }
+    @MainActor var hasObservedPlaybackProgress: Bool {
+        playbackDiagnostics.hasStartedPlayback && !awaitingReconnectProgress
+    }
+
+    @MainActor
+    func hasPlaybackProgress(for layerURL: URL?) -> Bool {
+        guard let currentPlayURL, layerURL == currentPlayURL else { return false }
+        return hasObservedPlaybackProgress
+    }
+
+    #if canImport(KSPlayer)
+    @MainActor
+    func observeReconnectProgress(on layer: KSPlayerLayer) {
+        guard awaitingReconnectProgress, layer === watchedPlayerLayer,
+              layer.url == currentPlayURL, layer.player.isPlaying else { return }
+        let playhead = layer.player.currentPlaybackTime
+        guard playhead.isFinite else { return }
+        // The diagnostics flag sticks for a whole room. A replacement source
+        // must show its own forward progress, including reconnections to the same URL.
+        if let reconnectPlayhead, playhead > reconnectPlayhead + 0.05 {
+            awaitingReconnectProgress = false
+            self.reconnectPlayhead = nil
+        } else {
+            reconnectPlayhead = playhead
+        }
+    }
+    #endif
 
     @MainActor
     func interruptPlaybackDiagnostics() {
@@ -156,6 +185,8 @@ final class RoomInfoViewModel {
     private func recordAssignedSource() {
         guard !playbackDiagnosticsEnded,
               let args = currentRoomPlayArgs, args.indices.contains(currentCdnIndex) else { return }
+        awaitingReconnectProgress = playbackDiagnostics.hasStartedPlayback
+        reconnectPlayhead = nil
         playbackDiagnostics.sourceAssigned(
             pluginID: SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId ?? currentRoom.liveType.rawValue,
             lineID: args[currentCdnIndex].cdn,
@@ -338,6 +369,8 @@ final class RoomInfoViewModel {
         isOnDemand = false
         _playbackDiagnostics?.end()
         _playbackDiagnostics = nil
+        awaitingReconnectProgress = false
+        reconnectPlayhead = nil
         _recoveryCoordinator?.stop()
         _recoveryCoordinator = nil
         playbackDiagnosticsEnded = false

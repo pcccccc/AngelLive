@@ -130,7 +130,7 @@ struct LiveDetailPlayerView: View {
     @State private var portraitRoomSwitcherDetent = Self.portraitRoomSwitcherHalfDetent
     @State private var pendingPortraitRoom: LiveModel?
     @State private var selectedRoomSource: RoomSwitchSource
-    @State private var switchingRoomID: String?
+    @State private var switchingRoom: LiveModel?
     @State private var failedRoomID: String?
     @State private var roomSwitchFailureMessage: String?
     @State private var roomSwitchTask: Task<Void, Never>?
@@ -328,7 +328,8 @@ struct LiveDetailPlayerView: View {
                         isVerticalLiveMode: $isVerticalLiveMode,
                         videoAspectRatio: $videoAspectRatio,
                         showsPortraitRoomSwitcher: usesPortraitRoomSwitcher,
-                        keepsPortraitLayoutWhileDetecting: portraitSwitchRoomID == viewModel.currentRoom.id
+                        keepsPortraitLayoutWhileDetecting: portraitSwitchRoomID == viewModel.currentRoom.id,
+                        pendingLoadingRoom: portraitSwitchRoomID == nil ? switchingRoom : nil
                     )
                         .id("stable_player")
                         .environment(viewModel)
@@ -374,9 +375,11 @@ struct LiveDetailPlayerView: View {
                     && scenePhase == .active && !portraitPlayback.hasFailed
                     && !playerModel.isLocked && !verticalLiveControlPopupPresented
                     && !isPortraitRoomSwitcherPresented && !isRoomSwitcherPresented && pendingPortraitRoom == nil,
+                viewportWidth: geometry.size.width,
                 viewportHeight: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom,
                 availableHeight: geometry.size.height,
                 playback: portraitPlayback,
+                loadingDiagnostics: PlayerLoadingDiagnostics(viewModel: viewModel, layer: playerCoordinator.playerLayer),
                 currentPlayback: { portraitPlayback },
                 source: selectedRoomSource,
                 adjacentRoom: adjacentPortraitRoom,
@@ -793,7 +796,7 @@ struct LiveDetailPlayerView: View {
             history: switcherHistoryRooms ?? historyModel.watchList,
             category: switcherCategoryRooms,
             source: selectedRoomSource,
-            switchingRoomID: switchingRoomID,
+            switchingRoomID: switchingRoom?.id,
             failedRoomID: failedRoomID,
             failureMessage: roomSwitchFailureMessage,
             canLoadMoreCategory: canLoadMoreCategoryRooms,
@@ -803,10 +806,9 @@ struct LiveDetailPlayerView: View {
     }
 
     private var portraitPlayback: PortraitRoomPager.Playback {
-        let hasCurrentLayer = viewModel.currentPlayURL.map { playerCoordinator.playerLayer?.url == $0 } ?? false
-        return .init(
+        .init(
             room: viewModel.currentRoom,
-            hasProgress: hasCurrentLayer && viewModel.hasObservedPlaybackProgress,
+            hasProgress: viewModel.hasPlaybackProgress(for: playerCoordinator.playerLayer?.url),
             hasFailed: viewModel.playError != nil || viewModel.playErrorMessage != nil
                 || viewModel.displayState == .streamerOffline
         )
@@ -999,13 +1001,13 @@ struct LiveDetailPlayerView: View {
         showsConfirmation: Bool,
         portraitCompletion: ((Bool) -> Void)? = nil
     ) {
-        if portraitCompletion == nil, room == viewModel.currentRoom || switchingRoomID == room.id { return }
+        if portraitCompletion == nil, room == viewModel.currentRoom || switchingRoom == room { return }
         let previousTask = roomSwitchTask
         previousTask?.cancel()
         cancelRoomBanner()
         let requestID = UUID()
         roomSwitchRequestID = requestID
-        switchingRoomID = room.id
+        switchingRoom = room
         portraitSwitchRoomID = portraitCompletion == nil ? nil : room.id
         failedRoomID = nil
         roomSwitchFailureMessage = nil
@@ -1032,7 +1034,7 @@ struct LiveDetailPlayerView: View {
                 }
                 guard roomSwitchRequestID == requestID else { return }
 
-                switchingRoomID = nil
+                switchingRoom = nil
                 if portraitSwitchRoomID == room.id, portraitPlayback.hasProgress || portraitPlayback.hasFailed {
                     portraitSwitchRoomID = nil
                 }
@@ -1045,12 +1047,12 @@ struct LiveDetailPlayerView: View {
                 portraitCompletion?(true)
             } catch is CancellationError {
                 guard !Task.isCancelled, roomSwitchRequestID == requestID else { return }
-                switchingRoomID = nil
+                switchingRoom = nil
                 portraitSwitchRoomID = nil
                 portraitCompletion?(false)
             } catch {
                 guard !Task.isCancelled, roomSwitchRequestID == requestID else { return }
-                switchingRoomID = nil
+                switchingRoom = nil
                 portraitSwitchRoomID = nil
                 failedRoomID = requestRoomID
                 roomSwitchFailureMessage = error.localizedDescription

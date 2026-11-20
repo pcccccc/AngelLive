@@ -7,7 +7,6 @@
 
 import SwiftUI
 import Combine
-import SharedAssets
 import AngelLiveCore
 import AngelLiveDependencies
 import UIKit
@@ -64,6 +63,7 @@ struct PlayerContentView: View {
     @Binding var videoAspectRatio: CGFloat
     var showsPortraitRoomSwitcher = false
     var keepsPortraitLayoutWhileDetecting = false
+    var pendingLoadingRoom: LiveModel?
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var detectedVideoSize: CGSize?
@@ -74,9 +74,6 @@ struct PlayerContentView: View {
     @State private var isControlPopupOpen = false
     @StateObject private var vlcPlaybackController = VLCPlaybackController()
     @State private var hasVLCStartedPlayback = false
-    /// KSPlayer 路径首帧标志:state 第一次进入 .buffering / .bufferFinished 后置 true,
-    /// 直播流 state 在 KSPlayer 内可能长期停留在 .buffering(KSPlayer 视为 isPlaying),
-    /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
     /// VLC 模式下的控制层显示/隐藏状态
     @State private var vlcMaskShow: Bool = true
     /// VLC 模式下的锁定状态
@@ -99,6 +96,7 @@ struct PlayerContentView: View {
     @Environment(\.roomSwitcherPresentation) private var roomSwitcherPresentation: Binding<Bool>
     @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
     @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
+    @Environment(\.portraitRoomLoadingCovered) private var portraitRoomLoadingCovered
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     // 检测设备是否为横屏
@@ -256,6 +254,9 @@ struct PlayerContentView: View {
         #if canImport(KSPlayer)
         .onReceive(playerCoordinator.timemodel.$currentTime) { _ in
             guard useKSPlayer, let expectedURL = viewModel.currentPlayURL else { return }
+            if let layer = playerCoordinator.playerLayer {
+                viewModel.observeReconnectProgress(on: layer)
+            }
             _ = detectVideoSizeIfReady(expectedURL: expectedURL)
         }
         #endif
@@ -342,185 +343,186 @@ struct PlayerContentView: View {
     // MARK: - Player Content
 
     private var playerContent: some View {
-        Group {
-            // 如果有播放地址，显示播放器
+        ZStack {
             if let playURL = viewModel.currentPlayURL {
-                ZStack {
-                    compatiblePlayerSurface(playURL: playURL)
+                configuredPlayerSurface(playURL: playURL)
+            }
 
-                    if shouldShowLoading {
-                        #if canImport(KSPlayer)
-                        StreamLoadingOverlay(
-                            dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo,
-                            stage: viewModel.startupStage
-                        )
-                        #else
-                        StreamLoadingOverlay(dynamicInfo: nil, stage: viewModel.startupStage)
-                        #endif
-                    }
+            loadingScreen
 
-                    #if canImport(KSPlayer)
-                    if useKSPlayer {
-                        Color.clear
-                            .allowsHitTesting(false)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .liveSubtitleOverlay(
-                                coordinator: playerCoordinator,
-                                playback: viewModel.subtitlePlayback,
-                                playbackIdentity: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)",
-                                bottomPadding: isDeviceLandscape ? 48 : 16
-                            )
-                    }
-                    #endif
-
-                    // 竖屏直播模式使用专用控制层，普通模式使用统一控制层
-                    #if canImport(KSPlayer)
-                    if isVerticalLiveMode && useKSPlayer {
-                        VerticalLiveControllerView(
-                            model: playerModel,
-                            onOpenRoomSwitcher: portraitRoomSwitcherAction
-                        )
-                    } else {
-                        UnifiedPlayerControlOverlay(
-                            bridge: controlBridge,
-                            showVideoSetting: $showVideoSetting,
-                            showDanmakuSettings: $showDanmakuSettings,
-                            isPopupPresented: $isControlPopupOpen,
-                            playerLayer: { useKSPlayer ? playerCoordinator.playerLayer : nil }
-                        )
-                    }
-                    #else
-                    UnifiedPlayerControlOverlay(
-                        bridge: controlBridge,
-                        showVideoSetting: $showVideoSetting,
-                        showDanmakuSettings: $showDanmakuSettings,
-                        isPopupPresented: $isControlPopupOpen
-                    )
-                    #endif
-
-                    #if canImport(KSPlayer)
-                    if useKSPlayer && showVideoSetting {
-                        VideoSettingHUDView(model: playerModel, isShowing: $showVideoSetting)
-                            .padding(.trailing, 0)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                            .background(
-                                Color.black.opacity(0.001)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        showVideoSetting = false
-                                    }
-                            )
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
-                    }
-                    #endif
-                }
-                .animation(.easeInOut(duration: 0.3), value: showVideoSetting)
-                .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") { @MainActor in
-                    guard !Task.isCancelled, viewModel.currentPlayURL == playURL else { return }
-                    Logger.debug(
-                        "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",
-                        category: .player
-                    )
-                    detectedVideoSize = nil
-                    if useKSPlayer {
-                        #if canImport(KSPlayer)
-                        // Reset for every URL/kernel task before touching the player. The
-                        // layer can still expose the previous URL while the new one loads.
-                        if !keepsPortraitLayoutWhileDetecting {
-                            resetVideoGeometry()
-                        }
-                        hasDetectedSize = false
-                        configureModelIfNeeded(playURL: playURL)
-                        viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
-
-                        // 使用异步任务定期检查视频尺寸
-                        var retryCount = 0
-                        let maxRetries = 40 // 最多重试 40 次（10 秒）
-
-                        Logger.debug("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)", category: .player)
-
-                        while !Task.isCancelled && retryCount < maxRetries {
-                            // 已被 readyToPlay 回调提前设置，直接退出
-                            if hasDetectedSize { break }
-
-                            if detectVideoSizeIfReady(expectedURL: playURL) {
-                                break
-                            }
-
-                            retryCount += 1
-                            do {
-                                try await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
-                            } catch {
-                                return
-                            }
-                        }
-
-                        // 超时只保留默认 16:9；不要把未确认尺寸标记为已检测，
-                        // 后续 readyToPlay 仍需有机会采信真实视频尺寸。
-                        if retryCount >= maxRetries {
-                            await MainActor.run {
-                                guard !Task.isCancelled,
-                                      viewModel.currentPlayURL == playURL,
-                                      !hasDetectedSize else { return }
-                                resetVideoGeometry()
-                                Logger.warning(
-                                    "视频尺寸检测超时，保持默认 16:9: \(compactURL(playURL))",
-                                    category: .player
-                                )
-                            }
-                        }
-                        #endif
-                    } else {
-                        await MainActor.run {
-                            Logger.debug("[PlayerFlow] task prepare VLC defaults", category: .player)
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                videoAspectRatio = 16.0 / 9.0
-                                isVideoPortrait = false
-                                isVerticalLiveMode = false
-                                hasDetectedSize = true
-                                hasVLCStartedPlayback = false
-                            }
-                        }
-                    }
-                }
-                .onChange(of: playURL) { _ in
-                    Logger.debug("[PlayerFlow] playURL changed -> \(compactURL(playURL)), reset detect states", category: .player)
-                    // 切换视频时重置为默认 16:9 比例并重新检测
-                    if !keepsPortraitLayoutWhileDetecting {
-                        videoAspectRatio = 16.0 / 9.0
-                        isVideoPortrait = false
-                        isVerticalLiveMode = false
-                    }
-                    hasDetectedSize = false
-                    detectedVideoSize = nil
-                    hasVLCStartedPlayback = false
-                    if useKSPlayer && !keepsPortraitLayoutWhileDetecting {
-                        applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
-                    }
-                    // task(id: playURL.absoluteString) 会自动触发重新检测
-                }
-            } else {
-                if viewModel.isLoading {
-                    // 加载中 — 复用直播流加载层(Arc + "connecting")。
-                    StreamLoadingOverlay(dynamicInfo: nil, stage: viewModel.startupStage)
-                } else {
-                    // 封面图作为背景
-                    KFImage(URL(string: viewModel.currentRoom.roomCover))
-                        .placeholder {
-                            ZStack {
-                                Rectangle()
-                                    .fill(AppConstants.Colors.placeholderGradient())
-                                Image("placeholder")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .opacity(0.7)
-                            }
-                        }
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                }
+            if let playURL = viewModel.currentPlayURL {
+                playerOverlays(playURL: playURL)
             }
         }
+    }
+
+    private var loadingScreen: some View {
+        let room = portraitRoomLoadingCovered ? nil : loadingRoom
+        return ZStack {
+            if let room {
+                let diagnostics = room == viewModel.currentRoom
+                    ? PlayerLoadingDiagnostics(viewModel: viewModel, layer: useKSPlayer ? playerCoordinator.playerLayer : nil)
+                    : PlayerLoadingDiagnostics()
+                PlayerLoadingScreen(room: room, diagnostics: diagnostics, prefersLowerAlignment: isVerticalLiveMode)
+                    .ignoresSafeArea(isFullscreen || isVerticalLiveMode ? .container : [], edges: .all)
+                    .allowsHitTesting(false)
+                    .transition(.asymmetric(insertion: .identity, removal: .opacity))
+            }
+        }
+        .animation(PlayerLoadingScreen.fade, value: room == nil)
+    }
+
+    private var loadingRoom: LiveModel? {
+        if let pendingLoadingRoom, pendingLoadingRoom != viewModel.currentRoom { return pendingLoadingRoom }
+        return isInitialStreamLoading ? viewModel.currentRoom : nil
+    }
+
+    private func playerOverlays(playURL: URL) -> some View {
+        ZStack {
+            #if canImport(KSPlayer)
+            if useKSPlayer {
+                Color.clear
+                    .allowsHitTesting(false)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .liveSubtitleOverlay(
+                        coordinator: playerCoordinator,
+                        playback: viewModel.subtitlePlayback,
+                        playbackIdentity: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)",
+                        bottomPadding: isDeviceLandscape ? 48 : 16
+                    )
+            }
+            #endif
+
+            // 竖屏直播模式使用专用控制层，普通模式使用统一控制层
+            #if canImport(KSPlayer)
+            if isVerticalLiveMode && useKSPlayer {
+                VerticalLiveControllerView(
+                    model: playerModel,
+                    onOpenRoomSwitcher: portraitRoomSwitcherAction
+                )
+            } else {
+                UnifiedPlayerControlOverlay(
+                    bridge: controlBridge,
+                    showVideoSetting: $showVideoSetting,
+                    showDanmakuSettings: $showDanmakuSettings,
+                    isPopupPresented: $isControlPopupOpen,
+                    playerLayer: { useKSPlayer ? playerCoordinator.playerLayer : nil }
+                )
+            }
+            #else
+            UnifiedPlayerControlOverlay(
+                bridge: controlBridge,
+                showVideoSetting: $showVideoSetting,
+                showDanmakuSettings: $showDanmakuSettings,
+                isPopupPresented: $isControlPopupOpen
+            )
+            #endif
+
+            #if canImport(KSPlayer)
+            if useKSPlayer && showVideoSetting {
+                VideoSettingHUDView(model: playerModel, isShowing: $showVideoSetting)
+                    .padding(.trailing, 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .background(
+                        Color.black.opacity(0.001)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                showVideoSetting = false
+                            }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+            #endif
+        }
+        .animation(.easeInOut(duration: 0.3), value: showVideoSetting)
+    }
+
+    private func configuredPlayerSurface(playURL: URL) -> some View {
+        compatiblePlayerSurface(playURL: playURL)
+            .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") { @MainActor in
+                guard !Task.isCancelled, viewModel.currentPlayURL == playURL else { return }
+                Logger.debug(
+                    "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",
+                    category: .player
+                )
+                detectedVideoSize = nil
+                if useKSPlayer {
+                    #if canImport(KSPlayer)
+                    // Reset for every URL/kernel task before touching the player. The
+                    // layer can still expose the previous URL while the new one loads.
+                    if !keepsPortraitLayoutWhileDetecting {
+                        resetVideoGeometry()
+                    }
+                    hasDetectedSize = false
+                    configureModelIfNeeded(playURL: playURL)
+                    viewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
+
+                    // 使用异步任务定期检查视频尺寸
+                    var retryCount = 0
+                    let maxRetries = 40 // 最多重试 40 次（10 秒）
+
+                    Logger.debug("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)", category: .player)
+
+                    while !Task.isCancelled && retryCount < maxRetries {
+                        // 已被 readyToPlay 回调提前设置，直接退出
+                        if hasDetectedSize { break }
+
+                        if detectVideoSizeIfReady(expectedURL: playURL) {
+                            break
+                        }
+
+                        retryCount += 1
+                        do {
+                            try await Task.sleep(nanoseconds: 250_000_000) // 0.25秒
+                        } catch {
+                            return
+                        }
+                    }
+
+                    // 超时只保留默认 16:9；不要把未确认尺寸标记为已检测，
+                    // 后续 readyToPlay 仍需有机会采信真实视频尺寸。
+                    if retryCount >= maxRetries {
+                        await MainActor.run {
+                            guard !Task.isCancelled,
+                                  viewModel.currentPlayURL == playURL,
+                                  !hasDetectedSize else { return }
+                            resetVideoGeometry()
+                            Logger.warning(
+                                "视频尺寸检测超时，保持默认 16:9: \(compactURL(playURL))",
+                                category: .player
+                            )
+                        }
+                    }
+                    #endif
+                } else {
+                    await MainActor.run {
+                        Logger.debug("[PlayerFlow] task prepare VLC defaults", category: .player)
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            videoAspectRatio = 16.0 / 9.0
+                            isVideoPortrait = false
+                            isVerticalLiveMode = false
+                            hasDetectedSize = true
+                            hasVLCStartedPlayback = false
+                        }
+                    }
+                }
+            }
+            .onChange(of: playURL) { _, _ in
+                Logger.debug("[PlayerFlow] playURL changed -> \(compactURL(playURL)), reset detect states", category: .player)
+                // 切换视频时重置为默认 16:9 比例并重新检测
+                if !keepsPortraitLayoutWhileDetecting {
+                    videoAspectRatio = 16.0 / 9.0
+                    isVideoPortrait = false
+                    isVerticalLiveMode = false
+                }
+                hasDetectedSize = false
+                detectedVideoSize = nil
+                hasVLCStartedPlayback = false
+                if useKSPlayer && !keepsPortraitLayoutWhileDetecting {
+                    applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
+                }
+                // task(id: playURL.absoluteString) 会自动触发重新检测
+            }
     }
 
     @MainActor
@@ -599,35 +601,18 @@ struct PlayerContentView: View {
         .ignoresSafeArea(isFullscreen || isVerticalLiveMode ? .container : [], edges: .all)
     }
 
-    private var shouldShowBuffering: Bool {
-        if useKSPlayer {
-            // Coordinator and VM receive the same KSPlayer callback; engineState is the
-            // shared Core form used by recovery and the platform control layer.
-            // 加 !isPlaying 门:KSPlayer 边播边缓冲(isPlaying=true)时不显示菊花,避免常驻。
-            let seeking = playerCoordinator.playerLayer?.player.playbackState == .seeking
-            return (viewModel.engineState == .buffering && !viewModel.isPlaying) || seeking
-        }
-        // VLC 直播流在播放后仍可能短暂回报 buffering，避免中间菊花常驻干扰观看。
-        return vlcState.isBuffering && !hasVLCStartedPlayback
-    }
-
-    /// 直播流首次加载（URL 已就绪但尚未开始播放）：区别于用户主动暂停。
-    /// 命中时上层会显示「正在加载…」+ 网速，避免中间播放按钮误导用户「页面卡住」。
     private var isInitialStreamLoading: Bool {
+        if viewModel.isLoading || viewModel.isResolvingPlaybackSource { return true }
+        guard let playURL = viewModel.currentPlayURL else { return true }
         if useKSPlayer {
             #if canImport(KSPlayer)
-            // 已经渲染过帧后,初次加载层退场 — 直播流可能长期停在 .buffering / .readyToPlay,
-            // 不靠粘性标志退场就会永远盖着。
-            if viewModel.hasObservedPlaybackProgress { return false }
-            // 按 KSPlayer 定义,state.isPlaying 仅 .buffering / .bufferFinished 为真;
-            // .readyToPlay 是「准备好可以播」而非「已在播」,此时还没渲染过帧。
-            // 必须把这三个 pre-play 状态都视为加载中,否则 .readyToPlay 一帧会撤掉 overlay
-            // 暴露黑屏,紧接着 .buffering 又把 overlay 盖回来 —— 视觉上闪一下黑。
+            let layerURL = playerCoordinator.playerLayer?.url
+            guard layerURL == playURL else { return true }
             switch playerCoordinator.state {
-            case .paused, .playedToTheEnd, .error:
+            case .paused, .playedToTheEnd:
                 return false
             default:
-                return true
+                return !viewModel.hasPlaybackProgress(for: layerURL)
             }
             #else
             return false
@@ -635,11 +620,6 @@ struct PlayerContentView: View {
         }
         // VLC 还未首次进入播放状态时视为加载中
         return !hasVLCStartedPlayback && vlcState != .error && vlcState != .stopped
-    }
-
-    /// 当前是否应展示加载指示（buffering 或初次加载）。
-    private var shouldShowLoading: Bool {
-        shouldShowBuffering || isInitialStreamLoading
     }
 
     private func activatePlaybackSurface() -> Bool {
@@ -972,62 +952,6 @@ private struct VideoAspectRatioModifier: ViewModifier {
 
 // MARK: - 直播加载指示
 
-/// 直播流加载层:细圆弧 + 数字/单位分体网速,无背景片,贴在视频画面上。
-/// 网速订阅 KSPlayer 自带的 `DynamicInfo.networkSpeed`(@Published)。
-struct StreamLoadingOverlay: View {
-    #if canImport(KSPlayer)
-    let dynamicInfo: DynamicInfo?
-    #else
-    let dynamicInfo: AnyObject?
-    #endif
-    let stage: PlaybackStartupStage
-
-    var body: some View {
-        VStack(spacing: 16) {
-            ArcSpinner(size: 42, lineWidth: 1.8).tint(.white)
-            VStack(spacing: 8) {
-                Text(stage.title)
-                    .font(.headline.weight(.medium))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                #if canImport(KSPlayer)
-                if let info = dynamicInfo {
-                    StreamSpeedText(info: info)
-                }
-                #endif
-            }
-        }
-        .padding(.horizontal, 20)
-        .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 3)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(stage.title)
-    }
-}
-
-#if canImport(KSPlayer)
-private struct StreamSpeedText: View {
-    @ObservedObject var info: DynamicInfo
-
-    var body: some View {
-        if info.networkSpeed > 0 {
-            let (value, unit) = SpeedFormatter.split(bytesPerSecond: Int64(info.networkSpeed))
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(value)
-                    .font(.system(size: 26, weight: .light, design: .rounded))
-                    .foregroundStyle(.white)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.25), value: value)
-                Text(unit)
-                    .font(.system(size: 12, weight: .medium))
-                    .tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-        }
-    }
-}
-#endif
-
 private struct PlayerRecoveryNoticeBanner: View {
     let notice: PlaybackRecoveryNotice
 
@@ -1042,17 +966,5 @@ private struct PlayerRecoveryNoticeBanner: View {
             .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .allowsHitTesting(false)
             .accessibilityLabel(notice.title)
-    }
-}
-
-/// 网速格式化:返回 (数字, 单位) 拆分。
-private enum SpeedFormatter {
-    static func split(bytesPerSecond: Int64) -> (value: String, unit: String) {
-        let bps = max(bytesPerSecond, 0)
-        let kb = Double(bps) / 1024.0
-        if kb < 1024 {
-            return (String(format: "%.0f", kb), "KB/s")
-        }
-        return (String(format: "%.1f", kb / 1024.0), "MB/s")
     }
 }

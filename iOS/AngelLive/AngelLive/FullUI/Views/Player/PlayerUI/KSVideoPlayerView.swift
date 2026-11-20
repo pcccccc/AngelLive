@@ -195,7 +195,6 @@ public struct KSVideoPlayerView: View {
         let gestures = PlayerGestureView(
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
-            onHorizontalSwipe: verticalLiveSwipeAction,
             adjustsBrightnessAndVolumeWithDrag: !isVerticalLiveMode,
             edgePassthroughWidth: reservesBackEdge ? LiveRoomNavigationState.playerBackEdgeWidth : 0,
             preventsInteractiveDismissal: true,
@@ -212,7 +211,7 @@ public struct KSVideoPlayerView: View {
                     .accessibilityLabel("直播画面")
                     .accessibilityValue(verticalLiveControlsVisible.wrappedValue ? "控制层已显示" : "已清屏")
                     .accessibilityAction(named: Text(verticalLiveControlsVisible.wrappedValue ? "清屏" : "显示控制层")) {
-                        handleVerticalLiveSwipe(verticalLiveControlsVisible.wrappedValue ? .left : .right)
+                        toggleVerticalLiveControls()
                     }
                     .accessibilityAction(named: Text(viewModel.isPlaying ? "暂停播放" : "继续播放")) {
                         toggleVerticalLivePlayback()
@@ -234,11 +233,6 @@ public struct KSVideoPlayerView: View {
         return toggleVerticalLivePlayback
     }
 
-    private var verticalLiveSwipeAction: ((PlayerHorizontalSwipeDirection) -> Void)? {
-        guard isVerticalLiveMode else { return nil }
-        return handleVerticalLiveSwipe
-    }
-
     private func handleSingleTap() {
         guard !model.isLocked else { return }
         if model.showVideoSetting {
@@ -248,12 +242,12 @@ public struct KSVideoPlayerView: View {
         }
     }
 
-    private func handleVerticalLiveSwipe(_ direction: PlayerHorizontalSwipeDirection) {
+    private func toggleVerticalLiveControls() {
         guard isVerticalLiveMode,
               !model.isLocked,
               portraitRoomPageActions?.isMoving() != true,
               !verticalLiveControlPopupPresented.wrappedValue else { return }
-        verticalLiveControlsVisible.wrappedValue = direction == .right
+        portraitRoomPageActions?.setControlsVisible(!verticalLiveControlsVisible.wrappedValue)
     }
 
     @MainActor

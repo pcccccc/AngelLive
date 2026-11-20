@@ -1,6 +1,5 @@
 import AngelLiveCore
 import Kingfisher
-import SharedAssets
 import SwiftUI
 import UIKit
 
@@ -13,9 +12,11 @@ struct PortraitRoomPager: ViewModifier {
 
     typealias Direction = RoomSwitchCandidates.Direction
     let enabled: Bool
+    let viewportWidth: CGFloat
     let viewportHeight: CGFloat
     let availableHeight: CGFloat
     let playback: Playback
+    let loadingDiagnostics: PlayerLoadingDiagnostics
     let currentPlayback: () -> Playback
     let source: RoomSwitchSource
     let adjacentRoom: (Direction, LiveModel) -> LiveModel?
@@ -28,11 +29,14 @@ struct PortraitRoomPager: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.fullUIRoomPlayerPushed) private var isPushed
+    @Environment(\.verticalLiveControlsVisible) private var controlsVisible
     @State private var motion = PortraitPageMotion()
+    @State private var controlsMotion = PortraitControlsMotion()
     @State private var pages: AdjacentPages?
     @State private var cover: Cover?
     @State private var categoryTask: Task<Void, Never>?
     @State private var prefetcher: ImagePrefetcher?
+    @State private var legacyDragAxis: Axis?
     @State private var hasRejectedLegacyDrag = false
     @GestureState private var legacyDragActive = false
 
@@ -40,41 +44,35 @@ struct PortraitRoomPager: ViewModifier {
         let pageAction: ((Direction) -> Void)? = enabled && cover == nil ? { turnPage($0) } : nil
         let actions = PortraitRoomPageActions(
             turnPage: pageAction,
-            isMoving: { motion.dragOrigin != nil || motion.settlement != nil }
+            isMoving: { motion.dragOrigin != nil || motion.settlement != nil },
+            setControlsVisible: { setControlsVisible($0) }
         )
         let movingPage = ZStack {
             content
                 .allowsHitTesting(cover == nil)
                 .accessibilityHidden(cover != nil)
-            if let cover {
-                PortraitRoomPreview(room: cover.room)
-                    .id(cover.id)
+            // Keep the target's view identity as it moves from adjacent preview to cover.
+            ForEach(loadingPages) { page in
+                let isCover = page.offset == 0
+                let diagnostics = isCover && page.room == playback.room ? loadingDiagnostics : PlayerLoadingDiagnostics()
+                PlayerLoadingScreen(room: page.room, diagnostics: diagnostics, prefersLowerAlignment: true)
+                    .ignoresSafeArea(.container)
+                    .offset(y: page.offset)
                     .transition(.opacity)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("正在加载 \(cover.room.userName.orDash)")
+                    .accessibilityHidden(!isCover)
+                    .allowsHitTesting(isCover)
                     .accessibilityActions {
-                        if enabled {
+                        if isCover && enabled {
                             Button("下一个房间") { turnPage(.next) }
                             Button("上一个房间") { turnPage(.previous) }
                         }
                     }
-            }
-            if !reduceMotion, let pages {
-                if let previous = pages.previous {
-                    PortraitRoomPreview(room: previous)
-                        .accessibilityHidden(true)
-                        .allowsHitTesting(false)
-                        .offset(y: -viewportHeight)
-                }
-                if let next = pages.next {
-                    PortraitRoomPreview(room: next)
-                        .accessibilityHidden(true)
-                        .allowsHitTesting(false)
-                        .offset(y: viewportHeight)
-                }
+                    .zIndex(isCover ? 1 : 2)
             }
         }
         .environment(\.portraitRoomPageActions, actions)
+        .environment(\.portraitControlsMotion, controlsMotion)
+        .environment(\.portraitRoomLoadingCovered, cover != nil)
         .modifier(PortraitPageOffset(motion: motion, onSettled: finishSettlement))
         .contentShape(Rectangle())
 
@@ -85,29 +83,56 @@ struct PortraitRoomPager: ViewModifier {
             }
         }
         .onChange(of: playback) { _, _ in updateCover() }
+        .onChange(of: playback.room.id) { _, _ in controlsMotion.reset() }
         .onChange(of: enabled) { _, enabled in
-            if !enabled { resetPaging() }
+            if !enabled {
+                resetPaging()
+                controlsMotion.reset()
+            }
         }
         .onChange(of: source) { _, _ in resetPaging() }
+        .onChange(of: viewportWidth) { _, _ in controlsMotion.reset() }
         .onChange(of: viewportHeight) { _, _ in resetPaging() }
         .onDisappear {
             resetPaging()
+            controlsMotion.reset()
             cover = nil
         }
     }
 
     private var displayedRoom: LiveModel { cover?.room ?? currentPlayback().room }
 
-    private var canStartDrag: Bool {
-        enabled && GeneralSettingModel().enablePlayerGesture && categoryTask == nil
+    private var loadingPages: [LoadingPage] {
+        var result: [LoadingPage] = []
+        if let cover { result.append(LoadingPage(room: cover.room, offset: 0)) }
+        if !reduceMotion, let pages {
+            if let previous = pages.previous, previous != cover?.room {
+                result.append(LoadingPage(room: previous, offset: -viewportHeight))
+            }
+            if let next = pages.next, next != cover?.room {
+                result.append(LoadingPage(room: next, offset: viewportHeight))
+            }
+        }
+        return result
+    }
+
+    private var reservesBackEdge: Bool { isPushed || controlsVisible.wrappedValue }
+
+    private func canStartDrag(_ axis: Axis) -> Bool {
+        guard enabled else { return false }
+        switch axis {
+        case .vertical: return GeneralSettingModel().enablePlayerGesture && categoryTask == nil
+        case .horizontal: return cover == nil && motion.dragOrigin == nil && motion.settlement == nil
+        }
     }
 
     @ViewBuilder
     private func withPan(_ content: some View) -> some View {
         if #available(iOS 18.0, *) {
             content.gesture(PortraitRoomPan(
-                shouldBegin: { canStartDrag },
-                reservesBackEdge: isPushed,
+                isEnabled: enabled,
+                shouldBegin: canStartDrag,
+                reservesBackEdge: reservesBackEdge,
                 onBegan: beginDrag,
                 onChanged: updateDrag,
                 onEnded: endDrag,
@@ -119,7 +144,8 @@ struct PortraitRoomPager: ViewModifier {
                 .onChange(of: legacyDragActive) { _, active in
                     if !active {
                         hasRejectedLegacyDrag = false
-                        cancelDrag()
+                        if let axis = legacyDragAxis { cancelDrag(axis) }
+                        legacyDragAxis = nil
                     }
                 }
         }
@@ -130,23 +156,81 @@ struct PortraitRoomPager: ViewModifier {
             .updating($legacyDragActive) { _, active, _ in active = true }
             .onChanged { value in
                 guard !hasRejectedLegacyDrag else { return }
-                if motion.dragOrigin != nil {
-                    updateDrag(value.translation.height)
+                if let axis = legacyDragAxis {
+                    updateDrag(axis, value.translation[axis])
                     return
                 }
-                guard canStartDrag, let bounds = windowContext?.window?.bounds,
-                      value.startLocation.y > bounds.minY + 44,
-                      value.startLocation.y < bounds.maxY - 44,
-                      abs(value.translation.height) > abs(value.translation.width) * 1.25 else {
+                guard let window = windowContext?.window,
+                      PortraitRoomDrag.accepts(value.startLocation, in: window, reservesBackEdge: reservesBackEdge),
+                      let axis = PortraitRoomDrag.axis(for: value.translation), canStartDrag(axis) else {
                     hasRejectedLegacyDrag = true
                     return
                 }
-                beginDrag(value.translation.height)
+                legacyDragAxis = axis
+                beginDrag(axis, value.translation[axis])
             }
             .onEnded { value in
-                endDrag(value.translation.height, value.velocity.height)
+                if let axis = legacyDragAxis {
+                    endDrag(axis, value.translation[axis], value.velocity[axis])
+                }
+                legacyDragAxis = nil
                 hasRejectedLegacyDrag = false
             }
+    }
+
+    private func beginDrag(_ axis: Axis, _ translation: CGFloat) {
+        switch axis {
+        case .vertical:
+            controlsMotion.reset()
+            beginDrag(translation)
+        case .horizontal:
+            controlsMotion.begin(
+                translation: translation, width: viewportWidth, visible: controlsVisible.wrappedValue
+            )
+            updateDrag(axis, translation)
+        }
+    }
+
+    private func updateDrag(_ axis: Axis, _ translation: CGFloat) {
+        switch axis {
+        case .vertical: updateDrag(translation)
+        case .horizontal:
+            if !reduceMotion { controlsMotion.update(translation: translation, width: viewportWidth) }
+        }
+    }
+
+    private func endDrag(_ axis: Axis, _ translation: CGFloat, _ velocity: CGFloat) {
+        switch axis {
+        case .vertical: endDrag(translation, velocity)
+        case .horizontal:
+            guard let position = controlsMotion.dragPosition(translation: translation, width: viewportWidth) else {
+                return
+            }
+            let visible = controlsVisible.wrappedValue
+            let distance = visible ? -position : viewportWidth + position
+            let releaseSpeed = visible ? -velocity : velocity
+            let commits = distance > viewportWidth * 0.30 || releaseSpeed >= 600
+            setControlsVisible(commits ? !visible : visible, from: position, velocity: velocity)
+        }
+    }
+
+    private func cancelDrag(_ axis: Axis) {
+        switch axis {
+        case .vertical: cancelDrag()
+        case .horizontal:
+            guard controlsMotion.dragOrigin != nil else { return }
+            setControlsVisible(controlsVisible.wrappedValue)
+        }
+    }
+
+    private func setControlsVisible(_ visible: Bool, from position: CGFloat? = nil, velocity: CGFloat = 0) {
+        if reduceMotion {
+            controlsMotion.reset()
+        } else {
+            let from = position ?? controlsMotion.position(width: viewportWidth, visible: controlsVisible.wrappedValue)
+            controlsMotion.settle(from: from, to: visible ? 0 : -viewportWidth, velocity: velocity)
+        }
+        controlsVisible.wrappedValue = visible
     }
 
     private func preparePages() {
@@ -344,7 +428,14 @@ struct PortraitRoomPager: ViewModifier {
     }
 
     private func fadeCover() {
-        withAnimation(.easeOut(duration: 0.2)) { cover = nil }
+        withAnimation(PlayerLoadingScreen.fade) { cover = nil }
+    }
+
+    private struct LoadingPage: Identifiable {
+        let room: LiveModel
+        let offset: CGFloat
+
+        var id: LiveModel.ID { room.id }
     }
 
     private struct AdjacentPages {
@@ -370,36 +461,23 @@ private final class PortraitPageMotion {
     @ObservationIgnored var dragOrigin: CGFloat?
 
     struct Settlement {
-        private static let spring = Spring(response: 0.35, dampingRatio: 0.9)
-        private let start: Date
-        let from: CGFloat
-        let to: CGFloat
-        let velocity: CGFloat
+        let spring: PortraitPlayerSpring
         let room: LiveModel?
 
-        private let duration: TimeInterval
-
         init(from: CGFloat, to: CGFloat, velocity: CGFloat, room: LiveModel?) {
-            self.from = from
-            self.to = to
-            self.velocity = velocity
+            spring = PortraitPlayerSpring(from: from, to: to, velocity: velocity)
             self.room = room
-            start = .now
-            duration = Self.spring.settlingDuration(target: to - from, initialVelocity: velocity, epsilon: 0.5)
         }
 
         func isFinished(at date: Date) -> Bool {
-            date.timeIntervalSince(start) >= duration
+            spring.isFinished(at: date)
         }
 
         func position(at date: Date) -> CGFloat {
-            if isFinished(at: date) { return to }
-            let value = from + Self.spring.value(
-                target: to - from, initialVelocity: velocity, time: max(0, date.timeIntervalSince(start))
-            )
+            let value = spring.position(at: date)
             // Prevent an overshoot past a fully revealed page.
             guard room != nil else { return value }
-            return to < 0 ? max(to, value) : min(to, value)
+            return spring.to < 0 ? max(spring.to, value) : min(spring.to, value)
         }
     }
 }
@@ -421,17 +499,43 @@ private struct PortraitPageOffset: ViewModifier {
 
 final class PortraitRoomPanGestureRecognizer: UIPanGestureRecognizer {}
 
+private enum PortraitRoomDrag {
+    static func axis(for translation: CGSize) -> Axis? {
+        if abs(translation.height) > abs(translation.width) * 1.25 { return .vertical }
+        if abs(translation.width) > abs(translation.height) * 1.25 { return .horizontal }
+        return nil
+    }
+
+    static func accepts(_ point: CGPoint, in window: UIWindow, reservesBackEdge: Bool) -> Bool {
+        if reservesBackEdge {
+            let distance = window.effectiveUserInterfaceLayoutDirection == .rightToLeft
+                ? window.bounds.maxX - point.x : point.x - window.bounds.minX
+            guard distance >= LiveRoomNavigationState.playerBackEdgeWidth else { return false }
+        }
+        return point.y > window.bounds.minY + 44 && point.y < window.bounds.maxY - 44
+    }
+}
+
+private extension CGSize {
+    subscript(_ axis: Axis) -> CGFloat { axis == .horizontal ? width : height }
+}
+
 @available(iOS 18.0, *)
 private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
-    let shouldBegin: () -> Bool
+    let isEnabled: Bool
+    let shouldBegin: (Axis) -> Bool
     let reservesBackEdge: Bool
-    let onBegan: (CGFloat) -> Void
-    let onChanged: (CGFloat) -> Void
-    let onEnded: (CGFloat, CGFloat) -> Void
-    let onCancelled: () -> Void
+    let onBegan: (Axis, CGFloat) -> Void
+    let onChanged: (Axis, CGFloat) -> Void
+    let onEnded: (Axis, CGFloat, CGFloat) -> Void
+    let onCancelled: (Axis) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
-        Coordinator(shouldBegin: shouldBegin)
+        let coordinator = Coordinator()
+        coordinator.isEnabled = isEnabled
+        coordinator.shouldBegin = shouldBegin
+        coordinator.reservesBackEdge = reservesBackEdge
+        return coordinator
     }
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
@@ -442,111 +546,68 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     }
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        context.coordinator.isEnabled = isEnabled
         context.coordinator.shouldBegin = shouldBegin
         context.coordinator.reservesBackEdge = reservesBackEdge
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        guard let axis = context.coordinator.axis else { return }
         let window = recognizer.view?.window
-        let translation = recognizer.translation(in: window).y
+        let point = recognizer.translation(in: window)
+        let translation = axis == .horizontal ? point.x : point.y
         switch recognizer.state {
-        case .began: onBegan(translation)
-        case .changed: onChanged(translation)
-        case .ended: onEnded(translation, recognizer.velocity(in: window).y)
-        case .cancelled: onCancelled()
+        case .began: onBegan(axis, translation)
+        case .changed: onChanged(axis, translation)
+        case .ended:
+            context.coordinator.axis = nil
+            let velocity = recognizer.velocity(in: window)
+            onEnded(axis, translation, axis == .horizontal ? velocity.x : velocity.y)
+        case .cancelled:
+            context.coordinator.axis = nil
+            onCancelled(axis)
         default: break
         }
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var shouldBegin: () -> Bool
+        var isEnabled = false
+        var shouldBegin: (Axis) -> Bool = { _ in false }
         var reservesBackEdge = false
-
-        init(shouldBegin: @escaping () -> Bool) {
-            self.shouldBegin = shouldBegin
-        }
+        var axis: Axis?
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            guard shouldBegin(), let window = gestureRecognizer.view?.window else { return false }
-            let point = touch.location(in: window)
-            if reservesBackEdge {
-                let distance = window.effectiveUserInterfaceLayoutDirection == .rightToLeft
-                    ? window.bounds.maxX - point.x : point.x - window.bounds.minX
-                guard distance >= LiveRoomNavigationState.playerBackEdgeWidth else { return false }
-            }
-            return point.y > window.bounds.minY + 44 && point.y < window.bounds.maxY - 44
+            guard isEnabled, let window = gestureRecognizer.view?.window else { return false }
+            return PortraitRoomDrag.accepts(touch.location(in: window), in: window, reservesBackEdge: reservesBackEdge)
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard shouldBegin(), let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            axis = nil
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
             let translation = pan.translation(in: pan.view?.window)
-            return abs(translation.y) > abs(translation.x) * 1.25
+            guard let axis = PortraitRoomDrag.axis(for: CGSize(width: translation.x, height: translation.y)),
+                  shouldBegin(axis) else { return false }
+            self.axis = axis
+            return true
         }
 
         func gestureRecognizer(
             _ gestureRecognizer: UIGestureRecognizer,
             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
         ) -> Bool {
-            // The KSPlayer canvas keeps horizontal clear/restore and the left edge keeps back.
+            // Keep the canvas tap gestures and the separate edge dismissal recognizer.
             true
         }
-    }
-}
-
-private struct PortraitRoomPreview: View {
-    let room: LiveModel
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black
-                KFImage(URL(string: room.roomCover))
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-                    .scaleEffect(1.04)
-                    .blur(radius: 8)
-                Color.black.opacity(0.48)
-
-                VStack(spacing: 8) {
-                    KFImage(URL(string: room.userHeadImg))
-                        .placeholder {
-                            Image(systemName: "person.fill")
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .background(.white.opacity(0.15))
-                        }
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 48, height: 48)
-                        .clipShape(Circle())
-                    Text(room.userName.orDash)
-                        .font(.headline)
-                        .lineLimit(1)
-                    Text(room.roomTitle.orDash)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .lineLimit(2)
-                    ArcSpinner(size: 24, lineWidth: 1.5)
-                        .tint(.white)
-                        .padding(.top, 6)
-                }
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 24)
-                .position(x: geometry.size.width / 2, y: geometry.size.height * 0.63)
-            }
-            .clipped()
-        }
-        .ignoresSafeArea(.container)
     }
 }
 
 struct PortraitRoomPageActions {
     let turnPage: ((RoomSwitchCandidates.Direction) -> Void)?
     let isMoving: () -> Bool
+    let setControlsVisible: (Bool) -> Void
 }
 
 extension EnvironmentValues {
     @Entry var portraitRoomPageActions: PortraitRoomPageActions?
+    @Entry var portraitRoomLoadingCovered = false
 }

@@ -26,6 +26,8 @@ struct VerticalLiveControllerView: View {
     @Environment(\.presentToast) private var presentToast
     @Environment(\.verticalLiveControlsVisible) private var controlsVisible
     @Environment(\.verticalLiveControlPopupPresented) private var controlPopupPresented
+    @Environment(\.portraitControlsMotion) private var controlsMotion
+    @Environment(\.portraitRoomPageActions) private var portraitRoomPageActions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
@@ -62,11 +64,14 @@ struct VerticalLiveControllerView: View {
 
                     bottomRightArea
                 }
-                .opacity(visible ? 1 : 0)
+                .modifier(PortraitControlsOffset(
+                    motion: controlsMotion, width: geometry.size.width, visible: visible, reduceMotion: reduceMotion
+                ))
                 .allowsHitTesting(visible)
                 .accessibilityHidden(!visible)
 
                 FullUIPlayerDanmakuStatus(status: viewModel.danmakuConnectionStatus, controlsVisible: visible)
+                    .animation(FullUIPlayerChrome.visibilityAnimation(visible, reduceMotion: reduceMotion), value: visible)
 
                 // 面板独立于清屏动画；展开时不接收底层清屏手势。
                 if showQualityPanel {
@@ -79,10 +84,6 @@ struct VerticalLiveControllerView: View {
             }
             .clipped()
         }
-        .animation(
-            FullUIPlayerChrome.visibilityAnimation(controlsVisible.wrappedValue, reduceMotion: reduceMotion),
-            value: controlsVisible.wrappedValue
-        )
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         .environment(\.colorScheme, .dark)
         .onChange(of: showQualityPanel || showStreamerInfo || moreActionSheetPresented, initial: true) { _, presented in
@@ -309,7 +310,11 @@ struct VerticalLiveControllerView: View {
         MoreActionsButton(
             room: viewModel.currentRoom,
             onClearChat: {
-                controlsVisible.wrappedValue = false
+                if let portraitRoomPageActions {
+                    portraitRoomPageActions.setControlsVisible(false)
+                } else {
+                    controlsVisible.wrappedValue = false
+                }
             },
             showQualityOption: false,
             onRefreshPlayback: refreshPlayback,
