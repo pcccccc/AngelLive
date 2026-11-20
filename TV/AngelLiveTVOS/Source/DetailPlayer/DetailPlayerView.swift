@@ -22,8 +22,13 @@ struct DetailPlayerView: View {
     /// 直播流 state 在 KSPlayer 内可能长期停留在 .buffering(被视作 isPlaying),
     /// 不能再把 .buffering 当作"加载中"来盖 overlay,否则永不消失。
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
+    @State private var roomBannerID: String?
+    @State private var lastBannerRoomID: String?
+    @State private var roomBannerTask: Task<Void, Never>?
+    @State private var showsBottomControls = false
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     public var didExitView: (Bool, String) -> Void = {_, _ in}
@@ -60,6 +65,16 @@ struct DetailPlayerView: View {
             .onChange(of: roomInfoViewModel.recoveryNotice) { _, notice in
                 showRecoveryNotice(notice)
             }
+            .onChange(of: roomInfoViewModel.currentRoom.id) { _, roomID in
+                if roomBannerID != roomID { cancelRoomBanner() }
+            }
+            .onChange(of: roomBannerCandidate, initial: true) { _, roomID in
+                if let roomID, roomID != lastBannerRoomID {
+                    showRoomBanner(for: roomID)
+                } else if !usesFullUI || roomInfoViewModel.isOnDemand {
+                    cancelRoomBanner()
+                }
+            }
             // 画质面板点击「登录后可用」档位：复用登录恢复页
             .onChange(of: roomInfoViewModel.pendingLoginRequest?.id) { _, _ in
                 guard let request = roomInfoViewModel.pendingLoginRequest else { return }
@@ -81,10 +96,36 @@ struct DetailPlayerView: View {
                 roomInfoViewModel.refreshPlayback()
             }
             .onDisappear {
+                cancelRoomBanner()
                 // Presenting account recovery keeps this room alive for a manual retry.
                 guard authenticationRecovery == nil else { return }
                 cleanupPlayer()
             }
+    }
+
+    private var roomBannerCandidate: String? {
+        guard usesFullUI, !roomInfoViewModel.isOnDemand, roomInfoViewModel.currentPlayURL != nil else { return nil }
+        return roomInfoViewModel.currentRoom.id
+    }
+
+    private func showRoomBanner(for roomID: String) {
+        cancelRoomBanner()
+        lastBannerRoomID = roomID
+        roomBannerID = roomID
+        roomBannerTask = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            guard !Task.isCancelled, roomBannerID == roomID else { return }
+            withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.22)) {
+                roomBannerID = nil
+            }
+            roomBannerTask = nil
+        }
+    }
+
+    private func cancelRoomBanner() {
+        roomBannerTask?.cancel()
+        roomBannerTask = nil
+        roomBannerID = nil
     }
 
     @ViewBuilder
@@ -187,11 +228,13 @@ struct DetailPlayerView: View {
                     .zIndex(4)
                 }
 
-                PlayerControlView(playerCoordinator: playerCoordinator)
+                PlayerControlView(playerCoordinator: playerCoordinator,
+                                  showsRoomBanner: roomBannerID == roomInfoViewModel.currentRoom.id,
+                                  onBottomControlVisibilityChange: { showsBottomControls = $0 })
                     .zIndex(3)
-                    .frame(width: 1920, height: 1080)
-//                    .opacity(roomInfoViewModel.showControlView ? 1 : 0)
-                    .safeAreaPadding(.all)
+                    .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
+                    .safeAreaPadding(.all, usesFullUI ? 0 : nil)
+                    .ignoresSafeArea(usesFullUI ? .container : [])
                     .environment(roomInfoViewModel)
                     .environment(appViewModel)
                 if roomInfoViewModel.supportsDanmu {
@@ -199,7 +242,10 @@ struct DetailPlayerView: View {
                         if appViewModel.danmuSettingsViewModel.danmuAreaIndex >= 3 {
                             Spacer()
                         }
-                        DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
+                        DanmuView(coordinator: roomInfoViewModel.danmuCoordinator,
+                                  height: appViewModel.danmuSettingsViewModel.getDanmuArea().0,
+                                  bottomControlBand: usesFullUI && showsBottomControls && !roomInfoViewModel.isOnDemand
+                                    ? TVFullUIPlayerControlMetrics.bottomControlBand : 0)
                             .frame(width: 1920, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
                             .opacity(appViewModel.danmuSettingsViewModel.showDanmu ? 1 : 0)
                             .environment(appViewModel)
@@ -229,11 +275,11 @@ struct DetailPlayerView: View {
                 endPlay()
             }
             .onPlayPauseCommand {
-                roomInfoViewModel.togglePlayPause()
+                if !usesFullUI { roomInfoViewModel.togglePlayPause() }
             }
             // Coordinator remains the sole layer delegate; the VM receives its forwarded callbacks.
             // Keep first playback sticky so a later pause or rebuffer does not look like startup.
-            .frame(width: 1920, height: 1080)
+            .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
         }
     }
 
@@ -261,6 +307,7 @@ struct DetailPlayerView: View {
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        cancelRoomBanner()
         roomInfoViewModel.subtitlePlayback.stop()
         roomInfoViewModel.endPlaybackDiagnostics()
         SupportDiagnosticsService.shared.recordAction(

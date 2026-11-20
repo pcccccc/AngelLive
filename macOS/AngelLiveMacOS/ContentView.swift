@@ -222,6 +222,11 @@ struct ContentView: View {
                     .background(SidebarWidthEnforcer(min: 180, ideal: 200, max: 260))
                     .navigationDestination(for: LiveModel.self) { room in
                         MacRoomPlaybackDestination(room: room, presentation: .navigation)
+                            .toolbarVisibility(
+                                pluginAvailability.hasAvailablePlugins ? .hidden : .automatic,
+                                for: .windowToolbar
+                            )
+                            .environment(\.macPlayerAcceptsCommands, !fullscreenPlayerManager.showFullscreenPlayer)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .switchToSettings)) { _ in
                         selectedTab = .settings
@@ -248,6 +253,11 @@ struct ContentView: View {
                 .background(Color.black)
             }
         }
+        .toolbarVisibility(
+            pluginAvailability.hasAvailablePlugins && fullscreenPlayerManager.showFullscreenPlayer
+                ? .hidden : .automatic,
+            for: .windowToolbar
+        )
         .background(PlayerWindowReferenceView(window: $mainWindow))
         .background(FullUIWindowTabbingPolicyView(isEnabled: pluginAvailability.hasAvailablePlugins))
         .onChange(of: mainWindow) { _, window in
@@ -352,7 +362,14 @@ struct ContentView: View {
         } message: {
             Text("检测到您已在其他设备安装过插件，是否一键安装？")
         }
-        .alert(consentService.alertTitle, isPresented: $consentService.isPresenting) {
+        .alert(consentService.alertTitle, isPresented: Binding(
+            get: { consentService.isPresenting && !(pluginAvailability.hasAvailablePlugins && consentService.hasPresentationHost) },
+            set: { presented in
+                if !presented, !(pluginAvailability.hasAvailablePlugins && consentService.hasPresentationHost) {
+                    consentService.resolve(false)
+                }
+            }
+        )) {
             Button(consentService.continueButtonTitle) { consentService.resolve(true) }
             Button("取消", role: .cancel) { consentService.resolve(false) }
         } message: {

@@ -30,7 +30,9 @@ public struct KSVideoPlayerView: View {
     @Environment(\.isVerticalLiveMode) private var isVerticalLiveMode
     @Environment(\.verticalLiveControlsVisible) private var verticalLiveControlsVisible
     @Environment(\.verticalLiveControlPopupPresented) private var verticalLiveControlPopupPresented
+    @Environment(\.portraitRoomPageActions) private var portraitRoomPageActions
     @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
+    @Environment(\.fullUILandscapePlayerLayout) private var landscapeLayout
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var hasAutoRotatedForCurrentRoom = false // 当前直播间是否已自动旋转
@@ -108,16 +110,23 @@ public struct KSVideoPlayerView: View {
                 }
                 .ksIsFocused($model.focusableView, equals: .play)
                 .opacity(!model.config.isMaskShow && !isVerticalLiveMode ? 1 : 0)
-                .allowsHitTesting(!isVerticalLiveMode && !model.config.isMaskShow)
+                .allowsHitTesting(!isVerticalLiveMode && !model.config.isMaskShow && !model.isLocked)
 
                 // 弹幕层（在控制层下方）
                 if viewModel.supportsDanmu && viewModel.danmuSettings.showDanmu && !isVerticalLiveMode {
                     GeometryReader { geometry in
-                        let playerHeight = geometry.size.height
+                        let bottomClearance = landscapeLayout.flatMap { layout in
+                            model.config.isMaskShow && !model.isLocked && !viewModel.isOnDemand
+                                ? max(0, layout.bottomControlBand - layout.safeAreaBottom) : nil
+                        } ?? 0
                         let config = danmuAreaConfiguration(
                             areaIndex: viewModel.danmuSettings.danmuAreaIndex,
-                            containerHeight: playerHeight
+                            containerHeight: geometry.size.height
                         )
+                        let limit = max(0, geometry.size.height - bottomClearance)
+                        let bottomAligned = (3...4).contains(viewModel.danmuSettings.danmuAreaIndex)
+                        let yOffset = bottomAligned ? min(config.yOffset, max(0, limit - config.height)) : config.yOffset
+                        let height = bottomClearance > 0 ? min(config.height, max(0, limit - yOffset)) : config.height
 
                         DanmuView(
                             coordinator: viewModel.danmuCoordinator,
@@ -127,8 +136,8 @@ public struct KSVideoPlayerView: View {
                             speed: viewModel.danmuSettings.danmuSpeed,
                             areaIndex: viewModel.danmuSettings.danmuAreaIndex
                         )
-                        .frame(width: geometry.size.width, height: config.height)
-                        .position(x: geometry.size.width / 2, y: config.yOffset + config.height / 2)
+                        .frame(width: geometry.size.width, height: height)
+                        .position(x: geometry.size.width / 2, y: yOffset + height / 2)
                         .allowsHitTesting(false)
                         .clipped()
                     }
@@ -146,7 +155,6 @@ public struct KSVideoPlayerView: View {
             .toolbar(.hidden, for: .navigationBar)
             .fullUITabBarHidden()
             .focusedObject(model.config)
-            .statusBar(hidden: isFullscreen)
             .onChange(of: model.config.isMaskShow) { newValue in
                 if newValue {
                     model.focusableView = .slider
@@ -185,8 +193,9 @@ public struct KSVideoPlayerView: View {
         let gestures = PlayerGestureView(
             onSingleTap: handleSingleTap,
             onDoubleTap: verticalLiveDoubleTapAction,
-            onHorizontalSwipe: verticalLiveSwipeAction,
-            edgePassthroughWidth: isVerticalLiveMode && !verticalLiveControlsVisible.wrappedValue ? 0 : 20,
+            onHorizontalSwipe: verticalOnDemandSwipeAction,
+            adjustsBrightnessAndVolumeWithDrag: !isVerticalLiveMode,
+            edgePassthroughWidth: 0,
             preventsInteractiveDismissal: true,
             orientationErrorHandler: { @Sendable error in
                 Logger.warning("切换屏幕方向失败: \(error)", category: .ui)
@@ -201,10 +210,16 @@ public struct KSVideoPlayerView: View {
                     .accessibilityLabel("直播画面")
                     .accessibilityValue(verticalLiveControlsVisible.wrappedValue ? "控制层已显示" : "已清屏")
                     .accessibilityAction(named: Text(verticalLiveControlsVisible.wrappedValue ? "清屏" : "显示控制层")) {
-                        handleVerticalLiveSwipe(verticalLiveControlsVisible.wrappedValue ? .left : .right)
+                        setVerticalControlsVisible(!verticalLiveControlsVisible.wrappedValue)
                     }
                     .accessibilityAction(named: Text(viewModel.isPlaying ? "暂停播放" : "继续播放")) {
                         toggleVerticalLivePlayback()
+                    }
+                    .accessibilityActions {
+                        if let turnPage = portraitRoomPageActions?.turnPage {
+                            Button("下一个房间") { turnPage(.next) }
+                            Button("上一个房间") { turnPage(.previous) }
+                        }
                     }
             } else {
                 gestures
@@ -217,12 +232,13 @@ public struct KSVideoPlayerView: View {
         return toggleVerticalLivePlayback
     }
 
-    private var verticalLiveSwipeAction: ((PlayerHorizontalSwipeDirection) -> Void)? {
-        guard isVerticalLiveMode else { return nil }
-        return handleVerticalLiveSwipe
+    private var verticalOnDemandSwipeAction: ((PlayerHorizontalSwipeDirection) -> Void)? {
+        guard isVerticalLiveMode, viewModel.isOnDemand else { return nil }
+        return { setVerticalControlsVisible($0 == .right) }
     }
 
     private func handleSingleTap() {
+        guard !model.isLocked else { return }
         if model.showVideoSetting {
             model.showVideoSetting = false
         } else if !isVerticalLiveMode {
@@ -230,11 +246,16 @@ public struct KSVideoPlayerView: View {
         }
     }
 
-    private func handleVerticalLiveSwipe(_ direction: PlayerHorizontalSwipeDirection) {
+    private func setVerticalControlsVisible(_ visible: Bool) {
         guard isVerticalLiveMode,
               !model.isLocked,
+              portraitRoomPageActions?.isMoving() != true,
               !verticalLiveControlPopupPresented.wrappedValue else { return }
-        verticalLiveControlsVisible.wrappedValue = direction == .right
+        if viewModel.isOnDemand {
+            verticalLiveControlsVisible.wrappedValue = visible
+        } else {
+            portraitRoomPageActions?.setControlsVisible(visible)
+        }
     }
 
     @MainActor
@@ -294,7 +315,7 @@ public struct KSVideoPlayerView: View {
             return (height, padding)
 
         case 2: // 全屏
-            return (containerHeight - padding, padding)
+            return (max(0, containerHeight - padding), padding)
 
         case 3: // 底部1/2
             let height = containerHeight * 0.5
@@ -307,7 +328,7 @@ public struct KSVideoPlayerView: View {
             return (height, yOffset)
 
         default: // 默认全屏
-            return (containerHeight - padding, padding)
+            return (max(0, containerHeight - padding), padding)
         }
     }
 }

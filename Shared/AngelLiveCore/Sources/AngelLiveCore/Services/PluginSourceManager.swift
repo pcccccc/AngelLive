@@ -126,15 +126,75 @@ public final class PluginSourceManager: @unchecked Sendable {
     @ObservationIgnored @MainActor
     public private(set) lazy var installBatch = PluginInstallBatch()
 
+    @ObservationIgnored @MainActor
+    private lazy var installationProgressStore = PluginInstallationProgressStore()
+
+    @MainActor public func installationProgress(for pluginId: String) -> PluginInstallationProgress? {
+        installationProgressStore.values[pluginId]
+    }
+
+    /// The number of queued and active FullUI installs or updates.
+    @MainActor public var activeInstallationCount: Int {
+        installBatch.remainingCount + updateBatch.remainingCount
+    }
+
+    @MainActor public func isPendingInstallation(for pluginId: String) -> Bool {
+        installBatch.isPending(pluginId) || updateBatch.isPending(pluginId)
+    }
+
+    @MainActor public func cancelInstallation(pluginId: String) {
+        installBatch.cancel(pluginId)
+        updateBatch.cancel(pluginId)
+    }
+
+    /// Opt-in delayed removal for management hosts. Existing direct uninstall
+    /// callers retain their immediate behavior.
+    @ObservationIgnored @MainActor
+    public private(set) lazy var deferredUninstall = PluginDeferredUninstall(
+        canUninstall: { [weak self] pluginId in
+            guard let self, self.installedVersion(for: pluginId) != nil else { return false }
+            let isQueuedForInstall = self.installBatch.isRunning &&
+                self.installBatch.pluginIds.contains(pluginId) && self.installBatch.outcomes[pluginId] == nil
+            return !isQueuedForInstall && !self.updatingPluginIds.contains(pluginId) &&
+                !self.remotePlugins.contains { $0.id == pluginId && $0.installState == .installing }
+        },
+        uninstall: { [weak self] pluginId in
+            self?.uninstallPlugin(pluginId: pluginId) ?? false
+        }
+    )
+
+    @MainActor public var pendingUninstallPluginId: String? {
+        deferredUninstall.pendingUninstallPluginId
+    }
+
+    @MainActor public var pendingUninstallDeadline: Date? {
+        deferredUninstall.pendingUninstallDeadline
+    }
+
+    @MainActor @discardableResult
+    public func stageUninstall(pluginId: String) -> Bool {
+        deferredUninstall.stageUninstall(pluginId: pluginId)
+    }
+
+    @MainActor
+    public func undoPendingUninstall() {
+        deferredUninstall.undoPendingUninstall()
+    }
+
+    @MainActor @discardableResult
+    public func commitPendingUninstall() -> Bool {
+        deferredUninstall.commitPendingUninstall()
+    }
+
     @MainActor public var isManagementBusy: Bool {
         installBatch.isRunning || updateBatch.isRunning || isFetchingIndex || isCheckingUpdates || isInstalling ||
         installTotalCount > 0 || !updatingPluginIds.isEmpty
     }
 
-    /// 批量安装进度：已完成数量
+    /// Legacy ShellUI automatic installation count. FullUI uses activeInstallationCount.
     public private(set) var installCompletedCount: Int = 0
 
-    /// 批量安装进度：总数量
+    /// Legacy ShellUI automatic installation total. FullUI uses activeInstallationCount.
     public private(set) var installTotalCount: Int = 0
 
     /// 错误信息
@@ -692,16 +752,64 @@ public final class PluginSourceManager: @unchecked Sendable {
         )
         guard !candidates.isEmpty else { return 0 }
 
+        return await Self.runInstallBatch(
+            installBatch, candidates: candidates, updater: updater,
+            pluginManager: LiveParsePlugins.shared, consentRequester: consentRequester,
+            progress: installationProgressStore
+        )
+    }
+
+    @MainActor
+    static func runInstallBatch(
+        _ batch: PluginInstallBatch,
+        candidates: [RemotePluginDisplayItem],
+        updater: LiveParsePluginUpdater,
+        pluginManager: LiveParsePluginManager,
+        consentRequester: (any PluginInstallConsentRequesting)?,
+        progress: PluginInstallationProgressStore = PluginInstallationProgressStore(),
+        stagingRoot: URL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    ) async -> Int {
         let candidatesById = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id, $0) })
         let displayNames = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id, $0.displayName) })
         let knownLoginIds = Set(candidates.lazy.filter { $0.item.auth?.required == true }.map(\.id))
-        let preapprovedLoginIds = knownLoginIds
+        var deferred: [String: (manifest: LiveParsePluginManifest, directory: URL)] = [:]
+        defer {
+            for id in deferred.keys where batch.outcomes[id] == .cancelled {
+                candidatesById[id]?.installState = .notInstalled
+            }
+            try? FileManager.default.removeItem(at: stagingRoot)
+        }
 
-        return await installBatch.run(
+        func activate(_ entry: (manifest: LiveParsePluginManifest, directory: URL), item: RemotePluginDisplayItem) async -> PluginInstallBatch.Outcome {
+            let id = item.id
+            do {
+                try await updater.activateStaged(
+                    manifest: entry.manifest, directory: entry.directory, manager: pluginManager,
+                    progress: { progress.report($0, for: id) }
+                )
+                item.installState = .installed
+                return .installed
+            } catch {
+                return outcome(for: error, item: item)
+            }
+        }
+
+        func outcome(for error: Error, item: RemotePluginDisplayItem) -> PluginInstallBatch.Outcome {
+            if Task.isCancelled || error is CancellationError {
+                item.installState = .notInstalled
+                return .cancelled
+            }
+            let message = Self.detailedErrorDescription(error)
+            Logger.error(error, message: "安装插件失败: \(item.id)@\(item.item.version)", category: .general)
+            item.installState = .failed(message)
+            return .failed(message)
+        }
+
+        return await batch.run(
             pluginIds: candidates.map(\.id),
             displayNames: displayNames,
             knownLoginPluginIds: knownLoginIds,
-            requestLoginConsent: { [consentRequester] ids in
+            requestLoginConsent: { ids in
                 guard let consentRequester else { return true }
                 let plugins = ids.map {
                     LoginPluginEntry(
@@ -713,58 +821,33 @@ public final class PluginSourceManager: @unchecked Sendable {
                     reason: .installingLoginPluginsBatch(plugins: plugins)
                 )
             },
-            install: { [self] id in
+            activateDeferred: { id in
+                guard let entry = deferred[id], let item = candidatesById[id] else {
+                    return .failed("插件已移除，请重新加载订阅源。")
+                }
+                defer { progress.clear(for: id) }
+                return await activate(entry, item: item)
+            },
+            install: { id in
                 guard let displayItem = candidatesById[id] else {
                     return .failed("插件已移除，请重新加载订阅源。")
                 }
                 displayItem.installState = .installing
-                let displayName = displayItem.displayName
-                let consentHook: (@Sendable (LiveParsePluginManifest) async -> Bool)?
-                if let consentRequester {
-                    consentHook = { @Sendable manifest in
-                        guard manifest.requiresLogin else { return true }
-                        if preapprovedLoginIds.contains(manifest.pluginId) {
-                            return true
-                        }
-                        return await consentRequester.requestConsent(
-                            reason: .installingLoginPlugin(
-                                pluginId: manifest.pluginId,
-                                displayName: displayName
-                            )
-                        )
-                    }
-                } else {
-                    consentHook = nil
-                }
-
+                defer { progress.clear(for: id) }
                 do {
-                    try await updater.installAndActivate(
-                        item: displayItem.item,
-                        manager: LiveParsePlugins.shared,
-                        afterInstallConsent: consentHook
-                    )
-                    displayItem.installState = .installed
-                    return .installed
-                } catch is PluginInstallConsentError {
-                    Logger.info("User declined login plugin install: \(id)", category: .plugin)
-                    displayItem.installState = .notInstalled
-                    return .cancelled
-                } catch is CancellationError {
-                    displayItem.installState = .notInstalled
-                    return .cancelled
-                } catch {
-                    if Task.isCancelled {
-                        displayItem.installState = .notInstalled
-                        return .cancelled
+                    let directory = stagingRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+                    let manifest = try await updater.install(item: displayItem.item, stagingDirectory: directory) {
+                        progress.report($0, for: id)
                     }
-                    let message = Self.detailedErrorDescription(error)
-                    Logger.error(
-                        error,
-                        message: "安装插件失败: \(id)@\(displayItem.item.version)",
-                        category: .general
-                    )
-                    displayItem.installState = .failed(message)
-                    return .failed(message)
+                    try Task.checkCancellation()
+                    let entry = (manifest: manifest, directory: directory)
+                    if consentRequester != nil, manifest.requiresLogin, !knownLoginIds.contains(id) {
+                        deferred[id] = entry
+                        return nil
+                    }
+                    return await activate(entry, item: displayItem)
+                } catch {
+                    return outcome(for: error, item: displayItem)
                 }
             }
         )
@@ -947,7 +1030,7 @@ public final class PluginSourceManager: @unchecked Sendable {
     @MainActor
     @discardableResult
     public func updateAllPlugins(pluginIds: [String]) async -> Int {
-        guard !updateBatch.isRunning, !isInstalling,
+        guard !updateBatch.isRunning, !installBatch.isRunning, !isInstalling,
               installTotalCount == 0, updatingPluginIds.isEmpty,
               !isFetchingIndex, !isCheckingUpdates else { return 0 }
         let candidates = pluginIds.filter { hasUpdate(for: $0) }
@@ -955,19 +1038,28 @@ public final class PluginSourceManager: @unchecked Sendable {
         // Reserve the whole queue before the first suspension. Existing
         // automatic/single-update entry points already honor this set.
         let reservedIds = Set(candidates)
+        let progress = installationProgressStore
         updatingPluginIds.formUnion(reservedIds)
         defer { updatingPluginIds.subtract(reservedIds) }
         return await updateBatch.run(pluginIds: candidates) { [self] id in
             guard let item = items[id], installedVersion(for: id) != nil else {
                 return .failed("插件已移除，请重新检查更新。")
             }
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            defer {
+                progress.clear(for: id)
+                try? FileManager.default.removeItem(at: directory)
+            }
+            let report: PluginInstallationProgressHandler = { progress.report($0, for: id) }
             do {
-                try await updater.installAndActivate(item: item, manager: LiveParsePlugins.shared)
+                let manifest = try await updater.install(item: item, stagingDirectory: directory, progress: report)
+                try await updater.activateStaged(
+                    manifest: manifest, directory: directory, manager: LiveParsePlugins.shared, progress: report
+                )
                 remotePlugins.first(where: { $0.id == id })?.installState = .installed
                 return .updated
-            } catch is CancellationError {
-                return .cancelled
             } catch {
+                if Task.isCancelled || error is CancellationError { return .cancelled }
                 return .failed(Self.detailedErrorDescription(error))
             }
         }

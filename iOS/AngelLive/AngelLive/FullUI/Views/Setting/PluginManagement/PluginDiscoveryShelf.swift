@@ -1,0 +1,130 @@
+import SwiftUI
+import AngelLiveCore
+
+struct PluginDiscoveryShelf: View {
+    let items: [ManagedPluginItem]
+    let isLoading: Bool
+    let hasSources: Bool
+    let sourcesVerified: Bool
+    let searchIsEmpty: Bool
+    let canOperate: Bool
+    let open: (ManagedPluginItem) -> Void
+    let action: (ManagedPluginItem, UUID) -> Void
+    let addSource: () -> Void
+
+    var body: some View {
+        VStack {
+            if items.isEmpty {
+                if isLoading {
+                    PluginManagementEmptyState(title: "正在读取插件…", message: "正在读取来源里的插件。", isLoading: true)
+                } else if !searchIsEmpty {
+                    PluginManagementEmptyState(title: "没有匹配的插件", message: "请尝试其他搜索词。")
+                } else if hasSources && sourcesVerified {
+                    PluginManagementEmptyState(title: "来源里的插件都装好了", message: "添加其他来源以发现更多插件。")
+                } else if hasSources {
+                    PluginManagementEmptyState(title: "来源尚未读取成功", message: "请检查来源状态后重试。")
+                } else {
+                    PluginManagementEmptyState(title: "添加来源，发现更多插件", message: "添加插件来源后，可以选择需要的插件。", actionTitle: "添加来源", action: addSource)
+                }
+            } else {
+                ScrollView(.horizontal) {
+                    PluginDiscoveryRow(spacing: PluginManagementLayout.iconTextSpacing) {
+                        ForEach(items) { item in
+                            PluginDiscoveryCard(item: item, canOperate: canOperate, open: { open(item) }, action: { action(item, $0) })
+                        }
+                    }.scrollTargetLayout()
+                }.fixedSize(horizontal: false, vertical: true)
+                    .scrollIndicators(.hidden).scrollTargetBehavior(.viewAligned)
+            }
+        }
+    }
+}
+
+private struct PluginDiscoveryRow: Layout {
+    let spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        var rowSize = CGSize(width: spacing * CGFloat(max(0, subviews.count - 1)), height: 0)
+        for card in subviews {
+            let naturalSize = card.sizeThatFits(.unspecified)
+            rowSize.width += naturalSize.width
+            rowSize.height = max(rowSize.height, naturalSize.height)
+        }
+        return rowSize
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        for card in subviews {
+            let width = card.sizeThatFits(.unspecified).width
+            card.place(
+                at: CGPoint(x: x, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: width, height: bounds.height)
+            )
+            x += width + spacing
+        }
+    }
+}
+
+struct PluginDiscoveryCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var maximumReadingWidth: CGFloat = 266
+    let item: ManagedPluginItem
+    let canOperate: Bool
+    let open: () -> Void
+    let action: (UUID) -> Void
+    private var installationMetadata: String {
+        let login = item.remote?.item.auth?.required == true ? "需要登录" : "不需要登录"
+        guard let version = item.remote?.item.version, !version.isEmpty else { return login }
+        return "\(login) · \(version)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 6) {
+                    PluginManagementIcon(pluginID: item.pluginID, displayName: item.name, remoteIcon: item.remote?.item.icon)
+                    Text(item.name).font(.headline).foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let description = item.remote?.item.platformDescription, !description.isEmpty {
+                        Text(description).font(.footnote).foregroundStyle(.secondary).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if let source = item.sourceURL {
+                        Text(pluginSourceHost(source)).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(PluginPressButtonStyle())
+            Spacer(minLength: 6)
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    metadata(wraps: false).layoutPriority(1)
+                    Spacer(minLength: PluginManagementLayout.itemSpacing)
+                    PluginActionButton(item: item, canOperate: canOperate, action: action)
+                }
+                VStack(alignment: .leading) {
+                    metadata(wraps: true)
+                    PluginActionButton(item: item, canOperate: canOperate, action: action)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 6)
+        }
+        .padding(PluginManagementLayout.contentInset)
+        .containerRelativeFrame(.horizontal, alignment: .leading) { availableWidth, _ in
+            min(availableWidth * (dynamicTypeSize.isAccessibilitySize ? 1 : 0.70), maximumReadingWidth)
+        }
+        .background(PluginManagementLayout.cardBackground, in: RoundedRectangle(cornerRadius: PluginManagementLayout.cardRadius, style: .continuous))
+    }
+
+    private func metadata(wraps: Bool) -> some View {
+        let reason = item.row.action.failure
+        return Text(installationMetadata).font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: !wraps, vertical: wraps)
+            .opacity(reason == nil ? 1 : 0).accessibilityHidden(reason != nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .leading) {
+                if let reason { PluginInstallationFailureReason(reason: reason, font: .caption) }
+            }
+    }
+}

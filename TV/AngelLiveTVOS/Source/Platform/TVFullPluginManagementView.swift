@@ -1,8 +1,7 @@
 import SwiftUI
 import AngelLiveCore
 
-/// FullUI-only plugin management. ShellUI keeps its existing management page
-/// and add-source surface in TVShellConfigView/TVAddPluginSourceView.
+/// FullUI owns its shelf navigation and leaves the ShellUI entry points intact.
 struct TVFullPluginManagementView: View {
     let pluginSourceManager: PluginSourceManager
     let pluginAvailability: PluginAvailabilityService
@@ -12,259 +11,251 @@ struct TVFullPluginManagementView: View {
     @Environment(AppState.self) private var appViewModel
     @State private var selectedPlugin: TVFullPluginSelection?
     @State private var showSources = false
-    @State private var focusToRestore: TVFullPluginFocus?
+    @State private var focusToRestore: TVFullPluginFocus = .summary
     @FocusState private var focusedAction: TVFullPluginFocus?
+    @State private var operation: Task<Void, Never>?
+    @State private var deferredUninstall: PluginDeferredUninstall
+    @State private var hasChecked = false
+    @State private var installedIDs: [String] = []
+    @State private var availableIDs: [String] = []
+    @State private var seenInstallSuccesses: Set<String> = []
+    @State private var seenUpdateSuccesses: Set<String> = []
+    @State private var completionDeadlines: [String: ContinuousClock.Instant] = [:]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(
-        pluginSourceManager: PluginSourceManager,
-        pluginAvailability: PluginAvailabilityService,
-        onClose: @escaping () -> Void = {}
-    ) {
+    init(pluginSourceManager: PluginSourceManager, pluginAvailability: PluginAvailabilityService,
+         onClose: @escaping () -> Void = {}) {
         self.pluginSourceManager = pluginSourceManager
         self.pluginAvailability = pluginAvailability
         self.onClose = onClose
+        // The television's remote undo affordance has its own six-second window.
+        _deferredUninstall = State(initialValue: PluginDeferredUninstall(
+            delay: .seconds(6),
+            canUninstall: { id in
+                pluginSourceManager.installedVersion(for: id) != nil && !pluginSourceManager.isManagementBusy
+            },
+            uninstall: { id in
+                let removed = pluginSourceManager.uninstallPlugin(pluginId: id)
+                if removed {
+                    PluginAppGroupSync.syncToAppGroup()
+                    Task { await pluginAvailability.refresh() }
+                }
+                return removed
+            }
+        ))
     }
 
     var body: some View {
-        @Bindable var consent = consentService
-
-        NavigationStack {
-            TVFullDualColumnLayout {
-                TVFullPluginSummary(
-                    pluginID: nil,
-                    manager: pluginSourceManager,
-                    availability: pluginAvailability
-                )
-            } right: {
-                operationColumn
+        let completingIDs = Set(completionDeadlines.keys)
+        let nextCompletionDeadline = completionDeadlines.values.min()
+        ScrollView {
+            VStack(alignment: .leading, spacing: TVPluginLayout.sectionSpacing) {
+                TVPluginManagementHeader(manager: pluginSourceManager, ids: installedIDs,
+                    hasChecked: hasChecked, focus: $focusedAction,
+                    summaryAction: performSummaryAction, check: checkUpdates, sources: openSources)
+                TVPluginShelf(title: "已安装", ids: installedIDs, installed: true,
+                    completingIDs: completingIDs, manager: pluginSourceManager, availability: pluginAvailability,
+                    focus: $focusedAction, open: openPlugin, action: performPluginAction,
+                    emptyAction: openSources)
+                TVPluginShelf(title: "发现", ids: availableIDs, installed: false,
+                    completingIDs: completingIDs, manager: pluginSourceManager, availability: pluginAvailability,
+                    focus: $focusedAction, open: openPlugin, action: performPluginAction,
+                    emptyAction: openSources)
+                if let message = pluginSourceManager.errorMessage {
+                    TVPluginEmptyState(title: "操作未完成", message: message,
+                        actionTitle: "重试读取来源", action: checkUpdates)
+                }
             }
-            .toolbar(.hidden, for: .navigationBar)
-            .onExitCommand(perform: onClose)
-            .defaultFocus($focusedAction, pluginSourceManager.sourceURLs.isEmpty ? .sources : .check)
+            .padding(.horizontal, TVPluginLayout.pageMargin)
+            .padding(.top, TVPluginLayout.topMargin)
+            .padding(.bottom, TVPluginLayout.focusBleed)
         }
+        .scrollClipDisabled()
+        .toolbar(.hidden, for: .navigationBar)
+        .defaultFocus($focusedAction, .summary)
+        .onExitCommand {
+            guard selectedPlugin == nil, !showSources else { return }
+            closeManagement()
+        }
+        .ignoresSafeArea()
+        .background(.background)
+        .overlay(alignment: .topTrailing) {
+            if let id = deferredUninstall.pendingUninstallPluginId,
+               let deadline = deferredUninstall.pendingUninstallDeadline {
+                TVPluginUndoNotice(name: pluginSourceManager.managementDisplayName(for: id), deadline: deadline)
+                    .padding(TVPluginLayout.pageMargin)
+            }
+        }
+        .overlay {
+            if consentService.isPresenting && selectedPlugin == nil && !showSources {
+                TVPluginConsentSurface(consent: consentService)
+            }
+        }
+        .onPlayPauseCommand(perform: undoUninstall)
         .task {
+            seenInstallSuccesses = installSuccesses
+            seenUpdateSuccesses = updateSuccesses
+            rebuildShelves()
             await reloadCatalog()
             if let action = appViewModel.pendingPluginManagementAction {
                 appViewModel.pendingPluginManagementAction = nil
                 await runAutoAction(action)
             }
         }
+        .task(id: nextCompletionDeadline) {
+            guard let nextCompletionDeadline else { return }
+            let clock = ContinuousClock()
+            do { try await clock.sleep(until: nextCompletionDeadline) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            let now = clock.now
+            completionDeadlines = completionDeadlines.filter { $0.value > now }
+            rebuildShelves()
+        }
+        .onChange(of: installSuccesses) { rebuildShelves() }
+        .onChange(of: updateSuccesses) { rebuildShelves() }
+        .onChange(of: pluginAvailability.catalogRevision) { rebuildShelves() }
+        .onChange(of: pluginSourceManager.remotePlugins.map(\.id)) { rebuildShelves() }
+        .onChange(of: deferredUninstall.pendingUninstallPluginId) {
+            rebuildShelves()
+        }
         .fullScreenCover(item: $selectedPlugin, onDismiss: restoreManagementFocus) { selection in
-            TVFullPluginDetailView(
-                pluginID: selection.id,
-                manager: pluginSourceManager,
-                availability: pluginAvailability,
-                performAction: performPluginAction,
-                refreshAfterMutation: refreshAfterMutation,
-                onClose: { selectedPlugin = nil }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
+            TVFullPluginDetailView(pluginID: selection.id, manager: pluginSourceManager,
+                availability: pluginAvailability, initialFocus: selection.focus,
+                performAction: performPluginAction, install: installPlugin, uninstall: stageUninstall,
+                onClose: { selectedPlugin = nil })
+                .background(.background)
+                .environment(appViewModel)
+                .environment(consentService)
         }
         .fullScreenCover(isPresented: $showSources, onDismiss: restoreManagementFocus) {
-            NavigationStack {
-                TVFullPluginSourcesView(
-                    manager: pluginSourceManager,
-                    onClose: { showSources = false },
-                    refreshCatalog: reloadCatalog,
-                    refreshAfterMutation: refreshAfterMutation
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
-            .environment(appViewModel)
+            TVFullPluginSourcesView(manager: pluginSourceManager,
+                onClose: { showSources = false }, refreshCatalog: reloadCatalog,
+                refreshAfterMutation: refreshAfterMutation, commitUninstall: commitUninstall)
+                .background(.background)
+                .environment(appViewModel)
         }
-        .alert(
-            consent.alertTitle,
-            isPresented: Binding(
-                get: { consent.isPresenting && selectedPlugin == nil && !showSources },
-                set: { isPresented in
-                    if !isPresented { consent.isPresenting = false }
-                }
-            )
-        ) {
-            Button(consent.continueButtonTitle) { consent.resolve(true) }
-            Button("取消", role: .cancel) { consent.resolve(false) }
-        } message: {
-            Text(consent.alertMessage)
+        .onDisappear {
+            // Covers do not dismiss this owner; its actual departure flushes the intent.
+            if selectedPlugin == nil && !showSources { commitUninstall() }
         }
+    }
+
+    private var installSuccesses: Set<String> {
+        Set(pluginSourceManager.installBatch.outcomes.compactMap { $0.value == .installed ? $0.key : nil })
+    }
+
+    private var updateSuccesses: Set<String> {
+        Set(pluginSourceManager.updateBatch.outcomes.compactMap { $0.value == .updated ? $0.key : nil })
+    }
+
+    private func rebuildShelves() {
+        let installs = installSuccesses
+        let updates = updateSuccesses
+        let completed = installs.subtracting(seenInstallSuccesses).union(updates.subtracting(seenUpdateSuccesses))
+        seenInstallSuccesses = installs
+        seenUpdateSuccesses = updates
+        let deadline = ContinuousClock().now.advanced(by: TVPluginLayout.completionFeedbackDuration)
+        for id in completed { completionDeadlines[id] = deadline }
+
+        let pending = deferredUninstall.pendingUninstallPluginId
+        // Let a discovery card finish showing its check before moving it to the installed shelf.
+        let completedDiscoveries = Set(availableIDs).intersection(installs)
+        var seen = Set<String>()
+        installedIDs = pluginAvailability.installedPluginIds.filter {
+            $0 != pending && pluginSourceManager.installedVersion(for: $0) != nil &&
+                !(completedDiscoveries.contains($0) && completionDeadlines[$0] != nil) && seen.insert($0).inserted
+        }
+        let installedSet = Set(installedIDs)
+        seen.removeAll()
+        availableIDs = pluginSourceManager.remotePlugins.compactMap {
+            let id = $0.id
+            let staysInDiscovery = completedDiscoveries.contains(id) && !installedSet.contains(id)
+            return id != pending && (staysInDiscovery || pluginSourceManager.installedVersion(for: id) == nil) &&
+                seen.insert(id).inserted ? id : nil
+        }
+        if case .available(let id) = focusedAction, installedSet.contains(id), !availableIDs.contains(id) {
+            focusedAction = .installed(id)
+        }
+    }
+
+    private func openPlugin(_ id: String, _ focus: TVFullPluginFocus = .detailAction) {
+        guard !pluginSourceManager.installBatch.isRunning, !consentService.isPresenting else { return }
+        commitUninstall()
+        focusToRestore = pluginSourceManager.installedVersion(for: id) == nil ? .available(id) : .installed(id)
+        selectedPlugin = TVFullPluginSelection(id: id, focus: focus)
     }
 
     private func restoreManagementFocus() {
-        let target = focusToRestore
-        focusToRestore = nil
-        switch target {
-        case .installed(let id) where installedIDs.contains(id):
-            focusedAction = target
-        case .available(let id) where availableItems.contains(where: { $0.id == id }):
-            focusedAction = target
-        case .addSource where pluginSourceManager.sourceURLs.isEmpty && availableItems.isEmpty:
-            focusedAction = target
-        default:
-            focusedAction = .sources
+        switch focusToRestore {
+        case .installed(let id) where !installedIDs.contains(id): focusedAction = .summary
+        case .available(let id) where installedIDs.contains(id): focusedAction = .installed(id)
+        case .available(let id) where !availableIDs.contains(id): focusedAction = .summary
+        default: focusedAction = focusToRestore
         }
     }
 
-    @ViewBuilder
-    private var operationColumn: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            TVFullOperationRow(
-                title: "检查更新",
-                symbol: "arrow.clockwise",
-                disabled: pluginSourceManager.sourceURLs.isEmpty || pluginSourceManager.isManagementBusy,
-                action: checkUpdates
-            )
-            .focused($focusedAction, equals: .check)
-
-            if !updateIDs.isEmpty || pluginSourceManager.updateBatch.isRunning {
-                TVFullOperationRow(
-                    title: pluginSourceManager.updateBatch.isRunning ? "正在更新" : "全部更新",
-                    symbol: "arrow.down.circle",
-                    trailing: pluginSourceManager.updateBatch.isRunning ? updateProgressText : nil,
-                    disabled: pluginSourceManager.isManagementBusy && !pluginSourceManager.updateBatch.isRunning,
-                    action: updateAll
-                )
-                .focused($focusedAction, equals: .update)
-            }
-
-            TVFullOperationRow(
-                title: "订阅源",
-                symbol: "chevron.right",
-                action: {
-                    focusToRestore = focusedAction
-                    showSources = true
-                }
-            )
-            .focused($focusedAction, equals: .sources)
-
-            TVFullPluginSectionHeader(title: "已安装", count: installedIDs.count)
-
-            if installedIDs.isEmpty {
-                Text("尚未安装插件")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            } else {
-                installedRows
-            }
-
-            TVFullPluginSectionHeader(title: "可安装", count: availableItems.count)
-
-            if availableItems.isEmpty {
-                if pluginSourceManager.sourceURLs.isEmpty {
-                    TVFullOperationRow(
-                        title: "添加订阅源",
-                        symbol: "plus",
-                        action: {
-                            focusToRestore = focusedAction
-                            showSources = true
-                        }
-                    )
-                    .focused($focusedAction, equals: .addSource)
-                } else {
-                    Text("当前订阅源暂无可安装插件")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                if !installableItems.isEmpty {
-                    TVFullOperationRow(
-                        title: "全部安装",
-                        symbol: "square.and.arrow.down",
-                        disabled: pluginSourceManager.isManagementBusy,
-                        action: installAll
-                    )
-                    .focused($focusedAction, equals: .installAll)
-                }
-                availableRows
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
+    private func openSources() {
+        guard !pluginSourceManager.isManagementBusy, !consentService.isPresenting else { return }
+        commitUninstall()
+        focusToRestore = focusedAction ?? .sources
+        showSources = true
     }
 
-    @ViewBuilder
-    private var installedRows: some View {
-        ForEach(installedIDs, id: \.self) { id in
-            TVFullOperationRow(
-                title: pluginSourceManager.managementDisplayName(for: id),
-                symbol: "chevron.right",
-                trailing: statusText(for: id),
-                action: {
-                    focusToRestore = focusedAction
-                    selectedPlugin = TVFullPluginSelection(id: id)
-                }
-            )
-            .focused($focusedAction, equals: .installed(id))
-            .accessibilityIdentifier("plugins.item.\(id)")
-        }
+    private func closeManagement() {
+        operation?.cancel()
+        consentService.resolve(false)
+        commitUninstall()
+        onClose()
     }
 
-    @ViewBuilder
-    private var availableRows: some View {
-        ForEach(availableItems) { item in
-            TVFullOperationRow(
-                title: item.displayName,
-                symbol: "chevron.right",
-                trailing: statusText(for: item.id),
-                action: {
-                    focusToRestore = focusedAction
-                    selectedPlugin = TVFullPluginSelection(id: item.id)
-                }
-            )
-            .focused($focusedAction, equals: .available(item.id))
-            .accessibilityIdentifier("plugins.item.\(item.id)")
-        }
+    private func stageUninstall(_ id: String) {
+        guard let index = installedIDs.firstIndex(of: id) else { return }
+        let neighbor = index + 1 < installedIDs.count ? installedIDs[index + 1] :
+            (index > 0 ? installedIDs[index - 1] : nil)
+        guard deferredUninstall.stageUninstall(pluginId: id) else { return }
+        focusToRestore = neighbor.map(TVFullPluginFocus.installed) ?? .summary
+        withAnimation(reduceMotion ? nil : .default) { rebuildShelves() }
+        selectedPlugin = nil
     }
 
-    private var installedIDs: [String] {
-        pluginAvailability.installedPluginIds
+    private func commitUninstall() {
+        _ = deferredUninstall.commitPendingUninstall()
+        _ = pluginSourceManager.commitPendingUninstall()
     }
 
-    private var availableItems: [RemotePluginDisplayItem] {
-        pluginSourceManager.remotePlugins.filter {
-            pluginSourceManager.installedVersion(for: $0.id) == nil
-        }
+    private func undoUninstall() {
+        guard let id = deferredUninstall.pendingUninstallPluginId else { return }
+        deferredUninstall.undoPendingUninstall()
+        rebuildShelves()
+        focusToRestore = .installed(id)
+        focusedAction = .installed(id)
     }
 
-    private var updateIDs: [String] {
-        installedIDs.filter { pluginSourceManager.hasUpdate(for: $0) }
-    }
-
-    private var installableItems: [RemotePluginDisplayItem] {
-        availableItems.filter {
-            pluginSourceManager.catalogActionState(for: $0) == .install
-        }
-    }
-
-    private var updateProgressText: String {
-        let batch = pluginSourceManager.updateBatch
-        return "\(batch.completedCount)/\(batch.pluginIds.count)"
-    }
-
-    private func statusText(for id: String) -> String? {
-        let remote = pluginSourceManager.remotePlugins.first { $0.id == id }
-        if pluginSourceManager.isWaitingForUpdate(for: id) {
-            return "等待更新"
-        }
-        switch pluginSourceManager.managementActionState(for: id, remote: remote) {
-        case .install:
-            return "安装"
-        case .installing:
-            return "安装中"
-        case .update:
-            return "可更新"
-        case .updating:
-            return "更新中"
-        case .installed:
-            return nil
+    private func performSummaryAction() {
+        let state = TVPluginStatus.resolve(manager: pluginSourceManager, ids: installedIDs, hasChecked: hasChecked)
+        switch state {
+        case .running: stopOperation()
         case .failed:
-            return "失败"
+            let failed = pluginSourceManager.updateBatch.failedPluginIds
+            if !failed.isEmpty {
+                updatePlugins(failed)
+            } else if !pluginSourceManager.installBatch.failedPluginIds.isEmpty {
+                retryFailedInstalls()
+            } else {
+                checkUpdates()
+            }
+        case .updates: updatePlugins(installedIDs.filter { pluginSourceManager.hasUpdate(for: $0) })
+        case .unchecked, .current: checkUpdates()
+        case .checking: break
         }
     }
 
-    private func updateAll() {
-        guard !updateIDs.isEmpty, !pluginSourceManager.isManagementBusy else { return }
-        updatePlugins(updateIDs)
+    private func stopOperation() {
+        operation?.cancel()
+        let ids = pluginSourceManager.installBatch.pluginIds + pluginSourceManager.updateBatch.pluginIds
+        for id in ids { pluginSourceManager.cancelInstallation(pluginId: id) }
+        if consentService.isPresenting { consentService.resolve(false) }
     }
 
     private func checkUpdates() {
@@ -274,43 +265,47 @@ struct TVFullPluginManagementView: View {
     }
 
     private func performPluginAction(_ id: String) {
+        guard !consentService.isPresenting else { return }
+        if pluginSourceManager.isPendingInstallation(for: id) {
+            pluginSourceManager.cancelInstallation(pluginId: id)
+            return
+        }
         guard !pluginSourceManager.isManagementBusy else { return }
-        let remote = pluginSourceManager.remotePlugins.first { $0.id == id }
-        switch pluginSourceManager.managementActionState(for: id, remote: remote) {
-        case .install:
-            guard let remote else { return }
-            Task {
-                _ = await pluginSourceManager.installPlugin(remote)
-                await refreshAfterMutation()
-            }
-        case .failed:
-            if pluginSourceManager.installedVersion(for: id) != nil {
-                updatePlugins([id])
-            } else if let remote {
-                Task {
-                    _ = await pluginSourceManager.installPlugin(remote)
-                    await refreshAfterMutation()
-                }
-            }
-        case .update:
-            updatePlugins([id])
-        case .installed, .installing, .updating:
-            break
+        if pluginSourceManager.installedVersion(for: id) != nil {
+            if pluginSourceManager.hasUpdate(for: id) { updatePlugins([id]) }
+        } else {
+            openPlugin(id)
+        }
+    }
+
+    private func installPlugin(_ id: String) {
+        guard !pluginSourceManager.isManagementBusy else { return }
+        commitUninstall()
+        if pluginSourceManager.remotePlugins.first(where: { $0.id == id })?.item.auth?.required == true {
+            consentService.approveNextLoginRequest(for: id)
+        }
+        operation = Task {
+            defer { consentService.clearInlineApproval() }
+            _ = await pluginSourceManager.installPlugins(pluginIds: [id])
+            await refreshAfterMutation()
+        }
+    }
+
+    private func retryFailedInstalls() {
+        guard !pluginSourceManager.isManagementBusy else { return }
+        let ids = pluginSourceManager.installBatch.failedPluginIds
+        commitUninstall()
+        operation = Task {
+            _ = await pluginSourceManager.installPlugins(pluginIds: ids)
+            await refreshAfterMutation()
         }
     }
 
     private func updatePlugins(_ ids: [String]) {
         guard !ids.isEmpty, !pluginSourceManager.isManagementBusy else { return }
-        Task {
+        commitUninstall()
+        operation = Task {
             _ = await pluginSourceManager.updateAllPlugins(pluginIds: ids)
-            await refreshAfterMutation()
-        }
-    }
-
-    private func installAll() {
-        guard !installableItems.isEmpty, !pluginSourceManager.isManagementBusy else { return }
-        Task {
-            _ = await pluginSourceManager.installAll()
             await refreshAfterMutation()
         }
     }
@@ -319,439 +314,273 @@ struct TVFullPluginManagementView: View {
         guard !pluginSourceManager.isManagementBusy else { return }
         await pluginSourceManager.fetchAllSourceIndexes()
         await pluginSourceManager.refreshAvailableUpdates()
+        hasChecked = !pluginSourceManager.sourceURLs.isEmpty &&
+            !pluginSourceManager.sourceHealth.values.contains(where: \.isFailed)
+        rebuildShelves()
     }
 
     private func refreshAfterMutation() async {
         PluginAppGroupSync.syncToAppGroup()
         await pluginAvailability.refresh()
         await pluginSourceManager.refreshAvailableUpdates()
+        rebuildShelves()
     }
 
     private func runAutoAction(_ action: PluginManagementAutoAction) async {
+        commitUninstall()
         switch action {
         case .oneClickInstall:
             await appViewModel.pluginSourceSyncService.performOneClickInstall(
-                pluginSourceManager: pluginSourceManager,
-                pluginAvailability: pluginAvailability,
-                consentRequester: consentService
-            )
-            await refreshAfterMutation()
+                pluginSourceManager: pluginSourceManager, pluginAvailability: pluginAvailability,
+                consentRequester: consentService)
         case .deepLinkInstall(let input):
             let added = await pluginSourceManager.addSourceFromInput(input)
             guard !added.isEmpty else { return }
             await pluginSourceManager.fetchAllSourceIndexes()
             _ = await pluginSourceManager.installAll()
-            await refreshAfterMutation()
         }
+        await refreshAfterMutation()
     }
 }
 
-private struct TVFullPluginSelection: Identifiable, Equatable {
+struct TVFullPluginSelection: Identifiable {
     let id: String
+    var focus: TVFullPluginFocus = .detailAction
 }
 
-private struct TVFullActionPresentation: Equatable {
-    let title: String
-    let symbol: String
-    let trailing: String?
-    let isRunning: Bool
-}
-
-private enum TVFullPluginFocus: Hashable {
-    case check
-    case update
-    case sources
-    case addSource
-    case installAll
-    case installed(String)
-    case available(String)
-    case detailAction
-    case detailUninstall
-    case detailBack
-    case source(String)
-    case playlist(UUID)
-    case playlistName
-    case playlistIcon
-    case sourceAdd
-    case sourceRefresh
-    case sourceDelete
-    case sourceBack
-    case inputField
-    case inputAdd
-    case inputCancel
-}
-
-private struct TVFullOperationRow: View {
-    // Existing settings rows are 66 points: a 36-point content line plus the
-    // native button insets. Symbol typographic bounds must not enlarge that line.
-    @ScaledMetric(relativeTo: .body) private var symbolLineHeight = 36
-
-    let title: String
-    let symbol: String
-    let trailing: String?
-    let disabled: Bool
-    let action: () -> Void
-
-    init(
-        title: String,
-        symbol: String,
-        trailing: String? = nil,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.symbol = symbol
-        self.trailing = trailing
-        self.disabled = disabled
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 15) {
-                Text(title)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 15)
-                if let trailing {
-                    Text(trailing)
-                        .font(.system(size: 30))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Image(systemName: symbol)
-                    .frame(height: symbolLineHeight)
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-        }
-        .buttonStyle(.bordered)
-        .disabled(disabled)
-        .accessibilityLabel(Text(title))
-        .accessibilityValue(Text(trailing ?? ""))
-    }
-}
-
-private struct TVFullPluginSectionHeader: View {
-    let title: String
-    var count: Int? = nil
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 15) {
-            Text(title)
-            Spacer()
-            if let count {
-                Text(count, format: .number)
-                    .monospacedDigit()
-            }
-        }
-        .font(.system(size: 30, weight: .bold))
-        .foregroundStyle(.secondary)
-        // 与原生 bordered 按钮的内容边距对齐，而非胶囊外缘。
-        .padding(.horizontal, 30)
-        .padding(.top, 10)
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-
-private struct TVFullDualColumnLayout<Left: View, Right: View>: View {
-    private let left: Left
-    private let right: Right
-
-    init(
-        @ViewBuilder left: () -> Left,
-        @ViewBuilder right: () -> Right
-    ) {
-        self.left = left()
-        self.right = right()
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            HStack(spacing: 0) {
-                ScrollView(.vertical) {
-                    left
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(minHeight: max(0, geometry.size.height - 120), alignment: .center)
-                        .padding(.horizontal, 90)
-                        .padding(.vertical, 60)
-                }
-                .frame(width: geometry.size.width / 2, height: geometry.size.height)
-
-                ScrollView(.vertical) {
-                    right
-                        .padding(.vertical, 60)
-                }
-                .scrollClipDisabled()
-                .frame(
-                    width: geometry.size.width / 2 - 50,
-                    height: geometry.size.height
-                )
-                .padding(.trailing, 50)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-    }
-}
-
-private struct TVFullPluginSummary: View {
-    let pluginID: String?
-    let manager: PluginSourceManager
-    let availability: PluginAvailabilityService
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            if let pluginID {
-                pluginDetails(for: pluginID)
-            } else {
-                Image(systemName: "puzzlepiece.extension")
-                    .font(.system(size: 72))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Text("插件管理")
-                    .font(.title2)
-                Text("管理已安装的插件，或从订阅源获取新的插件。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("已安装 \(availability.installedPluginIds.count) 个插件 · \(updateCount) 个可更新")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                if manager.isFetchingIndex || manager.isCheckingUpdates {
-                    ProgressView("正在检查更新…")
-                        .font(.callout)
-                }
-                if manager.installTotalCount > 0 {
-                    ProgressView(
-                        value: Double(manager.installCompletedCount),
-                        total: Double(max(1, manager.installTotalCount))
-                    ) {
-                        Text("正在安装插件")
-                            .font(.callout)
-                    } currentValueLabel: {
-                        Text("\(manager.installCompletedCount)/\(manager.installTotalCount)")
-                            .font(.caption)
-                            .monospacedDigit()
-                    }
-                }
-                if failedSourceCount > 0 {
-                    Text("\(failedSourceCount) 个订阅源检查失败，请打开订阅源重试。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let error = manager.errorMessage, !error.isEmpty {
-                    Text(error)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("关闭提示") {
-                        manager.errorMessage = nil
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    private var updateCount: Int {
-        availability.installedPluginIds.filter { manager.hasUpdate(for: $0) }.count
-    }
-
-    private var failedSourceCount: Int {
-        manager.sourceHealth.values.filter(\.isFailed).count
-    }
-
-    @ViewBuilder
-    private func pluginDetails(for id: String) -> some View {
-        if let platform = LiveParseJSPlatformManager.availablePlatforms.first(where: { $0.pluginId == id }),
-           let image = TVPlatformIconProvider.tabImage(for: platform.liveType) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 96, height: 96)
-                .accessibilityHidden(true)
-        } else {
-            Image(systemName: "puzzlepiece.extension")
-                .font(.system(size: 72))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-        }
-
-        Text(manager.managementDisplayName(for: id))
-            .font(.title2)
-            .fixedSize(horizontal: false, vertical: true)
-
-        if let remote = manager.remotePlugins.first(where: { $0.id == id }) {
-            Text("版本 \(manager.installedVersion(for: id) ?? "未安装") · 远程 \(remote.item.version)")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let description = remote.item.platformDescription,
-               !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if availability.requiresLogin(for: id) || remote.item.auth?.required == true {
-                Label("需登录", systemImage: "person.crop.circle")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-        } else if let version = manager.installedVersion(for: id) {
-            Text("版本 \(version)")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-
-        if case .failed(let reason) = manager.managementActionState(
-            for: id,
-            remote: manager.remotePlugins.first(where: { $0.id == id })
-        ) {
-            Text(reason)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
+enum TVFullPluginFocus: Hashable {
+    case summary, check, sources, addSource, installAll
+    case installed(String), available(String)
+    case detailAction, detailLogin, detailUninstall, detailBack
+    case source(String), playlist(UUID), playlistName, playlistIcon, playlistURL
+    case sourceAdd, sourceRefresh, sourceDelete, sourceDeleteAll, sourceBack, sourceEdit
+    case inputField, inputAdd, inputCancel
 }
 
 private struct TVFullPluginDetailView: View {
     let pluginID: String
     let manager: PluginSourceManager
     let availability: PluginAvailabilityService
+    let initialFocus: TVFullPluginFocus
     let performAction: (String) -> Void
-    let refreshAfterMutation: () async -> Void
+    let install: (String) -> Void
+    let uninstall: (String) -> Void
     let onClose: () -> Void
 
-    @Environment(PluginInstallConsentService.self) private var consentService
-    @FocusState private var focusedAction: TVFullPluginFocus?
-    @State private var showUninstallConfirmation = false
+    @Environment(AppState.self) private var appViewModel
+    @Environment(PluginInstallConsentService.self) private var consent
+    @ObservedObject private var credentials = PlatformCredentialSyncService.shared
+    @FocusState private var focus: TVFullPluginFocus?
+    @State private var showLogin = false
+
+    private var remote: RemotePluginDisplayItem? { manager.remotePlugins.first { $0.id == pluginID } }
+    private var installed: Bool { manager.installedVersion(for: pluginID) != nil }
+    private var needsLogin: Bool { availability.requiresLogin(for: pluginID) || remote?.item.auth?.required == true }
+    private var phase: PluginManagementRowPhase { TVPluginStatus.phase(pluginID, manager: manager) }
 
     var body: some View {
-        @Bindable var consent = consentService
-
-        NavigationStack {
-            TVFullDualColumnLayout {
-                TVFullPluginSummary(
-                    pluginID: pluginID,
-                    manager: manager,
-                    availability: availability
-                )
-            } right: {
-                operationColumn
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .onExitCommand(perform: onClose)
-            .defaultFocus($focusedAction, .detailBack)
-        }
-        .confirmationDialog(
-            "卸载插件",
-            isPresented: $showUninstallConfirmation
-        ) {
-            Button("卸载 \(manager.managementDisplayName(for: pluginID))", role: .destructive) {
-                guard !manager.isManagementBusy else { return }
-                _ = manager.uninstallPlugin(pluginId: pluginID)
-                Task {
-                    await refreshAfterMutation()
-                    onClose()
+        let phase = phase
+        let activity = consent.isPresenting ? nil : TVPluginInstallationActivity(phase: phase, manager: manager, pluginID: pluginID)
+        let canStop = manager.isPendingInstallation(for: pluginID)
+        TVFullDualColumnLayout {
+            TVPluginDetailInformation(pluginID: pluginID, manager: manager, availability: availability,
+                loggedIn: credentials.isLoggedIn(pluginId: pluginID))
+        } right: {
+            VStack(alignment: .leading, spacing: TVPluginLayout.actionSpacing) {
+                TVPluginConfirmRow(title: activity.map { canStop ? "\($0.title) · 停止" : $0.title } ?? primaryTitle,
+                    symbol: primarySymbol,
+                    confirmation: consent.isPresenting || (!installed && needsLogin && (phase == .install || isInstallFailure))
+                        ? "需要登录 · 再按一次继续安装" : nil,
+                    installation: activity, showsInstallationStop: canStop,
+                    cancel: { if consent.isPresenting { consent.resolve(false) } },
+                    action: primaryAction)
+                    .focused($focus, equals: .detailAction)
+                    .accessibilityIdentifier("plugins.detail.primary")
+                if installed && needsLogin && !credentials.isLoggedIn(pluginId: pluginID) {
+                    TVFullOperationRow(title: "登录账号", symbol: "person.crop.circle") { showLogin = true }
+                        .focused($focus, equals: .detailLogin)
+                }
+                TVFullOperationRow(title: consent.isPresenting ? "取消安装并返回" : "返回",
+                    symbol: "chevron.left", action: close)
+                    .focused($focus, equals: .detailBack)
+                if installed {
+                    TVPluginConfirmRow(title: "卸载插件", symbol: "trash",
+                        confirmation: "再按一次卸载", destructive: true,
+                        disabled: manager.isManagementBusy, action: { uninstall(pluginID) })
+                        .focused($focus, equals: .detailUninstall)
+                        .padding(.top, TVPluginLayout.destructiveSpacing)
+                        .accessibilityIdentifier("plugins.detail.uninstall")
                 }
             }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("卸载后需要重新安装才能继续使用。")
+            .focusSection()
         }
-        .alert(consent.alertTitle, isPresented: $consent.isPresenting) {
-            Button(consent.continueButtonTitle) { consent.resolve(true) }
-            Button("取消", role: .cancel) { consent.resolve(false) }
-        } message: {
-            Text(consent.alertMessage)
+        .defaultFocus($focus, initialFocus)
+        .onExitCommand {
+            guard !showLogin else { return }
+            close()
         }
-        .onChange(of: actionPresentation?.title) { oldTitle, newTitle in
-            if oldTitle != nil, newTitle == nil {
-                focusedAction = .detailBack
-            }
+        .onChange(of: consent.isPresenting) { _, presenting in
+            if presenting { focus = .detailAction }
+        }
+        .onDisappear {
+            if !showLogin && consent.isPresenting { consent.resolve(false) }
+        }
+        .fullScreenCover(isPresented: $showLogin, onDismiss: { focus = .detailLogin }) {
+            AccountManagementView(recoveryPluginIDs: [pluginID])
+                .padding(TVPluginLayout.pageMargin)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.background)
+                .environment(appViewModel)
         }
     }
 
-    @ViewBuilder
-    private var operationColumn: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            if let actionPresentation {
-                TVFullOperationRow(
-                    title: actionPresentation.title,
-                    symbol: actionPresentation.symbol,
-                    trailing: actionPresentation.trailing,
-                    disabled: manager.isManagementBusy && !actionPresentation.isRunning,
-                    action: { performAction(pluginID) }
-                )
-                .focused($focusedAction, equals: .detailAction)
-            }
-
-            TVFullOperationRow(
-                title: "返回",
-                symbol: "chevron.left",
-                action: onClose
-            )
-            .focused($focusedAction, equals: .detailBack)
-
-            if manager.installedVersion(for: pluginID) != nil {
-                Divider()
-                    .padding(.vertical, 8)
-                TVFullOperationRow(
-                    title: "卸载插件",
-                    symbol: "trash",
-                    disabled: manager.isManagementBusy,
-                    action: { showUninstallConfirmation = true }
-                )
-                .focused($focusedAction, equals: .detailUninstall)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
+    private var isInstallFailure: Bool {
+        if case .failed = phase { return true }
+        return false
     }
 
-    private var actionPresentation: TVFullActionPresentation? {
-        let remote = manager.remotePlugins.first { $0.id == pluginID }
-        switch manager.managementActionState(for: pluginID, remote: remote) {
-        case .install:
-            return TVFullActionPresentation(
-                title: "安装",
-                symbol: "arrow.down.circle",
-                trailing: nil,
-                isRunning: false
-            )
-        case .update:
-            return TVFullActionPresentation(
-                title: "更新",
-                symbol: "arrow.down.circle",
-                trailing: nil,
-                isRunning: false
-            )
+    private var primaryTitle: String {
+        if consent.isPresenting { return "需要登录 · 继续安装" }
+        switch phase {
+        case .install: return "安装"
+        case .update: return "更新到 \(remote?.item.version ?? "")"
+        case .queued, .progress: return "停止"
+        case .failed: return "重试"
+        case .success, .idle: return "已安装"
+        }
+    }
+
+    private var primarySymbol: String {
+        switch phase {
+        case .failed: "arrow.clockwise"
+        case .success, .idle: "checkmark"
+        default: "arrow.down.circle"
+        }
+    }
+
+    private func primaryAction() {
+        if consent.isPresenting { consent.resolve(true); return }
+        if manager.isPendingInstallation(for: pluginID) {
+            manager.cancelInstallation(pluginId: pluginID)
+            return
+        }
+        guard !manager.isManagementBusy else { return }
+        switch phase {
+        case .update: performAction(pluginID)
+        case .install where remote != nil: install(pluginID)
         case .failed:
-            return TVFullActionPresentation(
-                title: "重试",
-                symbol: "arrow.clockwise",
-                trailing: nil,
-                isRunning: false
+            if installed { performAction(pluginID) }
+            else if remote != nil { install(pluginID) }
+        default: break
+        }
+    }
+
+    private func close() {
+        if consent.isPresenting { consent.resolve(false) }
+        onClose()
+    }
+}
+
+private struct TVPluginDetailInformation: View {
+    let pluginID: String
+    let manager: PluginSourceManager
+    let availability: PluginAvailabilityService
+    let loggedIn: Bool
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.colorSchemeContrast) private var contrast
+    @State private var features: [PlatformFeature] = []
+
+    var body: some View {
+        let remote = manager.remotePlugins.first { $0.id == pluginID }
+        let source = manager.sourceURLs.first { url in
+            manager.catalogPlugins(forSourceURLs: [url]).contains { $0.id == pluginID }
+        }
+        VStack(alignment: .leading, spacing: TVPluginLayout.infoSpacing) {
+            TVPluginManagementIcon(pluginID: pluginID, name: manager.managementDisplayName(for: pluginID),
+                remote: remote?.item, size: TVPluginLayout.detailIcon,
+                revision: availability.catalogRevision)
+                .padding(.bottom, TVPluginLayout.infoSpacing)
+            Text(manager.managementDisplayName(for: pluginID)).font(.title.bold()).lineLimit(1)
+            Text("版本 \(manager.installedVersion(for: pluginID) ?? remote?.item.version ?? "未知")")
+                .foregroundStyle(.secondary)
+            if let host = source.flatMap({ URL(string: $0)?.host() }) {
+                Text("来自 \(host)").foregroundStyle(.secondary).lineLimit(1)
+            }
+            Text(availability.requiresLogin(for: pluginID) || remote?.item.auth?.required == true
+                ? (loggedIn ? "已登录" : "需要登录") : "不需要登录")
+                .foregroundStyle(.secondary)
+            if case .failed(let reason) = TVPluginStatus.phase(pluginID, manager: manager) {
+                Label(TVPluginStatus.failureReason(reason), systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(contrast == .increased ? Color.primary : TVPluginLayout.failure).lineLimit(1)
+            }
+            if !features.isEmpty {
+                TVPluginTagFlowLayout(spacing: TVPluginLayout.infoSpacing, layoutDirection: layoutDirection) {
+                    ForEach(features, id: \.rawValue) { feature in
+                        Text(feature.displayName).font(.caption).lineLimit(1)
+                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .background(.quaternary, in: Capsule())
+                    }
+                }
+            }
+        }
+        .font(.callout)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: availability.catalogRevision) {
+            features = PlatformCapability.declaredFeatures(forPluginId: pluginID) ?? []
+        }
+    }
+}
+
+/// Packs capability tags by their own width. Horizontal and vertical gaps share one spacing.
+private struct TVPluginTagFlowLayout: Layout {
+    let spacing: CGFloat
+    let layoutDirection: LayoutDirection
+
+    private struct Placement {
+        let origins: [CGPoint]
+        let sizes: [CGSize]
+        let size: CGSize
+    }
+
+    private func placement(width: CGFloat?, subviews: Subviews) -> Placement {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let limit = width.flatMap { $0.isFinite ? max(0, $0) : nil }
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var contentWidth: CGFloat = 0
+        for size in sizes {
+            if x > 0, let limit, x + size.width > limit {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            contentWidth = max(contentWidth, x + size.width)
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        let reportedWidth = limit ?? contentWidth
+        return Placement(origins: origins, sizes: sizes,
+            size: CGSize(width: reportedWidth, height: sizes.isEmpty ? 0 : y + rowHeight))
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        placement(width: proposal.width, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let placed = placement(width: bounds.width, subviews: subviews)
+        let isRightToLeft = layoutDirection == .rightToLeft
+        for index in subviews.indices {
+            let origin = placed.origins[index]
+            subviews[index].place(
+                at: CGPoint(x: isRightToLeft ? bounds.maxX - origin.x : bounds.minX + origin.x,
+                            y: bounds.minY + origin.y),
+                anchor: isRightToLeft ? .topTrailing : .topLeading,
+                proposal: ProposedViewSize(placed.sizes[index])
             )
-        case .installing:
-            return TVFullActionPresentation(
-                title: "安装中",
-                symbol: "arrow.down.circle",
-                trailing: "请稍候",
-                isRunning: true
-            )
-        case .updating:
-            return TVFullActionPresentation(
-                title: "更新中",
-                symbol: "arrow.down.circle",
-                trailing: "请稍候",
-                isRunning: true
-            )
-        case .installed:
-            return nil
         }
     }
 }
@@ -761,315 +590,318 @@ private struct TVFullPluginSourcesView: View {
     let onClose: () -> Void
     let refreshCatalog: () async -> Void
     let refreshAfterMutation: () async -> Void
-
+    let commitUninstall: () -> Void
+    @Environment(AppState.self) private var appViewModel
     @State private var selectedSource: TVFullSourceSelection?
-    @State private var showAddSource = false
-    @State private var isRefreshingAfterAdd = false
-    @State private var focusToRestore: TVFullPluginFocus?
-    @State private var playlists = PlaylistInstanceStore.shared.all()
-    @State private var playlistStatuses: [UUID: PlaylistRefreshStatus] = [:]
     @State private var selectedPlaylist: PlaylistInstance?
-    @FocusState private var focusedAction: TVFullPluginFocus?
+    @State private var showAddSource = false
+    @State private var playlists = PlaylistInstanceStore.shared.all()
+    @FocusState private var focus: TVFullPluginFocus?
+    @State private var savedFocus: TVFullPluginFocus = .sourceAdd
 
     var body: some View {
-        TVFullDualColumnLayout {
-            TVFullSourceSummary(manager: manager)
-        } right: {
-            sourceOperationColumn
+        ScrollView {
+            VStack(alignment: .leading, spacing: TVPluginLayout.sectionSpacing) {
+                HStack {
+                    Text("来源").font(.largeTitle.bold())
+                        .padding(.leading, -TVPluginLayout.titleInkInset)
+                    Spacer()
+                    TVFullOperationRow(title: "添加来源", symbol: "plus") {
+                        savedFocus = .sourceAdd
+                        showAddSource = true
+                    }
+                    .frame(width: 340).focused($focus, equals: .sourceAdd)
+                }
+                VStack(alignment: .leading, spacing: TVPluginLayout.headingSpacing) {
+                    TVFullPluginSectionHeader(title: "插件订阅源", count: manager.sourceURLs.count)
+                    if manager.sourceURLs.isEmpty {
+                        TVPluginEmptyState(title: "尚未添加订阅源", message: "用手机扫码输入订阅地址或兑换码。",
+                            actionTitle: "添加来源", action: { showAddSource = true })
+                    }
+                    ForEach(manager.sourceURLs, id: \.self) { url in
+                        TVFullOperationRow(title: URL(string: url)?.host() ?? url, symbol: "link",
+                            trailing: sourceStatus(url),
+                            trailingColor: manager.health(for: url).isFailed ? TVPluginLayout.failure : .secondary) {
+                                savedFocus = .source(url)
+                                selectedSource = TVFullSourceSelection(id: url)
+                            }
+                            .focused($focus, equals: .source(url))
+                            .contextMenu {
+                                Button("刷新", systemImage: "arrow.clockwise") {
+                                    Task { _ = await manager.refreshSource(url) }
+                                }.disabled(manager.isManagementBusy)
+                                Button("查看详情", systemImage: "info.circle") {
+                                    savedFocus = .source(url)
+                                    selectedSource = TVFullSourceSelection(id: url)
+                                }
+                            }
+                    }
+                }.focusSection()
+                VStack(alignment: .leading, spacing: TVPluginLayout.headingSpacing) {
+                    TVFullPluginSectionHeader(title: "播放列表", count: playlists.count)
+                    if playlists.isEmpty {
+                        TVPluginEmptyState(title: "尚未添加播放列表", message: "支持 m3u 播放列表地址。",
+                            actionTitle: "添加来源", action: { showAddSource = true })
+                    }
+                    ForEach(playlists) { instance in
+                        TVFullOperationRow(title: instance.name, symbol: "list.and.film",
+                            trailing: "播放列表") {
+                                savedFocus = .playlist(instance.id)
+                                selectedPlaylist = instance
+                            }
+                            .focused($focus, equals: .playlist(instance.id))
+                    }
+                }.focusSection()
+                TVFullOperationRow(title: "返回", symbol: "chevron.left", action: onClose)
+                    .frame(width: 520).focused($focus, equals: .sourceBack)
+            }
+            .padding(.horizontal, TVPluginLayout.pageMargin)
+            .padding(.vertical, TVPluginLayout.topMargin)
         }
+        .scrollClipDisabled()
         .toolbar(.hidden, for: .navigationBar)
-        .onExitCommand(perform: onClose)
-        .defaultFocus($focusedAction, manager.isManagementBusy ? .sourceBack : .sourceAdd)
-        .fullScreenCover(item: $selectedSource, onDismiss: restoreSourceFocus) { selection in
-            NavigationStack {
-                TVFullSourceDetailView(
-                    sourceURL: selection.id,
-                    manager: manager,
-                    refreshAfterMutation: refreshAfterMutation,
-                    deleteSource: deleteSource,
-                    onClose: { selectedSource = nil }
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
+        .defaultFocus($focus, .sourceAdd)
+        .onExitCommand {
+            guard selectedSource == nil, selectedPlaylist == nil, !showAddSource else { return }
+            onClose()
         }
-        .fullScreenCover(item: $selectedPlaylist, onDismiss: restoreSourceFocus) { instance in
-            NavigationStack {
-                TVPlaylistDetailView(instance: instance, onClose: { selectedPlaylist = nil })
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
-            .environment(appViewModel)
-        }
-        .task(id: playlists.map(\.id)) {
-            var result: [UUID: PlaylistRefreshStatus] = [:]
-            for instance in playlists {
-                result[instance.id] = await PlaylistPlatformService.shared.status(instanceID: instance.id)
-            }
-            playlistStatuses = result
-        }
+        .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
             playlists = PlaylistInstanceStore.shared.all()
         }
-        .fullScreenCover(isPresented: $showAddSource, onDismiss: restoreSourceFocus) {
+        .fullScreenCover(item: $selectedSource, onDismiss: restoreFocus) { selection in
+            TVFullSourceDetailView(sourceURL: selection.id, manager: manager,
+                refreshAfterMutation: refreshAfterMutation, commitUninstall: commitUninstall,
+                onClose: { selectedSource = nil })
+                .background(.background)
+        }
+        .fullScreenCover(item: $selectedPlaylist, onDismiss: restoreFocus) { instance in
+            TVPlaylistDetailView(instance: instance, commitUninstall: commitUninstall,
+                onClose: { selectedPlaylist = nil })
+                .environment(appViewModel).background(.background)
+        }
+        .fullScreenCover(isPresented: $showAddSource, onDismiss: restoreFocus) {
             NavigationStack {
-                TVFullPluginSourceInputView(onAdded: refreshAfterAddingSource)
+                TVFullPluginSourceInputView(onAdded: { Task { await refreshCatalog() } })
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
-            .environment(appViewModel)
+            .environment(appViewModel).background(.background)
         }
     }
 
-    private func restoreSourceFocus() {
-        let target = focusToRestore
-        focusToRestore = nil
-        if case .source(let url) = target, manager.sourceURLs.contains(url) {
-            focusedAction = target
-        } else if case .playlist(let id) = target, playlists.contains(where: { $0.id == id }) {
-            focusedAction = target
-        } else {
-            // Adding a source refreshes the combined catalog. Keep an enabled
-            // target throughout that work, without moving focus again on completion.
-            focusedAction = manager.isManagementBusy || isRefreshingAfterAdd ? .sourceBack : .sourceAdd
-        }
+    private func restoreFocus() {
+        if case .source(let url) = savedFocus, !manager.sourceURLs.contains(url) { savedFocus = .sourceAdd }
+        if case .playlist(let id) = savedFocus, !playlists.contains(where: { $0.id == id }) { savedFocus = .sourceAdd }
+        focus = savedFocus
     }
 
-    private func refreshAfterAddingSource() {
-        isRefreshingAfterAdd = true
-        Task {
-            await refreshCatalog()
-            isRefreshingAfterAdd = false
-        }
-    }
-
-    @Environment(AppState.self) private var appViewModel
-
-    @ViewBuilder
-    private var sourceOperationColumn: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            TVFullOperationRow(
-                title: "添加订阅源",
-                symbol: "plus",
-                disabled: manager.isManagementBusy,
-                action: {
-                    focusToRestore = focusedAction
-                    showAddSource = true
-                }
-            )
-            .focused($focusedAction, equals: .sourceAdd)
-
-            TVFullPluginSectionHeader(title: "已添加", count: manager.sourceURLs.count + playlists.count)
-
-            if manager.sourceURLs.isEmpty, playlists.isEmpty {
-                Text("尚未添加订阅源")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            } else {
-                // m3u 播放列表与插件订阅源同列展示。
-                ForEach(playlists) { instance in
-                    TVFullOperationRow(
-                        title: instance.name,
-                        symbol: "chevron.right",
-                        trailing: playlistStatus(for: instance),
-                        action: {
-                            focusToRestore = focusedAction
-                            selectedPlaylist = instance
-                        }
-                    )
-                    .focused($focusedAction, equals: .playlist(instance.id))
-                }
-                ForEach(manager.sourceURLs, id: \.self) { url in
-                    TVFullOperationRow(
-                        title: sourceHost(for: url),
-                        symbol: "chevron.right",
-                        trailing: sourceStatus(for: url),
-                        action: {
-                            focusToRestore = focusedAction
-                            selectedSource = TVFullSourceSelection(id: url)
-                        }
-                    )
-                    .focused($focusedAction, equals: .source(url))
-                    .accessibilityIdentifier("plugins.source.\(url)")
-                }
-            }
-
-            TVFullOperationRow(
-                title: "返回",
-                symbol: "chevron.left",
-                action: onClose
-            )
-            .focused($focusedAction, equals: .sourceBack)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
-    }
-
-    private func sourceHost(for url: String) -> String {
-        URL(string: url)?.host() ?? url
-    }
-
-    private func playlistStatus(for instance: PlaylistInstance) -> String {
-        let status = playlistStatuses[instance.id]
-        if status?.lastErrorMessage != nil, status?.fetchedAt == nil { return "m3u · 异常" }
-        if let count = status?.channelCount { return "m3u · \(count) 个频道" }
-        return "m3u"
-    }
-
-    private func sourceStatus(for url: String) -> String {
+    private func sourceStatus(_ url: String) -> String {
         switch manager.health(for: url) {
-        case .unknown:
-            return "未检查"
-        case .checking:
-            return "检查中"
-        case .healthy(let count):
-            return "\(count) 个插件"
-        case .failed:
-            return "异常"
+        case .unknown: "未检查"
+        case .checking: "检查中"
+        case .healthy(let count): "\(count) 个插件"
+        case .failed: "读取失败 · 查看详情"
         }
     }
-
-    private func deleteSource(_ url: String) async {
-        guard !manager.isManagementBusy else { return }
-        await manager.removeSourceAndAssociatedPlugins(url)
-        await refreshAfterMutation()
-        await refreshCatalog()
-    }
 }
 
-private struct TVFullSourceSelection: Identifiable, Equatable {
-    let id: String
-}
-
-private struct TVFullSourceSummary: View {
-    let manager: PluginSourceManager
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Image(systemName: "link")
-                .font(.system(size: 72))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text("订阅源")
-                .font(.title2)
-            Text("添加和管理插件目录与 m3u 播放列表，查看订阅源的连接状态。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let error = manager.errorMessage, !error.isEmpty {
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-}
+private struct TVFullSourceSelection: Identifiable { let id: String }
 
 private struct TVFullSourceDetailView: View {
     let sourceURL: String
     let manager: PluginSourceManager
     let refreshAfterMutation: () async -> Void
-    let deleteSource: (String) async -> Void
+    let commitUninstall: () -> Void
     let onClose: () -> Void
-
-    @State private var showDeleteConfirmation = false
+    @FocusState private var focus: TVFullPluginFocus?
     @State private var isRefreshing = false
-    @FocusState private var focusedAction: TVFullPluginFocus?
+    var body: some View {
+        TVFullDualColumnLayout {
+            VStack(alignment: .leading, spacing: TVPluginLayout.infoSpacing) {
+                Image(systemName: "link").font(.system(size: 72)).foregroundStyle(.secondary)
+                Text(URL(string: sourceURL)?.host() ?? sourceURL).font(.title2.bold()).lineLimit(1)
+                Text(sourceURL).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                if case .failed(let reason) = manager.health(for: sourceURL) {
+                    Text(reason).font(.callout).foregroundStyle(TVPluginLayout.failure).lineLimit(1)
+                }
+                Text("删除来源时可保留插件，或同时卸载仅由此来源提供的插件。")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        } right: {
+            VStack(spacing: TVPluginLayout.actionSpacing) {
+                TVFullOperationRow(title: isRefreshing ? "刷新中" : "刷新订阅源", symbol: "arrow.clockwise",
+                    disabled: manager.isManagementBusy || isRefreshing) {
+                        isRefreshing = true
+                        Task {
+                            _ = await manager.refreshSource(sourceURL)
+                            await refreshAfterMutation()
+                            isRefreshing = false
+                        }
+                    }.focused($focus, equals: .sourceRefresh)
+                TVFullOperationRow(title: "返回", symbol: "chevron.left", action: onClose)
+                    .focused($focus, equals: .sourceBack)
+                TVPluginConfirmRow(title: "删除来源 · 保留插件", symbol: "trash",
+                    confirmation: "再按一次删除来源", destructive: true,
+                    disabled: manager.isManagementBusy || isRefreshing) {
+                        commitUninstall()
+                        manager.removeSource(sourceURL)
+                        onClose()
+                    }
+                    .focused($focus, equals: .sourceDelete)
+                    .padding(.top, TVPluginLayout.destructiveSpacing)
+                TVPluginConfirmRow(title: "删除并卸载关联插件", symbol: "trash",
+                    confirmation: "再按一次删除并卸载", destructive: true,
+                    disabled: manager.isManagementBusy || isRefreshing) {
+                        commitUninstall()
+                        Task {
+                            await manager.removeSourceAndAssociatedPlugins(sourceURL)
+                            await refreshAfterMutation()
+                            onClose()
+                        }
+                    }.focused($focus, equals: .sourceDeleteAll)
+            }.focusSection()
+        }
+        .defaultFocus($focus, .sourceRefresh)
+        .onExitCommand(perform: onClose)
+    }
+}
+
+private struct TVPlaylistDetailView: View {
+    let instance: PlaylistInstance
+    let commitUninstall: () -> Void
+    let onClose: () -> Void
+    @Environment(AppState.self) private var appViewModel
+    @State private var status: PlaylistRefreshStatus?
+    @State private var isRefreshing = false
+    @State private var isEditing = false
+    @State private var message: String?
+    @FocusState private var focus: TVFullPluginFocus?
 
     var body: some View {
         TVFullDualColumnLayout {
-            sourceSummary
+            VStack(alignment: .leading, spacing: TVPluginLayout.infoSpacing) {
+                Image(systemName: "list.and.film").font(.system(size: 72)).foregroundStyle(.secondary)
+                Text(instance.name).font(.title2.bold()).lineLimit(1)
+                Text(instance.sourceURL).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                if let count = status?.channelCount {
+                    Text("\(count) 个频道").font(.callout).foregroundStyle(.secondary)
+                }
+                if let error = message ?? status?.lastErrorMessage {
+                    Text(error).font(.callout).foregroundStyle(TVPluginLayout.failure).lineLimit(1)
+                }
+            }
         } right: {
-            operationColumn
+            VStack(spacing: TVPluginLayout.actionSpacing) {
+                TVFullOperationRow(title: isRefreshing ? "正在刷新" : "刷新播放列表", symbol: "arrow.clockwise",
+                    disabled: isRefreshing, action: refresh)
+                    .focused($focus, equals: .sourceRefresh)
+                TVFullOperationRow(title: "编辑播放列表", symbol: "pencil", disabled: isRefreshing) { isEditing = true }
+                    .focused($focus, equals: .sourceEdit)
+                TVFullOperationRow(title: "返回", symbol: "chevron.left", action: onClose)
+                    .focused($focus, equals: .sourceBack)
+                TVPluginConfirmRow(title: "删除播放列表", symbol: "trash", confirmation: "再按一次删除",
+                    destructive: true, disabled: isRefreshing, action: remove)
+                    .focused($focus, equals: .sourceDelete)
+                    .padding(.top, TVPluginLayout.destructiveSpacing)
+            }.focusSection()
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .onExitCommand(perform: onClose)
-        .defaultFocus($focusedAction, .sourceRefresh)
-        .confirmationDialog("删除订阅源", isPresented: $showDeleteConfirmation) {
-            Button("删除并卸载关联插件", role: .destructive) {
-                Task {
-                    await deleteSource(sourceURL)
-                    onClose()
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("删除订阅源后，只由此源提供且没有其他来源覆盖的插件也会被移除。")
+        .defaultFocus($focus, .sourceRefresh)
+        .onExitCommand { if !isEditing { onClose() } }
+        .task { status = await PlaylistPlatformService.shared.status(instanceID: instance.id) }
+        .fullScreenCover(isPresented: $isEditing, onDismiss: { focus = .sourceEdit }) {
+            TVPlaylistEditView(instance: instance, onSaved: onClose).environment(appViewModel).background(.background)
         }
     }
 
-    private var sourceSummary: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Image(systemName: manager.health(for: sourceURL).isFailed ? "exclamationmark.circle" : "link")
-                .font(.system(size: 72))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(URL(string: sourceURL)?.host() ?? sourceURL)
-                .font(.title2)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(sourceURL)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            switch manager.health(for: sourceURL) {
-            case .unknown:
-                Text("尚未检查")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            case .checking:
-                ProgressView("检查中")
-            case .healthy(let count):
-                Text("包含 \(count) 个插件")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            case .failed(let reason):
-                Text(reason)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    private func refresh() {
+        isRefreshing = true
+        Task {
+            defer { isRefreshing = false }
+            do {
+                _ = try await PlaylistPlatformService.shared.refresh(instanceID: instance.id)
+                message = nil
+            } catch { message = PlaylistPlatformService.userMessage(for: error) }
+            status = await PlaylistPlatformService.shared.status(instanceID: instance.id)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    @ViewBuilder
-    private var operationColumn: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            TVFullOperationRow(
-                title: "刷新订阅源",
-                symbol: "arrow.clockwise",
-                disabled: manager.isManagementBusy || isRefreshing || manager.health(for: sourceURL) == .checking,
-                action: {
-                    guard !isRefreshing, manager.health(for: sourceURL) != .checking else { return }
-                    isRefreshing = true
-                    Task {
-                        _ = await manager.refreshSource(sourceURL)
-                        await refreshAfterMutation()
-                        isRefreshing = false
-                    }
-                }
-            )
-            .focused($focusedAction, equals: .sourceRefresh)
-
-            TVFullOperationRow(
-                title: "删除订阅源",
-                symbol: "trash",
-                disabled: manager.isManagementBusy || isRefreshing || manager.health(for: sourceURL) == .checking,
-                action: { showDeleteConfirmation = true }
-            )
-            .focused($focusedAction, equals: .sourceDelete)
-
-            TVFullOperationRow(
-                title: "返回",
-                symbol: "chevron.left",
-                action: onClose
-            )
-            .focused($focusedAction, equals: .sourceBack)
+    private func remove() {
+        commitUninstall()
+        Task {
+            do {
+                try PlaylistInstanceStore.shared.remove(id: instance.id)
+                await PlaylistPlatformService.shared.removeCache(instanceID: instance.id)
+                await appViewModel.pluginAvailability.checkAvailability()
+                onClose()
+            } catch { message = PlaylistPlatformService.userMessage(for: error) }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .focusSection()
+    }
+}
+
+private struct TVPlaylistEditView: View {
+    let instance: PlaylistInstance
+    let onSaved: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appViewModel
+    @State private var name = ""
+    @State private var icon = ""
+    @State private var source = ""
+    @State private var message: String?
+    @State private var isSaving = false
+    @FocusState private var focus: TVFullPluginFocus?
+
+    var body: some View {
+        TVFullDualColumnLayout {
+            VStack(alignment: .leading, spacing: TVPluginLayout.infoSpacing) {
+                Text("编辑播放列表").font(.title.bold())
+                Text("可使用手机的远程输入页面填写名称和地址。").font(.callout).foregroundStyle(.secondary)
+                let service = appViewModel.remoteInputService
+                if service.isRunning && !service.localIPAddress.isEmpty {
+                    Image(uiImage: Common.generateQRCode(from: "http://\(service.localIPAddress):\(service.port)/config"))
+                        .resizable().interpolation(.none).scaledToFit().frame(width: 280, height: 280)
+                }
+                if let message { Text(message).font(.callout).foregroundStyle(TVPluginLayout.failure).lineLimit(1) }
+            }
+        } right: {
+            VStack(spacing: TVPluginLayout.actionSpacing) {
+                TextField("名称", text: $name).focused($focus, equals: .playlistName)
+                TextField("播放列表地址", text: $source).focused($focus, equals: .playlistURL)
+                TextField("图标地址（可选）", text: $icon).focused($focus, equals: .playlistIcon)
+                TVPluginConfirmRow(title: isSaving ? "保存中" : "保存", symbol: "checkmark",
+                    confirmation: "再按一次保存", disabled: isSaving, action: save)
+                TVFullOperationRow(title: "取消", symbol: "chevron.left") { dismiss() }
+            }.focusSection()
+        }
+        .defaultFocus($focus, .playlistName)
+        .onExitCommand { dismiss() }
+        .task { name = instance.name; icon = instance.iconURL ?? ""; source = instance.sourceURL }
+        .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
+            guard let event = appViewModel.remoteInputService.lastEvent else { return }
+            switch event.field {
+            case .title: name = event.value
+            case .url: if focus == .playlistIcon { icon = event.value } else { source = event.value }
+            case .config: if let url = event.url { source = url }
+            case .search, .cookie: break
+            }
+        }
+    }
+
+    private func save() {
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            do {
+                let preview = source != instance.sourceURL ? try await PlaylistPlatformService.shared.preview(sourceURL: source) : nil
+                let reserved = Set(LiveParseJSPlatformManager.availablePlatforms
+                    .filter { !PlaylistPlatformIdentity.isPlaylist($0.pluginId) }.map(\.displayName))
+                let updated = try PlaylistInstanceStore.shared.update(id: instance.id, name: name,
+                    iconURL: icon, sourceURL: source, reservedNames: reserved)
+                if let preview { await PlaylistPlatformService.shared.seed(preview, for: updated) }
+                if let icon = updated.iconURL, !icon.isEmpty { await PlaylistIconCache.fetch(iconURL: icon) }
+                await appViewModel.pluginAvailability.checkAvailability()
+                dismiss()
+                onSaved()
+            } catch { message = PlaylistPlatformService.userMessage(for: error) }
+        }
     }
 }
 
@@ -1120,7 +952,7 @@ private struct TVFullPluginSourceInputView: View {
     }
 
     private var explanationColumn: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: TVPluginLayout.actionSpacing) {
             Text("添加订阅源")
                 .font(.title2)
             remoteInputQRPanel
@@ -1141,7 +973,7 @@ private struct TVFullPluginSourceInputView: View {
     /// 地址内容是 m3u 播放列表：填写平台名称（必填）与图标地址(可选)后添加。
     private func playlistColumn(sourceURL: String) -> some View {
         let trimmedName = playlistName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return VStack(alignment: .leading, spacing: 15) {
+        return VStack(alignment: .leading, spacing: TVPluginLayout.actionSpacing) {
             TVFullPluginSectionHeader(title: "添加播放列表")
             if let preview = playlistPreview {
                 // 与分区标题同一内容边距。
@@ -1169,7 +1001,7 @@ private struct TVFullPluginSourceInputView: View {
             if let localErrorMessage {
                 Text(localErrorMessage)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(TVPluginLayout.failure)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -1227,7 +1059,7 @@ private struct TVFullPluginSourceInputView: View {
     }
 
     private var sourceColumn: some View {
-        VStack(alignment: .leading, spacing: 15) {
+        VStack(alignment: .leading, spacing: TVPluginLayout.actionSpacing) {
             TVFullPluginSectionHeader(title: "订阅地址、兑换码或 m3u 地址")
             TextField("输入订阅地址、兑换码或 m3u 地址", text: $inputURL)
                 .accessibilityLabel("订阅地址、兑换码或 m3u 地址")
@@ -1238,12 +1070,12 @@ private struct TVFullPluginSourceInputView: View {
                !error.isEmpty {
                 Text(error)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(TVPluginLayout.failure)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             if isProcessing {
-                HStack(spacing: 15) {
+                HStack(spacing: TVPluginLayout.actionSpacing) {
                     ProgressView()
                     Text("添加中…")
                         .font(.body)
@@ -1272,13 +1104,13 @@ private struct TVFullPluginSourceInputView: View {
     private var remoteInputQRPanel: some View {
         let service = appViewModel.remoteInputService
         let url = "http://\(service.localIPAddress):\(service.port)/config"
-        return VStack(spacing: 16) {
+        return VStack(spacing: TVPluginLayout.infoSpacing) {
             if service.isRunning && !service.localIPAddress.isEmpty {
                 Image(uiImage: Common.generateQRCode(from: url))
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 280, height: 280)
+                    .frame(width: TVPluginLayout.qrSide, height: TVPluginLayout.qrSide)
                     .accessibilityLabel("扫码用手机输入")
                 Text("扫码用手机输入")
                     .font(.headline)
@@ -1320,105 +1152,6 @@ private struct TVFullPluginSourceInputView: View {
             } else if appViewModel.pluginSourceManager.errorMessage == nil {
                 localErrorMessage = "无法解析为订阅源，请确认地址或兑换码有效。"
             }
-        }
-    }
-}
-
-private struct TVPlaylistDetailView: View {
-    let instance: PlaylistInstance
-    let onClose: () -> Void
-
-    @Environment(AppState.self) private var appViewModel
-    @State private var status: PlaylistRefreshStatus?
-    @State private var isRefreshing = false
-    @State private var message: String?
-    @State private var showDeleteConfirmation = false
-    @FocusState private var focusedAction: TVFullPluginFocus?
-
-    var body: some View {
-        TVFullDualColumnLayout {
-            VStack(alignment: .leading, spacing: 24) {
-                Image(systemName: "list.and.film")
-                    .font(.system(size: 72))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                Text(instance.name)
-                    .font(.title2)
-                Text(instance.sourceURL)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(summary)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        } right: {
-            VStack(alignment: .leading, spacing: 15) {
-                TVFullOperationRow(
-                    title: isRefreshing ? "正在刷新…" : "刷新播放列表",
-                    symbol: "arrow.clockwise",
-                    disabled: isRefreshing,
-                    action: refresh
-                )
-                .focused($focusedAction, equals: .sourceRefresh)
-
-                TVFullOperationRow(
-                    title: "删除播放列表",
-                    symbol: "trash",
-                    disabled: isRefreshing,
-                    action: { showDeleteConfirmation = true }
-                )
-                .focused($focusedAction, equals: .sourceDelete)
-
-                TVFullOperationRow(title: "返回", symbol: "chevron.left", action: onClose)
-                    .focused($focusedAction, equals: .sourceBack)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .focusSection()
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        .onExitCommand(perform: onClose)
-        .defaultFocus($focusedAction, .sourceRefresh)
-        .task { status = await PlaylistPlatformService.shared.status(instanceID: instance.id) }
-        .confirmationDialog("删除播放列表", isPresented: $showDeleteConfirmation) {
-            Button("删除", role: .destructive) {
-                Task {
-                    try? PlaylistInstanceStore.shared.remove(id: instance.id)
-                    await PlaylistPlatformService.shared.removeCache(instanceID: instance.id)
-                    await appViewModel.pluginAvailability.checkAvailability()
-                    onClose()
-                }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("删除后，该平台下的收藏和观看历史将无法播放。")
-        }
-    }
-
-    private var summary: String {
-        if let message { return message }
-        if let error = status?.lastErrorMessage { return error }
-        guard let count = status?.channelCount else { return "m3u 播放列表" }
-        var text = "m3u 播放列表 · \(count) 个频道"
-        if let fetchedAt = status?.fetchedAt {
-            text += " · " + PlaylistIconCache.updatedText(fetchedAt)
-        }
-        return text
-    }
-
-    private func refresh() {
-        isRefreshing = true
-        Task {
-            defer { isRefreshing = false }
-            do {
-                _ = try await PlaylistPlatformService.shared.refresh(instanceID: instance.id)
-                message = nil
-            } catch {
-                message = PlaylistPlatformService.userMessage(for: error)
-            }
-            status = await PlaylistPlatformService.shared.status(instanceID: instance.id)
         }
     }
 }

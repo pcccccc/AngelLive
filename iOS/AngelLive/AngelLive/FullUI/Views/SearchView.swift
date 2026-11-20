@@ -58,33 +58,22 @@ struct SearchView: View {
     }
 
     var body: some View {
-        if #available(iOS 18.0, *) {
-            searchPage
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        } else {
-            searchPage
-        }
+        searchPage
+            .roomPlayerZoomCover(navigationState) {
+                playerDestination(.zoom)
+            }
     }
 
     // MARK: - 播放器导航
 
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
-    }
-
     @ViewBuilder
-    private var playerDestination: some View {
+    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
                 categoryRooms: navigationState.categoryRooms
             )
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
                 .fullUITabBarHidden()
         }
     }
@@ -208,12 +197,8 @@ struct SearchView: View {
             }
         }
 
-        if #available(iOS 18.0, *) {
-            content
-        } else {
-            content.navigationDestination(isPresented: playerPresentedBinding) {
-                playerDestination
-            }
+        content.roomPlayerPushDestination(navigationState) {
+            playerDestination(.push)
         }
     }
 

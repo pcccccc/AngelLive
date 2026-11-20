@@ -38,8 +38,15 @@ final class RoomInfoViewModel {
     var currentPlayQualityQn = 0
     var currentCdnIndex = 0      // 当前选中的线路索引
     var currentQualityIndex = 0  // 当前选中的清晰度索引
+    var fullUIQualityTitle: String {
+        guard let selection = RoomPlaybackResolver.selection(
+            in: currentRoomPlayArgs, cdnIndex: currentCdnIndex, qualityIndex: currentQualityIndex
+        ) else { return String(localized: "清晰度") }
+        return PlaybackDisplay.qualityTitle(selection.quality, in: currentRoomPlayArgs)
+    }
     var showControlView: Bool = true
     var isPlaying = false
+    private(set) var isOnDemand = false
     var userPaused = false  // 跟踪用户是否手动暂停
     weak var playerCoordinator: KSVideoPlayer.Coordinator?
     private var qualitySwitchTask: Task<Void, Never>?
@@ -150,7 +157,7 @@ final class RoomInfoViewModel {
     var showDanmuSettingView = false
     var showControl = false {
         didSet {
-            if showControl == true {
+            if showControl && !usesFullUI {
                 controlViewOptionSecond = 5  // 重置计时器
             }
         }
@@ -179,6 +186,9 @@ final class RoomInfoViewModel {
     var danmuServerIsLoading = false
     /// 弹幕状态气泡文案;非空即显示,几秒后自动清空
     var danmuStatusHint: String? = nil
+    private(set) var fullUIDanmakuStatus: DanmakuConnectionStatus?
+    private(set) var showsFullUIDanmakuHint = false
+    private var fullUIDanmakuHintHideTask: Task<Void, Never>?
     /// 自动隐藏气泡的延迟任务
     private var danmuHintHideTask: Task<Void, Never>? = nil
     /// 是否经历过断开(用于区分"首次连上"与"重连恢复",避免正常进房弹气泡)
@@ -188,6 +198,8 @@ final class RoomInfoViewModel {
     var supportsDanmu: Bool {
         PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
     }
+
+    private var usesFullUI: Bool { appViewModel.pluginAvailability.hasAvailablePlugins }
     
     @MainActor
     init(currentRoom: LiveModel, appViewModel: AppState, enterFromLive: Bool, roomType: LiveRoomListType) {
@@ -410,6 +422,7 @@ final class RoomInfoViewModel {
             liveReconnectPolicy: .playerManaged
         )
         let plan = applied.plan
+        isOnDemand = usesFullUI && !plan.isLive
         recoveryCoordinator.playbackConfigured(isLive: plan.isLive)
 
         return PlayerTypeResult(
@@ -786,6 +799,7 @@ final class RoomInfoViewModel {
             return
         }
         danmuServerIsLoading = true
+        if usesFullUI { updateFullUIDanmakuStatus(.connecting) }
         danmuConnectionTask?.cancel()
         let room = currentRoom
         let roomId = room.roomId
@@ -846,6 +860,7 @@ final class RoomInfoViewModel {
                 guard !Task.isCancelled, self.currentRoom == room else { return }
                 await MainActor.run {
                     danmuServerIsLoading = false
+                    if usesFullUI { updateFullUIDanmakuStatus(.failed) }
                 }
             }
         }
@@ -873,6 +888,10 @@ final class RoomInfoViewModel {
         danmuHintHideTask?.cancel()
         danmuHintHideTask = nil
         danmuStatusHint = nil
+        fullUIDanmakuHintHideTask?.cancel()
+        fullUIDanmakuHintHideTask = nil
+        fullUIDanmakuStatus = nil
+        showsFullUIDanmakuHint = false
     }
 
     @MainActor
@@ -949,7 +968,11 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         danmuServerIsConnected = true
         danmuServerIsLoading = false
         // 首次连上提示"已连接",重连成功提示"已恢复"
-        showDanmuHint(danmuHadDisconnected ? "弹幕已恢复" : "弹幕已连接")
+        if usesFullUI {
+            updateFullUIDanmakuStatus(.connected)
+        } else {
+            showDanmuHint(danmuHadDisconnected ? "弹幕已恢复" : "弹幕已连接")
+        }
         danmuHadDisconnected = false
     }
 
@@ -957,7 +980,9 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         danmuServerIsConnected = false
         danmuServerIsLoading = false
         danmuHadDisconnected = true
-        if let error {
+        if usesFullUI {
+            updateFullUIDanmakuStatus(.failed)
+        } else if let error {
             showDanmuHint("弹幕连接已断开:\(error.localizedDescription)", isFailure: true)
         }
     }
@@ -965,7 +990,32 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketIsReconnecting(attempt: Int, maxAttempts: Int) {
         danmuServerIsLoading = true
         danmuHadDisconnected = true
-        showDanmuHint(maxAttempts > 0 ? "弹幕断开,正在重连… (\(attempt)/\(maxAttempts))" : "弹幕断开，正在重连…（第 \(attempt) 次）", isFailure: true)
+        if usesFullUI {
+            updateFullUIDanmakuStatus(.reconnecting)
+        } else {
+            showDanmuHint(maxAttempts > 0 ? "弹幕断开,正在重连… (\(attempt)/\(maxAttempts))" : "弹幕断开，正在重连…（第 \(attempt) 次）", isFailure: true)
+        }
+    }
+
+    @MainActor
+    private func updateFullUIDanmakuStatus(_ status: DanmakuConnectionStatus) {
+        // Repeated callbacks for a single reconnect must share its four-second display window.
+        guard status != fullUIDanmakuStatus else { return }
+        fullUIDanmakuHintHideTask?.cancel()
+        fullUIDanmakuHintHideTask = nil
+        fullUIDanmakuStatus = status
+        showsFullUIDanmakuHint = true
+        guard let duration = status.visibleDuration else { return }
+        fullUIDanmakuHintHideTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: duration)
+            } catch {
+                return
+            }
+            self?.showsFullUIDanmakuHint = false
+            if status == .connected { self?.fullUIDanmakuStatus = nil }
+            self?.fullUIDanmakuHintHideTask = nil
+        }
     }
 
     /// 显示左下角气泡并安排自动隐藏(默认 3 秒)。重复调用会重置计时。
@@ -1014,6 +1064,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         KSOptions.isSecondOpen = true
         subtitlePlayback.stop()
         self.currentRoom = liveModel
+        isOnDemand = false
         getPlayArgs()
         recoveryCoordinator.start()
     }

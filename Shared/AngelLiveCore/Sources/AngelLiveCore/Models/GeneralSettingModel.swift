@@ -27,15 +27,35 @@ public enum AngelLiveFavoriteStyle: Int, CaseIterable, CustomStringConvertible {
     case liveState = 2
 }
 
+public enum RoomEntryAnimation: String, CaseIterable, Sendable {
+    case zoom
+    case push
+}
+
 @Observable
 public final class GeneralSettingModel {
 
     public static let globalGeneralDisableMaterialBackground = "SimpleLive.Setting.globalGeneralDisableMaterialBackground"
     public static let globalGeneralSettingFavoriteStyle = "SimpleLive.Setting.favorite.style"
     public static let globalEnablePlayerGesture = "SimpleLive.Setting.enablePlayerGesture"
+    public static let roomEntryAnimationKey = "SimpleLive.Setting.roomEntryAnimation"
     public static let globalDeveloperMode = "SimpleLive.Setting.developerMode"
 
     public init() {}
+
+    @ObservationIgnored
+    public var roomEntryAnimation: RoomEntryAnimation {
+        get {
+            access(keyPath: \.roomEntryAnimation)
+            let value = UserDefaults.shared.string(forKey: Self.roomEntryAnimationKey)
+            return value.flatMap(RoomEntryAnimation.init(rawValue:)) ?? .zoom
+        }
+        set {
+            withMutation(keyPath: \.roomEntryAnimation) {
+                UserDefaults.shared.set(newValue.rawValue, forKey: Self.roomEntryAnimationKey, synchronize: true)
+            }
+        }
+    }
 
     @ObservationIgnored
     public var generalDisableMaterialBackground: Bool {

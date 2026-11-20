@@ -45,7 +45,9 @@ class PlatformDetailViewModel {
     }
 
     private var roomModels: [String: CategoryRoomListModel] = [:]
+    @ObservationIgnored private var roomTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var catalogRequestID = UUID()
+    @ObservationIgnored private var catalogGeneration = UUID()
 
     var roomList: [LiveModel] { roomModels[cacheKey]?.rooms ?? [] }
     var currentRoomListModel: CategoryRoomListModel? { roomModels[cacheKey] }
@@ -57,10 +59,15 @@ class PlatformDetailViewModel {
     // 加载状态
     var isLoadingCategories = false
     var isLoadingRooms: Bool { roomModels[cacheKey]?.isLoading ?? false }
+    var isLoadingMoreRooms: Bool { roomModels[cacheKey]?.isLoadingMore ?? false }
+    var roomListPhase: RoomListDisplayPhase { roomModels[cacheKey]?.phase ?? .skeleton }
 
     // 错误状态
     var categoryError: Error?
-    var roomError: Error? { roomModels[cacheKey]?.error }
+    var roomError: Error? {
+        guard roomModels[cacheKey]?.phase == .failure else { return nil }
+        return roomModels[cacheKey]?.error
+    }
 
     // 分页
     var hasMoreRooms: Bool { roomModels[cacheKey]?.hasMore ?? true }
@@ -83,7 +90,7 @@ class PlatformDetailViewModel {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: platform.liveType)
             guard !Task.isCancelled, catalogRequestID == requestID else { return }
             categories = fetchedCategories
-            roomModels.removeAll()
+            replaceRoomCatalog()
 
             // 自动加载第一个分类的房间列表
             if !categories.isEmpty {
@@ -120,7 +127,7 @@ class PlatformDetailViewModel {
             let fetchedCategories = try await LiveService.fetchCategoryList(liveType: platform.liveType)
             guard !Task.isCancelled, catalogRequestID == requestID else { return }
             categories = fetchedCategories
-            roomModels.removeAll()
+            replaceRoomCatalog()
 
             guard !categories.isEmpty else { return }
 
@@ -156,6 +163,7 @@ class PlatformDetailViewModel {
     @MainActor
     func loadRoomList(refresh: Bool = true) async {
         guard let subCategory = currentSubCategory else { return }
+        let generation = catalogGeneration
         let key = cacheKey
         let model: CategoryRoomListModel
         if let cached = roomModels[key] {
@@ -182,7 +190,36 @@ class PlatformDetailViewModel {
             }
             roomModels[key] = model
         }
-        await model.load(refresh: refresh)
+
+        let previous = roomTasks[key]
+        previous?.cancel()
+        await previous?.value
+        guard !Task.isCancelled, catalogGeneration == generation, roomModels[key] != nil else { return }
+        let task = Task { @MainActor in
+            await model.load(refresh: refresh)
+        }
+        roomTasks[key] = task
+        await task.value
+    }
+
+    /// 切到当前分类：取消其它分类的请求，有缓存就留在原地再刷新。
+    @MainActor
+    private func activateCurrentCategory() async {
+        let key = cacheKey
+        for (other, task) in roomTasks where other != key {
+            task.cancel()
+        }
+        await loadRoomList(refresh: true)
+    }
+
+    @MainActor
+    private func replaceRoomCatalog() {
+        catalogGeneration = UUID()
+        for task in roomTasks.values {
+            task.cancel()
+        }
+        roomTasks.removeAll()
+        roomModels.removeAll()
     }
 
     // MARK: - 加载更多
@@ -202,39 +239,30 @@ class PlatformDetailViewModel {
 
         selectedMainCategoryIndex = index
         selectedSubCategoryIndex = 0
-        await loadRoomList()
+        await activateCurrentCategory()
     }
 
     // MARK: - 切换子分类
 
     @MainActor
     func selectSubCategory(index: Int) async {
-        guard currentSubCategories.indices.contains(index) else { return }
-
+        guard currentSubCategories.indices.contains(index), index != selectedSubCategoryIndex else { return }
         selectedSubCategoryIndex = index
-
-        // 检查是否有缓存数据，没有则加载
-        if roomList.isEmpty {
-            await loadRoomList()
-        }
+        await activateCurrentCategory()
     }
 
     // MARK: - 一次性切换主/子分类
 
-    /// 同时切换主分类与子分类,只在缓存缺失时发一次房间请求。
-    /// 供分类筛选面板使用:面板先关闭,再在后台完成切换,避免「等两次网络请求才关窗」的卡顿。
+    /// 同时切换主分类与子分类。换了分类就后台刷新，缓存先留在屏幕上。
     @MainActor
     func selectCategory(mainIndex: Int, subIndex: Int) async {
         guard categories.indices.contains(mainIndex) else { return }
-        selectedMainCategoryIndex = mainIndex
-
-        let subList = currentSubCategories
+        let subList = categories[mainIndex].subList
         guard subList.indices.contains(subIndex) else { return }
+        let keyChanged = mainIndex != selectedMainCategoryIndex || subIndex != selectedSubCategoryIndex
+        selectedMainCategoryIndex = mainIndex
         selectedSubCategoryIndex = subIndex
-
-        // 命中缓存则不再请求,直接沿用已有房间列表。
-        if roomList.isEmpty {
-            await loadRoomList()
-        }
+        guard keyChanged || roomModels[cacheKey] == nil else { return }
+        await activateCurrentCategory()
     }
 }

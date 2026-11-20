@@ -71,14 +71,12 @@ struct PlatformDetailView: View {
                         ) { index in
                             roomListPage(for: index)
                         }
-                        .onChange(of: viewModel.selectedSubCategoryIndex) { oldValue, newValue in
-                            // 切换分类时加载数据
+                        .onChange(of: viewModel.selectedSubCategoryIndex) { _, newValue in
                             Task {
-                                // 检查缓存，如果没有数据则加载
-                                let key = "\(viewModel.selectedMainCategoryIndex)-\(newValue)"
-                                if viewModel.roomListCache[key]?.isEmpty ?? true {
-                                    await viewModel.loadRoomList()
-                                }
+                                await viewModel.activateCategory(
+                                    mainCategoryIndex: viewModel.selectedMainCategoryIndex,
+                                    subCategoryIndex: newValue
+                                )
                             }
                         }
                     }
@@ -103,42 +101,43 @@ struct PlatformDetailView: View {
     // MARK: - 房间列表页面（用于 PageView）
     @ViewBuilder
     private func roomListPage(for index: Int) -> some View {
-        let cacheKey = "\(viewModel.selectedMainCategoryIndex)-\(index)"
-        let rooms = viewModel.roomListCache[cacheKey] ?? []
-        let isCurrentPage = viewModel.selectedSubCategoryIndex == index
+        let mainIndex = viewModel.selectedMainCategoryIndex
+        let rooms = viewModel.rooms(mainCategoryIndex: mainIndex, subCategoryIndex: index)
+        let phase = viewModel.roomListPhase(mainCategoryIndex: mainIndex, subCategoryIndex: index)
+        let isLoading = viewModel.isLoadingRooms(mainCategoryIndex: mainIndex, subCategoryIndex: index)
 
         GeometryReader { geometry in
-            // 显示骨架屏的条件：
-            // 1. 正在加载分类
-            // 2. 或者当前页面正在加载房间且房间列表为空
-            if viewModel.isLoadingCategories || (isCurrentPage && viewModel.isLoadingRooms && rooms.isEmpty) {
+            switch phase {
+            case .skeleton:
                 loadingSkeletonView(geometry: geometry)
-            } else if let error = viewModel.roomError, isCurrentPage && rooms.isEmpty {
-                // 如果当前页且加载房间列表失败，显示错误视图
-                ErrorView(
-                    title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
-                    message: error.liveParseMessage,
-                    detailMessage: error.liveParseDetail,
-                    curlCommand: error.liveParseCurl,
-                    showRetry: true,
-                    showLoginButton: error.showsLoginAction,
-                    showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
-                    onRetry: {
-                        Task {
-                            await viewModel.loadRoomList()
-                        }
-                    },
-                    onLogin: error.showsLoginAction ? {
-                        authenticationRecoveryRequest = AuthenticationRecoveryRequest(
-                            pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
-                                .map { [$0.pluginId] } ?? []
-                        )
-                    } : nil
-                )
-            } else if rooms.isEmpty && !viewModel.isLoadingRooms && isCurrentPage {
-                emptyView()
-            } else {
-                roomGridView(geometry: geometry, rooms: rooms)
+            case .failure:
+                if let error = viewModel.roomError(mainCategoryIndex: mainIndex, subCategoryIndex: index) {
+                    ErrorView(
+                        title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
+                        message: error.liveParseMessage,
+                        detailMessage: error.liveParseDetail,
+                        curlCommand: error.liveParseCurl,
+                        showRetry: true,
+                        showLoginButton: error.showsLoginAction,
+                        showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
+                        isRetrying: isLoading,
+                        onRetry: {
+                            Task {
+                                await viewModel.loadRoomList(mainCategoryIndex: mainIndex, subCategoryIndex: index)
+                            }
+                        },
+                        onLogin: error.showsLoginAction ? {
+                            authenticationRecoveryRequest = AuthenticationRecoveryRequest(
+                                pluginIDs: SandboxPluginCatalog.platform(for: viewModel.platform.liveType)
+                                    .map { [$0.pluginId] } ?? []
+                            )
+                        } : nil
+                    )
+                }
+            case .empty:
+                roomEmptyView(mainIndex: mainIndex, subIndex: index, isRetrying: isLoading)
+            case .content:
+                roomGridView(geometry: geometry, rooms: rooms, pageIndex: index)
             }
         }
     }
@@ -206,35 +205,16 @@ struct PlatformDetailView: View {
         let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
         let cardHeight = cardWidth / AppConstants.AspectRatio.card(width: cardWidth)
 
-        ScrollView {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: horizontalSpacing), count: columns),
-                spacing: verticalSpacing
-            ) {
-                // 显示 6 个骨架卡片
-                ForEach(0..<6, id: \.self) { _ in
-                    LiveRoomCardSkeleton(width: cardWidth)
-                        .frame(width: cardWidth, height: cardHeight)
-                }
-            }
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, AppConstants.Spacing.lg)
-        }
+        RoomListSkeletonGrid(
+            cardSize: CGSize(width: cardWidth, height: cardHeight),
+            columns: columns,
+            horizontalSpacing: horizontalSpacing,
+            verticalSpacing: verticalSpacing,
+            horizontalPadding: horizontalPadding
+        )
     }
 
-    // MARK: - 加载和空状态视图
-
-    @ViewBuilder
-    private func loadingView() -> some View {
-        VStack(spacing: 20) {
-            ProgressView()
-                .scaleEffect(1.5)
-            Text("加载中...")
-                .font(.subheadline)
-                .foregroundStyle(AppConstants.Colors.secondaryText)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    // MARK: - 空状态视图
 
     @ViewBuilder
     private func emptyView() -> some View {
@@ -251,7 +231,32 @@ struct PlatformDetailView: View {
     }
 
     @ViewBuilder
-    private func roomGridView(geometry: GeometryProxy, rooms: [LiveModel]) -> some View {
+    private func roomEmptyView(mainIndex: Int, subIndex: Int, isRetrying: Bool) -> some View {
+        ContentUnavailableView {
+            Label("暂无直播", systemImage: "video.slash")
+        } description: {
+            Text("换个分类看看，或稍后再试")
+        } actions: {
+            Button {
+                guard !isRetrying else { return }
+                Task {
+                    await viewModel.loadRoomList(mainCategoryIndex: mainIndex, subCategoryIndex: subIndex)
+                }
+            } label: {
+                if isRetrying {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Text("重试")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private func roomGridView(geometry: GeometryProxy, rooms: [LiveModel], pageIndex: Int) -> some View {
         let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
@@ -271,26 +276,30 @@ struct PlatformDetailView: View {
                     LiveRoomCard(room: room, liveCheckMode: .none)
                         .frame(width: cardWidth, height: cardHeight)
                         .onAppear {
-                            // 加载更多逻辑
-                            if room.roomId == rooms.last?.roomId {
-                                Task {
-                                    await viewModel.loadMore()
-                                }
+                            guard viewModel.selectedSubCategoryIndex == pageIndex,
+                                  room.roomId == rooms.last?.roomId else { return }
+                            Task {
+                                await viewModel.loadMoreRooms(
+                                    mainCategoryIndex: viewModel.selectedMainCategoryIndex,
+                                    subCategoryIndex: pageIndex
+                                )
                             }
                         }
                 }
 
-                // 加载更多指示器
-                if viewModel.isLoadingRooms {
-                    HStack {
-                        ProgressView()
-                        Text("加载更多...")
-                            .font(.caption)
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-                    }
-                    .frame(width: cardWidth, height: cardHeight)
-                    .gridCellColumns(columns)
-                } else if !viewModel.hasMoreRooms && !rooms.isEmpty {
+                if viewModel.isLoadingMoreRooms(
+                    mainCategoryIndex: viewModel.selectedMainCategoryIndex,
+                    subCategoryIndex: pageIndex
+                ) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppConstants.Spacing.md)
+                        .gridCellColumns(columns)
+                } else if !viewModel.canLoadMoreRooms(
+                    mainCategoryIndex: viewModel.selectedMainCategoryIndex,
+                    subCategoryIndex: pageIndex
+                ) && !rooms.isEmpty {
                     Text("已经到底了")
                         .font(.caption)
                         .foregroundStyle(AppConstants.Colors.secondaryText)

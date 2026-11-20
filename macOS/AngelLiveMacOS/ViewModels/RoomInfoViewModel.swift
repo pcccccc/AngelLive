@@ -68,6 +68,10 @@ final class RoomInfoViewModel {
     var currentQualityIndex = 0  // 当前选中的清晰度索引
     var isPlaying = false
     var isHLSStream = false  // 当前是否为 HLS 流
+    private(set) var isOnDemand = false
+    private(set) var danmakuConnectionStatus: DanmakuConnectionStatus?
+    private(set) var danmakuConnectionIssue: String?
+    @ObservationIgnored private var danmakuStatusTask: Task<Void, Never>?
 
     /// 需要重新取流的清晰度切换任务，用于取消之前的请求
     private var qualitySwitchTask: Task<Void, Never>?
@@ -290,6 +294,7 @@ final class RoomInfoViewModel {
         currentQualityIndex = 0
         currentPlayQualityString = "清晰度"
         currentPlayQualityQn = 0
+        isOnDemand = false
         playError = nil
         playErrorMessage = nil
         pendingLoginRequest = nil
@@ -538,10 +543,9 @@ final class RoomInfoViewModel {
                 tappedSelection: tappedSelection,
                 effectiveSelection: tappedSelection
             )
-            currentPlayQualityString = RoomPlaybackResolver.qualityDisplayTitle(
-                in: playArgs,
-                selection: tappedSelection
-            )
+            currentPlayQualityString = usesFullUI
+                ? PlaybackDisplay.qualityTitle(currentQuality, in: playArgs)
+                : RoomPlaybackResolver.qualityDisplayTitle(in: playArgs, selection: tappedSelection)
             currentPlayQualityQn = currentQuality.qn
             self.currentCdnIndex = cdnIndex
             self.currentQualityIndex = urlIndex
@@ -577,7 +581,10 @@ final class RoomInfoViewModel {
             effectiveSelection: effectiveSelection
         )
 
-        currentPlayQualityString = effectiveQuality.title
+        let displayTitle = usesFullUI
+            ? PlaybackDisplay.qualityTitle(effectiveQuality, in: playArgs)
+            : effectiveQuality.title
+        currentPlayQualityString = displayTitle
         currentPlayQualityQn = effectiveQuality.qn
         self.currentCdnIndex = effectiveSelection?.cdnIndex ?? cdnIndex
         self.currentQualityIndex = effectiveSelection?.qualityIndex ?? urlIndex
@@ -596,7 +603,7 @@ final class RoomInfoViewModel {
         // 如果已经通过 HLS 查找确定了播放地址，直接返回
         if let resolvedURL = resolved.overrideURL {
             setPlayURL(resolvedURL, source: "resolved", debugContext: debugContext)
-            currentPlayQualityString = resolved.overrideTitle ?? effectiveQuality.title
+            currentPlayQualityString = resolved.overrideTitle ?? displayTitle
             isLoading = false
             return
         }
@@ -663,6 +670,7 @@ final class RoomInfoViewModel {
             liveReconnectPolicy: .playerManaged
         )
         let plan = applied.plan
+        isOnDemand = !plan.isLive
         recoveryCoordinator.playbackConfigured(isLive: plan.isLive)
 
         return PlayerTypeResult(
@@ -845,7 +853,9 @@ final class RoomInfoViewModel {
         debugContext: RoomPlaybackDebugContext
     ) {
         let resolved = resolvePlayerTypes(quality: quality, cdnIndex: cdnIndex, urlIndex: urlIndex)
-        let displayTitle = RoomPlaybackResolver.qualityDisplayTitle(quality, in: currentRoomPlayArgs)
+        let displayTitle = usesFullUI
+            ? PlaybackDisplay.qualityTitle(quality, in: currentRoomPlayArgs)
+            : RoomPlaybackResolver.qualityDisplayTitle(quality, in: currentRoomPlayArgs)
 
         currentPlayQualityString = resolved.overrideTitle ?? displayTitle
         currentPlayQualityQn = quality.qn
@@ -915,8 +925,9 @@ final class RoomInfoViewModel {
         danmuConnectionTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
-            // 添加连接中消息
-            await MainActor.run {
+            if usesFullUI {
+                updateDanmakuStatus(.connecting)
+            } else {
                 addSystemMessage("正在连接弹幕服务器...")
             }
 
@@ -975,7 +986,11 @@ final class RoomInfoViewModel {
                 Logger.error(error, message: "获取弹幕连接失败", category: .danmu)
                 await MainActor.run {
                     danmuServerIsLoading = false
-                    addSystemMessage("连接弹幕服务器失败：\(error.localizedDescription)")
+                    if usesFullUI {
+                        updateDanmakuStatus(.failed, issue: String(localized: "无法建立弹幕连接。"))
+                    } else {
+                        addSystemMessage("连接弹幕服务器失败：\(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -984,6 +999,7 @@ final class RoomInfoViewModel {
     /// 断开弹幕连接
     @MainActor
     func disconnectSocket() {
+        if usesFullUI { updateDanmakuStatus(nil) }
         danmuConnectionTask?.cancel()
         danmuConnectionTask = nil
         // 断开 WebSocket
@@ -1002,6 +1018,21 @@ final class RoomInfoViewModel {
 
         danmuServerIsConnected = false
         danmuServerIsLoading = false
+    }
+
+    private func updateDanmakuStatus(_ status: DanmakuConnectionStatus?, issue: String? = nil) {
+        danmakuStatusTask?.cancel()
+        danmakuStatusTask = nil
+        danmakuConnectionStatus = status
+        danmakuConnectionIssue = nil
+        guard let duration = status?.visibleDuration else { return }
+        danmakuStatusTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: duration) } catch { return }
+            guard !Task.isCancelled, let self else { return }
+            self.danmakuConnectionIssue = issue
+            self.danmakuConnectionStatus = nil
+            self.danmakuStatusTask = nil
+        }
     }
 
     @MainActor
@@ -1072,15 +1103,23 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidConnect() {
         danmuServerIsConnected = true
         danmuServerIsLoading = false
-        addSystemMessage("弹幕服务器连接成功")
+        if usesFullUI { updateDanmakuStatus(.connected) }
+        else { addSystemMessage("弹幕服务器连接成功") }
         Logger.info("弹幕服务已连接", category: .danmu)
     }
 
     func webSocketDidDisconnect(error: Error?) {
         danmuServerIsConnected = false
         danmuServerIsLoading = false
+        if usesFullUI {
+            if error != nil {
+                updateDanmakuStatus(.failed, issue: String(localized: "弹幕连接已断开。"))
+            } else {
+                updateDanmakuStatus(nil)
+            }
+        }
         if let error = error {
-            addSystemMessage("弹幕服务器已断开：\(error.localizedDescription)")
+            if !usesFullUI { addSystemMessage("弹幕服务器已断开：\(error.localizedDescription)") }
             Logger.error(error, message: "弹幕服务断开", category: .danmu)
         }
     }
@@ -1089,7 +1128,11 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
         danmuServerIsLoading = true
         // 仅首次重连提示一次，避免聊天区被多次重试刷屏
         guard attempt == 1 else { return }
-        addSystemMessage("弹幕连接断开，正在尝试重连…")
+        if usesFullUI {
+            updateDanmakuStatus(.reconnecting, issue: String(localized: "弹幕正在尝试重新连接。"))
+        } else {
+            addSystemMessage("弹幕连接断开，正在尝试重连…")
+        }
     }
 
     func webSocketDidReceiveMessage(_ message: DanmakuDisplayMessage) {

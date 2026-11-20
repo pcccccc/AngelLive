@@ -66,6 +66,7 @@ struct ErrorView: View {
     let showDismiss: Bool
     let showRetry: Bool
     let showLoginButton: Bool
+    let isRetrying: Bool
     let onDismiss: (() -> Void)?
     let onRetry: (() -> Void)?
     let onLogin: (() -> Void)?
@@ -85,6 +86,7 @@ struct ErrorView: View {
         showDismiss: Bool = false,
         showRetry: Bool = true,
         showLoginButton: Bool = false,
+        isRetrying: Bool = false,
         onDismiss: (() -> Void)? = nil,
         onRetry: (() -> Void)? = nil,
         onLogin: (() -> Void)? = nil
@@ -99,6 +101,7 @@ struct ErrorView: View {
         self.showDismiss = showDismiss
         self.showRetry = showRetry
         self.showLoginButton = showLoginButton
+        self.isRetrying = isRetrying
         self.onDismiss = onDismiss
         self.onRetry = onRetry
         self.onLogin = onLogin
@@ -323,11 +326,20 @@ struct ErrorView: View {
         }
 
         if showRetry, let onRetry {
-            Button(action: onRetry) {
-                Label("重试", systemImage: "arrow.clockwise")
+            Button(action: {
+                guard !isRetrying else { return }
+                onRetry()
+            }) {
+                if isRetrying {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .accessibilityLabel(isRetrying ? "正在加载" : "重试")
         }
     }
 
@@ -354,7 +366,9 @@ extension ErrorView {
         message: String,
         symbolName: String,
         tint: Color = .accentColor,
-        layout: ErrorViewLayout = .fill
+        layout: ErrorViewLayout = .fill,
+        isRetrying: Bool = false,
+        onRetry: (() -> Void)? = nil
     ) -> ErrorView {
         ErrorView(
             style: .empty(symbolName: symbolName, tint: tint),
@@ -362,8 +376,10 @@ extension ErrorView {
             title: title,
             message: message,
             showDismiss: false,
-            showRetry: false,
-            showLoginButton: false
+            showRetry: onRetry != nil,
+            showLoginButton: false,
+            isRetrying: isRetrying,
+            onRetry: onRetry
         )
     }
 }

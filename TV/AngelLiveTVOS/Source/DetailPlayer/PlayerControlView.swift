@@ -25,6 +25,9 @@ enum PlayControlFocusableField: Hashable {
     case left
     case right
     case danmuSetting
+    case settings
+    case progress
+    case reveal
 }
 
 enum PlayControlTopField: Hashable {
@@ -38,11 +41,17 @@ struct PlayerControlView: View {
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
     @Environment(\.usesFullUI) private var usesFullUI
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @State var sectionList: [LiveModel] = []
     @State var selectIndex = 0
     @State private var showStatisticsPanel = false
     @State private var showQualityPanel = false
+    @State private var settingsPage: TVLivePlayerSettingsPanel.Page?
+    @State private var settingsReturnFocus: TVLivePlayerSettingsPanel.Item?
+    @State private var hideGeneration = UUID()
     @State private var showSubtitleLanguages = false
     @State private var subtitleActivationID = UUID()
     @State private var subtitleFocusGeneration = UUID()
@@ -50,6 +59,8 @@ struct PlayerControlView: View {
     @State private var pendingVisibleFocusAfterReveal: PlayControlFocusableField?
     @State private var showVolumeHUD = false
     @State private var volumeHUDHideTask: Task<Void, Never>?
+    @State private var timeline = KSRoomSeekTimeline()
+    @State private var focusBeforeProgress: PlayControlFocusableField = .playPause
     @StateObject private var systemVolumeObserver = TVSystemVolumeObserver()
 
     @FocusState var state: PlayControlFocusableField?
@@ -57,7 +68,11 @@ struct PlayerControlView: View {
     @FocusState var showDanmuSetting: Bool
 
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
+    let showsRoomBanner: Bool
+    let onBottomControlVisibilityChange: (Bool) -> Void
 
+    private static let fullUIDanmakuHintFont = UIFont.systemFont(ofSize: 24, weight: .semibold)
+    private static let fullUIDanmakuHintHorizontalInset: CGFloat = 24
     private let multiCameraTip = MultiCameraTip()
     #if DEBUG
     private static let navigationLog = OSLog(
@@ -86,7 +101,7 @@ struct PlayerControlView: View {
         @Bindable var roomInfoModel = roomInfoViewModel
         
         ZStack {
-            if roomInfoViewModel.showControl && !roomInfoViewModel.showTop {
+            if !usesFullUI, roomInfoViewModel.showControl && !roomInfoViewModel.showTop {
                 // 遮罩独立贴住画面底边；按钮仍遵循原有安全区和焦点布局。
                 VStack(spacing: 0) {
                     Spacer(minLength: 0)
@@ -217,13 +232,34 @@ struct PlayerControlView: View {
                     }
                 }
 
+                if usesFullUI, let settingsPage {
+                    GeometryReader { geometry in
+                        TVLivePlayerSettingsPanel(
+                            page: settingsPage, returnsFrom: settingsReturnFocus,
+                            onOpen: { self.settingsPage = $0 },
+                            onDanmaku: openDanmakuSettings,
+                            onStatistics: showStatisticsAction,
+                            onFavorite: favoriteAction,
+                            onChooseLanguage: {
+                                subtitleActivationID = roomInfoViewModel.subtitlePlayback.activationID
+                                showSubtitleLanguages = true
+                            },
+                            onClose: closeSettingsPage
+                        )
+                        .frame(width: min(geometry.size.width * 0.4, 640))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .transition(panelTransition)
+                    }
+                    .zIndex(5)
+                }
+
                 if showStatisticsPanel {
                     GeometryReader { geometry in
                         HStack {
                             Spacer()
                             TVPlayerStatisticsPanel(
                                 playerCoordinator: playerCoordinator,
-                                qualityTitle: roomInfoViewModel.currentPlayQualityString,
+                                qualityTitle: usesFullUI ? roomInfoViewModel.fullUIQualityTitle : roomInfoViewModel.currentPlayQualityString,
                                 streamURL: roomInfoViewModel.currentPlayURL
                             ) {
                                 hideStatisticsPanel()
@@ -231,7 +267,7 @@ struct PlayerControlView: View {
                             .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)
                             .padding(.vertical, 40)
                             .padding(.trailing, 48)
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .transition(usesFullUI ? panelTransition : .move(edge: .trailing).combined(with: .opacity))
                         }
                     }
                     .zIndex(5)
@@ -261,7 +297,7 @@ struct PlayerControlView: View {
                             .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)
                             .padding(.vertical, 40)
                             .padding(.trailing, 48)
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .transition(usesFullUI ? panelTransition : .move(edge: .trailing).combined(with: .opacity))
                         }
                     }
                     .zIndex(5)
@@ -284,7 +320,10 @@ struct PlayerControlView: View {
                     .zIndex(6)
                 }
 
-                if let hint = roomInfoViewModel.danmuStatusHint {
+                if usesFullUI {
+                    fullUIDanmakuHint
+                        .zIndex(7)
+                } else if let hint = roomInfoViewModel.danmuStatusHint {
                     VStack {
                         Spacer()
                         HStack {
@@ -295,14 +334,20 @@ struct PlayerControlView: View {
                     }
                     // 左下角,抬到底部控制带(高 150)之上;左边距与播放控制胶囊左缘对齐
                     // (HStack 起点 0 + 隐藏聚焦按钮 40 + spacing 15 ≈ 55)
-                    .padding(.leading, usesFullUI ? TVFullUIPlayerControlMetrics.screenInset : 55)
+                    .padding(.leading, 55)
                     .padding(.bottom, 170)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
                     .zIndex(7)
                 }
 
-                if roomInfoViewModel.showControl {
+                if showsFullUIBottomControls {
+                    fullUIControls
+                        .disabled(settingsPage != nil)
+                        .accessibilityHidden(settingsPage != nil)
+                        .allowsHitTesting(settingsPage == nil)
+                        .environment(\.tvPlayerControlsAreCovered, settingsPage != nil)
+                } else if !usesFullUI, roomInfoViewModel.showControl {
                     VStack {
                         ZStack {
                             HStack {
@@ -360,19 +405,12 @@ struct PlayerControlView: View {
                                 .modifier(TVFullUIPlayerControlButtonModifier(enabled: usesFullUI,
                                                                              isFocused: state == .playPause, shape: .circle, legacyShape: .circle))
                                 .contextMenu(menuItems: {
-                                    if usesFullUI {
-                                        LiveSubtitleQuickControls(playback: roomInfoViewModel.subtitlePlayback) {
-                                            subtitleActivationID = roomInfoViewModel.subtitlePlayback.activationID
-                                            showSubtitleLanguages = true
-                                        }
-                                    }
                                     Button {
                                         showStatisticsAction()
                                     } label: {
                                         Label("视频信息统计", systemImage: "chart.bar.xaxis")
                                     }
                                 })
-                                .modifier(TVFullUISubtitleMenuHintModifier(enabled: usesFullUI))
                                 .focused($state, equals: .playPause)
 
                                 Button(action: {
@@ -518,7 +556,6 @@ struct PlayerControlView: View {
                     .frame(height: usesFullUI ? TVFullUIPlayerControlMetrics.height + 2 * TVFullUIPlayerControlMetrics.inset : 150)
                     .padding(.horizontal, usesFullUI ? TVFullUIPlayerControlMetrics.screenInset : 0)
                     .padding(.bottom, usesFullUI ? TVFullUIPlayerControlMetrics.screenInset : 0)
-                    .modifier(TVFullUIControlMoveModifier(enabled: usesFullUI, action: handleFullUIControlMove))
                     }
                     .environment(\.colorScheme, .dark)
                     .focusSection()
@@ -526,11 +563,32 @@ struct PlayerControlView: View {
                 }
             }
         }
+        .overlay(alignment: .topLeading) {
+            if usesFullUI && showsRoomBanner && !roomInfoViewModel.isOnDemand && !hasOpenPanel {
+                fullUIRoomBanner
+            }
+        }
         .onAppear {
             Logger.debug("[VolumeHUD] PlayerControlView appeared, initial volume=\(systemVolumeObserver.volume)", category: .ui)
             roomInfoViewModel.showControl = true
             restoreControlFocus()
         }
+        .onChange(of: showsFullUIBottomControls, initial: true) { _, visible in
+            guard usesFullUI else { return }
+            onBottomControlVisibilityChange(visible)
+            if !visible { timeline.cancelScrubbing() }
+        }
+        .onChange(of: timeline.target != nil) { _, _ in hideGeneration = UUID() }
+        .onChange(of: roomInfoViewModel.currentPlayURL) { if usesFullUI { timeline.reset() } }
+        .onChange(of: roomInfoViewModel.currentRoom.id) { if usesFullUI { timeline.reset() } }
+        .task(id: showsFullUIBottomControls && roomInfoViewModel.isOnDemand ? roomInfoViewModel.currentPlayURL : nil) {
+            guard showsFullUIBottomControls, roomInfoViewModel.isOnDemand, roomInfoViewModel.currentPlayURL != nil else { return }
+            while !Task.isCancelled {
+                timeline.sample(currentTimelineLayer)
+                do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+            }
+        }
+        .onDisappear { if usesFullUI { timeline.reset() } }
         .sheet(isPresented: $showSubtitleLanguages) {
             LiveSubtitleLanguageSelectionSheet(
                 playback: roomInfoViewModel.subtitlePlayback,
@@ -546,7 +604,7 @@ struct PlayerControlView: View {
                 roomInfoViewModel.contolTimer?.invalidate()
                 pendingVisibleFocusAfterReveal = nil
                 state = nil
-            } else {
+            } else if !usesFullUI {
                 pendingVisibleFocusAfterReveal = .playPause
                 let wasVisible = roomInfoViewModel.showControl
                 roomInfoViewModel.showControl = true
@@ -588,16 +646,22 @@ struct PlayerControlView: View {
         }
         .onChange(of: state, { oldValue, newValue in
             guard !showSubtitleLanguages else { return }
-            roomInfoViewModel.controlViewOptionSecond = 5
+            if usesFullUI {
+                hideGeneration = UUID()
+            } else {
+                roomInfoViewModel.controlViewOptionSecond = 5
+            }
 
-            if oldValue != .list && isListContentField(oldValue) == false && oldValue != nil {
+            if oldValue != .list && oldValue != .reveal && oldValue != .progress
+                && isListContentField(oldValue) == false && oldValue != nil {
                 roomInfoViewModel.lastOptionState = oldValue
             }
 
             guard roomInfoViewModel.showTop == false,
                   roomInfoViewModel.showDanmuSettingView == false,
                   showStatisticsPanel == false,
-                  showQualityPanel == false else {
+                  showQualityPanel == false,
+                  settingsPage == nil else {
                 return
             }
 
@@ -616,6 +680,18 @@ struct PlayerControlView: View {
                 showRelatedRoomsPanel()
             }
         })
+        .task(id: canAutoHide ? hideGeneration : nil) {
+            guard canAutoHide else { return }
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, canAutoHide else { return }
+            hideFullUIControls()
+            if !roomInfoViewModel.onceTips { roomInfoViewModel.showTips = true }
+        }
+        .modifier(TVFullUIPlayPauseModifier(enabled: usesFullUI, action: toggleFullUIPlayback))
         .onExitCommand {
             logNavigation("exitCommand")
             handleBackCommand()
@@ -629,6 +705,218 @@ struct PlayerControlView: View {
             }
             return .handled
         }
+    }
+
+    private var hasOpenPanel: Bool {
+        roomInfoViewModel.showTop || roomInfoViewModel.showDanmuSettingView || showQualityPanel
+            || showStatisticsPanel || settingsPage != nil || showSubtitleLanguages
+    }
+
+    private var canAutoHide: Bool {
+        usesFullUI && roomInfoViewModel.showControl && !hasOpenPanel && !voiceOverEnabled
+            && roomInfoViewModel.isPlaying && !roomInfoViewModel.userPaused && scenePhase == .active
+            && timeline.target == nil && !timeline.isCommitting
+    }
+
+    private var showsFullUIBottomControls: Bool {
+        usesFullUI && roomInfoViewModel.showControl && !roomInfoViewModel.showTop
+            && (!hasOpenPanel || settingsPage != nil)
+    }
+
+    private var visibilityAnimation: Animation {
+        TVFullUIPlayerControlMetrics.visibilityAnimation(reduceMotion: reduceMotion)
+    }
+
+    private var panelTransition: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity)
+    }
+
+    private var fullUIControls: some View {
+        ZStack {
+            VStack(spacing: TVPlayerTimeline.buttonGap) {
+                Spacer(minLength: 0)
+                if roomInfoViewModel.isOnDemand, timeline.duration > 0 {
+                    fullUIProgress
+                }
+                HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
+                    TVFullUIPlayerControlGroup {
+                        liveControl(roomInfoViewModel.userPaused ? "播放" : "暂停",
+                                    symbol: roomInfoViewModel.userPaused ? "play.fill" : "pause.fill",
+                                    focus: .playPause, action: toggleFullUIPlayback)
+                        liveControl("刷新", symbol: "arrow.counterclockwise",
+                                    focus: .refresh, action: refreshAction)
+                    }
+                    Spacer(minLength: 0)
+                    TVFullUIPlayerControlGroup {
+                        if roomInfoViewModel.supportsDanmu {
+                            fullUIDanmakuButton
+                        }
+                        Button(action: showQualityAction) {
+                            TVPlayerName(name: roomInfoViewModel.fullUIQualityTitle,
+                                         font: .systemFont(ofSize: 26, weight: .semibold), maximumWidth: 6 * 26)
+                        }
+                        .modifier(TVFullUIPlayerControlButtonModifier(enabled: true, isFocused: state == .playQuality,
+                                                                     shape: .capsule))
+                        .focused($state, equals: .playQuality)
+                        .accessibilityLabel("清晰度")
+                        .accessibilityValue(roomInfoViewModel.fullUIQualityTitle)
+                        liveControl("设置", symbol: "gearshape", focus: .settings, action: openSettingsPanel)
+                    }
+                }
+                .frame(height: TVFullUIPlayerControlMetrics.groupHeight)
+                .opacity(timeline.target == nil ? 1 : 0)
+                .disabled(timeline.target != nil)
+                .accessibilityHidden(timeline.target != nil)
+                .animation(visibilityAnimation, value: timeline.target == nil)
+                .focusSection()
+                .onMoveCommand(perform: handleFullUIControlMove)
+            }
+            .padding(TVFullUIPlayerControlMetrics.screenInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if let target = timeline.target {
+                TVPlayerSeekReadout(time: target, duration: timeline.duration, preview: timeline.preview)
+                    .transition(.opacity)
+            }
+        }
+        .defaultFocus($state, resolvedVisibleControlFocus(from: roomInfoViewModel.lastOptionState))
+        .environment(\.colorScheme, .dark)
+        .transition(.opacity)
+    }
+
+    private var fullUIRoomBanner: some View {
+        TVLivePlayerRoomIdentity(room: roomInfoViewModel.currentRoom)
+            .padding(.leading, 16)
+            .padding(.trailing, 24)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 640, alignment: .leading)
+            .tvPlayerGlass(in: Capsule(), interactive: false)
+            .environment(\.colorScheme, .dark)
+            .padding(TVFullUIPlayerControlMetrics.screenInset)
+            .allowsHitTesting(false)
+            .transition(.opacity)
+    }
+
+    private var fullUIProgress: some View {
+        Button {
+            if let target = timeline.target { timeline.seek(to: target, on: currentTimelineLayer) }
+        } label: {
+            TVPlayerTimeline(elapsed: timeline.elapsed, duration: timeline.duration, target: timeline.target,
+                             isFocused: state == .progress)
+        }
+        .buttonStyle(TVFullUIHiddenControlButtonStyle())
+        .focused($state, equals: .progress)
+        .focusSection()
+        .disabled(!timeline.canSeek)
+        .accessibilityLabel("播放进度")
+        .accessibilityValue("\(tvPlayerTimeLabel(timeline.target ?? timeline.elapsed))，总时长\(tvPlayerTimeLabel(timeline.duration))")
+        .accessibilityHint(timeline.target == nil ? "左右调整进度" : "按下选择键确认，按菜单键取消")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: timeline.seek(to: timeline.elapsed + 15, on: currentTimelineLayer)
+            case .decrement: timeline.seek(to: timeline.elapsed - 15, on: currentTimelineLayer)
+            @unknown default: break
+            }
+        }
+        .onMoveCommand { direction in
+            hideGeneration = UUID()
+            switch direction {
+            case .left: adjustProgress(by: -15)
+            case .right: adjustProgress(by: 15)
+            case .down:
+                if let target = timeline.target { timeline.seek(to: target, on: currentTimelineLayer) }
+                state = focusBeforeProgress
+            default: break
+            }
+        }
+    }
+
+    private var currentTimelineLayer: KSPlayerLayer? {
+        guard let layer = playerCoordinator.playerLayer, layer.url == roomInfoViewModel.currentPlayURL else { return nil }
+        return layer
+    }
+
+    private func adjustProgress(by delta: Double) {
+        guard currentTimelineLayer != nil else { return }
+        timeline.beginScrubbing()
+        guard let target = timeline.target else { return }
+        let selection = RoomPlaybackResolver.selection(in: roomInfoViewModel.currentRoomPlayArgs,
+                                                       cdnIndex: roomInfoViewModel.currentCdnIndex,
+                                                       qualityIndex: roomInfoViewModel.currentQualityIndex)
+        timeline.updateScrub(to: target + delta, url: roomInfoViewModel.currentPlayURL, quality: selection?.quality)
+    }
+
+    private func liveControl(_ label: LocalizedStringKey, symbol: String, focus: PlayControlFocusableField,
+                             action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 30, weight: .bold))
+                .frame(width: 40, height: 40)
+        }
+        .modifier(TVFullUIPlayerControlButtonModifier(enabled: true, isFocused: state == focus, shape: .circle))
+        .focused($state, equals: focus)
+        .accessibilityLabel(Text(label))
+        .foregroundStyle(.white)
+    }
+
+    private var fullUIDanmakuButton: some View {
+        let enabled = appViewModel.danmuSettingsViewModel.showDanmu
+        let status = collapsedDanmakuStatus
+        return Button(action: danmuAction) {
+            Image(systemName: enabled ? "captions.bubble.fill" : "captions.bubble")
+                .font(.system(size: 30, weight: .bold))
+                .frame(width: 40, height: 40)
+                .overlay(alignment: .topTrailing) {
+                    if status != nil {
+                        Circle().fill(.orange).frame(width: 8, height: 8)
+                    }
+                }
+        }
+        .modifier(TVFullUIPlayerControlButtonModifier(enabled: true, isFocused: state == .danmu, shape: .circle))
+        .focused($state, equals: .danmu)
+        .accessibilityLabel(enabled ? "关闭弹幕" : "开启弹幕")
+        .accessibilityValue(status?.title ?? "")
+        .foregroundStyle(.white)
+    }
+
+    private var collapsedDanmakuStatus: DanmakuConnectionStatus? {
+        guard !roomInfoViewModel.showsFullUIDanmakuHint, let status = roomInfoViewModel.fullUIDanmakuStatus,
+              status == .failed || status == .reconnecting else { return nil }
+        return status
+    }
+
+    private var fullUIDanmakuHintTitle: String? {
+        let status: DanmakuConnectionStatus?
+        if hasOpenPanel {
+            status = nil
+        } else if roomInfoViewModel.showsFullUIDanmakuHint {
+            status = roomInfoViewModel.fullUIDanmakuStatus
+        } else {
+            status = state == .danmu ? collapsedDanmakuStatus : nil
+        }
+        return status?.title ?? (hasOpenPanel ? nil : roomInfoViewModel.danmuStatusHint)
+    }
+
+    private var fullUIDanmakuHint: some View {
+        let title = fullUIDanmakuHintTitle
+        let bottom = roomInfoViewModel.showControl
+            ? TVFullUIPlayerControlMetrics.screenInset + TVFullUIPlayerControlMetrics.groupHeight + 8 : 24
+        return ZStack(alignment: .bottom) {
+            if let title {
+                Text(title)
+                    .font(Font(Self.fullUIDanmakuHintFont))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Self.fullUIDanmakuHintHorizontalInset)
+                    .padding(.vertical, 14)
+                    .tvPlayerGlass(in: Capsule(), interactive: false)
+                    .padding(.bottom, bottom)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .allowsHitTesting(false)
+        .animation(visibilityAnimation, value: title)
+        .environment(\.colorScheme, .dark)
     }
 
     private var relatedRoomCards: some View {
@@ -664,6 +952,11 @@ struct PlayerControlView: View {
         if roomInfoViewModel.showDanmuSettingView {
             roomInfoViewModel.showDanmuSettingView = false
             showDanmuSetting = false
+            if usesFullUI {
+                settingsReturnFocus = .danmaku
+                settingsPage = .menu
+                return
+            }
             state = roomInfoViewModel.lastOptionState
             roomInfoViewModel.showControl = true
             return
@@ -679,10 +972,24 @@ struct PlayerControlView: View {
             return
         }
 
+        if settingsPage != nil {
+            closeSettingsPage()
+            return
+        }
+
+        if usesFullUI, timeline.target != nil {
+            timeline.cancelScrubbing()
+            return
+        }
+
         if roomInfoViewModel.showControl {
             logNavigation("hideControls")
-            withAnimation(.easeInOut(duration: 0.2)) {
-                roomInfoViewModel.showControl = false
+            if usesFullUI {
+                hideFullUIControls()
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    roomInfoViewModel.showControl = false
+                }
             }
         } else {
             logNavigation("endPlayback")
@@ -700,6 +1007,13 @@ struct PlayerControlView: View {
     }
 
     private func showStatisticsAction() {
+        if usesFullUI {
+            withAnimation(visibilityAnimation) {
+                settingsPage = nil
+                showStatisticsPanel = true
+            }
+            return
+        }
         guard ensureControlVisible() else { return }
         roomInfoViewModel.lastOptionState = state ?? .playPause
         state = nil
@@ -710,6 +1024,14 @@ struct PlayerControlView: View {
     }
 
     private func hideStatisticsPanel() {
+        if usesFullUI {
+            withAnimation(visibilityAnimation) {
+                showStatisticsPanel = false
+                settingsReturnFocus = .statistics
+                settingsPage = .menu
+            }
+            return
+        }
         withAnimation(.easeInOut(duration: 0.28)) {
             showStatisticsPanel = false
             roomInfoViewModel.showControl = true
@@ -718,28 +1040,66 @@ struct PlayerControlView: View {
 
     private func showQualityAction() {
         guard ensureControlVisible() else { return }
-        roomInfoViewModel.lastOptionState = state ?? .playQuality
+        roomInfoViewModel.lastOptionState = usesFullUI ? .playQuality : (state ?? .playQuality)
         state = nil
-        withAnimation(.easeInOut(duration: 0.28)) {
+        withAnimation(usesFullUI ? visibilityAnimation : .easeInOut(duration: 0.28)) {
             showQualityPanel = true
             roomInfoViewModel.showControl = false
         }
     }
 
     private func hideQualityPanel() {
-        withAnimation(.easeInOut(duration: 0.28)) {
+        withAnimation(usesFullUI ? visibilityAnimation : .easeInOut(duration: 0.28)) {
             showQualityPanel = false
             roomInfoViewModel.showControl = true
         }
     }
 
+    private func openSettingsPanel() {
+        roomInfoViewModel.lastOptionState = .settings
+        settingsReturnFocus = nil
+        state = nil
+        withAnimation(visibilityAnimation) { settingsPage = .menu }
+    }
+
+    private func closeSettingsPage() {
+        if settingsPage == .subtitles {
+            settingsReturnFocus = .subtitles
+            settingsPage = .menu
+        } else if settingsPage == .playback {
+            settingsReturnFocus = .playback
+            settingsPage = .menu
+        } else {
+            withAnimation(visibilityAnimation) { settingsPage = nil }
+            restoreControlFocus()
+        }
+    }
+
+    private func openDanmakuSettings() {
+        settingsPage = nil
+        roomInfoViewModel.showDanmuSettingView = true
+        showDanmuSetting = true
+    }
+
+    private func toggleFullUIPlayback() {
+        guard !hasOpenPanel, timeline.target == nil, !timeline.isCommitting else { return }
+        revealFullUIControls()
+        roomInfoViewModel.togglePlayPause()
+        hideGeneration = UUID()
+    }
+
+    private func revealFullUIControls() {
+        guard !roomInfoViewModel.showControl else { return }
+        roomInfoViewModel.lastOptionState = .playPause
+        withAnimation(visibilityAnimation) { roomInfoViewModel.showControl = true }
+    }
+
+    private func hideFullUIControls() {
+        withAnimation(visibilityAnimation) { roomInfoViewModel.showControl = false }
+    }
+
     private var shouldShowHiddenControlAnchors: Bool {
-        showSubtitleLanguages == false &&
-        roomInfoViewModel.showControl == false &&
-        roomInfoViewModel.showTop == false &&
-        roomInfoViewModel.showDanmuSettingView == false &&
-        showStatisticsPanel == false &&
-        showQualityPanel == false
+        !roomInfoViewModel.showControl && !hasOpenPanel
     }
 
     @ViewBuilder
@@ -752,32 +1112,19 @@ struct PlayerControlView: View {
     }
 
     private var fullUIHiddenControlAnchorOverlay: some View {
-        VStack {
-            Spacer()
-            HStack(spacing: 15) {
-                HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
-                    hiddenControlAnchor(width: 70, height: 70, focus: .playPause)
-                    hiddenControlAnchor(width: 70, height: 70, focus: .refresh)
-                    hiddenControlAnchor(width: 70, height: 70, focus: .favorite)
-                }
-                .padding(TVFullUIPlayerControlMetrics.inset)
-
-                Spacer()
-
-                HStack(spacing: TVFullUIPlayerControlMetrics.spacing) {
-                    hiddenControlAnchor(width: 150, height: 70, focus: .playQuality)
-                    if roomInfoViewModel.supportsDanmu {
-                        hiddenControlAnchor(width: 70, height: 70, focus: .danmuSetting)
-                        hiddenControlAnchor(width: 70, height: 70, focus: .danmu)
-                    }
-                }
-                .padding(TVFullUIPlayerControlMetrics.inset)
-            }
-            .frame(height: TVFullUIPlayerControlMetrics.height + 2 * TVFullUIPlayerControlMetrics.inset)
-            .padding(.horizontal, TVFullUIPlayerControlMetrics.screenInset)
-            .padding(.bottom, TVFullUIPlayerControlMetrics.screenInset)
+        Button(action: revealFullUIControls) {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
         }
-        .focusSection()
+        .buttonStyle(TVFullUIHiddenControlButtonStyle())
+        .focused($state, equals: .reveal)
+        .defaultFocus($state, .reveal)
+        .accessibilityLabel("显示播放控制")
+        .onMoveCommand { direction in
+            if direction == .down { showRelatedRoomsPanel() }
+            else { revealFullUIControls() }
+        }
     }
 
     private var legacyHiddenControlAnchorOverlay: some View {
@@ -835,19 +1182,11 @@ struct PlayerControlView: View {
             pendingVisibleFocusAfterReveal = resolvedVisibleControlFocus(from: focus)
             roomInfoViewModel.showControl = true
         }) {
-            if usesFullUI, focus == .playQuality {
-                qualityLabel()
-                    .padding(.horizontal, 24)
-                    .frame(height: TVFullUIPlayerControlMetrics.height)
-                    .hidden()
-                    .contentShape(Rectangle())
-            } else {
-                Color.clear
-                    .frame(width: width, height: height)
-                    .contentShape(Rectangle())
-            }
+            Color.clear
+                .frame(width: width, height: height)
+                .contentShape(Rectangle())
         }
-        .modifier(TVFullUIHiddenAnchorStyleModifier(enabled: usesFullUI, focus: focus))
+        .buttonStyle(.plain)
         .focused($state, equals: focus)
         .onMoveCommand { direction in
             handleHiddenAnchorMove(from: focus, direction: direction)
@@ -855,11 +1194,9 @@ struct PlayerControlView: View {
     }
 
     private func restoreControlFocus() {
-        guard showSubtitleLanguages == false,
-              roomInfoViewModel.showTop == false,
-              roomInfoViewModel.showDanmuSettingView == false,
-              showStatisticsPanel == false,
-              showQualityPanel == false else {
+        guard !hasOpenPanel else { return }
+        if usesFullUI {
+            state = resolvedVisibleControlFocus(from: roomInfoViewModel.lastOptionState)
             return
         }
 
@@ -902,6 +1239,10 @@ struct PlayerControlView: View {
 
     private func restoreHiddenControlFocus() {
         guard shouldShowHiddenControlAnchors else {
+            return
+        }
+        if usesFullUI {
+            state = .reveal
             return
         }
 
@@ -950,10 +1291,12 @@ struct PlayerControlView: View {
 
     private func resolvedVisibleControlFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
         if usesFullUI {
-            if candidate == .left { return roomInfoViewModel.supportsDanmu ? .danmu : .playQuality }
-            if candidate == .right { return .playPause }
-            if !roomInfoViewModel.supportsDanmu, candidate == .danmu || candidate == .danmuSetting {
-                return .playQuality
+            switch candidate {
+            case .refresh: return .refresh
+            case .danmu: return firstRightControl
+            case .playQuality: return .playQuality
+            case .settings: return .settings
+            default: return .playPause
             }
         }
         switch candidate {
@@ -969,22 +1312,27 @@ struct PlayerControlView: View {
     }
 
     private func handleFullUIControlMove(_ direction: MoveCommandDirection) {
+        hideGeneration = UUID()
         switch direction {
+        case .up where roomInfoViewModel.isOnDemand && timeline.canSeek && !timeline.isCommitting:
+            focusBeforeProgress = resolvedVisibleControlFocus(from: state)
+            state = .progress
         case .down:
             showRelatedRoomsPanel()
-        case .left where state == .playPause:
-            state = roomInfoViewModel.supportsDanmu ? .danmu : .playQuality
-        case .right where state == (roomInfoViewModel.supportsDanmu ? .danmu : .playQuality):
-            state = .playPause
+        case .right where state == .refresh:
+            state = firstRightControl
+        case .left where state == firstRightControl:
+            state = .refresh
         default:
             break
         }
     }
 
+    private var firstRightControl: PlayControlFocusableField {
+        roomInfoViewModel.supportsDanmu ? .danmu : .playQuality
+    }
+
     private func resolvedHiddenAnchorFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
-        if usesFullUI {
-            return resolvedVisibleControlFocus(from: candidate)
-        }
         switch candidate {
         case .danmu, .danmuSetting:
             return roomInfoViewModel.supportsDanmu ? (candidate ?? .playQuality) : .playQuality
@@ -996,21 +1344,6 @@ struct PlayerControlView: View {
     }
 
     private func nextVisibleFocus(from focus: PlayControlFocusableField, direction: MoveCommandDirection) -> PlayControlFocusableField? {
-        if usesFullUI {
-            var controls: [PlayControlFocusableField] = [.playPause, .refresh, .favorite, .playQuality]
-            if roomInfoViewModel.supportsDanmu {
-                controls.append(contentsOf: [.danmuSetting, .danmu])
-            }
-            guard let index = controls.firstIndex(of: resolvedVisibleControlFocus(from: focus)) else { return nil }
-            switch direction {
-            case .left:
-                return controls[(index + controls.count - 1) % controls.count]
-            case .right:
-                return controls[(index + 1) % controls.count]
-            default:
-                return nil
-            }
-        }
         switch (focus, direction) {
         case (.left, .right):
             return .playPause
@@ -1099,6 +1432,7 @@ struct PlayerControlView: View {
 
     @discardableResult
     private func ensureControlVisible() -> Bool {
+        if usesFullUI { hideGeneration = UUID() }
         if roomInfoViewModel.showControl == false {
             roomInfoViewModel.showControl = true
             return false
@@ -1242,53 +1576,13 @@ struct PlayerControlView: View {
     
 }
 
-private struct TVFullUISubtitleMenuHintModifier: ViewModifier {
+private struct TVFullUIPlayPauseModifier: ViewModifier {
     let enabled: Bool
+    let action: () -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if enabled {
-            content.accessibilityHint("聚焦此播放或暂停按钮后，长按遥控器选择键打开字幕菜单。")
-        } else {
-            content
-        }
-    }
-}
-
-private struct TVFullUIControlMoveModifier: ViewModifier {
-    let enabled: Bool
-    let action: (MoveCommandDirection) -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled { content.onMoveCommand(perform: action) }
+        if enabled { content.onPlayPauseCommand(perform: action) }
         else { content }
-    }
-}
-
-private struct TVFullUIHiddenAnchorStyleModifier: ViewModifier {
-    let enabled: Bool
-    let focus: PlayControlFocusableField
-
-    private var accessibilityLabel: String {
-        switch focus {
-        case .playPause: "显示播放控制，播放与暂停"
-        case .refresh: "显示播放控制，刷新"
-        case .favorite: "显示播放控制，收藏"
-        case .playQuality: "显示播放控制，清晰度"
-        case .danmuSetting: "显示播放控制，弹幕设置"
-        case .danmu: "显示播放控制，弹幕开关"
-        default: "显示播放控制"
-        }
-    }
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled {
-            content
-                .buttonStyle(TVFullUIHiddenControlButtonStyle())
-                .accessibilityLabel(accessibilityLabel)
-        }
-        else { content.buttonStyle(.plain) }
     }
 }

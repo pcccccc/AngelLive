@@ -12,7 +12,11 @@ import Kingfisher
 
 /// FullUI short-drama playback. Episode resolution and completion policy stay in the model.
 struct ShortDramaPlayerView: View {
+    private static let portraitDockFill = Color(.sRGB, white: 0.12)
+    private static let episodeSwipeAxisRatio: CGFloat = 1.3
+
     let room: LiveModel
+    let presentsOverSource: Bool
 
     @State private var model: ShortDramaPlaybackModel
     @State private var playerController = KSShortDramaPlayerController()
@@ -31,10 +35,10 @@ struct ShortDramaPlayerView: View {
     @State private var seekOriginTime = 0.0
     @State private var seekRequestID = UUID()
     @State private var seekCommitInFlight = false
-    @State private var seekPreview = ShortDramaSeekPreviewModel()
+    @State private var seekPreview = SeekPreviewModel()
     @State private var orientation = ShortDramaOrientationController()
-    @State private var landscapeControlsVisible = true
-    @State private var isLandscapeLayout = false
+    @State private var controlsVisible = true
+    @State private var isLocked = false
     @State private var controlsHideID = UUID()
     @State private var playbackRate: Float = 1
     @State private var panel: ShortDramaPanel?
@@ -53,30 +57,39 @@ struct ShortDramaPlayerView: View {
     @State private var boundaryMessage: String?
     @State private var boundaryMessageToken = UUID()
     @State private var readyPlaybackID: UUID?
-    @GestureState private var episodeSwipeGesture = ShortDramaEpisodeSwipeGestureState()
+    @State private var episodeSwipeRegion = ShortDramaEpisodeSwipeRegion()
+    @State private var episodeSwipeGesture = ShortDramaEpisodeSwipeGestureState()
     @State private var episodeSwipeSettlementOffset: CGFloat = 0
     @State private var episodeSwipeSettlementOpacity = 1.0
     @State private var episodeSwipeTransitioning = false
     @State private var episodeSwipeSelecting = false
-    @State private var episodeSwipeAwaitingGestureReset = false
     @State private var episodeSwipeToken = UUID()
     @State private var episodeSwipeHoldActive = false
     @State private var episodeSwipeHoldTask: Task<Void, Never>?
     @State private var panelAnimationToken = UUID()
     @ScaledMetric(relativeTo: .headline) private var titleFontSize: CGFloat = 17
-    @ScaledMetric(relativeTo: .caption) private var quickRateDiameter: CGFloat = 44
-    @ScaledMetric(relativeTo: .caption) private var quickRateLabelSize: CGFloat = 13
     @AccessibilityFocusState private var accessibilityFocus: ShortDramaAccessibilityFocus?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    init(room: LiveModel) {
+    init(room: LiveModel, presentsOverSource: Bool) {
         self.room = room
+        self.presentsOverSource = presentsOverSource
         _model = State(initialValue: ShortDramaPlaybackModel(room: room))
+    }
+
+    private var exitsLandscapeFullscreen: Bool {
+        verticalSizeClass == .compact && orientation.permitsOrientationRequests
+    }
+
+    private var allowsPageSwipe: Bool {
+        scenePhase == .active && !isLocked && !isLeavingPage && panel == nil && !panelTransitioning && !isSeeking
     }
 
     var body: some View {
@@ -86,107 +99,89 @@ struct ShortDramaPlayerView: View {
                 isRegularWidth: horizontalSizeClass == .regular
             )
             let landscape = geometry.size.width > geometry.size.height
-            let usesCompactLandscapeControls = landscape && verticalSizeClass == .compact
-                && orientation.permitsOrientationRequests
-            let controlInset = controlEdgeInset(geometry: geometry)
-            let horizontalControlInset = usesCompactLandscapeControls
-                ? UnifiedPlayerControlOverlay.compactLandscapeControlInset
-                : controlInset
+            let landscapeLayout = landscape ? FullUILandscapePlayerLayout(
+                geometry: geometry, window: windowContext?.window, direction: layoutDirection
+            ) : nil
+            let dockInset = controlEdgeInset(geometry: geometry)
+            let overlayInset = FullUIPlayerChrome.inset
+            let videoCenterOffset = landscape ? (geometry.safeAreaInsets.bottom - geometry.safeAreaInsets.top) / 2 : 0
+            let swipeRoute: PlayerPagePan.Route? = if allowsPageSwipe {
+                { direction, start, window, back in routeSwipe(direction, start, window, back) }
+            } else {
+                nil
+            }
 
             ZStack(alignment: .topLeading) {
                 Color.black.ignoresSafeArea()
 
-                VStack(spacing: 0) {
+                VStack(spacing: landscape ? 0 : -ShortDramaProgressSlider.hitHeight / 2) {
                     GeometryReader { videoGeometry in
                         videoRegion(
                             size: videoGeometry.size,
-                            landscape: landscape
+                            landscape: landscape,
+                            centerOffset: videoCenterOffset
                         )
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    bottomControls(metrics: panelMetrics, landscape: landscape)
-                        .padding(.horizontal, controlInset)
-                        .padding(.bottom, controlInset)
-                        .frame(height: landscape ? 0 : nil, alignment: .bottom)
-                        .opacity(landscape ? 0 : 1)
-                        .allowsHitTesting(!landscape)
-                        .opacity(panel != nil || panelTransitioning ? 0 : 1)
-                        .allowsHitTesting(
-                            !landscape && panel == nil
-                                && !panelTransitioning
-                                && !episodeSwipeHoldActive
-                                && !episodeSwipeTransitioning
-                        )
-                        .accessibilityHidden(
-                            landscape || panel != nil
-                                || panelTransitioning
-                                || episodeSwipeHoldActive
-                                || episodeSwipeTransitioning
-                        )
+                    if !landscape {
+                        // Straddle the video edge with the full UIKit hit region.
+                        // The 16 pt gap starts at the visible track, inside that region.
+                        let trackToTitle = 16 - (ShortDramaProgressSlider.hitHeight - ShortDramaProgressSlider.visibleTrackHeight) / 2
+                        VStack(spacing: trackToTitle) {
+                            progressControl(portraitGeometry: geometry)
+                            regularControls(portraitDock(metrics: panelMetrics))
+                                .padding(.horizontal, dockInset)
+                        }
+                        .padding(.bottom, dockInset)
+                    }
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
 
-                if landscape {
-                    bottomControls(metrics: panelMetrics, landscape: landscape)
-                        .padding(.horizontal, horizontalControlInset)
-                        .padding(.bottom, controlInset)
-                        .background(alignment: .bottom) {
-                            LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
-                                .ignoresSafeArea(.container, edges: [.horizontal, .bottom])
-                                .allowsHitTesting(false)
-                        }
-                        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
-                        .opacity(landscapeControlsVisible && panel == nil && !panelTransitioning ? 1 : 0)
-                        .allowsHitTesting(landscapeControlsVisible && panel == nil && !panelTransitioning)
-                        .accessibilityHidden(!landscapeControlsVisible || panel != nil || panelTransitioning)
+                if let layout = landscapeLayout {
+                    landscapeControls(metrics: panelMetrics, layout: layout)
+                        .ignoresSafeArea(.container)
+                } else {
+                    regularControls(topControls(metrics: panelMetrics))
+                        .padding([.top, .horizontal], overlayInset)
                 }
-
-                // Controls share the window's safe geometry; only the media extends beyond it.
-                topControls(metrics: panelMetrics, landscape: landscape)
-                    .padding(.top, landscape ? controlInset : 8)
-                    .padding(.horizontal, landscape ? horizontalControlInset : 16)
-                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-                    .opacity(!landscape || landscapeControlsVisible ? 1 : 0)
-                    .allowsHitTesting(
-                        panel == nil
-                            && (!landscape || landscapeControlsVisible)
-                            && !panelTransitioning
-                            && !episodeSwipeHoldActive
-                            && !episodeSwipeTransitioning
-                    )
-                    .accessibilityHidden(
-                        panel != nil
-                            || (landscape && !landscapeControlsVisible)
-                            || panelTransitioning
-                            || episodeSwipeHoldActive
-                            || episodeSwipeTransitioning
-                    )
 
                 panelOverlay(metrics: panelMetrics)
                     .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
                     .zIndex(10)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-            .background(Color.black)
+            .modifier(FullUIPlayerStatusBar(isLandscapeFullscreen: landscape))
+            .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true
+                && model.playback != nil && model.errorMessage == nil && controlsAvailable ? .all : [])
+            .background(Color.black.ignoresSafeArea())
             .background { ShortDramaWindowProbe(controller: orientation) }
             .onAppear {
                 latestPanelMetrics = panelMetrics
-                isLandscapeLayout = landscape
             }
             .onChange(of: panelMetrics) { _, _ in
                 latestPanelMetrics = panelMetrics
-                isLandscapeLayout = landscape
+                if !landscape { isLocked = false }
                 orientation.geometryDidChange()
-                showLandscapeControls()
+                showControls()
                 cancelSeek()
                 cancelEpisodeSwipe()
                 cancelPanelDetentDrag(using: panelMetrics)
             }
+            .modifier(PlayerPagePan(
+                route: swipeRoute,
+                verticalRatio: Self.episodeSwipeAxisRatio
+            ))
+            .modifier(PlayerBackSwipe(
+                enabled: allowsPageSwipe,
+                width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                exitsFullscreen: exitsLandscapeFullscreen,
+                revealsRoomList: presentsOverSource && !exitsLandscapeFullscreen,
+                onReturn: finishSwipeReturn
+            ))
         }
-        .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
         .toolbar(.hidden, for: .navigationBar)
+        .interactiveDismissDisabled()
         .onChange(of: panel?.id) { _, newValue in
             guard let newValue else { return }
             Task { @MainActor in
@@ -208,12 +203,15 @@ struct ShortDramaPlayerView: View {
         }
         .onChange(of: playbackRate) { _, newValue in
             playerController.setRate(newValue)
-            showLandscapeControls()
+            showControls()
         }
         .onChange(of: videoNaturalSize) { _, _ in
             if videoNaturalSize != nil { orientation.setLandscapeAllowed(isHorizontalVideo) }
         }
-        .onChange(of: isPlaying) { _, _ in showLandscapeControls() }
+        .onChange(of: isPlaying) { _, _ in showControls() }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in
+            showControls()
+        }
         .onChange(of: orientation.errorMessage) { _, message in
             if let message { showBoundary(message) }
         }
@@ -221,42 +219,17 @@ struct ShortDramaPlayerView: View {
             if let message { showBoundary(message) }
         }
         .task(id: controlsHideID) {
-            guard isLandscapeLayout, isPlaying, landscapeControlsVisible,
-                  !isSeeking, panel == nil, !panelTransitioning,
-                  !UIAccessibility.isVoiceOverRunning else { return }
+            guard shouldAutoHideControls else { return }
             do { try await Task.sleep(for: .seconds(5)) } catch { return }
-            guard !Task.isCancelled, isPlaying, !isSeeking, panel == nil, !panelTransitioning else { return }
-            landscapeControlsVisible = false
+            guard !Task.isCancelled, shouldAutoHideControls else { return }
+            controlsVisible = false
         }
         .onChange(of: scenePhase) { _, phase in
             handleScenePhase(phase)
-            if phase != .active, let latestPanelMetrics {
+            if phase == .active {
+                showControls()
+            } else if let latestPanelMetrics {
                 cancelPanelDetentDrag(using: latestPanelMetrics)
-            }
-        }
-        .onChange(of: episodeSwipeGesture) { oldValue, newValue in
-            if !newValue.isVerticalLocked, episodeSwipeAwaitingGestureReset {
-                episodeSwipeAwaitingGestureReset = false
-                if !episodeSwipeHoldActive {
-                    episodeSwipeTransitioning = false
-                }
-                return
-            }
-            guard oldValue.isVerticalLocked,
-                  !newValue.isVerticalLocked,
-                  !episodeSwipeTransitioning,
-                  !isLeavingPage else { return }
-            Task { @MainActor in
-                await Task.yield()
-                guard episodeSwipeHoldActive, !episodeSwipeTransitioning, !isLeavingPage else { return }
-                let opacity = reduceMotion
-                    ? 1 - min(abs(oldValue.rawVerticalTranslation) / 800, 0.15)
-                    : 1
-                settleEpisodeSwipeBack(
-                    from: oldValue.verticalOffset,
-                    message: nil,
-                    startingOpacity: opacity
-                )
             }
         }
         .onChange(of: model.playback?.id) { oldValue, newValue in
@@ -267,7 +240,7 @@ struct ShortDramaPlayerView: View {
                 seekPlaybackID = nil
                 seekPreview.cancel()
                 videoNaturalSize = nil
-                showLandscapeControls()
+                showControls()
             }
             if readyPlaybackID != newValue {
                 readyPlaybackID = nil
@@ -299,7 +272,8 @@ struct ShortDramaPlayerView: View {
 
     private func videoRegion(
         size: CGSize,
-        landscape: Bool
+        landscape: Bool,
+        centerOffset: CGFloat
     ) -> some View {
         ZStack {
             GeometryReader { mediaGeometry in
@@ -310,41 +284,79 @@ struct ShortDramaPlayerView: View {
             }
             .ignoresSafeArea(.container, edges: .all)
 
-            episodeInteractionLayer(availableHeight: size.height, landscape: landscape)
-                .allowsHitTesting(
-                    panel == nil
-                        && !panelTransitioning
-                        && !episodeSwipeTransitioning
-                        && isCurrentPlaybackReady
-                )
-                .accessibilityHidden(
-                    panel != nil
-                        || panelTransitioning
-                        || !isCurrentPlaybackReady
-                )
+            episodeInteractionLayer(
+                availableHeight: size.height,
+                landscape: landscape
+            )
+            .allowsHitTesting(
+                !isLocked && panel == nil
+                    && !panelTransitioning
+                    && !episodeSwipeTransitioning
+                    && isCurrentPlaybackReady
+            )
+            .accessibilityHidden(
+                isLocked || panel != nil
+                    || panelTransitioning
+                    || !isCurrentPlaybackReady
+            )
 
-            if model.errorMessage == nil,
-               let playbackID = model.playback?.id,
-               (!playerController.wantsPlayback || (readyPlaybackID == playbackID && !isPlaying)),
-               !episodeSwipeHoldActive,
-               !episodeSwipeTransitioning,
-               !isSeeking,
-               panel == nil,
-               !panelTransitioning {
-                Button(action: togglePlayback) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 21, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background { controlGlassCircle }
+            if !landscape, isHorizontalVideo, isCurrentPlaybackReady, orientation.permitsOrientationRequests {
+                GeometryReader { mediaGeometry in
+                    let viewport = mediaGeometry.size
+                    let videoBottom = (viewport.height + fittedVideoSize(in: viewport).height) / 2
+
+                    regularControls(fullscreenButton)
+                        .padding(.top, videoBottom + 16)
+                        .frame(maxWidth: .infinity)
+                        .offset(y: playbackSurfaceOffset)
+                        .opacity(playbackSurfaceOpacity)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(model.hasFinished ? "重播本集" : "继续播放")
-                .accessibilityHint(model.hasFinished ? "双击从头重播本集" : "双击从当前进度继续播放")
-                .zIndex(2)
+                .ignoresSafeArea(.container, edges: .all)
             }
 
-            if let boundaryMessage {
+            Group {
+                if !isLocked, model.errorMessage == nil,
+                   let playbackID = model.playback?.id,
+                   (!playerController.wantsPlayback || (readyPlaybackID == playbackID && !isPlaying)),
+                   !episodeSwipeHoldActive,
+                   !episodeSwipeTransitioning,
+                   !isSeeking,
+                   panel == nil,
+                   !panelTransitioning {
+                    Button(action: togglePlayback) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 56, height: 56)
+                            .fullUIPlayerGlass(in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(model.hasFinished ? "重播本集" : "继续播放")
+                    .accessibilityHint(model.hasFinished ? "双击从头重播本集" : "双击从当前进度继续播放")
+                    .transition(.opacity)
+                }
+            }
+            .offset(y: centerOffset)
+            .animation(FullUIPlayerChrome.visibilityAnimation(!isScrubbing, reduceMotion: reduceMotion), value: isScrubbing)
+            .zIndex(2)
+
+            ZStack {
+                if isScrubbing {
+                    FullUIPlayerSeekReadout(time: seekValue, duration: duration, preview: seekPreview.state,
+                                            isHorizontalVideo: isHorizontalVideo)
+                        .transition(.opacity)
+                }
+            }
+            .offset(y: centerOffset)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .animation(
+                FullUIPlayerChrome.visibilityAnimation(isScrubbing, reduceMotion: reduceMotion),
+                value: isScrubbing
+            )
+
+            if !isLocked, let boundaryMessage {
                 Text(boundaryMessage)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.white)
@@ -482,17 +494,18 @@ struct ShortDramaPlayerView: View {
     }
 
     private func episodeInteractionLayer(availableHeight: CGFloat, landscape: Bool) -> some View {
-        Color.clear
-            // The timeline borrows 12pt from the picture; video gestures yield that strip.
-            .frame(height: max(0, availableHeight - (landscape ? 0 : 12)))
+        let progressOverlap = !landscape && canInteractWithProgress ? ShortDramaProgressSlider.hitHeight / 2 : 0
+
+        return Color.clear
+            .frame(height: max(0, availableHeight - progressOverlap))
+            .background {
+                ShortDramaEpisodeSwipeAnchor(region: episodeSwipeRegion, availableHeight: availableHeight)
+                    .allowsHitTesting(false)
+            }
             .contentShape(Rectangle())
             .onTapGesture {
-                if landscape && !landscapeControlsVisible {
-                    showLandscapeControls()
-                } else {
-                    togglePlayback()
-                    showLandscapeControls()
-                }
+                if controlsVisible { togglePlayback() }
+                showControls()
             }
             .accessibilityLabel(isPlaying ? "暂停播放" : "继续播放")
             .accessibilityAddTraits(.isButton)
@@ -500,46 +513,39 @@ struct ShortDramaPlayerView: View {
             .accessibilityAction(.default, togglePlayback)
             .accessibilityAction(named: Text("上一集")) { changeEpisode(by: -1) }
             .accessibilityAction(named: Text("下一集")) { changeEpisode(by: 1) }
-            .simultaneousGesture(episodeSwipeGestureForVideo(availableHeight: availableHeight))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func episodeSwipeGestureForVideo(availableHeight: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($episodeSwipeGesture) { value, state, transaction in
-                transaction.animation = nil
-                guard panel == nil,
-                      !isSeeking,
-                      !panelTransitioning,
-                      !episodeSwipeTransitioning else {
-                    state = .zero
-                    return
-                }
-                let translation = value.translation
-                if state.isVerticalLocked || abs(translation.height) > abs(translation.width) * 1.3 {
-                    state = ShortDramaEpisodeSwipeGestureState(
-                        isVerticalLocked: true,
-                        rawVerticalTranslation: translation.height,
-                        verticalOffset: episodeSwipeDragOffset(
-                            translation.height,
-                            availableHeight: availableHeight
-                        )
-                    )
-                } else {
-                    state = .zero
-                }
-            }
-            .onChanged { value in
-                guard panel == nil,
-                      !isSeeking,
-                      !panelTransitioning,
-                      !episodeSwipeTransitioning,
-                      abs(value.translation.height) > abs(value.translation.width) * 1.3 else { return }
+    private func routeSwipe(
+        _ direction: PlayerPagePan.Direction, _ start: CGPoint, _ window: UIWindow, _ back: PlayerPanAction?
+    ) -> PlayerPanAction? {
+        if direction == .back { return back }
+        guard direction == .vertical, isCurrentPlaybackReady, !episodeSwipeTransitioning,
+              let height = episodeSwipeRegion.height(at: start, in: window) else { return nil }
+        return PlayerPanAction(
+            kind: .episode, axis: .vertical,
+            begin: { translation in
                 beginEpisodeSwipeHold()
-            }
-            .onEnded { value in
-                finishEpisodeSwipe(value, availableHeight: availableHeight)
-            }
+                updateEpisodeSwipe(translation, availableHeight: height)
+            },
+            update: { updateEpisodeSwipe($0, availableHeight: height) },
+            canEnd: { abs($0.y) > abs($0.x) * Self.episodeSwipeAxisRatio },
+            end: { finishEpisodeSwipe($0, velocity: $1, availableHeight: height) },
+            cancel: cancelEpisodeDrag
+        )
+    }
+
+    private func updateEpisodeSwipe(_ translation: CGFloat, availableHeight: CGFloat) {
+        guard episodeSwipeHoldActive, !episodeSwipeTransitioning else { return }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            episodeSwipeGesture = ShortDramaEpisodeSwipeGestureState(
+                isVerticalLocked: true,
+                rawVerticalTranslation: translation,
+                verticalOffset: episodeSwipeDragOffset(translation, availableHeight: availableHeight)
+            )
+        }
     }
 
     private var playbackSurfaceOffset: CGFloat {
@@ -593,30 +599,23 @@ struct ShortDramaPlayerView: View {
         episodeSwipeHoldActive = false
     }
 
-    private func finishEpisodeSwipe(_ value: DragGesture.Value, availableHeight: CGFloat) {
+    private func finishEpisodeSwipe(_ translation: CGFloat, velocity: CGFloat, availableHeight: CGFloat) {
         guard !isLeavingPage,
               panel == nil,
               !panelTransitioning,
               !episodeSwipeTransitioning,
-              episodeSwipeHoldActive else { return }
+              episodeSwipeGesture.isVerticalLocked else { return }
+        updateEpisodeSwipe(translation, availableHeight: availableHeight)
+        defer { episodeSwipeGesture = .zero }
 
-        let translation = value.translation
-        guard abs(translation.height) > abs(translation.width) * 1.3 else {
-            settleEpisodeSwipeBack(from: episodeSwipeGesture.verticalOffset, message: nil)
-            return
-        }
-
-        let direction = translation.height < 0 ? 1 : -1
-        let magnitude = abs(translation.height)
+        let direction = translation < 0 ? 1 : -1
+        let magnitude = abs(translation)
         let minimumDistance = min(120, max(0, availableHeight) * 0.18)
         let sameDirectionFlick = magnitude >= 28
-            && abs(value.velocity.height) >= 650
-            && value.velocity.height.sign == translation.height.sign
+            && abs(velocity) >= 650
+            && velocity.sign == translation.sign
         let commits = magnitude >= minimumDistance || sameDirectionFlick
-        let currentOffset = episodeSwipeDragOffset(
-            translation.height,
-            availableHeight: availableHeight
-        )
+        let currentOffset = episodeSwipeGesture.verticalOffset
 
         guard let target = targetEpisode(for: direction) else {
             if commits {
@@ -642,15 +641,14 @@ struct ShortDramaPlayerView: View {
         )
     }
 
-    private func settleEpisodeSwipeBack(from offset: CGFloat, message: String?) {
-        settleEpisodeSwipeBack(from: offset, message: message, startingOpacity: playbackSurfaceOpacity)
+    private func cancelEpisodeDrag() {
+        guard !isLeavingPage, !episodeSwipeTransitioning, episodeSwipeGesture.isVerticalLocked else { return }
+        settleEpisodeSwipeBack(from: episodeSwipeGesture.verticalOffset, message: nil)
+        episodeSwipeGesture = .zero
     }
 
-    private func settleEpisodeSwipeBack(
-        from offset: CGFloat,
-        message: String?,
-        startingOpacity: Double
-    ) {
+    private func settleEpisodeSwipeBack(from offset: CGFloat, message: String?) {
+        let startingOpacity = playbackSurfaceOpacity
         let token = UUID()
         episodeSwipeToken = token
         episodeSwipeTransitioning = true
@@ -669,9 +667,7 @@ struct ShortDramaPlayerView: View {
             Task { @MainActor in
                 await releaseEpisodeSwipeHold()
                 guard episodeSwipeToken == token, !isLeavingPage else { return }
-                if !episodeSwipeAwaitingGestureReset {
-                    episodeSwipeTransitioning = false
-                }
+                episodeSwipeTransitioning = false
                 if let message { showBoundary(message) }
             }
         }
@@ -715,9 +711,7 @@ struct ShortDramaPlayerView: View {
                 await releaseEpisodeSwipeHold()
                 guard episodeSwipeToken == token, !isLeavingPage else { return }
                 episodeSwipeSelecting = false
-                if !episodeSwipeAwaitingGestureReset {
-                    episodeSwipeTransitioning = false
-                }
+                episodeSwipeTransitioning = false
                 withTransaction(Transaction(animation: nil)) {
                     episodeSwipeSettlementOffset = 0
                     episodeSwipeSettlementOpacity = 1
@@ -735,30 +729,23 @@ struct ShortDramaPlayerView: View {
 
     private func cancelEpisodeSwipe() {
         guard episodeSwipeTransitioning || episodeSwipeHoldActive || episodeSwipeGesture.isVerticalLocked else { return }
-        let gestureIsActive = episodeSwipeGesture.isVerticalLocked
         invalidateEpisodeSwipe()
-        if gestureIsActive {
-            episodeSwipeAwaitingGestureReset = true
-        }
-        if gestureIsActive || episodeSwipeHoldActive {
-            episodeSwipeTransitioning = true
-        }
+        guard episodeSwipeHoldActive else { return }
+        episodeSwipeTransitioning = true
         let token = episodeSwipeToken
         Task { @MainActor in
             await releaseEpisodeSwipeHold()
             guard episodeSwipeToken == token, !isLeavingPage else { return }
-            if !episodeSwipeAwaitingGestureReset {
-                episodeSwipeTransitioning = false
-            }
+            episodeSwipeTransitioning = false
         }
     }
 
     private func invalidateEpisodeSwipe() {
         episodeSwipeToken = UUID()
         episodeSwipeSelecting = false
-        episodeSwipeAwaitingGestureReset = false
         episodeSwipeTransitioning = false
         withTransaction(Transaction(animation: nil)) {
+            episodeSwipeGesture = .zero
             episodeSwipeSettlementOffset = 0
             episodeSwipeSettlementOpacity = 1
         }
@@ -843,26 +830,26 @@ struct ShortDramaPlayerView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func topControls(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
-        let exitsLandscape = verticalSizeClass == .compact && orientation.permitsOrientationRequests
+    private func finishSwipeReturn() {
+        if exitsLandscapeFullscreen {
+            orientation.exitLandscape()
+            return
+        }
 
-        return HStack {
-            Button {
-                if exitsLandscape {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { dismiss() }
+    }
+
+    private func topControls(metrics: ShortDramaPanelMetrics, centersBackSymbol: Bool = false) -> some View {
+        HStack {
+            FullUIPlayerBackButton(centersSymbol: centersBackSymbol, label: exitsLandscapeFullscreen ? "退出全屏" : "返回") {
+                if exitsLandscapeFullscreen {
                     orientation.exitLandscape()
                 } else {
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-                    .background { controlGlassCircle }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(exitsLandscape ? "退出全屏" : "返回")
 
             Spacer()
 
@@ -870,20 +857,8 @@ struct ShortDramaPlayerView: View {
                 Button("播放设置", systemImage: "slider.horizontal.3") {
                     present(.settings, metrics: metrics)
                 }
-                if isHorizontalVideo && !landscape,
-                   horizontalSizeClass == .compact, verticalSizeClass == .regular,
-                   orientation.permitsOrientationRequests {
-                    Button("横屏观看", systemImage: "rectangle.landscape") {
-                        orientation.enterLandscape()
-                    }
-                }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-                    .background { controlGlassCircle }
+                topControlLabel("ellipsis")
             }
             .buttonStyle(.plain)
             .accessibilityLabel("播放设置")
@@ -891,82 +866,204 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private func bottomControls(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
-        VStack(spacing: 0) {
-            progressControl(landscape: landscape)
-            if !landscape {
-                episodeMetadata
-                    .padding(.bottom, 12)
+    private func topControlLabel(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(FullUIPlayerChrome.symbolFont)
+            .foregroundStyle(.white)
+            .fullUIPlayerCircularControl()
+            .contentShape(Circle())
+    }
+
+    private var fullscreenButton: some View {
+        Button {
+            orientation.enterLandscape()
+        } label: {
+            Label {
+                Text("全屏观看")
+                    .font(.system(size: 15, weight: .semibold))
+            } icon: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(FullUIPlayerChrome.symbolFont)
             }
-            HStack(spacing: 8) {
-                episodeDock(metrics: metrics)
-                    .frame(maxWidth: landscape ? 240 : .infinity)
-                if landscape { Spacer(minLength: 8) }
-                quickRateButton
-            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .frame(height: FullUIPlayerChrome.controlSize)
+            .fullUIPlayerGlass(in: Capsule())
+            .contentShape(Capsule())
         }
-        .frame(maxWidth: .infinity)
-        .background(landscape ? Color.clear : Color.black)
+        .buttonStyle(.plain)
+    }
+
+    private func portraitDock(metrics: ShortDramaPanelMetrics) -> some View {
+        VStack(spacing: 0) {
+            episodeMetadata
+                .padding(.bottom, 12)
+            bottomButtons(metrics: metrics, landscape: false)
+        }
         .accessibilityElement(children: .contain)
     }
 
-    private func progressControl(landscape: Bool) -> some View {
-        ZStack(alignment: .top) {
-            ShortDramaProgressSlider(
-                value: $seekValue,
-                range: 0...max(duration, 1),
-                isEnabled: canSeek,
-                accessibilityLabel: "播放进度",
-                accessibilityValue: "\(formatTime(isSeeking ? seekValue : currentTime)) / \(formatTime(duration))",
-                onEditingChanged: { editing in
-                    if editing { beginSeek() }
-                },
-                onCommit: commitSeek,
-                trackOffset: landscape ? 0 : 9,
-                onCancel: cancelSeek
-            )
-            .frame(height: 44)
-            .offset(y: landscape ? 0 : -12)
-
-            if !isPlaying || isSeeking {
-                HStack(spacing: 8) {
-                    Text(formatTime(isSeeking ? seekValue : currentTime))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.84))
-                        .frame(minWidth: 34, alignment: .leading)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+    private func landscapeControls(metrics: ShortDramaPanelMetrics, layout: FullUILandscapePlayerLayout) -> some View {
+        GeometryReader { geometry in
+            if !isLocked {
+                VStack(spacing: 0) {
+                    regularControls(topControls(metrics: metrics, centersBackSymbol: true))
                     Spacer(minLength: 0)
-                    Text(formatTime(duration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.68))
-                        .frame(minWidth: 34, alignment: .trailing)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                    VStack(spacing: FullUILandscapePlayerLayout.progressGap) {
+                        progressControl()
+                        regularControls(
+                            bottomButtons(metrics: metrics, landscape: true)
+                                .fullUIPlayerGlassContainer(spacing: 0)
+                        )
+                    }
                 }
-                .offset(y: landscape ? -20 : -24)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+                .padding(layout.insets)
             }
+
+            if isLocked || (showsControls && controlsAcceptInput) {
+                FullUILandscapePlayerLock(isLocked: isLocked) {
+                    isLocked.toggle()
+                    showControls()
+                }
+                .position(x: layout.lockInset + FullUIPlayerChrome.controlSize / 2, y: geometry.size.height / 2)
+            }
+        }
+        .overlay(alignment: .top) {
+            FullUILandscapePlayerStatus(isVisible: showsControls)
+        }
+    }
+
+    private func bottomButtons(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
+        HStack(spacing: 8) {
+            episodeDock(metrics: metrics, landscape: landscape)
+                .frame(maxWidth: landscape ? 240 : .infinity)
+            if landscape { Spacer(minLength: 8) }
+            quickRateButton(landscape: landscape)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: landscape ? 44 : 32, alignment: .top)
-        .overlay(alignment: .bottom) {
-            if isSeeking {
-                seekPreviewOverlay
-                    .padding(.bottom, landscape ? 52 : 44)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+    }
+
+    private func regularControls(_ content: some View) -> some View {
+        content
+            .opacity(showsControls ? 1 : 0)
+            .allowsHitTesting(showsControls && controlsAcceptInput)
+            .accessibilityHidden(!showsControls || !controlsAcceptInput)
+            .animation(
+                FullUIPlayerChrome.visibilityAnimation(showsControls, reduceMotion: reduceMotion),
+                value: showsControls
+            )
+    }
+
+    private func progressControl(portraitGeometry: GeometryProxy? = nil) -> some View {
+        let landscape = portraitGeometry == nil
+        let showsProgress = controlsAvailable && (controlsVisible || !landscape)
+        let showsProgressControls = showsProgress && controlsVisible
+        let visibilityAnimation: Animation? = !landscape && reduceMotion
+            ? nil : FullUIPlayerChrome.visibilityAnimation(showsProgressControls, reduceMotion: reduceMotion)
+
+        let slider = ShortDramaProgressSlider(
+            value: $seekValue,
+            range: 0...max(duration, 1),
+            isEnabled: canInteractWithProgress,
+            accessibilityLabel: "播放进度",
+            accessibilityValue: "\(fullUIPlayerTime(isSeeking ? seekValue : currentTime)) / \(fullUIPlayerTime(duration))",
+            onEditingChanged: { editing in
+                if editing { beginSeek() }
+            },
+            onCommit: commitSeek,
+            showsCompactTrack: !controlsVisible && !landscape,
+            onCancel: cancelSeek
+        )
+        .frame(maxWidth: .infinity)
+
+        return Group {
+            if let geometry = portraitGeometry {
+                let safeArea = geometry.safeAreaInsets
+                let fullSize = CGSize(
+                    width: geometry.size.width + safeArea.leading + safeArea.trailing,
+                    height: ShortDramaProgressSlider.hitHeight
+                )
+                PortraitProgressLayout(size: fullSize, safeArea: safeArea, controlsVisibility: controlsVisible ? 1 : 0) {
+                    progressTime(currentTime)
+                        .opacity(controlsVisible ? 1 : 0)
+                    slider
+                    progressTime(duration)
+                        .opacity(controlsVisible ? 1 : 0)
+                }
+                // Expand the GeometryReader's safe-area width to the full viewport.
+                .padding(EdgeInsets(
+                    top: 0, leading: -safeArea.leading, bottom: 0, trailing: -safeArea.trailing
+                ))
+            } else {
+                HStack(spacing: 8) {
+                    progressTime(currentTime)
+                    slider
+                    progressTime(duration)
+                }
             }
         }
+        .frame(height: ShortDramaProgressSlider.hitHeight)
+        .opacity(showsProgress ? 1 : 0)
+        .allowsHitTesting(canInteractWithProgress)
+        .accessibilityHidden(!canInteractWithProgress)
+        .animation(visibilityAnimation, value: showsProgressControls)
         .onChange(of: currentTime) { _, newValue in
             if !isSeeking { seekValue = min(max(newValue, 0), max(duration, 1)) }
         }
         .onChange(of: seekValue) { _, value in
             if isSeeking, !seekCommitInFlight, let playback = model.playback {
-                seekPreview.update(playback: playback, targetTime: value)
+                seekPreview.update(id: playback.id, url: playback.url, quality: playback.quality, targetTime: value)
             }
         }
+    }
+
+    private struct PortraitProgressLayout: Layout {
+        private static let edgeInset: CGFloat = 16
+        private static let labelSpacing: CGFloat = 8
+
+        let size: CGSize
+        let safeArea: EdgeInsets
+        var controlsVisibility: CGFloat
+
+        var animatableData: CGFloat {
+            get { controlsVisibility }
+            set { controlsVisibility = newValue }
+        }
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            size
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let leading = safeArea.leading + Self.edgeInset
+            let trailing = safeArea.trailing + Self.edgeInset
+            let start = subviews[0]
+            let end = subviews[2]
+            let startWidth = start.sizeThatFits(.unspecified).width
+            let endWidth = end.sizeThatFits(.unspecified).width
+            let trackStart = bounds.minX + (leading + startWidth + Self.labelSpacing) * controlsVisibility
+            let trackEnd = bounds.maxX - (trailing + endWidth + Self.labelSpacing) * controlsVisibility
+
+            start.place(
+                at: CGPoint(x: bounds.minX + leading, y: bounds.midY), anchor: .leading, proposal: .unspecified
+            )
+            subviews[1].place(
+                at: CGPoint(x: trackStart, y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(width: max(0, trackEnd - trackStart), height: bounds.height)
+            )
+            end.place(
+                at: CGPoint(x: bounds.maxX - trailing, y: bounds.midY), anchor: .trailing, proposal: .unspecified
+            )
+        }
+    }
+
+    private func progressTime(_ time: Double) -> some View {
+        FullUIPlayerTimeLabel(time: time)
+            .opacity(isScrubbing ? 0 : 1)
+            .animation(FullUIPlayerChrome.visibilityAnimation(!isScrubbing, reduceMotion: reduceMotion), value: isScrubbing)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder private var episodeMetadata: some View {
@@ -985,6 +1082,7 @@ struct ShortDramaPlayerView: View {
             }
         }
         .frame(minHeight: 24, alignment: .leading)
+        .fullUIPlayerMediaText()
     }
 
     private var episodeTitle: some View {
@@ -1005,27 +1103,36 @@ struct ShortDramaPlayerView: View {
             }
     }
 
-    private func episodeDock(metrics: ShortDramaPanelMetrics) -> some View {
+    private func episodeDock(metrics: ShortDramaPanelMetrics, landscape: Bool) -> some View {
         Button {
             present(.episodes, metrics: metrics)
         } label: {
             HStack(spacing: 8) {
-                Label("选集", systemImage: "list.bullet")
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                if let episode = model.selectedEpisode {
-                    Text("第 \(episode.number) 集")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.82))
+                Label {
+                    Text("选集")
+                        .font(.subheadline.weight(.semibold))
+                } icon: {
+                    Image(systemName: "list.bullet")
+                        .font(FullUIPlayerChrome.symbolFont)
                 }
+                Spacer()
                 Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.74))
+                    .foregroundStyle(.white.opacity(landscape ? 0.74 : 1))
             }
             .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity, minHeight: bottomControlHeight)
-            .background { controlGlassCapsule }
+            .frame(maxWidth: .infinity)
+            .frame(height: FullUIPlayerChrome.controlSize)
+            .background {
+                if landscape {
+                    Color.clear.fullUIPlayerGlass(in: Capsule())
+                } else {
+                    Capsule().fill(Self.portraitDockFill)
+                }
+            }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -1034,17 +1141,16 @@ struct ShortDramaPlayerView: View {
         .accessibilityFocused($accessibilityFocus, equals: .episodesTrigger)
     }
 
-    private var quickRateButton: some View {
+    private func quickRateButton(landscape: Bool) -> some View {
         let rateText = ShortDramaRateLabel.text(for: playbackRate)
         let nextRateText = ShortDramaRateLabel.text(for: ShortDramaRateLabel.nextCycleRate(after: playbackRate))
-        let diameter = bottomControlHeight
-        let labelSize = min(quickRateLabelSize, 13 * diameter / 44)
+        let diameter = FullUIPlayerChrome.controlSize
 
         return Button {
             playbackRate = ShortDramaRateLabel.nextCycleRate(after: playbackRate)
         } label: {
             Text(rateText)
-                .font(.system(size: labelSize, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
@@ -1052,7 +1158,13 @@ struct ShortDramaPlayerView: View {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: playbackRate)
                 .padding(.horizontal, 4)
                 .frame(width: diameter, height: diameter)
-                .background { controlGlassCircle }
+                .background {
+                    if landscape {
+                        Color.clear.fullUIPlayerCircularControl()
+                    } else {
+                        Circle().fill(Self.portraitDockFill)
+                    }
+                }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -1075,7 +1187,22 @@ struct ShortDramaPlayerView: View {
         return videoNaturalSize.width > videoNaturalSize.height
     }
 
-    private var bottomControlHeight: CGFloat { min(60, max(44, quickRateDiameter)) }
+    private var isScrubbing: Bool { isSeeking && !seekCommitInFlight }
+
+    private var controlsAvailable: Bool { panel == nil && !panelTransitioning }
+
+    private var controlsAcceptInput: Bool { !episodeSwipeHoldActive && !episodeSwipeTransitioning }
+
+    private var showsControls: Bool { controlsVisible && controlsAvailable && !isScrubbing && !isLocked }
+
+    private var canInteractWithProgress: Bool {
+        controlsVisible && controlsAvailable && controlsAcceptInput && canSeek && !isLocked
+    }
+
+    private var shouldAutoHideControls: Bool {
+        controlsVisible && controlsAvailable && controlsAcceptInput
+            && scenePhase == .active && isPlaying && !isSeeking && !isLocked && !UIAccessibility.isVoiceOverRunning
+    }
 
     private func controlEdgeInset(geometry: GeometryProxy) -> CGFloat {
         if #available(iOS 27.0, *),
@@ -1089,14 +1216,14 @@ struct ShortDramaPlayerView: View {
             if radius > 0 {
                 // Keep the approved compact inset on displays with larger corners.
                 // Exact concentricity there would leave an oversized empty border.
-                return min(22, max(8, radius - bottomControlHeight / 2))
+                return min(22, max(8, radius - FullUIPlayerChrome.controlSize / 2))
             }
         }
         return 22
     }
 
-    private func showLandscapeControls() {
-        landscapeControlsVisible = true
+    private func showControls() {
+        controlsVisible = true
         controlsHideID = UUID()
     }
 
@@ -1109,9 +1236,9 @@ struct ShortDramaPlayerView: View {
         resumeAfterSeek = playerController.wantsPlayback && !model.hasFinished
         isSeeking = true
         playerController.pause()
-        showLandscapeControls()
+        showControls()
         if let playback = model.playback {
-            seekPreview.update(playback: playback, targetTime: seekValue)
+            seekPreview.update(id: playback.id, url: playback.url, quality: playback.quality, targetTime: seekValue)
         }
     }
 
@@ -1148,7 +1275,7 @@ struct ShortDramaPlayerView: View {
             if canResume, scenePhase == .active, !model.hasFinished, panel == nil {
                 playerController.play()
             }
-            showLandscapeControls()
+            showControls()
         }
     }
 
@@ -1177,45 +1304,7 @@ struct ShortDramaPlayerView: View {
                 playerController.play()
             }
         }
-        showLandscapeControls()
-    }
-
-    private var seekPreviewOverlay: some View {
-        GeometryReader { geometry in
-            let portrait = !isHorizontalVideo
-            let width: CGFloat = portrait ? 96 : 168
-            let height: CGFloat = portrait ? 152 : 94
-            let halfWidth = (width + 12) / 2
-            let center = min(max(halfWidth, geometry.size.width * seekValue / max(duration, 1)), geometry.size.width - halfWidth)
-            VStack(spacing: 6) {
-                ZStack {
-                    Color.black
-                    switch seekPreview.state {
-                    case .frame(let image, let actualTime):
-                        Image(uiImage: image).resizable().scaledToFit()
-                        if abs(actualTime - seekValue) > 0.5 {
-                            Text("预览约 \(formatTime(actualTime))")
-                                .font(.caption2.monospacedDigit())
-                                .padding(4).background(.black.opacity(0.7), in: Capsule())
-                                .frame(maxHeight: .infinity, alignment: .bottom)
-                        }
-                    case .unavailable:
-                        Text("暂无法预览").font(.caption).foregroundStyle(.white.opacity(0.8))
-                    case .idle, .loading:
-                        ProgressView().tint(.white)
-                    }
-                }
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                Text("\(formatTime(seekValue)) / \(formatTime(duration))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white)
-            }
-            .padding(6)
-            .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
-            .position(x: center, y: geometry.size.height / 2)
-        }
-        .frame(height: (isHorizontalVideo ? 94 : 152) + 40)
+        showControls()
     }
 
     @ViewBuilder
@@ -1442,7 +1531,7 @@ struct ShortDramaPlayerView: View {
         panelDragStartHeight = nil
         panelDragStartDetent = nil
         panelTransitioning = false
-        showLandscapeControls()
+        showControls()
         guard !isLeavingPage else { return }
         if resumeSelectedEpisodeAfterPanel {
             resumeSelectedEpisodeAfterPanel = false
@@ -1621,40 +1710,6 @@ struct ShortDramaPlayerView: View {
         }
         model.flushProgress()
     }
-
-    private func formatTime(_ time: Double) -> String {
-        guard time.isFinite, time > 0 else { return "00:00" }
-        let totalSeconds = Int(time.rounded(.down))
-        let seconds = totalSeconds % 60
-        let minutes = (totalSeconds / 60) % 60
-        let hours = totalSeconds / 3_600
-        if hours > 0 { return String(format: "%d:%02d:%02d", hours, minutes, seconds) }
-        return String(format: "%02d:%02d", totalSeconds / 60, seconds)
-    }
-
-    private var controlGlassCircle: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                Circle()
-                    .fill(.clear)
-                    .glassEffect(.regular.interactive(), in: .circle)
-            } else {
-                Circle().fill(.ultraThinMaterial)
-            }
-        }
-    }
-
-    private var controlGlassCapsule: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                Capsule()
-                    .fill(.clear)
-                    .glassEffect(.regular.interactive(), in: .capsule)
-            } else {
-                Capsule().fill(.ultraThinMaterial)
-            }
-        }
-    }
 }
 
 enum ShortDramaAccessibilityFocus: Hashable {
@@ -1682,6 +1737,34 @@ enum ShortDramaPanel: String, Identifiable, Equatable {
 private struct PlaybackObservationKey: Equatable {
     let playbackID: UUID?
     let isActive: Bool
+}
+
+@MainActor
+private final class ShortDramaEpisodeSwipeRegion {
+    weak var view: UIView?
+    var availableHeight: CGFloat = 0
+
+    func height(at point: CGPoint, in window: UIWindow) -> CGFloat? {
+        guard let view, view.window === window, view.bounds.contains(view.convert(point, from: window))
+        else { return nil }
+        return availableHeight
+    }
+}
+
+private struct ShortDramaEpisodeSwipeAnchor: UIViewRepresentable {
+    let region: ShortDramaEpisodeSwipeRegion
+    let availableHeight: CGFloat
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        region.view = view
+        region.availableHeight = availableHeight
+    }
 }
 
 private struct ShortDramaEpisodeSwipeGestureState: Equatable {
@@ -1820,9 +1903,11 @@ private struct ShortDramaPlayerSurface: View {
 #else
 struct ShortDramaPlayerView: View {
     let room: LiveModel
+    let presentsOverSource: Bool
 
     var body: some View {
-        LiveDetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+        LiveDetailPlayerView(viewModel: RoomInfoViewModel(room: room), presentsOverRoomList: presentsOverSource)
+            .interactiveDismissDisabled()
     }
 }
 #endif

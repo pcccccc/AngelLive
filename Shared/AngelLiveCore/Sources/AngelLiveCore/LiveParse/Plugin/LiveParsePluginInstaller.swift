@@ -11,21 +11,32 @@ public enum LiveParsePluginInstaller {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempRoot) }
 
-        try extract(zipData: zipData, to: tempRoot)
+        let manifest = try extractPlugin(zipData: zipData, to: tempRoot)
+        try placeExtractedPlugin(at: tempRoot, manifest: manifest, storage: storage)
+        return manifest
+    }
 
-        let manifestURL = tempRoot.appendingPathComponent("manifest.json", isDirectory: false)
+    static func extractPlugin(zipData: Data, to directory: URL) throws -> LiveParsePluginManifest {
+        try extract(zipData: zipData, to: directory)
+        let manifestURL = directory.appendingPathComponent("manifest.json", isDirectory: false)
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {
             throw LiveParsePluginError.invalidManifest("manifest.json not found")
         }
-        let manifest = try LiveParsePluginManifest.load(from: manifestURL)
+        return try LiveParsePluginManifest.load(from: manifestURL)
+    }
 
+    static func placeExtractedPlugin(
+        at directory: URL,
+        manifest: LiveParsePluginManifest,
+        storage: LiveParsePluginStorage,
+        replacingExisting: Bool = true
+    ) throws {
         let destination = storage.pluginVersionDirectory(pluginId: manifest.pluginId, version: manifest.version)
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if FileManager.default.fileExists(atPath: destination.path) {
+        if replacingExisting, FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
-        try FileManager.default.moveItem(at: tempRoot, to: destination)
-        return manifest
+        try FileManager.default.moveItem(at: directory, to: destination)
     }
 
     public static func extract(zipData: Data, to destinationDirectory: URL) throws {

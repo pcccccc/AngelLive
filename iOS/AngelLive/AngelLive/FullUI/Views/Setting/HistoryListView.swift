@@ -17,6 +17,7 @@ struct HistoryListView: View {
     @State private var selectedType = 0
     @State private var progressStore: ShortDramaProgressStore
     @State private var shortDramaRoom: LiveModel?
+    @State private var shortDramaReturnPreview: RoomPlayerReturnPreview?
     @State private var historyError: String?
     @State private var liveRooms: [LiveModel] = []
     @State private var classification: ShortDramaHistoryClassification?
@@ -66,21 +67,15 @@ struct HistoryListView: View {
         Binding(get: { historyError != nil }, set: { if !$0 { historyError = nil } })
     }
 
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
-    }
-
     @ViewBuilder
-    private var playerDestination: some View {
+    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
+                categoryRooms: navigationState.categoryRooms,
+                entryRoomSource: .history
             )
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
                 .fullUITabBarHidden()
         }
     }
@@ -96,6 +91,7 @@ struct HistoryListView: View {
             selectedType: $selectedType,
             onOpenShortDrama: { room in
                 #if canImport(KSPlayer)
+                shortDramaReturnPreview = navigationState.returnSource.capture()
                 shortDramaRoom = room
                 #else
                 historyError = "当前播放器不支持短剧播放。"
@@ -143,24 +139,23 @@ struct HistoryListView: View {
             Text(historyError ?? "")
         }
         #if canImport(KSPlayer)
-        .fullScreenCover(item: $shortDramaRoom) { room in
-            ShortDramaPlayerView(room: room)
+        .fullScreenCover(item: $shortDramaRoom, onDismiss: { shortDramaReturnPreview = nil }) { room in
+            ShortDramaPlayerView(room: room, presentsOverSource: true)
+                .presentationBackground(.clear)
+                .environment(\.fullUIRoomPlayerReturnPreview, shortDramaReturnPreview)
+                .fullUIWindowContext()
                 .fullUITabBarHidden()
                 .fullUIArcLoadingStyle()
         }
         #endif
 
-        if #available(iOS 18.0, *) {
-            baseView
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        } else {
-            baseView
-                .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        }
+        baseView
+            .roomPlayerPushDestination(navigationState) {
+                playerDestination(.push)
+            }
+            .roomPlayerZoomCover(navigationState) {
+                playerDestination(.zoom)
+            }
     }
 }
 

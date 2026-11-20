@@ -73,6 +73,114 @@ enum TVPlatformIconProvider {
     private static let installedTabIconPrefix = "assets/live_card_"
     private static let imageCache = NSCache<NSString, UIImage>()
 
+    /// FullUI management compares decoded pixels without changing other icon caches.
+    static func managementImage(
+        pluginID: String, targetSize: CGSize, displayScale: CGFloat, remote: LiveParseRemotePluginItem? = nil
+    ) -> UIImage? {
+        let names = [
+            "assets/pad_live_card_" + pluginID, "assets/live_card_" + pluginID,
+            "assets/mini_live_card_" + pluginID
+        ] + [remote?.tvosIcon].compactMap { $0 }
+        return managementResourceImage(pluginID: pluginID, names: names,
+            targetSize: targetSize, displayScale: displayScale)
+    }
+
+    /// Shelf background color sampled from the icon. Cached per plugin and catalog revision.
+    /// Low-saturation results are discarded so the card does not become a gray plate.
+    static func managementShelfColor(pluginID: String, revision: UInt, image: UIImage) -> UIColor? {
+        let key = "\(pluginID)#\(revision)" as NSString
+        if let cached = shelfColorCache.object(forKey: key) { return cached }
+        guard let color = dominantIconColor(image) else { return nil }
+        shelfColorCache.setObject(color, forKey: key)
+        return color
+    }
+
+    private static let shelfColorCache = NSCache<NSString, UIColor>()
+
+    private static func dominantIconColor(_ image: UIImage) -> UIColor? {
+        guard let cgImage = image.cgImage else { return nil }
+        let side = 32
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drew = pixels.withUnsafeMutableBytes { raw -> Bool in
+            guard let base = raw.baseAddress,
+                  let context = CGContext(
+                    data: base, width: side, height: side, bitsPerComponent: 8,
+                    bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  ) else { return false }
+            context.interpolationQuality = .medium
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard drew else { return nil }
+
+        struct Bucket: Hashable { let r, g, b: Int }
+        var counts: [Bucket: Int] = [:]
+        for index in stride(from: 0, to: pixels.count, by: 4) {
+            let alpha = Int(pixels[index + 3])
+            guard alpha >= 40 else { continue }
+            let red = Int(pixels[index]) * 255 / alpha
+            let green = Int(pixels[index + 1]) * 255 / alpha
+            let blue = Int(pixels[index + 2]) * 255 / alpha
+            let bucket = Bucket(r: red / 16, g: green / 16, b: blue / 16)
+            counts[bucket, default: 0] += 1
+        }
+        func saturation(_ bucket: Bucket) -> Double {
+            let red = Double(bucket.r), green = Double(bucket.g), blue = Double(bucket.b)
+            let maxChannel = max(red, green, blue)
+            let minChannel = min(red, green, blue)
+            guard maxChannel > 0 else { return 0 }
+            return (maxChannel - minChannel) / maxChannel
+        }
+        guard let best = counts.max(by: { lhs, rhs in
+            let leftSaturated = saturation(lhs.key) >= 0.18
+            let rightSaturated = saturation(rhs.key) >= 0.18
+            if leftSaturated != rightSaturated { return rightSaturated }
+            if lhs.value != rhs.value { return lhs.value < rhs.value }
+            return saturation(lhs.key) < saturation(rhs.key)
+        }), saturation(best.key) >= 0.18 else { return nil }
+        return UIColor(
+            red: (Double(best.key.r) + 0.5) / 16,
+            green: (Double(best.key.g) + 0.5) / 16,
+            blue: (Double(best.key.b) + 0.5) / 16,
+            alpha: 1)
+    }
+
+    private static func managementResourceImage(
+        pluginID: String, names: [String], targetSize: CGSize, displayScale: CGFloat
+    ) -> UIImage? {
+        let versions = LiveParsePlugins.shared.storage.listInstalledVersions(pluginId: pluginID)
+            .sorted { semverCompare($0.lastPathComponent, $1.lastPathComponent) > 0 }
+        func select(_ images: [UIImage]) -> UIImage? {
+            let valid = images.filter { $0.cgImage != nil }
+            let sorted = valid.sorted {
+                let a = $0.cgImage!, b = $1.cgImage!
+                return Double(a.width) * Double(a.height) < Double(b.width) * Double(b.height)
+            }
+            return sorted.first {
+                guard let bitmap = $0.cgImage else { return false }
+                return CGFloat(bitmap.width) >= targetSize.width * displayScale &&
+                    CGFloat(bitmap.height) >= targetSize.height * displayScale
+            } ?? sorted.last
+        }
+        for version in versions {
+            let images = names.compactMap { name -> UIImage? in
+                // Resource names remain relative to the installed package.
+                guard !name.hasPrefix("/"), !name.split(separator: "/").contains(".."),
+                      URL(string: name)?.scheme == nil else { return nil }
+                let file = version.appendingPathComponent(name)
+                let url = file.pathExtension.isEmpty ? file.appendingPathExtension("png") : file
+                let key = url.path as NSString
+                if let cached = imageCache.object(forKey: key) { return cached }
+                guard let image = UIImage(contentsOfFile: url.path) else { return nil }
+                imageCache.setObject(image, forKey: key)
+                return image
+            }
+            if let image = select(images) { return image }
+        }
+        return select(names.compactMap { UIImage(named: $0.replacingOccurrences(of: "assets/", with: "")) })
+    }
+
     /// 播放列表平台：用户设置并已缓存到本地的图标。
     static func playlistIcon(for liveType: LiveType) -> UIImage? {
         guard let instance = PlaylistInstanceStore.shared.instance(for: liveType),

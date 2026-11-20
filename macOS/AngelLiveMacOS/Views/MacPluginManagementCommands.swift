@@ -6,11 +6,13 @@ struct MacPluginManagementActions {
     let canAddSource: Bool
     let canShowSources: Bool
     let canSearch: Bool
+    let canUninstall: Bool
     let update: () -> Void
     let check: () -> Void
     let addSource: () -> Void
     let showSources: () -> Void
     let search: () -> Void
+    let uninstall: () -> Void
 }
 
 extension FocusedValues {
@@ -44,6 +46,12 @@ struct MacPluginManagementCommands: Commands {
                 Button("检查插件更新", action: actions.check)
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                     .disabled(!actions.canCheck)
+
+                Divider()
+
+                Button("卸载所选插件", role: .destructive, action: actions.uninstall)
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .disabled(!actions.canUninstall)
             }
         }
     }

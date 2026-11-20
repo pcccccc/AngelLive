@@ -5,29 +5,29 @@ import UIKit
 @Observable
 final class TVAppIconSettingsModel {
     enum Choice: String, CaseIterable, Identifiable {
-        case xiaoShengBiBi
         case classic
+        case xiaoShengBiBi
 
         var id: Self { self }
 
         var title: String {
             switch self {
-            case .xiaoShengBiBi: "小声逼逼（联名）"
             case .classic: "AngelLive 原版"
+            case .xiaoShengBiBi: "小声逼逼（联名）"
             }
         }
 
         var alternateIconName: String? {
             switch self {
-            case .xiaoShengBiBi: nil
-            case .classic: "AngelLiveClassic"
+            case .classic: nil
+            case .xiaoShengBiBi: "XiaoShengBB"
             }
         }
 
         var previewAssetName: String {
             switch self {
-            case .xiaoShengBiBi: "XiaoShengBBPreview"
             case .classic: "AngelLiveClassic"
+            case .xiaoShengBiBi: "XiaoShengBBPreview"
             }
         }
     }
@@ -39,16 +39,15 @@ final class TVAppIconSettingsModel {
 
     init() {
         let application = UIApplication.shared
-        // Both the bundle default and the legacy XiaoShengBB alternate use
-        // the collaboration artwork, including after an app update.
-        selection = application.alternateIconName == Choice.classic.alternateIconName
-            ? .classic
-            : .xiaoShengBiBi
+        // The bundle default and the legacy AngelLiveClassic alternate both use the original artwork.
+        selection = application.alternateIconName == Choice.xiaoShengBiBi.alternateIconName
+            ? .xiaoShengBiBi
+            : .classic
     }
 
     func select(_ choice: Choice) async {
         let application = UIApplication.shared
-        guard choice != selection, applyingChoice == nil else { return }
+        guard applyingChoice == nil, application.alternateIconName != choice.alternateIconName else { return }
         guard application.supportsAlternateIcons else {
             showError("当前安装包不支持备用应用图标。")
             return

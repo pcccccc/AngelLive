@@ -39,6 +39,7 @@ public struct UITestLaunchConfiguration: Sendable {
     var defaultsSuiteName: String { "dev.angellive.ui-tests.\(runID.uuidString)" }
     var directory: URL { URL.cachesDirectory.appendingPathComponent("AngelLiveUITests", isDirectory: true)
         .appendingPathComponent(runID.uuidString, isDirectory: true) }
+    var favoritesDirectory: URL { directory.appendingPathComponent("Favorites", isDirectory: true) }
     var defaults: UserDefaults { UserDefaults(suiteName: defaultsSuiteName)! }
 }
 
@@ -107,7 +108,11 @@ public struct UITestHistoryContext {
             pluginResolver: FavoritePluginIDResolver { _ in "fixture.plugin" },
             failureCacheInvalidator: .none
         )
-        let favorite = AppFavoriteModel(refreshSession: refresh, defaults: defaults)
+        let favorite = AppFavoriteModel(
+            refreshSession: refresh,
+            defaults: defaults,
+            localStore: FavoriteLocalStore(directory: configuration.favoritesDirectory)
+        )
         return Self(history: history, progress: progress, favorite: favorite, directory: directory)
     }
 

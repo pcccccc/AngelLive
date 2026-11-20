@@ -1,63 +1,6 @@
 import SwiftUI
 import UIKit
 
-// MARK: - 左边缘滑动返回
-
-/// 只有左边缘 edgeWidth 内接收触摸，其余 hitTest 返回 nil 完全穿透。
-/// 内部用 UIScreenEdgePanGestureRecognizer，滑动距离/速度达标后回调 onDismiss。
-struct EdgeSwipeDismissView: UIViewRepresentable {
-    let edgeWidth: CGFloat
-    let onDismiss: () -> Void
-
-    func makeUIView(context: Context) -> EdgeHitPassthroughView {
-        let view = EdgeHitPassthroughView()
-        view.edgeWidth = edgeWidth
-        view.backgroundColor = .clear
-        let edge = UIScreenEdgePanGestureRecognizer(
-            target: context.coordinator,
-            action: #selector(Coordinator.handleEdge)
-        )
-        edge.edges = .left
-        edge.delegate = context.coordinator
-        view.addGestureRecognizer(edge)
-        return view
-    }
-
-    func updateUIView(_ uiView: EdgeHitPassthroughView, context: Context) {
-        uiView.edgeWidth = edgeWidth
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(onDismiss: onDismiss) }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        let onDismiss: () -> Void
-        init(onDismiss: @escaping () -> Void) { self.onDismiss = onDismiss }
-
-        @objc func handleEdge(_ g: UIScreenEdgePanGestureRecognizer) {
-            guard g.state == .ended else { return }
-            let tx = g.translation(in: g.view).x
-            let vx = g.velocity(in: g.view).x
-            if tx > 60 || vx > 300 {
-                onDismiss()
-            }
-        }
-
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
-        ) -> Bool { true }
-    }
-}
-
-/// hitTest 只在左边缘 edgeWidth 内返回 self，其余返回 nil 穿透
-final class EdgeHitPassthroughView: UIView {
-    var edgeWidth: CGFloat = 20
-
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        point.x < edgeWidth ? super.hitTest(point, with: event) : nil
-    }
-}
-
 #if canImport(KSPlayer)
 
 //
@@ -105,6 +48,7 @@ struct PlayerGestureView: View {
     var onDoubleTap: (() -> Void)?
     /// 仅在宿主显式注入时启用横向手势；默认入口保持原有亮度/音量行为。
     var onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)?
+    private let adjustsBrightnessAndVolumeWithDrag: Bool
     private let edgePassthroughWidth: CGFloat
     /// FullUI 仅在触摸播放画面期间阻止交互式返回。
     private let preventsInteractiveDismissal: Bool
@@ -117,6 +61,7 @@ struct PlayerGestureView: View {
         onSingleTap: (() -> Void)? = nil,
         onDoubleTap: (() -> Void)? = nil,
         onHorizontalSwipe: ((PlayerHorizontalSwipeDirection) -> Void)? = nil,
+        adjustsBrightnessAndVolumeWithDrag: Bool = true,
         edgePassthroughWidth: CGFloat = 20,
         preventsInteractiveDismissal: Bool = false,
         orientationErrorHandler: (@Sendable (Error) -> Void)? = nil,
@@ -125,6 +70,7 @@ struct PlayerGestureView: View {
         self.onSingleTap = onSingleTap
         self.onDoubleTap = onDoubleTap
         self.onHorizontalSwipe = onHorizontalSwipe
+        self.adjustsBrightnessAndVolumeWithDrag = adjustsBrightnessAndVolumeWithDrag
         self.edgePassthroughWidth = edgePassthroughWidth
         self.preventsInteractiveDismissal = preventsInteractiveDismissal
         self.orientationErrorHandler = orientationErrorHandler
@@ -228,7 +174,7 @@ struct PlayerGestureView: View {
                                           value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
                                     if onHorizontalSwipe != nil {
                                         handleDirectionalDragChanged(value: value, in: geometry.size)
-                                    } else if GeneralSettingModel().enablePlayerGesture {
+                                    } else if adjustsBrightnessAndVolumeWithDrag && GeneralSettingModel().enablePlayerGesture {
                                         handleDragChanged(value: value, in: geometry.size)
                                     }
                                 }
@@ -239,7 +185,8 @@ struct PlayerGestureView: View {
                                     } else {
                                         handleDragEnded()
                                     }
-                                }
+                                },
+                            including: adjustsBrightnessAndVolumeWithDrag || onHorizontalSwipe != nil ? .all : .subviews
                         )
                         .simultaneousGesture(
                             TapGesture(count: 2)
@@ -505,7 +452,7 @@ struct PlayerGestureView: View {
         }
 
         isDragging = true
-        if dragAxis == .vertical && GeneralSettingModel().enablePlayerGesture {
+        if dragAxis == .vertical && adjustsBrightnessAndVolumeWithDrag && GeneralSettingModel().enablePlayerGesture {
             handleDragChanged(
                 value: value,
                 in: CGSize(width: max(1, size.width - edgePassthroughWidth), height: size.height),
@@ -666,11 +613,12 @@ private struct PlayerInteractiveDismissalSurface: UIViewRepresentable {
             shouldBeRequiredToFailBy other: UIGestureRecognizer
         ) -> Bool {
             guard observer.hasCanvasTouch, let gestureHost else { return false }
-            // 呈现返回的 pan 挂在 controller 根视图；播放器拖动位于内部 SwiftUI 视图。
+            // 统一的播放页 pan 可挂在根视图。这里只拦截系统呈现返回。
             // 按每次触摸建立优先级，避免异步更新 SwiftUI 状态晚于系统首次识别。
             let shouldWait = other.view === gestureHost
                 && other is UIPanGestureRecognizer
                 && !(other is UIScreenEdgePanGestureRecognizer)
+                && !(other is PlayerPagePanGestureRecognizer)
             return shouldWait
         }
     }

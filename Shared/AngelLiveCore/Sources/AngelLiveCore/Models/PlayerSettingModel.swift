@@ -75,18 +75,26 @@ public final class PlayerSettingModel {
     public static let globalPlayerKernel = "SimpleLive.Setting.PlayerKernel"
     public static let globalDefaultPlaybackQuality = "AngelLive.Setting.DefaultPlaybackQuality"
 
-    public init() {}
+    @ObservationIgnored private let qualityDefaults: UserDefaults
+
+    public convenience init() {
+        self.init(qualityDefaults: .shared)
+    }
+
+    init(qualityDefaults: UserDefaults) {
+        self.qualityDefaults = qualityDefaults
+    }
 
     @ObservationIgnored
     public var defaultPlaybackQuality: DefaultPlaybackQuality {
         get {
             access(keyPath: \.defaultPlaybackQuality)
-            let rawValue = UserDefaults.shared.value(forKey: Self.globalDefaultPlaybackQuality, synchronize: true) as? Int
+            let rawValue = qualityDefaults.value(forKey: Self.globalDefaultPlaybackQuality, synchronize: true) as? Int
             return rawValue.flatMap(DefaultPlaybackQuality.init(rawValue:)) ?? .highest
         }
         set {
             withMutation(keyPath: \.defaultPlaybackQuality) {
-                UserDefaults.shared.set(newValue.rawValue, forKey: Self.globalDefaultPlaybackQuality, synchronize: true)
+                qualityDefaults.set(newValue.rawValue, forKey: Self.globalDefaultPlaybackQuality, synchronize: true)
             }
         }
     }

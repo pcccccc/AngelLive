@@ -60,6 +60,55 @@ struct HostRequestOwnershipTests {
         #expect(model.error == nil)
     }
 
+    @Test("a cached category stays on content while it refreshes")
+    func cachedRefreshDoesNotShowSkeleton() async {
+        let gate = RequestGate<[LiveModel]>()
+        let model = CategoryRoomListModel { _ in try await gate.request() }
+        let first = Task { await model.load() }
+        await gate.waitForStarted(1)
+        gate.finish(.success([room("cached")]))
+        await first.value
+
+        let refresh = Task { await model.load() }
+        await gate.waitForStarted(2)
+        #expect(model.isLoading)
+        #expect(model.phase == .content)
+        #expect(model.rooms.map(\.roomId) == ["cached"])
+        gate.finish(.success([room("fresh")]))
+        await refresh.value
+        #expect(model.phase == .content)
+        #expect(model.rooms.map(\.roomId) == ["fresh"])
+    }
+
+    @Test("cancelling a request is not an empty or failed list")
+    func cancellationIsNotFailureOrEmpty() async {
+        let gate = RequestGate<[LiveModel]>()
+        let model = CategoryRoomListModel { _ in try await gate.request() }
+        let load = Task { await model.load() }
+        await gate.waitForStarted(1)
+        load.cancel()
+        gate.finish(.success([room("late")]))
+        await load.value
+        #expect(model.error == nil)
+        #expect(model.rooms.isEmpty)
+        #expect(model.phase != .failure)
+        #expect(model.phase != .empty)
+        #expect(model.phase == .skeleton)
+    }
+
+    @Test("a successful empty page is the empty state")
+    func emptyResultIsEmptyState() async {
+        let gate = RequestGate<[LiveModel]>()
+        let model = CategoryRoomListModel { _ in try await gate.request() }
+        let load = Task { await model.load() }
+        await gate.waitForStarted(1)
+        gate.finish(.success([]))
+        await load.value
+        #expect(model.error == nil)
+        #expect(model.phase == .empty)
+        #expect(!model.hasMore)
+    }
+
     @Test("a repeated category load does not start a second request")
     func categoryRequestsDoNotOverlap() async {
         let gate = RequestGate<[LiveModel]>()

@@ -8,6 +8,7 @@ import KSPlayerUI
 import AppKit
 import Kingfisher
 import SharedAssets
+internal import AVFoundation
 
 /// Desktop controls follow the existing player; episode resolution is shared with the other hosts.
 struct MacShortDramaPlayerView: View {
@@ -28,6 +29,7 @@ struct MacShortDramaPlayerView: View {
     @State private var resumeAfterSeek = false
     @State private var seekPlaybackID: UUID?
     @State private var seekTask: Task<Void, Never>?
+    @State private var seekPreview = SeekPreviewModel()
     @State private var feedbackToast: ToastMessage?
     @State private var feedbackTask: Task<Void, Never>?
     @State private var playbackRate: Float = 1
@@ -39,15 +41,21 @@ struct MacShortDramaPlayerView: View {
     @State private var isLeaving = false
     @State private var sleepActivity: NSObjectProtocol?
     @State private var controlsRevealed = true
-    @State private var controlsHovered = false
-    @State private var volumeHovered = false
-    @State private var isAdjustingVolume = false
+    @State private var volumeExpanded = false
+    @State private var isFullscreen = false
+    @State private var isPinned = false
+    @State private var showVideoInfo = false
+    @State private var showAirPlay = false
+    @State private var closeDeadline: ContinuousClock.Instant?
     @State private var preMuteVolume: Float = 1
     @State private var menuTrackingCount = 0
     @State private var hideControlsTask: Task<Void, Never>?
+    @State private var pointerOverControls = false
+    @State private var bottomControlsFrame = CGRect.null
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.macPlayerAcceptsCommands) private var acceptsCommands
     @Environment(\.scenePhase) private var scenePhase
 
     init(room: LiveModel, onClose: (@MainActor () -> Void)? = nil, onExitFullscreen: (@MainActor () -> Bool)? = nil) {
@@ -58,26 +66,45 @@ struct MacShortDramaPlayerView: View {
     }
 
     private var title: String { room.roomTitle.isEmpty ? room.userName.orDash : room.roomTitle }
-    private var episodeText: String { model.selectedEpisode.map { "第 \($0.number) 集" } ?? "分集播放" }
+    private var episodeText: String { model.selectedEpisode?.title.orDash ?? "分集播放" }
+    private var episodeSubtitle: LocalizedStringResource? {
+        guard let episode = model.selectedEpisode else { return nil }
+        let number = episode.number
+        let separator = " · "
+        var titleComponents = episode.quality.title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: separator)[...]
+        if titleComponents.first == "选集" {
+            titleComponents = titleComponents.dropFirst()
+        }
+        if titleComponents.first == "第\(number)集" || titleComponents.first == "第 \(number) 集" {
+            titleComponents = titleComponents.dropFirst()
+        }
+        let name = titleComponents.joined(separator: separator).trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "第 \(number) 集" }
+        return "第 \(number) 集 · \(name)"
+    }
+
     private var isSeekable: Bool { controller.isSeekable(for: model.playback?.id) }
+    private var isScrubbing: Bool { isSeeking && !seekCommitInFlight }
+    private var inset: CGFloat { MacPlayerChrome.inset }
+    private var chromeVisible: Bool { controlsVisible && !isScrubbing }
+    private var playerLayer: KSPlayerLayer? { controller.coordinator?.playerLayer }
+    private var airPlayPlayer: AVPlayer? {
+        guard let quality = model.playback?.quality, RoomPlaybackResolver.isHLSQuality(quality),
+              let source = playerLayer?.player as? KSAVPlayer, source.player.allowsExternalPlayback else {
+            return nil
+        }
+        return source.player
+    }
+    private var isPaused: Bool { isReady && playerLayer?.state == .paused }
 
     private var controlsHeld: Bool {
-        !isPlaying || !isReady || model.isLoading || model.errorMessage != nil
-            || model.hasFinished || isSeeking || isAdjustingVolume || showsEpisodes
-            || controlsHovered || menuTrackingCount > 0 || voiceOverEnabled
+        !isReady || model.isLoading || model.errorMessage != nil || model.hasFinished
+            || isSeeking || volumeExpanded || showsEpisodes || showVideoInfo || showAirPlay
+            || menuTrackingCount > 0 || voiceOverEnabled || isPaused
     }
     private var controlsVisible: Bool { controlsRevealed || controlsHeld }
-    private var volumeIsExpanded: Bool { volumeHovered || isAdjustingVolume || voiceOverEnabled }
-
-    private func volumeSliderWidth(availableWidth: CGFloat) -> CGFloat {
-        // Four 30pt slots + three 16pt gaps + capsule 16pt + expansion gap 12pt
-        // + window insets 32pt leave the remaining width for the native slider.
-        availableWidth >= 352 ? 80 : max(40, min(80, availableWidth - 228))
-    }
-
-    private func volumeExpansionWidth(availableWidth: CGFloat) -> CGFloat {
-        12 + volumeSliderWidth(availableWidth: availableWidth) + (availableWidth >= 352 ? 44 : 0)
-    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -99,39 +126,74 @@ struct MacShortDramaPlayerView: View {
                 // This layer owns only uncovered video clicks and pointer activity.
                 // Controls and the existing top window-drag strip receive their own events.
                 MacShortDramaInteractionArea(onActivity: revealControls, onClick: videoClicked)
-                    .allowsHitTesting(!showsEpisodes)
+                .allowsHitTesting(!showsEpisodes && !showVideoInfo && !isScrubbing)
                     .accessibilityHidden(true)
-                WindowDragArea()
-                    .frame(height: 60)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .allowsHitTesting(!showsEpisodes)
-                VStack {
-                    topControls
-                        .padding(.horizontal, 16)
-                        .onHover { controlsHoverChanged($0) }
-                    Spacer(minLength: 16)
-                    bottomControls(availableWidth: geometry.size.width)
-                        .onHover { controlsHoverChanged($0) }
+                if !isFullscreen {
+                    WindowDragArea()
+                        .frame(height: inset + MacPlayerChrome.controlSize)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(!showsEpisodes && !showVideoInfo && !isScrubbing)
+                        .accessibilityHidden(true)
                 }
-                .padding(.top, 16)
-                .opacity(controlsVisible ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: controlsVisible)
-                .allowsHitTesting(controlsVisible && !showsEpisodes)
-                .accessibilityHidden(showsEpisodes || !controlsVisible)
-                // Match the live player's ZStack: status is centered in the video viewport,
-                // independent of the title, progress row, and adaptive bottom control height.
+                VStack {
+                    topControls(width: geometry.size.width)
+                        .opacity(chromeVisible ? 1 : 0)
+                        .animation(chromeAnimation, value: chromeVisible)
+                        .allowsHitTesting(chromeVisible)
+                        .accessibilityHidden(!chromeVisible)
+                    Spacer(minLength: 16)
+                    bottomControls(availableWidth: geometry.size.width - 2 * inset)
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(MacPlayerChrome.hoverSpace)) } action: {
+                            bottomControlsFrame = $0
+                        }
+                }
+                .padding(inset)
+                .allowsHitTesting(controlsVisible && !showsEpisodes && !showVideoInfo)
+                .accessibilityHidden(showsEpisodes || showVideoInfo || !controlsVisible)
                 statusContent
-                    .padding(.horizontal, 16)
-                    .opacity(controlsVisible ? 1 : 0)
-                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: controlsVisible)
-                    .allowsHitTesting(controlsVisible && !showsEpisodes)
-                    .accessibilityHidden(showsEpisodes || !controlsVisible)
+                    .padding(.horizontal, inset)
+                    .opacity(chromeVisible ? 1 : 0)
+                    .animation(chromeAnimation, value: chromeVisible)
+                    .allowsHitTesting(chromeVisible && !showsEpisodes && !showVideoInfo)
+                    .accessibilityHidden(showsEpisodes || showVideoInfo || !chromeVisible)
+                if isScrubbing {
+                    MacPlayerScrubPreview(position: seekValue, duration: duration, state: seekPreview.state)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
                 if showsEpisodes {
                     episodeOverlay(size: geometry.size)
+                }
+                if showVideoInfo, let coordinator = controller.coordinator {
+                    VideoSettingsPanel(
+                        coordinator: coordinator, qualityTitle: model.playback?.quality.title,
+                        streamURL: model.playback?.url, isShowing: $showVideoInfo
+                    )
+                    .frame(width: min(380, geometry.size.width))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .coordinateSpace(name: MacPlayerChrome.hoverSpace)
+            .onContinuousHover(coordinateSpace: .named(MacPlayerChrome.hoverSpace)) { phase in
+                switch phase {
+                case .active(let point):
+                    pointerOverControls = MacPlayerChrome.isPointerOverControls(
+                        point, inset: inset, bottomFrame: bottomControlsFrame
+                    )
+                    revealControls()
+                case .ended:
+                    guard pointerOverControls else { return }
+                    pointerOverControls = false
+                    revealControls()
                 }
             }
         }
         .background(PlayerWindowReferenceView(window: $playerWindow))
+        .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: controlsHeld || pointerOverControls))
+        .macPlayerWindowState(playerWindow) {
+            isFullscreen = playerWindow?.styleMask.contains(.fullScreen) == true
+            isPinned = playerWindow?.level == .floating
+        }
         .environment(\.colorScheme, .dark)
         .navigationTitle(title)
         .toolbar(.hidden, for: .windowToolbar)
@@ -139,6 +201,11 @@ struct MacShortDramaPlayerView: View {
         .task {
             isLeaving = false
             await model.load()
+        }
+        .task(id: closeDeadline) {
+            guard let closeDeadline else { return }
+            do { try await Task.sleep(until: closeDeadline, clock: .continuous) } catch { return }
+            closePlayer()
         }
         .task(id: model.playback?.id) {
             let id = model.playback?.id
@@ -161,6 +228,7 @@ struct MacShortDramaPlayerView: View {
         .onChange(of: model.playback?.id) { _, _ in
             seekTask?.cancel()
             seekTask = nil
+            seekPreview.cancel()
             seekPlaybackID = nil
             seekCommitInFlight = false
             isReady = false
@@ -177,6 +245,11 @@ struct MacShortDramaPlayerView: View {
             revealControls()
         }
         .onChange(of: controlsHeld) { _, _ in revealControls() }
+        .onChange(of: seekValue) {
+            if isScrubbing, let playback = model.playback {
+                seekPreview.update(id: playback.id, url: playback.url, quality: playback.quality, targetTime: seekValue)
+            }
+        }
         .onChange(of: controller.wantsPlayback) { _, wantsPlayback in
             if !wantsPlayback { persistCurrentProgress() }
         }
@@ -209,77 +282,84 @@ struct MacShortDramaPlayerView: View {
             persistCurrentProgress()
         }
         .onDisappear { cleanup() }
+        .sheet(isPresented: $showAirPlay) {
+            MacPlayerAirPlaySheet(player: airPlayPlayer)
+                .onExitCommand { showAirPlay = false }
+        }
         .focusable()
         .focusEffectDisabled()
+        .focusedSceneValue(\.macPlayerCommands, acceptsCommands ? commandActions : nil)
         .onKeyPress(.return) {
-            guard !showsEpisodes else { return .ignored }
-            playerWindow?.toggleFullScreen(nil)
+            guard commandActions.canControlPlayback else { return .ignored }
+            toggleFullscreen()
             return .handled
         }
-        .onExitCommand {
-            if showsEpisodes {
-                closeEpisodes()
-            } else if onExitFullscreen?() == true {
-                // The destination serializes full-screen transitions before any close request.
-            } else if onExitFullscreen == nil, let window = playerWindow, window.styleMask.contains(.fullScreen) {
-                window.toggleFullScreen(nil)
-            } else {
-                closePlayer()
-            }
-        }
+        .macPlayerEscapeKey(isEnabled: acceptsCommands && menuTrackingCount == 0, action: handleEscape)
     }
 
-    private var topControls: some View {
-        HStack(spacing: 12) {
-            Button(action: closePlayer) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .adaptiveGlassEffect(in: .circle)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+    private var commandActions: MacPlayerCommandActions {
+        let canControlPlayback = !showsEpisodes && !showVideoInfo && !showAirPlay && !isSeeking
+        let seek: ((Double) -> Void)? = isSeekable ? { offset in seekBy(offset) } : nil
+        return MacPlayerCommandActions(
+            isPlaying: isPlaying, isMuted: volume == 0, isFullscreen: isFullscreen,
+            togglePlayback: togglePlayback, toggleMute: toggleMute, toggleFullscreen: toggleFullscreen,
+            changeVolume: { volume = min(1, max(0, volume + $0)); revealControls() },
+            seek: seek, escape: handleEscape, canControlPlayback: canControlPlayback
+        )
+    }
+
+    private var chromeAnimation: Animation {
+        MacPlayerChrome.visibilityAnimation(reduceMotion: reduceMotion)
+    }
+
+    private func topControls(width: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: MacPlayerChrome.topControlSpacing) {
+            MacPlayerCloseButton(action: closePlayer)
+            MacPlayerTitle(
+                title: title,
+                subtitle: episodeSubtitle,
+                maximumWidth: width * MacPlayerChrome.titleWidthFraction
+            )
+            Spacer(minLength: 0)
+            MacPlayerGlassGroup {
+                if let playerLayer { MacPlayerSubtitlesMenu(layer: playerLayer) }
+                settingsMenu
+                Button {
+                    guard let playerWindow else { return }
+                    isPinned.toggle()
+                    playerWindow.level = isPinned ? .floating : .normal
+                } label: { macPlayerIcon(isPinned ? "pin.fill" : "pin") }
+                    .accessibilityLabel(isPinned ? "取消置顶" : "置顶")
             }
             .buttonStyle(.plain)
-            // Keep the existing 36pt circle/alignment while the button itself remains 44pt.
-            .padding(-4)
-            .accessibilityLabel("关闭播放器")
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.bold()).lineLimit(1)
-                Text(episodeText).font(.caption).foregroundStyle(.white.opacity(0.8))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .adaptiveGlassEffect()
-            Spacer(minLength: 12)
-            HStack(spacing: 16) {
-                Button { playerWindow?.toggleFullScreen(nil) } label: { controlIcon("arrow.up.left.and.arrow.down.right") }
-                    .buttonStyle(.plain)
-                    .padding(-7)
-                    .accessibilityLabel("切换全屏")
-                settingsMenu
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .adaptiveGlassEffect()
+            .fixedSize()
         }
         .foregroundStyle(.white)
-        .frame(height: 44)
+        .frame(height: MacPlayerChrome.controlSize)
     }
 
     private var settingsMenu: some View {
         Menu {
-            Picker("播放速度", selection: $playbackRate) {
-                ForEach([Float(0.75), 1, 1.25, 1.5, 2, 3], id: \.self) { rate in
-                    Text(rateLabel(rate)).tag(rate)
+            Section("常用") {
+                MacPlayerSleepTimerMenu(deadline: $closeDeadline)
+            }
+            if airPlayPlayer != nil {
+                Section("投屏") {
+                    Button { showAirPlay = true } label: { Label("投屏", systemImage: "airplay.video") }
                 }
             }
-            Toggle("自动连播", isOn: Binding(get: { model.autoplay }, set: { model.autoplay = $0 }))
-        } label: { controlIcon("gearshape") }
+            Section("更多") {
+                Menu {
+                    Toggle("自动连播", isOn: Binding(get: { model.autoplay }, set: { model.autoplay = $0 }))
+                } label: {
+                    Label("播放设置", systemImage: "slider.horizontal.3")
+                }
+                Button("视频信息") { showVideoInfo = true }.disabled(playerLayer == nil)
+            }
+        } label: { macPlayerIcon("gearshape") }
         .menuStyle(.button)
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
-        .padding(-7)
         .accessibilityLabel("播放设置")
         .help("播放设置")
     }
@@ -304,139 +384,82 @@ struct MacShortDramaPlayerView: View {
         } else if model.episodes.isEmpty {
             ContentUnavailableView("暂无可播放剧集", systemImage: "film", description: Text("可返回选择其他剧目。"))
         } else if !isPlaying {
-            Button(action: togglePlayback) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 60, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(20)
-                    .adaptiveGlassEffect(in: .circle)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(model.hasFinished ? "重播本集" : "继续播放")
+            MacPlayerCenterPlayButton(title: model.hasFinished ? "重播本集" : "继续播放", action: togglePlayback)
         }
     }
 
     private func bottomControls(availableWidth: CGFloat) -> some View {
-        VStack(spacing: 12) {
-            if let note = model.selectionNote { Text(note).font(.caption).foregroundStyle(.white.opacity(0.72)) }
-            HStack(spacing: 12) {
-                Text(timeLabel(isSeeking ? seekValue : currentTime))
-                MacShortDramaSlider(
-                    value: $seekValue, maximum: max(1, duration),
-                    isEnabled: isSeekable && !seekCommitInFlight && !model.isLoading,
-                    label: "播放进度", valueDescription: timeLabel(seekValue),
-                    onEditingChanged: seekEditingChanged
-                )
-                .frame(height: 20)
-                Text(timeLabel(duration))
+        let showsPercentage = availableWidth >= 400
+        let sliderWidth: CGFloat = min(80, max(40, availableWidth - 200))
+        let expandedWidth = sliderWidth + (showsPercentage ? 64 : 12)
+        return VStack(spacing: 0) {
+            if let note = model.selectionNote {
+                Text(note).font(.caption).macPlayerMediaText()
+                    .padding(.bottom, 8)
+                    .opacity(chromeVisible ? 1 : 0)
+                    .animation(chromeAnimation, value: chromeVisible)
+                    .accessibilityHidden(!chromeVisible)
             }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.white)
+            if duration > 0 {
+                MacPlayerProgressRow(
+                    currentTime: seekCommitInFlight ? seekValue : currentTime, duration: duration,
+                    position: Binding(get: { isSeeking ? seekValue : currentTime }, set: {
+                        if isSeeking && !seekCommitInFlight { seekValue = $0 }
+                    }),
+                    isScrubbing: isScrubbing, canSeek: isSeekable && !seekCommitInFlight && !model.isLoading,
+                    onEditingChanged: seekEditingChanged, onCancel: cancelScrubbing, seekBy: seekBy
+                )
+                    .padding(.bottom, MacPlayerProgressRow.buttonGap)
+                    .opacity(controlsVisible ? 1 : 0)
+                    .animation(chromeAnimation, value: controlsVisible)
+            }
             MacShortDramaControlGroupsLayout(
-                additionalPlaybackWidth: volumeIsExpanded ? 0 : volumeExpansionWidth(availableWidth: availableWidth)
+                additionalPlaybackWidth: volumeExpanded ? 0 : expandedWidth
             ) {
-                HStack(spacing: 16) {
-                    Button(action: togglePlayback) { controlIcon(isPlaying ? "pause.fill" : "play.fill") }
-                        .padding(-7)
-                        .keyboardShortcut(.space, modifiers: [])
+                MacPlayerGlassGroup {
+                    Button(action: togglePlayback) { macPlayerIcon(isPlaying ? "pause.fill" : "play.fill") }
                         .accessibilityLabel(model.hasFinished ? "重播本集" : isPlaying ? "暂停" : "播放")
                         .disabled(model.playback == nil && !model.hasFinished)
-                    Button { adjacentEpisode(-1) } label: { controlIcon("backward.end.fill") }
-                        .padding(-7)
+                    Button { adjacentEpisode(-1) } label: { macPlayerIcon("backward.end.fill") }
                         .keyboardShortcut(.leftArrow, modifiers: [.command])
                         .accessibilityLabel("上一集")
                         .disabled(!canMove(-1))
-                    Button { adjacentEpisode(1) } label: { controlIcon("forward.end.fill") }
-                        .padding(-7)
+                    Button { adjacentEpisode(1) } label: { macPlayerIcon("forward.end.fill") }
                         .keyboardShortcut(.rightArrow, modifiers: [.command])
                         .accessibilityLabel("下一集")
                         .disabled(!canMove(1))
-                    volumeControls(availableWidth: availableWidth)
+                    MacPlayerVolumeControl(
+                        volume: $volume, isMuted: volume == 0, sliderWidth: sliderWidth, showsPercentage: showsPercentage,
+                        toggleMute: toggleMute, onExpansionChanged: { volumeExpanded = $0 }
+                    )
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .adaptiveGlassEffect()
-                .fixedSize(horizontal: true, vertical: true)
-                episodeButton
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .adaptiveGlassEffect()
-                    .fixedSize(horizontal: true, vertical: true)
-            }
-        }
-        .padding(.top, 16)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-        // Shade the full window edge, including the controls' outer inset.
-        .background(LinearGradient(colors: [.clear, .black.opacity(0.8)], startPoint: .top, endPoint: .bottom))
-    }
-
-    private func volumeControls(availableWidth: CGFloat) -> some View {
-        HStack(spacing: 12) {
-            Button {
-                if volume > 0 {
-                    preMuteVolume = volume
-                    volume = 0
-                } else {
-                    volume = preMuteVolume
+                .fixedSize()
+                MacPlayerGlassGroup {
+                    Button(action: openEpisodes) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "list.bullet").font(MacPlayerChrome.symbolFont)
+                            Text("选集").font(.system(size: 15, weight: .semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .frame(height: MacPlayerChrome.controlSize)
+                        .contentShape(Rectangle())
+                    }
+                    .disabled(model.episodes.isEmpty)
+                    MacPlayerRateMenu(rate: $playbackRate)
+                    Button(action: toggleFullscreen) {
+                        macPlayerIcon(isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    }
+                    .accessibilityLabel(isFullscreen ? "退出全屏" : "进入全屏")
                 }
-                revealControls()
-            } label: {
-                controlIcon(volume == 0 ? "speaker.slash.fill" : volume > 0.5 ? "speaker.wave.2.fill" : "speaker.wave.1.fill")
+                .fixedSize()
             }
             .buttonStyle(.plain)
-            .padding(-7)
-            .accessibilityLabel(volume == 0 ? "取消静音" : "静音")
-            if volumeIsExpanded {
-                HStack(spacing: 8) {
-                    MacShortDramaSlider(
-                        value: Binding(get: { Double(volume) }, set: { volume = Float($0) }),
-                        maximum: 1, isEnabled: true, label: "音量",
-                        valueDescription: "\(Int(volume * 100))%",
-                        onEditingChanged: { isAdjustingVolume = $0; revealControls() }
-                    )
-                    .frame(width: volumeSliderWidth(availableWidth: availableWidth), height: 20)
-                    if availableWidth >= 352 {
-                        Text("\(Int(volume * 100))%")
-                            .font(.system(size: 12, weight: .medium).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.8))
-                            .frame(width: 36, alignment: .trailing)
-                    }
-                }
-                .transition(.opacity)
-            }
+            .opacity(chromeVisible ? 1 : 0)
+            .animation(chromeAnimation, value: chromeVisible)
+            .allowsHitTesting(chromeVisible)
+            .accessibilityHidden(!chromeVisible)
         }
-        .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { volumeHovered = hovering }
-            revealControls()
-        }
-    }
-
-    private var episodeButton: some View {
-        Button(action: openEpisodes) {
-            HStack(spacing: 8) {
-                Image(systemName: "rectangle.stack.fill").font(.system(size: 18, weight: .semibold))
-                Text("选集").font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 15)
-            .frame(height: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .padding(-7)
-        .disabled(model.episodes.isEmpty)
-    }
-
-    private func controlIcon(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(.white)
-            // Button padding removes only the 7pt hit-area allowance from layout; visible
-            // glyphs remain centered in the existing 30pt control slots and capsule sizes.
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
+        .foregroundStyle(.white)
     }
 
     private func episodeOverlay(size: CGSize) -> some View {
@@ -452,28 +475,48 @@ struct MacShortDramaPlayerView: View {
         }
     }
 
-    private func controlsHoverChanged(_ hovering: Bool) {
-        controlsHovered = hovering
-        revealControls()
-    }
-
     private func revealControls() {
         controlsRevealed = true
         hideControlsTask?.cancel()
-        guard !controlsHeld, !isLeaving else { return }
+        guard !controlsHeld, !pointerOverControls, !isLeaving else { return }
         hideControlsTask = Task { @MainActor in
-            do { try await Task.sleep(for: .seconds(2.5)) } catch { return }
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
             guard !Task.isCancelled, !isLeaving, !controlsHeld else { return }
             controlsRevealed = false
         }
     }
 
     private func videoClicked() {
-        let wasVisible = controlsVisible
+        guard !controlsHeld else { return }
+        if controlsVisible {
+            hideControlsTask?.cancel()
+            controlsRevealed = false
+        } else { revealControls() }
+    }
+
+    private func toggleFullscreen() {
+        playerWindow?.toggleFullScreen(nil)
         revealControls()
-        if wasVisible, isReady, !model.isLoading, model.errorMessage == nil {
-            togglePlayback()
+    }
+
+    private func handleEscape() {
+        if showAirPlay { showAirPlay = false }
+        else if showVideoInfo { showVideoInfo = false }
+        else if showsEpisodes { closeEpisodes() }
+        else if isScrubbing { cancelScrubbing() }
+        else if onExitFullscreen?() == true { return }
+        else if isFullscreen { toggleFullscreen() }
+        else { closePlayer() }
+    }
+
+    private func toggleMute() {
+        if volume > 0 {
+            preMuteVolume = volume
+            volume = 0
+        } else {
+            volume = preMuteVolume
         }
+        revealControls()
     }
 
     private func run(_ action: @escaping @MainActor () async -> Void) {
@@ -576,6 +619,7 @@ struct MacShortDramaPlayerView: View {
             let sampledDuration = duration
             let shouldResume = resumeAfterSeek
             seekCommitInFlight = true
+            seekPreview.endScrubbing()
             seekTask = Task { @MainActor in
                 let succeeded = await controller.seek(to: target, playbackID: id)
                 guard !Task.isCancelled, !isLeaving, model.playback?.id == id else { return }
@@ -604,6 +648,39 @@ struct MacShortDramaPlayerView: View {
                 if canResume, !showsEpisodes, !model.hasFinished { controller.play() }
                 revealControls()
             }
+        }
+    }
+
+    private func seekBy(_ offset: Double) {
+        let target = min(duration, max(0, currentTime + offset))
+        guard target != currentTime else { return }
+        revealControls()
+        seekEditingChanged(true)
+        guard isSeeking else { return }
+        seekValue = target
+        seekEditingChanged(false)
+    }
+
+    private func cancelScrubbing() {
+        guard isScrubbing, let id = seekPlaybackID else { return }
+        seekCommitInFlight = true
+        seekPreview.endScrubbing()
+        let shouldResume = resumeAfterSeek
+        let sampledDuration = duration
+        seekValue = currentTime
+        seekTask = Task { @MainActor in
+            controller.setDesiredPlayback(shouldResume, applyImmediately: false)
+            seekTask = nil
+            await model.completeScrubbing(
+                playbackID: id, targetTime: nil, duration: sampledDuration,
+                seekSucceeded: false, resumePlayback: shouldResume
+            )
+            guard !Task.isCancelled, !isLeaving, model.playback?.id == id else { return }
+            seekPlaybackID = nil
+            seekCommitInFlight = false
+            isSeeking = false
+            if shouldResume, !model.hasFinished { controller.play() }
+            revealControls()
         }
     }
 
@@ -641,6 +718,7 @@ struct MacShortDramaPlayerView: View {
         isLeaving = true
         seekTask?.cancel()
         seekTask = nil
+        seekPreview.cancel()
         feedbackTask?.cancel()
         feedbackTask = nil
         feedbackToast = nil
@@ -665,12 +743,6 @@ struct MacShortDramaPlayerView: View {
         }
     }
 
-    private func timeLabel(_ seconds: Double) -> String {
-        let value = Int(max(0, seconds.isFinite ? seconds : 0))
-        return value >= 3600 ? String(format: "%d:%02d:%02d", value / 3600, value / 60 % 60, value % 60) : String(format: "%d:%02d", value / 60, value % 60)
-    }
-
-    private func rateLabel(_ rate: Float) -> String { "\(rate.formatted(.number.precision(.fractionLength(0...2))))×" }
 }
 
 /// Keep the playback/volume group at the same bottom-left anchor during hover.
@@ -679,7 +751,7 @@ private struct MacShortDramaControlGroupsLayout: Layout {
     // Reserve the expanded audio width when choosing rows so the episode target
     // stays put as the pointer moves between audio and episode controls.
     let additionalPlaybackWidth: CGFloat
-    private let horizontalSpacing: CGFloat = 32
+    private let horizontalSpacing: CGFloat = 12
     private let verticalSpacing: CGFloat = 12
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -708,68 +780,6 @@ private struct MacShortDramaControlGroupsLayout: Layout {
                         y: fitsRow ? bounds.maxY - episodes.height : bounds.minY),
             proposal: ProposedViewSize(episodes)
         )
-    }
-}
-
-/// NSSlider matches the live player's compact white slider and keeps native keyboard/AX behavior.
-/// Editing brackets both mouse tracking and single-step keyboard/accessibility actions.
-private struct MacShortDramaSlider: NSViewRepresentable {
-    @Binding var value: Double
-    let maximum: Double
-    let isEnabled: Bool
-    let label: String
-    let valueDescription: String
-    let onEditingChanged: (Bool) -> Void
-
-    func makeNSView(context: Context) -> MacShortDramaNativeSlider {
-        let slider = MacShortDramaNativeSlider(value: value, minValue: 0, maxValue: maximum,
-                                              target: context.coordinator, action: #selector(Coordinator.valueChanged(_:)))
-        slider.sliderType = .linear
-        slider.controlSize = .small
-        slider.isContinuous = true
-        slider.trackFillColor = .white.withAlphaComponent(0.8)
-        return slider
-    }
-
-    func updateNSView(_ slider: MacShortDramaNativeSlider, context: Context) {
-        context.coordinator.parent = self
-        slider.maxValue = maximum
-        if !slider.isTrackingEdit { slider.doubleValue = value }
-        slider.isEnabled = isEnabled
-        slider.setAccessibilityLabel(label)
-        slider.spokenValue = valueDescription
-        slider.onEditingChanged = onEditingChanged
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject {
-        var parent: MacShortDramaSlider
-        init(_ parent: MacShortDramaSlider) { self.parent = parent }
-
-        @objc func valueChanged(_ sender: MacShortDramaNativeSlider) {
-            let discreteEdit = !sender.isTrackingEdit
-            if discreteEdit { parent.onEditingChanged(true) }
-            parent.value = sender.doubleValue
-            if discreteEdit { parent.onEditingChanged(false) }
-        }
-    }
-}
-
-private final class MacShortDramaNativeSlider: NSSlider {
-    var isTrackingEdit = false
-    var spokenValue = ""
-    var onEditingChanged: ((Bool) -> Void)?
-    override var mouseDownCanMoveWindow: Bool { false }
-    override func accessibilityValueDescription() -> String? { spokenValue }
-
-    override func mouseDown(with event: NSEvent) {
-        guard isEnabled else { return }
-        isTrackingEdit = true
-        onEditingChanged?(true)
-        super.mouseDown(with: event)
-        isTrackingEdit = false
-        onEditingChanged?(false)
     }
 }
 

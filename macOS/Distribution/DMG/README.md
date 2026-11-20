@@ -1,6 +1,6 @@
 # AngelLive 联名 DMG 安装窗口
 
-浅暖白背景，右上淡粉、左下淡橙，沿用 AngelLive × 小声逼逼联名图标。中央保留从应用到 Applications 的拖拽路径，使用系统应用程序文件夹图标。界面只说明安装动作与安装后的打开位置。
+浅暖白背景，右上淡粉、左下淡橙，保留 AngelLive × 小声逼逼联名标识。应用使用 AngelLive 原版图标。中央保留从应用到 Applications 的拖拽路径，使用系统应用程序文件夹图标。界面只说明安装动作与安装后的打开位置。
 
 ![安装窗口设计预览](preview.png)
 
@@ -13,7 +13,7 @@
 | `background@2x.png` | 1440 × 920 px，144 DPI |
 | `preview.png` | 1664 × 1200 px 的安装窗口设计预览，含示意图标和窗口边框 |
 | `layout.json` | 文案、窗口尺寸和图标位置 |
-| `render.swift` | 使用系统字体、AppKit 和现有联名资源重新导出素材 |
+| `render.swift` | 使用系统字体、AppKit 和原版图标重新导出素材 |
 | `dmg-settings.py` | dmgbuild 的可复用 Finder 布局配置 |
 
 实际打包使用 `background.tiff`。背景中没有绘制应用、文件夹或它们的名称；这些由 Finder 根据真实 `.app` 和 `/Applications` 链接显示，保持拖拽、键盘操作和系统菜单可用。`preview.png` 只用于设计评审。

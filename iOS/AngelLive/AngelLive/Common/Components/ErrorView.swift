@@ -26,6 +26,7 @@ struct ErrorView: View {
     let showRetry: Bool
     let showLoginButton: Bool
     let showDetailButton: Bool
+    let isRetrying: Bool
     let onDismiss: (() -> Void)?
     let onRetry: (() -> Void)?
     let onLogin: (() -> Void)?
@@ -55,6 +56,7 @@ struct ErrorView: View {
         showRetry: Bool = true,
         showLoginButton: Bool = false,
         showDetailButton: Bool = false,
+        isRetrying: Bool = false,
         onDismiss: (() -> Void)? = nil,
         onRetry: (() -> Void)? = nil,
         onLogin: (() -> Void)? = nil
@@ -70,6 +72,7 @@ struct ErrorView: View {
         self.showRetry = showRetry
         self.showLoginButton = showLoginButton
         self.showDetailButton = showDetailButton
+        self.isRetrying = isRetrying
         self.onDismiss = onDismiss
         self.onRetry = onRetry
         self.onLogin = onLogin
@@ -521,23 +524,35 @@ private extension ErrorView {
         }
 
         if showRetry, let onRetry = onRetry {
-            Button(action: onRetry) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 15, weight: .semibold))
-                    Text("重试")
-                        .font(.system(size: 16, weight: .semibold))
+            Button(action: {
+                guard !isRetrying else { return }
+                onRetry()
+            }) {
+                Group {
+                    if isRetrying {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.white)
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text("重试")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                    }
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     Capsule()
                         .fill(Color.accentColor)
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(isRetrying ? "正在加载" : "重试")
         }
 
         if showDetailButton, detailMessage?.isEmpty == false {

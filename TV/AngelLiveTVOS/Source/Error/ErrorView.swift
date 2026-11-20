@@ -18,6 +18,7 @@ struct ErrorView: View {
     let showDismiss: Bool
     let showRetry: Bool
     let showLoginButton: Bool
+    let isRetrying: Bool
     let onDismiss: () -> Void
     let onRetry: (() -> Void)?
     let onLogin: (() -> Void)?
@@ -47,6 +48,7 @@ struct ErrorView: View {
         showDismiss: Bool = true,
         showRetry: Bool = false,
         showLoginButton: Bool = false,
+        isRetrying: Bool = false,
         onDismiss: @escaping () -> Void,
         onRetry: (() -> Void)? = nil,
         onLogin: (() -> Void)? = nil
@@ -60,6 +62,7 @@ struct ErrorView: View {
         self.showDismiss = showDismiss
         self.showRetry = showRetry
         self.showLoginButton = showLoginButton
+        self.isRetrying = isRetrying
         self.onDismiss = onDismiss
         self.onRetry = onRetry
         self.onLogin = onLogin
@@ -128,10 +131,19 @@ struct ErrorView: View {
                         }
 
                         if showRetry, let onRetry = onRetry {
-                            Button(action: onRetry) {
-                                Label("重试", systemImage: "arrow.clockwise")
-                                    .font(.caption)
+                            Button(action: {
+                                guard !isRetrying else { return }
+                                onRetry()
+                            }) {
+                                if isRetrying {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Label("重试", systemImage: "arrow.clockwise")
+                                        .font(.caption)
+                                }
                             }
+                            .accessibilityLabel(isRetrying ? "正在加载" : "重试")
                         }
 
                         if hasDetail {

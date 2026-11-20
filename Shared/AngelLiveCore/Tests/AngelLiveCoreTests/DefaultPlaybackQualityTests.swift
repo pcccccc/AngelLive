@@ -143,23 +143,21 @@ struct DefaultPlaybackQualityTests {
     }
 
     @Test("stored preference defaults safely and round trips all values")
-    @MainActor func preferencePersistence() {
+    @MainActor func preferencePersistence() throws {
         let key = PlayerSettingModel.globalDefaultPlaybackQuality
-        let original = UserDefaults.shared.object(forKey: key)
-        defer {
-            if let original { UserDefaults.shared.set(original, forKey: key) }
-            else { UserDefaults.shared.removeObject(forKey: key) }
-        }
-        UserDefaults.shared.removeObject(forKey: key)
-        let settings = PlayerSettingModel()
+        let suite = "DefaultPlaybackQualityTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = PlayerSettingModel(qualityDefaults: defaults)
         #expect(settings.defaultPlaybackQuality == .highest)
-        UserDefaults.shared.set(999, forKey: key)
+        defaults.set(999, forKey: key)
         #expect(settings.defaultPlaybackQuality == .highest)
-        UserDefaults.shared.set("invalid", forKey: key)
+        defaults.set("invalid", forKey: key)
         #expect(settings.defaultPlaybackQuality == .highest)
         for preference in DefaultPlaybackQuality.allCases {
             settings.defaultPlaybackQuality = preference
-            #expect(PlayerSettingModel().defaultPlaybackQuality == preference)
+            let reloaded = try #require(UserDefaults(suiteName: suite))
+            #expect(PlayerSettingModel(qualityDefaults: reloaded).defaultPlaybackQuality == preference)
         }
     }
 }

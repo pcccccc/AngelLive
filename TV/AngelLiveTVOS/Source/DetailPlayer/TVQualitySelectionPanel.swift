@@ -9,6 +9,7 @@ import AngelLiveCore
 /// tvOS 播放器内嵌清晰度/线路选择面板，右侧滑入覆盖，不离开播放画面即可切换
 struct TVQualitySelectionPanel: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
+    @Environment(\.usesFullUI) private var usesFullUI
 
     let onSelect: (_ cdnIndex: Int, _ urlIndex: Int) -> Void
     let onClose: () -> Void
@@ -145,7 +146,9 @@ struct TVQualitySelectionPanel: View {
                             onSelect(cdnIndex, urlIndex)
                         } label: {
                             HStack(spacing: 14) {
-                                Text(RoomPlaybackResolver.qualityDisplayTitle(quality, in: playArgs))
+                                Text(usesFullUI
+                                     ? PlaybackDisplay.qualityTitle(quality, in: playArgs)
+                                     : RoomPlaybackResolver.qualityDisplayTitle(quality, in: playArgs))
                                     .font(.system(size: 28, weight: (selected || isFocused) ? .semibold : .regular))
                                     .foregroundStyle(selected ? .white : .white.opacity(isFocused ? 0.95 : 0.8))
 
@@ -199,7 +202,8 @@ struct TVQualitySelectionPanel: View {
         HStack(spacing: 8) {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.system(size: 18, weight: .semibold))
-            Text(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
+            Text(usesFullUI ? PlaybackDisplay.lineTitle(for: cdn, index: cdnIndex)
+                            : cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn)
                 .font(.system(size: 22, weight: .semibold))
 
             if isCurrentCdn {
@@ -233,7 +237,8 @@ struct TVQualitySelectionPanel: View {
     // MARK: - Helpers
 
     private var normalizedQualityTitle: String? {
-        let trimmed = viewModel.currentPlayQualityString.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = (usesFullUI ? viewModel.fullUIQualityTitle : viewModel.currentPlayQualityString)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != "清晰度" else { return nil }
         return trimmed
     }
@@ -303,6 +308,12 @@ enum TVFullUIPlayerControlMetrics {
     static let inset: CGFloat = 14
     static let screenInset: CGFloat = 70
     static let focusOutset: CGFloat = 2
+    static let groupHeight = height + 2 * inset
+    static let bottomControlBand = screenInset + groupHeight
+
+    static func visibilityAnimation(reduceMotion: Bool) -> Animation {
+        .easeInOut(duration: reduceMotion ? 0.15 : 0.2)
+    }
 }
 
 enum TVPlayerControlShape { case circle, capsule }
@@ -343,13 +354,15 @@ struct TVFullUIPlayerControlGroupModifier: ViewModifier {
     let enabled: Bool
     let legacyInsets: EdgeInsets
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .padding(enabled ? EdgeInsets(top: TVFullUIPlayerControlMetrics.inset,
-                                          leading: TVFullUIPlayerControlMetrics.inset,
-                                          bottom: TVFullUIPlayerControlMetrics.inset,
-                                          trailing: TVFullUIPlayerControlMetrics.inset) : legacyInsets)
-            .adaptiveGlassEffectCapsule()
+        let inset = TVFullUIPlayerControlMetrics.inset
+        let group = content.padding(enabled ? EdgeInsets(top: inset, leading: inset, bottom: inset, trailing: inset) : legacyInsets)
+        if enabled {
+            group.tvPlayerGlass(in: Capsule())
+        } else {
+            group.adaptiveGlassEffectCapsule()
+        }
     }
 }
 
@@ -358,22 +371,31 @@ private struct TVFullUIPlayerControlButtonStyle: ButtonStyle {
     let shape: TVPlayerControlShape
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.tvPlayerControlsAreCovered) private var isCovered
 
     func makeBody(configuration: Configuration) -> some View {
-        let focusGrowth = isFocused && !reduceMotion ? TVFullUIPlayerControlMetrics.focusOutset * 2 : 0
+        let focusOutset = isFocused ? TVFullUIPlayerControlMetrics.focusOutset : 0
         return configuration.label
             .padding(.horizontal, shape == .capsule ? 24 : 0)
             .frame(width: shape == .circle ? TVFullUIPlayerControlMetrics.height : nil,
                    height: TVFullUIPlayerControlMetrics.height)
-            .background(.white.opacity(isFocused ? 0.3 : 0.1), in: Capsule())
-            .contentShape(Capsule())
-            .visualEffect { content, geometry in
-                // Fixed edge growth keeps long text buttons inside the same shell
-                // clearance as circular buttons; proportional scaling would not.
-                content.scaleEffect(x: 1 + focusGrowth / max(geometry.size.width, 1),
-                                    y: 1 + focusGrowth / max(geometry.size.height, 1))
+            .background {
+                Capsule()
+                    .fill(.white.opacity(isFocused ? 0.3 : 0.1))
+                    .padding(-focusOutset)
             }
-            .opacity(isEnabled ? configuration.isPressed ? 0.8 : 1 : 0.35)
+            .contentShape(Capsule())
+            .opacity(isEnabled || isCovered ? (configuration.isPressed ? 0.8 : 1) : 0.35)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
+    }
+}
+
+struct TVFullUIPlayerControlGroup<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: TVFullUIPlayerControlMetrics.spacing, content: content)
+            .modifier(TVFullUIPlayerControlGroupModifier(enabled: true, legacyInsets: EdgeInsets()))
+            .focusSection()
     }
 }

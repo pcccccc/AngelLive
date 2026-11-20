@@ -72,15 +72,8 @@ struct PlatformDetailViewControllerWrapper: View {
         )
     }
 
-    private var playerPresentedBinding: Binding<Bool> {
-        Binding(
-            get: { navigationState.showPlayer },
-            set: { navigationState.showPlayer = $0 }
-        )
-    }
-
     @ViewBuilder
-    private var playerDestination: some View {
+    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
         if let room = navigationState.currentRoom {
             DetailPlayerView(
                 viewModel: RoomInfoViewModel(room: room),
@@ -88,7 +81,7 @@ struct PlatformDetailViewControllerWrapper: View {
                 canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
                 onLoadMoreCategoryRooms: loadMoreCategoryRooms
             )
-                .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: roomTransitionNamespace))
+                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
         }
     }
 
@@ -114,19 +107,14 @@ struct PlatformDetailViewControllerWrapper: View {
         return rooms
     }
 
-    @ViewBuilder
     private var playerPresentation: some View {
-        if #available(iOS 18.0, *) {
-            baseView
-                .fullScreenCover(isPresented: playerPresentedBinding) {
-                    playerDestination
-                }
-        } else {
-            baseView
-                .navigationDestination(isPresented: playerPresentedBinding) {
-                    playerDestination.toolbar(.hidden, for: .tabBar)
-                }
-        }
+        baseView
+            .roomPlayerPushDestination(navigationState) {
+                playerDestination(.push).fullUITabBarHidden()
+            }
+            .roomPlayerZoomCover(navigationState) {
+                playerDestination(.zoom)
+            }
     }
 }
 

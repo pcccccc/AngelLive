@@ -1,13 +1,30 @@
 import SwiftUI
 import UIKit
 
+@MainActor
+final class HomeHeroScrollViewport {
+    fileprivate weak var scrollView: UIScrollView?
+
+    func centerPage() {
+        guard let scrollView else { return }
+        let insets = scrollView.adjustedContentInset
+        let startX = -insets.left
+        let endX = max(startX, scrollView.contentSize.width - scrollView.bounds.width + insets.right)
+        // Change the horizontal offset of the carousel directly. A scroll-to-ID
+        // request can also try to reveal the target in the enclosing feed.
+        let centerX = (startX + endX) / 2
+        scrollView.setContentOffset(CGPoint(x: centerX, y: scrollView.contentOffset.y), animated: false)
+    }
+}
+
 /// Observes the carousel's actual scrolling lifecycle on iOS 17 and later.
 /// It does not replace SwiftUI's scroll delegate or add a competing gesture.
 struct HomeHeroScrollActivityProbe: UIViewRepresentable {
+    let viewport: HomeHeroScrollViewport
     let onChange: (Bool) -> Void
 
     func makeUIView(context: Context) -> HomeHeroScrollActivityView {
-        HomeHeroScrollActivityView(onChange: onChange)
+        HomeHeroScrollActivityView(viewport: viewport, onChange: onChange)
     }
 
     func updateUIView(_ uiView: HomeHeroScrollActivityView, context: Context) {
@@ -22,6 +39,7 @@ struct HomeHeroScrollActivityProbe: UIViewRepresentable {
 final class HomeHeroScrollActivityView: UIView {
     var onChange: (Bool) -> Void
 
+    private let viewport: HomeHeroScrollViewport
     private weak var scrollView: UIScrollView?
     private var offsetObservation: NSKeyValueObservation?
     private var displayLink: CADisplayLink?
@@ -30,7 +48,8 @@ final class HomeHeroScrollActivityView: UIView {
     private var reportedActivity: Bool?
     private var originalBounces = true
 
-    init(onChange: @escaping (Bool) -> Void) {
+    init(viewport: HomeHeroScrollViewport, onChange: @escaping (Bool) -> Void) {
+        self.viewport = viewport
         self.onChange = onChange
         super.init(frame: .zero)
         isUserInteractionEnabled = false
@@ -61,6 +80,7 @@ final class HomeHeroScrollActivityView: UIView {
         guard enclosing !== scrollView else { return }
         stopObserving()
         scrollView = enclosing
+        viewport.scrollView = enclosing
         originalBounces = enclosing.bounces
         // The neighboring page is the edge of the rendering window, not the
         // end of the feed. A held drag must never pull empty canvas into view.
@@ -82,6 +102,9 @@ final class HomeHeroScrollActivityView: UIView {
         if let scrollView {
             scrollView.panGestureRecognizer.removeTarget(self, action: #selector(panChanged))
             scrollView.bounces = originalBounces
+            if viewport.scrollView === scrollView {
+                viewport.scrollView = nil
+            }
         }
         scrollView = nil
         reportedActivity = nil

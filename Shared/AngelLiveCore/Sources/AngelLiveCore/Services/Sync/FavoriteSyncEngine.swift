@@ -29,6 +29,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     private static let recordType = "favorite_streamers"
     private let zoneID: CKRecordZone.ID
     private let container: CKContainer
+    private let localStore: FavoriteLocalStore
 
     private var engine: CKSyncEngine?
 
@@ -49,7 +50,8 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
     private var repairCanonical: [String: String] = [:]   // 稳定 key -> 已保留的 recordName
     private var pendingDeleteRevisions: [String: UUID] = [:]
 
-    private init() {
+    init(localStore: FavoriteLocalStore = .shared) {
+        self.localStore = localStore
         container = CKContainer(identifier: containerID)
         zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
     }
@@ -215,7 +217,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         }) else { return }
         let serverModels = await filterPendingRemovals(fetchedModels)
         guard !serverModels.isEmpty else { return }   // 查询失败/空 → 不动本地
-        let localSnapshot = await FavoriteLocalStore.shared.loadVersioned()
+        let localSnapshot = await localStore.loadVersioned()
         let local = localSnapshot.rooms
         guard await MainActor.run(body: {
             PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
@@ -227,7 +229,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         // 推:本地有、服务器任一维度都没有的记录 → 补推上云(只补缺口,已匹配的不重推,避免再造重复)。
         let localOnly = merged.filter { l in !serverModels.contains { AppFavoriteModel.isSameStreamer($0, l) } }
         if merged.count != local.count || !localOnly.isEmpty {
-            guard await FavoriteLocalStore.shared.save(
+            guard await localStore.save(
                 merged,
                 ifRevisionMatches: localSnapshot.revision
             ) else { return }
@@ -324,7 +326,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         let membershipRevision = await MainActor.run {
             PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
         }
-        let localSnapshot = await FavoriteLocalStore.shared.loadVersioned()
+        let localSnapshot = await localStore.loadVersioned()
         var rooms = localSnapshot.rooms
         var byKey: [String: Int] = [:]
         for (i, r) in rooms.enumerated() { byKey[AppFavoriteModel.favoriteUniqueKey(for: r)] = i }
@@ -368,7 +370,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
         guard await MainActor.run(body: {
             PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
         }) else { return }
-        guard await FavoriteLocalStore.shared.save(
+        guard await localStore.save(
             rooms,
             ifRevisionMatches: localSnapshot.revision
         ) else { return }
@@ -440,7 +442,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
                 return
             }
             // 合并进本地真相
-            let localSnapshot = await FavoriteLocalStore.shared.loadVersioned()
+            let localSnapshot = await localStore.loadVersioned()
             var rooms = localSnapshot.rooms
             var keys = Set(rooms.map { AppFavoriteModel.favoriteUniqueKey(for: $0) })
             var newSaves: [CKSyncEngine.PendingRecordZoneChange] = []
@@ -459,7 +461,7 @@ public final class FavoriteSyncEngine: @unchecked Sendable {
             guard await MainActor.run(body: {
                 PersistentSyncRetryCoordinator.shared.favoriteMembershipIsCurrent(membershipRevision)
             }) else { return }
-            guard await FavoriteLocalStore.shared.save(
+            guard await localStore.save(
                 rooms,
                 ifRevisionMatches: localSnapshot.revision
             ) else { return }
@@ -548,7 +550,7 @@ extension FavoriteSyncEngine: CKSyncEngineDelegate {
         let pending = syncEngine.state.pendingRecordZoneChanges.filter { scope.contains($0) }
         guard !pending.isEmpty else { return nil }
 
-        let rooms = await FavoriteLocalStore.shared.load()
+        let rooms = await localStore.load()
         let byKey = Dictionary(rooms.map { (AppFavoriteModel.favoriteUniqueKey(for: $0), $0) },
                                uniquingKeysWith: { _, latest in latest })
 

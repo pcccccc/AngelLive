@@ -1,5 +1,366 @@
 # 插件管理重构验收标准
 
+## 2026-11-17：tvOS 第三轮，清晰居中图标
+
+本轮实现者是 grok-4.7 / high，接替额度用完的 codex（gpt-6.1-sol / high）。用户已确认这个安排。未转交 Astra。只改 tvOS 已安装货架海报；左缘、操作行、原地确认和逐层返回未动。iOS、macOS、Core 的未提交改动未回退。
+
+- 已安装卡仍是 280×280pt 方形，名称和版本仍在同一 `.borderless` 按钮里，焦点仍是图像上的 `.hoverEffect(.highlight)`。
+- 不再把 320×192px 的 TV 大海报铺满方形。货架只在 `pad_live_card_`、`live_card_`、`mini_live_card_` 和远程 `tvosIcon` 里按像素选图；两维都盖住目标像素才取最小面积，否则取最大面积。上一轮只读 PNG 头：这些通用图标最大 128×128px，另有 50×50 与 30×30。2x 上铺满需要 560×560px，没有一张够。
+- 位图绘制尺寸为 `min(槽边长 / 像素边, 1 / displayScale)`。128×128px 在 2x 上画成 64×64pt，设备像素仍是 128×128，缩放为 1。更小的图同样不超过 `资源像素 / displayScale`。最近邻插值，不放大位图。
+- 卡片底是图标像素的主色，按 `插件 id#目录修订` 缓存。32×32 采样，跳过 alpha < 40，按 16 级量化，饱和度低于 0.18 的结果丢弃，退回首字图标的 6 色。底是不透明纯色，没有灰色底座，也没有透明度不超过 0.35 的模糊放大层。
+- 详情 240pt 和发现卡 86pt 仍走原来的 `.fit` 选择器，本轮没有改它们的放大行为。
+
+构建用 `/Applications/Xcode-27.2.0.app`（Xcode 27.2，27B52）。`xcode-select` 本来就指向它，没有改。命令行从 `/tmp` 启动，并加 `-skipPackageUpdates -disableAutomaticPackageResolution`，避免仓库旁的本地 FFmpegKit 被当成不稳定依赖。锁文件没有变化。
+
+| Scheme | 结果 | 耗时 | error 行 |
+| --- | --- | --- | --- |
+| `AngelLiveTVOS` | BUILD SUCCEEDED | 33 秒 | 0 |
+| `AngelLiveTVOS-SimpleLive` | BUILD SUCCEEDED | 63 秒 | 0 |
+
+日志：`runs/plugin-management-redesign-20261117/tvos/round3/build-AngelLiveTVOS.log`、`build-AngelLiveTVOS-SimpleLive.log`。
+
+**三张截图没有拍到。** `xcrun mcp-server status` 仍显示 grok-shell-xcode 等待用户在 Xcode 里点允许。按「等待 Xcode 授权、不要绕过」停止，没有第三次打开 workspace，没有 `DeviceInteractionInstallAndRun`，也没有改用 `simctl` 截图。指定 Apple TV 保持 Shutdown，没有其他模拟器在运行，因此没有需要结束的 Device Hub 会话。视觉验收未完成。
+
+## 2026-11-17：tvOS 第二轮原生 lockup 视觉返工
+
+用户 root 已否决上一轮关于光晕、海报与标题跟随的视觉结论；下方旧记录仅作历史证据，不代表通过。本轮按用户指定由同一 Sol 实现者亲自返工，未转交 Astra。范围仅为 tvOS FullUI 视觉，Core、安装同意、原地确认及逐层返回逻辑均不改。
+
+- 首屏增加不透明的系统 `.background`，阻断入口材质透出底层页面颜色；没有新增橙色光晕、渐变或发光阴影。
+- 已安装货架改为系统 `.borderless` lockup，图像、名称、版本是同一 Button label 的独立子视图；`.hoverEffect(.highlight)` 仅标记原生图像效果作用区域。缩放、高光、视差及下方文字的焦点避让由系统完成，不手写文字位移或卡片缩放。状态卡与发现信息卡继续使用 `.card`。
+- 此选择依据选定 SDK 的 [Apple tvOS media catalog 示例](https://developer.apple.com/documentation/swiftui/creating-a-tvos-media-catalog-app-in-swiftui)：下方标题的图像 lockup 使用 borderless，信息密集的 platter 使用 card。本轮以用户新确认的系统 App 图标行为取代早先原型对所有按钮统一 card 的要求。
+- 已安装图像槽为280×280pt，使用完整 TV 大海报及其明／暗变体居中裁切铺满方形；小叠层不当作完整海报。详情仍用原来的240pt图标选择器。两种资源角色分别按目标物理像素选最小可覆盖资源，全部不足时才取最大的候选，未影响其他图标入口。
+- 已只读第二项 PNG 前24字节取得资源尺寸，没有复制图片或设备容器：完整海报320×192px，通用图标128×128px；另两张通用候选50×50、30×30px。海报需求560×560px，320×192资源按高度约2.92倍铺满，横向居中裁切；详情图标需求480×480px，实际约3.75倍显示。资源不足不冒称无放大或新增高清资源，原始角色与尺寸见 `tvos/round2/resource-pixel-metadata.json`。
+- 保留页面左缘与光学侧承常量、详情操作行及其焦点尺寸。`preserved-blocks.json` 对照本轮修改前快照，详情／来源代码、操作行与确认组件、Consent 服务均逐字不变。
+
+本轮只构建两个 tvOS scheme，不跑测试，不做其他回归；只计划取“首屏第2卡焦点、首屏状态卡焦点、详情”三张新包图。取证目录为 `runs/plugin-management-redesign-20261117/tvos/round2/`。最终方形版在 Xcode 27.2（27B52）、根 workspace、指定现有 tvOS 27.0 目标上构建：`AngelLiveTVOS` 成功63.815秒、`AngelLiveTVOS-SimpleLive` 成功74.657秒，均 error 0；结构化响应和完整日志分别为 `build-standard-final.*`、`build-simple-final.*`。源码哈希见 `source-hashes-before-final-install.json`。
+
+**本轮未完成视觉验收。** 最后方形源码的 `DeviceInteractionInstallAndRun` 已成功（`bridge/request-11.json`），但注册会话及持续 raw bridge 的会话先后返回不存在；第二轮恢复后现有 bridge 的交互连接无法继续接管。按工具恢复两轮上限停止，不继续创建会话，也没有用其他操作工具绕过 Device Hub。三张指定截图均未取得，新的卡片实测像素、焦点辨识、海报裁切和字幕位移均为未验证；上文280×280pt及资源放大值是源码与 PNG 文件头计算，不能当作原图测量。旧版截图不能证明本轮通过。来源、卸载确认、逐层返回和其他状态按用户本轮范围不重跑，只有保护块逐字不变的静态证据。
+
+收尾证据为 `cleanup-summary.json`、`cleanup-end-session.json`、`cleanup-devices-after.json`、`cleanup-scheme-restore.json`、`source-hashes-after-cleanup.json`：EndSession 返回会话已不存在，指定电视已关机，完整设备清单 Booted 为0，本轮 bridge 已停止，五个 TV 源码哈希与安装前一致。headless workspace 已恢复 `AngelLive / LaoPC`；GUI scheme 恢复 `AngelLive` 后自动选择 `iPhone 18 Pro`，完整可用／不兼容目标列表均没有原 `LaoPC`，故 GUI 运行目标未完整恢复，没有启动手机。Navigator error 查询因既有 raw 连接输入句柄不可接管而未执行；不能将 BuildProject 的 error 0 等同于该项完成。`git diff --check` 通过，没有运行测试。
+
+## 2026-11-17：tvOS FullUI 货架与原地确认新标准
+
+本节取代下方 tvOS 首屏旧双栏标准；详情及输入表单仍可采用原生双区布局。依据为完整的已确认原型 `runs/plugin-management-prototype/tvos-ux.html`，不照搬网页尺寸。按用户当次要求，布局与发现的视觉问题均由同一实现者亲自修正，未转交 Astra；此指定覆盖默认的视觉问题接管安排，视觉、新包和 root 复核门禁保留。当前 Axiom 将 tvOS 指南收录为 `axiom-swift/skills/tvos.md`，已读取本地版及[官方当前源码](https://github.com/CharlesWiltgen/Axiom/blob/main/axiom-codex/skills/axiom-swift/skills/tvos.md)，未假称存在独立安装的 `axiom-tvos`。
+
+- 首屏为大标题、单一可聚焦状态卡、检查更新及来源按钮、已安装海报货架和发现卡片货架。摘要与行阶段分别使用 Core 的 `PluginManagementSummaryState`、`PluginManagementRowPhase`；运行、失败、可更新、检查中、最新的优先级不由界面重新发明。卡片为原生 `Button`、`.buttonStyle(.card)`、系统 `.contextMenu`，每排使用 `focusSection()`，详情和来源各自全屏呈现并保存返回焦点。
+- 统一度量位于 `TVPluginLayout`：页面边距96pt、顶部54pt、分区44pt、标题与货架20pt、页面标题与状态区30pt、卡片横距44pt、已安装卡280×158pt、发现卡420×140pt、状态卡190pt、圆角22pt、操作行内容50pt、行间24pt、卸载额外间隔44pt、焦点留白48pt。系统 bordered 行包含原生内边距，不能把50pt内容高度冒称实际行高。
+- 按原始2倍像素图实测字体侧承，标题及发现标题校正2pt、已安装标题校正4pt，均集中于布局常量；已安装货架末行的6pt行盒底部留白单独补偿，使分区之间的可见墨迹留白一致。移除首屏多余的 `NavigationStack`，避免重复安全区和焦点移动后的标题裁切。焦点浮起、高光和放大由系统提供，不绘制自己的焦点动画。
+- 图标只比较实际图标资源：通用图标候选和 manifest 的 `tvosIcon`；`tvosBigIcon`／`tvosSmallIcon` 在协议中明确用于页面背景及叠层，不作为管理图标候选。首个可解码安装版本内，选两维均覆盖目标像素的最小面积图片，否则取最大图片；管理方法独立，不改变其他图标入口。真实图片没有额外底座；远程加载失败或确实无图时使用 Core 首字图标。
+- 卸载和已知需要登录的安装使用按钮自身的3秒二次确认，离焦、超时或返回会取消。确认态为系统语义红／蓝底及白字、白色倒计时条；安装 consent 保留既有 continuation 与 manifest 激活前确认、拒绝回滚契约，已明确确认的单插件审批仅在当前安装操作内有效。未知登录要求在详情主操作上再次确认；批量／同步 consent 使用原生按钮组成的聚焦确认面。
+- tvOS FullUI 使用既有 Core `PluginDeferredUninstall(delay: .seconds(6))` 独立实例；没有修改管理器默认5秒或其他端行为。待卸载卡片从货架隐藏，焦点选相邻项，右上通知提示播放／暂停键撤销。到期提交、离开管理、打开其他子页、开始安装／更新或删除来源前均提交；实际移除后执行既有 App Group 同步和可用性刷新。测试不实际卸载或删除真实数据。
+- 来源页把插件订阅源和播放列表分组，保留刷新、仅删来源／连同关联插件卸载、播放列表刷新／编辑／删除及原有二维码远程输入契约，确认均在操作按钮上进行。各层的退出处理在子页呈现期间不处理根退出；返回恢复原按钮／插件焦点。
+- Core 目前没有单项下载百分比和逐项取消接口，故单项卡片使用不定进度环、遮罩及成功对勾；摘要显示真实批次比例，停止作用于当前批次。没有伪造单项百分比或扩大 Core 协议。空态复用同一可聚焦组件，错误使用统一语义色，长文本单行截断。
+
+最后新包的六场景与视觉复核已完成，变体最后构建记录补于下表；不以早期图或首轮构建代替。截图与原始响应统一存于 `runs/plugin-management-redesign-20261117/tvos/`。指定4K模拟器原生 PNG 实际为3840×2160、逻辑画布1920×1080；保留原图并同时报告2px/pt换算，不下采样冒充1920原图。失败及过渡帧保留在迭代目录。
+
+### 最后新包的像素复核
+
+root 已逐张查看六张最后新包原图。以下物理像素来自未缩放 PNG；括号为除以2后的1920×1080逻辑坐标，不能混称两种原图。
+
+| 第3节检查项 | 最后原图实测／结果 |
+| --- | --- |
+| 标题、两货架标题、首卡左缘 | 均x=192px（96）；标题墨迹y=131…249，已安装y=816…898，发现y=1570…1653；左缘差0px |
+| 同类分区与标题贴近货架 | 常态状态卡底711至已安装墨迹顶816，105px（52.5）；末行字幕底1465至发现墨迹顶1570，同105px（52.5）；已安装标题墨迹底899至卡顶954，仅55px（27.5） |
+| 海报与焦点留白 | 常态560×316px（280×158）；选中卡原生外框600×约339px（300×169.3），完整可见；稳定插件焦点帧中的页面标题仍为x192/y131 |
+| 详情操作行统一规格 | 三行常态均1632×160px（816×80），聚焦主操作／卸载均1648×176px（824×88），四边各扩8px；普通行空白48px（24），卸载段空白136px（68） |
+| 同一语义色、确认态 | 错误共用系统红；来源失败文字原PNG主色RGB(255,66,69)，聚焦确认底RGB(255,61,65)，确认字／图标／条为白色，白字与红底约3.50:1，使用大号文字 |
+| 图标与空态 | 最后详情真实图透明角为RGB(0,0,0)，与页面一致，无额外底座；发现为空的同一可聚焦空态已实测，未制造其他空态数据 |
+| 长文本、系统焦点与布局 | 所见来源主机和错误文字均单行，无重叠；系统菜单、聚焦放大及其返回后的稳定帧未裁切。02早期捕获时点与hierarchy不一致的图被拒收，以菜单返回后的空capture→原生截图→空capture稳定证据覆盖；没有为截图改设备或画布尺寸 |
+
+测量阈值、独占边界、原图SHA256和各行frame记录于 `tvos/root-measurements.json`，复测脚本为 `tvos/measure-final.py`。22pt圆角常量用于自绘遮罩／材质组件，原生按钮外框及焦点形状由系统提供，不用位图曲线反推一个未经验证的精确半径。
+
+六个交付场景为 `01-state.png`、`02-plugin.png`、`03-menu.png`、`04-detail.png`、`05-confirm.png`、`06-sources.png`。菜单使用 Device Hub 原生界面文档支持的 Return 按住输入，不把电视坐标当触屏；返回统一用 Siri Remote `r menu`，未用 Escape 冒充。详情、来源、菜单各一次 Menu 只关闭当前层，并恢复原第2张卡片焦点；卸载只按一次，超时恢复普通文案，没有实际移除。证据为 `menu-return-evidence.json`、`02-plugin-stability.json`。五个生产文件的安装前与最终截图后哈希一致，记录于 `source-hashes-before-final-install.json`、`source-hashes-after-final-capture.json`。
+
+验收后 `DeviceInteractionEndSession` 返回停止成功，指定电视与原手机均为 Shutdown，完整设备清单 Booted 总数0；原GUI scheme／运行目标未改变。收尾证据为 `cleanup-response.json`、`devices-after-final-shutdown.json`。
+
+### 最后源码构建
+
+最高已核验 Xcode 27.2（27B52），根 `AngelLive.xcworkspace`，目标为指定现有 tvOS 27.0 模拟器，播放器及已提交依赖锁定保持原样。
+
+| Scheme | workspace MCP BuildProject | Error | 本轮证据 |
+| --- | --- | --- | --- |
+| `AngelLiveTVOS` | 成功，24.050秒 | 0 | `tvos/build-standard-final.json`／`.log` |
+| `AngelLiveTVOS-SimpleLive` | 成功，119.940秒 | 0 | `tvos/build-simple-final.json`／`.log` |
+
+最后源码另经 Device Hub `DeviceInteractionInstallAndRun` 返回已安装并运行，安装构建 error 为0，记录于 `install-response.json`、`final-build-response.json`。最后 GUI Issue Navigator 只读查询返回 `issues=[]`、`totalFound=0`（空集没有fresh/stale条目），证据为 `navigator-errors-final.json`；与 headless workspace 的构建结果分别记录，不互相冒充。设备在最后变体构建前已关闭，此后没有源码变化或额外设备交互。
+
+### 验证范围
+
+本轮仅修改5个 tvOS 宿主文件及本文，Core、iOS、macOS和ShellUI均未修改。没有新增或运行单元测试（0项执行；Core未改，遵照用户明确范围），没有运行额外UI回归。六个场景覆盖失败摘要、已安装货架、发现空态、原生菜单、已登录插件详情、卸载确认超时和来源分组；未验证真实安装／更新批次、登录安装确认／回滚、真实延迟卸载／撤销、来源写入／删除、播放列表编辑保存，以及其他系统版本、实体设备、Large Text、浅色或辅助功能开关。发现计数为0，没有为补状态而准备假数据或改变用户容器。
+
+与请求适配上的差异：指定模拟器输出原生4K而非1920原PNG；单项进度是实契约支持的不定环，停止为当前批次；6秒撤销使用Core协调器独立实例，不改变管理器5秒默认。布局整改遵循本轮用户明确的同一实现者要求，而未执行默认Astra转交；其余不降低门禁。没有升级依赖、清理缓存／DerivedData、修改证书、提交、推送或发布。
+
+## 2026-11-17：两端管理图标按需选图与首字回退
+
+本轮按用户明确指定由 `gpt-6.1-sol / high` 独占修改 iOS 与 macOS 图标代码，root 独立复核；其他布局与业务逻辑保持原样。用户后续纠正了“资源不足”的初始判断：本地具有更大的资源，旧管理方法按 `pad_live_card_` 前缀先命中小图，导致放大模糊。因此最终规则取代“总取最大资源”：同一首个可解码版本内，对 `pad_live_card_`、`live_card_`、`mini_live_card_` 候选比较原始像素，两维都覆盖显示尺寸乘屏幕缩放时取最小面积；全部不足才取最大面积。仅管理页使用带 `targetSide`／`displayScale` 的方法；侧栏、其他卡片、播放列表以及 iOS 账号页的旧入口保持原行为，不污染其缓存。
+
+开发中出现过真实图像被错误回退为首字的回归。根因是管理选图返回 CGImage 支持的 `NSImage`，加载端却只接受 `NSBitmapImageRep` 子类，导致有效图像被丢弃；已改用 `NSImage.cgImage(forProposedRect:context:hints:)`。调用链复核确认 Mac 行 ID 原样来自 canonical 安装 ID；iOS 的 canonical `pluginID` 与列表命名空间 `id` 分开，所有图标调用都使用前者，未添加无依据的别名兼容。iOS 使用 `UIImage.cgImage`，不存在该 representation 转型问题。两端显示分支均为真实图像优先、加载中保留原占位、确认缺失／失败后才首字。
+
+macOS 详情图标最终56pt。最后新包对首个已安装项的一次性自动继续断点，从管理选择器已解码的 CGImage 读取到需求112px、实际128×128px；结合用户提供的本机资源矩阵，对应 `assets/live_card_<id>.png`，没有保留真实资源路径或标识。实际原图彩色外缘 `[1828,394,1940,506)`，112×112px＝56pt@2，源到显示缩放0.875，没有放大。位图绘制仍受原始像素除以当前 `Environment.displayScale` 限制，外层图标槽不动。直接 Swift 表达式及独立文件读取的失败未作为证据；最终尺寸证据只来自应用已有的解码对象，探针及断点已移除。
+
+缺图统一使用 Core `PluginManagementMonogram.swift`：名称去首尾空白后取首个字符，使用固定 POSIX 大写规则；UTF-8 plugin ID 经固定 FNV-1a 64位哈希后模6选择柔和中性纯色，不用随机 `Hasher` 或内容品牌映射。两端共用同一取字、取色与绘制逻辑。字号为容器边长的0.48，CoreText 根据实际墨迹 bounds 居中；真实图和首字槽均使用连续圆角，比例为边长的0.25。真实图片保持透明角，无额外底座。
+
+| 最终原图复核 | root 与 Sol 独立实测 |
+| --- | --- |
+| macOS 真实详情 | 资源128×128px，显示112×112px／56pt@2；列表已安装真实图像恢复 |
+| macOS 首字 | 列表64×64px／32pt，详情112×112px／56pt；五个列表首字墨迹中心偏差最大0.5px，详情两轴均≤0.5px；ICC转sRGB后文字对比8.60–8.95:1 |
+| iOS 首字及真实图 | 1206×2622原PNG同时显示已安装真实图标与两个发现首字；首字144×144px／48pt@3，墨迹中心偏差均(-0.5,+0.5)px；文字对比8.77／8.70:1，匹配共享调色板0／1 |
+
+本轮生产改动共9文件：Core 新增 `PluginManagementMonogram.swift`；macOS 的 `MacPlatformIconProvider.swift`、`MacPluginManagementComponents.swift`；iOS 的 `PlatformIconProvider.swift`、`PluginManagementComponents.swift`，以及只传递名称／远程图标参数的 `PluginDiscoveryShelf.swift`、`PluginInstalledSection.swift`、`PluginManagementDetailView.swift`、`PluginManagementStatusCard.swift`。`icons/icon-only.diff`、修改前快照和17项静态比较保留；取证后9文件哈希未变，原有其他Core／tvOS文件与受保护文件没有意外变化。
+
+最高已核验 Xcode 27.2（27B52）、根 workspace 的最后构建如下；不写或运行单元测试，不扩大交互回归。
+
+| Scheme | 结果 | Error | 耗时 |
+| --- | --- | --- | --- |
+| `AngelLiveMacOS` | 成功 | 0 | 17.309秒 |
+| `AngelLiveMacOS-AppStore` | 成功 | 0 | 74.513秒 |
+| `AngelLive` | 成功 | 0 | 39.031秒 |
+| `AngelLiveTVOS` | 成功 | 0 | 89.776秒 |
+
+截图目录为 `runs/plugin-management-redesign-20261117/icons/`，最终只保留 `mac-detail.png`、`mac-main-light.png`（均2298×1768），以及 `ios-shelf.png`（1206×2622）。macOS 使用最后编辑后新产物 Run 成功（3.609秒，buildErrors为空）并核对实际进程路径；初始回归／非活动态截图已被最终有效图覆盖。既有来源首次读取未返回发现项，界面重读一次后恢复14个已安装／5个发现，仅恢复目录读取，未改来源配置。浅色图能同时看到已安装真实图与缺图首字，截图后立即恢复Dark并经fresh AX确认。
+
+iOS 使用指定已有 iPhone 17／iOS27.0，最后源码经 `DeviceInteractionInstallAndRun` 成功。会话名称失效后用同一已核验 Xcode 的持续原生bridge及新唯一名称恢复；最终连续完成 InstallAndRun、正常页面导航、发现货架观察和同状态物理3×截图，再 EndSession 与关闭bridge。DeviceHub自身返回402×874的1×图，未将它放大冒充原图；最终原PNG由当前指定设备的只读原生截图读取，原始请求／hierarchy及方法记录在 `icons/devicehub-final-bridge/`、`ios-native-verification.json`。会话已正常结束，原设备保持Booted，原scheme／运行目标已恢复。
+
+证据为 `icons/build-*.json`／`.log`、`mac-run-final.json`／`.log`、`resource-pixels.json`、两端native verification、root与Sol独立像素测量和最终哈希。截图使用的真实数据没有同一插件同时在两端缺图，不把共用算法冒称逐ID跨端实验；iOS原资源像素未另作运行期读取，未借用Mac128px证据。未新增来源、卸载插件、直接编辑容器、清理缓存／DerivedData、修改证书或提交推送。环境Skill中的清缓存／批量结束进程建议与根红线不一致，本轮以 `AGENTS.md` 为准，仅恢复本轮会话，未执行这些建议。
+
+## 2026-11-17：macOS 第三轮侧栏与分隔标准
+
+本节按用户新反馈取代首轮关于标题／页尾常驻分隔线和较宽左栏的标准；第二轮七项已通过的呈现保留。用户继续明确指定 `gpt-6.1-sol / high`，覆盖根指南默认的 Astra 视觉接管安排；本轮没有转交 Astra。只修改 `MacPluginManagementView.swift` 和 `MacPluginManagementComponents.swift` 的布局及来源标签推导，Core、其他平台及安装／更新／同意／延迟卸载逻辑不动。
+
+- 保留从设置打开的原 sheet、`HSplitView` 和原尺寸契约；删除标题下方、页尾上方的两个 `Divider`。页尾快捷键和完成按钮直接放在 sheet 背景上，中间只保留系统 split 的细竖向分界，不再组成T形线框。
+- 左栏使用语义 `.background.secondary`，右栏及标题／页尾使用 `.background` 内容背景。侧栏宽度由统一常量规定为最小220、理想250、最大280pt；右栏保持 `maxWidth: .infinity`，宽度增加时剩余空间留给详情。不固定整个 sheet 的屏幕尺寸，也没有为截图调整窗口。
+- `List(selection:)`、`.listStyle(.sidebar)`、系统选择背景与默认行内边距保持原样，不绘制自定义选中高亮。第二轮标题墨迹校正、计数对齐、26pt活动胶囊、流式标签、统一卡片与选中行按钮样式保留。
+- 发现行副标题默认只显示版本及登录要求；仅未经过搜索过滤的候选确实来自多个贡献源时，才呈现可区分的短来源标签。空源／失败但未贡献候选的源不触发，搜索不改变规则；同主机以短路径区分，仍重名则不制造假区分。来源主机仍在详情页显示，不改变实际安装来源选择。
+
+root 独立查看两张最后新包原PNG，Sol另行独立测量。画布均为2272×2132px，原生 sheet 仍850×640pt、2px/pt；以下为原图坐标，不作查看器1.14倍换算。完整14个已安装与5个发现保留，无搜索、折叠或数组截断。深色选中第一个发现项，自然滚动位置只显示一条完整发现行；浅色自然选择第三个发现项，三条发现行完整可见，副标题不再重复主机名。
+
+| 复核项 | 深色实测 | 浅色实测 |
+| --- | --- | --- |
+| 左栏宽度 | sheet左缘286，系统分界左缘846，560px＝280pt | 同为560px＝280pt |
+| 系统竖向分隔 | `[846,506,848,1558)`，宽2px、长1052px＝526pt；可见端点y506／1557 | 同样边界、宽度及长度 |
+| 上下硬横线 | 右侧在y505至507、1557至1559保持内容背景，没有额外描边；左侧只在y506／1558转换侧栏背景，无横线和T交叉 | 同样无额外硬横线 |
+| 系统选中高亮 | `[306,1422,826,1522)`；距侧栏左右边界均20px＝10pt | `[306,1458,826,1558)`；左右均20px＝10pt |
+| 背景层级（原PNG RGB） | 左栏(38,37,36)，右栏／标题／页尾(32,31,30)；系统分隔(59,58,57) | 左栏(248,248,248)，右栏／标题／页尾(255,255,255)；系统分隔(229,229,229) |
+| 发现行副标题 | 可见版本与登录要求，来源仅在详情 | 前三发现行完整显示版本及可选登录要求，没有重复主机名；选中安装按钮清晰可辨 |
+
+最后源码使用最高已核验 Xcode 27.2（27B52）、根 workspace／My Mac 的 MCP `BuildProject`：`AngelLiveMacOS` 成功61.286秒，`AngelLiveMacOS-AppStore` 成功74.688秒，二者 error 均为0。普通版在最后编辑后由 MCP `RunProject` 成功启动（4.365秒，buildErrors为空），根据本次完整构建日志的实际产物路径核对新进程后才取证。未运行测试或其他交互回归。
+
+最终截图位于 `runs/plugin-management-redesign-20261117/macos/round3/main-dark.png`、`main-light.png`，同目录保存构建／运行JSON和完整日志、修改前快照、纯呈现diff、最终源码哈希、原生操作记录及root／Sol独立测量。浅色最初误拍到非活动窗口，激活当前选中行后覆盖同文件，最终仅保留约定两张活动态PNG；未把旧非活动图作为最终证据。截图后立即恢复Dark，fresh AX确认Dark选中、Light未选中；CUA已收尾，原scheme／运行目标已恢复。
+
+本轮未额外改变窗口宽度来实测扩宽，仅核对宽度约束及当前实际280pt；多源标签没有通过添加真实来源造状态。已安装详情的流式标签、卡片和红字仅作临时原生观察，未增加第三张详情图；源码逐段比较确认活动／操作／同意／详情／卡片／Flow／页尾及业务helper未改。没有卸载插件、删除来源、编辑用户容器、依赖／缓存清理、提交或推送。
+
+## 2026-11-17：macOS 第二轮视觉修订与验收
+
+本节优先于下方首轮 macOS 的旧视觉数值与未通过结论。用户明确要求 `gpt-6.1-sol / high` 亲自返工、不转交 Astra，覆盖根指南默认的视觉问题接管安排；本轮按该当次指令执行。只修改 `MacPluginManagementComponents.swift` 的呈现，安装、更新、同意、延迟卸载、UndoManager 与其他业务逻辑不动；root 独立查看三张最后新包原图并复核像素。
+
+- 支持标签使用按内容理想宽度排列的自定义 SwiftUI `Layout`，水平与竖直间距共用8pt，按实际可用宽度自然换行；首标签外缘贴信息组的内部文字线。
+- 信息、支持、卸载共用卡片背景、圆角与描边 modifier；卸载仍为单独的底部分组，按钮保留 destructive role，并显式使用系统红色文字。
+- 活动胶囊改为单行26pt，与搜索和两个无边框工具按钮共用工具栏高度；保留相对 sheet 的水平居中 Layout。标题、副文均单行截断，完整诊断仍可由既有详情与帮助获得。
+- 系统 sidebar 分组标题按旧原PNG的字形差值补1.5pt leading、13pt trailing；计数右缘与行内操作右缘对齐。选中状态只作为呈现参数传给行内按钮，胶囊采用系统 control 表面、文字和描边，避免选中色与按钮同色。
+
+验收只覆盖用户本轮七项视觉修订，不新增或运行测试，不做卸载、来源操作或其他交互回归。14个已安装与5个发现完整保留；首屏为自然选中第一个发现项后的列表位置，已安装标题位于视口上方，另在浅色详情图核对。窗口未为截图调整尺寸，原生 sheet 为850×640pt；三张 `screencapture` 原PNG均2272×2132px，包含宿主与系统阴影，未经缩放、裁切或拼接。以下坐标直接取原PNG（2px/pt），不使用查看器的1.14倍换算。
+
+| 修订点 | 最后新包实测（px） |
+| --- | --- |
+| 流式支持标签 | 浅色详情第一行6个、第二行2个；宽度120/120/160/80/120/120/140/80，均高42；全部水平间距16、行间距16。首标签外缘x1092，信息标签字形x1093，差1 |
+| 卸载卡片与红字 | 信息卡 `[1068,806,1926,1026)`、支持卡 `[1068,1112,1926,1260)`、卸载卡 `[1068,1308,1926,1420)`；三者同为白色内底与RGB(242,242,242)边界。卸载文字主色RGB(252,29,47)，不再使用普通灰字 |
+| 标题栏高度、中心 | 深浅两图活动表面及搜索外框均y422至474，高52；中心y448。两个工具图标字形中心y448.5，偏差0.5；胶囊与sheet水平中心同x1136。工具按钮无外框且当前AX不提供frame，未把字形高度冒充控件高度；源码共用26pt高度 |
+| 分组计数右缘 | 已安装与发现计数右缘、行内按钮右缘均x974，误差0；分栏线x1006，右留白32；行图标x318距sheet左缘286也为32 |
+| 左栏字形与图标 | 深浅两图发现字形x318，行图标外缘x318，差0；浅色详情已安装字形x319、图标x318，差1，均满足≤1px |
+| 浅色复核 | 信息／支持标题字形底至各自卡片均16；支持卡底至卸载卡顶48。信息、支持、卸载文字左缘均x1093；标签间距、卡片、红字、工具栏与左右栏对齐已在浅色原图逐项复核 |
+| 选中行内安装按钮 | 深浅两图操作表面同为 `[878,1100,974,1144)`，文字和描边清楚可辨。深色文字／内底原RGB(220,220,220)／(23,23,23)，浅色RGB(39,39,39)／(255,255,255)；按PNG内嵌ICC转换到sRGB后对比约12.99／12.45，均超过普通文字4.5。只验证该文字样本，不作全页无障碍认证 |
+
+最后生产源码哈希为 `round2/source-hashes.json`，与取证后文件一致；仅组件文件相对首轮变化，2281个既有受保护Core、iOS、tvOS文件哈希均未变。使用最高已核验 Xcode 27.2（27B52），根 workspace、My Mac 的 MCP `BuildProject`：
+
+| Scheme | 构建结果 | Error | 证据（均在下方目录） |
+| --- | --- | --- | --- |
+| `AngelLiveMacOS` | 成功，86.740秒 | 0 | `build-standard.json`／`.log` |
+| `AngelLiveMacOS-AppStore` | 成功，72.025秒 | 0 | `build-appstore.json`／`.log` |
+
+普通版最后编辑后由 MCP `RunProject` 成功启动（6.879秒，buildErrors为空），以本次完整构建日志的产物路径核对新进程；原生验收使用该新包，不声称执行Mac InstallAndRun。截图为 `runs/plugin-management-redesign-20261117/macos/round2/main-dark.png`、`main-light.png`、`detail.png`；同目录含 `native-run.json`／`.log`、`native-verification.json`、root与Sol独立像素测量及原图哈希。浅色两图拍完立即恢复原Dark，fresh AX确认Dark选中、Light未选中；CUA已收尾，原scheme／运行目标已恢复。
+
+证据边界：最终三图提供深浅色首屏与浅色已安装详情的原PNG测量；深色已安装支持／卸载仅在原生界面临时观察，没有为此额外保存第四图，不能声称有深色详情原PNG像素证据。详情拉丁名称首墨迹x1095，比中文信息／支持／卸载文字x1093右移2px，保留字体侧边距的实测，不冒称字形精确重合。未重新验证Undo／Esc、右键菜单、来源、安装更新、窗口进一步缩小、极长文本、空态或非活动选择，均超出本轮限定。没有卸载插件、删除来源、编辑用户容器、提交或推送。
+
+## 2026-11-17：macOS FullUI 两栏交互新标准
+
+本节取代本文旧 macOS 插件列表的范围切换、独立来源 sheet、更多按钮与卸载确认布局；iOS、tvOS、ShellUI 不随本轮改变。依据为用户已确认的 `runs/plugin-management-prototype/mac-ux.html` 完整 HTML、CSS 和 JS。仍由设置窗口打开 sheet，不改变应用窗口策略；标题左边距30pt、页尾关闭与 Esc 的设置二级页语义保留。原型网页尺寸和 hex 颜色不作为原生数值契约。
+
+- 左侧使用系统 `List(selection:)`，按已安装、发现分组；系统处理选中与上下键，右侧显示当前插件详情。两栏随可用空间调整，统一管理页面、分栏、分组与图标的主要布局度量。
+- 标题中间唯一活动胶囊使用 Core `PluginManagementSummaryState` 推导，优先级与 iOS 一致；行尾和详情操作共用 `PluginManagementRowPhase`。进度只呈现现有 batch 的真实 n/N 和完成比例，单项下载没有百分比契约时使用不定进度，不模拟下载比例。
+- 右键使用原生 context menu。添加来源、查看来源和登录同意使用按钮锚定 popover；来源分订阅源和播放列表两组，保留刷新、编辑与行锚定删除确认及关联卸载选择。
+- 卸载先调用 Core 延迟卸载并动画隐藏行，选择移到相邻插件；底部显示倒计时撤销，环境 `UndoManager` 支持 ⌘Z 和编辑菜单。关闭、开始安装或更新批次、删除来源前提交待卸载。现场验收只允许卸载后立即撤销，禁止真正移除用户插件或来源。
+- 详情真实图标无底色，仅占位图使用中性底；名称下一行只显示“来自 + 主机名”。信息组显示版本、manifest 声明能力数量及账号；支持标签仅来自 manifest 声明，缺失不展示。卸载为独立底部分组，长信息单行截断。
+- 标题与内容间距小于区块间距；同类间距相等；分组标题、插件图标、行文字分别沿统一左边缘，详情各区块左边缘一致。空态使用同一组件，失败图标与操作统一系统红色。
+- 保留 ⌘F、⇧⌘U、⇧⌘R、⌘⌫，Esc 先关闭 popover 或菜单，再关闭 sheet。保留“插件”菜单，并让命令作用于当前管理 sheet。
+
+### 本轮实现与构建证据（原生验收未完成）
+
+`gpt-6.1-sol / high` 实现七个 macOS 文件：`MacPluginManagementView.swift` 管理选择、操作、延迟卸载与 UndoManager，并保留原播放列表编辑器；新增 `MacPluginManagementComponents.swift` 管理双栏、活动胶囊、详情、统一空态与按钮；新增 `MacPluginManagementSources.swift` 管理来源 popover、刷新与行锚定删除；`MacPluginManagementCommands.swift` 保留菜单并加入所选卸载；`PluginInstallConsentService.swift` 与 `ContentView.swift` 隔离管理页的确认归属，无管理 host 时保留原布尔 binding 语义；`SettingView.swift` 仅统一 FullUI 插件 sheet 宿主与内容的尺寸契约。
+
+root 静态复核确认首版胶囊仅跟随标题排列，未相对 sheet 居中，因此按根指南由 `gpt-6-astra / high` 实际接管并重写 Header/Activity。新 Layout 以两侧原生控件理想宽度的较大值对称预留，胶囊放在可用区域中点；未改变850pt最小宽度。一次构建暴露默认主 actor 隔离错误，随后将仅含不可变 CGFloat 的布局常量命名空间声明为 `nonisolated enum`，没有修改编译设置或引入不安全隔离。
+
+桌面解锁恢复验收后，用户当次明确要求后续视觉问题由 Sol 自己修复，覆盖本轮默认 Astra 接管安排。root 与 Sol 独立查看原生原图，确认宿主600pt最小宽度与内部850pt要求冲突，造成实际水平裁切；Sol 将宿主和内容统一引用 `MacPluginLayout` 的850×580pt最小、920×640pt理想尺寸，不改变主窗口或其他 sheet。旧失败图保留在 `macos/iteration-1/`；最后新包的原生 sheet 实际为850×640pt，裁切已消除。
+
+最后生产源码使用已核验的 Xcode 27.2（27B52），根 `AngelLive.xcworkspace`、My Mac 的 MCP `BuildProject`：
+
+| Scheme | 最后构建 | Error | 证据 |
+| --- | --- | --- | --- |
+| `AngelLiveMacOS` | 成功，17.484秒 | 0 | `macos/build-standard-visual-2.json`、同名 `.log` |
+| `AngelLiveMacOS-AppStore` | 成功，57.008秒 | 0 | `macos/build-appstore-visual-2.json`、同名 `.log` |
+
+本轮开始时记录的 Core、iOS、tvOS 源文件哈希均保持一致；没有运行或新增单元测试，按用户限制未构建其他平台。以上是 workspace 构建结果，不能代替原生 Issue Navigator、截图或交互通过。
+
+最后编辑后的普通版另经 MCP `RunProject` 构建并启动成功（4.802秒，buildErrors为空），使用本次 build log 的实际产物路径并核对新进程，响应与完整日志为 `macos/native-run-visual-2.json`／`.log`；未声称执行 Mac InstallAndRun。七个生产文件哈希保留于 `macos/visual-2-source-hashes.json`，取证后源码一致；本轮恢复状态另行记录。
+
+### 像素与交互门禁
+
+此前锁屏期间的两轮 `cgWindowNotFound` 保留在 `macos/native-ui-blocker.json`，不再作为当前阻塞结论。用户确认桌面解锁后，CUA 的 AX 与交互恢复；其截图接口返回 JPEG，故按用户明确授权使用动态窗口 ID 的 `screencapture -l` 保存真实 PNG。原图包含宿主、sheet、关联菜单/气泡与系统阴影，未经缩放、裁切或拼接。前四图为2272×2132px，添加气泡图为2344×2132px；sheet 原图外缘为1700×1280px，与原生850×640pt相符。
+
+| 用户第3节对齐项 | 实现值（pt，仅供源码核对） | 最后新包原图实测（px） |
+| --- | --- | --- |
+| 统一布局度量 | 页面30、空态内边距18、组标题间隔6、分区24、内容12、圆角9、行图标32、详情图标76；sidebar 保留系统内边距 | 标题字形x346，sheet左缘286，差60px；详情卡片左缘1068，文字x1092–1093，内缩24–25px；活动实色区596×88px，中心与sheet中心相差0px |
+| 左栏标题、图标、行文字各自对齐 | 系统 sidebar List，稳定 identity | 已安装字形x316；首行图像着色外缘x318、64×64px；可见行名称字形x402–404，保留原生字体侧边距；发现标题首屏在折叠线以下，尚未同图测量 |
+| 右栏标题、信息、支持、卸载左缘 | 统一详情内边距与12pt内容文字列 | 名称1093、信息标题1092、版本/能力/账号标签1093、支持1093、卸载1093px，差≤1px |
+| 标题贴近内容、分区更大且同类相等 | 标题6、分区24 | 两处分组标题字形底至卡片均16px；信息卡底至支持字形顶51px（较强墨迹阈值为52px），大于标题内容间隔；信息三行字形顶步长均74px |
+| 失败语义色与统一空态 | 系统红色、同一 `MacPluginEmptyState` | 失败图标与重试文字主色均为原PNG编码RGB(252,40,54)；本轮未触发空态，不以源码复用替代空态实测 |
+| 图标无底座 | 真实图像无底色；仅占位有中性底 | 详情图像着色外缘152×152px，透明角与详情背景同RGB(23,23,23)；首行透明角与选中行同RGB(51,51,51)；占位图未触发 |
+| 长文本单行、不撑高信息组 | 单行截断，信息行最小36pt | 当前来源主机行字形高24px、单行；信息行72px，行间分隔2px，三行等高；极长值未引入测试状态 |
+
+截图目录为 `runs/plugin-management-redesign-20261117/macos/`。root 已逐项查看 `main-dark.png`、`detail.png`、`context-menu.png`、`uninstall-undo.png`、`add-source-popover.png` 五张新包原图。一次卸载在同一 CUA 调用内经截图后立即⌘Z，总耗时230ms，fresh AX确认原选中项、14个已安装与5个发现恢复，未到期提交实际卸载。撤销图保留动画过渡帧，不再为美化重复卸载。Esc第一次只关闭添加 popover、第二次关闭 sheet，均有前后 AX 证据；另在右键菜单中复核Esc，只关闭菜单，sheet/选中项/详情保持。未输入或提交来源。行为证据为 `macos/native-verification-resumed.json`，root 的像素 ROI、阈值与原图哈希为 `macos/root-measurements-resumed.json`；Sol 的独立五图复核为 `macos/sol-measurements-resumed.json`，文字左缘差1–2px、两组标题内容空白16px、信息步长74px及失败主色均与 root 吻合，未发现新的明确裁切。
+
+用户亲手处理既有网络模态表单后，按当次限定仅切Light、拍 `main-light.png`、立即恢复Dark；fresh AX确认Dark选中、Light未选中，CUA已收尾。六张指定PNG现已齐备，root均已查看。浅色图2272×2132px，原生选择自动滚动至第一个发现项，显示已安装尾部与发现分组；已安装标题位于视口上方，完整14个已安装与5个发现没有筛选、折叠或截断。
+
+| 浅色原图补量 | 实测（px，PNG编码RGB） |
+| --- | --- |
+| sheet与活动胶囊 | 外缘1700×1280，活动实色596×88，中心偏差0 |
+| 标题与两栏文字 | 标题墨迹x347，距sheet左缘61；详情名称x1094、来源/信息/行标签x1093；发现标题x315，与深色已安装标题x316相差1 |
+| 信息分组 | 标题墨迹底831、卡片顶847，空白16；两行字形顶872/946，步长74；行高72、分隔2 |
+| 失败色 | 图标与重试文字同RGB(252,29,47) |
+| 占位图 | 详情底板152×152，内部中性RGB(242,242,242)、外角与页面同RGB(255,255,255)；列表占位内底RGB(232,232,232)，列表底RGB(244,244,244) |
+| 单行信息 | 来源主机墨迹高23，当前版本与账号各单行；该未安装项不显示支持与卸载分组 |
+
+补量同时确认一项尚未通过的视觉问题：浅色选中发现行的安装操作不可辨，行尾ROI `[875,1170,980,1240)` 的7350个像素全部为选中底色RGB(252,106,76)，相邻未选中行可见安装胶囊。遵照用户本次“只切外观、拍图、恢复、补量”的限定，未继续改源码、构建或操作界面，不能把六图齐备视为整页视觉通过。浅色ROI、阈值、哈希及该问题保留于 `macos/root-measurements-light.json`。
+
+菜单栏View菜单的历史Esc差异与已通过的右键菜单/popover退出路径分开记录。空态、极长值与窗口进一步缩小未在限定步骤内额外触发，原生 Issue Navigator 未取得；占位图在本张浅色图已实际覆盖。浅色选中项未安装，支持/卸载分组的浅色墨迹仍未验证。
+
+最后代码及文档通过 `git diff --check`；全仓799个可读文本文件的词表扫描无实际内容平台标识，6处短词匹配均为通用恢复计数、查询示例与其审计说明，未发现数字 `liveType`／`siteId` 候选，176处测试身份引用及字面量清单保留于 `macos/platform-neutrality.json`。扫描为有界词表检查，二进制未做 OCR。没有执行真实卸载、来源删除、手动安装/更新、依赖升级、容器编辑或提交推送。
+
+与网页原型的适配：详情文字在左、图标独立在右，以对齐各组文字；活动胶囊内部采用可截断的标题/副文文字列；百分比为现有 Core 的真实批次完成比例，单项环为不定进度；停止作用于当前批次，帮助、辅助功能及菜单已明确。未扩展 Core 的单项下载进度或逐项取消契约。标题与页尾分隔遵循原型，本节明确取代旧 macOS 外框禁止横线的标准；标题30pt及关闭语义保留。
+
+## 2026-11-17：第四轮修订判据
+
+用户 root 否决第三轮关于约52pt分区留白、真实图标透明角可露中性底及详情展示完整订阅地址的判据。本轮仍按用户指定由 `gpt-6.1-sol / high` 修改；第三轮已通过的字形左缘 x=48±1px、货架尺寸与详情列文字顶边对齐继续保留。
+
+- 分区按实际墨迹衡量：状态卡底到“已安装”字形顶、已安装卡底到“发现”字形顶，以及货架底到无标题来源卡顶，均约27pt；标题字形底到自己的卡片保持原值。标题内部44pt控件和字体留白须计入总间距，不能机械叠加布局间距。
+- 真实插件图片完全无底色，保留资源透明区域与原形、统一尺寸居中裁剪；仅通用拼图占位图保留中性底。
+- 详情名称下方仅单行“来自 + 主机名”；信息列移除来源，使用既有manifest显式能力数量，拿不到时只显示版本与账号。完整地址仍在来源页，不在详情显示。
+
+首屏使用 `sectionSpacing=27pt`，将标题原生字体墨迹与44pt操作目标本身占用的高度计入留白；仅首屏解除 List 默认最小 header 高度，避免27pt无标题间隔被撑成28pt。标题至自身卡片仍保留原值，不机械叠加两份分区间距。
+
+| 本轮项目 | 最后新包原尺寸实测（3x） |
+| --- | --- |
+| 状态卡至已安装字形 | 卡片底 exclusive y=906，字形顶987，差81px（27pt） |
+| 已安装卡至发现字形 | 卡片底 exclusive y=1487，字形顶1569，差82px（约27.33pt） |
+| 货架至来源卡 | 货架底 exclusive y=2188，来源卡顶2269，差81px（27pt） |
+| 保留已有对齐 | 卡片外缘x=48；已安装字形x=48，发现强墨迹x=49，附注x=48；两标题字形底至自身卡顶均34px |
+| 保留货架比例 | 首卡777×534px（259×178pt），右侧下一卡露297px（99pt） |
+| 真实图标无底 | 行图标144×144px，透明角与卡片均RGB(255,255,255)；占位拼图中性底RGB(248,248,248)单独保留 |
+| 详情来源与信息 | 来源仅单行主机名，文字框185.7×18pt；三列改为版本／能力／账号，实际能力9项，各值顶部均391.7pt、高20.3pt；“支持”强墨迹x=49，卡片x=48；288×288px真实图标透明角与页面均RGB(242,242,247) |
+
+本轮修改均在 iOS FullUI 视图层：`PluginManagementLayout.swift` 管分区墨迹间距；`PluginManagementEdgeText.swift` 复用字体度量；`PluginManagementComponents.swift` 管标题与无底真实图标；`PluginManagementView.swift`、`PluginInstalledSection.swift`、`PluginManagementStatusCard.swift` 接入统一间隔；`PluginManagementDetailView.swift` 改主机名与能力数显示。发现货架、操作状态机、Core与测试不改；本文仅记录新判据与证据。
+
+最后源码由最高已核验 Xcode 27.2（27B52）构建 `AngelLive` 成功（12.104秒），error=0，12个插件管理视图编译单元无warning／error。265个Core及测试Swift／Package文件与本轮开始时哈希完全一致；依用户限定不运行单元测试或额外回归，不构建其他scheme。
+
+同一台已有 iPhone 17／iOS 27.0（24A434）经 Device Hub `final-run/request-6.json` 明确安装运行最后新包；仅三张最终1206×2622原图：`main-light.png`（capture10）、`shelf.png`（capture12）、`detail-sheet.png`（capture18）。默认16项完整保留，没有筛选或截短列表迁就截图。root与Sol均亲自原尺寸复核，上表三项通过；`iteration-1/`旧包只作中间诊断，不计最终验收。
+
+证据位于 `runs/plugin-management-redesign-20261117/round4/`，含 `build.json`／`build.log`、`manifest.json`、`root-measurements.json`、`sol-measurements.json`。设备外观Light、字号Large、Portrait均未改；EndSession19成功、bridge正常关闭，原scheme／运行目标已恢复。无真实插件或来源数据操作，无提交推送；深色、其他交互及平台本轮不适用，未把历史证据冒充本轮回归。
+
+## 2026-11-17：第三轮修订判据
+
+用户 root 复核否决下方第二轮自评；其中“布局文字线 x=60”不能证明与 x=48 的卡片外边缘对齐，第二轮通过结论已撤销。本轮继续按用户明确指定由 `gpt-6.1-sol / high` 修改，不转交 Astra；Core、测试和功能逻辑保持不变，只构建 `AngelLive`，设备范围限以下五项。
+
+- 已安装、发现、底部附注及详情“支持”的实际字形墨迹左边缘，须与卡片外边缘重合，原尺寸 3x 图误差不超过 1px。标题贴近自己的卡片，分区之间保留更大的间距，不改成上下等距。
+- 图像铺满连续圆角容器后裁剪，取消资源外围的统一内缩；中性底色仅能经真实透明像素显露，不再给不透明图标套底座。
+- 详情三列值各占一行，中间省略长文本；完整来源放到名称下方供查看，避免撑高信息列。
+- 发现卡片收窄并按内容决定高度，移除撑高空白，右侧保留下一张卡片的可见部分。
+- 无标题的来源卡片与货架之间，按卡片底到下一卡片顶使用同一 `sectionSpacing`，本轮值为 26pt；以最终新包原图核对。
+
+本轮未运行或新增单元测试，也未回归长按、侧滑、来源删除或添加流程。Core 全部 Swift 文件哈希与本轮开始时一致。只构建 `AngelLive`：Xcode 27.2（27B52）成功，38.096 秒，Issue Navigator error 为 0，12 个插件管理视图编译单元无 warning／error。
+
+最后同包 Device Hub 安装响应为 `round3/recovery-1/request-3.json`，明确安装并运行成功；默认16项完整保留，没有用筛选或截短数据迁就截图。root 与 Sol 均亲自检查下列四张 1206×2622／3x 原图，复核范围仅上述五点。
+
+| 修订点 | 最后原图实测与结果 |
+| --- | --- |
+| 字形贴卡片外缘 | 卡片外缘 x=48；已安装浅／深色字形 x=48，发现强墨迹 x=49，附注 x=48，支持 x=49，误差均≤1px。已安装／发现字形底到自己的卡片首像素坐标距离均34px；布局框间距24px（8pt），上一区至下一标题保留更大间隔 |
+| 图标铺满 | 去掉8%内缩，行容器144×144px、详情288×288px，图像触及容器四边中点；中性底仅经原图透明像素显露，不改私有资源 |
+| 三列单行 | 版本／来源／账号的值同为 y=411.7pt、文字框高20.3pt，各一行；来源中间省略，完整地址在名称下方可查看／选择；账号按钮高44pt |
+| 紧凑货架 | 首卡777×534px，即259×178pt，按内容自然取高；下一卡露出297px，即99pt |
+| 货架与来源间隔 | 货架底exclusive y=2178、来源顶y=2256，差78px，即同一sectionSpacing=26pt；来源不另加标题或叠加padding |
+
+原图位于 `runs/plugin-management-redesign-20261117/round3/recovery-1/`：`main-light.png`（7）、`detail-sheet.png`（10）、`shelf.png`（13）、`main-dark.png`（19）。请求号均在本次 recovery-1 会话内；早期工具出现截图与AX不一致，经一次 End／正常关闭 bridge／重连后恢复，早期诊断图不计入验收，没有据此改业务代码。
+
+外观恢复 light（22），字号 large／Portrait 均未改变；EndSession（23）成功、bridge 正常关闭。root 已用目的工具及原生 AX 核验原 scheme／运行目标恢复。构建、四图 SHA-256、独立测量与恢复证据见 `round3/build.json`、`round3/manifest.json`、`round3/sol-measurements.json`、`round3/root-measurements.json`。没有构建其他 scheme、执行真实插件／来源数据操作或提交推送。
+
+## 2026-11-17：iOS FullUI 原型交互重做
+
+本节取代本文及 `PluginManagementUX.md` 中旧 iOS 首屏的 90pt 行高、分段范围、底部管理区、更多菜单和 `confirmationDialog` 卸载标准；macOS、tvOS 与 ShellUI 不随本次界面重做改变。视觉与交互依据是用户已确认的本地 `runs/plugin-management-prototype/ios-ux.html`。原型中的网页尺寸、颜色和模拟进度不作为原生实现契约；使用系统字体、语义颜色、原生导航、搜索、侧滑、菜单和 sheet。
+
+- 首屏为可折叠大标题“插件”、搜索、唯一状态卡、已安装列表、发现横向货架和来源入口。下拉检查更新。来源限定安装保留明确提示及退出入口。
+- 状态优先级为进行中、失败、有更新、检查中、已核验最新；未检查、无源、准备失败及来源读取失败单独说明，不把未知状态写成最新。安装与更新批次、取消、逐项失败及仅重试失败项的业务语义继续保留。
+- 行尾与详情主按钮共用排队、处理中、成功、失败状态，使用真实批次进度；下载没有百分比契约时显示不定进度。完成与失败提供语义反馈，减少动态效果时降级。行和货架随文字大小自然增高，按钮触控至少 44pt。
+- 侧滑禁止全滑直接执行；侧滑及长按卸载进入五秒撤销窗口，先隐藏行，不修改运行时或存储。详情卸载在按钮原位展开确认。离开管理页、进入后台、安装或更新批次与删除来源前提交待卸载；失败清除隐藏标记并呈现原有错误。
+- 登录插件的同意请求锚定具体卡片或按钮，保留实际 manifest 加载后的激活前确认与回滚。详情的能力仅使用 manifest 显式声明，不以入口扫描结果虚构标签。
+- 来源页分插件订阅源与播放列表两组；详情与删除确认保留来源身份、关联插件影响及取消。添加使用 sheet，校验错误就地呈现。设备验收禁止真正卸载插件或删除来源。
+
+### 第二轮统一布局与实测
+
+用户复核首轮新包后判定视觉未通过，并明确指定 `gpt-6.1-sol / high` 亲自重写；本轮按该当次指令执行，优先于 `AGENTS.md` 默认由 Astra 接管视觉整改的安排，未再转交 Astra。root 独立检查最终新包原图、AX 布局框和实际像素。Core、延迟卸载及测试在本轮保持原 SHA-256，不回退已实现业务。
+
+`PluginManagementLayout` 统一管理原生度量：页面与卡片内容水平边距均 16pt，分组文字额外内缩 4pt，标题到卡片 8pt，分区间距 26pt，自绘卡片连续圆角 22pt，插件图标容器 48pt／连续圆角 12pt，图文间距 12pt，普通行上下各 13pt，状态卡上下各 14pt，交互目标至少 44pt。分组标题使用主文字色的 title3 semibold；原生 List／Section 负责列表分组与侧滑。来源、详情和添加页复用对应度量，详情账号格与其他信息格等高并顶对齐。图标在中性底色内缩放和裁剪，不直接展示任意资源外框。
+
+以下为最后定点修复后新包的实测；坐标单位为原始 PNG 像素，画布 1206×2622，3x，对应 402×874pt。布局框与字形墨迹分别报告，不把字形边距差当成布局偏移，也不按网页像素硬套原生尺寸。
+
+| 用户复核项 | 状态 | 最后新包测量 |
+| --- | --- | --- |
+| 1. 两个分组标题左边缘 | 通过 | 布局文字线均 x=60；实际字形左边缘分别 65、63，差异来自字形侧边距 |
+| 2. 右侧附注右边缘 | 通过 | 两处布局右端均 x=1146 |
+| 3. 标题到卡片间距 | 通过 | 标题布局框到卡片均 24；字形底到卡片首像素坐标距离均 34 |
+| 4. 分组标题层级 | 通过 | 同为主文字色 title3 semibold，普通字号的文字框高 72 |
+| 5. 状态卡垂直居中与高度 | 通过 | 卡片高 216；图标上下各 54，文字组合上下各 51，重试触控框上下各 42 |
+| 6. 失败语义色 | 通过 | 浅色图标与重试表面同为 RGB(255,56,60)，深色同为 RGB(255,66,69)，没有混用橙色强调按钮 |
+| 7. 两处空态 | 通过 | 共用组件；搜索无结果两张卡分别 y=826…1084、1323…1581，均高 259 |
+| 8. 底部附注缩进 | 通过 | 共用 x=60 文字线；最终搜索空态的字形从 x=62 起，y=1877…1911 |
+| 9. 插件图标容器 | 通过 | 列表容器 x=96，144×144；统一连续圆角、中性底色、等比内缩及裁剪 |
+| 10. 列表分隔线 | 通过 | 已安装从文字列 x=276 到 1157，共 882；来源从文字列 x=222 到 1157，共 936；两者 x=1158 均已是页面背景 |
+
+同屏对齐图 `filtered-y-overview.png` 是原生搜索 `y` 的真实筛选状态，包含状态卡、3 个已安装项、非空发现货架和来源入口；不冒充默认首屏。默认保留全部 16 个已安装项，以 `main-light.png` 和自然滚动的 `main-light-discovery.png` 记录完整结构，不折叠或截短数据迁就截图。来源页两标题实际字形底到卡片的坐标距离同为 34px，播放列表为空时使用相同的双行空态组件。
+
+最后源码经已逐个核验的最高版本 Xcode 27.2（27B52）构建 `AngelLive` 成功（15.075 秒，日志尾名 `BuildProject-Log-20261117-113011.txt`）；11 个视图编译单元没有 warning／error，原生 Issue Navigator error 为 0（request138）。同一台既有 iPhone 17／iOS 27.0（24A434）上的 `DeviceInteractionInstallAndRun` request140 明确返回安装并运行成功。交互均经 Device Hub；3x PNG 是同一状态下的只读原尺寸截图，没有缩放、拼接或改图。`iteration-1/2/3` 为中间／失败版本，不能代替最后安装后的证据。
+
+相关 `AngelLiveCoreTests` 已运行 7 个 suite、49 项测试（含本次新增 10 项）：49 通过，失败／跳过／禁用／取消均为 0。覆盖延迟卸载七项契约、呈现优先级、显式能力及受影响安装／更新批次等。测试通过注入时钟等待和卸载动作验证，不触碰真实插件存储。本轮仅改 iOS 视图，Core／测试六文件哈希未变，因此没有为布局修改重复运行 Package 测试。相同 Core 最终版本的 `AngelLiveMacOS`、`AngelLiveMacOS-AppStore`、`AngelLiveTVOS`、`AngelLiveTVOS-SimpleLive` 均已构建成功；不把构建当作这些平台本轮 UI 运行验收。
+
+最终原图集中在 `runs/plugin-management-redesign-20261117/round2/final/`，`manifest.json` 记录请求号、尺寸及 SHA-256；root 逐项核对原图和源文件哈希，确认均来自最后 request140 安装后的包。视觉基准同时参考同包的原生设置页 `settings-baseline.png`。上表十项及下列已观察页面通过本轮视觉复核，不把未运行的业务分支写成设备通过。
+
+| 目标状态 | 原图 | Device Hub 请求 |
+| --- | --- | --- |
+| 默认浅色首屏，16 项完整列表 | `main-light.png` | 145 |
+| 状态／已安装／非空货架同屏，明确为原生 y 搜索态 | `filtered-y-overview.png` | 148 |
+| 来源两分组、播放列表空态 | `sources.png` | 151 |
+| 添加来源的就地空输入错误 | `add-source-error.png` | 160 |
+| 搜索无结果，两处统一空态及附注 | `search-empty.png` | 166 |
+| 长按浮起预览和需要登录时的菜单项 | `context-preview.png` | 169 |
+| 详情 sheet，未登录账号格与能力标签 | `detail-sheet.png` | 172 |
+| 详情卸载在原位置展开确认 | `detail-uninstall-confirm-settled.png` | 174 |
+| 默认列表自然滚动后的发现货架 | `main-light-discovery.png` | 181 |
+| 较大辅助功能字号 accessibility-medium | `main-accessibility.png` | 188 |
+| 默认深色首屏 | `main-dark.png` | 199 |
+
+详情三列标签顶部为 376.4／376.4／376.3pt，两条竖线均为 y=1135…1361、各高 227px；账号按钮覆盖 119.3×79.7pt 的等高信息格。发现标题的“全部安装”实际 Button 为 59.7×44pt，不以外层容器冒充触控框。较大字号下状态卡自然竖排、行自然增长，深浅色的文字、图标和分隔线均没有观察到裁切或重叠。
+
+设备仅执行安全路径：来源详情删除确认展开后取消（154／155）、添加空输入错误后取消（159／160／162）、长按菜单查看详情（168…170）、详情卸载展开后取消（173…175）、原生下拖关闭 sheet（176／177）、插件侧滑露出后反滑关闭（178／179）。没有 stage 或真正卸载设备插件，没有新增／删除真实来源，观察到的插件与来源数量仍为 16／2。五秒撤销未执行：当前捕获与决策延迟不能保证在提交前撤销，不能冒实际卸载风险；Core 注入动作的七项测试通过不替代这条设备路径。现场没有可用更新候选，更新按钮完整变形流程未验证；真实安装后的插入、真实登录／授权、激活前 consent／回滚、非空播放列表操作及 VoiceOver 语音／减少动态效果／瞬态触觉反馈也未做本轮设备验证。
+
+字号已恢复 large（191），外观已恢复 light（201），Portrait 未改；原有“大号辅助功能字体”开关一直保留，未改其值。EndSession request202 明确返回 `Session stopped`，唯一 bridge 正常关闭；root 另已核验原生 Xcode UI 与 headless workspace 的 scheme／运行目标均恢复原值。没有另开模拟器、升级依赖、清理缓存／DerivedData、改证书或提交推送。最终测量、构建、恢复及完整文件职责见本地 `round2/delivery.md`、`round2/sol-measurements.json`、`round2/final/root-final-measurements.json` 与 `round2/final/restored-run-targets.json`。
+
 ## 2026-10-26：macOS 标题、关闭区域与滚动边界复核
 
 本节取代下方各轮关于整体页面外框的验收结论。用户复核指出，原生标题栏下方和关闭区域上方仍有横线，标题保持独立缩进；随后补充截图指出中段列表紧贴标题、文字被截。此前仅首屏或表单内部通过，不能证明这些问题已经解决。本轮继续由 `gpt-6-astra / high` 实际修改，root 独立检查源码、最后新包原图及交互。

@@ -17,7 +17,7 @@ struct SettingView: View {
     #endif
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @AppStorage(MacDockIconPreference.storageKey)
-    private var dockIconPreference = MacDockIconPreference.xiaoShengBiBi
+    private var dockIconPreference = MacDockIconPreference.classic
     @AppStorage(MacPlaybackPresentationPreference.singlePageModeKey)
     private var singlePagePlayback = false
 
@@ -135,7 +135,12 @@ struct SettingView: View {
                     guard supportDiagnosticsEnabled else { return }
                     supportDiagnosticsService.recordAction(.openedPluginManagement)
                 }
-                .frame(minWidth: 600, idealWidth: 680, minHeight: 520, idealHeight: 640)
+                .frame(
+                    minWidth: MacPluginLayout.sheetMinimumWidth,
+                    idealWidth: MacPluginLayout.sheetIdealWidth,
+                    minHeight: MacPluginLayout.sheetMinimumHeight,
+                    idealHeight: MacPluginLayout.sheetIdealHeight
+                )
         }
         .sheet(isPresented: $showOpenSourceList) {
             if pluginAvailability.hasAvailablePlugins {

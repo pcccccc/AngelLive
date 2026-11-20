@@ -197,8 +197,10 @@ struct FavoriteMembershipSnapshotTests {
 struct FavoriteCloudStateTests {
   @Test("a recovered account check clears the stale cloud error")
   @MainActor
-  func recoveredAccountClearsStaleError() {
-    let model = AppFavoriteModel()
+  func recoveredAccountClearsStaleError() throws {
+    let fixture = try FavoriteModelFixture()
+    defer { fixture.cleanUp() }
+    let model = fixture.makeModel()
     model.applyCloudState(isReady: false, message: "iCloud account is temporarily not available")
 
     let recoveredAt = Date(timeIntervalSince1970: 1_786_291_200)
@@ -213,8 +215,10 @@ struct FavoriteCloudStateTests {
 
   @Test("cloud errors only block the page when no local favorites exist")
   @MainActor
-  func cloudErrorDoesNotHideLocalFavorites() {
-    let model = AppFavoriteModel()
+  func cloudErrorDoesNotHideLocalFavorites() throws {
+    let fixture = try FavoriteModelFixture()
+    defer { fixture.cleanUp() }
+    let model = fixture.makeModel()
     model.applyCloudState(isReady: false, message: "iCloud account is temporarily not available")
 
     #expect(model.shouldShowBlockingCloudError)

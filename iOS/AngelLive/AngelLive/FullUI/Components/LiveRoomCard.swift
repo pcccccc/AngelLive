@@ -42,6 +42,8 @@ struct LiveRoomCard: View {
     var disableTapGesture: Bool = false
     /// 本地导航状态 - 仅在没有外部导航状态时使用
     @State private var localShowPlayer = false
+    @State private var localShortDramaReturnSource = RoomPlayerReturnSource()
+    @State private var localShortDramaReturnPreview: RoomPlayerReturnPreview?
     /// 本地 Namespace - 仅在没有外部 Namespace 时使用
     @Namespace private var localNamespace
     /// 正在查询直播状态中
@@ -176,7 +178,7 @@ struct LiveRoomCard: View {
                 }
                 .contentShape(Rectangle())
 
-            let baseTappable = Group {
+            let tappable = Group {
                 if disableTapGesture {
                     baseContent
                 } else {
@@ -190,29 +192,47 @@ struct LiveRoomCard: View {
             // 外层 Button / UICollectionView 接管选择时不注册本地播放器 presentation。
             // UIKit cell 的 UIHostingController 是独立 SwiftUI 根，不能继承应用的自定义环境。
             if disableTapGesture || useExternalNavigation {
-                baseTappable
+                tappable
             } else {
+                let returnSource = ShortDramaRouting.isShortDrama(room) ? localShortDramaReturnSource : nil
+                let baseTappable = tappable.roomPlayerReturnSource(returnSource)
+                // A standalone card can also be hosted in a UIKit cell without a NavigationStack.
                 if #available(iOS 18.0, *) {
                     baseTappable
-                        .fullScreenCover(isPresented: showPlayerBinding) {
-                            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                                .modifier(ZoomTransitionModifier(sourceID: resolvedTransitionSourceID, namespace: namespace))
-                                .fullUITabBarHidden()
+                        .fullScreenCover(isPresented: showPlayerBinding, onDismiss: clearLocalShortDramaReturnPreview) {
+                            localPlayer
                         }
                 } else {
                     baseTappable
                         .navigationDestination(isPresented: showPlayerBinding) {
-                            DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-                                .modifier(ZoomTransitionModifier(sourceID: resolvedTransitionSourceID, namespace: namespace))
-                                .fullUITabBarHidden()
+                            localPlayer
+                        }
+                        .onChange(of: localShowPlayer) { _, isPresented in
+                            if !isPresented { clearLocalShortDramaReturnPreview() }
                         }
                 }
             }
         }
     }
 
+    private var localPlayer: some View {
+        DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
+            .modifier(ZoomTransitionModifier(sourceID: resolvedTransitionSourceID, namespace: namespace))
+            .fullUITabBarHidden()
+            .transformEnvironment(\.fullUIRoomPlayerReturnPreview) { preview in
+                if ShortDramaRouting.isShortDrama(room) { preview = localShortDramaReturnPreview }
+            }
+    }
+
+    private func clearLocalShortDramaReturnPreview() {
+        localShortDramaReturnPreview = nil
+    }
+
     private func handleTap() {
         if ShortDramaRouting.isShortDrama(room) {
+            if !useExternalNavigation && !localShowPlayer {
+                localShortDramaReturnPreview = localShortDramaReturnSource.capture()
+            }
             showPlayerBinding.wrappedValue = true
             return
         }

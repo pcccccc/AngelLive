@@ -1,26 +1,22 @@
 #if canImport(KSPlayer)
-internal import AVFoundation
+import AVFoundation
 import Observation
-import UIKit
+import CoreGraphics
 import AngelLiveCore
-import AngelLiveDependencies
-#if canImport(KSPlayer)
 import KSPlayer
-import KSPlayerUI
-#endif
 
-enum ShortDramaSeekPreviewState {
+public enum SeekPreviewState {
     case idle
     case loading
-    case frame(UIImage, actualTime: Double)
+    case frame(CGImage, actualTime: Double)
     case unavailable
 }
 
 /// Owns an independent, bounded image generator. It never seeks or captures the active player.
 @MainActor
 @Observable
-final class ShortDramaSeekPreviewModel {
-    private(set) var state: ShortDramaSeekPreviewState = .idle
+public final class SeekPreviewModel {
+    public private(set) var state: SeekPreviewState = .idle
 
     @ObservationIgnored private var playbackID: UUID?
     @ObservationIgnored private var lifecycleID = UUID()
@@ -33,23 +29,25 @@ final class ShortDramaSeekPreviewModel {
     @ObservationIgnored private var lastRequestTime: ContinuousClock.Instant?
     @ObservationIgnored private var isUnavailable = false
     @ObservationIgnored private var usesThumbnailCache = false
-    @ObservationIgnored private var thumbnails: [ShortDramaPreviewFrame] = []
+    @ObservationIgnored private var thumbnails: [SeekPreviewFrame] = []
     @ObservationIgnored private var isDisplaying = false
 
-    func update(playback: ShortDramaPlayback, targetTime: Double) {
+    public init() {}
+
+    public func update(id: UUID, url: URL, quality: LiveQualityDetail, targetTime: Double) {
         guard targetTime.isFinite, targetTime >= 0 else { return }
-        if playbackID != playback.id {
+        if playbackID != id {
             cancel()
-            playbackID = playback.id
+            playbackID = id
             // A loader supplied by the playback engine cannot be recreated by this provider.
-            guard playback.quality.playbackHints?.requiresCustomSegmentLoader != true else {
+            guard quality.playbackHints?.requiresCustomSegmentLoader != true else {
                 isUnavailable = true
                 state = .unavailable
                 return
             }
             let options = KSOptions()
             let configuration = KSPlayerSessionConfigurator.apply(
-                quality: playback.quality,
+                quality: quality,
                 to: options,
                 fallbackUserAgent: "libmpv",
                 liveReconnectPolicy: .applicationManaged
@@ -62,8 +60,8 @@ final class ShortDramaSeekPreviewModel {
             thumbnailOptions = options
             // HLS without an image rendition can leave AVFoundation waiting throughout
             // a drag. Use the independent streaming thumbnail batch for that format.
-            if playback.quality.decryption == nil && !configuration.plan.isHLS {
-                let asset = AVURLAsset(url: playback.url, options: options.avOptions)
+            if quality.decryption == nil && !configuration.plan.isHLS {
+                let asset = AVURLAsset(url: url, options: options.avOptions)
                 let generator = AVAssetImageGenerator(asset: asset)
                 generator.appliesPreferredTrackTransform = true
                 generator.maximumSize = CGSize(width: 320, height: 320)
@@ -92,22 +90,21 @@ final class ShortDramaSeekPreviewModel {
             return
         }
         guard request == nil else { return }
-        let id = playback.id
         let lifecycle = lifecycleID
         if let generator {
             request = Task(priority: .utility) { [weak self] in
                 guard let self else { return }
-                await self.generateLatest(using: generator, playbackID: id, lifecycle: lifecycle, url: playback.url)
+                await self.generateLatest(using: generator, playbackID: id, lifecycle: lifecycle, url: url)
             }
         } else {
             // HLS and explicit FFmpeg input decryption use the bounded batch directly.
             // Its headers/key belong to these independent preview-only options.
-            startThumbnailBatch(playbackID: id, lifecycle: lifecycle, url: playback.url)
+            startThumbnailBatch(playbackID: id, lifecycle: lifecycle, url: url)
         }
     }
 
     /// Hide this gesture's preview while retaining the episode's single bounded batch/cache.
-    func endScrubbing() {
+    public func endScrubbing() {
         isDisplaying = false
         request?.cancel()
         request = nil
@@ -117,7 +114,7 @@ final class ShortDramaSeekPreviewModel {
         state = .idle
     }
 
-    func cancel() {
+    public func cancel() {
         request?.cancel()
         request = nil
         thumbnailRequest?.cancel()
@@ -158,7 +155,7 @@ final class ShortDramaSeekPreviewModel {
                 // Publish its real timestamp, then immediately pursue the newest target.
                 let actualTime = result.actualTime.seconds
                 state = actualTime.isFinite
-                    ? .frame(UIImage(cgImage: result.image), actualTime: actualTime)
+                    ? .frame(result.image, actualTime: actualTime)
                     : .unavailable
                 if revision == expectedRevision {
                     request = nil
@@ -192,10 +189,9 @@ final class ShortDramaSeekPreviewModel {
 
     private func generateThumbnails(playbackID id: UUID, lifecycle: UUID, url: URL) async {
         guard isCurrent(id: id, lifecycle: lifecycle), let options = thumbnailOptions else { return }
-        #if canImport(KSPlayer)
         // The worker is shared across model instances, so a cancelled network read must
         // leave its single batch before any newly selected episode starts another one.
-        let frames = await ShortDramaThumbnailWorker.shared.generate(url: url, options: options) { [weak self] frame in
+        let frames = await SeekThumbnailWorker.shared.generate(url: url, options: options) { [weak self] frame in
             Task { @MainActor [weak self] in
                 guard let self, self.playbackID == id, self.lifecycleID == lifecycle,
                       self.thumbnails.count < 24,
@@ -208,7 +204,6 @@ final class ShortDramaSeekPreviewModel {
         // Commit the complete result as well: queued progress callbacks need not have reached
         // MainActor before the worker returns. Timestamp deduplication keeps late callbacks bounded.
         thumbnails = frames
-        #endif
         guard isCurrent(id: id, lifecycle: lifecycle) else { return }
         thumbnailOptions = nil
         thumbnailRequest = nil
@@ -227,22 +222,21 @@ final class ShortDramaSeekPreviewModel {
     }
 }
 
-private struct ShortDramaPreviewFrame: Sendable {
-    let image: UIImage
+private struct SeekPreviewFrame: Sendable {
+    let image: CGImage
     let time: Double
 }
 
-#if canImport(KSPlayer)
 /// KSPlayer's batch API checks cancellation between frames. Opening/reading may finish only
 /// after the preview timeout; actor serialization prevents overlapping batches during that wait.
-private actor ShortDramaThumbnailWorker {
-    static let shared = ShortDramaThumbnailWorker()
+private actor SeekThumbnailWorker {
+    static let shared = SeekThumbnailWorker()
 
     func generate(
-        url: URL, options: KSOptions, onFrame: @escaping @Sendable (ShortDramaPreviewFrame) -> Void
-    ) async -> [ShortDramaPreviewFrame] {
+        url: URL, options: KSOptions, onFrame: @escaping @Sendable (SeekPreviewFrame) -> Void
+    ) async -> [SeekPreviewFrame] {
         guard !Task.isCancelled else { return [] }
-        var frames: [ShortDramaPreviewFrame] = []
+        var frames: [SeekPreviewFrame] = []
         do {
             try await FFmpegUtility.streamThumbnail(for: url, options: options, thumbnailCount: 24) { image, time, _ in
                 guard !Task.isCancelled, time.isFinite else { return }
@@ -259,7 +253,7 @@ private actor ShortDramaThumbnailWorker {
                     ) else { return }
                     context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
                     guard let scaled = context.makeImage() else { return }
-                    let frame = ShortDramaPreviewFrame(image: UIImage(cgImage: scaled), time: time)
+                    let frame = SeekPreviewFrame(image: scaled, time: time)
                     frames.append(frame)
                     onFrame(frame)
                 }
@@ -270,5 +264,4 @@ private actor ShortDramaThumbnailWorker {
         return frames
     }
 }
-#endif
 #endif

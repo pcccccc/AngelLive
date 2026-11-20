@@ -112,17 +112,28 @@ public final class AppFavoriteModel {
     @ObservationIgnored private var cloudMembershipGeneration: UUID?
 
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let localStore: FavoriteLocalStore
 
     private enum Keys {
         static let favoriteICloudSyncEnabled = "AppFavoriteModel.favoriteICloudSyncEnabled"
     }
 
-    public init(
+    public convenience init(
         refreshSession: FavoriteRefreshSession = FavoriteRefreshSession(),
         refreshNow: @escaping @MainActor () -> Date = { Date() },
         defaults: UserDefaults = .standard
     ) {
+        self.init(refreshSession: refreshSession, refreshNow: refreshNow, defaults: defaults, localStore: .shared)
+    }
+
+    init(
+        refreshSession: FavoriteRefreshSession = FavoriteRefreshSession(),
+        refreshNow: @escaping @MainActor () -> Date = { Date() },
+        defaults: UserDefaults,
+        localStore: FavoriteLocalStore
+    ) {
         self.defaults = defaults
+        self.localStore = localStore
         self.refreshSession = refreshSession
         self.refreshNow = refreshNow
         if defaults.object(forKey: Keys.favoriteICloudSyncEnabled) == nil {
@@ -154,9 +165,9 @@ public final class AppFavoriteModel {
     @MainActor
     private func enqueueLocalPersistence(_ snapshot: [LiveModel]) {
         let previous = localPersistenceTask
-        localPersistenceTask = Task { @MainActor in
+        localPersistenceTask = Task { @MainActor [localStore] in
             await previous?.value
-            await FavoriteLocalStore.shared.save(snapshot)
+            await localStore.save(snapshot)
         }
     }
 
@@ -249,7 +260,7 @@ public final class AppFavoriteModel {
         let localRevision = localMembershipRevision
         await localPersistenceTask?.value
         let membershipRevision = PersistentSyncRetryCoordinator.shared.favoriteMembershipRevision()
-        let local = await FavoriteLocalStore.shared.load()
+        let local = await localStore.load()
         if let expectedCloudGeneration {
             guard cloudMembershipGeneration == expectedCloudGeneration else { return }
         }
@@ -653,7 +664,7 @@ public final class AppFavoriteModel {
     @MainActor
     private func performAutomaticFavoriteSync() async {
         // 本地优先:先用本地数据秒显(仅当内存为空,避免整页重建导致滚动卡顿)。
-        let local = await FavoriteLocalStore.shared.load()
+        let local = await localStore.load()
         let hasExistingData = !roomList.isEmpty
         if !hasExistingData {
             if local.isEmpty {
@@ -701,7 +712,7 @@ public final class AppFavoriteModel {
 
     @MainActor
     private func performManualFavoriteRefresh() async {
-        let local = await FavoriteLocalStore.shared.load()
+        let local = await localStore.load()
         let members = roomList.isEmpty ? local : roomList
 
         // iCloud 关闭:纯本地刷新直播状态。

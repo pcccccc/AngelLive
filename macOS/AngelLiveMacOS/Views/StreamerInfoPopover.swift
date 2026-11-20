@@ -87,7 +87,7 @@ struct StreamerInfoPopover: View {
 
             infoRow(icon: "number", title: "房间号", value: room.roomId.orDash)
 
-            if let watched = room.liveWatchedCount, !watched.isEmpty {
+            if let watched = watchedTitle {
                 Divider()
                 infoRow(icon: "eye", title: "观看人数", value: watched)
             }
@@ -95,6 +95,11 @@ struct StreamerInfoPopover: View {
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .roomTitleTranslationTask(room.roomTitle, enabled: usesFullUI)
+    }
+
+    private var watchedTitle: String? {
+        if usesFullUI { return PlaybackDisplay.popularityTitle(room.liveWatchedCount) }
+        return room.liveWatchedCount.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private var translatedTitle: String? {

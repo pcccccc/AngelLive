@@ -11,9 +11,16 @@ final class MacPlayerCloseCoordinator {
     private var pendingClose: (@MainActor (NSWindow) -> Void)?
     private var exitRequested = false
     private var closeCompleted = false
+    private let toolbarOwner = UUID()
+    private var toolbarSuppression: MacFullscreenToolbarSuppression?
+
+    var suppressesFullscreenToolbar = false {
+        didSet { updateFullscreenToolbar() }
+    }
 
     func bind(to window: NSWindow?) {
         guard self.window !== window else { return }
+        restoreFullscreenToolbar()
         if self.window != nil {
             cancelPendingClose()
             exitRequested = false
@@ -36,6 +43,7 @@ final class MacPlayerCloseCoordinator {
                 }
             })
         }
+        updateFullscreenToolbar()
         advanceCloseIfPossible()
     }
 
@@ -69,6 +77,7 @@ final class MacPlayerCloseCoordinator {
     }
 
     func invalidate() {
+        restoreFullscreenToolbar()
         bindingGeneration = UUID()
         pendingClose = nil
         exitRequested = false
@@ -84,15 +93,33 @@ final class MacPlayerCloseCoordinator {
         case NSWindow.willEnterFullScreenNotification: phase = .entering
         case NSWindow.didEnterFullScreenNotification:
             phase = .fullscreen
+            updateFullscreenToolbar()
             if exitRequested || pendingClose != nil { requestExitFullscreen() }
         case NSWindow.willExitFullScreenNotification: phase = .exiting
         case NSWindow.didExitFullScreenNotification:
             phase = .windowed
+            restoreFullscreenToolbar()
             exitRequested = false
             advanceCloseIfPossible()
         case NSWindow.willCloseNotification: invalidate()
         default: break
         }
+    }
+
+    private func updateFullscreenToolbar() {
+        guard suppressesFullscreenToolbar, phase == .fullscreen else {
+            restoreFullscreenToolbar()
+            return
+        }
+        guard let window else { return }
+        let suppression = MacFullscreenToolbarSuppression.forWindow(window)
+        suppression.acquire(for: toolbarOwner, in: window)
+        toolbarSuppression = suppression
+    }
+
+    private func restoreFullscreenToolbar() {
+        toolbarSuppression?.release(for: toolbarOwner)
+        toolbarSuppression = nil
     }
 
     private func advanceCloseIfPossible() {
@@ -112,5 +139,52 @@ final class MacPlayerCloseCoordinator {
         observers.removeAll()
     }
 
-    isolated deinit { removeObservers() }
+    isolated deinit {
+        restoreFullscreenToolbar()
+        removeObservers()
+    }
+}
+
+/// Navigation and embedded playback can overlap during a handoff in the same window.
+@MainActor
+private final class MacFullscreenToolbarSuppression {
+    private static let windows = NSMapTable<NSWindow, MacFullscreenToolbarSuppression>.weakToStrongObjects()
+    private var owners: Set<UUID> = []
+    private weak var hiddenToolbar: NSToolbar?
+    private weak var ignoredToolbarWindow: NSWindow?
+
+    static func forWindow(_ window: NSWindow) -> MacFullscreenToolbarSuppression {
+        if let existing = windows.object(forKey: window) { return existing }
+        let suppression = MacFullscreenToolbarSuppression()
+        windows.setObject(suppression, forKey: window)
+        return suppression
+    }
+
+    func acquire(for owner: UUID, in window: NSWindow) {
+        owners.insert(owner)
+        if let toolbar = window.toolbar, toolbar.isVisible {
+            if let hiddenToolbar, hiddenToolbar !== toolbar { hiddenToolbar.isVisible = true }
+            hiddenToolbar = toolbar
+            toolbar.isVisible = false
+        }
+        // AppKit can keep its fullscreen toolbar in a separate child window after
+        // hiding the toolbar. That child intercepts clicks on the player's top row.
+        // Match the exact runtime class in this window's children and use the public
+        // event flag. If AppKit supplies no match, leave every child's event routing alone.
+        guard let child = window.childWindows?.first(where: {
+            NSStringFromClass(type(of: $0)) == "NSToolbarFullScreenWindow"
+        }), !child.ignoresMouseEvents else { return }
+        ignoredToolbarWindow?.ignoresMouseEvents = false
+        child.ignoresMouseEvents = true
+        ignoredToolbarWindow = child
+    }
+
+    func release(for owner: UUID) {
+        owners.remove(owner)
+        guard owners.isEmpty else { return }
+        ignoredToolbarWindow?.ignoresMouseEvents = false
+        ignoredToolbarWindow = nil
+        hiddenToolbar?.isVisible = true
+        hiddenToolbar = nil
+    }
 }

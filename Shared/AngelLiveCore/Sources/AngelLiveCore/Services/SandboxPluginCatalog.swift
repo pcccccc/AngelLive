@@ -35,7 +35,10 @@ public struct SandboxPluginMetadata: Sendable, Hashable {
 public enum SandboxPluginCatalog {
     /// 返回每个 pluginId 在沙盒中已安装的最高版本 manifest 信息。
     public static func installedPluginMap() -> [String: SandboxPluginMetadata] {
-        let storage = LiveParsePlugins.shared.storage
+        installedPluginMap(storage: LiveParsePlugins.shared.storage)
+    }
+
+    static func installedPluginMap(storage: LiveParsePluginStorage) -> [String: SandboxPluginMetadata] {
         let pluginsRoot = storage.pluginsRootDirectory
 
         guard let pluginDirs = try? FileManager.default.contentsOfDirectory(
