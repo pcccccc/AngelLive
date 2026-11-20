@@ -175,9 +175,9 @@ struct FullUIPlayerGlassGroup<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
+        // A glass container makes this single capsule refract its own labels.
         HStack(spacing: 0, content: content)
             .fullUIPlayerGlass(in: Capsule())
-            .fullUIPlayerGlassContainer(spacing: 8)
             .fullUIPlayerShadow(in: Capsule())
             .environment(\.colorScheme, .dark)
     }
