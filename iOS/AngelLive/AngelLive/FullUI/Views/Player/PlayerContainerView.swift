@@ -373,8 +373,8 @@ struct PlayerContentView: View {
     }
 
     private var loadingRoom: LiveModel? {
-        if let pendingLoadingRoom, pendingLoadingRoom != viewModel.currentRoom { return pendingLoadingRoom }
-        return isInitialStreamLoading ? viewModel.currentRoom : nil
+        guard isInitialStreamLoading else { return nil }
+        return pendingLoadingRoom ?? viewModel.currentRoom
     }
 
     private func playerOverlays(playURL: URL) -> some View {
@@ -602,6 +602,7 @@ struct PlayerContentView: View {
     }
 
     private var isInitialStreamLoading: Bool {
+        if let pendingLoadingRoom, pendingLoadingRoom != viewModel.currentRoom { return true }
         if viewModel.isLoading || viewModel.isResolvingPlaybackSource { return true }
         guard let playURL = viewModel.currentPlayURL else { return true }
         if useKSPlayer {

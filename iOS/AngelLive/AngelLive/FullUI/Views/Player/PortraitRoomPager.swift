@@ -207,7 +207,8 @@ struct PortraitRoomPager: ViewModifier {
                 return
             }
             let visible = controlsVisible.wrappedValue
-            let distance = visible ? -position : viewportWidth + position
+            // Only the current drag counts, even when it interrupts a spring midway.
+            let distance = visible ? -translation : translation
             let releaseSpeed = visible ? -velocity : velocity
             let commits = distance > viewportWidth * 0.30 || releaseSpeed >= 600
             setControlsVisible(commits ? !visible : visible, from: position, velocity: velocity)
