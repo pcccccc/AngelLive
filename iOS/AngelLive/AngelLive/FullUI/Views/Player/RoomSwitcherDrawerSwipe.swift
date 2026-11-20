@@ -8,6 +8,7 @@ struct RoomSwitcherDrawerSwipe: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.fullUIWindowContext) private var windowContext
     @State private var offset: CGFloat = 0
     @State private var dragOrigin: CGFloat?
     @State private var settlement: Settlement?
@@ -31,6 +32,7 @@ struct RoomSwitcherDrawerSwipe: ViewModifier {
     private func draggable(_ content: Content) -> some View {
         if #available(iOS 18.0, *) {
             content.gesture(DrawerPan(
+                layoutDirection: layoutDirection,
                 shouldBegin: { canBegin(x: $0.x, y: $0.y) },
                 onBegan: { beginDrag(translation: $0 * direction) },
                 onChanged: { updateDrag(translation: $0 * direction) },
@@ -57,7 +59,9 @@ struct RoomSwitcherDrawerSwipe: ViewModifier {
                 guard !rejectedLegacyDrag else { return }
                 if dragOrigin != nil {
                     updateDrag(translation: x * direction)
-                } else if canBegin(x: x, y: value.translation.height) {
+                } else if let window = windowContext?.window,
+                          !PlayerBackSwipe.isAtLeadingEdge(value.startLocation, in: window, layoutDirection: layoutDirection),
+                          canBegin(x: x, y: value.translation.height) {
                     beginDrag(translation: x * direction)
                 } else {
                     rejectedLegacyDrag = true
@@ -161,6 +165,7 @@ struct RoomSwitcherDrawerSwipe: ViewModifier {
 
 @available(iOS 18.0, *)
 private struct DrawerPan: UIGestureRecognizerRepresentable {
+    let layoutDirection: LayoutDirection
     let shouldBegin: (CGPoint) -> Bool
     let onBegan: (CGFloat) -> Void
     let onChanged: (CGFloat) -> Void
@@ -168,7 +173,7 @@ private struct DrawerPan: UIGestureRecognizerRepresentable {
     let onCancelled: () -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
-        Coordinator(shouldBegin: shouldBegin)
+        Coordinator(shouldBegin: shouldBegin, layoutDirection: layoutDirection)
     }
 
     func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
@@ -180,6 +185,7 @@ private struct DrawerPan: UIGestureRecognizerRepresentable {
 
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         context.coordinator.shouldBegin = shouldBegin
+        context.coordinator.layoutDirection = layoutDirection
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
@@ -196,9 +202,16 @@ private struct DrawerPan: UIGestureRecognizerRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var shouldBegin: (CGPoint) -> Bool
+        var layoutDirection: LayoutDirection
 
-        init(shouldBegin: @escaping (CGPoint) -> Bool) {
+        init(shouldBegin: @escaping (CGPoint) -> Bool, layoutDirection: LayoutDirection) {
             self.shouldBegin = shouldBegin
+            self.layoutDirection = layoutDirection
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let window = gestureRecognizer.view?.window else { return false }
+            return !PlayerBackSwipe.isAtLeadingEdge(touch.location(in: window), in: window, layoutDirection: layoutDirection)
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {

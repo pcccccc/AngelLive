@@ -28,7 +28,7 @@ struct PortraitRoomPager: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.fullUIWindowContext) private var windowContext
-    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.verticalLiveControlsVisible) private var controlsVisible
     @State private var motion = PortraitPageMotion()
     @State private var controlsMotion = PortraitControlsMotion()
@@ -116,8 +116,6 @@ struct PortraitRoomPager: ViewModifier {
         return result
     }
 
-    private var reservesBackEdge: Bool { isPushed || controlsVisible.wrappedValue }
-
     private func canStartDrag(_ axis: Axis) -> Bool {
         guard enabled else { return false }
         switch axis {
@@ -132,7 +130,7 @@ struct PortraitRoomPager: ViewModifier {
             content.gesture(PortraitRoomPan(
                 isEnabled: enabled,
                 shouldBegin: canStartDrag,
-                reservesBackEdge: reservesBackEdge,
+                layoutDirection: layoutDirection,
                 onBegan: beginDrag,
                 onChanged: updateDrag,
                 onEnded: endDrag,
@@ -161,7 +159,7 @@ struct PortraitRoomPager: ViewModifier {
                     return
                 }
                 guard let window = windowContext?.window,
-                      PortraitRoomDrag.accepts(value.startLocation, in: window, reservesBackEdge: reservesBackEdge),
+                      PortraitRoomDrag.accepts(value.startLocation, in: window, layoutDirection: layoutDirection),
                       let axis = PortraitRoomDrag.axis(for: value.translation), canStartDrag(axis) else {
                     hasRejectedLegacyDrag = true
                     return
@@ -507,13 +505,9 @@ private enum PortraitRoomDrag {
         return nil
     }
 
-    static func accepts(_ point: CGPoint, in window: UIWindow, reservesBackEdge: Bool) -> Bool {
-        if reservesBackEdge {
-            let distance = window.effectiveUserInterfaceLayoutDirection == .rightToLeft
-                ? window.bounds.maxX - point.x : point.x - window.bounds.minX
-            guard distance >= LiveRoomNavigationState.playerBackEdgeWidth else { return false }
-        }
-        return point.y > window.bounds.minY + 44 && point.y < window.bounds.maxY - 44
+    static func accepts(_ point: CGPoint, in window: UIWindow, layoutDirection: LayoutDirection) -> Bool {
+        !PlayerBackSwipe.isAtLeadingEdge(point, in: window, layoutDirection: layoutDirection)
+            && point.y > window.bounds.minY + 44 && point.y < window.bounds.maxY - 44
     }
 }
 
@@ -525,7 +519,7 @@ private extension CGSize {
 private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     let isEnabled: Bool
     let shouldBegin: (Axis) -> Bool
-    let reservesBackEdge: Bool
+    let layoutDirection: LayoutDirection
     let onBegan: (Axis, CGFloat) -> Void
     let onChanged: (Axis, CGFloat) -> Void
     let onEnded: (Axis, CGFloat, CGFloat) -> Void
@@ -535,7 +529,7 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
         let coordinator = Coordinator()
         coordinator.isEnabled = isEnabled
         coordinator.shouldBegin = shouldBegin
-        coordinator.reservesBackEdge = reservesBackEdge
+        coordinator.layoutDirection = layoutDirection
         return coordinator
     }
 
@@ -549,7 +543,7 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
         context.coordinator.isEnabled = isEnabled
         context.coordinator.shouldBegin = shouldBegin
-        context.coordinator.reservesBackEdge = reservesBackEdge
+        context.coordinator.layoutDirection = layoutDirection
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
@@ -574,12 +568,12 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var isEnabled = false
         var shouldBegin: (Axis) -> Bool = { _ in false }
-        var reservesBackEdge = false
+        var layoutDirection: LayoutDirection = .leftToRight
         var axis: Axis?
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard isEnabled, let window = gestureRecognizer.view?.window else { return false }
-            return PortraitRoomDrag.accepts(touch.location(in: window), in: window, reservesBackEdge: reservesBackEdge)
+            return PortraitRoomDrag.accepts(touch.location(in: window), in: window, layoutDirection: layoutDirection)
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
@@ -596,7 +590,7 @@ private struct PortraitRoomPan: UIGestureRecognizerRepresentable {
             _ gestureRecognizer: UIGestureRecognizer,
             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
         ) -> Bool {
-            // Keep the canvas tap gestures and the separate edge dismissal recognizer.
+            // Keep the canvas tap gestures. The pager excludes the back edge before recognition.
             true
         }
     }

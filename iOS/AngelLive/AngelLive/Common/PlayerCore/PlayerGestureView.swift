@@ -669,12 +669,13 @@ private struct PlayerInteractiveDismissalSurface: UIViewRepresentable {
             shouldBeRequiredToFailBy other: UIGestureRecognizer
         ) -> Bool {
             guard observer.hasCanvasTouch, let gestureHost else { return false }
-            // 系统呈现返回和竖屏换台都可能挂在根视图，只为前者保留退出保护。
+            // 专用的播放页前缘返回与竖屏换台可挂在根视图。这里只拦截系统呈现返回。
             // 按每次触摸建立优先级，避免异步更新 SwiftUI 状态晚于系统首次识别。
             let shouldWait = other.view === gestureHost
                 && other is UIPanGestureRecognizer
                 && !(other is UIScreenEdgePanGestureRecognizer)
                 && !(other is PortraitRoomPanGestureRecognizer)
+                && !(other is PlayerBackPanGestureRecognizer)
             return shouldWait
         }
     }

@@ -40,6 +40,7 @@ struct DetailPlayerView: View {
                 ShortDramaPlayerView(room: viewModel.currentRoom)
                     .id(viewModel.currentRoom.id)
                     .interactivePopGestureEnabled(isPushed && verticalSizeClass != .compact, edgeOnly: isPushed)
+                    .interactiveDismissDisabled(!isPushed)
             } else {
                 LiveDetailPlayerView(
                     viewModel: viewModel,
@@ -48,11 +49,10 @@ struct DetailPlayerView: View {
                     onLoadMoreCategoryRooms: onLoadMoreCategoryRooms,
                     entryRoomSource: entryRoomSource
                 )
+                .interactiveDismissDisabled()
             }
         }
         .fullUIWindowContext()
-        // 缩放呈现关闭系统下拉和捏合退出。推入由导航栈处理交互返回。
-        .interactiveDismissDisabled(!isPushed)
     }
 }
 
@@ -70,7 +70,6 @@ struct LiveDetailPlayerView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
 
     /// 全局播放器 coordinator，在整个 DetailPlayerView 生命周期中保持
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
@@ -191,18 +190,6 @@ struct LiveDetailPlayerView: View {
         SandboxPluginCatalog.platform(for: viewModel.currentRoom.liveType)?.pluginId
     }
 
-    private var shouldEnableInteractivePopGesture: Bool {
-        if isPushed { return !isFullscreen }
-        if #available(iOS 18.0, *) {
-            return false
-        }
-        return !isFullscreen && allowsEdgeDismiss
-    }
-
-    private var allowsEdgeDismiss: Bool {
-        !isVerticalLiveMode || verticalLiveControlsVisible
-    }
-
     private var legacyPlayerGestureMask: GestureMask {
         #if canImport(KSPlayer)
         if #available(iOS 18.0, *) {
@@ -226,7 +213,6 @@ struct LiveDetailPlayerView: View {
                 && viewModel.playErrorMessage == nil && viewModel.displayState != .streamerOffline
             let canShowRoomBanner = landscapeLayout != nil && !viewModel.isOnDemand
             let bannerCandidate = canShowRoomBanner && streamAvailable ? viewModel.currentRoom.id : nil
-            let iPhoneLandscapeMode = isIPhoneLandscape
             // 竖屏直播模式下隐藏信息面板，让播放器占满全屏
             let showInfoPanel = !isVerticalLiveMode && !isFullscreen
             let usesRoomSwitcherSheet = showInfoPanel || usesPortraitRoomSwitcher
@@ -389,17 +375,6 @@ struct LiveDetailPlayerView: View {
                 reportStartupFailure: reportPortraitRoomStartupFailure,
                 showBoundary: showPortraitRoomBoundary
             ))
-            .overlay(alignment: .leading) {
-                // Keep the invisible back gesture in the viewport while the player page moves.
-                if #available(iOS 18.0, *), !isPushed, !iPhoneLandscapeMode, allowsEdgeDismiss, !portraitPlayback.hasFailed {
-                    Color.clear
-                        .frame(width: LiveRoomNavigationState.playerBackEdgeWidth)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .gesture(edgeDismissGesture)
-                        .accessibilityHidden(true)
-                }
-            }
             .accessibilityHidden(isRoomSwitcherPresented || isPortraitRoomSwitcherPresented)
             .overlay {
                 let showsPortraitBackdrop = isPortraitRoomSwitcherPresented
@@ -411,6 +386,14 @@ struct LiveDetailPlayerView: View {
                     trailingSafeArea: geometry.safeAreaInsets.trailing
                 )
             }
+            .modifier(PlayerBackSwipe(
+                enabled: scenePhase == .active && !playerModel.isLocked
+                    && !verticalLiveControlPopupPresented && !isPortraitRoomSwitcherPresented
+                    && authenticationRecoveryRequest == nil,
+                width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                exitsFullscreen: isFullscreen,
+                onReturn: finishEdgeReturn
+            ))
             .environment(
                 \.roomSwitcherPresentation,
                 usesRoomSwitcherSheet ? $isPortraitRoomSwitcherPresented
@@ -468,9 +451,8 @@ struct LiveDetailPlayerView: View {
         }
         .environment(\.verticalLiveControlsVisible, $verticalLiveControlsVisible)
         .environment(\.verticalLiveControlPopupPresented, $verticalLiveControlPopupPresented)
-        // 推入时由外层隐藏整条导航栏，保留栈原生返回项对应的手势。
-        .navigationBarBackButtonHidden(!isPushed)
-        .interactivePopGestureEnabled(shouldEnableInteractivePopGesture, edgeOnly: isPushed)
+        .navigationBarBackButtonHidden()
+        .interactivePopGestureEnabled(false, edgeOnly: true)
         .onChange(of: viewModel.currentRoom.id) { _, _ in
             verticalLiveControlsVisible = true
             verticalLiveControlPopupPresented = false
@@ -961,22 +943,20 @@ struct LiveDetailPlayerView: View {
         }
     }
 
-    private var edgeDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .global)
-            .onEnded { drag in
-                let horizontalTravel = drag.translation.width
-                guard horizontalTravel > abs(drag.translation.height),
-                      horizontalTravel > 60 || drag.velocity.width > 300 else { return }
-
-                if isFullscreen {
-                    isIPadFullscreen = false
-                    if !usesInPlaceFullscreen {
-                        requestPhoneOrientation(.portrait)
-                    }
-                } else {
-                    dismiss()
-                }
+    private func finishEdgeReturn() {
+        if isFullscreen {
+            closeFullscreenRoomSwitchers()
+            isIPadFullscreen = false
+            if !usesInPlaceFullscreen {
+                requestPhoneOrientation(.portrait)
             }
+            return
+        }
+
+        // The player is already offscreen after the edge swipe. Skip the pop or zoom-out animation.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { dismiss() }
     }
 
     private func dismissRoomSwitcher() {
