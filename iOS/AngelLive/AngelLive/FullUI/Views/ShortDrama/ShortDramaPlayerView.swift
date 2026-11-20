@@ -876,8 +876,7 @@ struct ShortDramaPlayerView: View {
         Image(systemName: symbol)
             .font(FullUIPlayerChrome.symbolFont)
             .foregroundStyle(.white)
-            .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
-            .fullUIPlayerGlass(in: Circle())
+            .fullUIPlayerCircularControl()
             .contentShape(Circle())
     }
 
@@ -1088,7 +1087,6 @@ struct ShortDramaPlayerView: View {
     private var quickRateButton: some View {
         let rateText = ShortDramaRateLabel.text(for: playbackRate)
         let nextRateText = ShortDramaRateLabel.text(for: ShortDramaRateLabel.nextCycleRate(after: playbackRate))
-        let diameter = FullUIPlayerChrome.controlSize
 
         return Button {
             playbackRate = ShortDramaRateLabel.nextCycleRate(after: playbackRate)
@@ -1101,8 +1099,7 @@ struct ShortDramaPlayerView: View {
                 .contentTransition(.numericText())
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: playbackRate)
                 .padding(.horizontal, 4)
-                .frame(width: diameter, height: diameter)
-                .fullUIPlayerGlass(in: Circle())
+                .fullUIPlayerCircularControl()
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

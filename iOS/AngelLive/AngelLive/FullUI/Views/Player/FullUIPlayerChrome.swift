@@ -39,6 +39,19 @@ extension View {
         modifier(FullUIPlayerGlassModifier(glassShape: shape, interactive: interactive))
     }
 
+    func fullUIPlayerCircularControl() -> some View {
+        let diameter = FullUIPlayerChrome.controlSize
+        let circle = Circle()
+        return frame(width: diameter, height: diameter)
+            .background {
+                // Give the glass its own square surface and bound its rim to the circle.
+                Color.clear
+                    .frame(width: diameter, height: diameter)
+                    .fullUIPlayerGlass(in: circle.size(width: diameter, height: diameter))
+                    .clipShape(circle)
+            }
+    }
+
     func fullUIPlayerMediaText() -> some View {
         shadow(color: .black.opacity(0.85), radius: 3, y: 1)
     }

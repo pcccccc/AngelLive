@@ -137,7 +137,7 @@ struct MoreActionsButton: View {
                     menuGlyph
                 } else {
                     menuGlyph
-                        .fullUIPlayerGlass(in: Circle())
+                        .fullUIPlayerCircularControl()
                         .environment(\.colorScheme, .dark)
                 }
             }

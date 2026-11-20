@@ -252,8 +252,7 @@ struct VerticalLiveControllerView: View {
                     Image(systemName: "rectangle.stack")
                         .font(FullUIPlayerChrome.symbolFont)
                         .foregroundStyle(.white)
-                        .frame(width: FullUIPlayerChrome.controlSize, height: FullUIPlayerChrome.controlSize)
-                        .fullUIPlayerGlass(in: Circle())
+                        .fullUIPlayerCircularControl()
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -282,20 +281,26 @@ struct VerticalLiveControllerView: View {
         let size = FullUIPlayerChrome.controlSize
         let font = UIFont.systemFont(ofSize: 15, weight: .semibold)
         let titleWidth = (title as NSString).size(withAttributes: [.font: font]).width.rounded(.up)
-        let fitsCircle = titleWidth <= size
-        let width = fitsCircle ? size : min(76, titleWidth + 12)
-        let shape = Capsule()
+        let label = Text(verbatim: title)
+            .font(Font(font))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+
         return Button {
             showQualityPanel = true
         } label: {
-            Text(verbatim: title)
-                .font(Font(font))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, fitsCircle ? 0 : min(6, max(4, (width - titleWidth) / 2)))
-                .frame(width: width, height: size)
-                .fullUIPlayerGlass(in: shape)
-                .contentShape(shape)
+            if titleWidth <= size {
+                label
+                    .fullUIPlayerCircularControl()
+                    .contentShape(Circle())
+            } else {
+                let width = min(76, titleWidth + 12)
+                label
+                    .padding(.horizontal, min(6, max(4, (width - titleWidth) / 2)))
+                    .frame(width: width, height: size)
+                    .fullUIPlayerGlass(in: Capsule())
+                    .contentShape(Capsule())
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("清晰度")
