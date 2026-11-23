@@ -69,6 +69,8 @@ struct PlayerControlView: View {
 
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
     let showsRoomBanner: Bool
+    let sleepTimer: TVPlaybackSleepTimer?
+    let onSetSleepTimer: (Int) -> Void
     let onBottomControlVisibilityChange: (Bool) -> Void
 
     private static let fullUIDanmakuHintFont = UIFont.systemFont(ofSize: 24, weight: .semibold)
@@ -236,6 +238,7 @@ struct PlayerControlView: View {
                     GeometryReader { geometry in
                         TVLivePlayerSettingsPanel(
                             page: settingsPage, returnsFrom: settingsReturnFocus,
+                            sleepTimer: sleepTimer, onSetSleepTimer: onSetSleepTimer,
                             onOpen: { self.settingsPage = $0 },
                             onDanmaku: openDanmakuSettings,
                             onStatistics: showStatisticsAction,
@@ -919,13 +922,22 @@ struct PlayerControlView: View {
         .environment(\.colorScheme, .dark)
     }
 
+    @ViewBuilder
     private var relatedRoomCards: some View {
-        ForEach(sectionList.indices, id: \.self) { index in
-            PlayerControlCardView { liveModel in
-                changeRoom(liveModel)
+        if usesFullUI {
+            ForEach(Array(sectionList.enumerated()), id: \.element) { index, room in
+                relatedRoomCard(room, at: index)
             }
-            .environment(PlayerControlCardViewModel(liveModel: sectionList[index], cardIndex: index, selectIndex: selectIndex))
+        } else {
+            ForEach(sectionList.indices, id: \.self) { index in
+                relatedRoomCard(sectionList[index], at: index)
+            }
         }
+    }
+
+    private func relatedRoomCard(_ room: LiveModel, at index: Int) -> some View {
+        PlayerControlCardView(changeRoom: changeRoom)
+            .environment(PlayerControlCardViewModel(liveModel: room, cardIndex: index, selectIndex: selectIndex))
     }
 
     private func handleBackCommand() {
@@ -1063,16 +1075,19 @@ struct PlayerControlView: View {
     }
 
     private func closeSettingsPage() {
-        if settingsPage == .subtitles {
+        switch settingsPage {
+        case .subtitles:
             settingsReturnFocus = .subtitles
-            settingsPage = .menu
-        } else if settingsPage == .playback {
+        case .playback:
             settingsReturnFocus = .playback
-            settingsPage = .menu
-        } else {
+        case .sleepTimer:
+            settingsReturnFocus = .sleepTimer
+        case .menu, nil:
             withAnimation(visibilityAnimation) { settingsPage = nil }
             restoreControlFocus()
+            return
         }
+        settingsPage = .menu
     }
 
     private func openDanmakuSettings() {
@@ -1547,30 +1562,44 @@ struct PlayerControlView: View {
         }else if liveModel.liveState == LiveState.close.rawValue {
             roomInfoViewModel.showToast(false, title: "主播已经下播")
         }else {
+            if usesFullUI {
+                roomInfoViewModel.showTop = false
+                topState = nil
+            }
             roomInfoViewModel.reloadRoom(liveModel: liveModel)
+            if usesFullUI {
+                // 与 iOS / macOS 一致：换台后把新房间记为最近观看。
+                appViewModel.historyViewModel.addHistory(room: liveModel)
+            }
         }
     }
     
     func changeList(_ index: Int) {
         selectIndex = index
-        sectionList.removeAll()
         switch index {
-            case 0:
-                for item in appViewModel.favoriteViewModel.roomList {
-                    if item.liveState ?? "0" == LiveState.live.rawValue {
-                        sectionList.append(item)
-                    }
-                }
-            case 1:
-                Task {
-                    for item in appViewModel.historyViewModel.watchList {
-                        sectionList.append(item)
-                    }
-                }
-            case 2:
-                sectionList.append(contentsOf: roomInfoViewModel.roomList)
-            default:
-                break
+        case 0:
+            let favorites = appViewModel.favoriteViewModel.roomList
+            sectionList = usesFullUI
+                ? RoomSwitchCandidates.orderedRooms(for: .favorite, favorites: favorites, history: [], category: [])
+                : favorites.filter { $0.liveState == LiveState.live.rawValue }
+        case 1:
+            let history = appViewModel.historyViewModel.watchList
+            guard usesFullUI else {
+                sectionList = history
+                return
+            }
+            let store = ShortDramaProgressStore.shared
+            store.loadHistory()
+            let classification = store.historyClassification(for: history)
+            let liveHistory = store.liveHistory(from: history, classification: classification)
+            sectionList = RoomSwitchCandidates.orderedRooms(for: .history, favorites: [], history: liveHistory, category: [])
+        case 2:
+            let category = roomInfoViewModel.roomList
+            sectionList = usesFullUI
+                ? RoomSwitchCandidates.orderedRooms(for: .category, favorites: [], history: [], category: category)
+                : category
+        default:
+            sectionList = []
         }
     }
     

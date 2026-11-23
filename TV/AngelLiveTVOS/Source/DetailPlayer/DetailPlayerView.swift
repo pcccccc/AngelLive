@@ -18,14 +18,12 @@ struct DetailPlayerView: View {
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
     @State private var didCleanup = false
     @State private var authenticationRecovery: AuthenticationRecoveryRequest?
-    /// 标记 KSPlayer 是否曾进入实际渲染态(.buffering / .bufferFinished)。
-    /// 直播流 state 在 KSPlayer 内可能长期停留在 .buffering(被视作 isPlaying),
-    /// 不能再把 .buffering 当作"加载中"来盖 overlay,否则永不消失。
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @State private var roomBannerID: String?
     @State private var lastBannerRoomID: String?
     @State private var roomBannerTask: Task<Void, Never>?
     @State private var showsBottomControls = false
+    @State private var sleepTimer: TVPlaybackSleepTimer?
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
     @Environment(\.usesFullUI) private var usesFullUI
@@ -95,8 +93,16 @@ struct DetailPlayerView: View {
                 }
                 roomInfoViewModel.refreshPlayback()
             }
+            .task(id: sleepTimer) {
+                guard usesFullUI, let timer = sleepTimer else { return }
+                do { try await ContinuousClock().sleep(until: timer.deadline) }
+                catch { return }
+                guard !Task.isCancelled, !didCleanup, sleepTimer == timer else { return }
+                endPlay()
+            }
             .onDisappear {
                 cancelRoomBanner()
+                sleepTimer = nil
                 // Presenting account recovery keeps this room alive for a manual retry.
                 guard authenticationRecovery == nil else { return }
                 cleanupPlayer()
@@ -104,7 +110,8 @@ struct DetailPlayerView: View {
     }
 
     private var roomBannerCandidate: String? {
-        guard usesFullUI, !roomInfoViewModel.isOnDemand, roomInfoViewModel.currentPlayURL != nil else { return nil }
+        guard usesFullUI, !roomInfoViewModel.isOnDemand,
+              roomInfoViewModel.hasObservedPlaybackProgress else { return nil }
         return roomInfoViewModel.currentRoom.id
     }
 
@@ -147,7 +154,8 @@ struct DetailPlayerView: View {
                 }
                 .padding(.top, 20)
             }
-            .frame(width: 1920, height: 1080)
+            .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
+            .frame(maxWidth: usesFullUI ? .infinity : nil, maxHeight: usesFullUI ? .infinity : nil)
             .background(.black)
         } else if roomInfoViewModel.hasError, let error = roomInfoViewModel.currentError {
             ErrorView(
@@ -166,7 +174,7 @@ struct DetailPlayerView: View {
                     if error.showsLoginAction || roomInfoViewModel.currentPlayURL == nil {
                         roomInfoViewModel.getPlayArgs(diagnosticAction: .retriedPlayback)
                     } else {
-                        playerCoordinator.playerLayer?.play()
+                        roomInfoViewModel.retryCurrentPlayer()
                     }
                 },
                 onLogin: {
@@ -174,7 +182,7 @@ struct DetailPlayerView: View {
                     authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: pluginIDs)
                 }
             )
-        } else if roomInfoViewModel.currentPlayURL == nil {
+        } else if !usesFullUILiveLoading, roomInfoViewModel.currentPlayURL == nil {
             ZStack {
                 KFImage(URL(string: roomInfoViewModel.currentRoom.roomCover))
                     .placeholder {
@@ -199,88 +207,116 @@ struct DetailPlayerView: View {
             }
             .frame(width: 1920, height: 1080)
             .background(.black)
-        }else {
-            ZStack {
-                KSVideoPlayer(coordinator: playerCoordinator, url: roomInfoViewModel.currentPlayURL ?? URL(string: "")!, options: roomInfoViewModel.playerOption)
-                    .background(Color.black)
-                    .onAppear {
-                        playerCoordinator.playerLayer?.play()
-                        roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
-                        // 启动统一恢复协调器的 1Hz 采样;起播超时/stall/finish 全由它接管。
-                        roomInfoViewModel.recoveryCoordinator.start()
-                    }
-                    .onChange(of: roomInfoViewModel.currentPlayURL) { _, _ in
-                        // URL 变化(refresh / CDN failover)时 KSPlayer 可能重建 playerLayer，
-                        // 重新绑定业务回调与采样 layer，保持三端一致。
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
-                        }
-                    }
-                    .safeAreaPadding(.all)
-                    .zIndex(1)
-
-                // 加载/缓冲指示器 - URL 已就绪但尚未开始播放，或播放中缓冲时显示
-                if shouldShowStreamLoading {
-                    TVStreamLoadingOverlay(
-                        dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo,
-                        stage: roomInfoViewModel.startupStage
-                    )
-                    .zIndex(4)
-                }
-
-                PlayerControlView(playerCoordinator: playerCoordinator,
-                                  showsRoomBanner: roomBannerID == roomInfoViewModel.currentRoom.id,
-                                  onBottomControlVisibilityChange: { showsBottomControls = $0 })
-                    .zIndex(3)
-                    .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
-                    .safeAreaPadding(.all, usesFullUI ? 0 : nil)
-                    .ignoresSafeArea(usesFullUI ? .container : [])
-                    .environment(roomInfoViewModel)
-                    .environment(appViewModel)
-                if roomInfoViewModel.supportsDanmu {
-                    VStack {
-                        if appViewModel.danmuSettingsViewModel.danmuAreaIndex >= 3 {
-                            Spacer()
-                        }
-                        DanmuView(coordinator: roomInfoViewModel.danmuCoordinator,
-                                  height: appViewModel.danmuSettingsViewModel.getDanmuArea().0,
-                                  bottomControlBand: usesFullUI && showsBottomControls && !roomInfoViewModel.isOnDemand
-                                    ? TVFullUIPlayerControlMetrics.bottomControlBand : 0)
-                            .frame(width: 1920, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
-                            .opacity(appViewModel.danmuSettingsViewModel.showDanmu ? 1 : 0)
-                            .environment(appViewModel)
-                        if appViewModel.danmuSettingsViewModel.danmuAreaIndex < 3 {
-                            Spacer()
-                        }
-                    }
-                    .zIndex(2)
-                }
-
-                #if canImport(KSPlayer)
-                if appViewModel.pluginAvailability.hasAvailablePlugins, let url = roomInfoViewModel.currentPlayURL {
-                    Color.clear
-                        .allowsHitTesting(false)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .liveSubtitleOverlay(
-                            coordinator: playerCoordinator,
-                            playback: roomInfoViewModel.subtitlePlayback,
-                            playbackIdentity: url.absoluteString,
-                            bottomPadding: 64
-                        )
-                        .zIndex(2.5)
-                }
-                #endif
-            }
-            .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
-                endPlay()
-            }
-            .onPlayPauseCommand {
-                if !usesFullUI { roomInfoViewModel.togglePlayPause() }
-            }
-            // Coordinator remains the sole layer delegate; the VM receives its forwarded callbacks.
-            // Keep first playback sticky so a later pause or rebuffer does not look like startup.
-            .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
+        } else {
+            playbackSurface(url: roomInfoViewModel.currentPlayURL)
         }
+    }
+
+    private func playbackSurface(url: URL?) -> some View {
+        let exitWhileLoading: (() -> Void)? = url == nil ? { endPlay() } : nil
+        return ZStack {
+            if let url {
+                playerLayers(url: url)
+            }
+            if usesFullUILiveLoading, !roomInfoViewModel.hasObservedPlaybackProgress {
+                TVPlayerLoadingScreen(
+                    room: roomInfoViewModel.currentRoom,
+                    stage: roomInfoViewModel.startupStage,
+                    dynamicInfo: streamInfo(for: url)
+                )
+                .id(roomInfoViewModel.currentRoom.id)
+                .allowsHitTesting(false)
+                .zIndex(2.75)
+            } else if url != nil, shouldShowStreamLoading {
+                TVStreamLoadingOverlay(
+                    dynamicInfo: playerCoordinator.playerLayer?.player.dynamicInfo,
+                    stage: usesFullUILiveLoading ? .buffering : roomInfoViewModel.startupStage
+                )
+                .zIndex(4)
+            }
+        }
+        .background { if usesFullUILiveLoading { Color.black.ignoresSafeArea() } }
+        .onExitCommand(perform: exitWhileLoading)
+        .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
+            endPlay()
+        }
+        .onPlayPauseCommand {
+            if !usesFullUI { roomInfoViewModel.togglePlayPause() }
+        }
+        .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
+    }
+
+    @ViewBuilder
+    private func playerLayers(url: URL) -> some View {
+        KSVideoPlayer(coordinator: playerCoordinator, url: url, options: roomInfoViewModel.playerOption)
+            .background(Color.black)
+            .onAppear {
+                playerCoordinator.playerLayer?.play()
+                roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
+                // 起播超时、卡顿和结束由恢复协调器的采样处理。
+                roomInfoViewModel.recoveryCoordinator.start()
+            }
+            .onChange(of: url) { _, newURL in
+                // 更换播放地址后，重新绑定 KSPlayer 可能重建的采样层。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    guard !didCleanup, roomInfoViewModel.currentPlayURL == newURL else { return }
+                    roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
+                }
+            }
+            .safeAreaPadding(.all)
+            .zIndex(1)
+
+        PlayerControlView(playerCoordinator: playerCoordinator,
+                          showsRoomBanner: roomBannerID == roomInfoViewModel.currentRoom.id,
+                          sleepTimer: sleepTimer,
+                          onSetSleepTimer: setSleepTimer,
+                          onBottomControlVisibilityChange: { showsBottomControls = $0 })
+            .zIndex(3)
+            .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
+            .safeAreaPadding(.all, usesFullUI ? 0 : nil)
+            .ignoresSafeArea(usesFullUI ? .container : [])
+            .environment(roomInfoViewModel)
+            .environment(appViewModel)
+        if roomInfoViewModel.supportsDanmu {
+            VStack {
+                if appViewModel.danmuSettingsViewModel.danmuAreaIndex >= 3 {
+                    Spacer()
+                }
+                DanmuView(coordinator: roomInfoViewModel.danmuCoordinator,
+                          height: appViewModel.danmuSettingsViewModel.getDanmuArea().0,
+                          bottomControlBand: usesFullUI && showsBottomControls && !roomInfoViewModel.isOnDemand
+                            ? TVFullUIPlayerControlMetrics.bottomControlBand : 0)
+                    .frame(width: 1920, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
+                    .opacity(appViewModel.danmuSettingsViewModel.showDanmu ? 1 : 0)
+                    .environment(appViewModel)
+                if appViewModel.danmuSettingsViewModel.danmuAreaIndex < 3 {
+                    Spacer()
+                }
+            }
+            .zIndex(2)
+        }
+
+        #if canImport(KSPlayer)
+        if appViewModel.pluginAvailability.hasAvailablePlugins {
+            Color.clear
+                .allowsHitTesting(false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .liveSubtitleOverlay(
+                    coordinator: playerCoordinator,
+                    playback: roomInfoViewModel.subtitlePlayback,
+                    playbackIdentity: url.absoluteString,
+                    bottomPadding: 64
+                )
+                .zIndex(2.5)
+        }
+        #endif
+    }
+
+    private func setSleepTimer(minutes: Int) {
+        guard usesFullUI else { return }
+        sleepTimer = minutes == 0 ? nil : TVPlaybackSleepTimer(
+            minutes: minutes, deadline: .now + .seconds(minutes * 60)
+        )
     }
 
     @MainActor func endPlay() {
@@ -307,6 +343,7 @@ struct DetailPlayerView: View {
     private func cleanupPlayer() {
         guard !didCleanup else { return }
         didCleanup = true
+        sleepTimer = nil
         cancelRoomBanner()
         roomInfoViewModel.subtitlePlayback.stop()
         roomInfoViewModel.endPlaybackDiagnostics()
@@ -319,11 +356,20 @@ struct DetailPlayerView: View {
         roomInfoViewModel.disConnectSocket()
     }
 
-    /// 是否应展示加载层（缓冲或初次加载）。
+    private var usesFullUILiveLoading: Bool {
+        usesFullUI && !roomInfoViewModel.isOnDemand
+    }
+
+    private func streamInfo(for url: URL?) -> DynamicInfo? {
+        guard let url, let layer = playerCoordinator.playerLayer, layer.url == url else { return nil }
+        return layer.player.dynamicInfo
+    }
+
     private var shouldShowStreamLoading: Bool {
-        // 起播一次之后,只在用户主动 seek 时再现 overlay。直播流不会 seek,通常等于永不再现。
         if roomInfoViewModel.hasObservedPlaybackProgress {
-            return playerCoordinator.playerLayer?.player.playbackState == .seeking
+            guard let player = playerCoordinator.playerLayer?.player else { return false }
+            return player.playbackState == .seeking
+                || (usesFullUILiveLoading && playerCoordinator.state == .buffering && player.loadState != .playable)
         }
         return isInitialStreamLoading
     }
@@ -342,6 +388,88 @@ struct DetailPlayerView: View {
 }
 
 // MARK: - 直播加载指示
+
+private struct TVPlayerLoadingScreen: View {
+    let room: LiveModel
+    let stage: PlaybackStartupStage
+    let dynamicInfo: DynamicInfo?
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                if !room.roomCover.isEmpty, let url = URL(string: room.roomCover) {
+                    KFImage(url)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .scaleEffect(1.04)
+                        .blur(radius: 18)
+                        .accessibilityHidden(true)
+                    Color.black.opacity(0.50)
+                }
+
+                VStack(spacing: 16) {
+                    avatar
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
+                        .accessibilityHidden(true)
+                    Text(room.userName.orDash)
+                        .font(.system(size: 48, weight: .semibold))
+                        .lineLimit(1)
+                    TranslatedRoomTitle(room.roomTitle.orDash)
+                        .font(.system(size: 31))
+                        .foregroundStyle(.white.opacity(0.84))
+                        .lineLimit(2)
+                    ArcSpinner(size: 64, lineWidth: 2.5)
+                        .tint(.white)
+                        .padding(.top, 16)
+                        .accessibilityHidden(true)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(stage.title)
+                            .font(.system(size: 29, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
+                            .layoutPriority(1)
+                        if let dynamicInfo {
+                            TVStreamSpeedText(info: dynamicInfo, isInline: true)
+                        }
+                    }
+                    .lineLimit(1)
+                }
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .padding(.horizontal, TVFullUIPlayerControlMetrics.screenInset)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("player.loading")
+            }
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if !room.userHeadImg.isEmpty, let url = URL(string: room.userHeadImg) {
+            KFImage(url)
+                .placeholder { avatarPlaceholder }
+                .resizable()
+                .scaledToFill()
+        } else {
+            avatarPlaceholder
+        }
+    }
+
+    private var avatarPlaceholder: some View {
+        Image(systemName: "person.fill")
+            .font(.system(size: 52, weight: .medium))
+            .foregroundStyle(.white.opacity(0.7))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.white.opacity(0.15))
+    }
+}
 
 /// tvOS 直播流加载层:细圆弧 + 数字/单位分体网速,无背景片,贴在视频画面上。
 /// 网速订阅 KSPlayer 自带的 `DynamicInfo.networkSpeed`(@Published)。
@@ -371,19 +499,20 @@ struct TVStreamLoadingOverlay: View {
 
 private struct TVStreamSpeedText: View {
     @ObservedObject var info: DynamicInfo
+    var isInline = false
 
     var body: some View {
         if info.networkSpeed > 0 {
             let (value, unit) = SpeedFormatter.split(bytesPerSecond: Int64(info.networkSpeed))
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(value)
-                    .font(.system(size: 44, weight: .ultraLight, design: .rounded))
-                    .foregroundStyle(.white)
+                    .font(.system(size: isInline ? 34 : 44, weight: isInline ? .light : .ultraLight, design: .rounded))
+                    .foregroundStyle(.white.opacity(isInline ? 0.72 : 1))
                     .monospacedDigit()
                 Text(unit)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: isInline ? 19 : 18, weight: .medium))
                     .tracking(1)
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.white.opacity(isInline ? 0.72 : 0.55))
             }
         }
     }

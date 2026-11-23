@@ -917,6 +917,12 @@ final class RoomInfoViewModel {
         getPlayArgs(silent: silent, diagnosticAction: .retriedPlayback)
     }
 
+    @MainActor
+    func retryCurrentPlayer() {
+        playbackRequestGeneration = UUID()
+        playerCoordinator?.playerLayer?.play()
+    }
+
     func stopTimer() {
         timer.upstream.connect().cancel()
         debugTimerIsActive = false
@@ -1122,6 +1128,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
             recoveryCoordinator.finished(error: error)
             return
         }
+        guard layer.url == currentPlayURL else { return }
         Logger.error("[KSPlayer] non-retryable playback error on tvOS: \(errorMsg)", category: .player)
         checkLiveStatusOnError(error: error)
     }
@@ -1141,14 +1148,18 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
     @MainActor
     func checkLiveStatusOnError(error: Error) {
         // 恢复阶梯未结束时不进错误页,避免无感续播被打断
-        if isPlaybackRecovering { return }
+        guard !playbackDiagnosticsEnded, !isPlaybackRecovering else { return }
+        let failedRoom = currentRoom
+        let requestGeneration = playbackRequestGeneration
         Task {
             do {
                 let state = try await ApiManager.getCurrentRoomLiveState(
-                    roomId: currentRoom.roomId,
-                    userId: currentRoom.userId,
-                    liveType: currentRoom.liveType
+                    roomId: failedRoom.roomId,
+                    userId: failedRoom.userId,
+                    liveType: failedRoom.liveType
                 )
+                guard !playbackDiagnosticsEnded, currentRoom == failedRoom,
+                      requestGeneration == playbackRequestGeneration else { return }
                 if state == .close || state == .unknow {
                     // 主播已下播
                     displayState = .streamerOffline
@@ -1160,9 +1171,13 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
                     displayState = .error
                 }
             } catch let statusError where statusError.isNotLive {
+                guard !playbackDiagnosticsEnded, currentRoom == failedRoom,
+                      requestGeneration == playbackRequestGeneration else { return }
                 // 插件明确返回 NOT_LIVE，按已下播处理
                 displayState = .streamerOffline
             } catch {
+                guard !playbackDiagnosticsEnded, currentRoom == failedRoom,
+                      requestGeneration == playbackRequestGeneration else { return }
                 // 检查状态失败，显示原始错误
                 hasError = true
                 currentError = error

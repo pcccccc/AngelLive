@@ -337,7 +337,10 @@ struct TVFullPluginManagementView: View {
             let added = await pluginSourceManager.addSourceFromInput(input)
             guard !added.isEmpty else { return }
             await pluginSourceManager.fetchAllSourceIndexes()
-            _ = await pluginSourceManager.installAll()
+            let ids = pluginSourceManager.catalogPlugins(forSourceURLs: added)
+                .filter { pluginSourceManager.installedVersion(for: $0.id) == nil }
+                .map(\.id)
+            _ = await pluginSourceManager.installPlugins(pluginIds: ids, sourceURLs: added)
         }
         await refreshAfterMutation()
     }

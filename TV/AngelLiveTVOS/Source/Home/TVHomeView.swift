@@ -1379,9 +1379,7 @@ private final class TVHomePlaybackCoordinator {
             isPresented = true
             return
         }
-        if !appViewModel.historyViewModel.watchList.contains(room) {
-            appViewModel.historyViewModel.watchList.insert(room, at: 0)
-        }
+        appViewModel.historyViewModel.addHistory(room: room)
         shortDramaRoom = nil
         let roomType: LiveRoomListType = mode == .favorite ? .favorite : .live
         let infoModel = RoomInfoViewModel(
@@ -1423,7 +1421,6 @@ private struct TVHomePlaybackPresentationModifier: ViewModifier {
                     .environment(roomInfoViewModel)
                     .environment(roomInfoViewModel.appViewModel)
                     .ignoresSafeArea()
-                    .frame(width: 1920, height: 1080)
                 }
             }
             .tvHomeToast(

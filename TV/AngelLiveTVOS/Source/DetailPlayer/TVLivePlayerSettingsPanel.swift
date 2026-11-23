@@ -2,15 +2,27 @@ import AngelLiveCore
 import AngelLiveDependencies
 import SwiftUI
 
+struct TVPlaybackSleepTimer: Equatable {
+    let minutes: Int
+    let deadline: ContinuousClock.Instant
+
+    var remainingTime: String {
+        let remaining = ContinuousClock.now.duration(to: deadline).components
+        let seconds = max(0, remaining.seconds + (remaining.attoseconds > 0 ? 1 : 0))
+        return String(format: "%02lld:%02lld", seconds / 60, seconds % 60)
+    }
+}
+
 struct TVLivePlayerSettingsPanel: View {
     enum Page: Hashable {
-        case menu, subtitles, playback
+        case menu, subtitles, playback, sleepTimer
 
         var title: LocalizedStringKey {
             switch self {
             case .menu: "设置"
             case .subtitles: "字幕与翻译"
             case .playback: "播放设置"
+            case .sleepTimer: "定时关闭"
             }
         }
     }
@@ -21,6 +33,8 @@ struct TVLivePlayerSettingsPanel: View {
 
     let page: Page
     let returnsFrom: Item?
+    let sleepTimer: TVPlaybackSleepTimer?
+    let onSetSleepTimer: (Int) -> Void
     let onOpen: (Page) -> Void
     let onDanmaku: () -> Void
     let onStatistics: () -> Void
@@ -28,7 +42,9 @@ struct TVLivePlayerSettingsPanel: View {
     let onChooseLanguage: () -> Void
     let onClose: () -> Void
 
-    enum Item: Hashable { case close, danmaku, subtitles, playback, statistics, favorite }
+    enum Item: Hashable {
+        case close, danmaku, subtitles, playback, sleepTimer, sleepTimerOption(Int), statistics, favorite
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -59,6 +75,8 @@ struct TVLivePlayerSettingsPanel: View {
                         subtitleSettings
                     case .playback:
                         TVLivePlaybackSettings()
+                    case .sleepTimer:
+                        sleepTimerOptions
                     }
                 }
             }
@@ -72,10 +90,14 @@ struct TVLivePlayerSettingsPanel: View {
         .environment(\.colorScheme, .dark)
         .focusSection()
         .task(id: page) {
-            guard page == .menu else { return }
+            guard page == .menu || page == .sleepTimer else { return }
             await Task.yield()
             guard !Task.isCancelled else { return }
-            focusedItem = returnsFrom ?? (room.supportsDanmu ? .danmaku : .subtitles)
+            if page == .sleepTimer {
+                focusedItem = .sleepTimerOption(sleepTimer?.minutes ?? 0)
+            } else {
+                focusedItem = returnsFrom ?? (room.supportsDanmu ? .danmaku : .subtitles)
+            }
         }
     }
 
@@ -101,6 +123,7 @@ struct TVLivePlayerSettingsPanel: View {
             Divider().overlay(.white.opacity(0.12))
             section("更多") {
                 row("播放设置", symbol: "gearshape", item: .playback) { onOpen(.playback) }
+                row("定时关闭", symbol: "timer", item: .sleepTimer, showsCountdown: true) { onOpen(.sleepTimer) }
                 row("视频信息", symbol: "chart.bar.xaxis", item: .statistics, action: onStatistics)
                 row(room.currentRoomIsLiked ? "取消收藏" : "收藏直播间",
                     symbol: room.currentRoomIsLiked ? "heart.fill" : "heart",
@@ -109,6 +132,17 @@ struct TVLivePlayerSettingsPanel: View {
             }
         }
         .padding(.top, 16)
+    }
+
+    private var sleepTimerOptions: some View {
+        VStack(spacing: 0) {
+            ForEach([0, 15, 30, 60, 90, 120], id: \.self) { minutes in
+                row(minutes == 0 ? "关闭" : "\(minutes) 分钟", item: .sleepTimerOption(minutes),
+                    opensPanel: false, isSelected: minutes == (sleepTimer?.minutes ?? 0)) {
+                    onSetSleepTimer(minutes)
+                }
+            }
+        }
     }
 
     private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
@@ -123,17 +157,31 @@ struct TVLivePlayerSettingsPanel: View {
     }
 
     private func row(
-        _ title: LocalizedStringKey, symbol: String, item: Item, opensPanel: Bool = true,
+        _ title: LocalizedStringKey, symbol: String? = nil, item: Item, opensPanel: Bool = true,
+        showsCountdown: Bool = false, isSelected: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         let focused = focusedItem == item
         return Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: symbol)
-                    .frame(width: 30)
+                if let symbol {
+                    Image(systemName: symbol)
+                        .frame(width: 30)
+                }
                 Text(title)
                     .lineLimit(1)
                 Spacer(minLength: 8)
+                if showsCountdown, let sleepTimer {
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        Text(sleepTimer.remainingTime)
+                            .monospacedDigit()
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                }
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .accessibilityHidden(true)
+                }
                 if opensPanel {
                     Image(systemName: "chevron.forward")
                         .font(.system(size: 16, weight: .semibold))
@@ -147,6 +195,7 @@ struct TVLivePlayerSettingsPanel: View {
         }
         .buttonStyle(TVQualityItemButtonStyle(isFocused: focused, reduceMotion: reduceMotion))
         .focused($focusedItem, equals: item)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

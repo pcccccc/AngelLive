@@ -453,7 +453,7 @@ struct LiveCardView: View {
             .environment(liveViewModel.roomInfoViewModel!)
             .environment(appViewModel)
             .edgesIgnoringSafeArea(.all)
-            .frame(width: 1920, height: 1080)
+            .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
         }
     }
 
@@ -495,14 +495,8 @@ struct LiveCardView: View {
             if index >= liveViewModel.roomList.count - 4 {
                 liveViewModel.searchRequest.loadMore()
             }
-        } else if liveViewModel.roomListType == .live {
-            if index >= liveViewModel.roomList.count - 4 && liveViewModel.hasMoreRooms && !liveViewModel.isLoading {
-                if liveViewModel.usesCategoryRoomCache {
-                    liveViewModel.loadMoreDisplayedRooms()
-                } else {
-                    liveViewModel.roomPage += 1
-                }
-            }
+        } else if liveViewModel.roomListType == .live, index >= liveViewModel.roomList.count - 4 {
+            liveViewModel.loadMoreDisplayedRooms()
         }
     }
 
@@ -568,9 +562,13 @@ struct LiveCardView: View {
 
     private func proceedToPlayer() {
         guard let currentRoom = liveViewModel.currentRoom else { return }
-        if !TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel),
-           !appViewModel.historyViewModel.watchList.contains(where: { currentRoom.roomId == $0.roomId }) {
-            appViewModel.historyViewModel.watchList.insert(currentRoom, at: 0)
+        if !TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel) {
+            if usesFullUI {
+                appViewModel.historyViewModel.addHistory(room: currentRoom)
+            } else if !appViewModel.historyViewModel.watchList.contains(where: { currentRoom.roomId == $0.roomId }) {
+                // ShellUI 保持原有写入行为，持久化修复仅作用于 FullUI。
+                appViewModel.historyViewModel.watchList.insert(currentRoom, at: 0)
+            }
         }
         let enterFromLive = liveViewModel.roomListType == .live
         liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)

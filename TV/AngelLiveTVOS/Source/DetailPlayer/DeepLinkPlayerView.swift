@@ -19,6 +19,7 @@ struct DeepLinkPlayerView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesFullUI) private var usesFullUI
 
     var body: some View {
         Group {
@@ -36,7 +37,7 @@ struct DeepLinkPlayerView: View {
                 .environment(viewModel)
                 .environment(appViewModel)
                 .edgesIgnoringSafeArea(.all)
-                .frame(width: 1920, height: 1080)
+                .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
             }
         }
         .fullUIArcLoadingStyle(isEnabled: appViewModel.pluginAvailability.hasAvailablePlugins)
@@ -117,8 +118,10 @@ struct DeepLinkPlayerView: View {
                 return
             }
 
-            // 添加到历史记录
-            if !appViewModel.historyViewModel.watchList.contains(where: { latestInfo.roomId == $0.roomId }) {
+            // 添加到历史记录（ShellUI 保持原有写入行为）
+            if usesFullUI {
+                appViewModel.historyViewModel.addHistory(room: latestInfo)
+            } else if !appViewModel.historyViewModel.watchList.contains(where: { latestInfo.roomId == $0.roomId }) {
                 appViewModel.historyViewModel.watchList.insert(latestInfo, at: 0)
             }
 

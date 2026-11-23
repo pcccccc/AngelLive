@@ -74,23 +74,8 @@ class LiveViewModel {
     //直播列表分页
     var subPageNumber = 0
     var subPageSize = 20
-    private var storedHasMoreRooms = true
     var hasMoreRooms: Bool {
-        get {
-            if usesCategoryRoomCache {
-                return displayedCategoryModel?.hasMore ?? false
-            }
-            return storedHasMoreRooms
-        }
-        set { storedHasMoreRooms = newValue }
-    }
-    var roomPage: Int = 1 {
-        didSet {
-            if usesCategoryRoomCache || roomListType == .favorite || roomListType == .search || !hasMoreRooms {
-                return
-            }
-            getRoomList(index: selectedSubListIndex)
-        }
+        displayedCategoryModel?.hasMore ?? false
     }
     private var storedRoomList: [LiveModel] = []
     private var categoryModels: [String: CategoryRoomListModel] = [:]
@@ -170,7 +155,6 @@ class LiveViewModel {
     )
     var endFirstLoading = false
     var lodingTimer: Timer?
-    private var roomRequestGeneration = UUID()
     private var catalogRequestGeneration = UUID()
     private var fullUIHistoryGeneration = UUID()
     let searchRequest = SearchRequestModel(
@@ -190,10 +174,9 @@ class LiveViewModel {
                 Task {
                     await getCategoryList()
                 }
-            case .favorite: break
-//                getRoomList(index: 0)
             case .history:
-                getRoomList(index: 0)
+                selectedRoomListIndex = 0
+                roomList = appViewModel.historyViewModel.watchList
             default:
                 break
 
@@ -294,107 +277,9 @@ class LiveViewModel {
 
     func loadMoreDisplayedRooms() {
         guard usesCategoryRoomCache, let key = displayedCategoryKey,
-              let model = categoryModels[key], model.hasMore, !model.isLoading else { return }
+              let model = categoryModels[key], model.hasMore, !isLoading else { return }
         if let task = categoryTasks[key], !task.isCancelled { return }
         startCategoryLoad(key: key, refresh: false)
-    }
-
-    func getRoomList(index: Int) {
-        if roomListType == .search {
-            return
-        }
-        if usesCategoryRoomCache && roomListType == .live {
-            Task { await refreshDisplayedRooms() }
-            return
-        }
-        if roomPage == 1 {
-            selectedRoomListIndex = 0
-        }
-        isLoading = true
-
-        switch roomListType {
-        case .live:
-            fetchLiveRooms(index: index)
-        case .favorite:
-            // Favorite logic remains here for now as it's complex and involves CloudKit.
-            // It's a good candidate for its own ViewModel/Service later.
-            break
-        case .history:
-            self.roomList = appViewModel.historyViewModel.watchList
-            self.isLoading = false // Make sure to turn off loading indicator
-        default:
-            self.isLoading = false // Make sure to turn off loading indicator
-            break
-        }
-    }
-    
-    private func fetchLiveRooms(index: Int) {
-        let generation = UUID()
-        roomRequestGeneration = generation
-        let requestedPage = roomPage
-        let requestedCategory: LiveCategoryModel?
-        let requestedParentBiz: String?
-        if index == -1 {
-            requestedCategory = categories.first?.subList.first
-            requestedParentBiz = categories.first?.biz
-        } else if let selectedMainListCategory,
-                  selectedMainListCategory.subList.indices.contains(index) {
-            requestedCategory = selectedMainListCategory.subList[index]
-            requestedParentBiz = selectedMainListCategory.biz
-        } else {
-            requestedCategory = nil
-            requestedParentBiz = nil
-        }
-
-        Task {
-            do {
-                let newRooms: [LiveModel]
-                if let requestedCategory {
-                    newRooms = try await LiveService.fetchRoomList(
-                        liveType: liveType,
-                        category: requestedCategory,
-                        parentBiz: requestedParentBiz,
-                        page: requestedPage
-                    )
-                } else {
-                    newRooms = []
-                }
-
-                await MainActor.run {
-                    guard self.roomRequestGeneration == generation else { return }
-                    if requestedPage == 1 {
-                        self.hasMoreRooms = true
-                    }
-                    if newRooms.isEmpty {
-                        self.hasMoreRooms = false
-                    }
-                    let mergedRooms: [LiveModel]
-                    if requestedPage == 1 {
-                        mergedRooms = newRooms.removingDuplicates()
-                    } else {
-                        mergedRooms = self.roomList.appendingUnique(contentsOf: newRooms)
-                    }
-                    self.roomList = mergedRooms
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    guard self.roomRequestGeneration == generation else { return }
-                    self.isLoading = false
-                    // 插件抛 "返回结果为空" 不算错误:分页到底 / 当前分类无房间。
-                    // 不弹错误页,只置 hasMoreRooms=false,首页同时清空列表让空态接管。
-                    if let liveParseError = error as? LiveParseError,
-                       liveParseError.detail.contains("返回结果为空") {
-                        self.hasMoreRooms = false
-                        if requestedPage == 1 {
-                            self.roomList = []
-                        }
-                        return
-                    }
-                    self.handleError(error)
-                }
-            }
-        }
     }
 
     func submitSearch(input: String, kind: RoomSearchKind, pluginID: String? = nil) {
@@ -515,8 +400,18 @@ class LiveViewModel {
     }
     
     func deleteHistory(index: Int) {
-        appViewModel.historyViewModel.watchList.remove(at: index)
-        self.roomList.remove(at: index)
+        guard roomList.indices.contains(index) else { return }
+        guard appViewModel.pluginAvailability.hasAvailablePlugins else {
+            // ShellUI 保持原有删除行为，持久化修复仅作用于 FullUI。
+            if appViewModel.historyViewModel.watchList.indices.contains(index) {
+                appViewModel.historyViewModel.watchList.remove(at: index)
+            }
+            roomList.remove(at: index)
+            return
+        }
+        let room = roomList[index]
+        appViewModel.historyViewModel.removeHistory(room: room)
+        roomList.removeAll { $0 == room }
     }
     
     //MARK: 操作相关

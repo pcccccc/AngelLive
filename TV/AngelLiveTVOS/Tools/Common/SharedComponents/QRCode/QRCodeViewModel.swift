@@ -124,14 +124,21 @@ class QRCodeViewModel {
             showToast(true, title: "收藏同步完成")
             TopShelfManager.notifyContentChanged()
         } else if syncType == .history {
-            if needOverlay {
-                appViewModel.historyViewModel.watchList = roomList
-            }else {
-                for room in roomList {
-                    if appViewModel.historyViewModel.watchList.contains(where: { $0.roomId != room.roomId }) {
-                        appViewModel.historyViewModel.watchList.append(room)
+            if !appViewModel.pluginAvailability.hasAvailablePlugins {
+                // ShellUI 保持原有同步行为，持久化修复仅作用于 FullUI。
+                if needOverlay {
+                    appViewModel.historyViewModel.watchList = roomList
+                } else {
+                    for room in roomList {
+                        if appViewModel.historyViewModel.watchList.contains(where: { $0.roomId != room.roomId }) {
+                            appViewModel.historyViewModel.watchList.append(room)
+                        }
                     }
                 }
+            } else if needOverlay {
+                appViewModel.historyViewModel.replaceHistories(roomList)
+            } else {
+                appViewModel.historyViewModel.mergeHistories(roomList)
             }
         }
         fullScreenLoading = false
