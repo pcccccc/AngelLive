@@ -64,7 +64,7 @@ class Common {
         return UIImage(systemName: "xmark.circle") ?? UIImage()
     }
     
-    public class func getWiFiIPAddress() -> String? {
+    public nonisolated class func getWiFiIPAddress() -> String? {
         var address: String?
         // Get list of all interfaces on the local machine:
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
@@ -96,7 +96,7 @@ class Common {
         return address
     }
 
-    public class func hostName() -> String? {
+    public nonisolated class func hostName() -> String? {
         let ptr = UnsafeMutablePointer<CChar>.allocate(capacity: Int(MAXHOSTNAMELEN))
         let ret = gethostname(ptr, Int(MAXHOSTNAMELEN))
         var name: String?

@@ -168,10 +168,7 @@ class QRCodeViewModel {
     }
 }
 
-/// 原为自定义 actor,但其全部依赖(Common 工具、httpPort、SyncManager、UDPListener)
-/// 在 tvOS 主 target 默认 MainActor 隔离下都落在主 actor,自定义隔离域没有并发收益,
-/// 只制造跨域警告,故收口为 @MainActor class(名字保留以减小 diff)。
-/// SyncManager 的 delegate 回调仍可能从网络线程进入,经 nonisolated + Task 跳回主 actor。
+/// 在主 actor 上管理同步服务生命周期和界面状态。
 @MainActor
 final class QRCodeActor: SyncManagerDelegate {
     
@@ -224,18 +221,12 @@ final class QRCodeActor: SyncManagerDelegate {
         udpManager = nil
     }
     
-    nonisolated func syncManagerDidConnectError(error: any Error) {
-       Task { @MainActor in
-           self.updateMessage("服务启动失败，错误原因\(error.localizedDescription)，如果错误原因为端口占用，请关闭App几分钟后再试。")
-       }
+    func syncManagerDidConnectError(error: any Error) {
+        updateMessage("服务启动失败，错误原因\(error.localizedDescription)，如果错误原因为端口占用，请关闭App几分钟后再试。")
     }
 
-    nonisolated func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any) {
-       // info 是非 Sendable 的 Any,在跳主 actor 前先在本上下文固化为 Sendable 的 [LiveModel]
-       let rooms = info as? [LiveModel] ?? []
-       Task { @MainActor in
-           self.updateSyncState(type: type, needOverlay: needOverlay, rooms: rooms)
-       }
+    func syncManagerDidReceiveRequest(type: SimpleSyncType, needOverlay: Bool, rooms: [LiveModel]) {
+        updateSyncState(type: type, needOverlay: needOverlay, rooms: rooms)
     }
 
     // 新增一个隔离方法来更新消息

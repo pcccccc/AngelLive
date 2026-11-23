@@ -9,7 +9,7 @@ import Foundation
 import AngelLiveCore
 import AngelLiveDependencies
 
-enum SimpleSyncType: CustomStringConvertible {
+nonisolated enum SimpleSyncType: CustomStringConvertible, Sendable {
     
     var description: String {
         switch self {
@@ -26,31 +26,35 @@ enum SimpleSyncType: CustomStringConvertible {
     case platformCredential
 }
 
-let httpPort = 23234
+nonisolated let httpPort = 23234
 let udpPort = 23235
 
+@MainActor
 protocol SyncManagerDelegate: AnyObject {
     func syncManagerDidConnectError(error: Error)
-    func syncManagerDidReciveRequest(type: SimpleSyncType, needOverlay: Bool, info: Any)
+    func syncManagerDidReceiveRequest(type: SimpleSyncType, needOverlay: Bool, rooms: [LiveModel])
 }
 
 class SyncManager {
     
-    let httpHandler = HTTPHandler()
     var serverChannel: Channel?
     var delegate: SyncManagerDelegate?
     
     init() {
         
-        httpHandler.syncSuccess = { type, needOverlay, result in
-            self.delegate?.syncManagerDidReciveRequest(type: type, needOverlay: needOverlay, info: result)
+        let syncSuccess: @Sendable (SimpleSyncType, Bool, [LiveModel]) -> Void = { [weak self] type, needOverlay, rooms in
+            Task { @MainActor in
+                self?.delegate?.syncManagerDidReceiveRequest(type: type, needOverlay: needOverlay, rooms: rooms)
+            }
         }
         
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let bootstrap = ServerBootstrap(group: group)
-            .childChannelInitializer { channel in
-                channel.pipeline.configureHTTPServerPipeline().flatMap {
-                    channel.pipeline.addHandler(self.httpHandler)
+            .childChannelInitializer { @Sendable channel in
+                channel.eventLoop.makeCompletedFuture {
+                    let pipeline = channel.pipeline.syncOperations
+                    try pipeline.configureHTTPServerPipeline()
+                    try pipeline.addHandler(HTTPHandler(syncSuccess: syncSuccess))
                 }
             }
             .childChannelOption(ChannelOptions.maxMessagesPerRead, value: 1)
@@ -111,7 +115,8 @@ class UDPListener: NSObject, GCDAsyncUdpSocketDelegate {
 }
 
 
-final class HTTPHandler: ChannelInboundHandler {
+// Each connection owns a handler whose request state lives on its NIO event loop.
+nonisolated private final class HTTPHandler: ChannelInboundHandler {
     
     typealias InboundIn = HTTPServerRequestPart
     typealias OutboundOut = HTTPServerResponsePart
@@ -119,7 +124,11 @@ final class HTTPHandler: ChannelInboundHandler {
     var responseBody: HTTPServerResponsePart?
     private var requestBody: ByteBuffer?
     var requestHeaderT: HTTPRequestHead?
-    var syncSuccess: ((SimpleSyncType, Bool, Any) -> Void)?
+    private let syncSuccess: @Sendable (SimpleSyncType, Bool, [LiveModel]) -> Void
+
+    init(syncSuccess: @escaping @Sendable (SimpleSyncType, Bool, [LiveModel]) -> Void) {
+        self.syncSuccess = syncSuccess
+    }
 
     private func jsonString(_ dict: [String: Any]) -> String? {
         (try? JSONSerialization.data(withJSONObject: dict)).flatMap { String(data: $0, encoding: .utf8) }
@@ -166,11 +175,8 @@ final class HTTPHandler: ChannelInboundHandler {
                     
                     let respList = formatDatas(bodyString: bodyString)
                     let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
-                    if self.syncSuccess != nil {
-                        self.syncSuccess!(.favorite, overlay, respList)
-                        // 重置为下一个请求
-                        requestBody = nil
-                    }
+                    syncSuccess(.favorite, overlay, respList)
+                    requestBody = nil
                     
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
@@ -179,11 +185,8 @@ final class HTTPHandler: ChannelInboundHandler {
                     let resp = jsonString(["status": true, "message": "success"])
                     let respList = formatDatas(bodyString: bodyString)
                     let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
-                    if self.syncSuccess != nil {
-                        self.syncSuccess!(.history, overlay, respList)
-                        // 重置为下一个请求
-                        requestBody = nil
-                    }
+                    syncSuccess(.history, overlay, respList)
+                    requestBody = nil
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                 }
