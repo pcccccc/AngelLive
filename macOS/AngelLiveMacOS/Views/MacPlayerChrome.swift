@@ -30,15 +30,6 @@ extension EnvironmentValues {
 }
 
 extension View {
-    @ViewBuilder
-    func macPlayerGlassContainer(spacing: CGFloat) -> some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) { self }
-        } else {
-            self
-        }
-    }
-
     func macPlayerGlass(in shape: some Shape, interactive: Bool = true) -> some View {
         modifier(MacPlayerGlassModifier(glassShape: shape, interactive: interactive))
     }
@@ -82,7 +73,6 @@ struct MacPlayerGlassGroup<Content: View>: View {
     var body: some View {
         HStack(spacing: 0, content: content)
             .macPlayerGlass(in: Capsule())
-            .macPlayerGlassContainer(spacing: 8)
             .environment(\.colorScheme, .dark)
     }
 }

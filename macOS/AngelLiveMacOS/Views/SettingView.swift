@@ -20,6 +20,8 @@ struct SettingView: View {
     private var dockIconPreference = MacDockIconPreference.classic
     @AppStorage(MacPlaybackPresentationPreference.singlePageModeKey)
     private var singlePagePlayback = false
+    @AppStorage(MacHomePagePreference.showRecommendationsKey)
+    private var showHomeRecommendation = true
 
     @State private var playerSettingModel = PlayerSettingModel()
     @State private var showOpenSourceList = false
@@ -64,6 +66,7 @@ struct SettingView: View {
             Section("通用设置") {
                 appIconRow
                 if pluginAvailability.hasAvailablePlugins {
+                    homeRecommendationRow
                     translationSettingRow
                 }
             }
@@ -400,6 +403,22 @@ struct SettingView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var homeRecommendationRow: some View {
+        PanelNavigationRow(
+            title: "显示推荐首页",
+            subtitle: "关闭后隐藏首页，默认进入收藏。",
+            showsChevron: false
+        ) {
+            Image(systemName: "house.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.blue.gradient)
+        } trailing: {
+            Toggle("显示推荐首页", isOn: $showHomeRecommendation)
+                .labelsHidden()
+                .toggleStyle(.switch)
+        }
     }
 
     private var singlePagePlaybackRow: some View {

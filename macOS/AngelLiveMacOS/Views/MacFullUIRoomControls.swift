@@ -29,6 +29,7 @@ struct MacFullUIRoomControls: View {
     @State private var pointerOverControls = false
     @State private var bottomControlsFrame = CGRect.null
     @State private var panel: Panel?
+    @State private var dlnaSession: DLNACastingSession?
     @State private var showStreamer = false
     @State private var showDanmakuIssue = false
     @State private var volumeExpanded = false
@@ -53,7 +54,7 @@ struct MacFullUIRoomControls: View {
     #endif
 
     enum Panel: String, Identifiable {
-        case danmaku, subtitles, languages, airPlay
+        case danmaku, subtitles, languages, airPlay, dlna
         var id: Self { self }
     }
 
@@ -88,6 +89,9 @@ struct MacFullUIRoomControls: View {
         #else
         return nil
         #endif
+    }
+    private var canOpenDLNA: Bool {
+        dlnaSession?.activeDevice != nil || dlnaSession?.state == .settingURI || viewModel.dlnaCastResource != nil
     }
     private var qualityTitle: String {
         let title = viewModel.currentPlayQualityString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -189,7 +193,17 @@ struct MacFullUIRoomControls: View {
         .focusedSceneValue(\.macPlayerCommands, acceptsCommands ? commandActions : nil)
         .macPlayerEscapeKey(isEnabled: acceptsCommands && menusTracking == 0, action: handleEscape)
         .onAppear { revealControls() }
-        .onDisappear { hideTask?.cancel(); resetTimeline() }
+        .onDisappear {
+            hideTask?.cancel()
+            resetTimeline()
+            if let dlnaSession {
+                dlnaSession.cancelDiscovery()
+                if dlnaSession.state != .stopping,
+                   dlnaSession.activeDevice != nil || dlnaSession.state == .settingURI {
+                    dlnaSession.stopCasting()
+                }
+            }
+        }
         .onChange(of: holdsControls) { revealControls() }
         .onChange(of: room) { showStreamer = false; showDanmakuIssue = false }
         .onChange(of: viewModel.currentPlayURL) { resetTimeline() }
@@ -473,10 +487,18 @@ struct MacFullUIRoomControls: View {
                 }
                 MacPlayerSleepTimerMenu(deadline: $closeDeadline)
             }
-            if airPlayPlayer != nil {
+            if airPlayPlayer != nil || canOpenDLNA {
                 Section("投屏") {
                     Menu {
-                        Button("AirPlay 投屏…") { panel = .airPlay }
+                        if airPlayPlayer != nil {
+                            Button("AirPlay 投屏…") { panel = .airPlay }
+                        }
+                        if canOpenDLNA {
+                            Button("DLNA 投屏…") {
+                                if dlnaSession == nil { dlnaSession = DLNACastingSession() }
+                                panel = .dlna
+                            }
+                        }
                     } label: {
                         Label("投屏", systemImage: "airplay.video")
                     }
@@ -521,6 +543,10 @@ struct MacFullUIRoomControls: View {
             LiveSubtitleLanguageSelectionSheet(playback: viewModel.subtitlePlayback, activationID: subtitleActivationID)
         case .airPlay:
             MacPlayerAirPlaySheet(player: airPlayPlayer)
+        case .dlna:
+            if let dlnaSession {
+                MacDLNADevicePickerSheet(session: dlnaSession, resource: viewModel.dlnaCastResource)
+            }
         }
     }
 

@@ -69,6 +69,31 @@ final class RoomInfoViewModel {
     var isPlaying = false
     var isHLSStream = false  // 当前是否为 HLS 流
     private(set) var isOnDemand = false
+    private var dlnaPlaybackQuality: LiveQualityDetail?
+
+    var dlnaCastResource: DLNAMediaResource? {
+        #if APPSTORE
+        // The sandboxed target lacks incoming network permission for SSDP responses.
+        return nil
+        #else
+        guard usesFullUI, let url = currentPlayURL, let quality = dlnaPlaybackQuality,
+              quality.decryption == nil,
+              quality.playbackHints?.mediaTransform == nil,
+              quality.playbackHints?.requiresCustomSegmentLoader != true else { return nil }
+        let plan = RoomPlaybackResolver.resolvePlan(selectedQuality: quality)
+        guard plan.audioURL == nil else { return nil }
+        return try? CastCompatibilityEvaluator.resource(
+            url: url,
+            title: currentRoom.roomTitle,
+            streamFormat: plan.streamFormat,
+            isLive: plan.isLive,
+            headers: quality.headers,
+            userAgent: quality.userAgent,
+            allowsHeaderDependentSource: true
+        ).get()
+        #endif
+    }
+
     private(set) var danmakuConnectionStatus: DanmakuConnectionStatus?
     private(set) var danmakuConnectionIssue: String?
     @ObservationIgnored private var danmakuStatusTask: Task<Void, Never>?
@@ -289,6 +314,7 @@ final class RoomInfoViewModel {
         playbackSelectionGeneration = UUID()
         subtitlePlayback.stop()
         currentRoom = room
+        dlnaPlaybackQuality = nil
         currentRoomPlayArgs = nil
         currentCdnIndex = 0
         currentQualityIndex = 0
@@ -602,7 +628,7 @@ final class RoomInfoViewModel {
 
         // 如果已经通过 HLS 查找确定了播放地址，直接返回
         if let resolvedURL = resolved.overrideURL {
-            setPlayURL(resolvedURL, source: "resolved", debugContext: debugContext)
+            setPlayURL(resolvedURL, quality: effectiveQuality, source: "resolved", debugContext: debugContext)
             currentPlayQualityString = resolved.overrideTitle ?? displayTitle
             isLoading = false
             return
@@ -685,6 +711,7 @@ final class RoomInfoViewModel {
     @MainActor
     private func setPlayURL(
         _ url: URL,
+        quality: LiveQualityDetail,
         source: String,
         debugContext: RoomPlaybackDebugContext? = nil
     ) {
@@ -692,6 +719,8 @@ final class RoomInfoViewModel {
         playError = nil
         playErrorMessage = nil
         displayState = .playing
+        // Prepared sources can differ from the quality still listed in the menu.
+        dlnaPlaybackQuality = usesFullUI ? quality : nil
         if currentPlayURL == url {
             currentPlayURL = nil
             let selectionGeneration = playbackSelectionGeneration
@@ -782,7 +811,7 @@ final class RoomInfoViewModel {
 
         // 通用：直接使用资源侧返回的 URL。
         if let url = RoomPlaybackResolver.playableURL(for: quality) {
-            setPlayURL(url, source: "direct", debugContext: debugContext)
+            setPlayURL(url, quality: quality, source: "direct", debugContext: debugContext)
         }
         isLoading = false
     }
@@ -863,9 +892,12 @@ final class RoomInfoViewModel {
         isHLSStream = resolved.isHLS
 
         if let resolvedURL = resolved.overrideURL {
-            setPlayURL(resolvedURL, source: source, debugContext: debugContext)
+            setPlayURL(
+                resolvedURL, quality: resolved.resolvedSelection?.quality ?? quality,
+                source: source, debugContext: debugContext
+            )
         } else if let url = RoomPlaybackResolver.playableURL(for: quality) {
-            setPlayURL(url, source: source, debugContext: debugContext)
+            setPlayURL(url, quality: quality, source: source, debugContext: debugContext)
         }
         isLoading = false
     }

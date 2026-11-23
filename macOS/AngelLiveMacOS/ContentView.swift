@@ -99,9 +99,14 @@ extension Notification.Name {
     static let switchToSettings = Notification.Name("switchToSettings")
 }
 
+enum MacHomePagePreference {
+    static let showRecommendationsKey = "AngelLiveMacOS.Setting.ShowHomeRecommendation"
+}
+
 struct ContentView: View {
     @State private var selectedTab: TabSelection = .home
     @State private var homeRecommendationAvailability = HomeRecommendationAvailability.unconfirmed
+    @AppStorage(MacHomePagePreference.showRecommendationsKey) private var showHomeRecommendation = true
     // 首次启动管理器
     @Environment(WelcomeManager.self) private var welcomeManager
     // 从环境获取全局 ViewModels
@@ -123,7 +128,7 @@ struct ContentView: View {
     @State private var searchViewModel = SearchViewModel()
 
     private var shouldShowHomeTab: Bool {
-        pluginAvailability.hasAvailablePlugins && homeRecommendationAvailability != .unavailable
+        pluginAvailability.hasAvailablePlugins && showHomeRecommendation && homeRecommendationAvailability != .unavailable
     }
 
     private var tabSelection: Binding<TabSelection> {
@@ -271,6 +276,11 @@ struct ContentView: View {
         .platformAPICredentialLifecycle(enabled: pluginAvailability.hasAvailablePlugins)
         .roomTitleTranslationHost(enabled: pluginAvailability.hasAvailablePlugins)
         .supportDiagnosticsHost(enabled: pluginAvailability.hasAvailablePlugins)
+        .onChange(of: pluginAvailability.hasAvailablePlugins && !showHomeRecommendation, initial: true) { _, hidesHome in
+            if hidesHome, selectedTab == .home {
+                selectedTab = .favorite
+            }
+        }
         .onChange(of: selectedTab) { _, selection in
             guard pluginAvailability.hasAvailablePlugins else { return }
             switch selection {

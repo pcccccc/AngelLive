@@ -36,9 +36,6 @@ struct RoomPlayerView: View {
     @State private var isMuted = false
     @State private var didCleanup = false
     @State private var translationService = RoomTitleTranslationService.shared
-    /// 首帧渲染粘性标志:state 第一次进入 .buffering / .bufferFinished 后置 true,
-    /// 直播流 state 可能长期停留在 .buffering(KSPlayer 视为 isPlaying),
-    /// 之后不能再把 .buffering 当作"加载中"以免 overlay 常驻。
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
     @State private var lockedQualityToast: ToastMessage?
@@ -47,7 +44,7 @@ struct RoomPlayerView: View {
     @State private var showVideoSettings = false
     @State private var roomSwitchTask: Task<Void, Never>?
     @State private var switchingRoom: LiveModel?
-    @State private var roomSwitchFailure: String?
+    @State private var roomSwitchFailure: (room: LiveModel, message: String)?
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     init(
@@ -124,7 +121,7 @@ struct RoomPlayerView: View {
                     .allowsHitTesting(false)
                 }
 
-                if showRoomSwitcher {
+                if usesFullUI, showRoomSwitcher {
                     ZStack(alignment: .trailing) {
                         Color.black.opacity(0.35)
                             .contentShape(Rectangle())
@@ -136,12 +133,11 @@ struct RoomPlayerView: View {
                             history: historyModel.watchList,
                             category: categoryRooms,
                             switchingRoom: switchingRoom,
-                            failureMessage: roomSwitchFailure,
+                            failure: roomSwitchFailure,
                             onSelect: switchRoom,
                             onClose: { showRoomSwitcher = false }
                         )
                         .frame(width: min(380, geometry.size.width))
-                        .environment(\.colorScheme, .dark)
                     }
                 }
             }
@@ -279,8 +275,6 @@ struct RoomPlayerView: View {
                 break
             }
         }
-        // VM observes Coordinator callbacks without replacing its layer delegate.
-        // Keep a sticky first-play signal so later buffering does not look like startup.
         .onAppear {
             // 启动统一恢复协调器的 1Hz 采样;起播超时/stall/finish 全由它接管。
             viewModel.recoveryCoordinator.start()
@@ -344,7 +338,7 @@ struct RoomPlayerView: View {
             } catch {
                 guard !Task.isCancelled, switchingRoom == room else { return }
                 switchingRoom = nil
-                roomSwitchFailure = "切换到 \(room.userName.orDash) 失败：\(error.localizedDescription)"
+                roomSwitchFailure = (room, error.localizedDescription)
             }
         }
     }
@@ -408,132 +402,6 @@ struct RoomPlayerView: View {
     }
 }
 
-private struct MacRoomSwitcherPanel: View {
-    let currentRoom: LiveModel
-    let favorites: [LiveModel]
-    let history: [LiveModel]
-    let category: CategoryRoomListModel?
-    let switchingRoom: LiveModel?
-    let failureMessage: String?
-    let onSelect: (LiveModel) -> Void
-    let onClose: () -> Void
-    @State private var source: RoomSwitchSource = .favorite
-    @State private var loadMoreTask: Task<Void, Never>?
-
-    private var rooms: [LiveModel] {
-        RoomSwitchCandidates.rooms(
-            for: source,
-            currentRoom: currentRoom,
-            favorites: favorites,
-            history: history,
-            category: category?.rooms ?? []
-        )
-    }
-
-    private var emptyMessage: String {
-        switch source {
-        case .favorite: "收藏中没有其他正在直播的房间"
-        case .history: "还没有其他观看记录"
-        case .category: "此分区没有其他可切换的直播间"
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(alignment: .top, spacing: 16) {
-                PanelCloseButton(closesOnEscape: true, action: onClose)
-                    .accessibilityLabel("关闭快速换台")
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("快速换台")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
-                    Text("当前：\(currentRoom.userName.orDash)")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 12)
-            }
-
-            Picker("换台来源", selection: $source) {
-                Text("收藏").tag(RoomSwitchSource.favorite)
-                Text("历史").tag(RoomSwitchSource.history)
-                if category != nil {
-                    Text("分区").tag(RoomSwitchSource.category)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            if let switchingRoom {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("正在切换到 \(switchingRoom.userName.orDash)…")
-                        .font(.caption)
-                        .lineLimit(2)
-                }
-            }
-            if let failureMessage {
-                Text(failureMessage)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    if rooms.isEmpty {
-                        ContentUnavailableView(
-                            "暂无可切换直播间",
-                            systemImage: "rectangle.stack",
-                            description: Text(emptyMessage)
-                        )
-                    }
-                    ForEach(rooms) { room in
-                        Button { onSelect(room) } label: {
-                            LiveRoomCard(
-                                room: room,
-                                isFavoritedOverride: favorites.contains(room)
-                            )
-                        }
-                        .buttonStyle(MacRoomCardButtonStyle())
-                        .frame(maxWidth: 260)
-                        .disabled(switchingRoom == room)
-                        .accessibilityLabel("切换到 \(room.userName.orDash)，\(room.roomTitle.orDash)")
-                    }
-                    if source == .category, let category {
-                        if let error = category.error {
-                            Text(error.localizedDescription)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if category.isLoading {
-                            ProgressView("加载更多…")
-                        } else if category.hasMore {
-                            Button(category.error == nil ? "加载更多" : "重试") {
-                                loadMoreTask?.cancel()
-                                loadMoreTask = Task { await category.loadMore() }
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(24)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 24)
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-        }
-        .onChange(of: category == nil) { _, missing in
-            if missing, source == .category { source = .favorite }
-        }
-        .onDisappear { loadMoreTask?.cancel() }
-    }
-}
-
 private extension RoomPlayerView {
     @ViewBuilder
     func playerSurface(for viewModel: RoomInfoViewModel) -> some View {
@@ -584,21 +452,35 @@ private extension RoomPlayerView {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black)
+        } else if usesFullUI {
+            let layer = coordinator.playerLayer
+            let isCurrentSource = viewModel.currentPlayURL != nil && layer?.url == viewModel.currentPlayURL
+            let streamInfo = isCurrentSource && viewModel.startupStage != .fetchingSource
+                ? layer?.player.dynamicInfo : nil
+            ZStack {
+                if let url = viewModel.currentPlayURL {
+                    videoSurface(url: url, viewModel: viewModel)
+                }
+
+                if !viewModel.hasObservedPlaybackProgress {
+                    if !isCurrentSource || isInitialStreamLoading(viewModel: viewModel) {
+                        MacPlayerLoadingScreen(
+                            room: viewModel.currentRoom,
+                            stage: viewModel.startupStage,
+                            dynamicInfo: streamInfo
+                        )
+                        .allowsHitTesting(false)
+                    }
+                } else if isCurrentSource,
+                          layer?.player.playbackState == .seeking ||
+                            (coordinator.state == .buffering && layer?.player.loadState == .loading) {
+                    MacStreamLoadingOverlay(dynamicInfo: streamInfo, stage: .buffering)
+                        .allowsHitTesting(false)
+                }
+            }
         } else if let url = viewModel.currentPlayURL {
             ZStack {
-                MacFullUIVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
-                    .onAppear {
-                        viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                        applyAudioSettings()
-                    }
-                    .onChange(of: viewModel.currentPlayURL) { _, _ in
-                        // URL 变化时重新绑定业务回调和采样 layer。
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            viewModel.setPlayerDelegate(playerCoordinator: coordinator)
-                            applyAudioSettings()
-                        }
-                    }
-                    .ignoresSafeArea()
+                videoSurface(url: url, viewModel: viewModel)
 
                 if shouldShowStreamLoading(viewModel: viewModel) {
                     MacStreamLoadingOverlay(
@@ -630,6 +512,22 @@ private extension RoomPlayerView {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    func videoSurface(url: URL, viewModel: RoomInfoViewModel) -> some View {
+        MacFullUIVideoPlayer(coordinator: coordinator, url: url, options: viewModel.playerOption)
+            .onAppear {
+                viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                applyAudioSettings()
+            }
+            .onChange(of: viewModel.currentPlayURL) { _, _ in
+                // URL 变化时重新绑定业务回调和采样 layer。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    viewModel.setPlayerDelegate(playerCoordinator: coordinator)
+                    applyAudioSettings()
+                }
+            }
+            .ignoresSafeArea()
     }
 
     @MainActor
@@ -824,7 +722,7 @@ final class WindowReferenceView: NSView {
 // MARK: - 共享组件
 
 /// 网速格式化:返回 (数字, 单位) 拆分,以便分别排版。
-private enum SpeedFormatter {
+enum SpeedFormatter {
     static func split(bytesPerSecond: Int64) -> (value: String, unit: String) {
         let bps = max(bytesPerSecond, 0)
         let kb = Double(bps) / 1024.0
