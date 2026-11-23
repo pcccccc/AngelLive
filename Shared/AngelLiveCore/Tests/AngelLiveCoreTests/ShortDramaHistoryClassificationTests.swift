@@ -5,6 +5,23 @@ import Testing
 @Suite("History classification batches")
 @MainActor
 struct ShortDramaHistoryClassificationTests {
+    @Test("Live history switch candidates retain current order and exclude drama duplicates")
+    func liveHistorySwitchCandidates() {
+        let store = ShortDramaProgressStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let current = room("current", "live-alias")
+        let drama = room("drama", "drama-alias")
+        let next = room("next", "live-alias")
+        let rooms = [current, drama, next, current, next]
+        let snapshot = ShortDramaHistoryClassification.make(for: rooms, platforms: {
+            ["drama-alias": platform("source-a", ["drama-alias"]), "live-alias": platform("source-b", ["live-alias"])]
+        }, installedPluginIDs: { ["source-a", "source-b"] }, resolveManifest: { id in
+            manifest(id, version: "1.0.0", drama: id == "source-a")
+        })
+        let filtered = store.liveHistory(from: rooms, classification: snapshot)
+        let candidates = RoomSwitchCandidates.orderedRooms(for: .history, favorites: [], history: filtered, category: [])
+        #expect(candidates == [current, next])
+        #expect(RoomSwitchCandidates.orderedRooms(for: .history, favorites: [], history: [], category: []).isEmpty)
+    }
     @Test("one batch discovers platforms once and resolves each relevant installed plugin once")
     func batchUsesDistinctPlugins() {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

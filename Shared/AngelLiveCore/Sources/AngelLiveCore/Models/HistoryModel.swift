@@ -11,6 +11,7 @@ import Observation
 
 @Observable
 public final class HistoryModel {
+    private static let maxHistoryCount = 100
 
     public init() {
         defaults = .shared
@@ -46,22 +47,39 @@ public final class HistoryModel {
 
     public func addHistory(room: LiveModel) {
         // 移除已存在的同一房间（如果有）
-        watchList.removeAll { $0.roomId == room.roomId }
+        watchList.removeAll { $0 == room }
 
         // 添加到列表开头
         watchList.insert(room, at: 0)
 
         // 限制历史记录数量（最多保存100条）
-        if watchList.count > 100 {
-            watchList = Array(watchList.prefix(100))
+        if watchList.count > Self.maxHistoryCount {
+            watchList = Array(watchList.prefix(Self.maxHistoryCount))
         }
 
         saveWatchList()
     }
 
     public func removeHistory(room: LiveModel) {
-        watchList.removeAll { $0.roomId == room.roomId }
+        watchList.removeAll { $0 == room }
         saveWatchList()
+    }
+
+    /// Replaces the history with the first occurrence of each room, in input order.
+    public func replaceHistories(_ rooms: [LiveModel]) {
+        var seen: Set<LiveModel> = []
+        var history: [LiveModel] = []
+        for room in rooms where seen.insert(room).inserted {
+            history.append(room)
+            if history.count == Self.maxHistoryCount { break }
+        }
+        watchList = history
+        saveWatchList()
+    }
+
+    /// Keeps local rooms and appends new rooms in input order.
+    public func mergeHistories(_ rooms: [LiveModel]) {
+        replaceHistories(watchList + rooms)
     }
 
     /// FullUI can remove its selected category without deleting a same-room-ID record from another source.
