@@ -6,6 +6,26 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Angel Live 2.4.0 Beta 1 (Build 33)</title>
+            <link>https://github.com/pcccccc/AngelLive/releases/tag/v2.4.0-beta1</link>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>33</sparkle:version>
+            <sparkle:shortVersionString>2.4.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <ul>
+                    <li>更新直播间加载页和换台面板，可按来源筛选换台候选。</li>
+                    <li>新增推荐首页开关和局域网 DLNA 投屏。</li>
+                    <li>优化观看历史的来源识别与去重，修复播放器工具栏点击及插件安装进度显示。</li>
+                </ul>
+            ]]></description>
+            <pubDate>Mon, 23 Nov 2026 23:13:26 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.4.0-beta1/Angel.Live.2.4.0.Beta1.Universal.Build33.dmg"
+                       sparkle:edSignature="QSkF/1qp7RJpeA15E18ftRxL+wzSz2WkW33swudJs1ZJYUnctCpL+AG/Z74EC8NqG2Xd1xM/3omVCOjlkEmHBg=="
+                       length="85739318"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 24)</title>
             <sparkle:version>24</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
