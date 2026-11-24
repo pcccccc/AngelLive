@@ -331,6 +331,45 @@ public enum LiveParseJSPlatformManager {
         return (plan.legacyParameters, plan.headers)
     }
 
+    // MARK: - On-demand catalog
+
+    public static func getVodWorks(
+        platform: LiveParseJSPlatform, context: [String: Any] = [:]
+    ) async throws -> [VodWork] {
+        let response: VodWorksResponse = try await LiveParsePlugins.shared.callDecodable(
+            pluginId: platform.pluginId, function: "getVodWorks", payload: context, sensitive: true
+        )
+        return response.normalized
+    }
+
+    public static func getVodDetail(
+        platform: LiveParseJSPlatform, workId: String, context: [String: Any] = [:],
+        fallbackTitle: String = "", fallbackPosterURL: String? = nil
+    ) async throws -> VodWorkDetail {
+        guard VodCatalog.hasIdentity(workId) else { throw VodCatalogError.missingIdentity }
+        let response: VodDetailResponse = try await LiveParsePlugins.shared.callDecodable(
+            pluginId: platform.pluginId, function: "getVodDetail",
+            payload: mergePayload(context, ["workId": workId]), sensitive: true
+        )
+        return try response.normalized(pluginID: platform.pluginId, workID: workId,
+                                       fallbackTitle: fallbackTitle, fallbackPosterURL: fallbackPosterURL)
+    }
+
+    public static func getVodPlayback(
+        platform: LiveParseJSPlatform, workId: String, episode: VodEpisode,
+        sourceId: String? = nil, context: [String: Any] = [:]
+    ) async throws -> VodResolvedPlayback {
+        guard VodCatalog.hasIdentity(workId), VodCatalog.hasIdentity(episode.episodeID) else {
+            throw VodCatalogError.missingIdentity
+        }
+        var payload = mergePayload(context, ["workId": workId, "episodeId": episode.episodeID])
+        payload["sourceId"] = sourceId
+        let response: VodPlaybackResponse = try await LiveParsePlugins.shared.callDecodable(
+            pluginId: platform.pluginId, function: "getVodPlayback", payload: payload, sensitive: true
+        )
+        return try response.normalized(workID: workId, episode: episode, liveType: platform.liveType, sourceID: sourceId)
+    }
+
     // MARK: - Internal
 
     public static func callDecodable<ResultType: Decodable>(

@@ -432,6 +432,7 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
     public let contentKind: String?
     /// 分集来源；qualityList 表示单线路的 qualitys 数组承载分集。
     public let episodeSelection: String?
+    public let vodSchema: Int?
 
     public init(
         favoriteIdentityKey: String? = nil,
@@ -442,7 +443,8 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
         externalRoomURLTemplate: String? = nil,
         themeColor: String? = nil,
         contentKind: String? = nil,
-        episodeSelection: String? = nil
+        episodeSelection: String? = nil,
+        vodSchema: Int? = nil
     ) {
         self.favoriteIdentityKey = favoriteIdentityKey
         self.preserveFavoriteRoomInfoOnRefresh = preserveFavoriteRoomInfoOnRefresh
@@ -453,6 +455,7 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
         self.themeColor = themeColor
         self.contentKind = contentKind
         self.episodeSelection = episodeSelection
+        self.vodSchema = vodSchema
     }
 }
 

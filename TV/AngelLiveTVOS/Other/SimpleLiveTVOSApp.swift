@@ -30,10 +30,25 @@ struct SimpleLiveTVOSApp: App {
     private let appViewModel: AppState
 #if DEBUG
     private let historyTestContext: UITestHistoryContext?
+    private let vodDemoSandbox: VodDemoSandbox?
 #endif
 
     init() {
 #if DEBUG
+        if VodDemoSandbox.isEnabled {
+            do {
+                let sandbox = try VodDemoSandbox.current.get()
+                vodDemoSandbox = sandbox
+                historyTestContext = nil
+                appViewModel = AppState(vodDemoSandbox: sandbox)
+                KSOptions.logLevel = .error
+                KSOptions.hudLog = false
+                return
+            } catch {
+                fatalError("Cannot prepare isolated VOD demo")
+            }
+        }
+        vodDemoSandbox = nil
         do {
             if let configuration = try UITestLaunchConfiguration.current() {
                 let context = try UITestHistoryContext.prepare(configuration: configuration)
@@ -86,7 +101,10 @@ struct SimpleLiveTVOSApp: App {
     @ViewBuilder
     private var rootView: some View {
 #if DEBUG
-        if let historyTestContext {
+        if let vodDemoSandbox {
+            TVVodDemoRootView(appViewModel: appViewModel, sandbox: vodDemoSandbox)
+                .environment(\.usesFullUI, true)
+        } else if let historyTestContext {
             TVFullUIHistoryListView(appViewModel: appViewModel, progressStore: historyTestContext.progress)
         } else {
             productionRoot

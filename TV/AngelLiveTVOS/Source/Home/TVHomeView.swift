@@ -1329,6 +1329,8 @@ private final class TVHomePlaybackCoordinator {
 
     var roomInfoViewModel: RoomInfoViewModel?
     var shortDramaRoom: LiveModel?
+    var vodRoom: LiveModel?
+    var generalSettings: GeneralSettingModel { appViewModel.generalSettingsViewModel }
     var isPresented = false
     var showToast = false
     var toastTitle = ""
@@ -1339,7 +1341,8 @@ private final class TVHomePlaybackCoordinator {
     }
 
     func open(room: LiveModel, rooms: [LiveModel], mode: TVHomePlaybackMode) {
-        if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
+        if TVVodRoute.matches(room: room, appViewModel: appViewModel)
+            || TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
             present(room: room, rooms: rooms, mode: mode)
             return
         }
@@ -1373,6 +1376,14 @@ private final class TVHomePlaybackCoordinator {
     }
 
     private func present(room: LiveModel, rooms: [LiveModel], mode: TVHomePlaybackMode) {
+        if TVVodRoute.matches(room: room, appViewModel: appViewModel) {
+            roomInfoViewModel = nil
+            shortDramaRoom = nil
+            vodRoom = room
+            isPresented = true
+            return
+        }
+        vodRoom = nil
         if TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
             roomInfoViewModel = nil
             shortDramaRoom = room
@@ -1407,8 +1418,13 @@ private struct TVHomePlaybackPresentationModifier: ViewModifier {
         @Bindable var coordinator = coordinator
 
         content
-            .fullScreenCover(isPresented: $coordinator.isPresented) {
-                if let room = coordinator.shortDramaRoom {
+            .fullScreenCover(isPresented: $coordinator.isPresented, onDismiss: { coordinator.vodRoom = nil }) {
+                if let room = coordinator.vodRoom {
+                    TVVodContainerView(room: room, settings: coordinator.generalSettings) {
+                        coordinator.isPresented = false
+                    }
+                    .id(room.id)
+                } else if let room = coordinator.shortDramaRoom {
                     TVShortDramaPlayerView(room: room) {
                         coordinator.isPresented = false
                         coordinator.shortDramaRoom = nil

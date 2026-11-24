@@ -40,8 +40,22 @@ public final class GeneralSettingModel {
     public static let globalEnablePlayerGesture = "SimpleLive.Setting.enablePlayerGesture"
     public static let roomEntryAnimationKey = "SimpleLive.Setting.roomEntryAnimation"
     public static let globalDeveloperMode = "SimpleLive.Setting.developerMode"
+    public static let globalVodAutoplay = "SimpleLive.Setting.vodAutoplay"
 
     public init() {}
+
+    @ObservationIgnored
+    public var vodAutoplayEnabled: Bool {
+        get {
+            access(keyPath: \.vodAutoplayEnabled)
+            return UserDefaults.shared.value(forKey: Self.globalVodAutoplay, synchronize: true) as? Bool ?? true
+        }
+        set {
+            withMutation(keyPath: \.vodAutoplayEnabled) {
+                UserDefaults.shared.set(newValue, forKey: Self.globalVodAutoplay, synchronize: true)
+            }
+        }
+    }
 
     @ObservationIgnored
     public var roomEntryAnimation: RoomEntryAnimation {

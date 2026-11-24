@@ -52,7 +52,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
-        if MacUITestBootstrap.context != nil { return }
+        if MacUITestBootstrap.context != nil || VodDemoSandbox.isEnabled { return }
         #endif
         MediaTransformSupport.registerHostCapability()
         DualStreamSupport.registerHostCapability()
@@ -123,11 +123,26 @@ struct AngelLiveMacOSApp: App {
         #endif
     }
 
+    private var isVodDemo: Bool {
+        #if DEBUG
+        VodDemoSandbox.isEnabled
+        #else
+        false
+        #endif
+    }
+
     @ViewBuilder
     private var mainContent: some View {
         #if DEBUG
         if let context = MacUITestBootstrap.context {
             MacHistoryUITestRoot(context: context)
+        } else if isVodDemo {
+            switch VodDemoSandbox.current {
+            case .success(let sandbox):
+                MacVodDemoAppRoot(sandbox: sandbox)
+            case .failure:
+                ContentUnavailableView("无法启动点播演示", systemImage: "film")
+            }
         } else {
             productionContent
         }
@@ -164,11 +179,11 @@ struct AngelLiveMacOSApp: App {
                         NSApp.orderFrontStandardAboutPanel(nil)
                     }
                 }
-                .disabled(isUITesting)
+                .disabled(isUITesting || isVodDemo)
             }
             CommandGroup(after: .appInfo) {
                 #if !APPSTORE
-                if !isUITesting {
+                if !isUITesting && !isVodDemo {
                     MacUpdateButton(updater: production.updater)
                     Divider()
                 }
@@ -182,11 +197,11 @@ struct AngelLiveMacOSApp: App {
                     }
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .disabled(isUITesting)
+                .disabled(isUITesting || isVodDemo)
             }
             #if DEBUG
             // Debug 菜单 + ⌘⇧D 召出插件控制台,仅 DEBUG 构建可见。
-            DevConsoleCommands(isEnabled: !isUITesting)
+            DevConsoleCommands(isEnabled: !isUITesting && !isVodDemo)
             #endif
         }
         .defaultSize(width: 1024, height: 960)
@@ -194,11 +209,11 @@ struct AngelLiveMacOSApp: App {
         // UI tests open this native WindowGroup explicitly with File > New Window.
         // Suppress automatic presentation so each launch owns exactly one window.
         .defaultLaunchBehavior(isUITesting ? .suppressed : .automatic)
-        .restorationBehavior(isUITesting ? .disabled : .automatic)
+        .restorationBehavior(isUITesting || isVodDemo ? .disabled : .automatic)
         #endif
 
         Window("关于 AngelLive", id: "about") {
-            if !isUITesting { MacAboutView() }
+            if !isUITesting && !isVodDemo { MacAboutView() }
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -211,7 +226,7 @@ struct AngelLiveMacOSApp: App {
         #endif
 
         WindowGroup(for: LiveModel.self) { $room in
-            if !isUITesting, let room = room {
+            if !isUITesting, !isVodDemo, let room = room {
                 MacRoomPlaybackDestination(room: room, presentation: .playerWindow)
                     .toolbarVisibility(
                         production.pluginAvailability.hasAvailablePlugins ? .hidden : .automatic,

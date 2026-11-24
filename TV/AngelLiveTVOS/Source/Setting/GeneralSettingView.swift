@@ -16,6 +16,14 @@ struct GeneralSettingView: View {
     @StateObject var settingStore = SettingStore()
     @State private var appIconSettings = TVAppIconSettingsModel()
     @AppStorage("SimpleLive.Setting.ShowHomeRecommendation") private var showHomeRecommendation = true
+
+    private var isVodDemo: Bool {
+        #if DEBUG
+        VodDemoSandbox.isEnabled
+        #else
+        false
+        #endif
+    }
     
     var body: some View {
 
@@ -67,6 +75,13 @@ struct GeneralSettingView: View {
                 .frame(height: 45)
                 .accessibilityHint("关闭后隐藏推荐页面，并在启动时显示收藏。")
 
+                Toggle(isOn: $generalSettingModel.vodAutoplayEnabled) {
+                    Text("剧集自动连播")
+                        .foregroundColor(.primary)
+                }
+                .frame(height: 45)
+                .accessibilityHint("进入片尾时提示并自动播放下一集。")
+
                 Picker("默认画质", selection: $playerSettingModel.defaultPlaybackQuality) {
                     ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
                         Text(quality.title)
@@ -87,6 +102,7 @@ struct GeneralSettingView: View {
                 selection: Binding(
                     get: { appIconSettings.selection },
                     set: { choice in
+                        guard !isVodDemo else { return }
                         Task { await appIconSettings.select(choice) }
                     }
                 )
@@ -115,7 +131,7 @@ struct GeneralSettingView: View {
                 }
             }
             .frame(height: 45)
-            .disabled(appIconSettings.applyingChoice != nil)
+            .disabled(isVodDemo || appIconSettings.applyingChoice != nil)
 
             Text("如果您的页面部分背景不正常（如页面背景透明）,请尝试打开这个选项。")
                 .font(.caption)

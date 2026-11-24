@@ -19,6 +19,7 @@ public enum PlatformFeature: String, CaseIterable, Sendable {
     case shareResolve  // 分享码解析
     case danmaku       // 弹幕
     case homeFeed      // 首页内容
+    case vod
 
     public var displayName: String {
         switch self {
@@ -31,6 +32,7 @@ public enum PlatformFeature: String, CaseIterable, Sendable {
         case .shareResolve: return "分享码解析"
         case .danmaku:      return "弹幕"
         case .homeFeed:     return "首页内容"
+        case .vod:          return "点播"
         }
     }
 
@@ -45,6 +47,7 @@ public enum PlatformFeature: String, CaseIterable, Sendable {
         case .shareResolve: return "link"
         case .danmaku:      return "text.bubble"
         case .homeFeed:     return "house"
+        case .vod:          return "film"
         }
     }
 }
@@ -192,6 +195,17 @@ public enum PlatformCapability {
             }
         }
 
+        return legacyFeatures(for: liveType) + [(.vod, vodStatus(for: liveType))]
+    }
+
+    private static func vodStatus(for liveType: LiveType) -> FeatureStatus {
+        SandboxPluginCatalog.platform(for: liveType)
+            .flatMap { try? LiveParsePlugins.shared.resolve(pluginId: $0.pluginId) }
+            .map { VodPluginPolicy.status(for: $0) }
+            ?? .unavailable
+    }
+
+    private static func legacyFeatures(for liveType: LiveType) -> [(PlatformFeature, FeatureStatus)] {
         let cacheKey = liveType.rawValue
         if let cached = cache.get(cacheKey) {
             return cached
@@ -206,7 +220,7 @@ public enum PlatformCapability {
         let result: [(PlatformFeature, FeatureStatus)]
 
         if let capabilities = loadPluginCapabilities(pluginId: platform.pluginId) {
-            result = PlatformFeature.allCases.map { feature in
+            result = PlatformFeature.allCases.filter { $0 != .vod }.map { feature in
                 (feature, capabilities[feature] ?? .unavailable)
             }
         } else if let entryScript = loadPluginEntryScript(pluginId: platform.pluginId) {
@@ -223,23 +237,40 @@ public enum PlatformCapability {
     }
 
     public static func status(for feature: PlatformFeature, liveType: LiveType) -> FeatureStatus {
-        features(for: liveType)
-            .first(where: { $0.0 == feature })?
-            .1 ?? .unavailable
+        if PlaylistPlatformIdentity.isPlaylist(liveType) {
+            return PlaylistInstanceStore.shared.instance(for: liveType) != nil && playlistFeatures.contains(feature)
+                ? .available : .unavailable
+        }
+        if feature == .vod { return vodStatus(for: liveType) }
+        return legacyFeatures(for: liveType).first { $0.0 == feature }?.1 ?? .unavailable
     }
 
     public static func supports(_ feature: PlatformFeature, for liveType: LiveType) -> Bool {
         status(for: feature, liveType: liveType).isSupported
     }
 
+    /// Explicit capabilities of the same version used by the runtime.
+    public static func selectedVersionSupports(_ feature: PlatformFeature, pluginId: String) -> Bool {
+        guard let plugin = try? LiveParsePlugins.shared.resolve(pluginId: pluginId) else { return false }
+        return selectedStatus(feature, plugin: plugin).isSupported
+    }
+
+    static func selectedStatus(_ feature: PlatformFeature, plugin: LiveParseLoadedPlugin) -> FeatureStatus {
+        selectedCapabilities(plugin)?[feature] ?? .unavailable
+    }
+
+    private static func selectedCapabilities(_ plugin: LiveParseLoadedPlugin) -> [PlatformFeature: FeatureStatus]? {
+        guard let manifestURL = plugin.manifestURL,
+              let data = try? Data(contentsOf: manifestURL) else { return nil }
+        return parseCapabilities(from: data)
+    }
+
     /// Explicit manifest declarations only; older script-inferred capabilities
     /// are intentionally absent from descriptive management UI.
     public static func declaredFeatures(forPluginId pluginId: String) -> [PlatformFeature]? {
         guard let plugin = try? LiveParsePlugins.shared.resolve(pluginId: pluginId),
-              let data = try? Data(contentsOf: plugin.rootDirectory.appendingPathComponent("manifest.json")) else {
-            return nil
-        }
-        return declaredFeatures(from: data)
+              let capabilities = selectedCapabilities(plugin) else { return nil }
+        return PlatformFeature.allCases.filter { capabilities[$0]?.isSupported == true }
     }
 
     static func declaredFeatures(from manifestData: Data) -> [PlatformFeature]? {

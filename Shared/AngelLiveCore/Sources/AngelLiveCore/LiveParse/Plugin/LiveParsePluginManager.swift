@@ -218,7 +218,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                     nativeStream: selected.manifest.nativeStream,
                     credentialDomains: selected.manifest.hostManagedCredentialDomains,
                     logHandler: logHandler
-                )
+                ),
+                manifestURL: selected.manifestURL
             )
 
             // 首次并发 resolve 可能同时完成候选选择。只允许一个 runtime 赢得
@@ -352,6 +353,10 @@ public final class LiveParsePluginManager: @unchecked Sendable {
 
         var payload = payload
         let selectedPlugin = try runtimeLease?.plugin ?? resolve(pluginId: pluginId)
+        let isVodEntryPoint = VodProtocol.entryPoints.contains(function)
+        if isVodEntryPoint, !VodPluginPolicy.isSupported(selectedPlugin) {
+            throw VodCatalogError.unsupportedPlugin
+        }
         let requiresCacheRuntimeGate = runtimeLease == nil && isolatedPlatformSession == nil
         let tokenPlugin = selectedPlugin.manifest.auth?.credentialKinds?.contains(where: { ["token", "client_credentials", "oauth_device_code"].contains($0) }) == true
         let tokenFeatureEnabled = await apiTokenVault.isEnabled
@@ -380,7 +385,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
 
         // 开发者控制台关闭时完全跳过记录。收藏批量刷新会并发调用上百次，
         // 即使 UI 不展示，无条件写 @Observable entries 仍会造成主 actor 压力。
-        let sensitivePluginCall = sensitive
+        let sensitivePluginCall = sensitive || isVodEntryPoint
             || tokenEnabled
             || Self.isSensitivePluginFunction(function)
             || Self.containsSensitiveConsoleValue(payload)
@@ -1012,6 +1017,8 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             throw CancellationError()
         } catch let error as LiveParsePluginError {
             throw error
+        } catch let error as VodCatalogError {
+            throw error
         } catch {
             throw LiveParsePluginError.invalidReturnValue(
                 "Decoding \(String(describing: T.self)) failed in \(pluginId).\(function): \(error.localizedDescription)"
@@ -1173,6 +1180,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
 private extension LiveParsePluginManager {
     struct Candidate {
         let manifest: LiveParsePluginManifest
+        let manifestURL: URL
         let rootDirectory: URL
         let location: LiveParseLoadedPlugin.Location
     }
@@ -1222,7 +1230,7 @@ private extension LiveParsePluginManager {
             guard FileManager.default.fileExists(atPath: manifestURL.path) else { return nil }
             let manifest = try LiveParsePluginManifest.load(from: manifestURL)
             guard manifest.pluginId == pluginId else { return nil }
-            return Candidate(manifest: manifest, rootDirectory: dir, location: .sandbox)
+            return Candidate(manifest: manifest, manifestURL: manifestURL, rootDirectory: dir, location: .sandbox)
         }
     }
 
@@ -1256,7 +1264,7 @@ private extension LiveParsePluginManager {
             guard url.lastPathComponent == "manifest.json" else { continue }
             let manifest = try LiveParsePluginManifest.load(from: url)
             guard manifest.pluginId == pluginId else { continue }
-            results.append(Candidate(manifest: manifest, rootDirectory: url.deletingLastPathComponent(), location: .builtIn))
+            results.append(Candidate(manifest: manifest, manifestURL: url, rootDirectory: url.deletingLastPathComponent(), location: .builtIn))
         }
         return results
     }
@@ -1276,7 +1284,7 @@ private extension LiveParsePluginManager {
             guard name.hasPrefix("lp_plugin_") && name.hasSuffix("_manifest.json") else { continue }
             let manifest = try LiveParsePluginManifest.load(from: url)
             guard manifest.pluginId == pluginId else { continue }
-            results.append(Candidate(manifest: manifest, rootDirectory: url.deletingLastPathComponent(), location: .builtIn))
+            results.append(Candidate(manifest: manifest, manifestURL: url, rootDirectory: url.deletingLastPathComponent(), location: .builtIn))
         }
         return results
     }

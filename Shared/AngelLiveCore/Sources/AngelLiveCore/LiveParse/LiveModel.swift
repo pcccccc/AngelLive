@@ -159,7 +159,7 @@ public struct LivePlaybackAuthLimit: Codable, Sendable, Equatable {
     }
 }
 
-public struct LivePlaybackHints: Codable, Sendable {
+public struct LivePlaybackHints: Codable, Equatable, Sendable {
     /// 描述流本身的格式/语义，资源侧不需要知道宿主有哪些播放器。
     public var streamFormat: LivePlaybackStreamFormat?
     /// 标准或低延迟播放语义。未提供时宿主才允许按 URL 特征推断。
@@ -237,7 +237,7 @@ public struct LivePlaybackHints: Codable, Sendable {
     }
 }
 
-public struct LiveQualityDetail: Codable, Sendable {
+public struct LiveQualityDetail: Codable, Equatable, Sendable {
     public var roomId: String
     public var title: String
     /// 资源侧用于标识清晰度或重取流参数的通用数值。

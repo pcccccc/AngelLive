@@ -70,7 +70,7 @@ struct GeneralSettingView: View {
                     }
                 }
                 .pickerStyle(.navigationLink)
-                .disabled(appIconSettings.applyingChoice != nil)
+                .disabled(!appIconSettings.allowsSelection || appIconSettings.applyingChoice != nil)
 
                 Toggle(isOn: materialBackgroundEnabled) {
                     GeneralSettingLabel(
@@ -117,6 +117,15 @@ struct GeneralSettingView: View {
                         )
                     }
                     .pickerStyle(.navigationLink)
+
+                    Toggle(isOn: $generalSettingModel.vodAutoplayEnabled) {
+                        GeneralSettingLabel(
+                            title: "剧集自动连播",
+                            systemImage: "play.square.stack.fill",
+                            tint: .blue
+                        )
+                    }
+                    .tint(AppConstants.Colors.accent)
                 }
 
                 Toggle(isOn: $generalSettingModel.enablePlayerGesture) {

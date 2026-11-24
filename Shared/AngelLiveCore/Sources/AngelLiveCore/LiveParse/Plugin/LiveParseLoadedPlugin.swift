@@ -5,6 +5,7 @@ public actor LiveParseLoadedPlugin {
     public nonisolated let rootDirectory: URL
     public nonisolated let location: Location
     public nonisolated let runtime: JSRuntime
+    nonisolated let manifestURL: URL?
     private var isLoaded = false
     private var loadTask: (id: UUID, task: Task<Void, Error>)?
 
@@ -14,10 +15,16 @@ public actor LiveParseLoadedPlugin {
     }
 
     public init(manifest: LiveParsePluginManifest, rootDirectory: URL, location: Location, runtime: JSRuntime) {
+        self.init(manifest: manifest, rootDirectory: rootDirectory, location: location, runtime: runtime, manifestURL: nil)
+    }
+
+    init(manifest: LiveParsePluginManifest, rootDirectory: URL, location: Location, runtime: JSRuntime,
+         manifestURL: URL?) {
         self.manifest = manifest
         self.rootDirectory = rootDirectory
         self.location = location
         self.runtime = runtime
+        self.manifestURL = manifestURL
     }
 
     public var entryFileURL: URL {

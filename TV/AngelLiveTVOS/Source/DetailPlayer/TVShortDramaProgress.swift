@@ -12,6 +12,7 @@ struct TVPlayerTimeline: View {
     let duration: Double
     let target: Double?
     let isFocused: Bool
+    var cues: [Double] = []
 
     private var isScrubbing: Bool { target != nil }
     private var fraction: CGFloat { CGFloat(min(max((target ?? elapsed) / duration, 0), 1)) }
@@ -24,6 +25,15 @@ struct TVPlayerTimeline: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.38))
                     Capsule().fill(.white).frame(width: playedWidth)
+                    ForEach(Array(cues.enumerated()), id: \.offset) { _, cue in
+                        if cue.isFinite, duration > 0, (0...duration).contains(cue) {
+                            let size: CGFloat = isScrubbing ? 6 : 4
+                            Circle().fill(.white).frame(width: size, height: size)
+                                .position(x: geometry.size.width * CGFloat(cue / duration),
+                                          y: geometry.size.height / 2)
+                                .accessibilityHidden(true)
+                        }
+                    }
                     if isFocused {
                         Capsule().strokeBorder(.white.opacity(0.75), lineWidth: 2).padding(-6)
                     }
@@ -92,6 +102,8 @@ struct TVPlayerSeekReadout: View {
     }
 }
 
+#endif
+
 func tvPlayerTimeLabel(_ seconds: Double) -> String {
     let value = Int(exactly: max(0, seconds).rounded(.towardZero)) ?? 0
     if value >= 3_600 {
@@ -99,4 +111,3 @@ func tvPlayerTimeLabel(_ seconds: Double) -> String {
     }
     return String(format: "%02d:%02d", value / 60, value % 60)
 }
-#endif

@@ -22,6 +22,7 @@ struct MacPlayerProgressRow: View {
     let onEditingChanged: (Bool) -> Void
     let onCancel: () -> Void
     let seekBy: (Double) -> Void
+    var cues: [Double] = []
 
     var body: some View {
         HStack(spacing: 8) {
@@ -35,6 +36,13 @@ struct MacPlayerProgressRow: View {
                         ZStack(alignment: .leading) {
                             Capsule().fill(.white.opacity(0.38))
                             Capsule().fill(.white).frame(width: x)
+                            ForEach(Array(cues.enumerated()), id: \.offset) { _, cue in
+                                if cue.isFinite, (0...duration).contains(cue) {
+                                    Circle().fill(.white).frame(width: height, height: height)
+                                        .offset(x: min(max(0, geometry.size.width * cue / duration - height / 2),
+                                                       max(0, geometry.size.width - height)))
+                                }
+                            }
                         }
                         .frame(height: height)
                         .overlay(alignment: .leading) {

@@ -378,7 +378,8 @@ private struct MacHomeRoomRail: View {
     }
 
     private func open(_ room: LiveModel) {
-        if openMode == .favorite, room.liveState == LiveState.close.rawValue {
+        if openMode == .favorite, room.liveState == LiveState.close.rawValue,
+           !(usesFullUI && VodHostRouting.declaresVod(room)) {
             toastManager.show(icon: "tv.slash", message: "主播已下播")
         } else {
             fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)
@@ -1067,7 +1068,8 @@ private struct MacHomeAllRoomsView: View {
     }
 
     private func open(_ room: LiveModel) {
-        if openMode == .favorite, room.liveState == LiveState.close.rawValue {
+        if openMode == .favorite, room.liveState == LiveState.close.rawValue,
+           !(usesFullUI && VodHostRouting.declaresVod(room)) {
             toastManager.show(icon: "tv.slash", message: "主播已下播")
         } else {
             fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: usesFullUI)

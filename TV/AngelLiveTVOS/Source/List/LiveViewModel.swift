@@ -134,6 +134,7 @@ class LiveViewModel {
     //当前选择房间ViewModel
     var roomInfoViewModel: RoomInfoViewModel?
     var shortDramaRoom: LiveModel?
+    var vodRoom: LiveModel?
 
     var isLeftFocused: Bool = false
     
@@ -387,8 +388,15 @@ class LiveViewModel {
         }
     }
     
-    @MainActor func createCurrentRoomViewModel(enterFromLive: Bool) {
+    @MainActor func createCurrentRoomViewModel(enterFromLive: Bool, usesFullUI: Bool) {
         guard let currentRoom = self.currentRoom else { return }
+        if usesFullUI, TVVodRoute.matches(room: currentRoom, appViewModel: appViewModel) {
+            roomInfoViewModel = nil
+            shortDramaRoom = nil
+            vodRoom = currentRoom
+            return
+        }
+        vodRoom = nil
         if TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel) {
             roomInfoViewModel = nil
             shortDramaRoom = currentRoom

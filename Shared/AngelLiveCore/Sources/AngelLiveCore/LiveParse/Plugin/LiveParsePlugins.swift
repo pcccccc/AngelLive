@@ -11,9 +11,7 @@ public enum LiveParsePlugins {
             do {
                 let storage = try LiveParsePluginStorage(baseDirectory:
                     configuration.directory.appendingPathComponent("LiveParse", isDirectory: true))
-                let session = URLSession(configuration: .ephemeral)
-                let vault = PlatformAPITokenVault(storage: UITestAPITokenStorage())
-                return LiveParsePluginManager(storage: storage, session: session, apiTokenVault: vault)
+                return makeFixtureManager(storage: storage)
             } catch {
                 fatalError("Cannot initialize isolated UI test plugin storage: \(error)")
             }
@@ -43,6 +41,14 @@ public enum LiveParsePlugins {
         }
     }()
 
+    #if DEBUG
+    static func makeFixtureManager(storage: LiveParsePluginStorage) -> LiveParsePluginManager {
+        let session = URLSession(configuration: .ephemeral)
+        let vault = PlatformAPITokenVault(storage: FixtureAPITokenStorage())
+        return LiveParsePluginManager(storage: storage, session: session, apiTokenVault: vault)
+    }
+    #endif
+
     public static func updatePlatformSession(platformId: String, cookie: String, uid: String? = nil) {
         LiveParsePlatformSessionVault.update(platformId: platformId, cookie: cookie, uid: uid)
         shared.evict(pluginId: platformId)
@@ -59,8 +65,8 @@ public enum LiveParsePlugins {
 }
 
 #if DEBUG
-/// History smoke tests have no credentials and must never open the user's Keychain.
-private struct UITestAPITokenStorage: APITokenStorage {
+/// Local fixtures have no credentials and must never open the user's Keychain.
+private struct FixtureAPITokenStorage: APITokenStorage {
     func read(pluginId: String) throws -> Data? { nil }
     func write(_ data: Data, pluginId: String) throws { throw APITokenError.storage }
     func delete(pluginId: String) throws { throw APITokenError.storage }

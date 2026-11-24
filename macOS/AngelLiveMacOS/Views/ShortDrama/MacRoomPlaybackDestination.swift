@@ -49,7 +49,13 @@ struct MacRoomPlaybackDestination: View {
     var body: some View {
         Group {
             #if canImport(KSPlayer)
-            if MacShortDramaRouting.isShortDrama(routedRoom) {
+            if usesFullUI && VodHostRouting.declaresVod(routedRoom) {
+                MacVodContainerView(
+                    room: routedRoom, presentation: presentation, onClose: requestClose,
+                    onExitFullscreen: closeCoordinator.requestExitFullscreen
+                )
+                .id(routedRoom.id)
+            } else if MacShortDramaRouting.isShortDrama(routedRoom) {
                 MacShortDramaPlayerView(
                     room: routedRoom, onClose: requestClose,
                     onExitFullscreen: closeCoordinator.requestExitFullscreen
@@ -62,7 +68,13 @@ struct MacRoomPlaybackDestination: View {
             livePlayer
             #endif
         }
-        .background(PlayerWindowReferenceView(window: $playerWindow))
+        .background {
+            if usesFullUI {
+                MacFullUIWindowProbe(window: $playerWindow)
+            } else {
+                PlayerWindowReferenceView(window: $playerWindow)
+            }
+        }
         .fullUIArcLoadingStyle(isEnabled: usesFullUI)
         .onChange(of: playerWindow, initial: true) { _, window in
             closeCoordinator.bind(to: usesFullUI ? window : nil)
@@ -85,6 +97,16 @@ struct MacRoomPlaybackDestination: View {
     }
 
     private func requestClose() {
+        if usesFullUI {
+            guard let playerWindow else {
+                switch presentation {
+                case .navigation, .playerWindow: dismiss()
+                case let .embedded(close): close()
+                }
+                return
+            }
+            closeCoordinator.bind(to: playerWindow)
+        }
         closeCoordinator.requestClose { window in
             switch presentation {
             case .navigation: dismiss()
@@ -104,5 +126,36 @@ struct MacRoomPlaybackDestination: View {
             onRouteShortDrama: { routedRoom = $0 }
         )
         .id(routedRoom.id)
+    }
+}
+
+struct MacFullUIWindowProbe: NSViewRepresentable {
+    @Binding var window: NSWindow?
+
+    func makeNSView(context: Context) -> Probe { Probe(frame: .zero) }
+
+    func updateNSView(_ view: Probe, context: Context) {
+        view.binding = $window
+        view.publishWindow()
+    }
+
+    static func dismantleNSView(_ view: Probe, coordinator: ()) {
+        view.binding = nil
+    }
+
+    final class Probe: NSView {
+        var binding: Binding<NSWindow?>?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            publishWindow()
+        }
+
+        func publishWindow() {
+            Task { @MainActor [weak self] in
+                guard let self, let binding, binding.wrappedValue !== window else { return }
+                binding.wrappedValue = window
+            }
+        }
     }
 }

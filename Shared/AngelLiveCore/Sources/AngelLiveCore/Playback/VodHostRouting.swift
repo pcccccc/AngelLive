@@ -1,0 +1,83 @@
+import Foundation
+
+@MainActor
+public enum VodHostRouting {
+    public static func declaresVod(_ room: LiveModel) -> Bool {
+        guard let plugin = selectedPlugin(for: room) else { return false }
+        return VodPluginPolicy.declaresVodContent(plugin.manifest)
+    }
+
+    public static func isVod(_ room: LiveModel) -> Bool {
+        guard let plugin = selectedPlugin(for: room) else { return false }
+        return VodPluginPolicy.isSupported(plugin)
+    }
+
+    public static func model(for room: LiveModel) -> VodPlaybackModel {
+        #if DEBUG
+        if let work = VodDemoWork.matching(room), let sandbox = try? VodDemoSandbox.current.get() {
+            return work.makeModel(progressStore: sandbox.progress)
+        }
+        #endif
+        return VodPlaybackModel(room: room)
+    }
+
+    public static func sources(for detail: VodWorkDetail, episode: VodEpisode) async throws -> [VodPlaybackSource] {
+        #if DEBUG
+        if VodDemoWork.isEnabled {
+            return detail.pluginID == VodDemoSandbox.pluginID ? VodDemoWork.sources : []
+        }
+        #endif
+        guard let platform = LiveParseJSPlatformManager.platform(forPluginId: detail.pluginID) else { return [] }
+        // The plugin publishes its line labels with the playback response for the episode.
+        let playback = try await LiveParseJSPlatformManager.getVodPlayback(
+            platform: platform, workId: detail.workID, episode: episode
+        )
+        return playback.sources
+    }
+
+    private static func selectedPlugin(for room: LiveModel) -> LiveParseLoadedPlugin? {
+        #if DEBUG
+        if VodDemoWork.isEnabled {
+            guard let work = VodDemoWork.matching(room), let sandbox = try? VodDemoSandbox.current.get() else { return nil }
+            return try? sandbox.pluginManager.resolve(pluginId: work.pluginID)
+        }
+        #endif
+        guard let platform = SandboxPluginCatalog.platform(for: room.liveType) else { return nil }
+        return try? LiveParsePlugins.shared.resolve(pluginId: platform.pluginId)
+    }
+}
+
+public extension VodWorkDetail {
+    func displayTags(sourceCount: Int) -> [String] {
+        sourceCount > 1 ? ["多线路"] : []
+    }
+
+    func displayMetadata(formatTime: (Double) -> String) -> String {
+        var parts = year.map { [String($0)] } ?? []
+        parts.append(kind == .movie ? "电影" : "剧集")
+        if kind == .series {
+            if hasExplicitSeasons { parts.append("共 \(seasons.count) 季") }
+            parts.append("\(episodes.count) 集")
+        } else if let duration = episodes.first?.durationHint {
+            parts.append(formatTime(duration))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    func playTitle(for episode: VodEpisode, snapshot: VodProgressSnapshot?, formatTime: (Double) -> String) -> String {
+        let progress = snapshot?.episodes[episode.id]
+        let position = progress?.completed == false ? progress?.position ?? 0 : 0
+        guard position > 0 || (snapshot?.lastEpisodeID != nil && snapshot?.lastEpisodeID != episode.id) else {
+            return "立即播放"
+        }
+        let prefix = kind == .series ? "第 \(episode.number) 集 " : ""
+        return "继续观看 · \(prefix)\(formatTime(position))"
+    }
+}
+
+public extension VodEpisodeProgress {
+    var fractionWatched: Double? {
+        guard !completed, position > 0, duration > 0 else { return nil }
+        return min(1, position / duration)
+    }
+}

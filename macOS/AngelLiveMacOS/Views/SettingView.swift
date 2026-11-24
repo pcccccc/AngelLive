@@ -24,6 +24,7 @@ struct SettingView: View {
     private var showHomeRecommendation = true
 
     @State private var playerSettingModel = PlayerSettingModel()
+    @State private var generalSettingModel = GeneralSettingModel()
     @State private var showOpenSourceList = false
     @State private var showSponsorAcknowledgements = false
     @State private var showPluginManagement = false
@@ -50,6 +51,7 @@ struct SettingView: View {
             if pluginAvailability.hasAvailablePlugins {
                 Section {
                     syncManagementRow
+                        .disabled(isVodDemo)
                 } header: {
                     Text("同步")
                 } footer: {
@@ -60,11 +62,13 @@ struct SettingView: View {
             if pluginAvailability.hasAvailablePlugins {
                 Section("插件与扩展") {
                     pluginManagementRow
+                        .disabled(isVodDemo)
                 }
             }
 
             Section("通用设置") {
                 appIconRow
+                    .disabled(isVodDemo)
                 if pluginAvailability.hasAvailablePlugins {
                     homeRecommendationRow
                     translationSettingRow
@@ -75,17 +79,18 @@ struct SettingView: View {
                 if pluginAvailability.hasAvailablePlugins {
                     singlePagePlaybackRow
                     defaultPlaybackQualityRow
+                    vodAutoplayRow
                 }
                 danmuSettingRow
             }
 
             Section("存储") {
-                clearCacheRow
+                clearCacheRow.disabled(isVodDemo)
             }
 
             Section("关于与支持") {
                 #if !APPSTORE
-                checkUpdateRow
+                if !isVodDemo { checkUpdateRow }
                 #endif
                 if supportDiagnosticsEnabled {
                     supportDiagnosticsRow
@@ -219,6 +224,7 @@ struct SettingView: View {
             }
         }
         .task {
+            guard !isVodDemo else { return }
             await refreshCacheSize()
         }
         .onChange(of: pluginAvailability.hasAvailablePlugins) { _, hasPlugins in
@@ -296,9 +302,34 @@ struct SettingView: View {
                 alignment: pluginAvailability.hasAvailablePlugins ? .trailing : .center
             )
             .onChange(of: dockIconPreference) { _, preference in
+                guard !isVodDemo else { return }
                 preference.apply()
             }
             .help("macOS 仅在应用运行期间更换 Dock 图标。")
+        }
+    }
+
+    private var isVodDemo: Bool {
+        #if DEBUG
+        VodDemoSandbox.isEnabled
+        #else
+        false
+        #endif
+    }
+
+    private var vodAutoplayRow: some View {
+        PanelNavigationRow(
+            title: "剧集自动连播",
+            subtitle: "进入片尾时提示并自动播放下一集",
+            showsChevron: false
+        ) {
+            Image(systemName: "play.square.stack.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.blue.gradient)
+        } trailing: {
+            Toggle("剧集自动连播", isOn: $generalSettingModel.vodAutoplayEnabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
         }
     }
 

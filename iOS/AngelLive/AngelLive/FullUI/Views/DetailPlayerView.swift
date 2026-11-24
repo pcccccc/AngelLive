@@ -40,7 +40,17 @@ struct DetailPlayerView: View {
 
     var body: some View {
         Group {
-            if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
+            if VodRouting.declaresVod(viewModel.currentRoom) {
+                let detail = VodWorkDetailView(room: viewModel.currentRoom, presentsOverSource: presentsOverRoomList)
+                    .id(viewModel.currentRoom.id)
+                    .interactivePopGestureEnabled(false, edgeOnly: true)
+                    .interactiveDismissDisabled()
+                if presentsOverRoomList {
+                    detail.presentationBackground(.clear)
+                } else {
+                    detail
+                }
+            } else if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
                 let player = ShortDramaPlayerView(room: viewModel.currentRoom, presentsOverSource: presentsOverRoomList)
                     .id(viewModel.currentRoom.id)
                     .interactivePopGestureEnabled(false, edgeOnly: true)

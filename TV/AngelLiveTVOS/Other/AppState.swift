@@ -70,6 +70,12 @@ class AppState {
     }
 
 #if DEBUG
+    init(vodDemoSandbox sandbox: VodDemoSandbox) {
+        favoriteViewModel = sandbox.favorite
+        historyViewModel = sandbox.history
+        pluginAvailability = sandbox.pluginAvailability
+    }
+
     init(historyTestContext context: UITestHistoryContext) {
         favoriteViewModel = context.favorite
         historyViewModel = context.history

@@ -229,6 +229,10 @@ struct LiveRoomCard: View {
     }
 
     private func handleTap() {
+        if VodRouting.declaresVod(room) {
+            showPlayerBinding.wrappedValue = true
+            return
+        }
         if ShortDramaRouting.isShortDrama(room) {
             if !useExternalNavigation && !localShowPlayer {
                 localShortDramaReturnPreview = localShortDramaReturnSource.capture()

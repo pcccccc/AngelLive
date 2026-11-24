@@ -16,6 +16,7 @@ struct DeepLinkPlayerView: View {
     var appViewModel: AppState
     @State private var roomInfoViewModel: RoomInfoViewModel?
     @State private var shortDramaRoom: LiveModel?
+    @State private var vodRoom: LiveModel?
     @State private var isLoading = true
     @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
@@ -27,6 +28,10 @@ struct DeepLinkPlayerView: View {
                 loadingView
             } else if let error = errorMessage {
                 errorView(message: error)
+            } else if let room = vodRoom {
+                TVVodContainerView(room: room, settings: appViewModel.generalSettingsViewModel,
+                                   onExit: cleanupAndDismiss)
+                    .id(room.id)
             } else if let room = shortDramaRoom {
                 TVShortDramaPlayerView(room: room, onExit: cleanupAndDismiss)
                     .id(room.id)
@@ -45,8 +50,7 @@ struct DeepLinkPlayerView: View {
             await loadRoomInfo()
         }
         .onExitCommand {
-            // The short-drama page owns its panel → controls → exit Menu state.
-            if shortDramaRoom == nil { cleanupAndDismiss() }
+            if shortDramaRoom == nil && vodRoom == nil { cleanupAndDismiss() }
         }
     }
 
@@ -96,6 +100,12 @@ struct DeepLinkPlayerView: View {
     private func loadRoomInfo() async {
         guard let room = appViewModel.pendingDeepLinkRoom else {
             errorMessage = "无效的直播间信息"
+            isLoading = false
+            return
+        }
+
+        if usesFullUI, TVVodRoute.matches(room: room, appViewModel: appViewModel) {
+            vodRoom = room
             isLoading = false
             return
         }

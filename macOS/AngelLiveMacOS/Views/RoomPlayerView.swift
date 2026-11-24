@@ -316,7 +316,8 @@ struct RoomPlayerView: View {
     }
 
     private func switchRoom(_ room: LiveModel) {
-        if MacShortDramaRouting.isShortDrama(room), let onRouteShortDrama {
+        if (usesFullUI && VodHostRouting.declaresVod(room)) || MacShortDramaRouting.isShortDrama(room),
+           let onRouteShortDrama {
             roomSwitchTask?.cancel()
             showRoomSwitcher = false
             onRouteShortDrama(room)

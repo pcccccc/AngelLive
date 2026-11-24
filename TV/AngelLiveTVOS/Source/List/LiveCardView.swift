@@ -153,7 +153,7 @@ struct LiveCardView: View {
             Text("确认取消收藏吗")
         }
         .contextMenu { contextMenuContent }
-        .fullScreenCover(isPresented: $isLive, onDismiss: restoreShortDramaCardFocus) {
+        .fullScreenCover(isPresented: $isLive, onDismiss: restoreOnDemandCardFocus) {
             playerFullScreenContent
         }
         .onDisappear {
@@ -400,7 +400,9 @@ struct LiveCardView: View {
             Button {
                 Task {
                     do {
-                        if liveViewModel.currentRoom!.liveState == nil || (liveViewModel.currentRoom!.liveState ?? "").isEmpty {
+                        if let room = liveViewModel.currentRoom,
+                           !(usesFullUI && TVVodRoute.matches(room: room, appViewModel: appViewModel)),
+                           room.liveState?.isEmpty != false {
                             liveViewModel.currentRoom!.liveState = try await ApiManager.getCurrentRoomLiveState(
                                 roomId: liveViewModel.currentRoom!.roomId,
                                 userId: liveViewModel.currentRoom!.userId,
@@ -441,7 +443,12 @@ struct LiveCardView: View {
     /// 播放器全屏内容
     @ViewBuilder
     private var playerFullScreenContent: some View {
-        if let room = liveViewModel.shortDramaRoom {
+        if usesFullUI, let room = liveViewModel.vodRoom {
+            TVVodContainerView(room: room, settings: appViewModel.generalSettingsViewModel) {
+                isLive = false
+            }
+            .id(room.id)
+        } else if let room = liveViewModel.shortDramaRoom {
             TVShortDramaPlayerView(room: room) {
                 isLive = false
             }
@@ -467,11 +474,12 @@ struct LiveCardView: View {
         }
     }
 
-    private func restoreShortDramaCardFocus() {
-        // Keep the FullUI short-drama content alive through cover dismissal;
+    private func restoreOnDemandCardFocus() {
+        // Keep the on-demand content alive through cover dismissal;
         // clearing it in onExit removes its focused view before the transition ends.
-        guard liveViewModel.shortDramaRoom != nil else { return }
+        guard liveViewModel.shortDramaRoom != nil || liveViewModel.vodRoom != nil else { return }
         liveViewModel.shortDramaRoom = nil
+        liveViewModel.vodRoom = nil
         if let externalFocusState {
             externalFocusState.wrappedValue = focusValue
         } else {
@@ -513,7 +521,8 @@ struct LiveCardView: View {
         liveViewModel.selectedRoomListIndex = index
 
         if let room = liveViewModel.currentRoom,
-           TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
+           (usesFullUI && TVVodRoute.matches(room: room, appViewModel: appViewModel))
+            || TVShortDramaRoute.matches(room: room, appViewModel: appViewModel) {
             proceedToPlayer()
             return
         }
@@ -562,7 +571,8 @@ struct LiveCardView: View {
 
     private func proceedToPlayer() {
         guard let currentRoom = liveViewModel.currentRoom else { return }
-        if !TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel) {
+        if !(usesFullUI && TVVodRoute.matches(room: currentRoom, appViewModel: appViewModel)),
+           !TVShortDramaRoute.matches(room: currentRoom, appViewModel: appViewModel) {
             if usesFullUI {
                 appViewModel.historyViewModel.addHistory(room: currentRoom)
             } else if !appViewModel.historyViewModel.watchList.contains(where: { currentRoom.roomId == $0.roomId }) {
@@ -571,7 +581,7 @@ struct LiveCardView: View {
             }
         }
         let enterFromLive = liveViewModel.roomListType == .live
-        liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive)
+        liveViewModel.createCurrentRoomViewModel(enterFromLive: enterFromLive, usesFullUI: usesFullUI)
         if historyDeletion != nil {
             isLive = true
         } else {

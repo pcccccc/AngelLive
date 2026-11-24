@@ -131,8 +131,7 @@ public final class KSShortDramaPlayerController {
               layer.player is KSMEPlayer || layer.player is DualStreamPlayer,
               let resolvedURL else { return false }
 
-        // The pinned ME seek path truncates subsecond timestamps before scaling them. A
-        // failed exact-zero seek can land before a valid HLS start; reopen this same resolved
+        // A failed exact-zero seek can land before a valid HLS start; reopen this same resolved
         // resource once, without changing its UUID, surface, options or episode selection.
         let token = UUID()
         return await withTaskCancellationHandler {
@@ -217,8 +216,25 @@ public final class KSShortDramaPlayerController {
     }
 
     public func restoreIfPossible(model: ShortDramaPlaybackModel, onReady: @escaping (UUID) -> Void) {
+        restoreIfPossible(
+            matchesPlayback: { model.playback?.id == $0 },
+            finishRestoration: { id, target, duration, succeeded, resume in
+                await model.restorationCompleted(id: id, position: target, duration: duration,
+                                                 succeeded: succeeded, resumePlayback: resume)
+            },
+            hasFinished: { model.hasFinished },
+            onReady: onReady
+        )
+    }
+
+    func restoreIfPossible(
+        matchesPlayback: @escaping (UUID) -> Bool,
+        finishRestoration: @escaping (UUID, Double, Double, Bool, Bool) async -> Void,
+        hasFinished: @escaping () -> Bool,
+        onReady: @escaping (UUID) -> Void
+    ) {
         guard let restore = pendingRestore, !restore.started,
-              playbackID == restore.playbackID, model.playback?.id == restore.playbackID,
+              playbackID == restore.playbackID, matchesPlayback(restore.playbackID),
               let layer = coordinator?.playerLayer, layer.player.isReadyToPlay,
               layer.player.loadState == .playable, layer.player.seekable,
               layer.player.duration.isFinite, layer.player.duration > 0 else { return }
@@ -229,24 +245,21 @@ public final class KSShortDramaPlayerController {
             guard let self else { return }
             let succeeded = await seek(to: target, playbackID: restore.playbackID)
             guard !Task.isCancelled, playbackID == restore.playbackID,
-                  model.playback?.id == restore.playbackID,
+                  matchesPlayback(restore.playbackID),
                   coordinator?.playerLayer === layer,
                   pendingRestore?.playbackID == restore.playbackID else { return }
             layer.pause()
             restorationTask = nil
-            await model.restorationCompleted(
-                id: restore.playbackID, position: target, duration: duration,
-                succeeded: succeeded, resumePlayback: wantsPlayback
-            )
-            guard succeeded, !Task.isCancelled, model.playback?.id == restore.playbackID,
+            await finishRestoration(restore.playbackID, target, duration, succeeded, wantsPlayback)
+            guard succeeded, !Task.isCancelled, matchesPlayback(restore.playbackID),
                   playbackID == restore.playbackID, coordinator?.playerLayer === layer else { return }
             // A confirmed endpoint that did not advance is terminal for this instance.
             // Clear intent before releasing the restore hold so late paused/ready callbacks
             // cannot restart it; an already-selected next UUID keeps its inherited intent.
-            if model.hasFinished { pause() }
+            if hasFinished() { pause() }
             pendingRestore = nil
             onReady(restore.playbackID)
-            if wantsPlayback, !model.hasFinished { layer.play() }
+            if wantsPlayback, !hasFinished() { layer.play() }
         }
     }
 

@@ -1,3 +1,4 @@
+import AngelLiveCore
 import Observation
 import UIKit
 
@@ -36,8 +37,17 @@ final class AppIconSettingsModel {
     var applyingChoice: Choice?
     var isShowingError = false
     var errorMessage = ""
+    let allowsSelection: Bool
 
     init() {
+        #if DEBUG && canImport(KSPlayer)
+        if VodDemoSandbox.isEnabled {
+            allowsSelection = false
+            selection = .classic
+            return
+        }
+        #endif
+        allowsSelection = true
         let application = UIApplication.shared
         // The bundle default and the legacy AngelLiveClassic alternate both use the original artwork.
         selection = application.alternateIconName == Choice.xiaoShengBiBi.alternateIconName
@@ -46,6 +56,7 @@ final class AppIconSettingsModel {
     }
 
     func select(_ choice: Choice) async {
+        guard allowsSelection else { return }
         let application = UIApplication.shared
         guard applyingChoice == nil, application.alternateIconName != choice.alternateIconName else { return }
         guard application.supportsAlternateIcons else {

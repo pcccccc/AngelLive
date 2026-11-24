@@ -40,6 +40,10 @@ struct AngelLiveApp: App {
                 .environment(context.history)
                 .environment(context.favorite)
                 .installToast(position: .top)
+            #if canImport(KSPlayer)
+            case .vodDemo(let sandbox):
+                VodDemoAppRoot(sandbox: sandbox)
+            #endif
             case .invalid:
                 Text("UI 测试启动配置无效")
                     .accessibilityIdentifier("uitest.launch.invalid")
@@ -61,6 +65,9 @@ private enum AppLaunch {
     case production(ProductionAppModels)
     #if DEBUG
     case history(UITestHistoryContext)
+    #if canImport(KSPlayer)
+    case vodDemo(VodDemoSandbox)
+    #endif
     case invalid
     #endif
 
@@ -73,6 +80,11 @@ private enum AppLaunch {
             } else if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-test") }) {
                 return .invalid
             }
+            #if canImport(KSPlayer)
+            if VodDemoWork.isEnabled {
+                return .vodDemo(try VodDemoSandbox.current.get())
+            }
+            #endif
         } catch {
             // A malformed test launch must never fall through to personal application data.
             return .invalid
@@ -130,6 +142,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-test") }) {
             return true
         }
+        #if canImport(KSPlayer)
+        if VodDemoWork.isEnabled {
+            configureAudioSessionForPlayback()
+            configurePlayerOrientations()
+            return true
+        }
+        #endif
         #endif
         MediaTransformSupport.registerHostCapability()
         DualStreamSupport.registerHostCapability()
@@ -146,18 +165,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
         }
 
-        // 初始化屏幕方向设置
         // 将 KSPlayer 日志同时打印到 Xcode 控制台和 App 内开发者控制台
         KSOptions.logger = KSPlayerConsoleBridge()
         KSOptions.logLevel = .debug
         KSOptions.hudLog = false
+        configurePlayerOrientations()
+        return true
+    }
+
+    private func configurePlayerOrientations() {
+        // 初始化屏幕方向设置
         if AppConstants.Device.isIPad {
             KSOptions.supportedInterfaceOrientations = .all
         } else {
             // iPhone 初始只支持竖屏，播放器页面会动态修改
             KSOptions.supportedInterfaceOrientations = .portrait
         }
-        return true
     }
 
     /// 限制 Kingfisher 磁盘缓存上限,避免直播封面图无限堆积导致 Documents & Data 膨胀。

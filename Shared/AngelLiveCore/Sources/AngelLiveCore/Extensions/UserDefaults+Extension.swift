@@ -12,12 +12,18 @@ public extension UserDefaults {
         #if DEBUG
         if let configuration = UITestLaunchConfiguration.process { return configuration.defaults }
         #endif
+        #if DEBUG
+        if VodDemoSandbox.isEnabled { return UserDefaults(suiteName: VodDemoSandbox.defaultsSuiteName)! }
+        #endif
         return UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
     }()
 
     func synchronized() -> UserDefaults {
         #if DEBUG
         if let configuration = UITestLaunchConfiguration.process { return configuration.defaults }
+        #endif
+        #if DEBUG
+        if VodDemoSandbox.isEnabled { return .shared }
         #endif
         return UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
     }
