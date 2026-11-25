@@ -300,13 +300,18 @@ struct VodLongVideoTests {
     }
 
     @Test(arguments: [
-        ("第1集", "第 1 集"), ("第01集", "第 1 集"), ("第 01 集", "第 1 集"), ("第 1 集", "第 1 集"),
-        ("", "第 1 集"), (" \n ", "第 1 集"), (" 末班渡船 ", "第 1 集 · 末班渡船"),
-        ("第2集", "第 1 集 · 第2集")
+        (1, "第1集", "第 1 集"), (1, "第01集", "第 1 集"),
+        (1, "第 01 集", "第 1 集"), (1, "第 1 集", "第 1 集"),
+        (1, "", "第 1 集"), (1, " \n ", "第 1 集"),
+        (1, " 末班渡船 ", "第 1 集 · 末班渡船"), (1, "第2集", "第 1 集 · 第2集"),
+        (2, "选集 · 第2集", "第 2 集"), (2, " 选集 · 第 02 集 ", "第 2 集"),
+        (2, "选集 · 第3集", "第 2 集 · 选集 · 第3集"),
+        (2, "选集", "第 2 集 · 选集"),
+        (2, "末班 · 渡船 · 第2集", "第 2 集 · 末班 · 渡船")
     ])
-    func displayTitleUsesAQualifiedEpisodeNumberOnce(raw: String, expected: String) {
+    func displayTitleUsesAQualifiedEpisodeNumberOnce(number: Int, raw: String, expected: String) {
         let episode = VodEpisode(pluginID: "fixture.plugin", workID: "work-a", episodeID: "1",
-                                 seasonID: "", number: 1, title: raw)
+                                 seasonID: "", number: number, title: raw)
         #expect(episode.displayTitle == expected)
     }
 

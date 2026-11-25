@@ -86,11 +86,17 @@ public struct VodEpisode: Identifiable, Codable, Equatable, Sendable {
         let prefix = "第 \(number) 集"
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return prefix }
-        if trimmed.hasPrefix("第"), trimmed.hasSuffix("集") {
-            let digits = trimmed.dropFirst().dropLast().trimmingCharacters(in: .whitespacesAndNewlines)
-            if Int(digits) == number { return prefix }
+        let parts = trimmed.split(separator: "·")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let names = parts.filter { part in
+            guard part.hasPrefix("第"), part.hasSuffix("集") else { return true }
+            let digits = part.dropFirst().dropLast().trimmingCharacters(in: .whitespacesAndNewlines)
+            return Int(digits) != number
         }
-        return "\(prefix) · \(trimmed)"
+        guard names.count < parts.count else { return "\(prefix) · \(trimmed)" }
+        if names.isEmpty || names == ["选集"] { return prefix }
+        return ([prefix] + names).joined(separator: " · ")
     }
 
     public init(pluginID: String, workID: String, episodeID: String, seasonID: String,
