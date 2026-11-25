@@ -427,6 +427,10 @@ extension HistoryContentListViewController: UICollectionViewDelegate {
         let room = watchList[indexPath.item]
         // mode = .remote:异步请求 API 查询直播状态
         cancelPendingNavigation()
+        if VodRouting.declaresVod(room) || ShortDramaRouting.isShortDrama(room) || PlatformHostBehavior.isPlayableRoom(room) {
+            navigationState.navigate(to: room)
+            return
+        }
         let token = liveCheckToken
         liveCheckTask = Task { @MainActor [weak self] in
             guard let self else { return }

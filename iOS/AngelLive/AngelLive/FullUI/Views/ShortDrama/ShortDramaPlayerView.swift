@@ -36,7 +36,7 @@ struct ShortDramaPlayerView: View {
     @State private var seekRequestID = UUID()
     @State private var seekCommitInFlight = false
     @State private var seekPreview = SeekPreviewModel()
-    @State private var orientation = ShortDramaOrientationController()
+    @State private var orientation: ShortDramaOrientationController
     @State private var controlsVisible = true
     @State private var isLocked = false
     @State private var controlsHideID = UUID()
@@ -82,6 +82,9 @@ struct ShortDramaPlayerView: View {
         self.room = room
         self.presentsOverSource = presentsOverSource
         _model = State(initialValue: ShortDramaPlaybackModel(room: room))
+        _orientation = State(initialValue: ShortDramaOrientationController(
+            startsInLandscape: PlatformHostBehavior.declaredOrientation(for: room) == .landscape
+        ))
     }
 
     private var exitsLandscapeFullscreen: Bool {

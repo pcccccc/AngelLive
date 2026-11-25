@@ -17,9 +17,11 @@ public enum RoomSwitchCandidates {
         currentRoom: LiveModel,
         favorites: [LiveModel],
         history: [LiveModel],
-        category: [LiveModel]
+        category: [LiveModel],
+        includesOnDemand: Bool = false
     ) -> [LiveModel] {
-        orderedRooms(for: source, favorites: favorites, history: history, category: category)
+        orderedRooms(for: source, favorites: favorites, history: history,
+                     category: category, includesOnDemand: includesOnDemand)
             .filter { $0 != currentRoom }
     }
 
@@ -27,12 +29,13 @@ public enum RoomSwitchCandidates {
         for source: RoomSwitchSource,
         favorites: [LiveModel],
         history: [LiveModel],
-        category: [LiveModel]
+        category: [LiveModel],
+        includesOnDemand: Bool = false
     ) -> [LiveModel] {
         let sourceRooms: [LiveModel]
         switch source {
         case .favorite:
-            sourceRooms = favorites.filter { $0.liveState == LiveState.live.rawValue }
+            sourceRooms = playableFavorites(favorites, includesOnDemand: includesOnDemand)
         case .history:
             sourceRooms = history
         case .category:
@@ -49,9 +52,11 @@ public enum RoomSwitchCandidates {
         currentRoom: LiveModel,
         favorites: [LiveModel],
         history: [LiveModel],
-        category: [LiveModel]
+        category: [LiveModel],
+        includesOnDemand: Bool = false
     ) -> LiveModel? {
-        let rooms = orderedRooms(for: source, favorites: favorites, history: history, category: category)
+        let rooms = orderedRooms(for: source, favorites: favorites, history: history,
+                                 category: category, includesOnDemand: includesOnDemand)
         guard let currentIndex = rooms.firstIndex(of: currentRoom) else {
             return direction == .next ? rooms.first : nil
         }
@@ -63,13 +68,34 @@ public enum RoomSwitchCandidates {
         currentRoom: LiveModel,
         favorites: [LiveModel],
         history: [LiveModel],
-        category: [LiveModel]
+        category: [LiveModel],
+        includesOnDemand: Bool = false
     ) -> Int {
         var rooms = Set<LiveModel>()
-        rooms.formUnion(favorites.filter { $0.liveState == LiveState.live.rawValue })
+        rooms.formUnion(playableFavorites(favorites, includesOnDemand: includesOnDemand))
         rooms.formUnion(history)
         rooms.formUnion(category)
         rooms.remove(currentRoom)
         return rooms.count
+    }
+
+    static func playableFavorites(
+        _ favorites: [LiveModel],
+        includesOnDemand: Bool,
+        isOnDemand: (LiveType) -> Bool = { liveType in
+            let plugin = SandboxPluginCatalog.platform(for: liveType)
+                .flatMap { try? LiveParsePlugins.shared.resolve(pluginId: $0.pluginId) }
+            return plugin.map { PlatformHostBehavior.declaresOnDemand($0.manifest) } ?? false
+        }
+    ) -> [LiveModel] {
+        var onDemandByType: [LiveType: Bool] = [:]
+        return favorites.filter { room in
+            if room.liveState == LiveState.live.rawValue { return true }
+            guard includesOnDemand else { return false }
+            if let declared = onDemandByType[room.liveType] { return declared }
+            let declared = isOnDemand(room.liveType)
+            onDemandByType[room.liveType] = declared
+            return declared
+        }
     }
 }

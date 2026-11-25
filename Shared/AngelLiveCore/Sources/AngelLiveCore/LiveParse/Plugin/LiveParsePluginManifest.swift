@@ -413,6 +413,11 @@ public struct ManifestNativeStream: Codable, Equatable, Hashable, Sendable {
     }
 }
 
+public enum HostContentOrientation: String, Sendable, Equatable {
+    case landscape
+    case portrait
+}
+
 public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
     /// 收藏记录的主匹配键。默认 roomId；当房间号会变动时可声明为 userId。
     public let favoriteIdentityKey: String?
@@ -428,11 +433,22 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
     public let externalRoomURLTemplate: String?
     /// 展示用主题色，格式如 #RRGGBB 或 #AARRGGBB。
     public let themeColor: String?
-    /// 内容类型；只有显式 shortDrama 声明才进入短剧播放页。
+    /// 内容类型。已知点播类型由宿主选择对应的播放路径。
     public let contentKind: String?
     /// 分集来源；qualityList 表示单线路的 qualitys 数组承载分集。
     public let episodeSelection: String?
     public let vodSchema: Int?
+    public let orientation: String?
+
+    public var declaredOrientation: HostContentOrientation? {
+        orientation.flatMap {
+            HostContentOrientation(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
+    var selectsShortDramaEpisodes: Bool {
+        contentKind == "shortDrama" && episodeSelection == "qualityList"
+    }
 
     public init(
         favoriteIdentityKey: String? = nil,
@@ -444,7 +460,8 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
         themeColor: String? = nil,
         contentKind: String? = nil,
         episodeSelection: String? = nil,
-        vodSchema: Int? = nil
+        vodSchema: Int? = nil,
+        orientation: String? = nil
     ) {
         self.favoriteIdentityKey = favoriteIdentityKey
         self.preserveFavoriteRoomInfoOnRefresh = preserveFavoriteRoomInfoOnRefresh
@@ -456,6 +473,7 @@ public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
         self.contentKind = contentKind
         self.episodeSelection = episodeSelection
         self.vodSchema = vodSchema
+        self.orientation = orientation
     }
 }
 

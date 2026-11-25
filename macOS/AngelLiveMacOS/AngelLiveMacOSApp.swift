@@ -208,7 +208,7 @@ struct AngelLiveMacOSApp: App {
         #if DEBUG
         // UI tests open this native WindowGroup explicitly with File > New Window.
         // Suppress automatic presentation so each launch owns exactly one window.
-        .defaultLaunchBehavior(isUITesting ? .suppressed : .automatic)
+        .defaultLaunchBehavior(isUITesting ? .suppressed : (isVodDemo ? .presented : .automatic))
         .restorationBehavior(isUITesting || isVodDemo ? .disabled : .automatic)
         #endif
 

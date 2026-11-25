@@ -13,6 +13,7 @@ import Combine
 /// FullUI routes explicitly declared episodic content to its own player surface.
 struct DetailPlayerView: View {
     @Environment(\.fullUIRoomPlayerPushed) private var isPushed
+    @State private var routedOnDemandRoom: LiveModel?
     let viewModel: RoomInfoViewModel
     let categoryRooms: [LiveModel]
     let canLoadMoreCategoryRooms: () -> Bool
@@ -39,10 +40,14 @@ struct DetailPlayerView: View {
     }
 
     var body: some View {
+        let room = routedOnDemandRoom ?? viewModel.currentRoom
         Group {
-            if VodRouting.declaresVod(viewModel.currentRoom) {
-                let detail = VodWorkDetailView(room: viewModel.currentRoom, presentsOverSource: presentsOverRoomList)
-                    .id(viewModel.currentRoom.id)
+            if VodRouting.usesDirectPlayer(room) {
+                VodDirectPlayerView(room: room)
+                    .id(room.id)
+            } else if VodRouting.declaresVod(room) {
+                let detail = VodWorkDetailView(room: room, presentsOverSource: presentsOverRoomList)
+                    .id(room.id)
                     .interactivePopGestureEnabled(false, edgeOnly: true)
                     .interactiveDismissDisabled()
                 if presentsOverRoomList {
@@ -50,9 +55,9 @@ struct DetailPlayerView: View {
                 } else {
                     detail
                 }
-            } else if ShortDramaRouting.isShortDrama(viewModel.currentRoom) {
-                let player = ShortDramaPlayerView(room: viewModel.currentRoom, presentsOverSource: presentsOverRoomList)
-                    .id(viewModel.currentRoom.id)
+            } else if ShortDramaRouting.isShortDrama(room) {
+                let player = ShortDramaPlayerView(room: room, presentsOverSource: presentsOverRoomList)
+                    .id(room.id)
                     .interactivePopGestureEnabled(false, edgeOnly: true)
                 if presentsOverRoomList {
                     player.presentationBackground(.clear)
@@ -66,7 +71,8 @@ struct DetailPlayerView: View {
                     canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
                     onLoadMoreCategoryRooms: onLoadMoreCategoryRooms,
                     entryRoomSource: entryRoomSource,
-                    presentsOverRoomList: presentsOverRoomList
+                    presentsOverRoomList: presentsOverRoomList,
+                    onRouteOnDemandRoom: { routedOnDemandRoom = $0 }
                 )
                 .interactiveDismissDisabled()
                 if presentsOverRoomList {
@@ -98,6 +104,7 @@ struct LiveDetailPlayerView: View {
     let canLoadMoreCategoryRooms: () -> Bool
     let onLoadMoreCategoryRooms: (() async -> [LiveModel])?
     let presentsOverRoomList: Bool
+    let onRouteOnDemandRoom: ((LiveModel) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.fullUIWindowContext) private var windowContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -118,6 +125,8 @@ struct LiveDetailPlayerView: View {
     )
 
     @State private var entryPhase = EntryPhase.waitingForSize
+    @State private var declaredOrientation: HostContentOrientation?
+    @State private var transientOrientationRequest: UUID?
     @State private var entryVLCPlaybackStarted = false
 
     /// Fullscreen intent is independent of whether the scene accepts a rotation request.
@@ -201,13 +210,19 @@ struct LiveDetailPlayerView: View {
         canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
         onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil,
         entryRoomSource: RoomSwitchSource? = nil,
-        presentsOverRoomList: Bool = false
+        presentsOverRoomList: Bool = false,
+        onRouteOnDemandRoom: ((LiveModel) -> Void)? = nil
     ) {
         _viewModel = State(initialValue: viewModel)
         self.categoryRooms = categoryRooms
         self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
         self.onLoadMoreCategoryRooms = onLoadMoreCategoryRooms
         self.presentsOverRoomList = presentsOverRoomList
+        self.onRouteOnDemandRoom = onRouteOnDemandRoom
+        let orientation = PlatformHostBehavior.declaredOrientation(for: viewModel.currentRoom)
+        _declaredOrientation = State(initialValue: orientation)
+        _isVerticalLiveMode = State(initialValue: orientation == .portrait)
+        _entryPhase = State(initialValue: orientation == nil ? .waitingForSize : .resolvedLayout)
         let enteredFromCategory = categoryRooms.contains(viewModel.currentRoom)
         _selectedRoomSource = State(initialValue: entryRoomSource ?? (enteredFromCategory ? .category : .favorite))
         _switcherCategoryRooms = State(initialValue: categoryRooms)
@@ -334,6 +349,7 @@ struct LiveDetailPlayerView: View {
             videoAspectRatio: $videoAspectRatio,
             showsPortraitRoomSwitcher: usesPortraitRoomSwitcher,
             keepsPortraitLayoutWhileDetecting: portraitSwitchRoomID == viewModel.currentRoom.id,
+            declaredOrientation: declaredOrientation,
             pendingLoadingRoom: portraitSwitchRoomID == nil ? switchingRoom : nil,
             isCoveredByEntryLoading: showsEntryCover,
             onEntryVideoSize: entrySizeHandler,
@@ -585,6 +601,14 @@ struct LiveDetailPlayerView: View {
         .interactivePopGestureEnabled(false, edgeOnly: true)
 
         let observedPlayback = presentation.onChange(of: viewModel.currentRoom.id) { _, _ in
+            let orientation = PlatformHostBehavior.declaredOrientation(for: viewModel.currentRoom)
+            if orientation != declaredOrientation {
+                declaredOrientation = orientation
+                isVerticalLiveMode = orientation == .portrait
+                applyEntryOrientation()
+            } else if orientation != nil {
+                applyEntryOrientation()
+            }
             verticalLiveControlsVisible = true
             verticalLiveControlPopupPresented = false
             showJumpToLatest = false
@@ -636,12 +660,11 @@ struct LiveDetailPlayerView: View {
         }
         .onChange(of: windowContext?.window, initial: true) { _, window in
             guard window?.traitCollection.userInterfaceIdiom == .phone else { return }
-            KSOptions.supportedInterfaceOrientations = isVerticalLiveMode ? .portrait : .allButUpsideDown
-            windowContext?.hostViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            applyEntryOrientation()
         }
         .onChange(of: isVerticalLiveMode) { _, isVertical in
             // 竖向直播锁定竖屏，切回普通画幅时恢复自由旋转。
-            if usesPhoneOrientationPolicy {
+            if usesPhoneOrientationPolicy, declaredOrientation == nil {
                 KSOptions.supportedInterfaceOrientations = isVertical ? .portrait : .allButUpsideDown
                 if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
@@ -685,6 +708,7 @@ struct LiveDetailPlayerView: View {
             )
         }
         .onDisappear {
+            transientOrientationRequest = nil
             pendingPortraitRoom = nil
             roomSwitchTask?.cancel()
             roomSwitchRequestID = nil
@@ -819,6 +843,22 @@ struct LiveDetailPlayerView: View {
 
     // MARK: - Orientation
 
+    private func applyEntryOrientation() {
+        guard usesPhoneOrientationPolicy else { return }
+        transientOrientationRequest = nil
+        let mask: UIInterfaceOrientationMask = switch declaredOrientation {
+        case .landscape: .landscape
+        case .portrait: .portrait
+        case nil: isVerticalLiveMode ? .portrait : .allButUpsideDown
+        }
+        KSOptions.supportedInterfaceOrientations = mask
+        windowContext?.hostViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        if declaredOrientation != nil {
+            windowContext?.window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+            windowContext?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+        }
+    }
+
     /// iPhone 回前台后保留横屏全屏:临时锁定横屏发起几何更新,完成后恢复自由旋转,
     /// 这样既保留用户主动横屏,又允许之后旋转/双击切回竖屏。
     private func reassertLandscapeOrientation() {
@@ -829,12 +869,15 @@ struct LiveDetailPlayerView: View {
         guard usesPhoneOrientationPolicy else { return }
         KSOptions.supportedInterfaceOrientations = orientation
         guard let windowScene = windowContext?.windowScene else { return }
+        let requestID = UUID()
+        transientOrientationRequest = requestID
         // 先通知 ViewController 刷新支持的方向
         if let rootVC = windowContext?.hostViewController {
             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
         // 延迟到下一个 run loop,确保 VC 已刷新支持的方向
         DispatchQueue.main.async {
+            guard transientOrientationRequest == requestID else { return }
             let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                 interfaceOrientations: orientation
             )
@@ -843,6 +886,8 @@ struct LiveDetailPlayerView: View {
             }
             // 旋转完成后恢复自由旋转,允许用户后续旋转/双击切回竖屏
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard transientOrientationRequest == requestID else { return }
+                transientOrientationRequest = nil
                 KSOptions.supportedInterfaceOrientations = .allButUpsideDown
                 if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
@@ -992,7 +1037,8 @@ struct LiveDetailPlayerView: View {
             direction, for: selectedRoomSource, currentRoom: room,
             favorites: favoriteModel.roomList,
             history: switcherHistoryRooms ?? historyModel.watchList,
-            category: switcherCategoryRooms
+            category: switcherCategoryRooms,
+            includesOnDemand: true
         )
     }
 
@@ -1189,6 +1235,12 @@ struct LiveDetailPlayerView: View {
         portraitCompletion: ((Bool) -> Void)? = nil
     ) {
         if portraitCompletion == nil, room == viewModel.currentRoom || switchingRoom == room { return }
+        if let onRouteOnDemandRoom, VodRouting.declaresVod(room) || ShortDramaRouting.isShortDrama(room) {
+            roomSwitchTask?.cancel()
+            portraitCompletion?(true)
+            onRouteOnDemandRoom(room)
+            return
+        }
         // Subsequent room selections are owned by the existing switch loading paths.
         entryPhase = .finished
         let previousTask = roomSwitchTask

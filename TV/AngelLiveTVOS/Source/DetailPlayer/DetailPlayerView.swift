@@ -24,6 +24,7 @@ struct DetailPlayerView: View {
     @State private var roomBannerTask: Task<Void, Never>?
     @State private var showsBottomControls = false
     @State private var sleepTimer: TVPlaybackSleepTimer?
+    @State private var routedOnDemandRoom: LiveModel?
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
     @Environment(AppState.self) var appViewModel
     @Environment(\.usesFullUI) private var usesFullUI
@@ -32,6 +33,25 @@ struct DetailPlayerView: View {
     public var didExitView: (Bool, String) -> Void = {_, _ in}
     
     var body: some View {
+        #if canImport(KSPlayer)
+        if usesFullUI, let room = routedOnDemandRoom {
+            Group {
+                if TVVodRoute.matches(room: room, appViewModel: appViewModel) {
+                    TVVodContainerView(room: room, settings: appViewModel.generalSettingsViewModel, onExit: endPlay)
+                } else {
+                    TVShortDramaPlayerView(room: room, onExit: endPlay)
+                }
+            }
+            .id(room.id)
+        } else {
+            livePlayer
+        }
+        #else
+        livePlayer
+        #endif
+    }
+
+    private var livePlayer: some View {
         playerContent
             .fullScreenCover(item: $authenticationRecovery) { request in
                 AccountManagementView(recoveryPluginIDs: request.pluginIDs)
@@ -270,7 +290,8 @@ struct DetailPlayerView: View {
                           showsRoomBanner: roomBannerID == roomInfoViewModel.currentRoom.id,
                           sleepTimer: sleepTimer,
                           onSetSleepTimer: setSleepTimer,
-                          onBottomControlVisibilityChange: { showsBottomControls = $0 })
+                          onBottomControlVisibilityChange: { showsBottomControls = $0 },
+                          onRouteOnDemandRoom: { routedOnDemandRoom = $0 })
             .zIndex(3)
             .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
             .safeAreaPadding(.all, usesFullUI ? 0 : nil)

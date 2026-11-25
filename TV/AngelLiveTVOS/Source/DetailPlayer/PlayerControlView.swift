@@ -72,6 +72,7 @@ struct PlayerControlView: View {
     let sleepTimer: TVPlaybackSleepTimer?
     let onSetSleepTimer: (Int) -> Void
     let onBottomControlVisibilityChange: (Bool) -> Void
+    let onRouteOnDemandRoom: (LiveModel) -> Void
 
     private static let fullUIDanmakuHintFont = UIFont.systemFont(ofSize: 24, weight: .semibold)
     private static let fullUIDanmakuHintHorizontalInset: CGFloat = 24
@@ -1557,6 +1558,15 @@ struct PlayerControlView: View {
     }
     
     @MainActor func changeRoom(_ liveModel: LiveModel) {
+        #if canImport(KSPlayer)
+        if usesFullUI, TVVodRoute.matches(room: liveModel, appViewModel: appViewModel)
+            || TVShortDramaRoute.matches(room: liveModel, appViewModel: appViewModel) {
+            roomInfoViewModel.showTop = false
+            topState = nil
+            onRouteOnDemandRoom(liveModel)
+            return
+        }
+        #endif
         if liveModel.liveState == "" || liveModel.liveState == LiveState.unknow.rawValue {
             roomInfoViewModel.showToast(false, title: "请等待房间状态同步")
         }else if liveModel.liveState == LiveState.close.rawValue {
@@ -1580,7 +1590,8 @@ struct PlayerControlView: View {
         case 0:
             let favorites = appViewModel.favoriteViewModel.roomList
             sectionList = usesFullUI
-                ? RoomSwitchCandidates.orderedRooms(for: .favorite, favorites: favorites, history: [], category: [])
+                ? RoomSwitchCandidates.orderedRooms(for: .favorite, favorites: favorites, history: [],
+                                                    category: [], includesOnDemand: true)
                 : favorites.filter { $0.liveState == LiveState.live.rawValue }
         case 1:
             let history = appViewModel.historyViewModel.watchList

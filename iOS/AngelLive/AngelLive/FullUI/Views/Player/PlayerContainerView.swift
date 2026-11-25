@@ -63,11 +63,18 @@ struct PlayerContentView: View {
     @Binding var videoAspectRatio: CGFloat
     var showsPortraitRoomSwitcher = false
     var keepsPortraitLayoutWhileDetecting = false
+    var declaredOrientation: HostContentOrientation?
     var pendingLoadingRoom: LiveModel?
     var isCoveredByEntryLoading = false
     var onEntryVideoSize: (@MainActor (CGSize) -> Void)?
     var entryVLCPlaybackStarted: Binding<Bool>?
     var blocksPageSwipe: Binding<Bool>?
+
+    private var usesVerticalPresentation: Bool {
+        if let declaredOrientation { return declaredOrientation == .portrait }
+        return isVideoPortrait && !usesExpandedLayout && landscapeLayout == nil
+    }
+
     @State private var isVideoPortrait: Bool = false
     @State private var hasDetectedSize: Bool = false // 是否已检测到真实尺寸
     @State private var detectedVideoSize: CGSize?
@@ -158,7 +165,7 @@ struct PlayerContentView: View {
             hidesOutsideLandscape: hasStream && useKSPlayer && isFullscreen
         ))
         .environment(\.isVerticalLiveMode, isVerticalLiveMode)
-        .onChange(of: isVideoPortrait && !usesExpandedLayout && landscapeLayout == nil, initial: true) { _, usesVerticalPresentation in
+        .onChange(of: usesVerticalPresentation, initial: true) { _, usesVerticalPresentation in
             isVerticalLiveMode = usesVerticalPresentation
             applyVideoFillMode(isVerticalLive: usesVerticalPresentation)
         }
@@ -494,7 +501,7 @@ struct PlayerContentView: View {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             videoAspectRatio = 16.0 / 9.0
                             isVideoPortrait = false
-                            isVerticalLiveMode = false
+                            isVerticalLiveMode = declaredOrientation == .portrait
                             hasDetectedSize = true
                             hasVLCStartedPlayback = false
                         }
@@ -507,13 +514,13 @@ struct PlayerContentView: View {
                 if !keepsPortraitLayoutWhileDetecting {
                     videoAspectRatio = 16.0 / 9.0
                     isVideoPortrait = false
-                    isVerticalLiveMode = false
+                    isVerticalLiveMode = declaredOrientation == .portrait
                 }
                 hasDetectedSize = false
                 detectedVideoSize = nil
                 hasVLCStartedPlayback = false
                 if useKSPlayer && !keepsPortraitLayoutWhileDetecting {
-                    applyVideoFillMode(isVerticalLive: false) // 重置为默认的 fit 模式
+                    applyVideoFillMode(isVerticalLive: declaredOrientation == .portrait)
                 }
                 // task(id: playURL.absoluteString) 会自动触发重新检测
             }
@@ -711,8 +718,8 @@ struct PlayerContentView: View {
     private func resetVideoGeometry() {
         videoAspectRatio = 16.0 / 9.0
         isVideoPortrait = false
-        isVerticalLiveMode = false
-        applyVideoFillMode(isVerticalLive: false)
+        isVerticalLiveMode = declaredOrientation == .portrait
+        applyVideoFillMode(isVerticalLive: isVerticalLiveMode)
     }
 
     /// KSMEPlayer 在媒体未就绪时会以窗口尺寸作为 naturalSize，不能据此决定直播画幅。
@@ -729,7 +736,7 @@ struct PlayerContentView: View {
         // 已校正旋转的显示尺寸决定画幅；播放推进时也允许校正迟到的尺寸。
         let ratio = naturalSize.width / naturalSize.height
         let isPortrait = ratio < 1
-        if isPortrait, isVerticalLiveMode,
+        if isVerticalLiveMode, isPortrait || declaredOrientation == .portrait,
            playerLayer.player.contentMode != .scaleAspectFill || playerLayer.player.view.clipsToBounds == false {
             // A replacement player starts in fit even when the portrait layout stayed active.
             applyVideoFillMode(isVerticalLive: true)

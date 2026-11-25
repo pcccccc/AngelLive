@@ -168,6 +168,19 @@ public enum LiveParseJSPlatformManager {
         userId: String?,
         context: [String: Any] = [:]
     ) async throws -> [LiveQualityModel] {
+        try await getPlayArgs(
+            platform: platform, roomId: roomId, userId: userId,
+            context: context, pluginManager: LiveParsePlugins.shared
+        )
+    }
+
+    static func getPlayArgs(
+        platform: LiveParseJSPlatform,
+        roomId: String,
+        userId: String?,
+        context: [String: Any],
+        pluginManager: LiveParsePluginManager
+    ) async throws -> [LiveQualityModel] {
         try await callWithFallback(
             platform: platform,
             function: "getPlayback",
@@ -175,7 +188,8 @@ public enum LiveParseJSPlatformManager {
             payload: mergePayload(context, [
                 "roomId": roomId,
                 "userId": userId
-            ])
+            ]),
+            pluginManager: pluginManager
         )
     }
 
@@ -205,6 +219,19 @@ public enum LiveParseJSPlatformManager {
         cdn: LiveQualityModel,
         quality: LiveQualityDetail
     ) async throws -> LiveQualityDetail {
+        try await refreshPlayback(
+            platform: platform, roomId: roomId, cdn: cdn, quality: quality,
+            pluginManager: LiveParsePlugins.shared
+        )
+    }
+
+    static func refreshPlayback(
+        platform: LiveParseJSPlatform,
+        roomId: String,
+        cdn: LiveQualityModel,
+        quality: LiveQualityDetail,
+        pluginManager: LiveParsePluginManager
+    ) async throws -> LiveQualityDetail {
         let cdnPayload = try encodePayload(cdn)
         let qualityPayload = try encodePayload(quality)
         return try await callDecodable(
@@ -214,7 +241,8 @@ public enum LiveParseJSPlatformManager {
                 "roomId": roomId,
                 "cdn": cdnPayload,
                 "quality": qualityPayload
-            ]
+            ],
+            pluginManager: pluginManager
         )
     }
 
@@ -377,10 +405,21 @@ public enum LiveParseJSPlatformManager {
         function: String,
         payload: [String: Any] = [:]
     ) async throws -> ResultType {
+        try await callDecodable(
+            platform: platform, function: function, payload: payload, pluginManager: LiveParsePlugins.shared
+        )
+    }
+
+    private static func callDecodable<ResultType: Decodable>(
+        platform: LiveParseJSPlatform,
+        function: String,
+        payload: [String: Any],
+        pluginManager: LiveParsePluginManager
+    ) async throws -> ResultType {
         if let instanceID = PlaylistPlatformIdentity.instanceID(from: platform.pluginId) {
             return try await callPlaylist(instanceID: instanceID, function: function, payload: payload)
         }
-        return try await LiveParsePlugins.shared.callDecodable(
+        return try await pluginManager.callDecodable(
             pluginId: platform.pluginId,
             function: function,
             payload: payload
@@ -392,13 +431,14 @@ public enum LiveParseJSPlatformManager {
         platform: LiveParseJSPlatform,
         function: String,
         fallback: String,
-        payload: [String: Any] = [:]
+        payload: [String: Any] = [:],
+        pluginManager: LiveParsePluginManager = LiveParsePlugins.shared
     ) async throws -> ResultType {
         if let instanceID = PlaylistPlatformIdentity.instanceID(from: platform.pluginId) {
             return try await callPlaylist(instanceID: instanceID, function: function, payload: payload)
         }
         do {
-            let result: ResultType = try await LiveParsePlugins.shared.callDecodable(
+            let result: ResultType = try await pluginManager.callDecodable(
                 pluginId: platform.pluginId,
                 function: function,
                 payload: payload
@@ -407,7 +447,7 @@ public enum LiveParseJSPlatformManager {
         } catch let error as LiveParsePluginError {
             // 仅当函数不存在时回退，其他错误直接抛出
             if case .invalidReturnValue(let msg) = error, msg.contains("Missing function") {
-                return try await LiveParsePlugins.shared.callDecodable(
+                return try await pluginManager.callDecodable(
                     pluginId: platform.pluginId,
                     function: fallback,
                     payload: payload

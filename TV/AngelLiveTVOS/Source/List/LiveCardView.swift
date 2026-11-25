@@ -527,7 +527,9 @@ struct LiveCardView: View {
             return
         }
 
-        let isPlayableRoom = liveViewModel.currentRoom.map(PlatformHostBehavior.isPlayableRoom) ?? false
+        let isPlayableRoom = liveViewModel.currentRoom.map {
+            PlatformHostBehavior.isPlayableRoom($0, includesOnDemand: usesFullUI)
+        } ?? false
 
         if isPlayableRoom || liveViewModel.roomListType == .live {
             proceedToPlayer()
@@ -553,7 +555,7 @@ struct LiveCardView: View {
                         liveViewModel.roomList[roomIndex] = updatedRoom
                     }
                     liveViewModel.currentRoom = updatedRoom
-                    if PlatformHostBehavior.isPlayableRoom(updatedRoom) {
+                    if PlatformHostBehavior.isPlayableRoom(updatedRoom, includesOnDemand: usesFullUI) {
                         proceedToPlayer()
                     } else {
                         presentToast(false, title: "主播已经下播")

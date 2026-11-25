@@ -7,7 +7,7 @@ import UIKit
 
 struct VodLandscapePlayerView: View {
     let model: VodPlaybackModel
-    let episode: VodEpisode
+    var episode: VodEpisode? = nil
     let sourceID: String?
 
     let requiresLandscape: Bool
@@ -102,7 +102,13 @@ struct VodLandscapePlayerView: View {
                 if finished && seek == nil { clock.current = clock.duration }
             }
             .onChange(of: scenePhase) { _, phase in handleScenePhase(phase) }
-            .task { await model.selectEpisode(id: episode.id, sourceID: sourceID) }
+            .task {
+                if let episode {
+                    await model.selectEpisode(id: episode.id, sourceID: sourceID)
+                } else {
+                    await model.loadAndPlayInitialEpisode()
+                }
+            }
             .task(id: scenePhase == .background ? nil : model.playback?.id) { await samplePlayback() }
             .task(id: overlayHold) {
                 guard !Task.isCancelled, !isLeaving else { return }
@@ -465,6 +471,77 @@ struct VodLandscapePlayerView: View {
             model.recordProgress(id: id, position: sample.current, duration: sample.duration)
         }
         model.flushProgress()
+    }
+}
+
+struct VodDirectPlayerView: View {
+    private let orientation: HostContentOrientation
+    @State private var model: VodPlaybackModel
+    @State private var orientationRequestID: UUID?
+    @State private var previousPolicy: UIInterfaceOrientationMask?
+    @State private var geometryUpdateFailed = false
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.fullUIWindowContext) private var windowContext
+
+    init(room: LiveModel) {
+        orientation = VodRouting.preferredOrientation(for: room)
+        _model = State(initialValue: VodRouting.model(for: room))
+    }
+
+    private var isPhone: Bool {
+        if let window = windowContext?.window {
+            return window.traitCollection.userInterfaceIdiom == .phone
+        }
+        return !AppConstants.Device.isIPad
+    }
+
+    var body: some View {
+        VodLandscapePlayerView(
+            model: model, sourceID: nil,
+            requiresLandscape: isPhone && orientation == .landscape && !geometryUpdateFailed,
+            onExit: {
+                restorePortrait()
+                dismiss()
+            }
+        )
+        .navigationBarBackButtonHidden()
+        .interactivePopGestureEnabled(false, edgeOnly: true)
+        .interactiveDismissDisabled()
+        .onChange(of: windowContext?.window, initial: true) { _, _ in requestOrientation() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && orientation == .landscape { requestOrientation() }
+        }
+        .onDisappear { restorePortrait() }
+    }
+
+    private func requestOrientation() {
+        guard isPhone, let scene = windowContext?.windowScene else { return }
+        if orientationRequestID == nil { previousPolicy = KSOptions.supportedInterfaceOrientations }
+        let id = UUID()
+        orientationRequestID = id
+        let mask: UIInterfaceOrientationMask = orientation == .landscape ? .landscape : .portrait
+        updatePolicy(mask)
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in
+            Task { @MainActor in
+                guard orientationRequestID == id else { return }
+                geometryUpdateFailed = true
+                updatePolicy(previousPolicy)
+            }
+        }
+    }
+
+    private func restorePortrait() {
+        guard orientationRequestID != nil else { return }
+        orientationRequestID = nil
+        updatePolicy(.portrait)
+        windowContext?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
+    }
+
+    private func updatePolicy(_ mask: UIInterfaceOrientationMask?) {
+        KSOptions.supportedInterfaceOrientations = mask
+        windowContext?.hostViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        windowContext?.window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 }
 #endif

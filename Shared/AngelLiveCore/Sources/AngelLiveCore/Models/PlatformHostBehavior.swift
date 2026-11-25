@@ -40,9 +40,41 @@ public enum PlatformHostBehavior {
         return PlatformCapability.supports(.liveState, for: liveType)
     }
 
+    public static func declaredOrientation(for liveType: LiveType) -> HostContentOrientation? {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else { return nil }
+        if let selected = try? LiveParsePlugins.shared.resolve(pluginId: platform.pluginId) {
+            return selected.manifest.hostBehavior?.declaredOrientation
+        }
+        return platform.hostBehavior?.declaredOrientation
+    }
+
+    public static func declaredOrientation(for room: LiveModel) -> HostContentOrientation? {
+        declaredOrientation(for: room.liveType)
+    }
+
     public static func isPlayableRoom(_ room: LiveModel) -> Bool {
+        isPlayableRoom(room, includesOnDemand: true)
+    }
+
+    public static func isPlayableRoom(_ room: LiveModel, includesOnDemand: Bool) -> Bool {
+        let platform = SandboxPluginCatalog.platform(for: room.liveType)
+        let manifest = includesOnDemand
+            ? platform.flatMap { try? LiveParsePlugins.shared.resolve(pluginId: $0.pluginId).manifest }
+            : nil
+        return isPlayableRoom(room, manifest: manifest, playableLiveStates: platform?.hostBehavior?.playableLiveStates)
+    }
+
+    static func isPlayableRoom(_ room: LiveModel, manifest: LiveParsePluginManifest?,
+                               playableLiveStates: [String]? = nil) -> Bool {
+        if let manifest, declaresOnDemand(manifest) { return true }
         let state = room.liveState ?? LiveState.unknow.rawValue
-        return playableLiveStates(for: room.liveType).contains(state)
+        guard let playableLiveStates, !playableLiveStates.isEmpty else { return state == LiveState.live.rawValue }
+        return playableLiveStates.contains { $0.trimmingCharacters(in: .whitespacesAndNewlines) == state && !state.isEmpty }
+    }
+
+    static func declaresOnDemand(_ manifest: LiveParsePluginManifest) -> Bool {
+        manifest.hostBehavior?.selectsShortDramaEpisodes == true
+            || VodPluginPolicy.isLongVideoSupported(manifest) || VodPluginPolicy.declaresVodContent(manifest)
     }
 
     public static func externalRoomURL(for liveType: LiveType, roomId: String, userId: String) -> URL? {
@@ -62,13 +94,6 @@ public enum PlatformHostBehavior {
         let normalized = behavior(for: liveType)?.themeColor?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return normalized?.isEmpty == false ? normalized : nil
-    }
-
-    private static func playableLiveStates(for liveType: LiveType) -> Set<String> {
-        guard let rawStates = behavior(for: liveType)?.playableLiveStates, !rawStates.isEmpty else {
-            return [LiveState.live.rawValue]
-        }
-        return Set(rawStates.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
     }
 
     private static func behavior(for liveType: LiveType) -> ManifestHostBehavior? {

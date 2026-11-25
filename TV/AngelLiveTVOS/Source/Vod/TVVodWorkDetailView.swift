@@ -376,5 +376,5 @@ struct TVVodOptionStyle: ButtonStyle {
 }
 
 extension VodEpisode {
-    var tvVodTitle: String { title.isEmpty ? "第 \(number) 集" : "第 \(number) 集 · \(title)" }
+    var tvVodTitle: String { displayTitle }
 }

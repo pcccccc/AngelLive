@@ -3,13 +3,35 @@ import Foundation
 @MainActor
 public enum VodHostRouting {
     public static func declaresVod(_ room: LiveModel) -> Bool {
-        guard let plugin = selectedPlugin(for: room) else { return false }
-        return VodPluginPolicy.declaresVodContent(plugin.manifest)
+        selectedPlugin(for: room).map { declaresVod($0.manifest) } ?? false
     }
 
     public static func isVod(_ room: LiveModel) -> Bool {
-        guard let plugin = selectedPlugin(for: room) else { return false }
-        return VodPluginPolicy.isSupported(plugin)
+        selectedPlugin(for: room).map { isVod($0) } ?? false
+    }
+
+    public static func usesDirectPlayer(_ room: LiveModel) -> Bool {
+        selectedPlugin(for: room).map { usesDirectPlayer($0.manifest) } ?? false
+    }
+
+    public static func preferredOrientation(for room: LiveModel) -> HostContentOrientation {
+        preferredOrientation(for: selectedPlugin(for: room)?.manifest)
+    }
+
+    static func declaresVod(_ manifest: LiveParsePluginManifest) -> Bool {
+        VodPluginPolicy.declaresVodContent(manifest) || usesDirectPlayer(manifest)
+    }
+
+    static func isVod(_ plugin: LiveParseLoadedPlugin) -> Bool {
+        VodPluginPolicy.isSupported(plugin) || usesDirectPlayer(plugin.manifest)
+    }
+
+    static func usesDirectPlayer(_ manifest: LiveParsePluginManifest) -> Bool {
+        VodPluginPolicy.isLongVideoSupported(manifest)
+    }
+
+    static func preferredOrientation(for manifest: LiveParsePluginManifest?) -> HostContentOrientation {
+        manifest?.hostBehavior?.declaredOrientation ?? .landscape
     }
 
     public static func model(for room: LiveModel) -> VodPlaybackModel {
@@ -35,7 +57,7 @@ public enum VodHostRouting {
         return playback.sources
     }
 
-    private static func selectedPlugin(for room: LiveModel) -> LiveParseLoadedPlugin? {
+    static func selectedPlugin(for room: LiveModel) -> LiveParseLoadedPlugin? {
         #if DEBUG
         if VodDemoWork.isEnabled {
             guard let work = VodDemoWork.matching(room), let sandbox = try? VodDemoSandbox.current.get() else { return nil }

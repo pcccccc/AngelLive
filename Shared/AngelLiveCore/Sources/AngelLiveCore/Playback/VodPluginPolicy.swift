@@ -8,6 +8,11 @@ public enum VodPluginPolicy {
         manifest.hostBehavior?.contentKind == "vod"
     }
 
+    public static func isLongVideoSupported(_ manifest: LiveParsePluginManifest) -> Bool {
+        guard let behavior = manifest.hostBehavior, behavior.contentKind == "longVideo" else { return false }
+        return behavior.episodeSelection == nil || behavior.episodeSelection == "qualityList"
+    }
+
     public static func isSupported(pluginId: String) -> Bool {
         guard let plugin = try? LiveParsePlugins.shared.resolve(pluginId: pluginId) else { return false }
         return isSupported(plugin)

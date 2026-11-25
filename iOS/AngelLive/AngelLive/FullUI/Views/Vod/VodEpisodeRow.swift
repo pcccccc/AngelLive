@@ -23,7 +23,7 @@ struct VodEpisodeRow: View {
                     }
                     .clipShape(.rect(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("第 \(episode.number) 集 · \(episode.title)")
+                    Text(episode.displayTitle)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     details

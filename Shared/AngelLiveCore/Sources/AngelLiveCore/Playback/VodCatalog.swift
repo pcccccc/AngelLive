@@ -82,6 +82,17 @@ public struct VodEpisode: Identifiable, Codable, Equatable, Sendable {
     public let stillURL: String?
     public let synopsis: String?
 
+    public var displayTitle: String {
+        let prefix = "第 \(number) 集"
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return prefix }
+        if trimmed.hasPrefix("第"), trimmed.hasSuffix("集") {
+            let digits = trimmed.dropFirst().dropLast().trimmingCharacters(in: .whitespacesAndNewlines)
+            if Int(digits) == number { return prefix }
+        }
+        return "\(prefix) · \(trimmed)"
+    }
+
     public init(pluginID: String, workID: String, episodeID: String, seasonID: String,
                 number: Int, title: String, durationHint: Double? = nil,
                 stillURL: String? = nil, synopsis: String? = nil) {

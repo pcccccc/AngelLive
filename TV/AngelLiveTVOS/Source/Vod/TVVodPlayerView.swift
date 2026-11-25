@@ -7,7 +7,7 @@ import UIKit
 
 struct TVVodPlayerView: View {
     let model: VodPlaybackModel
-    let episode: VodEpisode
+    var episode: VodEpisode? = nil
     let sourceID: String?
     let settings: GeneralSettingModel
     let backInput: TVVodBackInput
@@ -120,7 +120,13 @@ struct TVVodPlayerView: View {
             .ignoresSafeArea()
             .environment(\.colorScheme, .dark)
             .onAppear { playbackSession.register() }
-            .task { await model.selectEpisode(id: episode.id, sourceID: sourceID) }
+            .task {
+                if let episode {
+                    await model.selectEpisode(id: episode.id, sourceID: sourceID)
+                } else {
+                    await model.loadAndPlayInitialEpisode()
+                }
+            }
             .task(id: model.playback?.id) { await samplePlayback() }
             .task(id: overlayHold) {
                 guard !Task.isCancelled, !didExit else { return }

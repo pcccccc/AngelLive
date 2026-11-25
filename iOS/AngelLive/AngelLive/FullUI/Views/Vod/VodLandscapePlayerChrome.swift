@@ -72,7 +72,7 @@ extension VodLandscapePlayerView {
                         .accessibilityAddTraits(.isHeader)
                 }
                 if isSeries, let episode = model.selectedEpisode {
-                    Text("第 \(episode.number) 集 · \(episode.title)")
+                    Text(episode.displayTitle)
                         .font(.system(size: 13))
                 }
             }
@@ -132,6 +132,7 @@ extension VodLandscapePlayerView {
                         Label("选集", systemImage: "list.bullet")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 12).frame(minHeight: FullUIPlayerChrome.controlSize)
+                            .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.white)
@@ -237,7 +238,7 @@ extension VodLandscapePlayerView {
 
     private func creditsCard(_ offer: VodCreditsOffer) -> some View {
         let next = offer.nextEpisode
-        return MediaUpNextCard(episodeTitle: "第 \(next.number) 集 · \(next.title)", countdown: countdown) {
+        return MediaUpNextCard(episodeTitle: next.displayTitle, countdown: countdown) {
             VodArtwork(path: next.stillURL, symbol: "film")
         } actions: {
             Button(action: advanceFromCredits) { Label("立即播放", systemImage: "play.fill") }

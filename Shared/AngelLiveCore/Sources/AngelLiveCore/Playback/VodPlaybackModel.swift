@@ -34,10 +34,11 @@ public final class VodPlaybackModel {
 
     public var preferredEpisode: VodEpisode? {
         guard let detail else { return nil }
+        let episodes = detail.episodes.filter { dependencies.isEpisodeAutoSelectable?($0) ?? true }
         if let progressSnapshot {
-            return VodProgressSession(snapshot: progressSnapshot).preferredEpisode(in: detail.episodes)
+            return VodProgressSession(snapshot: progressSnapshot).preferredEpisode(in: episodes)
         }
-        return detail.episodes.first
+        return episodes.first
     }
 
     public var creditsOffer: VodCreditsOffer? {
@@ -54,6 +55,7 @@ public final class VodPlaybackModel {
     @ObservationIgnored private var progressStorageAvailable = true
     @ObservationIgnored private var selectedSourceID: String?
     @ObservationIgnored private var cancelled = false
+    @ObservationIgnored private var startsInPlayer = false
     @ObservationIgnored private var completion = ShortDramaCompletionPolicy()
     @ObservationIgnored private var introDismissed = false
     @ObservationIgnored private var creditsDismissed = false
@@ -79,13 +81,24 @@ public final class VodPlaybackModel {
     }
 
     public func loadDetail() async {
+        await loadDetail(playInitialEpisode: false)
+    }
+
+    public func loadAndPlayInitialEpisode() async {
+        await loadDetail(playInitialEpisode: true)
+    }
+
+    private func loadDetail(playInitialEpisode: Bool) async {
         guard !isLoadingDetail else { return }
+        startsInPlayer = playInitialEpisode
         cancelled = false
         let token = beginRequest()
         isLoadingDetail = true
+        isLoadingPlayback = playInitialEpisode
         detail = nil
         selectedSeasonID = nil
         selectedEpisodeID = nil
+        selectedSourceID = nil
         progressSnapshot = nil
         progressWarning = nil
         progress = nil
@@ -96,10 +109,16 @@ public final class VodPlaybackModel {
                 guard self.isCurrent(token) else { return }
                 self.detail = detail
                 self.loadProgress(for: detail)
-                self.selectedEpisodeID = self.preferredEpisode?.id
-                self.selectedSeasonID = self.preferredEpisode.flatMap { preferred in
+                let episode = self.preferredEpisode
+                self.selectedEpisodeID = episode?.id
+                self.selectedSeasonID = episode.flatMap { preferred in
                     detail.seasons.first { $0.id == preferred.seasonID }?.id
                 } ?? detail.seasons.first?.id
+                if playInitialEpisode {
+                    guard let episode else { throw VodCatalogError.invalidPlaybackURL }
+                    self.isLoadingDetail = false
+                    await self.preparePlayback(detail: detail, episode: episode, sourceID: nil, token: token)
+                }
             } catch {
                 self.fail(error, token: token, fallback: "无法加载作品详情，请重试")
             }
@@ -127,35 +146,40 @@ public final class VodPlaybackModel {
         selectedSourceID = sourceID
         let task = Task { [weak self] in
             guard let self, self.isCurrent(token) else { return }
-            do {
-                var resolved = try await self.dependencies.resolvePlayback(detail, episode, sourceID)
-                guard self.isCurrent(token) else { return }
-                self.selectedSourceID = sourceID ?? resolved.sourceID
-                if resolved.refreshOnSelect {
-                    resolved = try await self.dependencies.resolvePlayback(detail, episode, self.selectedSourceID)
-                    guard self.isCurrent(token) else { return }
-                }
-                guard resolved.workID == detail.workID, resolved.episodeID == episode.id,
-                      resolved.rawEpisodeID == episode.episodeID else { throw VodCatalogError.mismatchedIdentity }
-                guard resolved.quality.playbackHints?.isLive == false else {
-                    throw VodCatalogError.requiresOnDemandMedia
-                }
-                self.loadProgress(for: detail)
-                let id = UUID()
-                let resume = self.progress?.start(playbackID: id, episodeID: episode.id)
-                let playback = resolved.startingSession(id: id, at: resume)
-                self.completion.startPlayback(id: id)
-                self.playback = playback
-            } catch {
-                self.fail(error, token: token, fallback: "无法播放本集，请重试")
-            }
+            await self.preparePlayback(detail: detail, episode: episode, sourceID: sourceID, token: token)
         }
         await waitForRequest(task, token: token)
+    }
+
+    private func preparePlayback(detail: VodWorkDetail, episode: VodEpisode, sourceID: String?, token: UUID) async {
+        do {
+            var resolved = try await dependencies.resolvePlayback(detail, episode, sourceID)
+            guard isCurrent(token) else { return }
+            selectedSourceID = sourceID ?? resolved.sourceID
+            if resolved.refreshOnSelect {
+                resolved = try await dependencies.resolvePlayback(detail, episode, selectedSourceID)
+                guard isCurrent(token) else { return }
+            }
+            guard resolved.workID == detail.workID, resolved.episodeID == episode.id,
+                  resolved.rawEpisodeID == episode.episodeID else { throw VodCatalogError.mismatchedIdentity }
+            guard resolved.quality.playbackHints?.isLive == false else {
+                throw VodCatalogError.requiresOnDemandMedia
+            }
+            loadProgress(for: detail)
+            let id = UUID()
+            let resume = progress?.start(playbackID: id, episodeID: episode.id)
+            completion.startPlayback(id: id)
+            playback = resolved.startingSession(id: id, at: resume)
+        } catch {
+            fail(error, token: token, fallback: "无法播放本集，请重试")
+        }
     }
 
     public func retry() async {
         if detail != nil, let selectedEpisodeID {
             await selectEpisode(id: selectedEpisodeID, sourceID: selectedSourceID)
+        } else if startsInPlayer {
+            await loadAndPlayInitialEpisode()
         } else {
             await loadDetail()
         }
@@ -312,7 +336,8 @@ public final class VodPlaybackModel {
 
     private func fail(_ error: Error, token: UUID, fallback: String) {
         guard isCurrent(token), !(error is CancellationError) else { return }
-        errorMessage = (error as? VodCatalogError)?.errorDescription ?? fallback
+        let message = (error as? LocalizedError)?.errorDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
+        errorMessage = message?.isEmpty == false ? message : fallback
     }
 
     private func loadProgress(for detail: VodWorkDetail) {
@@ -388,7 +413,7 @@ public final class VodPlaybackModel {
     private var nextEpisode: VodEpisode? {
         guard let detail, detail.kind == .series,
               let index = detail.episodes.firstIndex(where: { $0.id == selectedEpisodeID }) else { return nil }
-        return detail.episodes.dropFirst(index + 1).first
+        return detail.episodes.dropFirst(index + 1).first { dependencies.isEpisodeAutoSelectable?($0) ?? true }
     }
 
     private func updateCompletionHold() async {
@@ -420,15 +445,21 @@ public final class VodPlaybackModel {
 public struct VodPlaybackDependencies {
     let loadDetail: @MainActor () async throws -> VodWorkDetail
     let resolvePlayback: @MainActor (VodWorkDetail, VodEpisode, String?) async throws -> VodResolvedPlayback
+    let isEpisodeAutoSelectable: (@MainActor (VodEpisode) -> Bool)?
 
     public init(loadDetail: @escaping @MainActor () async throws -> VodWorkDetail,
-                resolvePlayback: @escaping @MainActor (VodWorkDetail, VodEpisode, String?) async throws -> VodResolvedPlayback) {
+                resolvePlayback: @escaping @MainActor (VodWorkDetail, VodEpisode, String?) async throws -> VodResolvedPlayback,
+                isEpisodeAutoSelectable: (@MainActor (VodEpisode) -> Bool)? = nil) {
         self.loadDetail = loadDetail
         self.resolvePlayback = resolvePlayback
+        self.isEpisodeAutoSelectable = isEpisodeAutoSelectable
     }
 
     static func live(room: LiveModel) -> Self {
-        Self(
+        if let plugin = VodHostRouting.selectedPlugin(for: room), VodPluginPolicy.isLongVideoSupported(plugin.manifest) {
+            return VodLongVideoSource(room: room, plugin: plugin).dependencies
+        }
+        return Self(
             loadDetail: {
                 guard let platform = LiveParseJSPlatformManager.platform(for: room.liveType) else {
                     throw VodCatalogError.unsupportedPlugin

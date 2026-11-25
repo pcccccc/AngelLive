@@ -8,7 +8,7 @@ import Foundation
 import ImageIO
 
 public enum VodDemoWork: String, Identifiable, CaseIterable, Sendable {
-    case series, movie, incompatible
+    case series, movie, longVideo, incompatible
 
     public static let isEnabled = VodDemoSandbox.isEnabled
     public static let sources: [VodPlaybackSource] = [
@@ -21,6 +21,7 @@ public enum VodDemoWork: String, Identifiable, CaseIterable, Sendable {
         switch self {
         case .series: "雾港回声"
         case .movie: "远山来信"
+        case .longVideo: "海岬列车"
         case .incompatible: "协议不兼容示例"
         }
     }
@@ -29,6 +30,7 @@ public enum VodDemoWork: String, Identifiable, CaseIterable, Sendable {
         switch self {
         case .series: "剧集"
         case .movie: "电影"
+        case .longVideo: "剧集"
         case .incompatible: "协议诊断"
         }
     }
@@ -37,20 +39,25 @@ public enum VodDemoWork: String, Identifiable, CaseIterable, Sendable {
         switch self {
         case .series: "一场海雾，把多年未归的人重新带回港口。"
         case .movie: "一封寄自山间的信，让两位旧友踏上重逢的旅程。"
+        case .longVideo: "直达横屏"
         case .incompatible: "查看插件未提供受支持的点播能力时的提示。"
         }
     }
 
     public var featuredImage: CGImage? {
         switch self {
-        case .series: DemoArtwork.seriesImage
+        case .series, .longVideo: DemoArtwork.seriesImage
         case .movie: DemoArtwork.movieImage
         case .incompatible: nil
         }
     }
 
     public var pluginID: String {
-        self == .incompatible ? VodDemoSandbox.unsupportedPluginID : VodDemoSandbox.pluginID
+        switch self {
+        case .series, .movie: VodDemoSandbox.pluginID
+        case .longVideo: VodDemoSandbox.longVideoPluginID
+        case .incompatible: VodDemoSandbox.unsupportedPluginID
+        }
     }
 
     private var liveType: LiveType { LiveType(stringLiteral: pluginID) }
@@ -74,14 +81,24 @@ public enum VodDemoWork: String, Identifiable, CaseIterable, Sendable {
 
     @MainActor
     public func makeModel(progressStore: VodProgressStore) -> VodPlaybackModel {
-        VodPlaybackModel(dependencies: .init(
+        if self == .longVideo,
+           let sandbox = try? VodDemoSandbox.current.get(),
+           let plugin = try? sandbox.pluginManager.resolve(pluginId: pluginID),
+           VodPluginPolicy.isLongVideoSupported(plugin.manifest) {
+            let source = VodLongVideoSource(room: room, plugin: plugin, pluginManager: sandbox.pluginManager) {
+                let media = try await VodDemoMedia.shared.prepare()
+                return ["sampleURL": media.directory.appendingPathComponent("sample.mp4").absoluteString]
+            }
+            return VodPlaybackModel(dependencies: source.dependencies, progressStore: progressStore)
+        }
+        return VodPlaybackModel(dependencies: .init(
             loadDetail: {
-                guard self != .incompatible else { throw VodCatalogError.unsupportedPlugin }
+                guard self == .series || self == .movie else { throw VodCatalogError.unsupportedPlugin }
                 let media = try await VodDemoMedia.shared.prepare()
                 return detail(media: media)
             },
             resolvePlayback: { detail, episode, sourceID in
-                guard self != .incompatible else { throw VodCatalogError.unsupportedPlugin }
+                guard self == .series || self == .movie else { throw VodCatalogError.unsupportedPlugin }
                 let media = try await VodDemoMedia.shared.prepare()
                 let url = media.directory.appendingPathComponent("sample.mp4")
                 let subtitles = VodSubtitleFormat.allCases.map {

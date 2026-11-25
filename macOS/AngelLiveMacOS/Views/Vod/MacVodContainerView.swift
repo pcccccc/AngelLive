@@ -28,7 +28,10 @@ struct MacVodContainerView: View {
 
     var body: some View {
         Group {
-            if let launch = activeLaunch {
+            if VodHostRouting.usesDirectPlayer(room) {
+                MacVodPlayerView(model: model, sourceID: nil, onReturn: onClose,
+                                 onClose: onClose, onExitFullscreen: onExitFullscreen)
+            } else if let launch = activeLaunch {
                 MacVodPlayerView(
                     model: model, episode: launch.episode, sourceID: launch.sourceID, onReturn: returnToDetail,
                     onClose: onClose, onExitFullscreen: onExitFullscreen

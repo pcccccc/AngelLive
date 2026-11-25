@@ -59,7 +59,8 @@ struct RoomSwitcherListContent {
     let onLoadMoreCategory: (() async -> [LiveModel])?
 
     var rooms: [LiveModel] {
-        RoomSwitchCandidates.orderedRooms(for: source, favorites: favorites, history: history, category: category)
+        RoomSwitchCandidates.orderedRooms(for: source, favorites: favorites, history: history,
+                                          category: category, includesOnDemand: true)
             .map { $0 == currentRoom ? currentRoom : $0 }
     }
 

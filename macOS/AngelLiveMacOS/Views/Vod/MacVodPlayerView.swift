@@ -9,7 +9,7 @@ import SwiftUI
 
 struct MacVodPlayerView: View {
     let model: VodPlaybackModel
-    let episode: VodEpisode
+    var episode: VodEpisode? = nil
     let sourceID: String?
     let onReturn: () -> Void
     let onClose: () -> Void
@@ -166,7 +166,13 @@ struct MacVodPlayerView: View {
 
     private func lifecycle<Content: View>(_ content: Content) -> some View {
         content
-            .task { await model.selectEpisode(id: episode.id, sourceID: sourceID) }
+            .task {
+                if let episode {
+                    await model.selectEpisode(id: episode.id, sourceID: sourceID)
+                } else {
+                    await model.loadAndPlayInitialEpisode()
+                }
+            }
             .task(id: model.playback?.id) { await samplePlayback(id: model.playback?.id) }
             .task(id: overlayHold) {
                 guard !Task.isCancelled, !isLeaving else { return }
@@ -296,8 +302,8 @@ struct MacVodPlayerView: View {
             Button(action: returnToDetail) { controlIcon("xmark") }
                 .buttonStyle(.plain)
                 .macPlayerGlass(in: Circle())
-                .accessibilityLabel("返回作品详情")
-                .help("返回作品详情")
+                .accessibilityLabel(episode == nil ? "关闭播放器" : "返回作品详情")
+                .help(episode == nil ? "关闭播放器" : "返回作品详情")
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: title).font(.system(size: 13, weight: .semibold))
                 if let subtitle = episodeSubtitle(workTitle: title) {
@@ -336,7 +342,7 @@ struct MacVodPlayerView: View {
     }
 
     private func episodeSubtitle(workTitle: String) -> LocalizedStringResource? {
-        let current = model.selectedEpisode ?? episode
+        guard let current = model.selectedEpisode ?? episode else { return nil }
         if isSeries { return "\(current.macVodTitle)" }
         if !current.title.isEmpty, current.title != workTitle { return "\(current.title)" }
         return nil

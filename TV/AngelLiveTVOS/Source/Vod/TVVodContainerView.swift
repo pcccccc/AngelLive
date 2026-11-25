@@ -26,7 +26,11 @@ struct TVVodContainerView: View {
     var body: some View {
         Group {
             #if canImport(KSPlayer)
-            if let launch {
+            if VodHostRouting.usesDirectPlayer(room) {
+                TVVodPlayerView(model: model, sourceID: nil, settings: settings, backInput: backInput) { _ in
+                    onExit()
+                }
+            } else if let launch {
                 TVVodPlayerView(model: model, episode: launch.episode, sourceID: launch.sourceID,
                                 settings: settings, backInput: backInput) { episodeID in
                     returnEpisodeID = episodeID

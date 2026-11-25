@@ -18,7 +18,12 @@ final class ShortDramaOrientationController {
     private var manualOrientation: UIInterfaceOrientationMask?
     private var active = true
     private var requestID = UUID()
+    private let startsInLandscape: Bool
     var errorMessage: String?
+
+    init(startsInLandscape: Bool = false) {
+        self.startsInLandscape = startsInLandscape
+    }
 
     var permitsOrientationRequests: Bool {
         guard let host else { return false }
@@ -40,15 +45,20 @@ final class ShortDramaOrientationController {
         hasSavedPolicy = true
         savedPolicy = KSOptions.supportedInterfaceOrientations
         savedOrientation = scene?.interfaceOrientation ?? .unknown
-        applyPolicy()
+        if startsInLandscape {
+            allowsLandscape = true
+            enterLandscape()
+        } else {
+            applyPolicy()
+        }
     }
 
     func setLandscapeAllowed(_ allowed: Bool) {
         guard active else { return }
-        allowsLandscape = allowed
-        if !allowed, manualOrientation == .landscape { manualOrientation = .portrait }
+        allowsLandscape = startsInLandscape || allowed
+        if !allowsLandscape, manualOrientation == .landscape { manualOrientation = .portrait }
         if hasSavedPolicy { applyPolicy() }
-        if !allowed, scene?.interfaceOrientation.isLandscape == true,
+        if !allowsLandscape, scene?.interfaceOrientation.isLandscape == true,
            permitsOrientationRequests {
             request(.portrait)
         }

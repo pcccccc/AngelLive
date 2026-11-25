@@ -334,7 +334,9 @@ private extension HomeView {
         case .direct:
             navigationState.navigate(to: room, categoryRooms: rooms, transitionSourceID: transitionSourceID)
         case .local:
-            if room.liveState == LiveState.close.rawValue {
+            if room.liveState == LiveState.close.rawValue,
+               !VodRouting.declaresVod(room), !ShortDramaRouting.isShortDrama(room),
+               !PlatformHostBehavior.isPlayableRoom(room) {
                 presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
             } else {
                 navigationState.navigate(to: room, categoryRooms: rooms, transitionSourceID: transitionSourceID)

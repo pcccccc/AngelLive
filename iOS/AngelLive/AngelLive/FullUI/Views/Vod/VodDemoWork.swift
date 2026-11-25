@@ -60,9 +60,14 @@ private struct VodDemoRoot: View {
             .toolbar(.hidden, for: .navigationBar)
             .fullUITabBarVisibilityRoot()
             .navigationDestination(for: VodDemoWork.self) { work in
-                VodWorkDetailView(room: work.room, presentsOverSource: false)
-                    .interactivePopGestureEnabled(false, edgeOnly: true)
-                    .interactiveDismissDisabled()
+                if VodRouting.usesDirectPlayer(work.room) {
+                    DetailPlayerView(viewModel: RoomInfoViewModel(room: work.room))
+                        .environment(\.fullUIRoomPlayerPushed, true)
+                } else {
+                    VodWorkDetailView(room: work.room, presentsOverSource: false)
+                        .interactivePopGestureEnabled(false, edgeOnly: true)
+                        .interactiveDismissDisabled()
+                }
             }
         }
         .task {

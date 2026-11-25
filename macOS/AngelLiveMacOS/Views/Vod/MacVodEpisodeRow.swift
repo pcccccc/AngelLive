@@ -92,7 +92,7 @@ struct MacVodEpisodeRow: View {
 }
 
 extension VodEpisode {
-    var macVodTitle: String { title.isEmpty ? "第 \(number) 集" : "第 \(number) 集 · \(title)" }
+    var macVodTitle: String { displayTitle }
 }
 
 struct MacVodEpisodeList: View {

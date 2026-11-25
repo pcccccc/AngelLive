@@ -519,7 +519,8 @@ extension FavoriteListViewController: UICollectionViewDelegate {
             guard let raw = room.liveState, let state = LiveState(rawValue: raw) else { return true }
             return state != .close
         }()
-        if isLive {
+        if isLive || VodRouting.declaresVod(room) || ShortDramaRouting.isShortDrama(room)
+            || PlatformHostBehavior.isPlayableRoom(room) {
             navigationState.navigate(to: room)
         } else {
             let alert = UIAlertController(title: "主播已下播", message: nil, preferredStyle: .alert)

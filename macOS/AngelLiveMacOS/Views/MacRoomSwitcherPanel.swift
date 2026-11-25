@@ -30,7 +30,8 @@ struct MacRoomSwitcherPanel: View {
             for: activeSource,
             favorites: favorites,
             history: liveHistory,
-            category: category?.rooms ?? []
+            category: category?.rooms ?? [],
+            includesOnDemand: true
         )
         .map { $0 == currentRoom ? currentRoom : $0 }
     }

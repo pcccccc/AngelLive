@@ -10,6 +10,14 @@ enum VodRouting {
         VodHostRouting.isVod(room)
     }
 
+    static func usesDirectPlayer(_ room: LiveModel) -> Bool {
+        VodHostRouting.usesDirectPlayer(room)
+    }
+
+    static func preferredOrientation(for room: LiveModel) -> HostContentOrientation {
+        VodHostRouting.preferredOrientation(for: room)
+    }
+
     static func model(for room: LiveModel) -> VodPlaybackModel {
         VodHostRouting.model(for: room)
     }

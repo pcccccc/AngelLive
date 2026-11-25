@@ -210,6 +210,10 @@ private struct HistoryRoomCardButton<Content: View>: View {
     var body: some View {
         Button {
             guard !isChecking else { return }
+            if usesFullUI, VodHostRouting.declaresVod(room) || MacShortDramaRouting.isShortDrama(room) {
+                fullscreenPlayerManager.openRoom(room, openWindow: openWindow, usesFullUI: true)
+                return
+            }
             isChecking = true
             let token = UUID()
             liveCheckToken = token
