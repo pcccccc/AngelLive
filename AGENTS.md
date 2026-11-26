@@ -97,7 +97,7 @@ Package 测试、宿主构建、UI/设备验收三层分别报告，不能相互
 | 任务 | 必读文档 / Skill |
 | --- | --- |
 | 分派、交接、独立测试、监控运维、指南维护 | [collaboration.md](docs/agents/collaboration.md) |
-| UI 布局/视觉审查/整改 | [ui-visual-gate.md](docs/agents/ui-visual-gate.md)、`axiom-design`，及下方对应 UI 框架 Skill |
+| UI 布局/视觉审查/整改 | [ui-visual-gate.md](docs/agents/ui-visual-gate.md)、[ui-vocabulary.md](docs/agents/ui-vocabulary.md)、`axiom-design`，及下方对应 UI 框架 Skill |
 | SwiftUI / UIKit 或桥接 / macOS UI、窗口、菜单 | SwiftUI 先 `axiom-design`、再 `axiom-swiftui`；UIKit/桥接用 `axiom-uikit`；macOS 用 `axiom-macos` |
 | 构建、签名、环境准备、Xcode MCP/工具故障 | [xcode-mcp.md](docs/agents/xcode-mcp.md)；MCP 用 `axiom-xcode-mcp`，环境故障先 `axiom-build` |
 | 模拟器/真机 UI、安装运行、设备取证/交接 | [device-hub.md](docs/agents/device-hub.md)、[xcode-mcp.md](docs/agents/xcode-mcp.md)、`device-interaction`；macOS 按设备文档的原生流程 |
