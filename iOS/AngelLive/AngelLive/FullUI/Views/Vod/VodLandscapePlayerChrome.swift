@@ -36,6 +36,8 @@ extension VodLandscapePlayerView {
     }
 
     private func controlStack(width: CGFloat, layout: FullUILandscapePlayerLayout) -> some View {
+        let hasPlayback = model.playback != nil
+        let hasEpisodeCatalog = isSeries && model.detail?.episodes.isEmpty == false
         let titleWidth = layout.insets.top < FullUILandscapePlayerStatus.bottomEdge
             ? max(0, width / 2 - FullUILandscapePlayerStatus.halfWidthWithClearance
                   - layout.insets.leading - FullUIPlayerChrome.controlSize - 12)
@@ -51,9 +53,9 @@ extension VodLandscapePlayerView {
             if showsChrome || seek != nil {
                 VStack(spacing: 0) {
                     progressRow
-                        .modifier(VodChromeVisibility(isVisible: drawer == nil))
-                    bottomBar
-                        .modifier(VodChromeVisibility(isVisible: showsChrome && model.playback != nil))
+                        .modifier(VodChromeVisibility(isVisible: drawer == nil && hasPlayback))
+                    bottomBar(hasPlayback: hasPlayback, hasEpisodeCatalog: hasEpisodeCatalog)
+                        .modifier(VodChromeVisibility(isVisible: showsChrome && (hasPlayback || hasEpisodeCatalog)))
                 }
             }
         }
@@ -115,19 +117,21 @@ extension VodLandscapePlayerView {
         .accessibilityHidden(clock.duration <= 0)
     }
 
-    private var bottomBar: some View {
+    private func bottomBar(hasPlayback: Bool, hasEpisodeCatalog: Bool) -> some View {
         HStack(spacing: 8) {
-            FullUIPlayerGlassGroup {
-                chromeIcon(playing ? "pause.fill" : "play.fill", label: playing ? "暂停" : "播放",
-                           action: togglePlayback)
-                if isSeries {
-                    chromeIcon("backward.end.fill", label: "上一集", dimmed: atBoundary(-1)) { changeEpisode(-1) }
-                    chromeIcon("forward.end.fill", label: "下一集", dimmed: atBoundary(1)) { changeEpisode(1) }
+            if hasPlayback {
+                FullUIPlayerGlassGroup {
+                    chromeIcon(playing ? "pause.fill" : "play.fill", label: playing ? "暂停" : "播放",
+                               action: togglePlayback)
+                    if hasEpisodeCatalog {
+                        chromeIcon("backward.end.fill", label: "上一集", dimmed: atBoundary(-1)) { changeEpisode(-1) }
+                        chromeIcon("forward.end.fill", label: "下一集", dimmed: atBoundary(1)) { changeEpisode(1) }
+                    }
                 }
             }
             Spacer(minLength: 4)
             FullUIPlayerGlassGroup {
-                if isSeries {
+                if hasEpisodeCatalog {
                     Button { openDrawer(.episodes) } label: {
                         Label("选集", systemImage: "list.bullet")
                             .font(.subheadline.weight(.semibold))
@@ -137,9 +141,11 @@ extension VodLandscapePlayerView {
                     .buttonStyle(.plain)
                     .foregroundStyle(.white)
                 }
-                chromeText(VodPlayerDrawer.rateTitle(rate)) { openDrawer(.tracks(.rate)) }
-                    .accessibilityLabel("倍速")
-                    .accessibilityValue(VodPlayerDrawer.rateTitle(rate))
+                if hasPlayback {
+                    chromeText(VodPlayerDrawer.rateTitle(rate)) { openDrawer(.tracks(.rate)) }
+                        .accessibilityLabel("倍速")
+                        .accessibilityValue(VodPlayerDrawer.rateTitle(rate))
+                }
             }
         }
         .frame(height: FullUIPlayerChrome.controlSize)

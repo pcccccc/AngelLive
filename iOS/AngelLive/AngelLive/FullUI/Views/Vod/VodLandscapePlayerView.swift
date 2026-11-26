@@ -478,7 +478,6 @@ struct VodDirectPlayerView: View {
     private let orientation: HostContentOrientation
     @State private var model: VodPlaybackModel
     @State private var orientationRequestID: UUID?
-    @State private var previousPolicy: UIInterfaceOrientationMask?
     @State private var geometryUpdateFailed = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -508,25 +507,44 @@ struct VodDirectPlayerView: View {
         .navigationBarBackButtonHidden()
         .interactivePopGestureEnabled(false, edgeOnly: true)
         .interactiveDismissDisabled()
-        .onChange(of: windowContext?.window, initial: true) { _, _ in requestOrientation() }
+        .onChange(of: windowContext?.hostViewController, initial: true) { _, _ in requestOrientation() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && orientation == .landscape { requestOrientation() }
+            if phase == .active { requestOrientation() }
         }
         .onDisappear { restorePortrait() }
     }
 
     private func requestOrientation() {
-        guard isPhone, let scene = windowContext?.windowScene else { return }
-        if orientationRequestID == nil { previousPolicy = KSOptions.supportedInterfaceOrientations }
+        guard isPhone, let window = windowContext?.window, window.windowScene != nil,
+              windowContext?.hostViewController != nil else { return }
         let id = UUID()
         orientationRequestID = id
+        // The window probe can attach during either the zoom cover or a push.
+        // Wait for that transition to finish so UIKit queries the visible controller.
+        if let transition = orientationControllers(in: window).lazy.compactMap(\.transitionCoordinator).first,
+           transition.animate(alongsideTransition: nil, completion: { context in
+               guard !context.isCancelled else { return }
+               applyOrientation(id, in: window)
+           }) { return }
+        applyOrientation(id, in: window)
+    }
+
+    private func applyOrientation(_ id: UUID, in window: UIWindow) {
+        guard orientationRequestID == id, windowContext?.window === window,
+              let scene = window.windowScene else { return }
         let mask: UIInterfaceOrientationMask = orientation == .landscape ? .landscape : .portrait
-        updatePolicy(mask)
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in
+        geometryUpdateFailed = false
+        updatePolicy(mask, in: window)
+        let current = scene.effectiveGeometry.interfaceOrientation
+        guard !(orientation == .landscape ? current.isLandscape : current == .portrait) else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { @Sendable error in
+            let code = (error as NSError).code
             Task { @MainActor in
                 guard orientationRequestID == id else { return }
+                // Keep the declared mask available for device rotation even if
+                // the scene rejects this explicit geometry request.
                 geometryUpdateFailed = true
-                updatePolicy(previousPolicy)
+                Logger.warning("[VOD] 场景方向请求被拒绝（\(code)）", category: .player)
             }
         }
     }
@@ -534,14 +552,32 @@ struct VodDirectPlayerView: View {
     private func restorePortrait() {
         guard orientationRequestID != nil else { return }
         orientationRequestID = nil
-        updatePolicy(.portrait)
+        updatePolicy(.portrait, in: windowContext?.window)
         windowContext?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
     }
 
-    private func updatePolicy(_ mask: UIInterfaceOrientationMask?) {
+    private func updatePolicy(_ mask: UIInterfaceOrientationMask, in window: UIWindow?) {
         KSOptions.supportedInterfaceOrientations = mask
-        windowContext?.hostViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        windowContext?.window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        if let window {
+            for controller in orientationControllers(in: window) {
+                controller.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+        }
+    }
+
+    private func orientationControllers(in window: UIWindow) -> [UIViewController] {
+        var controllers: [UIViewController] = []
+        var current = windowContext?.hostViewController
+        while let controller = current {
+            controllers.append(controller)
+            current = controller.parent
+        }
+        current = window.rootViewController
+        while let controller = current {
+            if !controllers.contains(where: { $0 === controller }) { controllers.append(controller) }
+            current = controller.presentedViewController
+        }
+        return controllers
     }
 }
 #endif

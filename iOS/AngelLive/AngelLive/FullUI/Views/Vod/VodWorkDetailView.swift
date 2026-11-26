@@ -9,13 +9,24 @@ struct VodWorkDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var model: VodPlaybackModel
-    @State private var sources: [VodPlaybackSource] = []
-    @State private var sourceID: String?
+    @State private var sourceOptions: VodEpisodeSourceOptions?
     @Environment(\.fullUIWindowContext) private var windowContext
     @State private var playing = false
     @State private var presentationFailed = false
     @State private var episodeGroup: Int?
     @State private var reload = 0
+    @State private var loadedRevision: Int?
+
+    private var sourceQuery: VodEpisodeSourceOptions.Query? {
+        guard !playing, loadedRevision == reload, !model.isLoadingDetail,
+              let episodeID = model.preferredEpisode?.id else { return nil }
+        return .init(episodeID: episodeID, reload: reload)
+    }
+
+    private var currentSourceOptions: VodEpisodeSourceOptions? {
+        guard let sourceOptions, sourceOptions.query == sourceQuery else { return nil }
+        return sourceOptions
+    }
 
     init(room: LiveModel, presentsOverSource: Bool) {
         self.room = room
@@ -38,7 +49,9 @@ struct VodWorkDetailView: View {
     }
 
     private func page(_ geometry: GeometryProxy) -> some View {
-        ZStack(alignment: .top) {
+        let revision = reload
+        let sourceQuery = sourceQuery
+        return ZStack(alignment: .top) {
             if !VodRouting.isVod(room) {
                 ContentUnavailableView("点播协议不兼容", systemImage: "film",
                                        description: Text("当前插件版本未提供受支持的点播能力。"))
@@ -66,11 +79,14 @@ struct VodWorkDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .toolbar(.hidden, for: .navigationBar)
         .fullUITabBarHidden()
-        .task(id: reload) {
-            guard !playing, VodRouting.isVod(room) else { return }
+        .task(id: revision) {
+            guard !Task.isCancelled, revision == reload, !playing, VodRouting.isVod(room) else { return }
+            loadedRevision = nil
             await model.loadDetail()
+            guard !Task.isCancelled, revision == reload else { return }
+            loadedRevision = revision
         }
-        .task(id: model.preferredEpisode?.id) { await discoverSources() }
+        .task(id: sourceQuery) { await discoverSources(for: sourceQuery) }
         .alert("无法打开播放器", isPresented: $presentationFailed) {
             Button("好", role: .cancel) {}
         }
@@ -94,6 +110,7 @@ struct VodWorkDetailView: View {
         let portrait = height > width
         let wide = width >= 720
         let artwork = detail.heroArtwork(portrait: portrait, preferredEpisode: model.preferredEpisode)
+        let sourceOptions = currentSourceOptions
         let inset: CGFloat = wide ? 32 : 20
         // A movie page has no episode grid below the hero, so the hero fills the visible height.
         let heroHeight = detail.kind == .movie ? height - 24 :
@@ -101,7 +118,7 @@ struct VodWorkDetailView: View {
         return ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 MediaHeroStage(title: detail.title, metadata: detail.displayMetadata(formatTime: fullUIPlayerTime),
-                               tags: detail.displayTags(sourceCount: sources.count), synopsis: detail.synopsis,
+                               tags: detail.displayTags(sourceCount: sourceOptions?.sources.count ?? 0), synopsis: detail.synopsis,
                                titleFont: wide ? .system(size: 36, weight: .bold) : .title.bold(),
                                height: heroHeight, inset: inset, topClearance: geometry.safeAreaInsets.top + 52,
                                landscape: !portrait, fitsPoster: artwork.fitsPoster) {
@@ -110,13 +127,15 @@ struct VodWorkDetailView: View {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 12) {
                             if let episode = model.preferredEpisode { playButton(episode, detail: detail) }
-                            if sources.count > 1 { sourcePicker.fixedSize(horizontal: true, vertical: false) }
+                            if let sourceOptions, sourceOptions.sources.count > 1 {
+                                sourcePicker(sourceOptions).fixedSize(horizontal: true, vertical: false)
+                            }
                         }
                         .fixedSize(horizontal: true, vertical: false)
 
                         VStack(alignment: .leading, spacing: 10) {
                             if let episode = model.preferredEpisode { playButton(episode, detail: detail) }
-                            if sources.count > 1 { sourcePicker }
+                            if let sourceOptions, sourceOptions.sources.count > 1 { sourcePicker(sourceOptions) }
                         }
                     }
                 }
@@ -130,18 +149,19 @@ struct VodWorkDetailView: View {
         .ignoresSafeArea(.container, edges: .top)
     }
 
-    private var sourcePicker: some View {
+    private func sourcePicker(_ options: VodEpisodeSourceOptions) -> some View {
         Menu {
-            ForEach(sources) { source in
+            ForEach(options.sources) { source in
                 Button {
-                    sourceID = source.id
+                    guard currentSourceOptions?.query == options.query else { return }
+                    sourceOptions?.select(source.id)
                 } label: {
-                    if sourceID == source.id { Label(source.title, systemImage: "checkmark") }
+                    if options.selectedID == source.id { Label(source.title, systemImage: "checkmark") }
                     else { Text(verbatim: source.title) }
                 }
             }
         } label: {
-            Label(sources.first { $0.id == sourceID }?.title ?? "选择线路", systemImage: "point.3.connected.trianglepath.dotted")
+            Label(options.selectedTitle ?? "选择线路", systemImage: "point.3.connected.trianglepath.dotted")
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
@@ -153,7 +173,7 @@ struct VodWorkDetailView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("播放线路")
-        .accessibilityValue(sources.first { $0.id == sourceID }?.title ?? "默认")
+        .accessibilityValue(options.selectedTitle ?? "默认")
     }
 
     private func playButton(_ episode: VodEpisode, detail: VodWorkDetail) -> some View {
@@ -208,14 +228,17 @@ struct VodWorkDetailView: View {
 
     private func open(_ episode: VodEpisode) {
         #if canImport(KSPlayer)
-        guard !playing else { return }
+        guard !playing, loadedRevision == reload else { return }
         guard let window = windowContext?.window, var presenter = window.rootViewController else {
             presentationFailed = true
             return
         }
         while let next = presenter.presentedViewController { presenter = next }
+        let sourceID = currentSourceOptions?.sourceID(for: episode.id)
+        let orientation = VodRouting.preferredOrientation(for: room)
         playing = true
-        let player = VodPlayerPresentation(window: window, model: model, episode: episode, sourceID: sourceID) { failed in
+        let player = VodPlayerPresentation(window: window, model: model, episode: episode, sourceID: sourceID,
+                                           orientation: orientation) { failed in
             playing = false
             episodeGroup = nil
             reload += 1
@@ -225,17 +248,11 @@ struct VodWorkDetailView: View {
         #endif
     }
 
-    private func discoverSources() async {
-        guard let detail = model.detail, let episode = model.preferredEpisode, !playing else { return }
-        do {
-            let offered = try await VodRouting.sources(for: detail, episode: episode)
-            guard !Task.isCancelled, !playing, model.preferredEpisode?.id == episode.id else { return }
-            sources = offered
-            if !offered.contains(where: { $0.id == sourceID }) { sourceID = nil }
-        } catch {
-            guard !Task.isCancelled, !playing else { return }
-            sources = []
-            sourceID = nil
-        }
+    private func discoverSources(for query: VodEpisodeSourceOptions.Query?) async {
+        guard !Task.isCancelled, let query, query == sourceQuery,
+              let detail = model.detail, let episode = model.preferredEpisode else { return }
+        let offered = (try? await VodRouting.sources(for: detail, episode: episode)) ?? []
+        guard !Task.isCancelled, query == sourceQuery else { return }
+        sourceOptions = VodEpisodeSourceOptions(query: query, sources: offered, previous: sourceOptions)
     }
 }

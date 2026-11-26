@@ -12,15 +12,27 @@ struct TVVodWorkDetailView: View {
     let onPlay: (VodEpisode, String?) -> Void
 
     @FocusState private var focus: Item?
-    @State private var sources: [VodPlaybackSource] = []
-    @State private var sourceID: String?
+    @State private var sourceOptions: VodEpisodeSourceOptions?
     @State private var selectedGroup = 0
     @State private var reload = 0
-    @State private var isPrepared = false
+    @State private var loadedRevision: Int?
     @State private var restoredEpisodeID: String?
 
     private enum SectionID: Hashable { case episodes }
     private enum Item: Hashable { case play, retry, exit, episode(String) }
+
+    private var isPrepared: Bool { loadedRevision == reload && !model.isLoadingDetail }
+
+    private var sourceQuery: VodEpisodeSourceOptions.Query? {
+        guard isPrepared, let episodeID = model.preferredEpisode?.id else { return nil }
+        return .init(episodeID: episodeID, reload: reload)
+    }
+
+    private var currentSourceOptions: VodEpisodeSourceOptions? {
+        guard let sourceOptions, sourceOptions.query == sourceQuery else { return nil }
+        return sourceOptions
+    }
+
     private var supported: Bool { VodHostRouting.isVod(room) }
     private var groups: [TVVodEpisodeRange] { TVVodEpisodeRange.make(from: model.seasonEpisodes) }
     private var episodes: ArraySlice<VodEpisode> {
@@ -29,12 +41,14 @@ struct TVVodWorkDetailView: View {
     }
 
     var body: some View {
+        let revision = reload
+        let sourceQuery = sourceQuery
         GeometryReader { geometry in
             let inset = TVFullUIPlayerControlMetrics.screenInset
             Group {
                 if !supported {
                     status("点播协议不兼容", message: "当前插件版本未提供受支持的点播能力。", canRetry: false)
-                } else if !isPrepared || model.isLoadingDetail {
+                } else if !isPrepared {
                     VStack(spacing: 22) {
                         ProgressView().fullUIArcLoadingStyle(size: 64, lineWidth: 2.5).tint(.white)
                         Text("正在加载作品").font(.title3)
@@ -70,20 +84,20 @@ struct TVVodWorkDetailView: View {
         .background(Color.black)
         .ignoresSafeArea(.container)
         .environment(\.colorScheme, .dark)
-        .task(id: reload) {
-            guard supported else { return }
-            isPrepared = false
+        .task(id: revision) {
+            guard !Task.isCancelled, revision == reload, supported else { return }
+            loadedRevision = nil
             await model.loadDetail()
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, revision == reload else { return }
             if model.detail?.kind == .series,
                let episode = model.detail?.episodes.first(where: { $0.id == returnEpisodeID }) {
                 model.selectSeason(id: episode.seasonID)
                 selectedGroup = groups.firstIndex { $0.episodes.contains(episode) } ?? 0
                 restoredEpisodeID = episode.id
             }
-            isPrepared = true
+            loadedRevision = revision
         }
-        .task(id: model.preferredEpisode?.id) { await discoverSources() }
+        .task(id: sourceQuery) { await discoverSources(for: sourceQuery) }
     }
 
     private func status(_ title: String, message: String, canRetry: Bool) -> some View {
@@ -103,8 +117,9 @@ struct TVVodWorkDetailView: View {
 
     private func overview(_ detail: VodWorkDetail, size: CGSize, inset: CGFloat) -> some View {
         let artwork = detail.heroArtwork(portrait: false, preferredEpisode: model.preferredEpisode)
+        let sourceOptions = currentSourceOptions
         return MediaHeroStage(title: detail.title, metadata: detail.displayMetadata(formatTime: tvPlayerTimeLabel),
-                              tags: detail.displayTags(sourceCount: sources.count), synopsis: detail.synopsis,
+                              tags: detail.displayTags(sourceCount: sourceOptions?.sources.count ?? 0), synopsis: detail.synopsis,
                               titleFont: .system(size: 50, weight: .bold),
                               height: detail.kind == .series ? min(530, size.height * 0.49) : size.height,
                               inset: inset, topClearance: inset, landscape: true, fitsPoster: artwork.fitsPoster) {
@@ -112,7 +127,7 @@ struct TVVodWorkDetailView: View {
         } actions: {
             HStack(spacing: 12) {
                 if let episode = model.preferredEpisode {
-                    Button { onPlay(episode, sourceID) } label: {
+                    Button { open(episode) } label: {
                         Label(detail.playTitle(for: episode, snapshot: model.progressSnapshot, formatTime: tvPlayerTimeLabel),
                               systemImage: "play.fill")
                             .foregroundStyle(.black)
@@ -125,26 +140,28 @@ struct TVVodWorkDetailView: View {
                     .disabled(true)
                     #endif
                 }
-                if sources.count > 1 { sourcePicker }
+                if let sourceOptions, sourceOptions.sources.count > 1 { sourcePicker(sourceOptions) }
             }
         }
     }
 
-    private var sourcePicker: some View {
+    private func sourcePicker(_ options: VodEpisodeSourceOptions) -> some View {
         Menu {
-            ForEach(sources) { source in
-                Button { sourceID = source.id } label: {
-                    if source.id == sourceID { Label(source.title, systemImage: "checkmark") }
+            ForEach(options.sources) { source in
+                Button {
+                    guard currentSourceOptions?.query == options.query else { return }
+                    sourceOptions?.select(source.id)
+                } label: {
+                    if source.id == options.selectedID { Label(source.title, systemImage: "checkmark") }
                     else { Text(verbatim: source.title) }
                 }
             }
         } label: {
-            Label(sources.first { $0.id == sourceID }?.title ?? "选择线路",
-                  systemImage: "point.3.connected.trianglepath.dotted")
+            Label(options.selectedTitle ?? "选择线路", systemImage: "point.3.connected.trianglepath.dotted")
         }
         .buttonBorderShape(.capsule)
         .accessibilityLabel("播放线路")
-        .accessibilityValue(sources.first { $0.id == sourceID }?.title ?? "默认")
+        .accessibilityValue(options.selectedTitle ?? "默认")
     }
 
     private func episodeBrowser(_ detail: VodWorkDetail, page: ScrollViewProxy) -> some View {
@@ -188,7 +205,7 @@ struct TVVodWorkDetailView: View {
                         ForEach(episodes) { episode in
                             let item = Item.episode(episode.id)
                             let lastWatched = model.progressSnapshot?.lastEpisodeID == episode.id
-                            Button { onPlay(episode, sourceID) } label: {
+                            Button { open(episode) } label: {
                                 let progress = model.progressSnapshot?.episodes[episode.id]
                                 MediaCardLabel(title: episode.title, episodeNumber: episode.number, synopsis: episode.synopsis,
                                                duration: (progress?.duration ?? episode.durationHint).map(tvPlayerTimeLabel),
@@ -231,13 +248,17 @@ struct TVVodWorkDetailView: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func discoverSources() async {
-        sources = []
-        guard let detail = model.detail, let episode = model.preferredEpisode else { return }
+    private func open(_ episode: VodEpisode) {
+        guard isPrepared else { return }
+        onPlay(episode, currentSourceOptions?.sourceID(for: episode.id))
+    }
+
+    private func discoverSources(for query: VodEpisodeSourceOptions.Query?) async {
+        guard !Task.isCancelled, let query, query == sourceQuery,
+              let detail = model.detail, let episode = model.preferredEpisode else { return }
         let offered = (try? await VodHostRouting.sources(for: detail, episode: episode)) ?? []
-        guard !Task.isCancelled, model.preferredEpisode?.id == episode.id else { return }
-        sources = offered
-        if !offered.contains(where: { $0.id == sourceID }) { sourceID = nil }
+        guard !Task.isCancelled, query == sourceQuery else { return }
+        sourceOptions = VodEpisodeSourceOptions(query: query, sources: offered, previous: sourceOptions)
     }
 }
 

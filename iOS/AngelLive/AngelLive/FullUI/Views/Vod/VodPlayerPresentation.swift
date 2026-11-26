@@ -8,18 +8,20 @@ import UIKit
 
 @MainActor
 final class VodPlayerPresentation: UIHostingController<VodPlayerViewport> {
-    private let locksOrientation: Bool
+    private let phoneOrientation: HostContentOrientation?
     private weak var playerWindow: UIWindow?
     private var onFinish: ((Bool) -> Void)?
     private var closing = false
 
     init(window: UIWindow, model: VodPlaybackModel, episode: VodEpisode, sourceID: String?,
+         orientation: HostContentOrientation,
          onFinish: @escaping (Bool) -> Void) {
         let phone = window.traitCollection.userInterfaceIdiom == .phone
-        locksOrientation = phone
+        phoneOrientation = phone ? orientation : nil
         playerWindow = window
         self.onFinish = onFinish
-        var viewport = VodPlayerViewport(window: window, phone: phone, model: model, episode: episode,
+        var viewport = VodPlayerViewport(window: window, requiresLandscape: phone && orientation == .landscape,
+                                         model: model, episode: episode,
                                          sourceID: sourceID, onExit: {})
         super.init(rootView: viewport)
         viewport.onExit = { [weak self] in self?.close() }
@@ -32,12 +34,19 @@ final class VodPlayerPresentation: UIHostingController<VodPlayerViewport> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    private var phoneOrientationMask: UIInterfaceOrientationMask? {
+        guard let phoneOrientation else { return nil }
+        return phoneOrientation == .landscape ? .landscape : .portrait
+    }
+
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        locksOrientation ? (closing ? .portrait : .landscape) : .all
+        guard let phoneOrientationMask else { return .all }
+        return closing ? .portrait : phoneOrientationMask
     }
 
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
-        locksOrientation ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
+        guard let phoneOrientation else { return super.preferredInterfaceOrientationForPresentation }
+        return phoneOrientation == .landscape ? .landscapeRight : .portrait
     }
 
     override var prefersStatusBarHidden: Bool { true }
@@ -52,23 +61,26 @@ final class VodPlayerPresentation: UIHostingController<VodPlayerViewport> {
     }
 
     private func presentPlayer(from presenter: UIViewController) {
-        if locksOrientation {
-            KSOptions.supportedInterfaceOrientations = .landscape
+        if let phoneOrientationMask {
+            KSOptions.supportedInterfaceOrientations = phoneOrientationMask
             playerWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
         presenter.present(self, animated: true) { [weak self] in
-            guard let self, self.locksOrientation, !self.closing,
-                  let scene = self.playerWindow?.windowScene, !scene.interfaceOrientation.isLandscape else { return }
-            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscape)) { [weak self] _ in
+            guard let self, let mask = self.phoneOrientationMask, !self.closing,
+                  let scene = self.playerWindow?.windowScene else { return }
+            let current = scene.interfaceOrientation
+            let matches = mask == .landscape ? current.isLandscape : current == .portrait
+            guard !matches else { return }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { [weak self] _ in
                 self?.close(failed: true)
             }
         }
     }
 
     private func close(failed: Bool = false) {
-        guard !closing else { return }
+        guard !closing, onFinish != nil else { return }
         closing = true
-        if locksOrientation {
+        if phoneOrientation != nil {
             KSOptions.supportedInterfaceOrientations = .portrait
             setNeedsUpdateOfSupportedInterfaceOrientations()
             playerWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
@@ -84,7 +96,7 @@ final class VodPlayerPresentation: UIHostingController<VodPlayerViewport> {
     private func finish(failed: Bool) {
         guard let completion = onFinish else { return }
         onFinish = nil
-        if locksOrientation {
+        if phoneOrientation != nil {
             KSOptions.supportedInterfaceOrientations = .portrait
             playerWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
             playerWindow?.windowScene?.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
@@ -95,7 +107,7 @@ final class VodPlayerPresentation: UIHostingController<VodPlayerViewport> {
 
 struct VodPlayerViewport: View {
     weak var window: UIWindow?
-    let phone: Bool
+    let requiresLandscape: Bool
     let model: VodPlaybackModel
     let episode: VodEpisode
     let sourceID: String?
@@ -112,7 +124,7 @@ struct VodPlayerViewport: View {
 
     var body: some View {
         VodLandscapePlayerView(model: model, episode: episode, sourceID: sourceID,
-                               requiresLandscape: phone, onExit: onExit)
+                               requiresLandscape: requiresLandscape, onExit: onExit)
             .fullUIWindowContext()
             .environment(\.scenePhase, notifiedPhase ?? currentPhase)
             .onAppear { notifiedPhase = currentPhase }

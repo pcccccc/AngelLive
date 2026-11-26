@@ -2,6 +2,42 @@ import Foundation
 import Testing
 @testable import AngelLiveCore
 
+struct VodEpisodeSourceOptionsTests {
+    private let sources = [VodPlaybackSource(id: "source-a", title: "线路 A"),
+                           VodPlaybackSource(id: "source-b", title: "线路 B")]
+
+    @Test func selectionIsScopedToItsEpisode() {
+        let query = VodEpisodeSourceOptions.Query(episodeID: "episode-a", reload: 0)
+        var options = VodEpisodeSourceOptions(query: query, sources: sources)
+        options.select("source-b")
+
+        #expect(options.sourceID(for: "episode-a") == "source-b")
+        #expect(options.sourceID(for: "episode-b") == nil)
+        let other = VodEpisodeSourceOptions(query: .init(episodeID: "episode-b", reload: 0),
+                                            sources: sources, previous: options)
+        #expect(other.selectedID == nil)
+    }
+
+    @Test func refreshRetainsOnlyAnOfferedSelection() {
+        var options = VodEpisodeSourceOptions(query: .init(episodeID: "episode-a", reload: 0), sources: sources)
+        options.select("source-b")
+        let refreshed = VodEpisodeSourceOptions(query: .init(episodeID: "episode-a", reload: 1),
+                                                sources: sources, previous: options)
+        #expect(refreshed.selectedID == "source-b")
+        let removed = VodEpisodeSourceOptions(query: .init(episodeID: "episode-a", reload: 2),
+                                              sources: [sources[0]], previous: refreshed)
+        #expect(removed.selectedID == nil)
+        #expect(removed.selectedTitle == nil)
+    }
+
+    @Test func queryDistinguishesStaleEpisodeAndRefreshResults() {
+        let current = VodEpisodeSourceOptions.Query(episodeID: "episode-a", reload: 1)
+        #expect(current != .init(episodeID: "episode-a", reload: 0))
+        #expect(current != .init(episodeID: "episode-b", reload: 1))
+        #expect(current == .init(episodeID: "episode-a", reload: 1))
+    }
+}
+
 struct VodCatalogTests {
     #if DEBUG
     @Test @MainActor func demoSeriesKeepsDistinctEpisodeStoriesAndSixRotatingStills() async throws {
