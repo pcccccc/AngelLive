@@ -108,12 +108,12 @@ struct LivePersistentSyncRetryExecutor: PersistentSyncRetryExecuting {
         #if os(macOS)
         guard Self.hasCloudKitContainerEntitlement else { throw CKError(.notAuthenticated) }
         #endif
-        let container = CKContainer(identifier: "iCloud.icloud.dev.igod.simplelive")
+        let container = CKContainer(identifier: CloudKitPlaylistStore.containerIdentifier)
         return try await container.userRecordID().recordName
     }
 
     #if os(macOS)
-    private static var hasCloudKitContainerEntitlement: Bool {
+    static var hasCloudKitContainerEntitlement: Bool {
         guard let task = SecTaskCreateFromSelf(nil),
               let identifiers = SecTaskCopyValueForEntitlement(
                   task,
@@ -122,7 +122,7 @@ struct LivePersistentSyncRetryExecutor: PersistentSyncRetryExecuting {
               ) as? [String] else {
             return false
         }
-        return identifiers.contains("iCloud.icloud.dev.igod.simplelive")
+        return identifiers.contains(CloudKitPlaylistStore.containerIdentifier)
     }
     #endif
 

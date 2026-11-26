@@ -1,59 +1,101 @@
-//
-//  PlatformView.swift
-//  AngelLiveMacOS
-//
-//  Created by pc on 11/11/25.
-//  Supported by AI助手Claude
-//
-
-import SwiftUI
 import AngelLiveCore
+import SharedAssets
+import SwiftUI
 
 struct PlatformView: View {
-    @Environment(PlatformViewModel.self) private var platformViewModel
+    let open: (Platformdescription) -> Void
+
+    @Environment(PlatformViewModel.self) private var platforms
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @State private var showingAppearance = false
+    @State private var showingManagement = false
+    @State private var selectedCard: Platformdescription?
+    @State private var gridWidth: CGFloat = 0
+    @Environment(\.platformAppearanceLibrary) private var library
+    private var store: PlatformAppearanceStore { library?.store ?? .shared }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 200))], spacing: 20) {
-                    ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
-                        PlatformCard(platform: platform)
+        let snapshot = store.snapshot
+        let ordered = store.orderedPlatforms(platforms.platformInfo)
+        let order = ordered.map(\.pluginId)
+        ScrollView {
+            PlatformAppearanceGridLayout(
+                idiom: .mac, density: snapshot.gridDensity, aspect: snapshot.cardAspect,
+                metrics: snapshot.metrics(for: .mac), spacing: 16, horizontalPadding: 20
+            ) {
+                ForEach(ordered, id: \.pluginId) { platform in
+                    let appearance = snapshot.appearance(for: platform.pluginId)
+                    Button { open(platform) } label: {
+                        PlatformAppearanceCard(
+                            pluginID: platform.pluginId, title: platform.title, liveType: platform.liveType,
+                            appearance: appearance, snapshot: snapshot, idiom: .mac,
+                            defaultBackground: .shared("platform-bg"), catalogRevision: pluginAvailability.catalogRevision
+                        )
                     }
+                    .buttonStyle(MacPlatformCardButtonStyle())
+                    .contextMenu {
+                        if store.isReady {
+                            PlatformAppearanceCardActions(pluginID: platform.pluginId, orderedIDs: order) {
+                                selectedCard = platform
+                            }
+                        }
+                    }
+                    .accessibilityLabel(Text(verbatim: platform.title))
+                    .accessibilityIdentifier("platform.card.\(platform.pluginId)")
+                    .platformAppearanceGridSpan(appearance.spansTwoColumns)
                 }
-                .padding()
             }
-            .navigationTitle("全部平台")
+            .padding(.vertical, 20)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
+        .navigationTitle("全部配置")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Picker("列数密度", selection: Binding(
+                    get: { store.snapshot.gridDensity },
+                    set: { store.updateGlobal(\.gridDensity, to: $0) }
+                )) {
+                    ForEach(PlatformGridDensity.allCases, id: \.self) { Text($0.appearanceTitle).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .disabled(!store.isReady || snapshot.metrics(for: .mac).useCustomMetrics)
+
+                Button("配置页外观", systemImage: "slider.horizontal.3") { showingAppearance.toggle() }
+                    .accessibilityIdentifier("platform.appearance.open")
+                    .popover(isPresented: $showingAppearance, arrowEdge: .top) {
+                        MacPlatformAppearancePopover {
+                            showingAppearance = false
+                            showingManagement = true
+                        }
+                        .disabled(!store.isReady)
+                    }
+            }
+        }
+        .sheet(isPresented: $showingManagement) {
+            MacPlatformAppearanceSettingsSheet(gridWidth: gridWidth)
+        }
+        .sheet(isPresented: Binding(
+            get: { selectedCard != nil },
+            set: { if !$0 { selectedCard = nil } }
+        )) {
+            if let selectedCard {
+                MacPlatformAppearanceCardSheet(platform: selectedCard, gridWidth: gridWidth)
+            }
         }
     }
 }
 
-struct PlatformCard: View {
-    let platform: Platformdescription
+private struct MacPlatformCardButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
 
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(platform.bigPic)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: 100)
-
-            Text(platform.title)
-                .font(.headline)
-
-            Text(platform.descripiton)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(AppConstants.Colors.secondaryBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .brightness(isHovered ? 0.035 : 0)
+            .shadow(color: .black.opacity(isHovered ? 0.14 : 0.08), radius: 6, y: 2)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovered)
+            .onHover { isHovered = $0 }
     }
-}
-
-#Preview {
-    PlatformView()
-        .environment(PlatformViewModel())
 }

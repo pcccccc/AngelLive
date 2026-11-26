@@ -1,31 +1,27 @@
-//
-//  PlatformView.swift
-//  SimpleLiveTVOS
-//
-//  Created by pc on 2024/6/11.
-//
-
-import SwiftUI
-import AngelLiveDependencies
 import AngelLiveCore
+import AngelLiveDependencies
+import SharedAssets
+import SwiftUI
 
 extension LiveType: @retroactive Identifiable {
     public var id: String { rawValue }
 }
 
 struct PlatformView: View {
-    let column = Array(repeating: GridItem(.fixed(380), spacing: 50), count: 4)
-    @State private var platformViewModel = PlatformViewModel()
-    @FocusState private var focusIndex: Int?
-    @Environment(AppState.self) private var appViewModel
+    @State private var platforms = PlatformViewModel()
     @State private var selectedPlatform: Platformdescription?
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(AppState.self) private var appViewModel
 
     var body: some View {
-        // cover 由 ContentView 根部统一持有,所有 tab 共享 — 这里不再本地持有。
         Group {
             if appViewModel.pluginAvailability.hasAvailablePlugins {
-                platformGridView
+                TVFullPlatformGrid(
+                    platforms: platforms,
+                    catalogRevision: appViewModel.pluginAvailability.catalogRevision,
+                    usesSolidBackground: appViewModel.generalSettingsViewModel.generalDisableMaterialBackground,
+                    open: { selectedPlatform = $0 }
+                )
+                .fullScreenCover(item: $selectedPlatform, content: platformDestination)
             } else {
                 TVShellConfigView()
                     .environment(appViewModel)
@@ -33,162 +29,221 @@ struct PlatformView: View {
         }
         .task {
             await appViewModel.pluginAvailability.checkAvailability()
-            platformViewModel.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
+            platforms.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
         }
-        // 播放列表增删改(含 iCloud 同步带来的变更)后重建平台网格。
         .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
-            Task { @MainActor in platformViewModel.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds) }
-        }
-        .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedPluginIds in
-            platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
-            if installedPluginIds.isEmpty {
-                selectedPlatform = nil
+            Task { @MainActor in
+                platforms.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
             }
+        }
+        .onChange(of: appViewModel.pluginAvailability.catalogRevision) { _, _ in
+            platforms.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
         }
     }
 
-    private var platformGridView: some View {
-        ScrollView {
-            LazyVGrid(columns: column, alignment: .center, spacing: 50) {
-                // 按元素迭代 + pluginId 作为稳定 id；避免 ForEach(_.indices, id: \.self)
-                // 在数组 mutate 时缓存的 index 落到新数组之外触发 "Index out of range"。
-                ForEach(Array(platformViewModel.platformInfo.enumerated()), id: \.element.id) { index, platform in
+    @ViewBuilder
+    private func platformDestination(_ platform: Platformdescription) -> some View {
+        if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
+            ListMainView(platform: platform, appViewModel: appViewModel)
+                .background(Color("sl-background", bundle: nil))
+                .safeAreaPadding(.all)
+                .id("\(platform.id)-\(PlatformAPITokenService.shared.contentRevision)")
+        } else {
+            ListMainView(platform: platform, appViewModel: appViewModel)
+                .id("\(platform.id)-\(PlatformAPITokenService.shared.contentRevision)")
+        }
+    }
+}
+
+struct TVFullPlatformGrid: View {
+    let platforms: PlatformViewModel
+    let catalogRevision: UInt
+    let usesSolidBackground: Bool
+    let open: (Platformdescription) -> Void
+
+    @FocusState private var focus: FocusTarget?
+    @State private var drawer: Drawer?
+    @State private var returnFocus: FocusTarget?
+    @State private var playlistArtworkRevision: UInt = 0
+    @Environment(\.platformAppearanceLibrary) private var library
+    private var store: PlatformAppearanceStore { library?.store ?? .shared }
+
+    private enum FocusTarget: Hashable {
+        case toolbar
+        case card(String)
+    }
+
+    private enum Drawer: Hashable, Identifiable {
+        case page
+        case card(String)
+
+        var id: Self { self }
+
+        var platformID: String? {
+            guard case let .card(id) = self else { return nil }
+            return id
+        }
+    }
+
+    private let horizontalInset: CGFloat = 80
+
+    var body: some View {
+        let ordered = store.snapshot.ordered(platforms.platformInfo, id: \.pluginId)
+        GeometryReader { geometry in
+            grid(ordered)
+                .fullScreenCover(item: $drawer, onDismiss: restoreFocus) { presentedDrawer in
+                    ZStack(alignment: .trailing) {
+                        Color.black.opacity(0.22)
+                            .ignoresSafeArea()
+                            .accessibilityHidden(true)
+
+                        drawerView(presentedDrawer, width: geometry.size.width * 0.46)
+                    }
+                    .presentationBackground(.clear)
+                    .environment(\.platformAppearanceLibrary, library)
+                    .onExitCommand(perform: closeDrawer)
+                    .onKeyPress(.escape, phases: .all, action: handleEscape)
+                }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
+            playlistArtworkRevision &+= 1
+        }
+    }
+
+    private func drawerView(_ drawer: Drawer, width: CGFloat) -> some View {
+        TVPlatformAppearanceControls(
+            platforms: platforms,
+            initialPlatformID: drawer.platformID,
+            onClose: closeDrawer
+        )
+        .padding(.horizontal, 20)
+        .padding(.vertical, 32)
+        .frame(width: width)
+        .adaptiveGlassEffectRoundedRect(cornerRadius: 36)
+        .padding(.vertical, 36)
+        .padding(.trailing, horizontalInset)
+    }
+
+    private func handleEscape(_ press: KeyPress) -> KeyPress.Result {
+        guard drawer != nil else { return .ignored }
+        if press.phase == .up { closeDrawer() }
+        return .handled
+    }
+
+    private func restoreFocus() {
+        guard drawer == nil, let target = returnFocus else { return }
+        if case let .card(id) = target, !platforms.platformInfo.contains(where: { $0.pluginId == id }) {
+            focus = .toolbar
+        } else {
+            focus = target
+        }
+        returnFocus = nil
+    }
+
+    private func grid(_ ordered: [Platformdescription]) -> some View {
+        let snapshot = store.snapshot
+        let order = ordered.map(\.pluginId)
+        return ScrollView {
+            HStack {
+                Spacer(minLength: 0)
+                Button("页面外观", systemImage: "slider.horizontal.3") {
+                    openDrawer(.page, from: .toolbar)
+                }
+                .buttonBorderShape(.capsule)
+                .opacity(drawer == nil ? 1 : 0)
+                .disabled(!store.isReady)
+                .focused($focus, equals: .toolbar)
+                .accessibilityIdentifier("platform.appearance.open")
+            }
+            .focusSection()
+            .padding(.horizontal, horizontalInset)
+            .padding(.bottom, 14)
+
+            PlatformAppearanceGridLayout(
+                idiom: .tv, density: snapshot.gridDensity, aspect: snapshot.cardAspect,
+                metrics: snapshot.metrics(for: .tv), spacing: 50, horizontalPadding: horizontalInset
+            ) {
+                ForEach(ordered) { platform in
+                    let appearance = snapshot.appearance(for: platform.pluginId)
+                    let target = FocusTarget.card(platform.pluginId)
                     Button {
-                        selectedPlatform = platform
+                        if drawer == nil { open(platform) }
                     } label: {
-                        ZStack {
-                            Image("platform-bg")
-                                .resizable()
-                                .frame(width: 370, height: 222)
-                            if PlaylistPlatformIdentity.isPlaylist(platform.liveType) {
-                                // 播放列表平台没有插件字标图：显示用户图标（或首字）与名称。
-                                // 焦点态由下方描述浮层接管；文字内容模糊后会与描述重叠，故直接淡出。
-                                TVPlaylistPlatformCardContent(platform: platform)
-                                    .frame(width: 370, height: 222)
-                                    .opacity(focusIndex == index ? 0 : 1)
-                                    .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                            } else if let bigImage = TVPlatformIconProvider.bigCardImage(
-                                for: platform,
-                                isDarkMode: colorScheme == .dark
-                            ) {
-                                Image(uiImage: bigImage)
-                                    .resizable()
-                                    .frame(width: 370, height: 222)
-                                    .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                                    .blur(radius: focusIndex == index ? 10 : 0)
+                        PlatformAppearanceCard(
+                            pluginID: platform.pluginId, title: platform.title, liveType: platform.liveType,
+                            appearance: appearance, snapshot: snapshot, idiom: .tv,
+                            defaultBackground: .shared("platform-bg"),
+                            catalogRevision: artworkRevision(for: platform),
+                            isFocused: focus == target
+                        )
+                        .overlay {
+                            if focus == target {
+                                focusDescription(platform, showsTitle: appearance.titleVisibility != .hidden)
+                                    .clipShape(.rect(cornerRadius: snapshot.cardCornerRadius(for: .tv)))
+                                    .allowsHitTesting(false)
                             }
-
-                            if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
-                                ZStack {
-                                    if let smallImage = TVPlatformIconProvider.smallCardImage(
-                                        for: platform,
-                                        isDarkMode: colorScheme == .dark
-                                    ) {
-                                        Image(uiImage: smallImage)
-                                            .resizable()
-                                            .frame(width: 370, height: 222)
-                                    }
-                                    Text(platform.descripiton)
-                                        .font(.body)
-                                        .multilineTextAlignment(.leading)
-                                        .padding([.leading, .trailing], 15)
-                                        .padding(.top, 50)
-
-                                }
-                                .frame(width: 370, height: 222)
-                                .background(Color("sl-background", bundle: nil))
-                                .opacity(focusIndex == index ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                            } else {
-                                ZStack {
-                                    if let smallImage = TVPlatformIconProvider.smallCardImage(
-                                        for: platform,
-                                        isDarkMode: colorScheme == .dark
-                                    ) {
-                                        Image(uiImage: smallImage)
-                                            .resizable()
-                                            .frame(width: 370, height: 222)
-                                    }
-                                    Text(platform.descripiton)
-                                        .font(.body)
-                                        .multilineTextAlignment(.leading)
-                                        .padding([.leading, .trailing], 15)
-                                        .padding(.top, 50)
-
-                                }
-                                // 无小图的平台(如播放列表)也铺满卡片，与其他平台焦点态一致。
-                                .frame(width: 370, height: 222)
-                                .background(.thinMaterial)
-                                .opacity(focusIndex == index ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                            }
-
                         }
                     }
                     .buttonStyle(.card)
-                    .background(.clear)
-                    .focused($focusIndex, equals: index)
-                    .transition(.moveAndOpacity)
-                    .animation(.easeInOut(duration: 0.25), value: true)
-                    .frame(width: 380, height: 230)
-                }
-
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 40)
-        }
-        .fullScreenCover(item: $selectedPlatform) { platform in
-            if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
-                ListMainView(platform: platform, appViewModel: appViewModel)
-                    .background(
-                        Color("sl-background", bundle: nil)
-                    )
-                    .safeAreaPadding(.all)
-                    .id("\(platform.id)-\(PlatformAPITokenService.shared.contentRevision)")
-            } else {
-                ListMainView(platform: platform, appViewModel: appViewModel)
-                    .id("\(platform.id)-\(PlatformAPITokenService.shared.contentRevision)")
-            }
-        }
-    }
-}
-
-extension AnyTransition {
-    static var moveAndOpacity: AnyTransition {
-        AnyTransition.opacity
-    }
-}
-
-#Preview {
-    PlatformView()
-}
-
-struct TVPlaylistPlatformCardContent: View {
-    let platform: Platformdescription
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Group {
-                if let image = TVPlatformIconProvider.playlistIcon(for: platform.liveType) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } else {
-                    Text(PlaylistIconCache.monogram(for: platform.title))
-                        .font(.system(size: 44, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(.quaternary)
+                    .buttonBorderShape(.roundedRectangle(radius: snapshot.cardCornerRadius(for: .tv)))
+                    .focused($focus, equals: target)
+                    .zIndex(focus == target ? 1 : 0)
+                    .contextMenu {
+                        if store.isReady, drawer == nil {
+                            PlatformAppearanceCardActions(pluginID: platform.pluginId, orderedIDs: order) {
+                                openDrawer(.card(platform.pluginId), from: target)
+                            }
+                        }
+                    }
+                    .onPlayPauseCommand {
+                        guard store.isReady, drawer == nil, focus == target else { return }
+                        openDrawer(.card(platform.pluginId), from: target)
+                    }
+                    .accessibilityLabel(Text(verbatim: platform.title))
+                    .accessibilityIdentifier("platform.card.\(platform.pluginId)")
+                    .platformAppearanceGridSpan(appearance.spansTwoColumns)
                 }
             }
-            .frame(width: 88, height: 88)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityHidden(true)
-
-            Text(platform.title)
-                .font(.headline)
-                .lineLimit(1)
-                .padding(.horizontal, 20)
+            .focusSection()
+            .padding(.bottom, 42)
         }
+        .padding(.top, 22)
+        .scrollClipDisabled()
+    }
+
+    private func focusDescription(_ platform: Platformdescription, showsTitle: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if showsTitle {
+                Text(verbatim: platform.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            Spacer(minLength: 0)
+
+            Text(verbatim: platform.descripiton)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+        .background(usesSolidBackground ? AnyShapeStyle(Color("sl-background", bundle: nil)) : AnyShapeStyle(.thinMaterial))
+    }
+
+    private func artworkRevision(for platform: Platformdescription) -> UInt {
+        let revision = catalogRevision
+        return PlaylistPlatformIdentity.isPlaylist(platform.liveType) ? revision &+ playlistArtworkRevision : revision
+    }
+
+    private func openDrawer(_ drawer: Drawer, from target: FocusTarget) {
+        guard self.drawer == nil else { return }
+        returnFocus = target
+        self.drawer = drawer
+    }
+
+    private func closeDrawer() {
+        drawer = nil
     }
 }

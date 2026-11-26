@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct SyncView: View {
     @Environment(AppFavoriteModel.self) var favoriteModel
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability: PluginAvailabilityService?
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var pluginSourceSyncService = PluginSourceSyncService()
     @State private var isSearching = false
@@ -44,6 +45,9 @@ struct SyncView: View {
             VStack(spacing: AppConstants.Spacing.lg) {
                 iCloudStatusCard
                 favoriteSyncToggleCard
+                if pluginAvailability?.hasAvailablePlugins == true {
+                    IOSPlatformAppearanceSyncControls(usesSyncCardLayout: true)
+                }
                 syncStatsCard
                 syncProgressCard
                 loginInfoSyncCard
@@ -922,7 +926,7 @@ private struct SyncStatTile: View {
     }
 }
 
-private struct ICloudSyncActionRow: View {
+struct ICloudSyncActionRow: View {
     let title: String
     let subtitle: String
     let isLoading: Bool

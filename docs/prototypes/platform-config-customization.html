@@ -1,0 +1,3386 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AngelLive · 配置页个性化交互原型</title>
+<style>
+  :root {
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+
+    /* Quiet Architectural Stage (Zero Dot Grid / Zero Glow) */
+    --stage-bg: #f3f4f6;
+    --bar-bg: rgba(248, 249, 250, 0.92);
+    --bar-border: rgba(0, 0, 0, 0.07);
+    --bar-text: #1c1c1e;
+    --bar-muted: #6e6e73;
+
+    /* AngelLive Brand & System Tokens (Light) */
+    --brand-accent: #f06843;      /* Optical legibility match for SharedAssets #FF815E on light glass */
+    --sys-tint: #007aff;
+    --sys-tint-soft: rgba(0, 122, 255, 0.10);
+
+    --ios-bg: #ffffff;
+    --ios-grouped: #f2f2f7;
+    --ios-card: #ffffff;
+    --fill-tertiary: rgba(118, 118, 128, 0.12);
+    --fill-quaternary: rgba(118, 118, 128, 0.07);
+    --pill-active: rgba(118, 118, 128, 0.13);
+
+    --mac-bg: #f6f6f7;
+    --mac-sidebar: rgba(238, 238, 241, 0.92);
+    --mac-toolbar: rgba(247, 247, 249, 0.90);
+    --popover-bg: rgba(249, 249, 251, 0.96);
+
+    --tv-bg: #eceef2;
+    --tv-pill-bar: rgba(255, 255, 255, 0.78);
+    --tv-focus-mat: rgba(250, 251, 253, 0.92);
+    --tv-drawer-bg: rgba(28, 30, 35, 0.90);
+
+    --label-1: #1c1c1e;
+    --label-2: rgba(60, 60, 67, 0.60);
+    --label-3: rgba(60, 60, 67, 0.34);
+    --sep: rgba(60, 60, 67, 0.11);
+    --card-border: rgba(0, 0, 0, 0.05);
+
+    --glass-fill: rgba(255, 255, 255, 0.84);
+    --glass-rim: rgba(0, 0, 0, 0.06);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    --glass-shadow: 0 6px 20px rgba(0, 0, 0, 0.07), 0 1px 3px rgba(0, 0, 0, 0.04);
+    --card-shadow: 0 4px 14px rgba(15, 23, 42, 0.055), 0 1px 2px rgba(15, 23, 42, 0.03);
+
+    --platform-bg-url: url("../../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets/platform-bg.imageset/BG2.png");
+    --platform-bg-fallback: radial-gradient(circle at 82% 24%, rgba(166, 217, 230, 0.85) 0%, rgba(166, 217, 230, 0) 46%),
+                            radial-gradient(circle at 18% 82%, rgba(164, 174, 219, 0.72) 0%, rgba(215, 213, 176, 0.58) 35%, rgba(215, 213, 176, 0) 52%),
+                            #cfd7df;
+  }
+
+  html[data-theme="dark"] {
+    --stage-bg: #0c0d10;
+    --bar-bg: rgba(20, 21, 25, 0.92);
+    --bar-border: rgba(255, 255, 255, 0.08);
+    --bar-text: #f2f2f7;
+    --bar-muted: #8e8e93;
+
+    --brand-accent: #ff815e;
+    --sys-tint: #0a84ff;
+    --sys-tint-soft: rgba(10, 132, 255, 0.18);
+
+    --ios-bg: #000000;
+    --ios-grouped: #111114;
+    --ios-card: #1c1c1e;
+    --fill-tertiary: rgba(118, 118, 128, 0.28);
+    --fill-quaternary: rgba(118, 118, 128, 0.16);
+    --pill-active: rgba(255, 255, 255, 0.14);
+
+    --mac-bg: #17171a;
+    --mac-sidebar: rgba(28, 28, 32, 0.92);
+    --mac-toolbar: rgba(30, 30, 35, 0.90);
+    --popover-bg: rgba(32, 32, 37, 0.96);
+
+    --tv-bg: #101216;
+    --tv-pill-bar: rgba(38, 40, 46, 0.82);
+    --tv-focus-mat: rgba(34, 36, 42, 0.94);
+    --tv-drawer-bg: rgba(24, 26, 31, 0.92);
+
+    --label-1: #f5f5f7;
+    --label-2: rgba(235, 235, 245, 0.58);
+    --label-3: rgba(235, 235, 245, 0.32);
+    --sep: rgba(84, 84, 88, 0.44);
+    --card-border: rgba(255, 255, 255, 0.08);
+
+    --glass-fill: rgba(30, 30, 34, 0.84);
+    --glass-rim: rgba(255, 255, 255, 0.11);
+    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 10px 26px rgba(0, 0, 0, 0.42);
+    --card-shadow: 0 8px 22px rgba(0, 0, 0, 0.36);
+
+    --platform-bg-url: url("../../Shared/SharedAssets/Sources/SharedAssets/Resources/Assets.xcassets/platform-bg.imageset/BG-%E5%A4%9C%E9%97%B4.png");
+    --platform-bg-fallback: radial-gradient(circle at 82% 24%, rgba(122, 152, 163, 0.78) 0%, rgba(122, 152, 163, 0) 46%),
+                            radial-gradient(circle at 18% 82%, rgba(118, 127, 156, 0.70) 0%, rgba(140, 145, 126, 0.54) 35%, rgba(140, 145, 126, 0) 52%),
+                            #6b757d;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    background: var(--stage-bg);
+    color: var(--bar-text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button, input { font-family: inherit; }
+
+  /* =========================================================
+     Quiet Prototype Environment Bar (Zero Brand Gradients / Badges)
+     ========================================================= */
+  .env-bar {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    height: 46px;
+    padding: 0 20px;
+    background: var(--bar-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--bar-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .env-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .env-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--bar-text);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 900px) {
+    .env-bar { padding: 0 12px; gap: 8px; overflow-x: auto; }
+    .env-bar::-webkit-scrollbar { display: none; }
+    .env-title { display: none; }
+  }
+
+  /* Segmented Control: Track R = 8px, P = 2px -> Button R = 6px (6 + 2 = 8px concentric) */
+  .seg-track {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 8px;
+    background: var(--fill-tertiary);
+    gap: 2px;
+  }
+
+  .seg-btn {
+    border: 0;
+    background: transparent;
+    color: var(--label-2);
+    font-size: 12px;
+    font-weight: 500;
+    height: 26px;
+    padding: 0 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out), background 150ms ease, color 150ms ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .seg-btn:active { transform: scale(0.97); }
+
+  .seg-btn.active {
+    background: var(--ios-card);
+    color: var(--label-1);
+    font-weight: 600;
+    box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.10), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  }
+
+  .stage-viewport {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 28px 32px;
+  }
+
+  /* =========================================================
+     3-Platform Overview (Unboxed Architectural Layout — Flush 748px Right Column)
+     ========================================================= */
+  .overview-layout {
+    width: fit-content;
+    max-width: 100%;
+    display: grid;
+    grid-template-columns: 308px 748px;
+    gap: 36px;
+    align-items: start;
+  }
+
+  .overview-right {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    width: 748px;
+  }
+
+  .overview-col {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .overview-caption {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 2px;
+    cursor: pointer;
+  }
+
+  .overview-caption-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--bar-text);
+    letter-spacing: -0.01em;
+  }
+
+  .overview-caption-meta {
+    font-size: 11.5px;
+    color: var(--bar-muted);
+  }
+
+  .slot-iphone {
+    width: 308px;
+    height: 640px;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .slot-iphone > .iphone-frame {
+    transform: scale(0.778);
+    transform-origin: top left;
+  }
+
+  /* 880px * 0.85 = 748px; 980px * 0.76326 = 748px -> Exact shared left & right vertical alignment! */
+  .slot-mac {
+    width: 748px;
+    display: flex;
+    justify-content: flex-start;
+    cursor: pointer;
+  }
+
+  .slot-mac > .mac-outer { zoom: 0.85; }
+
+  .slot-tv {
+    width: 748px;
+    display: flex;
+    justify-content: flex-start;
+    cursor: pointer;
+  }
+
+  .slot-tv > .tv-frame { zoom: 0.76326; }
+
+  /* =========================================================
+     Shared Platform Card
+     Container-Query Row Height so span-2 Wide Cards Keep Exact Row Height!
+     Concentric Action Button: Card R = 20px, inset = 8px -> Button R = 12px (24x24)
+     ========================================================= */
+  .p-grid {
+    container-type: inline-size;
+    display: grid;
+    grid-template-columns: var(--cols, repeat(2, minmax(0, 1fr)));
+    gap: var(--gap, 16px);
+    align-items: start;
+  }
+
+  .p-card {
+    position: relative;
+    width: 100%;
+    height: var(--fixed-h, calc(((100cqi - (var(--n, 2) - 1) * var(--gap, 16px)) / var(--n, 2)) * var(--ratio-h, 0.6)));
+    border-radius: var(--card-r, 20px);
+    overflow: hidden;
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--card-border);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 180ms var(--ease-out), box-shadow 200ms var(--ease-out), border-radius 160ms ease;
+  }
+
+  .p-card:active { transform: scale(0.97); }
+  .p-card.span-2 { grid-column: span 2; }
+
+  .p-card-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: var(--bg-pos, 50% 50%);
+    transition: transform 220ms var(--ease-out), filter 180ms ease;
+  }
+
+  .p-card-bg.default-bg {
+    background: var(--platform-bg-url) center / cover no-repeat, var(--platform-bg-fallback);
+  }
+
+  .p-card-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .p-card-fg {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    transition: opacity 180ms ease;
+  }
+
+  .p-card-fg.strip-layout {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .p-wordmark {
+    width: 82%;
+    max-width: 168px;
+    height: 52%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .p-wordmark svg {
+    width: 100%;
+    height: 100%;
+    max-height: 44px;
+    display: block;
+  }
+
+  /* Continuous Squircle Badge (~22.5% radius) */
+  .p-squircle {
+    width: var(--icon-s, 44px);
+    height: var(--icon-s, 44px);
+    border-radius: calc(var(--icon-s, 44px) * 0.23);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .p-squircle.elevated {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 0 0 0.5px rgba(255, 255, 255, 0.24);
+  }
+
+  .p-squircle.monogram-glass {
+    border: 1px solid rgba(255, 255, 255, 0.42);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+  }
+
+  html[data-theme="dark"] .p-squircle.monogram-glass {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .p-squircle img { width: 100%; height: 100%; object-fit: cover; }
+  .p-squircle svg { width: 50%; height: 50%; }
+
+  .p-text-group {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .p-card-fg.strip-layout .p-text-group { text-align: left; }
+
+  .p-title {
+    width: 100%;
+    font-size: var(--title-sz, 13.5px);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.24;
+    color: var(--fg-1, var(--label-1));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .p-sub {
+    font-size: 11px;
+    color: var(--fg-2, var(--label-2));
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .p-card-action {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 5;
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    border: 0;
+    background: rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 140ms ease, transform 140ms var(--ease-out);
+  }
+
+  .p-card-action svg { width: 13px; height: 13px; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .p-card:hover .p-card-action { opacity: 1; }
+  }
+
+  /* =========================================================
+     1. iPhone & iPad Hardware + iOS 27 Liquid Glass Chrome
+     Concentric Math:
+       iPhone Outer = 52px, Bezel = 8px -> Screen Inner R = 44px
+       Tab Dock inset = 16px -> Capsule R = 28px (height 56px: 28 + 16 = 44px!)
+       Capsule padding = 4px -> Active Pill R = 24px (height 48px: 24 + 4 = 28px!)
+       Sheet inset = 8px -> Sheet R = 36px (36 + 8 = 44px!)
+       Sheet scroll padding = 16px -> Card R = 20px (20 + 16 = 36px!)
+       Card block padding = 12px -> Inner Control R = 8px (8 + 12 = 20px!)
+     ========================================================= */
+  .iphone-frame {
+    width: 396px;
+    height: 822px;
+    background: var(--ios-bg);
+    color: var(--label-1);
+    border-radius: 52px;
+    border: 8px solid #1d1e22;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 24px 56px rgba(0, 0, 0, 0.18);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  html[data-theme="dark"] .iphone-frame {
+    border-color: #26282e;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 28px 64px rgba(0, 0, 0, 0.55);
+  }
+
+  /* iPad Landscape: Outer = 30px, Bezel = 8px -> Screen Inner R = 22px */
+  .iphone-frame.ipad-frame {
+    width: 944px;
+    height: 668px;
+    border-radius: 30px;
+    border-width: 8px;
+  }
+
+  .ios-statusbar {
+    height: 46px;
+    padding: 12px 26px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 6;
+  }
+
+  .ios-clock { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; width: 64px; }
+  .ios-island { width: 112px; height: 30px; border-radius: 999px; background: #000; }
+  .iphone-frame.ipad-frame .ios-island { display: none; }
+  .ios-signals { display: flex; align-items: center; justify-content: flex-end; gap: 6px; width: 72px; }
+
+  .ios-workspace {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+
+  /* iPad Sidebar: Screen R = 22px, Sidebar P = 10px -> Row R = 12px (12 + 10 = 22px!) */
+  .ipad-sidebar {
+    display: none;
+    width: 228px;
+    background: var(--ios-grouped);
+    border-right: 1px solid var(--sep);
+    padding: 10px;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .iphone-frame.ipad-frame .ipad-sidebar { display: flex; }
+  .iphone-frame.ipad-frame .ios-tab-dock { display: none; }
+
+  .side-heading {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--label-2);
+    padding: 12px 10px 4px;
+  }
+
+  .side-item {
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--label-1);
+    cursor: pointer;
+    transition: background 140ms ease;
+  }
+
+  .side-item:hover { background: var(--fill-quaternary); }
+
+  .side-item.active {
+    background: var(--pill-active);
+    color: var(--brand-accent);
+    font-weight: 600;
+  }
+
+  .side-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 5.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .side-icon svg { width: 16px; height: 16px; }
+  .side-icon.tinted svg { width: 13px; height: 13px; }
+
+  .ios-main-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    background: var(--ios-bg);
+  }
+
+  .ios-main-pane.grouped-pane {
+    background: var(--ios-grouped);
+  }
+
+  /* Navigation Bar & Scroll Content share exact 16px horizontal axis */
+  .ios-nav {
+    padding: 4px 16px 8px;
+    flex-shrink: 0;
+  }
+
+  .ios-nav-actions {
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /* Authentic iOS 27 Liquid Glass Combined Toolbar Capsule (matches simulator 1:1) */
+  .ios-toolbar-capsule {
+    height: 38px;
+    border-radius: 19px;
+    padding: 0 4px;
+    background: var(--glass-fill);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--glass-rim);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .ios-toolbar-btn {
+    width: 38px;
+    height: 32px;
+    border-radius: 16px;
+    border: 0;
+    background: transparent;
+    color: var(--label-1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 130ms var(--ease-out), background 140ms ease, color 140ms ease;
+  }
+
+  .ios-toolbar-btn svg { width: 17px; height: 17px; }
+  .ios-toolbar-btn:active { transform: scale(0.92); }
+  .ios-toolbar-btn.selected {
+    background: var(--pill-active);
+    color: var(--sys-tint);
+  }
+
+  .ios-large-title {
+    margin: 4px 0 0;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.022em;
+    line-height: 1.12;
+  }
+
+  .ios-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px 96px;
+  }
+
+  .ios-scroll-area::-webkit-scrollbar { display: none; }
+
+  /* Authentic iOS 27 Liquid Glass Tab Bar (Neutral Pill + Brand Coral Ink) */
+  .ios-tab-dock {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .ios-tab-capsule {
+    pointer-events: auto;
+    flex: 1;
+    height: 56px;
+    padding: 4px;
+    border-radius: 28px;
+    background: var(--glass-fill);
+    backdrop-filter: blur(28px) saturate(185%);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    border: 1px solid var(--glass-rim);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .ios-tab-pill {
+    border: 0;
+    background: transparent;
+    height: 48px;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--label-1);
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .ios-tab-pill svg { width: 19px; height: 19px; }
+
+  .ios-tab-pill.active {
+    background: var(--pill-active);
+    color: var(--brand-accent);
+  }
+
+  .ios-search-orb {
+    pointer-events: auto;
+    width: 56px;
+    height: 56px;
+    border-radius: 28px;
+    border: 1px solid var(--glass-rim);
+    background: var(--glass-fill);
+    backdrop-filter: blur(28px) saturate(185%);
+    -webkit-backdrop-filter: blur(28px) saturate(185%);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    color: var(--label-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .ios-search-orb svg { width: 19px; height: 19px; }
+
+  .ios-home-bar {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 124px;
+    height: 4.5px;
+    border-radius: 999px;
+    background: var(--label-1);
+    opacity: 0.20;
+    z-index: 40;
+    pointer-events: none;
+  }
+
+  /* =========================================================
+     Authentic SettingView.swift Rows (32pt Borderless Icon Slot — Zero Candy Badges)
+     ========================================================= */
+  .setting-row-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .setting-symbol-slot {
+    width: 28px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .setting-symbol-slot svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .chevron-right {
+    width: 13px;
+    height: 13px;
+    color: var(--label-3);
+    flex-shrink: 0;
+  }
+
+  /* =========================================================
+     Native InsetGrouped Sheet & Concentric Cards
+     Sheet R = 36px (inset 8px from 44px screen)
+     Scroll P = 16px -> Card R = 20px (20 + 16 = 36px!)
+     Card Block P = 12px -> Inner Control R = 8px (8 + 12 = 20px!)
+     ========================================================= */
+  .sheet-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.24);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms var(--ease-out);
+  }
+
+  .sheet-scrim.blurred {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.20);
+  }
+
+  .sheet-scrim.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .ios-sheet {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 28;
+    max-height: 82%;
+    background: var(--ios-grouped);
+    border-radius: 36px;
+    border: 1px solid var(--glass-rim);
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.22);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(calc(100% + 20px));
+    transition: transform 300ms var(--ease-sheet), opacity 180ms ease;
+  }
+
+  /* iPad Floating Inspector: R = 28px, P = 14px -> Card R = 14px, Block P = 10px -> Inner R = 6px */
+  .iphone-frame.ipad-frame .ios-sheet {
+    left: auto;
+    right: 12px;
+    bottom: 12px;
+    width: 392px;
+    max-height: calc(100% - 24px);
+    border-radius: 26px;
+  }
+
+  .ios-sheet.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .sheet-grabber {
+    width: 36px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(120, 120, 128, 0.30);
+    margin: 7px auto 2px;
+    flex-shrink: 0;
+  }
+
+  .sheet-header {
+    height: 42px;
+    padding: 0 20px;
+    display: grid;
+    grid-template-columns: 72px 1fr 72px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .sheet-header-title {
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sheet-nav-btn {
+    border: 0;
+    background: transparent;
+    padding: 6px 0;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--sys-tint);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .sheet-nav-btn.left { justify-self: start; }
+  .sheet-nav-btn.right { justify-self: end; }
+  .sheet-nav-btn.subtle { font-weight: 400; color: var(--label-2); font-size: 14px; }
+  .sheet-nav-btn svg { width: 15px; height: 15px; }
+
+  .sheet-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sheet-scroll::-webkit-scrollbar { display: none; }
+
+  .g-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .g-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--label-2);
+    padding: 0 12px;
+  }
+
+  .g-caption {
+    font-size: 11.5px;
+    color: var(--label-2);
+    padding: 0 12px;
+    line-height: 1.45;
+  }
+
+  .g-card {
+    background: var(--ios-card);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .iphone-frame.ipad-frame .g-card { border-radius: 14px; }
+
+  .g-row {
+    min-height: 46px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid var(--sep);
+    font-size: 14px;
+  }
+
+  .g-row:last-child { border-bottom: 0; }
+  .g-row.clickable { cursor: pointer; transition: background 140ms ease; }
+  .g-row.clickable:hover { background: var(--fill-quaternary); }
+  .g-row.action-link { color: var(--sys-tint); font-weight: 500; cursor: pointer; }
+  .g-row.action-link:hover { background: var(--fill-quaternary); }
+
+  .g-block {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-bottom: 1px solid var(--sep);
+  }
+
+  .g-block:last-child { border-bottom: 0; }
+
+  .g-block-label {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--label-2);
+  }
+
+  /* Clean Unobstructed Background Swatches + Centered Label Underneath
+     Concentric Ring: Outer Ring R = 8px (inside P=12px, Card R=20px: 8+12=20!), Ring P = 2px -> Fill R = 6px */
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px 8px;
+  }
+
+  .swatch-item {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+
+  .swatch-item:active .swatch-ring { transform: scale(0.96); }
+
+  .swatch-ring {
+    width: 100%;
+    padding: 2px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    transition: transform 140ms var(--ease-out), border-color 140ms ease;
+  }
+
+  .swatch-item.active .swatch-ring {
+    border-color: var(--sys-tint);
+  }
+
+  .swatch-fill {
+    width: 100%;
+    aspect-ratio: 5 / 3;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background-size: cover;
+    background-position: center;
+  }
+
+  html[data-theme="dark"] .swatch-fill {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .swatch-caption {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--label-2);
+    line-height: 1.2;
+  }
+
+  .swatch-item.active .swatch-caption {
+    color: var(--label-1);
+    font-weight: 600;
+  }
+
+  /* Native Sliders with Explicit Header + Tabular Readout */
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .slider-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13.5px;
+    color: var(--label-1);
+  }
+
+  .slider-val {
+    font-size: 12.5px;
+    color: var(--label-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type="range"].native-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    display: block;
+    width: 100%;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--fill-tertiary);
+    outline: none;
+  }
+
+  input[type="range"].native-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 0.5px solid rgba(0, 0, 0, 0.14);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.20);
+    cursor: pointer;
+  }
+
+  /* Native iOS Toggle */
+  .native-switch {
+    position: relative;
+    width: 46px;
+    height: 28px;
+    border-radius: 14px;
+    border: 0;
+    padding: 2px;
+    background: rgba(120, 120, 128, 0.26);
+    cursor: pointer;
+    transition: background 180ms ease;
+    flex-shrink: 0;
+  }
+
+  .native-switch.on { background: #34c759; }
+
+  .native-switch-knob {
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
+    transition: transform 180ms var(--ease-out);
+  }
+
+  .native-switch.on .native-switch-knob { transform: translateX(18px); }
+
+  /* Curated Symbol & Muted Tone Grids (Concentric R = 8px) */
+  .sym-matrix {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+
+  .sym-btn {
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--sep);
+    background: var(--fill-quaternary);
+    color: var(--label-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  }
+
+  .sym-btn svg { width: 17px; height: 17px; }
+
+  .sym-btn.active {
+    border-color: var(--sys-tint);
+    background: var(--sys-tint-soft);
+    color: var(--sys-tint);
+  }
+
+  .tint-matrix {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 7px;
+  }
+
+  .tint-ring {
+    padding: 2px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+  }
+
+  .tint-ring.active { border-color: var(--label-1); }
+
+  .tint-dot {
+    width: 100%;
+    height: 24px;
+    border-radius: 5.5px;
+  }
+
+  .native-input {
+    width: 100%;
+    height: 36px;
+    padding: 0 11px;
+    border-radius: 8px;
+    border: 1px solid var(--sep);
+    background: var(--fill-quaternary);
+    color: var(--label-1);
+    font-size: 13.5px;
+    outline: none;
+  }
+
+  .native-input:focus { border-color: var(--sys-tint); }
+
+  /* UIContextMenu */
+  .ctx-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 26;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    gap: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.96);
+    transition: opacity 160ms var(--ease-out), transform 180ms var(--ease-out);
+  }
+
+  .ctx-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+  }
+
+  .ctx-preview-card {
+    width: 220px;
+    pointer-events: none;
+    border-radius: 20px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  }
+
+  .ctx-menu-box {
+    width: 236px;
+    border-radius: 14px;
+    background: var(--popover-bg);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid var(--glass-rim);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.20);
+    overflow: hidden;
+  }
+
+  .ctx-menu-title {
+    padding: 8px 14px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--label-2);
+    border-bottom: 1px solid var(--sep);
+  }
+
+  .ctx-menu-item {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 10.5px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13.5px;
+    color: var(--label-1);
+    cursor: pointer;
+    border-bottom: 1px solid var(--sep);
+  }
+
+  .ctx-menu-item:last-child { border-bottom: 0; }
+  .ctx-menu-item:hover { background: var(--fill-quaternary); }
+  .ctx-menu-item.danger { color: #ff3b30; }
+  .ctx-menu-item svg { width: 15px; height: 15px; opacity: 0.82; }
+
+  /* =========================================================
+     2. macOS Window
+     Concentric Math:
+       Window R = 14px, Sidebar P = 8px -> Sidebar Row R = 6px (6 + 8 = 14px!)
+       Popover R = 18px, P = 8px -> Card R = 10px, Block P = 8px -> Control R = 6px
+       Toolbar & Grid share exact 20px horizontal alignment line!
+     ========================================================= */
+  .mac-outer {
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 100%;
+  }
+
+  .mac-win {
+    width: var(--mac-w, 920px);
+    height: 584px;
+    background: var(--mac-bg);
+    color: var(--label-1);
+    border-radius: 14px;
+    border: 1px solid var(--bar-border);
+    box-shadow: 0 22px 54px rgba(0, 0, 0, 0.16), inset 0 0 0 0.5px rgba(255, 255, 255, 0.22);
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  html[data-theme="dark"] .mac-win {
+    box-shadow: 0 26px 64px rgba(0, 0, 0, 0.52), inset 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+  }
+
+  .mac-side {
+    width: 204px;
+    background: var(--mac-sidebar);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid var(--sep);
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .mac-traffic {
+    display: flex;
+    gap: 8px;
+    padding: 2px 8px 14px;
+  }
+
+  .mac-dot { width: 12px; height: 12px; border-radius: 50%; border: 0.5px solid rgba(0, 0, 0, 0.12); }
+  .mac-dot.r { background: #ff5f57; }
+  .mac-dot.y { background: #febc2e; }
+  .mac-dot.g { background: #28c840; }
+
+  .mac-side-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mac-side-row {
+    height: 30px;
+    padding: 0 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--label-1);
+    cursor: pointer;
+  }
+
+  .mac-side-row:hover { background: var(--fill-quaternary); }
+
+  .mac-side-row.active {
+    background: var(--pill-active);
+    color: var(--label-1);
+    font-weight: 600;
+  }
+
+  .mac-icon-slot {
+    width: 18px;
+    height: 18px;
+    border-radius: 4.5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .mac-icon-slot svg { width: 14px; height: 14px; }
+  .mac-icon-slot.tinted svg { width: 11px; height: 11px; }
+
+  .mac-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+  }
+
+  .mac-bar {
+    height: 48px;
+    padding: 0 20px;
+    background: var(--mac-toolbar);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--sep);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 8;
+  }
+
+  .mac-bar-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .mac-bar-title { font-size: 14.5px; font-weight: 600; }
+  .mac-bar-meta { font-size: 12px; color: var(--label-2); }
+  .mac-bar-tools { display: flex; align-items: center; gap: 8px; }
+
+  .mac-btn {
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid var(--sep);
+    background: var(--ios-card);
+    color: var(--label-1);
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+
+  .mac-btn svg { width: 13.5px; height: 13.5px; }
+
+  .mac-btn.active {
+    border-color: var(--sys-tint);
+    background: var(--sys-tint-soft);
+    color: var(--sys-tint);
+  }
+
+  .mac-body-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+
+  .mac-popover {
+    position: absolute;
+    top: 54px;
+    right: 20px;
+    width: 344px;
+    max-height: 506px;
+    overflow-y: auto;
+    z-index: 24;
+    background: var(--popover-bg);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    border: 1px solid var(--sep);
+    border-radius: 18px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.20);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transform-origin: top right;
+    opacity: 0;
+    transform: scale(0.96);
+    pointer-events: none;
+    transition: opacity 150ms var(--ease-out), transform 170ms var(--ease-out);
+  }
+
+  .mac-popover::-webkit-scrollbar { display: none; }
+
+  .mac-popover.open {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
+
+  .mac-popover .g-card, .mac-modal-box .g-card { border-radius: 10px; border: 1px solid var(--sep); }
+  .mac-popover .g-block, .mac-modal-box .g-block { padding: 10px; }
+  .mac-popover .g-row, .mac-modal-box .g-row { padding: 8px 10px; min-height: 38px; font-size: 13px; }
+  .mac-popover .g-title, .mac-popover .g-caption,
+  .mac-modal-box .g-title, .mac-modal-box .g-caption { padding: 0 4px; }
+  .mac-popover .swatch-ring, .mac-modal-box .swatch-ring { border-radius: 6px; }
+  .mac-popover .swatch-fill, .mac-modal-box .swatch-fill { border-radius: 4px; }
+
+  .mac-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 28;
+    background: rgba(0, 0, 0, 0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+  }
+
+  .mac-modal-backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .mac-modal-box {
+    width: 560px;
+    max-height: 496px;
+    background: var(--popover-bg);
+    backdrop-filter: blur(30px);
+    border: 1px solid var(--sep);
+    border-radius: 16px;
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.28);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .mac-modal-head {
+    height: 44px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--sep);
+    display: grid;
+    grid-template-columns: 60px 1fr 60px;
+    align-items: center;
+  }
+
+  .mac-x-btn {
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    border: 0;
+    background: var(--fill-tertiary);
+    color: var(--label-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .mac-x-btn svg { width: 11px; height: 11px; }
+
+  .mac-modal-cols {
+    display: grid;
+    grid-template-columns: 212px minmax(0, 1fr);
+    min-height: 0;
+    flex: 1;
+  }
+
+  .mac-modal-preview {
+    background: var(--fill-quaternary);
+    border-right: 1px solid var(--sep);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .mac-modal-form {
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .mac-resizer {
+    width: 14px;
+    cursor: ew-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4px;
+    color: var(--bar-muted);
+  }
+
+  .mac-resizer::after {
+    content: "";
+    width: 4px;
+    height: 44px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.35;
+  }
+
+  .mac-resizer:hover::after { opacity: 0.80; }
+
+  /* =========================================================
+     3. tvOS 16:9 Ten-Foot Stage (Zero Spotlights / Gloss Stripes / Fake Dots)
+     Concentric Math:
+       Outer = 36px, Bezel = 8px -> Screen Inner R = 28px
+       Floating Drawer inset = 12px -> Drawer R = 16px (16 + 12 = 28px concentric!)
+       Drawer P = 18px -> Row R = 10px
+       Top Action & Grid share exact 48px safe-area margin!
+     ========================================================= */
+  .tv-frame {
+    width: 980px;
+    max-width: 100%;
+    aspect-ratio: 16 / 9;
+    background: var(--tv-bg);
+    color: var(--label-1);
+    border-radius: 36px;
+    border: 8px solid #1a1c20;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.22), 0 26px 60px rgba(0, 0, 0, 0.24);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  html[data-theme="dark"] .tv-frame {
+    border-color: #24272e;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 30px 70px rgba(0, 0, 0, 0.56);
+  }
+
+  .tv-top {
+    position: relative;
+    z-index: 4;
+    padding: 18px 48px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tv-tabbar {
+    height: 40px;
+    padding: 4px;
+    border-radius: 20px;
+    background: var(--tv-pill-bar);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--glass-rim);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tv-tab-btn {
+    border: 0;
+    background: transparent;
+    height: 32px;
+    padding: 0 15px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--label-2);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .tv-tab-btn svg { width: 14px; height: 14px; }
+
+  .tv-tab-btn.active {
+    background: var(--label-1);
+    color: var(--ios-bg);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14);
+  }
+
+  .tv-appear-btn {
+    position: absolute;
+    right: 48px;
+    top: 22px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 16px;
+    border: 1px solid var(--glass-rim);
+    background: var(--tv-pill-bar);
+    backdrop-filter: blur(20px);
+    color: var(--label-1);
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .tv-appear-btn svg { width: 13px; height: 13px; }
+
+  .tv-grid-stage {
+    position: relative;
+    z-index: 3;
+    flex: 1;
+    padding: 24px 48px 32px;
+    overflow-y: auto;
+  }
+
+  .tv-grid-stage::-webkit-scrollbar { display: none; }
+
+  .p-card.tv-card.tv-focused {
+    transform: scale(1.055) translateY(-2px);
+    z-index: 9;
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24), 0 0 0 2px rgba(255, 255, 255, 0.82);
+  }
+
+  html[data-theme="dark"] .p-card.tv-card.tv-focused {
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.56), 0 0 0 2px rgba(255, 255, 255, 0.84);
+  }
+
+  /* Clean fade-out on focus so material description never ghosts over underlying mark */
+  .p-card.tv-card.tv-focused .p-card-fg {
+    opacity: 0;
+  }
+
+  .tv-focus-card-info {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border-radius: inherit;
+    overflow: hidden;
+    padding: 15px 17px;
+    background: var(--tv-focus-mat);
+    backdrop-filter: blur(22px) saturate(160%);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    opacity: 0;
+    transition: opacity 180ms ease;
+    pointer-events: none;
+  }
+
+  .p-card.tv-card.tv-focused .tv-focus-card-info { opacity: 1; }
+
+  .tv-focus-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--label-1);
+  }
+
+  .tv-focus-desc {
+    font-size: 11.5px;
+    line-height: 1.44;
+    color: var(--label-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Concentric Floating tvOS Glass Drawer: Screen Inner R = 28px, inset = 12px -> Drawer R = 16px */
+  .tv-drawer {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: 396px;
+    z-index: 22;
+    background: var(--tv-drawer-bg);
+    backdrop-filter: blur(36px) saturate(170%);
+    -webkit-backdrop-filter: blur(36px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    color: #f5f5f7;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(calc(100% + 20px));
+    transition: transform 280ms var(--ease-sheet), opacity 180ms ease;
+    box-shadow: -16px 0 44px rgba(0, 0, 0, 0.36);
+  }
+
+  .tv-drawer.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  .tv-drawer-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .tv-drawer-close {
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    border: 0;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .tv-drawer-close svg { width: 13px; height: 13px; }
+
+  .tv-drawer-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .tv-drawer-list::-webkit-scrollbar { display: none; }
+
+  .tv-sec-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.50);
+    padding: 4px 2px 0;
+  }
+
+  .tv-row-btn {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 14px;
+    border-radius: 10px;
+    border: 0;
+    background: rgba(255, 255, 255, 0.09);
+    color: #f5f5f7;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out), background 140ms ease, color 140ms ease;
+  }
+
+  .tv-row-btn:hover, .tv-row-btn.focused {
+    background: #ffffff;
+    color: #1c1c1e;
+  }
+
+  .tv-row-btn.subtle-reset {
+    color: rgba(255, 255, 255, 0.78);
+    font-weight: 500;
+  }
+
+  .tv-row-btn.subtle-reset:hover {
+    color: #1c1c1e;
+  }
+
+  .tv-row-val { font-size: 12px; opacity: 0.68; font-weight: 500; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header class="env-bar">
+  <div class="env-left">
+    <span class="env-title">AngelLive · 配置页原型</span>
+    <div class="seg-track">
+      <button class="seg-btn" data-mode="baseline">默认现状</button>
+      <button class="seg-btn active" data-mode="custom">个性化方案</button>
+    </div>
+  </div>
+
+  <div class="seg-track" role="tablist">
+    <button class="seg-btn active" data-platform="iphone">iPhone</button>
+    <button class="seg-btn" data-platform="ipad">iPad</button>
+    <button class="seg-btn" data-platform="macos">macOS</button>
+    <button class="seg-btn" data-platform="tvos">Apple TV</button>
+    <button class="seg-btn" data-platform="overview">三端同屏</button>
+  </div>
+
+  <div class="seg-track">
+    <button class="seg-btn active" data-theme-toggle="light">浅色</button>
+    <button class="seg-btn" data-theme-toggle="dark">深色</button>
+  </div>
+</header>
+
+<main class="stage-viewport" id="stageViewport"></main>
+
+<input type="file" id="bgFilePicker" accept="image/*" style="display:none" />
+<input type="file" id="logoFilePicker" accept="image/*" style="display:none" />
+
+<script>
+  // =========================================================================
+  // 1. Native System Glyphs & Restrained Typographic Wordmarks
+  // =========================================================================
+  const SF = {
+    house: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.3 2.8a1 1 0 0 1 1.4 0l8.5 8A1 1 0 0 1 20.5 12.5H19v7.5a1.5 1.5 0 0 1-1.5 1.5h-4v-5.5h-3v5.5h-4A1.5 1.5 0 0 1 5 20v-7.5H3.5a1 1 0 0 1-.7-1.7l8.5-8Z"/></svg>',
+    grid: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.2"/><rect x="13" y="3" width="8" height="8" rx="2.2"/><rect x="3" y="13" width="8" height="8" rx="2.2"/><rect x="13" y="13" width="8" height="8" rx="2.2"/></svg>',
+    gear: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.6 2.4a1.6 1.6 0 0 1 2.8 0l.6 1.3a1.6 1.6 0 0 0 1.9.8l1.4-.4a1.6 1.6 0 0 1 2 2l-.4 1.4a1.6 1.6 0 0 0 .8 1.9l1.3.6a1.6 1.6 0 0 1 0 2.8l-1.3.6a1.6 1.6 0 0 0-.8 1.9l.4 1.4a1.6 1.6 0 0 1-2 2l-1.4-.4a1.6 1.6 0 0 0-1.9.8l-.6 1.3a1.6 1.6 0 0 1-2.8 0l-.6-1.3a1.6 1.6 0 0 0-1.9-.8l-1.4.4a1.6 1.6 0 0 1-2-2l.4-1.4a1.6 1.6 0 0 0-.8-1.9l-1.3-.6a1.6 1.6 0 0 1 0-2.8l1.3-.6a1.6 1.6 0 0 0 .8-1.9l-.4-1.4a1.6 1.6 0 0 1 2-2l1.4.4a1.6 1.6 0 0 0 1.9-.8l.6-1.3ZM12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.8"/><path d="M16 16l4.3 4.3"/></svg>',
+    heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.6s-7.8-4.8-9.6-9.4C.9 7.5 3.5 4 7.3 4c2 0 3.6 1 4.7 2.5C13.1 5 14.7 4 16.7 4c3.8 0 6.4 3.5 4.9 7.2-1.8 4.6-9.6 9.4-9.6 9.4Z"/></svg>',
+    cloudCheck: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 19H7a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 18 9.2a4.9 4.9 0 0 1-.5 9.8Zm-6.3-3.4 4.2-4.2-1.2-1.2-3 3-1.5-1.5-1.2 1.2 2.7 2.7Z"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v4.8l3.2 2"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+    sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.1"/><circle cx="10" cy="17" r="2.1"/></svg>',
+    more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+    playTv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2.6"/><path d="M8.5 20.5h7"/><polygon points="10.2 8 15.2 10.5 10.2 13 10.2 8" fill="currentColor" stroke="none"/></svg>',
+    puzzle: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10.5 2.5a2.3 2.3 0 0 1 2.3 2.3v.7h3.2a2 2 0 0 1 2 2v3.2h.7a2.3 2.3 0 1 1 0 4.6H18v3.2a2 2 0 0 1-2 2h-3.2v-.7a2.3 2.3 0 1 0-4.6 0v.7H5a2 2 0 0 1-2-2v-3.2h.7a2.3 2.3 0 1 0 0-4.6H3V7.5a2 2 0 0 1 2-2h3.2v-.7a2.3 2.3 0 0 1 2.3-2.3Z"/></svg>',
+    person: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 4.6a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4Zm0 13a7.6 7.6 0 0 1-6-2.9c.1-1.9 4-3 6-3s5.9 1.1 6 3a7.6 7.6 0 0 1-6 2.9Z"/></svg>',
+    icloud: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 19H7a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 18 9.2a4.9 4.9 0 0 1-.5 9.8Z"/></svg>',
+    bubbles: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 4h9A4.5 4.5 0 0 1 21 8.5v3A4.5 4.5 0 0 1 16.5 16H11l-4.2 3.2A.8.8 0 0 1 5.5 18.6V16A4.5 4.5 0 0 1 3 11.5v-3A4.5 4.5 0 0 1 7.5 4Z"/></svg>',
+
+    tv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="12.5" rx="2.4"/><path d="M8.5 20h7"/></svg>',
+    trophy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 3h12v6a6 6 0 0 1-4.8 5.9V18h3.3a1 1 0 1 1 0 2H7.5a1 1 0 1 1 0-2h3.3v-3.1A6 6 0 0 1 6 9V3Zm-2 2h1v3.2A2.2 2.2 0 0 1 2.8 6V5.8C2.8 5.3 3.3 5 4 5Zm16 0c.7 0 1.2.3 1.2.8V6A2.2 2.2 0 0 1 19 8.2V5h1Z"/></svg>',
+    radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.2 4.8a10.2 10.2 0 0 1 0 14.4M4.8 19.2a10.2 10.2 0 0 1 0-14.4"/></svg>',
+    film: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 3.5h15A1.5 1.5 0 0 1 21 5v14a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19V5a1.5 1.5 0 0 1 1.5-1.5Zm1.5 2v2h2v-2H6Zm0 5v3h2v-3H6Zm0 6v2h2v-2H6Zm10-11v2h2v-2h-2Zm0 5v3h2v-3h-2Zm0 6v2h2v-2h-2Z"/></svg>',
+    music: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.8 3.2a1 1 0 0 1 .7 1v11.6a3.6 3.6 0 1 1-2-3.2V7.1l-8 1.8v8.9a3.6 3.6 0 1 1-2-3.2V6.2a1 1 0 0 1 .8-1l9.5-2Z"/></svg>',
+    game: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.8 6h10.4a5.2 5.2 0 0 1 5.1 6.2l-.8 4.2a2.8 2.8 0 0 1-4.7 1.4l-2.1-2.1H9.3l-2.1 2.1a2.8 2.8 0 0 1-4.7-1.4l-.8-4.2A5.2 5.2 0 0 1 6.8 6Zm1.2 3.2v1.6H6.4v1.6H8v1.6h1.6v-1.6h1.6v-1.6H9.6V9.2H8Zm8.4.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Zm2.2 2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></svg>',
+    leaf: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.6 4.4c-6.8-.5-12.5 2.4-14.3 8.3-.7 2.2-.3 4.4.8 6.1l-2 2a1 1 0 1 0 1.4 1.4l2-2c1.7 1.1 3.9 1.5 6.1.8 5.9-1.8 8.8-7.5 8.3-14.3a2.3 2.3 0 0 0-2.3-2.3ZM8.4 15.6c2.2-2.2 5-3.8 8.1-4.5-1.7 2.4-3.7 4.7-6.7 6a1 1 0 0 1-1.4-1.5Z"/></svg>',
+    globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8.8"/><ellipse cx="12" cy="12" rx="3.8" ry="8.8"/><path d="M3.6 9.5h16.8M3.6 14.5h16.8"/></svg>',
+    antenna: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="7.5" r="2.1" fill="currentColor" stroke="none"/><path d="M12 9.7v10.8M8.5 20.5h7M7.4 4.2a6.2 6.2 0 0 0 0 6.6M16.6 4.2a6.2 6.2 0 0 1 0 6.6"/></svg>',
+    layers: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l9 4.7L12 12.2 3 7.5l9-4.7Zm0 11.5l7.4-3.8 1.6.9L12 16 3 11.4l1.6-.9 7.4 3.8Zm0 3.8l7.4-3.8 1.6.9L12 19.8 3 15.2l1.6-.9 7.4 3.8Z"/></svg>',
+    book: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.5 4h11A2.5 2.5 0 0 1 19 6.5v13a.5.5 0 0 1-.5.5H7a2.5 2.5 0 0 1-2.5-2.5v-11A2.5 2.5 0 0 1 7 4h-1.5Zm1.5 12a1 1 0 0 0 0 2h10v-2H7Z"/></svg>',
+    listPlay: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h12v2H4V6Zm0 5h12v2H4v-2Zm0 5h8v2H4v-2Zm11 0 5 3-5 3v-6Z"/></svg>',
+    expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>',
+    photo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.5" fill="currentColor"/><path d="M21 15l-4.5-4.5L7 20"/></svg>',
+    star: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.8l2.7 5.6 6.2.9-4.5 4.4 1.1 6.2L12 17l-5.5 2.9 1.1-6.2-4.5-4.4 6.2-.9L12 2.8Z"/></svg>',
+    reset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/></svg>'
+  };
+
+  const SYMBOL_KEYS = ['tv', 'trophy', 'film', 'leaf', 'radio', 'music', 'game', 'book', 'globe', 'antenna', 'listPlay', 'layers'];
+
+  // Restrained, muted tonal palette (Zero neon / zero rainbow candy)
+  const TINTS = ['#3b6e8c', '#c85a3b', '#4d7c6f', '#575989', '#9c6b3b', '#6d597a', '#4b5563'];
+
+  // Refined Material & Tonal Background Presets (Theme-aware swatches, zero cartoon SVG hills)
+  const BG_PRESETS = {
+    default: {
+      name: '默认底图',
+      swatchStyle: () => 'background:var(--platform-bg-url) center/cover no-repeat, var(--platform-bg-fallback);'
+    },
+    surface: {
+      name: '纯净卡片',
+      swatchStyle: (isDark) => isDark
+        ? 'background:linear-gradient(160deg, #25272d 0%, #1b1d22 100%);'
+        : 'background:linear-gradient(160deg, #ffffff 0%, #f3f4f7 100%);'
+    },
+    tinted: {
+      name: '微染底色',
+      swatchStyle: (isDark) => isDark
+        ? 'background:linear-gradient(155deg, #222c36 0%, #1a2129 100%);'
+        : 'background:linear-gradient(155deg, #edf2f6 0%, #e1eaf1 100%);'
+    },
+    linen: {
+      name: '暖砂米灰',
+      swatchStyle: (isDark) => isDark
+        ? 'background:linear-gradient(160deg, #2c2824 0%, #211e1b 100%);'
+        : 'background:linear-gradient(160deg, #efece6 0%, #e3ded5 100%);'
+    },
+    slate: {
+      name: '深灰石板',
+      swatchStyle: () => 'background:linear-gradient(160deg, #2a2f37 0%, #1d2127 100%);',
+      darkSurface: true
+    },
+    dusk: {
+      name: '暮色深蓝',
+      swatchStyle: () => 'background:linear-gradient(160deg, #212d3d 0%, #151d29 100%);',
+      darkSurface: true
+    }
+  };
+
+  // Translucent neutral-tinted monogram styles that harmonize with platform-bg (never muddy opaque gray boxes)
+  const MONOGRAM_THEMES = [
+    { lBg: 'rgba(255, 255, 255, 0.62)', lFg: '#283642', dBg: 'rgba(255, 255, 255, 0.13)', dFg: '#eef2f6' },
+    { lBg: 'rgba(255, 255, 255, 0.58)', lFg: '#2c3a35', dBg: 'rgba(255, 255, 255, 0.12)', dFg: '#e8f1ed' },
+    { lBg: 'rgba(255, 255, 255, 0.60)', lFg: '#373242', dBg: 'rgba(255, 255, 255, 0.13)', dFg: '#efeaf5' },
+    { lBg: 'rgba(255, 255, 255, 0.58)', lFg: '#3d352b', dBg: 'rgba(255, 255, 255, 0.12)', dFg: '#f3ede4' }
+  ];
+
+  function monogramTheme(id) {
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) {
+      h ^= id.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return MONOGRAM_THEMES[Math.abs(h) % MONOGRAM_THEMES.length];
+  }
+
+  // Clean, authentic horizontal wordmarks (Optically centered editorial logotype, zero English subtitle slop)
+  function renderBrandWordmark(kindId, isLightText) {
+    const ink = isLightText ? '#f4f6f9' : '#1e2630';
+    const accent = isLightText ? '#8ec5e8' : '#35698a';
+    const accentSport = isLightText ? '#f29a7e' : '#c45538';
+
+    if (kindId === 'fixture.studio') {
+      return `
+        <svg viewBox="0 0 164 44" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="5" width="34" height="34" rx="9" fill="${accent}"/>
+          <polygon points="15,14.5 26,22 15,29.5" fill="#ffffff"/>
+          <text x="46" y="30" font-family="-apple-system, 'PingFang SC', sans-serif" font-size="24" font-weight="700" letter-spacing="-0.4" fill="${ink}">综合演播</text>
+        </svg>
+      `;
+    }
+    return `
+      <svg viewBox="0 0 164 44" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="5" width="34" height="34" rx="9" fill="${accentSport}"/>
+        <path d="M10.5 28 L17 16 L22 16 L15.5 28 Z M18 28 L23.5 18 L27.5 18 L22 28 Z" fill="#ffffff"/>
+        <text x="46" y="30" font-family="-apple-system, 'PingFang SC', sans-serif" font-size="24" font-weight="700" letter-spacing="-0.4" fill="${ink}">体育现场</text>
+      </svg>
+    `;
+  }
+
+  // =========================================================================
+  // 2. State (100% Native In-App Driven, Cohesive Default Appearance)
+  // =========================================================================
+  const state = {
+    mode: 'custom',          // 'baseline' | 'custom'
+    platform: 'iphone',      // 'iphone' | 'ipad' | 'macos' | 'tvos' | 'overview'
+    theme: 'light',
+
+    appTab: 'config',        // 'config' | 'settings'
+    overlay: 'none',         // 'none' | 'pageSheet' | 'contextMenu' | 'cardEditor'
+    sheetFromPage: false,
+    editorTab: 'logo',       // 'logo' | 'bg' | 'size'
+    activePluginId: 'fixture.outdoor',
+
+    macWidth: 920,
+    tvFocusedIdx: 0,
+
+    global: {
+      sizingMode: 'preset',  // 'preset' | 'customWH'
+      density: 'standard',   // 'compact' | 'standard' | 'spacious'
+      aspect: '5:3',         // '2.4:1' | '5:3' | '16:9' | '1:1'
+      customCols: 2,
+      customHeight: 112,
+      customRadius: 20,
+
+      bgPreset: 'default',   // Defaults to AngelLive's authentic platform-bg
+      uploadedBgURL: '',
+      bgBlur: 0,
+      contrastGuard: true
+    },
+
+    items: [
+      {
+        id: 'fixture.studio',
+        title: '综合演播',
+        subtitle: '演播大厅与晚会现场',
+        desc: '多路高清综合演播厅与文化现场频道，支持实时弹幕与多码率切换。',
+        assetKind: 'wordmark',
+        brandHex: '#3b6e8c',
+        custom: { logoType: 'auto', symbol: 'tv', badge: '演播', tint: '#3b6e8c', logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false }
+      },
+      {
+        id: 'fixture.sports',
+        title: '体育现场',
+        subtitle: '赛事直转播',
+        desc: '实时赛事信号与赛场多视角直播，支持主客队解说音轨切换。',
+        assetKind: 'wordmark',
+        brandHex: '#c85a3b',
+        custom: { logoType: 'auto', symbol: 'trophy', badge: '体育', tint: '#c85a3b', logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false }
+      },
+      {
+        id: 'fixture.cinema',
+        title: '纪实人文',
+        subtitle: '仅含方形图标插件',
+        desc: '插件仅提供方形应用图标、未包含横版字标图时的标准排布。',
+        assetKind: 'squareIcon',
+        brandHex: '#575989',
+        custom: { logoType: 'auto', symbol: 'film', badge: '纪实', tint: '#575989', logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false }
+      },
+      {
+        id: 'fixture.outdoor',
+        title: '自然慢直播',
+        subtitle: '无内置图标插件',
+        desc: '无内置图标的社区插件：自动回退为半透明首字徽章与平台名称，支持自选符号或本地台标。',
+        assetKind: 'none',
+        brandHex: '#4d7c6f',
+        custom: { logoType: 'auto', symbol: 'leaf', badge: '自然', tint: '#4d7c6f', logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false }
+      },
+      {
+        id: 'fixture.radio',
+        title: '古典电台',
+        subtitle: '无内置图标插件',
+        desc: '全天候交响与室内乐音频流插件，零配置下与其它无图插件保持清晰区分。',
+        assetKind: 'none',
+        brandHex: '#9c6b3b',
+        custom: { logoType: 'auto', symbol: 'radio', badge: '电台', tint: '#9c6b3b', logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false }
+      },
+      {
+        id: 'playlist.family',
+        title: '家庭片单',
+        subtitle: '128 个自定义频道',
+        desc: '本地与订阅 M3U 播放列表实例 · 128 个频道 · 6 个分组。',
+        assetKind: 'playlist',
+        brandHex: '#6d597a',
+        custom: { logoType: 'auto', symbol: 'listPlay', badge: '片单', tint: '#6d597a', logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false }
+      }
+    ]
+  };
+
+  function getActiveItem() {
+    return state.items.find(x => x.id === state.activePluginId) || state.items[0];
+  }
+
+  // =========================================================================
+  // 3. Layout & Card Computation
+  // =========================================================================
+  function computeGridVars(os) {
+    const macAvail = Math.max(360, (state.platform === 'overview' ? 880 : state.macWidth) - 204 - 40);
+    if (state.mode === 'baseline') {
+      if (os === 'iphone') return { n: 2, cols: 'repeat(2, minmax(0, 1fr))', gap: '16px', ratioH: 0.6, fixedH: '', radius: '20px', iconS: '42px', titleSz: '13.5px' };
+      if (os === 'ipad')   return { n: 3, cols: 'repeat(3, minmax(0, 1fr))', gap: '16px', ratioH: 0.6, fixedH: '', radius: '20px', iconS: '46px', titleSz: '14px' };
+      if (os === 'macos') {
+        const n = Math.max(2, Math.floor((macAvail + 16) / (196 + 16)));
+        return { n, cols: `repeat(${n}, minmax(0, 1fr))`, gap: '16px', ratioH: 0.6, fixedH: '', radius: '14px', iconS: '44px', titleSz: '13.5px' };
+      }
+      return { n: 4, cols: 'repeat(4, minmax(0, 1fr))', gap: '22px', ratioH: 0.6, fixedH: '', radius: '18px', iconS: '48px', titleSz: '14px' };
+    }
+
+    if (state.global.sizingMode === 'customWH') {
+      const c = state.global.customCols;
+      const h = state.global.customHeight;
+      const r = state.global.customRadius;
+      const osCols = os === 'tvos' ? Math.min(5, c + 1) : (os === 'ipad' || os === 'macos' ? Math.min(5, c + 1) : c);
+      const scaledH = os === 'tvos' ? Math.round(h * 1.08) : h;
+      return {
+        n: osCols,
+        cols: `repeat(${osCols}, minmax(0, 1fr))`,
+        gap: os === 'tvos' ? '22px' : (osCols >= 3 ? '12px' : '16px'),
+        ratioH: 0.6,
+        fixedH: `--fixed-h:${scaledH}px;`,
+        radius: `${os === 'macos' ? Math.max(10, r - 4) : r}px`,
+        iconS: `${Math.max(30, Math.min(52, Math.round(scaledH * 0.38)))}px`,
+        titleSz: osCols >= 3 && os === 'iphone' ? '12px' : '13.5px'
+      };
+    }
+
+    const ratioH = { '2.4:1': 0.42, '5:3': 0.6, '16:9': 0.5625, '1:1': 1.0 }[state.global.aspect] || 0.6;
+    const d = state.global.density;
+
+    if (os === 'iphone') {
+      const n = d === 'compact' ? 3 : (d === 'spacious' ? 1 : 2);
+      return { n, cols: `repeat(${n}, minmax(0, 1fr))`, gap: n === 3 ? '12px' : '16px', ratioH, fixedH: '', radius: '20px', iconS: n === 3 ? '34px' : '44px', titleSz: n === 3 ? '12px' : '13.5px' };
+    }
+    if (os === 'ipad') {
+      const n = d === 'compact' ? 4 : (d === 'spacious' ? 2 : 3);
+      return { n, cols: `repeat(${n}, minmax(0, 1fr))`, gap: '16px', ratioH, fixedH: '', radius: '20px', iconS: '46px', titleSz: '14px' };
+    }
+    if (os === 'macos') {
+      const minW = d === 'compact' ? 156 : (d === 'spacious' ? 256 : 196);
+      const n = Math.max(2, Math.floor((macAvail + 16) / (minW + 16)));
+      return { n, cols: `repeat(${n}, minmax(0, 1fr))`, gap: '16px', ratioH, fixedH: '', radius: '14px', iconS: d === 'compact' ? '38px' : '44px', titleSz: '13.5px' };
+    }
+    const tvN = d === 'compact' ? 5 : (d === 'spacious' ? 3 : 4);
+    return { n: tvN, cols: `repeat(${tvN}, minmax(0, 1fr))`, gap: '22px', ratioH, fixedH: '', radius: '18px', iconS: tvN === 5 ? '42px' : '50px', titleSz: '14px' };
+  }
+
+  function resolveBg(item) {
+    const isDark = state.theme === 'dark';
+    if (state.mode === 'baseline') {
+      return { cls: 'p-card-bg default-bg', css: '', scrim: '', lightFg: isDark };
+    }
+
+    if (item.custom.bgMode === 'customCardImg' && item.custom.cardBgImg) {
+      const blur = state.global.bgBlur > 0 ? `filter:blur(${state.global.bgBlur}px);transform:scale(1.06);` : '';
+      return {
+        cls: 'p-card-bg',
+        css: `background-image:url("${item.custom.cardBgImg}");--bg-pos:50% ${item.custom.focalY}%;${blur}`,
+        scrim: state.global.contrastGuard ? 'background:linear-gradient(180deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0.48) 100%);' : '',
+        lightFg: state.global.contrastGuard
+      };
+    }
+
+    const key = item.custom.bgMode !== 'inherit' ? item.custom.bgMode : state.global.bgPreset;
+    const tint = item.custom.logoType !== 'auto' ? item.custom.tint : item.brandHex;
+    const blur = state.global.bgBlur > 0 ? `filter:blur(${state.global.bgBlur}px);transform:scale(1.05);` : '';
+
+    if (key === 'default') {
+      return { cls: 'p-card-bg default-bg', css: blur, scrim: '', lightFg: isDark };
+    }
+    if (key === 'surface') {
+      const bg = isDark ? '#1e1f24' : '#f8f9fb';
+      return { cls: 'p-card-bg', css: `background:${bg};`, scrim: '', lightFg: isDark };
+    }
+    if (key === 'tinted') {
+      const alphaTop = isDark ? '26' : '18';
+      const alphaBot = isDark ? '12' : '0a';
+      const base = isDark ? '#1c1e24' : '#f7f8fa';
+      return {
+        cls: 'p-card-bg',
+        css: `background:linear-gradient(155deg, ${tint}${alphaTop} 0%, ${tint}${alphaBot} 100%), ${base};`,
+        scrim: '',
+        lightFg: isDark
+      };
+    }
+    if (key === 'linen') {
+      const bg = isDark
+        ? 'linear-gradient(160deg, #2a2723 0%, #201d1a 100%)'
+        : 'linear-gradient(160deg, #f1eee8 0%, #e6e1d8 100%)';
+      return { cls: 'p-card-bg', css: `background:${bg};`, scrim: '', lightFg: isDark };
+    }
+    if (key === 'slate') {
+      return {
+        cls: 'p-card-bg',
+        css: `background:linear-gradient(160deg, #2a2f37 0%, #1d2127 100%);`,
+        scrim: state.global.contrastGuard ? 'background:linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.24) 100%);' : '',
+        lightFg: true
+      };
+    }
+    if (key === 'dusk') {
+      return {
+        cls: 'p-card-bg',
+        css: `background:linear-gradient(160deg, #222e3e 0%, #151d29 100%);`,
+        scrim: state.global.contrastGuard ? 'background:linear-gradient(180deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.26) 100%);' : '',
+        lightFg: true
+      };
+    }
+    if (key === 'uploaded' && state.global.uploadedBgURL) {
+      return {
+        cls: 'p-card-bg',
+        css: `background-image:url("${state.global.uploadedBgURL}");${blur}`,
+        scrim: state.global.contrastGuard ? 'background:linear-gradient(180deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0.48) 100%);' : '',
+        lightFg: state.global.contrastGuard
+      };
+    }
+    return { cls: 'p-card-bg default-bg', css: '', scrim: '', lightFg: isDark };
+  }
+
+  function renderSmallIcon(item, slotClass, isMac = false) {
+    const isDark = state.theme === 'dark';
+    if (state.mode === 'baseline') {
+      if (item.assetKind === 'wordmark' || item.assetKind === 'squareIcon') {
+        return `<span class="${slotClass}" style="background:${item.brandHex};color:#fff;">${item.title.slice(0, 1)}</span>`;
+      }
+      if (item.assetKind === 'playlist') {
+        return `<span class="${slotClass}" style="background:var(--fill-tertiary);color:var(--label-2);">${item.title.slice(0, 1)}</span>`;
+      }
+      return `<span class="${slotClass}" style="color:var(--label-2);">${isMac ? SF.puzzle : SF.playTv}</span>`;
+    }
+
+    const c = item.custom;
+    if (c.logoType === 'image' && c.logoImg) {
+      return `<span class="${slotClass}"><img src="${c.logoImg}" alt="" style="width:100%;height:100%;object-fit:cover;"/></span>`;
+    }
+    if (c.logoType === 'symbol') {
+      return `<span class="${slotClass} tinted" style="background:${c.tint};color:#fff;">${SF[c.symbol] || SF.tv}</span>`;
+    }
+    if (c.logoType === 'badge') {
+      return `<span class="${slotClass}" style="background:${c.tint};color:#fff;font-size:${isMac ? '9px' : '10px'};">${(c.badge || item.title).slice(0, 2)}</span>`;
+    }
+    if (item.assetKind === 'wordmark' || item.assetKind === 'squareIcon') {
+      return `<span class="${slotClass}" style="background:${item.brandHex};color:#fff;">${item.title.slice(0, 1)}</span>`;
+    }
+    const mono = monogramTheme(item.id);
+    return `<span class="${slotClass}" style="background:${isDark ? 'rgba(255,255,255,0.14)' : 'rgba(60,60,67,0.10)'};color:${isDark ? mono.dFg : mono.lFg};">${item.title.slice(0, 1)}</span>`;
+  }
+
+  function renderCard(item, os, idx, opts = {}) {
+    const isDark = state.theme === 'dark';
+    const bg = resolveBg(item);
+    const fgStyle = bg.lightFg ? '--fg-1:#f5f5f7;--fg-2:rgba(245,245,247,0.72);' : '';
+
+    if (state.mode === 'baseline') {
+      let content = '';
+      if (item.assetKind === 'wordmark') {
+        content = `<div class="p-wordmark">${renderBrandWordmark(item.id, bg.lightFg)}</div>`;
+      } else if (item.assetKind === 'playlist') {
+        content = `
+          <div class="p-squircle monogram-glass" style="background:${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.58)'};color:var(--label-1);">
+            <span style="font-weight:600;font-size:18px;">${item.title.slice(0, 1)}</span>
+          </div>
+          <div class="p-text-group"><div class="p-title">${item.title}</div></div>
+        `;
+      } else {
+        content = os === 'tvos' ? '' : `<div style="width:44px;height:44px;color:var(--label-1);opacity:0.78;">${SF.playTv}</div>`;
+      }
+
+      const tvExtra = os === 'tvos' ? `
+        <div class="tv-focus-card-info">
+          <div class="tv-focus-title">${item.title}</div>
+          <div class="tv-focus-desc">${item.desc}</div>
+        </div>
+      ` : '';
+      const tvCls = os === 'tvos' ? `tv-card ${state.tvFocusedIdx === idx ? 'tv-focused' : ''}` : '';
+
+      return `
+        <div class="p-card ${tvCls}" data-card="${item.id}" data-os="${os}" data-idx="${idx}">
+          <div class="${bg.cls}" style="${bg.css}"></div>
+          <div class="p-card-fg" style="${fgStyle}">${content}</div>
+          ${tvExtra}
+        </div>
+      `;
+    }
+
+    const c = item.custom;
+    const isStrip = (state.global.sizingMode === 'preset' && state.global.aspect === '2.4:1')
+                 || (state.global.sizingMode === 'customWH' && state.global.customHeight <= 92);
+
+    let markHTML = '';
+    let usesWordmark = false;
+
+    if (c.logoType === 'image' && c.logoImg) {
+      markHTML = `<div class="p-squircle elevated"><img src="${c.logoImg}" alt=""/></div>`;
+    } else if (c.logoType === 'symbol') {
+      markHTML = `<div class="p-squircle elevated" style="background:${c.tint};color:#fff;">${SF[c.symbol] || SF.tv}</div>`;
+    } else if (c.logoType === 'badge') {
+      const t = (c.badge || item.title).slice(0, 2);
+      markHTML = `<div class="p-squircle elevated" style="background:${c.tint};color:#fff;"><span style="font-weight:600;font-size:${t.length > 1 ? '14.5px' : '19px'};">${t}</span></div>`;
+    } else {
+      if (item.assetKind === 'wordmark' && !isStrip && state.global.aspect !== '1:1') {
+        usesWordmark = true;
+        markHTML = `<div class="p-wordmark">${renderBrandWordmark(item.id, bg.lightFg)}</div>`;
+      } else if (item.assetKind === 'squareIcon' || item.assetKind === 'wordmark') {
+        markHTML = `<div class="p-squircle elevated" style="background:${item.brandHex};color:#fff;">${SF.film}</div>`;
+      } else {
+        const mono = monogramTheme(item.id);
+        const mBg = bg.lightFg ? 'rgba(255, 255, 255, 0.16)' : mono.lBg;
+        const mFg = bg.lightFg ? '#f5f5f7' : mono.lFg;
+        markHTML = `
+          <div class="p-squircle monogram-glass" style="background:${mBg};color:${mFg};backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+            <span style="font-weight:600;font-size:19px;">${item.title.slice(0, 1)}</span>
+          </div>
+        `;
+      }
+    }
+
+    const showTitle = c.showTitle === 'always' || (c.showTitle === 'auto' && !usesWordmark);
+    const titleHTML = showTitle ? `
+      <div class="p-text-group">
+        <div class="p-title">${item.title}</div>
+        ${isStrip ? `<div class="p-sub">${item.subtitle}</div>` : ''}
+      </div>
+    ` : '';
+
+    const tvExtra = os === 'tvos' ? `
+      <div class="tv-focus-card-info">
+        <div class="tv-focus-title">${item.title}</div>
+        <div class="tv-focus-desc">${item.desc}</div>
+      </div>
+    ` : '';
+
+    const spanCls = c.span2 ? 'span-2' : '';
+    const tvCls = os === 'tvos' ? `tv-card ${state.tvFocusedIdx === idx ? 'tv-focused' : ''}` : '';
+    const actionBtn = (!opts.preview && os !== 'tvos')
+      ? `<button class="p-card-action" data-card-menu="${item.id}" title="更多操作">${SF.more}</button>`
+      : '';
+
+    return `
+      <div class="p-card ${spanCls} ${tvCls}" data-card="${item.id}" data-os="${os}" data-idx="${idx}">
+        <div class="${bg.cls}" style="${bg.css}"></div>
+        ${bg.scrim ? `<div class="p-card-scrim" style="${bg.scrim}"></div>` : ''}
+        <div class="p-card-fg ${isStrip ? 'strip-layout' : ''}" style="${fgStyle}">
+          ${markHTML}
+          ${titleHTML}
+        </div>
+        ${tvExtra}
+        ${actionBtn}
+      </div>
+    `;
+  }
+
+  function renderGrid(os) {
+    const v = computeGridVars(os);
+    const vars = `--n:${v.n};--cols:${v.cols};--gap:${v.gap};--ratio-h:${v.ratioH};${v.fixedH}--card-r:${v.radius};--icon-s:${v.iconS};--title-sz:${v.titleSz};`;
+    return `<div class="p-grid" style="${vars}">${state.items.map((it, i) => renderCard(it, os, i)).join('')}</div>`;
+  }
+
+  // =========================================================================
+  // 4. Native In-App Forms (Zero Web Dashed Dropzones / Zero Price-Tag Swatches)
+  // =========================================================================
+  function renderSwatchButton(attrName, key, currentVal, label, fillStyle) {
+    const active = currentVal === key ? 'active' : '';
+    return `
+      <button class="swatch-item ${active}" ${attrName}="${key}">
+        <div class="swatch-ring">
+          <div class="swatch-fill" style="${fillStyle}"></div>
+        </div>
+        <span class="swatch-caption">${label}</span>
+      </button>
+    `;
+  }
+
+  function buildPageAppearanceBodyHTML(includePlatformRows = true) {
+    const g = state.global;
+    const sizingBlock = g.sizingMode === 'preset' ? `
+      <div class="g-row">
+        <span>列数密度</span>
+        <div class="seg-track">
+          <button class="seg-btn ${g.density === 'compact' ? 'active' : ''}" data-set-density="compact">紧凑</button>
+          <button class="seg-btn ${g.density === 'standard' ? 'active' : ''}" data-set-density="standard">标准</button>
+          <button class="seg-btn ${g.density === 'spacious' ? 'active' : ''}" data-set-density="spacious">舒展</button>
+        </div>
+      </div>
+      <div class="g-block">
+        <div class="g-block-label">卡片比例</div>
+        <div class="seg-track" style="width:100%;display:grid;grid-template-columns:repeat(4,1fr);">
+          <button class="seg-btn ${g.aspect === '2.4:1' ? 'active' : ''}" data-set-aspect="2.4:1">横条</button>
+          <button class="seg-btn ${g.aspect === '5:3' ? 'active' : ''}" data-set-aspect="5:3">5 : 3</button>
+          <button class="seg-btn ${g.aspect === '16:9' ? 'active' : ''}" data-set-aspect="16:9">16 : 9</button>
+          <button class="seg-btn ${g.aspect === '1:1' ? 'active' : ''}" data-set-aspect="1:1">方形</button>
+        </div>
+      </div>
+    ` : `
+      <div class="g-block">
+        <div class="slider-group">
+          <div class="slider-head"><span>每行列数</span><span class="slider-val">${g.customCols} 列</span></div>
+          <input type="range" class="native-slider" min="1" max="4" step="1" value="${g.customCols}" id="sliderCols" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-head"><span>卡片高度</span><span class="slider-val">${g.customHeight} pt</span></div>
+          <input type="range" class="native-slider" min="76" max="196" step="2" value="${g.customHeight}" id="sliderHeight" />
+        </div>
+        <div class="slider-group">
+          <div class="slider-head"><span>卡片圆角</span><span class="slider-val">${g.customRadius} pt</span></div>
+          <input type="range" class="native-slider" min="12" max="28" step="1" value="${g.customRadius}" id="sliderRadius" />
+        </div>
+      </div>
+    `;
+
+    const platformListSection = includePlatformRows ? `
+      <div class="g-section">
+        <div class="g-title">平台图标与单卡设置</div>
+        <div class="g-card">
+          ${state.items.map(it => {
+            const modeText = { auto: '默认', symbol: '符号', badge: '字标', image: '图片' }[it.custom.logoType];
+            return `
+              <div class="g-row clickable" data-drill-card="${it.id}">
+                <div class="setting-row-left">
+                  ${renderSmallIcon(it, 'side-icon')}
+                  <span style="font-weight:500;">${it.title}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span style="font-size:12.5px;color:var(--label-2);">${modeText}</span>
+                  <span class="chevron-right">${SF.chevron}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    return `
+      <div class="g-section">
+        <div class="g-title">网格布局</div>
+        <div class="g-card">
+          <div class="g-block">
+            <div class="seg-track" style="width:100%;display:grid;grid-template-columns:1fr 1fr;">
+              <button class="seg-btn ${g.sizingMode === 'preset' ? 'active' : ''}" data-sizing-mode="preset">比例预设</button>
+              <button class="seg-btn ${g.sizingMode === 'customWH' ? 'active' : ''}" data-sizing-mode="customWH">自定义尺寸</button>
+            </div>
+          </div>
+          ${sizingBlock}
+        </div>
+      </div>
+
+      <div class="g-section">
+        <div class="g-title">卡片背景</div>
+        <div class="g-card">
+          <div class="g-block">
+            <div class="swatch-grid">
+              ${Object.entries(BG_PRESETS).map(([k, info]) => renderSwatchButton('data-set-bg', k, g.bgPreset, info.name, info.swatchStyle(state.theme === 'dark'))).join('')}
+            </div>
+          </div>
+          <div class="g-row action-link" id="btnPickGlobalBg">
+            <div class="setting-row-left">
+              <span class="setting-symbol-slot" style="color:var(--sys-tint);">${SF.photo}</span>
+              <span>从相册或本地选择背景图…</span>
+            </div>
+            ${g.bgPreset === 'uploaded' ? '<span style="font-size:12px;color:var(--label-2);">已选用</span>' : ''}
+          </div>
+          <div class="g-block">
+            <div class="slider-group">
+              <div class="slider-head"><span>背景柔化模糊</span><span class="slider-val">${g.bgBlur} pt</span></div>
+              <input type="range" class="native-slider" min="0" max="12" step="1" value="${g.bgBlur}" id="sliderBgBlur" />
+            </div>
+          </div>
+          <div class="g-row">
+            <span>深色背景对比度保护</span>
+            <button class="native-switch ${g.contrastGuard ? 'on' : ''}" id="switchContrast"><div class="native-switch-knob"></div></button>
+          </div>
+        </div>
+      </div>
+
+      ${platformListSection}
+    `;
+  }
+
+  function buildCardEditorBodyHTML(item) {
+    const c = item.custom;
+    let body = '';
+
+    if (state.editorTab === 'logo') {
+      const subControl = c.logoType === 'symbol' ? `
+        <div class="g-block">
+          <div class="g-block-label">选择符号</div>
+          <div class="sym-matrix">
+            ${SYMBOL_KEYS.map(k => `<button class="sym-btn ${c.symbol === k ? 'active' : ''}" data-pick-sym="${k}">${SF[k]}</button>`).join('')}
+          </div>
+        </div>
+      ` : (c.logoType === 'badge' ? `
+        <div class="g-block">
+          <div class="g-block-label">字标内容（1–2 字）</div>
+          <input type="text" class="native-input" id="inputBadge" maxlength="2" value="${c.badge}" placeholder="例如：自然" />
+        </div>
+      ` : (c.logoType === 'image' ? `
+        <div class="g-row action-link" id="btnPickLogo">
+          <div class="setting-row-left">
+            <span class="setting-symbol-slot" style="color:var(--sys-tint);">${SF.photo}</span>
+            <span>选择自定义图标图片…</span>
+          </div>
+        </div>
+      ` : ''));
+
+      const tintControl = (c.logoType === 'symbol' || c.logoType === 'badge') ? `
+        <div class="g-block">
+          <div class="g-block-label">图标色调</div>
+          <div class="tint-matrix">
+            ${TINTS.map(hex => `
+              <button class="tint-ring ${c.tint === hex ? 'active' : ''}" data-pick-tint="${hex}">
+                <span class="tint-dot" style="background:${hex};"></span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      body = `
+        <div class="g-section">
+          <div class="g-card">
+            <div class="g-block">
+              <div class="g-block-label">图标样式</div>
+              <div class="seg-track" style="width:100%;display:grid;grid-template-columns:repeat(4,1fr);">
+                <button class="seg-btn ${c.logoType === 'auto' ? 'active' : ''}" data-logo-type="auto">默认</button>
+                <button class="seg-btn ${c.logoType === 'symbol' ? 'active' : ''}" data-logo-type="symbol">符号</button>
+                <button class="seg-btn ${c.logoType === 'badge' ? 'active' : ''}" data-logo-type="badge">字标</button>
+                <button class="seg-btn ${c.logoType === 'image' ? 'active' : ''}" data-logo-type="image">图片</button>
+              </div>
+            </div>
+            ${subControl}
+            ${tintControl}
+            <div class="g-row">
+              <span>卡片标题</span>
+              <div class="seg-track">
+                <button class="seg-btn ${c.showTitle === 'auto' ? 'active' : ''}" data-show-title="auto">自动</button>
+                <button class="seg-btn ${c.showTitle === 'always' ? 'active' : ''}" data-show-title="always">显示</button>
+                <button class="seg-btn ${c.showTitle === 'hidden' ? 'active' : ''}" data-show-title="hidden">隐藏</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    } else if (state.editorTab === 'bg') {
+      const isDark = state.theme === 'dark';
+      const inheritFill = BG_PRESETS[state.global.bgPreset]?.swatchStyle(isDark) || BG_PRESETS.default.swatchStyle(isDark);
+      const tintedFill = isDark
+        ? `background:linear-gradient(155deg, ${c.tint}32 0%, ${c.tint}16 100%), #1c1e24;`
+        : `background:linear-gradient(155deg, ${c.tint}26 0%, ${c.tint}10 100%), #f6f7fa;`;
+      body = `
+        <div class="g-section">
+          <div class="g-card">
+            <div class="g-block">
+              <div class="g-block-label">单卡背景覆盖</div>
+              <div class="swatch-grid">
+                ${renderSwatchButton('data-card-bg', 'inherit', c.bgMode, '跟随全局', inheritFill)}
+                ${renderSwatchButton('data-card-bg', 'default', c.bgMode, '默认底图', BG_PRESETS.default.swatchStyle(isDark))}
+                ${renderSwatchButton('data-card-bg', 'tinted', c.bgMode, '微染底色', tintedFill)}
+                ${renderSwatchButton('data-card-bg', 'linen', c.bgMode, '暖砂米灰', BG_PRESETS.linen.swatchStyle(isDark))}
+                ${renderSwatchButton('data-card-bg', 'slate', c.bgMode, '深灰石板', BG_PRESETS.slate.swatchStyle(isDark))}
+                ${renderSwatchButton('data-card-bg', 'dusk', c.bgMode, '暮色深蓝', BG_PRESETS.dusk.swatchStyle(isDark))}
+              </div>
+            </div>
+            <div class="g-row action-link" id="btnPickCardBg">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:var(--sys-tint);">${SF.photo}</span>
+                <span>选择此平台专属背景图…</span>
+              </div>
+            </div>
+            ${c.bgMode === 'customCardImg' && c.cardBgImg ? `
+              <div class="g-block">
+                <div class="slider-group">
+                  <div class="slider-head"><span>纵向取景位置</span><span class="slider-val">${c.focalY}%</span></div>
+                  <input type="range" class="native-slider" min="0" max="100" value="${c.focalY}" id="sliderFocalY" />
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    } else {
+      body = `
+        <div class="g-section">
+          <div class="g-card">
+            <div class="g-row">
+              <div>
+                <div style="font-weight:500;">跨两列宽卡</div>
+                <div style="font-size:11.5px;color:var(--label-2);">在多列网格中占据两列宽度</div>
+              </div>
+              <button class="native-switch ${c.span2 ? 'on' : ''}" id="switchSpan2"><div class="native-switch-knob"></div></button>
+            </div>
+            <div class="g-row">
+              <span>排列顺序</span>
+              <div style="display:flex;gap:6px;">
+                <button class="mac-btn" id="btnOrderPrev">前移</button>
+                <button class="mac-btn" id="btnOrderNext">后移</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="seg-track" style="width:100%;display:grid;grid-template-columns:repeat(3,1fr);">
+        <button class="seg-btn ${state.editorTab === 'logo' ? 'active' : ''}" data-ed-tab="logo">图标与标题</button>
+        <button class="seg-btn ${state.editorTab === 'bg' ? 'active' : ''}" data-ed-tab="bg">专属背景</button>
+        <button class="seg-btn ${state.editorTab === 'size' ? 'active' : ''}" data-ed-tab="size">跨列与顺序</button>
+      </div>
+      ${body}
+    `;
+  }
+
+  // Matches authentic SettingView.swift (32pt borderless icon slot, calm secondary captions)
+  function renderInAppSettingViewHTML() {
+    const summaryText = state.global.sizingMode === 'customWH'
+      ? `${state.global.customCols} 列 · ${state.global.customHeight}pt`
+      : (BG_PRESETS[state.global.bgPreset]?.name || '默认底图');
+
+    return `
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div class="g-section">
+          <div class="g-title">账号</div>
+          <div class="g-card">
+            <div class="g-row">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:#007aff;">${SF.person}</span>
+                <span>平台账号登录</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:12.5px;color:var(--label-2);">多平台</span>
+                <span class="chevron-right">${SF.chevron}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="g-section">
+          <div class="g-title">插件</div>
+          <div class="g-card">
+            <div class="g-row">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:#ff9500;">${SF.puzzle}</span>
+                <span>插件管理</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:12.5px;color:var(--label-2);">${state.items.length} 个已安装</span>
+                <span class="chevron-right">${SF.chevron}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="g-section">
+          <div class="g-title">设置</div>
+          <div class="g-card">
+            <div class="g-row clickable" data-open-overlay="pageSheet">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:#00c7be;">${SF.sliders}</span>
+                <span>配置页外观</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:12.5px;color:var(--label-2);">${summaryText}</span>
+                <span class="chevron-right">${SF.chevron}</span>
+              </div>
+            </div>
+            <div class="g-row">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:#8e8e93;">${SF.gear}</span>
+                <span>通用设置</span>
+              </div>
+              <span class="chevron-right">${SF.chevron}</span>
+            </div>
+            <div class="g-row">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:#34c759;">${SF.bubbles}</span>
+                <span>弹幕设置</span>
+              </div>
+              <span class="chevron-right">${SF.chevron}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="g-section">
+          <div class="g-title">同步</div>
+          <div class="g-card">
+            <div class="g-row">
+              <div class="setting-row-left">
+                <span class="setting-symbol-slot" style="color:#32ade6;">${SF.icloud}</span>
+                <span>数据同步</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:12.5px;color:var(--label-2);">已开启</span>
+                <span class="chevron-right">${SF.chevron}</span>
+              </div>
+            </div>
+          </div>
+          <div class="g-caption">使用 iCloud 同步收藏、平台账号与配置页个性化外观。</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // 5. Device Renderers
+  // =========================================================================
+  function renderIOS(isIPad = false, interactive = true) {
+    const activeItem = getActiveItem();
+    const ov = interactive ? state.overlay : 'none';
+    const inSettingsTab = interactive && state.appTab === 'settings';
+
+    const statusIcons = `
+      <svg width="16" height="11" viewBox="0 0 18 12" fill="currentColor"><rect x="1" y="8" width="2.8" height="3.5" rx="0.8"/><rect x="5.2" y="6" width="2.8" height="5.5" rx="0.8"/><rect x="9.4" y="3.5" width="2.8" height="8" rx="0.8"/><rect x="13.6" y="1" width="2.8" height="10.5" rx="0.8"/></svg>
+      <svg width="15" height="11" viewBox="0 0 16 12" fill="currentColor"><path d="M8 9.6a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8Zm-3.6-2a5.2 5.2 0 0 1 7.2 0l1.2-1.3a7 7 0 0 0-9.6 0l1.2 1.3Zm-2.8-2.8a9.2 9.2 0 0 1 12.8 0L15.6 3.5a11 11 0 0 0-15.2 0l1.2 1.3Z"/></svg>
+      <svg width="23" height="11" viewBox="0 0 25 12" fill="none"><rect x="0.8" y="1" width="20" height="10" rx="3" stroke="currentColor" stroke-opacity="0.42" stroke-width="1.2"/><rect x="2.5" y="2.7" width="16.6" height="6.6" rx="1.6" fill="currentColor"/><path d="M22.4 4.2v3.6a1.8 1.8 0 0 0 0-3.6Z" fill="currentColor" fill-opacity="0.42"/></svg>
+    `;
+
+    const ipadSidebar = `
+      <aside class="ipad-sidebar">
+        <div class="side-item"><span class="side-icon">${SF.house}</span><span>首页</span></div>
+        <div class="side-item"><span class="side-icon">${SF.cloudCheck}</span><span>收藏</span></div>
+        <div class="side-heading">配置</div>
+        <div class="side-item ${!inSettingsTab ? 'active' : ''}" data-switch-tab="config"><span class="side-icon">${SF.grid}</span><span>全部配置</span></div>
+        ${state.items.map(it => `
+          <div class="side-item" data-drill-card="${it.id}">
+            ${renderSmallIcon(it, 'side-icon')}
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</span>
+          </div>
+        `).join('')}
+        <div class="side-heading">更多</div>
+        <div class="side-item"><span class="side-icon">${SF.search}</span><span>搜索</span></div>
+        <div class="side-item ${inSettingsTab ? 'active' : ''}" data-switch-tab="settings"><span class="side-icon">${SF.gear}</span><span>设置</span></div>
+      </aside>
+    `;
+
+    const sheetInner = ov === 'pageSheet' ? `
+      <div class="sheet-header">
+        <button class="sheet-nav-btn left subtle" id="btnResetGlobal">重置</button>
+        <span class="sheet-header-title">配置页外观</span>
+        <button class="sheet-nav-btn right" data-close-ov>完成</button>
+      </div>
+      <div class="sheet-scroll">
+        ${buildPageAppearanceBodyHTML(true)}
+      </div>
+    ` : (ov === 'cardEditor' ? `
+      <div class="sheet-header">
+        ${state.sheetFromPage
+          ? `<button class="sheet-nav-btn left" id="btnBackToPageSheet">${SF.back}<span>外观</span></button>`
+          : `<button class="sheet-nav-btn left subtle" id="btnResetSingle">默认</button>`}
+        <span class="sheet-header-title">${activeItem.title}</span>
+        <button class="sheet-nav-btn right" data-close-ov>完成</button>
+      </div>
+      <div class="sheet-scroll">
+        <div style="width:196px;margin:2px auto 0;--icon-s:44px;--card-r:20px;--fixed-h:118px;">
+          ${renderCard(activeItem, 'iphone', 0, { preview: true })}
+        </div>
+        ${buildCardEditorBodyHTML(activeItem)}
+      </div>
+    ` : '');
+
+    return `
+      <div class="iphone-frame ${isIPad ? 'ipad-frame' : ''}">
+        <div class="ios-statusbar">
+          <span class="ios-clock">9:41</span>
+          <div class="ios-island"></div>
+          <div class="ios-signals">${statusIcons}</div>
+        </div>
+
+        <div class="ios-workspace">
+          ${ipadSidebar}
+
+          <section class="ios-main-pane ${inSettingsTab ? 'grouped-pane' : ''}">
+            <div class="ios-nav">
+              <div class="ios-nav-actions">
+                ${!inSettingsTab ? `
+                  <div class="ios-toolbar-capsule">
+                    ${state.mode === 'custom' ? `
+                      <button class="ios-toolbar-btn ${ov === 'pageSheet' ? 'selected' : ''}" data-open-overlay="pageSheet" title="配置页外观">
+                        ${SF.sliders}
+                      </button>
+                    ` : ''}
+                    <button class="ios-toolbar-btn" title="添加播放列表或插件">${SF.plus}</button>
+                  </div>
+                ` : ''}
+              </div>
+              <h1 class="ios-large-title">${inSettingsTab ? '设置' : '配置'}</h1>
+            </div>
+
+            <div class="ios-scroll-area">
+              ${inSettingsTab ? renderInAppSettingViewHTML() : renderGrid(isIPad ? 'ipad' : 'iphone')}
+            </div>
+
+            <div class="ios-tab-dock">
+              <div class="ios-tab-capsule">
+                <button class="ios-tab-pill" data-switch-tab="config">${SF.cloudCheck}<span>收藏</span></button>
+                <button class="ios-tab-pill ${!inSettingsTab ? 'active' : ''}" data-switch-tab="config">${SF.grid}<span>配置</span></button>
+                <button class="ios-tab-pill ${inSettingsTab ? 'active' : ''}" data-switch-tab="settings">${SF.gear}<span>设置</span></button>
+              </div>
+              <button class="ios-search-orb" title="搜索">${SF.search}</button>
+            </div>
+
+            <div class="sheet-scrim ${ov === 'contextMenu' ? 'blurred' : ''} ${ov !== 'none' ? 'open' : ''}" data-close-ov></div>
+
+            <div class="ctx-overlay ${ov === 'contextMenu' ? 'open' : ''}">
+              <div class="ctx-preview-card" style="--icon-s:44px;--card-r:20px;--fixed-h:132px;">
+                ${renderCard(activeItem, 'iphone', 0, { preview: true })}
+              </div>
+              <div class="ctx-menu-box">
+                <div class="ctx-menu-title">${activeItem.title}</div>
+                <button class="ctx-menu-item" data-open-card-direct="${activeItem.id}"><span>自定义图标与卡面…</span>${SF.sliders}</button>
+                <button class="ctx-menu-item" id="ctxSpan"><span>${activeItem.custom.span2 ? '恢复单列宽度' : '设为跨两列宽卡'}</span>${SF.expand}</button>
+                <button class="ctx-menu-item" id="ctxTop"><span>移至首位</span>${SF.star}</button>
+                <button class="ctx-menu-item danger" id="ctxReset"><span>恢复默认外观</span>${SF.reset}</button>
+              </div>
+            </div>
+
+            <div class="ios-sheet ${(ov === 'pageSheet' || ov === 'cardEditor') ? 'open' : ''}">
+              <div class="sheet-grabber"></div>
+              ${sheetInner}
+            </div>
+          </section>
+        </div>
+
+        <div class="ios-home-bar"></div>
+      </div>
+    `;
+  }
+
+  function renderMac(interactive = true) {
+    const activeItem = getActiveItem();
+    const ov = interactive ? state.overlay : 'none';
+    const inSettingsTab = interactive && state.appTab === 'settings';
+
+    const mainView = inSettingsTab
+      ? `<div style="max-width:540px;margin:0 auto;">${renderInAppSettingViewHTML()}</div>`
+      : (state.mode === 'baseline' ? `
+          <div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;color:var(--label-2);padding:32px;">
+            <div style="width:36px;height:36px;opacity:0.38;">${SF.puzzle}</div>
+            <div style="font-size:14.5px;font-weight:600;color:var(--label-1);">现状：macOS 安装插件后未挂载「全部配置」网格页</div>
+            <div style="max-width:410px;font-size:12.5px;line-height:1.55;">
+              左侧「平台」分组直接平铺各平台，无图标插件统一显示拼图符号。切到顶部「个性化方案」可查看全部配置网格与外观气泡。
+            </div>
+          </div>
+        ` : renderGrid('macos'));
+
+    return `
+      <div class="mac-outer">
+        <div class="mac-win" style="--mac-w:${interactive ? state.macWidth : 880}px;">
+          <aside class="mac-side">
+            <div class="mac-traffic">
+              <span class="mac-dot r"></span><span class="mac-dot y"></span><span class="mac-dot g"></span>
+            </div>
+            <div class="mac-side-list">
+              <div class="mac-side-row" data-switch-tab="config"><span class="mac-icon-slot" style="color:var(--brand-accent);">${SF.house}</span><span>首页</span></div>
+              <div class="mac-side-row"><span class="mac-icon-slot" style="color:#ff3b30;">${SF.heart}</span><span>收藏</span></div>
+              <div class="side-heading" style="padding:10px 8px 4px;">平台</div>
+              ${state.mode === 'custom' ? `<div class="mac-side-row ${!inSettingsTab ? 'active' : ''}" data-switch-tab="config"><span class="mac-icon-slot" style="color:var(--brand-accent);">${SF.grid}</span><span>全部配置</span></div>` : ''}
+              ${state.items.map(it => `
+                <div class="mac-side-row" data-drill-card="${it.id}">
+                  ${renderSmallIcon(it, 'mac-icon-slot', true)}
+                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${it.title}</span>
+                </div>
+              `).join('')}
+              <div class="side-heading" style="padding:10px 8px 4px;">通用</div>
+              <div class="mac-side-row"><span class="mac-icon-slot" style="color:var(--label-2);">${SF.search}</span><span>搜索</span></div>
+              <div class="mac-side-row"><span class="mac-icon-slot" style="color:var(--label-2);">${SF.clock}</span><span>历史记录</span></div>
+              <div class="mac-side-row ${inSettingsTab ? 'active' : ''}" data-switch-tab="settings"><span class="mac-icon-slot" style="color:var(--label-2);">${SF.gear}</span><span>设置</span></div>
+            </div>
+          </aside>
+
+          <section class="mac-main">
+            <header class="mac-bar">
+              <div class="mac-bar-title-group">
+                <span class="mac-bar-title">${inSettingsTab ? '设置' : (state.mode === 'baseline' ? '平台直达' : '全部配置')}</span>
+                ${!inSettingsTab ? `<span class="mac-bar-meta">${state.items.length} 个来源</span>` : ''}
+              </div>
+              ${(!inSettingsTab && state.mode === 'custom') ? `
+                <div class="mac-bar-tools">
+                  <div class="seg-track">
+                    <button class="seg-btn ${state.global.density === 'compact' ? 'active' : ''}" data-set-density="compact">紧凑</button>
+                    <button class="seg-btn ${state.global.density === 'standard' ? 'active' : ''}" data-set-density="standard">标准</button>
+                    <button class="seg-btn ${state.global.density === 'spacious' ? 'active' : ''}" data-set-density="spacious">舒展</button>
+                  </div>
+                  <button class="mac-btn ${ov === 'pageSheet' ? 'active' : ''}" data-open-overlay="pageSheet">
+                    ${SF.sliders}<span>页面外观</span>
+                  </button>
+                  <button class="mac-btn" title="添加播放列表">${SF.plus}</button>
+                </div>
+              ` : ''}
+            </header>
+
+            <div class="mac-body-scroll" data-dismiss-popover>
+              ${mainView}
+            </div>
+
+            <div class="mac-popover ${ov === 'pageSheet' ? 'open' : ''}">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:2px 4px 0;">
+                <strong style="font-size:13px;">配置页外观</strong>
+                <button class="sheet-nav-btn right" style="font-size:12.5px;padding:2px 0;" data-close-ov>完成</button>
+              </div>
+              ${buildPageAppearanceBodyHTML(true)}
+            </div>
+
+            <div class="sheet-scrim ${ov === 'contextMenu' ? 'open' : ''}" style="background:transparent;" data-close-ov></div>
+            <div class="ctx-overlay ${ov === 'contextMenu' ? 'open' : ''}">
+              <div class="ctx-menu-box">
+                <div class="ctx-menu-title">${activeItem.title}</div>
+                <button class="ctx-menu-item" data-open-card-direct="${activeItem.id}"><span>自定义图标与卡面…</span>${SF.sliders}</button>
+                <button class="ctx-menu-item" id="ctxSpan"><span>${activeItem.custom.span2 ? '恢复单列宽度' : '跨两列显示'}</span>${SF.expand}</button>
+                <button class="ctx-menu-item" id="ctxTop"><span>移至首位</span>${SF.star}</button>
+                <button class="ctx-menu-item danger" id="ctxReset"><span>恢复默认外观</span>${SF.reset}</button>
+              </div>
+            </div>
+
+            <div class="mac-modal-backdrop ${ov === 'cardEditor' ? 'open' : ''}">
+              <div class="mac-modal-box">
+                <div class="mac-modal-head">
+                  <button class="mac-x-btn" data-close-ov title="关闭">${SF.close}</button>
+                  <strong style="font-size:13.5px;text-align:center;">${activeItem.title}</strong>
+                  <button class="sheet-nav-btn right" style="font-size:13px;" data-close-ov>完成</button>
+                </div>
+                <div class="mac-modal-cols">
+                  <div class="mac-modal-preview">
+                    <div style="width:100%;--icon-s:44px;--card-r:14px;--fixed-h:106px;">
+                      ${renderCard(activeItem, 'macos', 0, { preview: true })}
+                    </div>
+                    <div style="font-size:11.5px;color:var(--label-2);text-align:center;">侧栏图标与网格实时同步</div>
+                  </div>
+                  <div class="mac-modal-form">
+                    ${buildCardEditorBodyHTML(activeItem)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        ${interactive ? `<div class="mac-resizer" id="macDragHandle" title="拖拽缩放窗口宽度"></div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderTV(interactive = true) {
+    const focused = state.items[state.tvFocusedIdx] || state.items[0];
+    const drawerOpen = interactive && state.overlay !== 'none';
+
+    const aspectTxt = { '2.4:1': '横条 2.4:1', '5:3': '标准 5:3', '16:9': '宽屏 16:9', '1:1': '方形 1:1' }[state.global.aspect];
+    const densityTxt = { compact: '紧凑 5 列', standard: '标准 4 列', spacious: '舒展 3 列' }[state.global.density];
+    const bgTxt = BG_PRESETS[state.global.bgPreset]?.name || 'iCloud 同步图';
+    const logoTxt = { auto: '默认', symbol: '符号', badge: '字标', image: 'iCloud 同步图' }[focused.custom.logoType];
+
+    return `
+      <div class="tv-frame">
+        <header class="tv-top">
+          <div class="tv-tabbar">
+            <button class="tv-tab-btn">${SF.house}<span>推荐</span></button>
+            <button class="tv-tab-btn">${SF.star}<span>收藏</span></button>
+            <button class="tv-tab-btn active">${SF.grid}<span>配置</span></button>
+            <button class="tv-tab-btn">${SF.search}<span>搜索</span></button>
+            <button class="tv-tab-btn" data-open-overlay="pageSheet">${SF.gear}<span>设置</span></button>
+          </div>
+          ${state.mode === 'custom' ? `
+            <button class="tv-appear-btn" data-open-overlay="pageSheet">
+              ${SF.sliders}<span>页面外观</span>
+            </button>
+          ` : ''}
+        </header>
+
+        <div class="tv-grid-stage">
+          ${renderGrid('tvos')}
+        </div>
+
+        <aside class="tv-drawer ${drawerOpen ? 'open' : ''}">
+          <div class="tv-drawer-top">
+            <div>
+              <div style="font-size:18px;font-weight:700;letter-spacing:-0.015em;">页面与卡片外观</div>
+              <div style="font-size:11.5px;color:rgba(255,255,255,0.55);margin-top:2px;">当前焦点：${focused.title} · iCloud 自动同步</div>
+            </div>
+            <button class="tv-drawer-close" data-close-ov>${SF.close}</button>
+          </div>
+
+          <div class="tv-drawer-list">
+            <div class="tv-sec-label">全局网格</div>
+            <button class="tv-row-btn focused" id="tvBtnDensity"><span>列数密度</span><span class="tv-row-val">${densityTxt}</span></button>
+            <button class="tv-row-btn" id="tvBtnAspect"><span>卡片比例</span><span class="tv-row-val">${aspectTxt}</span></button>
+            <button class="tv-row-btn" id="tvBtnBg"><span>卡片背景</span><span class="tv-row-val">${bgTxt}</span></button>
+
+            <div class="tv-sec-label">当前卡片 · ${focused.title}</div>
+            <button class="tv-row-btn" id="tvBtnLogo"><span>图标样式</span><span class="tv-row-val">${logoTxt}</span></button>
+            <button class="tv-row-btn" id="tvBtnSym"><span>切换符号与色调</span><span class="tv-row-val">按确认键轮换</span></button>
+            <button class="tv-row-btn" id="tvBtnSpan"><span>跨两列宽卡</span><span class="tv-row-val">${focused.custom.span2 ? '开启' : '关闭'}</span></button>
+            <button class="tv-row-btn subtle-reset" id="tvBtnReset"><span>恢复全部默认外观</span><span class="tv-row-val">重置</span></button>
+          </div>
+        </aside>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // 6. Stage Render & Event Binding
+  // =========================================================================
+  function mount() {
+    const vp = document.getElementById('stageViewport');
+    if (state.platform === 'iphone') vp.innerHTML = renderIOS(false, true);
+    else if (state.platform === 'ipad') vp.innerHTML = renderIOS(true, true);
+    else if (state.platform === 'macos') vp.innerHTML = renderMac(true);
+    else if (state.platform === 'tvos') vp.innerHTML = renderTV(true);
+    else {
+      vp.innerHTML = `
+        <div class="overview-layout">
+          <div class="overview-col" data-go-plat="iphone">
+            <div class="overview-caption">
+              <span class="overview-caption-name">iOS · iPhone</span>
+              <span class="overview-caption-meta">点击进入交互</span>
+            </div>
+            <div class="slot-iphone">${renderIOS(false, false)}</div>
+          </div>
+          <div class="overview-right">
+            <div class="overview-col" data-go-plat="macos">
+              <div class="overview-caption">
+                <span class="overview-caption-name">macOS · 全部配置与侧边栏同步</span>
+                <span class="overview-caption-meta">点击进入交互</span>
+              </div>
+              <div class="slot-mac">${renderMac(false)}</div>
+            </div>
+            <div class="overview-col" data-go-plat="tvos">
+              <div class="overview-caption">
+                <span class="overview-caption-name">tvOS · 十英尺焦点视图</span>
+                <span class="overview-caption-meta">点击进入交互</span>
+              </div>
+              <div class="slot-tv">${renderTV(false)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    bindEvents();
+  }
+
+  function bindEvents() {
+    const activeItem = getActiveItem();
+
+    document.querySelectorAll('[data-go-plat]').forEach(b => {
+      b.addEventListener('click', () => switchPlatform(b.dataset.goPlat));
+    });
+
+    document.querySelectorAll('[data-switch-tab]').forEach(b => {
+      b.addEventListener('click', () => {
+        state.appTab = b.dataset.switchTab;
+        state.overlay = 'none';
+        mount();
+      });
+    });
+
+    document.querySelectorAll('[data-open-overlay]').forEach(b => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.mode === 'baseline') return;
+        const target = b.dataset.openOverlay;
+        state.sheetFromPage = false;
+        state.overlay = state.overlay === target ? 'none' : target;
+        mount();
+      });
+    });
+
+    document.querySelectorAll('[data-close-ov]').forEach(b => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.overlay = 'none';
+        state.sheetFromPage = false;
+        mount();
+      });
+    });
+
+    document.querySelectorAll('[data-dismiss-popover]').forEach(el => {
+      el.addEventListener('click', () => {
+        if (state.overlay === 'pageSheet' && state.platform === 'macos') {
+          state.overlay = 'none';
+          mount();
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-drill-card]').forEach(row => {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.mode === 'baseline' || state.platform === 'overview') return;
+        state.activePluginId = row.dataset.drillCard;
+        state.sheetFromPage = state.overlay === 'pageSheet';
+        state.overlay = 'cardEditor';
+        mount();
+      });
+    });
+
+    document.querySelectorAll('[data-open-card-direct]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.activePluginId = btn.dataset.openCardDirect;
+        state.sheetFromPage = false;
+        state.overlay = 'cardEditor';
+        mount();
+      });
+    });
+
+    document.getElementById('btnBackToPageSheet')?.addEventListener('click', () => {
+      state.overlay = 'pageSheet';
+      state.sheetFromPage = false;
+      mount();
+    });
+
+    // Card Gestures
+    document.querySelectorAll('[data-card]').forEach(card => {
+      const id = card.dataset.card;
+      const os = card.dataset.os;
+      const idx = Number(card.dataset.idx);
+      let holdTimer = null;
+
+      card.addEventListener('pointerdown', () => {
+        if (state.mode !== 'custom' || state.platform === 'overview' || os === 'tvos') return;
+        holdTimer = setTimeout(() => {
+          state.activePluginId = id;
+          state.overlay = 'contextMenu';
+          mount();
+        }, 420);
+      });
+      const clearHold = () => { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } };
+      card.addEventListener('pointerup', clearHold);
+      card.addEventListener('pointerleave', clearHold);
+
+      card.addEventListener('contextmenu', (e) => {
+        if (state.mode !== 'custom' || state.platform === 'overview') return;
+        e.preventDefault();
+        state.activePluginId = id;
+        state.overlay = os === 'tvos' ? 'pageSheet' : 'contextMenu';
+        mount();
+      });
+
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('[data-card-menu]')) return;
+        state.activePluginId = id;
+        if (os === 'tvos') {
+          state.tvFocusedIdx = idx;
+          if (state.mode === 'custom' && state.platform === 'tvos') state.overlay = 'pageSheet';
+          mount();
+          return;
+        }
+        if (state.mode === 'custom' && state.platform !== 'overview') {
+          state.sheetFromPage = false;
+          state.overlay = 'cardEditor';
+          mount();
+        }
+      });
+
+      if (os === 'tvos') {
+        card.addEventListener('mouseenter', () => {
+          if (state.tvFocusedIdx !== idx) {
+            state.tvFocusedIdx = idx;
+            state.activePluginId = id;
+            document.querySelectorAll('.tv-card').forEach(el => {
+              el.classList.toggle('tv-focused', Number(el.dataset.idx) === idx);
+            });
+          }
+        });
+      }
+    });
+
+    document.querySelectorAll('[data-card-menu]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.activePluginId = btn.dataset.cardMenu;
+        state.overlay = 'contextMenu';
+        mount();
+      });
+    });
+
+    // Context Menu
+    document.getElementById('ctxSpan')?.addEventListener('click', () => {
+      activeItem.custom.span2 = !activeItem.custom.span2;
+      state.overlay = 'none';
+      mount();
+    });
+    document.getElementById('ctxTop')?.addEventListener('click', () => {
+      const i = state.items.findIndex(x => x.id === activeItem.id);
+      if (i > 0) { const [p] = state.items.splice(i, 1); state.items.unshift(p); }
+      state.overlay = 'none';
+      mount();
+    });
+    document.getElementById('ctxReset')?.addEventListener('click', () => {
+      activeItem.custom = { logoType: 'auto', symbol: 'tv', badge: activeItem.title.slice(0, 2), tint: activeItem.brandHex, logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false };
+      state.overlay = 'none';
+      mount();
+    });
+
+    // Global Appearance Controls
+    document.querySelectorAll('[data-sizing-mode]').forEach(b => {
+      b.addEventListener('click', () => { state.global.sizingMode = b.dataset.sizingMode; mount(); });
+    });
+    document.querySelectorAll('[data-set-density]').forEach(b => {
+      b.addEventListener('click', () => { state.global.sizingMode = 'preset'; state.global.density = b.dataset.setDensity; mount(); });
+    });
+    document.querySelectorAll('[data-set-aspect]').forEach(b => {
+      b.addEventListener('click', () => { state.global.sizingMode = 'preset'; state.global.aspect = b.dataset.setAspect; mount(); });
+    });
+    document.getElementById('sliderCols')?.addEventListener('input', (e) => { state.global.customCols = Number(e.target.value); mount(); });
+    document.getElementById('sliderHeight')?.addEventListener('input', (e) => { state.global.customHeight = Number(e.target.value); mount(); });
+    document.getElementById('sliderRadius')?.addEventListener('input', (e) => { state.global.customRadius = Number(e.target.value); mount(); });
+    document.getElementById('sliderBgBlur')?.addEventListener('input', (e) => { state.global.bgBlur = Number(e.target.value); mount(); });
+    document.querySelectorAll('[data-set-bg]').forEach(b => {
+      b.addEventListener('click', () => { state.global.bgPreset = b.dataset.setBg; mount(); });
+    });
+    document.getElementById('switchContrast')?.addEventListener('click', () => { state.global.contrastGuard = !state.global.contrastGuard; mount(); });
+    document.getElementById('btnPickGlobalBg')?.addEventListener('click', () => {
+      document.getElementById('bgFilePicker').dataset.target = 'global';
+      document.getElementById('bgFilePicker').click();
+    });
+    document.getElementById('btnResetGlobal')?.addEventListener('click', () => {
+      state.global = { sizingMode: 'preset', density: 'standard', aspect: '5:3', customCols: 2, customHeight: 112, customRadius: 20, bgPreset: 'default', uploadedBgURL: '', bgBlur: 0, contrastGuard: true };
+      mount();
+    });
+
+    // Single Card Controls
+    document.querySelectorAll('[data-ed-tab]').forEach(b => {
+      b.addEventListener('click', () => { state.editorTab = b.dataset.edTab; mount(); });
+    });
+    document.querySelectorAll('[data-logo-type]').forEach(b => {
+      b.addEventListener('click', () => {
+        activeItem.custom.logoType = b.dataset.logoType;
+        if (activeItem.custom.logoType === 'image' && !activeItem.custom.logoImg) {
+          document.getElementById('logoFilePicker').click();
+        }
+        mount();
+      });
+    });
+    document.querySelectorAll('[data-pick-sym]').forEach(b => {
+      b.addEventListener('click', () => { activeItem.custom.symbol = b.dataset.pickSym; mount(); });
+    });
+    document.querySelectorAll('[data-pick-tint]').forEach(b => {
+      b.addEventListener('click', () => { activeItem.custom.tint = b.dataset.pickTint; mount(); });
+    });
+    document.getElementById('inputBadge')?.addEventListener('input', (e) => {
+      activeItem.custom.badge = e.target.value;
+      mount();
+      const el = document.getElementById('inputBadge');
+      if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    });
+    document.getElementById('btnPickLogo')?.addEventListener('click', () => document.getElementById('logoFilePicker').click());
+    document.querySelectorAll('[data-show-title]').forEach(b => {
+      b.addEventListener('click', () => { activeItem.custom.showTitle = b.dataset.showTitle; mount(); });
+    });
+    document.querySelectorAll('[data-card-bg]').forEach(b => {
+      b.addEventListener('click', () => { activeItem.custom.bgMode = b.dataset.cardBg; mount(); });
+    });
+    document.getElementById('btnPickCardBg')?.addEventListener('click', () => {
+      document.getElementById('bgFilePicker').dataset.target = 'card';
+      document.getElementById('bgFilePicker').click();
+    });
+    document.getElementById('sliderFocalY')?.addEventListener('input', (e) => { activeItem.custom.focalY = Number(e.target.value); mount(); });
+    document.getElementById('switchSpan2')?.addEventListener('click', () => { activeItem.custom.span2 = !activeItem.custom.span2; mount(); });
+    document.getElementById('btnOrderPrev')?.addEventListener('click', () => {
+      const i = state.items.findIndex(x => x.id === activeItem.id);
+      if (i > 0) { const [it] = state.items.splice(i, 1); state.items.splice(i - 1, 0, it); mount(); }
+    });
+    document.getElementById('btnOrderNext')?.addEventListener('click', () => {
+      const i = state.items.findIndex(x => x.id === activeItem.id);
+      if (i >= 0 && i < state.items.length - 1) { const [it] = state.items.splice(i, 1); state.items.splice(i + 1, 0, it); mount(); }
+    });
+    document.getElementById('btnResetSingle')?.addEventListener('click', () => {
+      activeItem.custom = { logoType: 'auto', symbol: 'tv', badge: activeItem.title.slice(0, 2), tint: activeItem.brandHex, logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false };
+      mount();
+    });
+
+    // tvOS Drawer Controls
+    document.getElementById('tvBtnDensity')?.addEventListener('click', () => {
+      const seq = ['compact', 'standard', 'spacious'];
+      state.global.sizingMode = 'preset';
+      state.global.density = seq[(seq.indexOf(state.global.density) + 1) % seq.length];
+      mount();
+    });
+    document.getElementById('tvBtnAspect')?.addEventListener('click', () => {
+      const seq = ['5:3', '16:9', '2.4:1', '1:1'];
+      state.global.sizingMode = 'preset';
+      state.global.aspect = seq[(seq.indexOf(state.global.aspect) + 1) % seq.length];
+      mount();
+    });
+    document.getElementById('tvBtnBg')?.addEventListener('click', () => {
+      const seq = ['default', 'surface', 'tinted', 'linen', 'slate', 'dusk'];
+      state.global.bgPreset = seq[(seq.indexOf(state.global.bgPreset) + 1) % seq.length];
+      mount();
+    });
+    document.getElementById('tvBtnLogo')?.addEventListener('click', () => {
+      const f = state.items[state.tvFocusedIdx];
+      const seq = ['auto', 'symbol', 'badge'];
+      f.custom.logoType = seq[(seq.indexOf(f.custom.logoType) + 1) % seq.length];
+      mount();
+    });
+    document.getElementById('tvBtnSym')?.addEventListener('click', () => {
+      const f = state.items[state.tvFocusedIdx];
+      f.custom.logoType = 'symbol';
+      f.custom.symbol = SYMBOL_KEYS[(SYMBOL_KEYS.indexOf(f.custom.symbol) + 1) % SYMBOL_KEYS.length];
+      f.custom.tint = TINTS[(TINTS.indexOf(f.custom.tint) + 1) % TINTS.length];
+      mount();
+    });
+    document.getElementById('tvBtnSpan')?.addEventListener('click', () => {
+      const f = state.items[state.tvFocusedIdx];
+      f.custom.span2 = !f.custom.span2;
+      mount();
+    });
+    document.getElementById('tvBtnReset')?.addEventListener('click', () => {
+      state.global = { sizingMode: 'preset', density: 'standard', aspect: '5:3', customCols: 2, customHeight: 112, customRadius: 20, bgPreset: 'default', uploadedBgURL: '', bgBlur: 0, contrastGuard: true };
+      state.items.forEach(it => {
+        it.custom = { logoType: 'auto', symbol: it.custom.symbol, badge: it.title.slice(0, 2), tint: it.brandHex, logoImg: '', showTitle: 'auto', bgMode: 'inherit', cardBgImg: '', focalY: 50, span2: false };
+      });
+      mount();
+    });
+
+    // macOS Drag Resize
+    const handle = document.getElementById('macDragHandle');
+    if (handle) {
+      handle.addEventListener('pointerdown', (e) => {
+        handle.setPointerCapture(e.pointerId);
+        const sx = e.clientX;
+        const sw = state.macWidth;
+        const move = (ev) => {
+          state.macWidth = Math.max(620, Math.min(1120, sw + (ev.clientX - sx)));
+          const win = document.querySelector('.mac-win');
+          if (win) {
+            win.style.setProperty('--mac-w', `${state.macWidth}px`);
+            const grid = win.querySelector('.p-grid');
+            if (grid) {
+              const v = computeGridVars('macos');
+              grid.style.setProperty('--n', v.n);
+              grid.style.setProperty('--cols', v.cols);
+            }
+          }
+        };
+        const up = () => {
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', up);
+        };
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', up);
+      });
+    }
+  }
+
+  function switchPlatform(p) {
+    state.platform = p;
+    state.overlay = 'none';
+    state.appTab = 'config';
+    document.querySelectorAll('[data-platform]').forEach(b => b.classList.toggle('active', b.dataset.platform === p));
+    mount();
+  }
+
+  document.querySelectorAll('[data-mode]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.mode = b.dataset.mode;
+      if (state.mode === 'baseline') { state.overlay = 'none'; state.appTab = 'config'; }
+      document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('active', x === b));
+      mount();
+    });
+  });
+
+  document.querySelectorAll('[data-platform]').forEach(b => {
+    b.addEventListener('click', () => switchPlatform(b.dataset.platform));
+  });
+
+  document.querySelectorAll('[data-theme-toggle]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.theme = b.dataset.themeToggle;
+      document.documentElement.setAttribute('data-theme', state.theme);
+      document.querySelectorAll('[data-theme-toggle]').forEach(x => x.classList.toggle('active', x === b));
+      mount();
+    });
+  });
+
+  document.getElementById('bgFilePicker').addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const target = e.target.dataset.target;
+    const r = new FileReader();
+    r.onload = () => {
+      if (target === 'card') {
+        const it = getActiveItem();
+        it.custom.cardBgImg = String(r.result);
+        it.custom.bgMode = 'customCardImg';
+      } else {
+        state.global.uploadedBgURL = String(r.result);
+        state.global.bgPreset = 'uploaded';
+      }
+      mount();
+    };
+    r.readAsDataURL(file);
+  });
+
+  document.getElementById('logoFilePicker').addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const it = getActiveItem();
+      it.custom.logoImg = String(r.result);
+      it.custom.logoType = 'image';
+      mount();
+    };
+    r.readAsDataURL(file);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.overlay !== 'none') {
+      state.overlay = 'none';
+      mount();
+      return;
+    }
+    if (document.activeElement?.tagName === 'INPUT') return;
+    if (state.platform !== 'tvos' && state.platform !== 'overview') return;
+    const cols = state.mode === 'baseline' ? 4 : (state.global.density === 'compact' ? 5 : state.global.density === 'spacious' ? 3 : 4);
+    const len = state.items.length;
+    let next = state.tvFocusedIdx;
+    if (e.key === 'ArrowRight') next = Math.min(len - 1, next + 1);
+    else if (e.key === 'ArrowLeft') next = Math.max(0, next - 1);
+    else if (e.key === 'ArrowDown') next = Math.min(len - 1, next + cols);
+    else if (e.key === 'ArrowUp') next = Math.max(0, next - cols);
+    else return;
+    e.preventDefault();
+    state.tvFocusedIdx = next;
+    state.activePluginId = state.items[next].id;
+    mount();
+  });
+
+  (function applyQuery() {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get('p')) state.platform = q.get('p');
+    if (q.get('o')) state.overlay = q.get('o');
+    if (q.get('tab')) state.appTab = q.get('tab');
+    if (q.get('ed')) state.editorTab = q.get('ed');
+    if (q.get('wh') === '1') state.global.sizingMode = 'customWH';
+    if (q.get('bg')) state.global.bgPreset = q.get('bg');
+    if (q.get('span') === '1') state.items[0].custom.span2 = true;
+    if (q.get('sym') === '1') {
+      state.items[3].custom.logoType = 'symbol';
+      state.items[3].custom.symbol = 'leaf';
+    }
+    if (q.get('mode') === 'baseline') state.mode = 'baseline';
+    if (q.get('t') === 'dark') {
+      state.theme = 'dark';
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+    document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === state.mode));
+    document.querySelectorAll('[data-platform]').forEach(b => b.classList.toggle('active', b.dataset.platform === state.platform));
+    document.querySelectorAll('[data-theme-toggle]').forEach(b => b.classList.toggle('active', b.dataset.themeToggle === state.theme));
+  })();
+
+  mount();
+</script>
+</body>
+</html>

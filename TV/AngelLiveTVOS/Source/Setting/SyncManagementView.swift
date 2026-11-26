@@ -20,6 +20,9 @@ import AngelLiveDependencies
 struct SyncManagementView: View {
     @Environment(AppState.self) private var appViewModel
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @AppStorage(PlatformAppearanceSyncService.settingKey) private var platformAppearanceSyncEnabled = true
+    @FocusState private var appearanceRowFocused: Bool
+    @State private var resumesAppearanceRow = false
 
     @State private var currentPage: SyncPage = .main
     /// Simple Live 老扫码同步页内部硬编码了 1920×1080,半屏宽度容不下,
@@ -31,6 +34,7 @@ struct SyncManagementView: View {
         case lanSync
         case iCloud
         case favorite
+        case platformAppearance
     }
 
     var body: some View {
@@ -48,6 +52,12 @@ struct SyncManagementView: View {
             case .favorite:
                 FavoriteSyncDetailView(onBack: { currentPage = .main })
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .platformAppearance:
+                TVPlatformAppearanceSyncDetail {
+                    resumesAppearanceRow = true
+                    currentPage = .main
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.25), value: currentPage)
@@ -119,6 +129,21 @@ struct SyncManagementView: View {
                     }
                 }
 
+                if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    sectionHeader("配置页外观同步")
+                    Button {
+                        currentPage = .platformAppearance
+                    } label: {
+                        let enabled = platformAppearanceSyncEnabled && syncService.iCloudSyncEnabled
+                        TVAppearanceControlLabel("配置页外观同步", value:
+                            Text(enabled ? "已开启" : "已关闭")
+                                .font(.system(size: 30))
+                                .foregroundStyle(enabled ? .green : .gray))
+                    }
+                    .focused($appearanceRowFocused)
+                    .accessibilityIdentifier("settings.platformAppearance.sync")
+                }
+
                 sectionHeader("其他设备")
 
                 // Simple Live 同步:扫码协议,留给安卓 Simple Live 用户。
@@ -142,6 +167,10 @@ struct SyncManagementView: View {
         }
         .scrollClipDisabled()
         .task {
+            if resumesAppearanceRow {
+                appearanceRowFocused = true
+                resumesAppearanceRow = false
+            }
             await syncService.refreshAllLoginStatus()
         }
     }

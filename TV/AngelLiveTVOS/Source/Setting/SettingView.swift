@@ -19,6 +19,7 @@ struct SettingView: View {
 
     @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "清除缓存", "关于&问题反馈", "问题诊断与反馈", "翻译与字幕", "播放时间轴", "赞助商"]
     private static let sponsorsIndex = 12
+    private static let platformAppearanceIndex = 13
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @State private var lastFocusedIndex: Int?
@@ -33,7 +34,7 @@ struct SettingView: View {
     @State private var showClearCacheConfirm = false
 
     // 需要在右侧半屏显示的页面索引
-    private var halfScreenIndices: Set<Int> { [0, 2, 3, 4, 10] } // 账号管理、通用设置、弹幕设置、数据同步、翻译与字幕
+    private var halfScreenIndices: Set<Int> { [0, 2, 3, 4, 10, Self.platformAppearanceIndex] }
 
     private var canEnterPluginManagement: Bool {
         appViewModel.pluginAvailability.hasAvailablePlugins ||
@@ -119,7 +120,7 @@ struct SettingView: View {
             if selectedIndex == 4 {
                 selectedIndex = nil
             }
-            if selectedIndex == 10 {
+            if selectedIndex == 10 || selectedIndex == Self.platformAppearanceIndex {
                 selectedIndex = nil
             }
         }
@@ -150,7 +151,11 @@ struct SettingView: View {
     private var menuItemIndices: [Int] {
         let indices = Array(titles.indices)
         guard appViewModel.pluginAvailability.hasAvailablePlugins else { return indices }
-        return indices.filter { $0 != 8 && $0 != 11 } + [8, 11]
+        var fullUIOrder = indices.filter { $0 != 8 && $0 != 11 } + [8, 11]
+        if let generalIndex = fullUIOrder.firstIndex(of: 2) {
+            fullUIOrder.insert(Self.platformAppearanceIndex, at: generalIndex + 1)
+        }
+        return fullUIOrder
     }
 
     private var menuListView: some View {
@@ -174,8 +179,7 @@ struct SettingView: View {
                             }
                         } label: {
                             HStack(spacing: 15) {
-                                Text(index == 8 && appViewModel.pluginAvailability.hasAvailablePlugins ? "关于" : titles[index])
-                                    .foregroundColor(.primary)
+                                menuTitle(for: index).foregroundColor(.primary)
                                 Spacer()
                                 menuTrailingStatus(for: index)
                                 if index != 7 {
@@ -192,6 +196,12 @@ struct SettingView: View {
         }
         // FullUI 的原生聚焦胶囊会超出滚动区域，保留两端放大后的完整轮廓。
         .scrollClipDisabled(appViewModel.pluginAvailability.hasAvailablePlugins)
+    }
+
+    private func menuTitle(for index: Int) -> Text {
+        if index == Self.platformAppearanceIndex { return Text("配置页外观") }
+        if index == 8 && appViewModel.pluginAvailability.hasAvailablePlugins { return Text("关于") }
+        return Text(titles[index])
     }
 
     /// 菜单行尾部状态文案。抽成独立 @ViewBuilder,避免 menuListView 整体表达式过大导致编译器 type-check 超时。
@@ -230,7 +240,7 @@ struct SettingView: View {
         if index == 9 {
             return supportDiagnosticsEnabled
         }
-        if index == 10 || index == Self.sponsorsIndex {
+        if index == 10 || index == Self.sponsorsIndex || index == Self.platformAppearanceIndex {
             return appViewModel.pluginAvailability.hasAvailablePlugins
         }
         if index == 11 {
@@ -290,6 +300,11 @@ struct SettingView: View {
                 .onExitCommand {
                     selectedIndex = nil
                 }
+        case Self.platformAppearanceIndex where appViewModel.pluginAvailability.hasAvailablePlugins:
+            TVSettingsPlatformAppearance {
+                selectedIndex = nil
+            }
+            .onExitCommand { selectedIndex = nil }
         default:
             EmptyView()
         }

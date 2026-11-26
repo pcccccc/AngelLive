@@ -11,19 +11,23 @@ import AngelLiveCore
 
 struct AdaptivePlatformView: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
-    @Environment(PlatformViewModel.self) private var viewModel
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     @State private var showAddSheet = false
     @State private var navigationPath: [AdaptivePlatformRoute] = []
     @State private var pendingPluginSourceURLs: [String]?
-    private let gridSpacing = AppConstants.Spacing.lg
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             Group {
                 if pluginAvailability.hasAvailablePlugins {
-                    platformContent
+                    IOSPlatformPage(open: { navigationPath.append(.platform($0)) }, addContent: { showAddSheet = true })
+                        .sheet(isPresented: $showAddSheet, onDismiss: openPendingPluginSources) {
+                            AddContentSheet { sourceURLs in
+                                pendingPluginSourceURLs = sourceURLs
+                                showAddSheet = false
+                            }
+                            .presentationDetents([.medium, .large])
+                            .presentationDragIndicator(.visible)
+                        }
                 } else {
                     ShellConfigView(onOpenPluginSources: openPluginSources)
                 }
@@ -37,55 +41,6 @@ struct AdaptivePlatformView: View {
                         .fullUITabBarHidden()
                 }
             }
-        }
-    }
-
-    // MARK: - 有插件时的平台内容
-
-    private var platformContent: some View {
-        GeometryReader { proxy in
-            let metrics = layoutMetrics(for: proxy.size)
-
-            ScrollView {
-                // 平台卡片网格
-                LazyVGrid(
-                    columns: metrics.columns,
-                    spacing: gridSpacing
-                ) {
-                    ForEach(viewModel.platformInfo) { platform in
-                        NavigationLink(value: AdaptivePlatformRoute.platform(platform)) {
-                            PlatformCard(platform: platform)
-                                .frame(width: metrics.itemWidth, height: metrics.itemHeight)
-                        }
-                        .buttonStyle(PlatformCardButtonStyle())
-                    }
-                }
-                .padding(.horizontal, gridSpacing)
-                .padding(.vertical, gridSpacing)
-                .animation(.smooth(duration: 0.3), value: metrics.columns.count)
-
-            }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-        .fullUITabBarVisibilityRoot()
-        .navigationTitle("配置")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showAddSheet, onDismiss: openPendingPluginSources) {
-            AddContentSheet { sourceURLs in
-                pendingPluginSourceURLs = sourceURLs
-                showAddSheet = false
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
     }
 
@@ -112,25 +67,55 @@ struct AdaptivePlatformView: View {
         case pluginSources([String])
     }
 
-    // MARK: - 布局计算
+}
 
-    private func columnCount(for size: CGSize) -> Int {
-        guard size.width > 0 else { return 2 }
-        return horizontalSizeClass == .regular ? 3 : 2
-    }
+// MARK: - 平台网格
 
-    private func layoutMetrics(for size: CGSize) -> GridMetrics {
-        let columnsCount = max(1, columnCount(for: size))
-        let horizontalPadding = gridSpacing * 2
-        let interItemSpacing = gridSpacing * CGFloat(max(0, columnsCount - 1))
-        let availableWidth = max(0, size.width - horizontalPadding - interItemSpacing)
-        let itemWidth = columnsCount > 0 ? availableWidth / CGFloat(columnsCount) : 0
-        let itemHeight = itemWidth * 0.6
-        let gridColumns = Array(
-            repeating: GridItem(.fixed(itemWidth), spacing: gridSpacing),
-            count: columnsCount
-        )
-        return GridMetrics(columns: gridColumns, itemWidth: itemWidth, itemHeight: itemHeight)
+struct IOSPlatformPage: View {
+    let open: (Platformdescription) -> Void
+    var addContent: (() -> Void)?
+
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @Environment(PlatformViewModel.self) private var viewModel
+    @State private var showAppearance = false
+    @State private var customPlatform: Platformdescription?
+    @State private var gridWidth: CGFloat = 0
+
+    var body: some View {
+        IOSPlatformGrid(platforms: viewModel.platformInfo, catalogRevision: pluginAvailability.catalogRevision) {
+            open($0)
+        } customize: {
+            customPlatform = $0
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
+        .fullUITabBarVisibilityRoot()
+        .navigationTitle("配置")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button("配置页外观", systemImage: "slider.horizontal.3") {
+                    showAppearance = true
+                }
+                .labelStyle(.iconOnly)
+                .accessibilityLabel("配置页外观")
+                .accessibilityIdentifier("platform.appearance.open")
+                if let addContent {
+                    Button(action: addContent) {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("添加视频或订阅")
+                    .accessibilityIdentifier("platform.add")
+                }
+            }
+        }
+        .sheet(isPresented: $showAppearance) {
+            NavigationStack { IOSPlatformAppearancePage(showsDone: true, gridWidth: gridWidth) }
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $customPlatform) { platform in
+            NavigationStack { IOSPlatformAppearanceCardEditor(platform: platform, showsDone: true, gridWidth: gridWidth) }
+                .presentationDragIndicator(.visible)
+        }
     }
 }
 
@@ -244,11 +229,4 @@ private struct AddContentSheet: View {
             isProcessing = false
         }
     }
-}
-
-// GridMetrics 复用（与 PlatformView 相同结构）
-private struct GridMetrics {
-    let columns: [GridItem]
-    let itemWidth: CGFloat
-    let itemHeight: CGFloat
 }

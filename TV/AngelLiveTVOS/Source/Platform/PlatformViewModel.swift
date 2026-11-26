@@ -86,64 +86,11 @@ enum TVPlatformIconProvider {
     }
 
     /// Shelf background color sampled from the icon. Cached per plugin and catalog revision.
-    /// Low-saturation results are discarded so the card does not become a gray plate.
     static func managementShelfColor(pluginID: String, revision: UInt, image: UIImage) -> UIColor? {
-        let key = "\(pluginID)#\(revision)" as NSString
-        if let cached = shelfColorCache.object(forKey: key) { return cached }
-        guard let color = dominantIconColor(image) else { return nil }
-        shelfColorCache.setObject(color, forKey: key)
-        return color
-    }
-
-    private static let shelfColorCache = NSCache<NSString, UIColor>()
-
-    private static func dominantIconColor(_ image: UIImage) -> UIColor? {
-        guard let cgImage = image.cgImage else { return nil }
-        let side = 32
-        var pixels = [UInt8](repeating: 0, count: side * side * 4)
-        let drew = pixels.withUnsafeMutableBytes { raw -> Bool in
-            guard let base = raw.baseAddress,
-                  let context = CGContext(
-                    data: base, width: side, height: side, bitsPerComponent: 8,
-                    bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
-                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                  ) else { return false }
-            context.interpolationQuality = .medium
-            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: side, height: side))
-            return true
-        }
-        guard drew else { return nil }
-
-        struct Bucket: Hashable { let r, g, b: Int }
-        var counts: [Bucket: Int] = [:]
-        for index in stride(from: 0, to: pixels.count, by: 4) {
-            let alpha = Int(pixels[index + 3])
-            guard alpha >= 40 else { continue }
-            let red = Int(pixels[index]) * 255 / alpha
-            let green = Int(pixels[index + 1]) * 255 / alpha
-            let blue = Int(pixels[index + 2]) * 255 / alpha
-            let bucket = Bucket(r: red / 16, g: green / 16, b: blue / 16)
-            counts[bucket, default: 0] += 1
-        }
-        func saturation(_ bucket: Bucket) -> Double {
-            let red = Double(bucket.r), green = Double(bucket.g), blue = Double(bucket.b)
-            let maxChannel = max(red, green, blue)
-            let minChannel = min(red, green, blue)
-            guard maxChannel > 0 else { return 0 }
-            return (maxChannel - minChannel) / maxChannel
-        }
-        guard let best = counts.max(by: { lhs, rhs in
-            let leftSaturated = saturation(lhs.key) >= 0.18
-            let rightSaturated = saturation(rhs.key) >= 0.18
-            if leftSaturated != rightSaturated { return rightSaturated }
-            if lhs.value != rhs.value { return lhs.value < rhs.value }
-            return saturation(lhs.key) < saturation(rhs.key)
-        }), saturation(best.key) >= 0.18 else { return nil }
-        return UIColor(
-            red: (Double(best.key.r) + 0.5) / 16,
-            green: (Double(best.key.g) + 0.5) / 16,
-            blue: (Double(best.key.b) + 0.5) / 16,
-            alpha: 1)
+        guard let bitmap = image.cgImage,
+              let color = PlatformIconDominantColor.extract(from: bitmap, cacheKey: "shelf|\(pluginID)|\(revision)")
+        else { return nil }
+        return UIColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
     }
 
     private static func managementResourceImage(

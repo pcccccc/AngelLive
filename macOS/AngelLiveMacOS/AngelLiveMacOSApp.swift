@@ -57,6 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         MediaTransformSupport.registerHostCapability()
         DualStreamSupport.registerHostCapability()
         Task { await PlaylistSyncService.shared.start() }
+        Task { await PlatformAppearanceSyncService.shared.start() }
         BugsnagBootstrap.start(platform: .macOS)
         KSOptions.logLevel = .error
         KSOptions.hudLog = false
@@ -108,7 +109,98 @@ private struct MacUpdateButton: View {
 }
 #endif
 
+#if DEBUG
 @main
+@MainActor
+private enum AngelLiveMacOSAppLauncher {
+    static func main() {
+        if PlatformAppearanceDemo.isEnabled {
+            AppearanceDemoApp.main()
+            return
+        }
+        AngelLiveMacOSApp.main()
+    }
+}
+
+private struct AppearanceDemoApp: App {
+    var body: some Scene {
+        WindowGroup {
+            PlatformAppearanceDemoRoot { page, width in
+                NavigationStack {
+                    switch page {
+                    case .grid:
+                        PlatformView { _ in }
+                    case .card(let platform):
+                        MacPlatformAppearanceCardEditor(platform: platform, gridWidth: width)
+                            .navigationTitle(platform.title)
+                    case .settings:
+                        AppearanceInspectionSettings(gridWidth: width)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct AppearanceInspectionSettings: View {
+    let gridWidth: CGFloat
+
+    private enum Sheet: String, Identifiable {
+        case appearance, translation, sync
+        var id: Self { self }
+    }
+
+    @State private var sheet: Sheet?
+
+    var body: some View {
+        Form {
+            Section("同步") {
+                MacSettingsSyncLink { sheet = .sync }
+            }
+
+            Section("通用设置") {
+                MacSettingsAppearanceLinks(
+                    appearanceDisabled: false,
+                    showAppearance: { sheet = .appearance },
+                    showTranslation: { sheet = .translation }
+                )
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("设置")
+        .sheet(item: $sheet) { item in
+            switch item {
+            case .appearance:
+                MacPlatformAppearanceSettingsSheet(gridWidth: gridWidth)
+            case .sync:
+                Form {
+                    Section("配置页外观同步") {
+                        MacPlatformAppearanceSyncContent(
+                            enabled: .constant(false),
+                            masterEnabled: false,
+                            isSyncing: false,
+                            message: Text("iCloud 总开关已关闭"),
+                            syncNow: {}
+                        )
+                    }
+                }
+                .formStyle(.grouped)
+                .macSettingsPage("同步管理")
+                .macSettingsSheetPresentation()
+                .frame(minWidth: 600, minHeight: 520)
+            case .translation:
+                ContentUnavailableView("此设置未载入演示环境", systemImage: "character.book.closed")
+                    .macSettingsPage("翻译与字幕")
+                    .macSettingsSheetPresentation()
+            }
+        }
+    }
+}
+#endif
+
+#if !DEBUG
+@main
+#endif
 struct AngelLiveMacOSApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
@@ -158,6 +250,9 @@ struct AngelLiveMacOSApp: App {
             .environment(production.favorite)
             .environment(production.history)
             .environment(production.toast)
+            .task(id: production.pluginAvailability.hasAvailablePlugins) {
+                await PlatformAppearanceSyncService.shared.setFullUIAvailable(production.pluginAvailability.hasAvailablePlugins)
+            }
             #if !APPSTORE
             .environmentObject(production.updater)
             #endif

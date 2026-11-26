@@ -24,7 +24,33 @@ extension EnvironmentValues {
     @Entry var usesFullUI = false
 }
 
+#if DEBUG
 @main
+@MainActor
+private enum SimpleLiveTVOSAppLauncher {
+    static func main() {
+        if PlatformAppearanceDemo.isEnabled {
+            AppearanceDemoApp.main()
+            return
+        }
+        SimpleLiveTVOSApp.main()
+    }
+}
+
+private struct AppearanceDemoApp: App {
+    var body: some Scene {
+        WindowGroup {
+            PlatformAppearanceDemoRoot { _, _ in
+                TVAppearanceDemoPage()
+            }
+        }
+    }
+}
+#endif
+
+#if !DEBUG
+@main
+#endif
 struct SimpleLiveTVOSApp: App {
 
     private let appViewModel: AppState
@@ -65,6 +91,7 @@ struct SimpleLiveTVOSApp: App {
         MediaTransformSupport.registerHostCapability()
         DualStreamSupport.registerHostCapability()
         Task { await PlaylistSyncService.shared.start() }
+        Task { await PlatformAppearanceSyncService.shared.start() }
         // 启动时将 Caches 中的插件同步到 App Group 容器（供 TopShelf 使用）
         PluginAppGroupSync.syncToAppGroup()
 
@@ -134,5 +161,59 @@ struct SimpleLiveTVOSApp: App {
                     DeepLinkPlayerView(appViewModel: appViewModel)
                 }
                 .environment(\.usesFullUI, appViewModel.pluginAvailability.hasAvailablePlugins)
+                .task(id: appViewModel.pluginAvailability.hasAvailablePlugins) {
+                    await PlatformAppearanceSyncService.shared.setFullUIAvailable(appViewModel.pluginAvailability.hasAvailablePlugins)
+                }
     }
 }
+
+#if DEBUG
+private struct TVAppearanceDemoPage: View {
+    @State private var platforms: PlatformViewModel = {
+        let model = PlatformViewModel()
+        model.platformInfo = PlatformAppearanceDemo.platforms.map {
+            Platformdescription(
+                title: $0.title,
+                pluginId: $0.pluginId,
+                bigPic: $0.bigPic,
+                smallPic: $0.smallPic,
+                descripiton: $0.descripiton,
+                liveType: $0.liveType
+            )
+        }
+        return model
+    }()
+
+    @State private var tab = 2
+
+    var body: some View {
+        TabView(selection: $tab) {
+            Text("推荐")
+                .tabItem { Label("推荐", systemImage: "house.fill") }
+                .tag(0)
+
+            Text("收藏")
+                .tabItem { Label("收藏", systemImage: "star.fill") }
+                .tag(1)
+
+            TVFullPlatformGrid(
+                platforms: platforms,
+                catalogRevision: 0,
+                usesSolidBackground: false,
+                open: { _ in }
+            )
+            .tabItem { Label("配置", systemImage: "square.stack.3d.up.fill") }
+            .tag(2)
+
+            Text("搜索")
+                .tabItem { Label("搜索", systemImage: "magnifyingglass") }
+                .tag(3)
+
+            TVPlatformAppearanceControls(platforms: platforms, onClose: { tab = 2 })
+                .safeAreaPadding(.horizontal, 80)
+                .tabItem { Label("设置", systemImage: "gearshape.fill") }
+                .tag(4)
+        }
+    }
+}
+#endif

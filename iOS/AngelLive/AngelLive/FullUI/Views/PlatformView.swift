@@ -1,169 +1,73 @@
-//
-//  PlatformView.swift
-//  AngelLive
-//
-//  Created by pangchong on 10/17/25.
-//
-
 import SwiftUI
-import AngelLiveDependencies
 import AngelLiveCore
+import SharedAssets
 
 struct PlatformView: View {
-    @Environment(PlatformViewModel.self) private var viewModel
-    @Environment(SearchViewModel.self) private var searchViewModel
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var navigationPath: [Platformdescription] = []
-    private let gridSpacing = AppConstants.Spacing.lg
+    var body: some View {
+        AdaptivePlatformView()
+    }
+}
+
+struct IOSPlatformGrid: View {
+    let platforms: [Platformdescription]
+    let catalogRevision: UInt
+    let open: (Platformdescription) -> Void
+    let customize: (Platformdescription) -> Void
+
+    @Environment(\.platformAppearanceLibrary) private var library
+    private var store: PlatformAppearanceStore { library?.store ?? .shared }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
-            GeometryReader { proxy in
-                let metrics = layoutMetrics(for: proxy.size)
-
-                ScrollView {
-                    LazyVGrid(
-                        columns: metrics.columns,
-                        spacing: gridSpacing
-                    ) {
-                        ForEach(viewModel.platformInfo) { platform in
-                            platformNavigationItem(platform: platform, metrics: metrics)
+        let idiom: PlatformDeviceIdiom = AppConstants.Device.isIPad ? .pad : .phone
+        let snapshot = store.snapshot
+        let ordered = store.orderedPlatforms(platforms)
+        let ids = ordered.map(\.pluginId)
+        let spacing = AppConstants.Spacing.lg
+        ScrollView {
+            PlatformAppearanceGridLayout(
+                idiom: idiom, density: snapshot.gridDensity, aspect: snapshot.cardAspect,
+                metrics: snapshot.metrics(for: idiom), spacing: spacing, horizontalPadding: spacing
+            ) {
+                ForEach(ordered) { platform in
+                    let appearance = snapshot.appearance(for: platform.pluginId)
+                    Button {
+                        open(platform)
+                    } label: {
+                        PlatformAppearanceCard(
+                            pluginID: platform.pluginId, title: platform.title, liveType: platform.liveType,
+                            appearance: appearance, snapshot: snapshot, idiom: idiom,
+                            defaultBackground: .shared("platform-bg"), catalogRevision: catalogRevision
+                        )
+                        .shadow(color: AppConstants.Shadow.lg.color, radius: AppConstants.Shadow.lg.radius,
+                                x: AppConstants.Shadow.lg.x, y: AppConstants.Shadow.lg.y)
+                    }
+                    .buttonStyle(PlatformCardButtonStyle())
+                    .contextMenu {
+                        if store.isReady {
+                            PlatformAppearanceCardActions(pluginID: platform.pluginId, orderedIDs: ids) {
+                                customize(platform)
+                            }
                         }
                     }
-                    .padding(.horizontal, gridSpacing)
-                    .padding(.vertical, gridSpacing)
-                    .animation(.smooth(duration: 0.3), value: metrics.columns.count) // iOS 26: smooth 动画
-
-                }
-                .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
-                .navigationTitle("配置")
-                .navigationBarTitleDisplayMode(.large)
-            }
-            .fullUITabBarVisibilityRoot()
-            .navigationDestination(for: Platformdescription.self) { platform in
-                PlatformDetailViewControllerWrapper()
-                    .environment(PlatformDetailViewModel(platform: platform))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationTitle(platform.title)
-                    .fullUITabBarHidden()
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func platformNavigationItem(platform: Platformdescription, metrics: GridMetrics) -> some View {
-        NavigationLink(value: platform) {
-            PlatformCard(platform: platform)
-                .frame(width: metrics.itemWidth, height: metrics.itemHeight)
-        }
-        .buttonStyle(PlatformCardButtonStyle())
-    }
-
-    private func columnCount(for size: CGSize) -> Int {
-        guard size.width > 0 else { return 2 }
-        return horizontalSizeClass == .regular ? 3 : 2
-    }
-
-    private func layoutMetrics(for size: CGSize) -> GridMetrics {
-        let columnsCount = max(1, columnCount(for: size))
-        let horizontalPadding = gridSpacing * 2
-        let interItemSpacing = gridSpacing * CGFloat(max(0, columnsCount - 1))
-        let availableWidth = max(0, size.width - horizontalPadding - interItemSpacing)
-        let itemWidth = columnsCount > 0 ? availableWidth / CGFloat(columnsCount) : 0
-        let itemHeight = itemWidth * 0.6
-        let gridColumns = Array(
-            repeating: GridItem(.fixed(itemWidth), spacing: gridSpacing),
-            count: columnsCount
-        )
-        return GridMetrics(columns: gridColumns, itemWidth: itemWidth, itemHeight: itemHeight)
-    }
-}
-
-private struct GridMetrics {
-    let columns: [GridItem]
-    let itemWidth: CGFloat
-    let itemHeight: CGFloat
-}
-
-// MARK: - Platform Card Component
-struct PlatformCard: View {
-    let platform: Platformdescription
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var isPlaylist: Bool { PlaylistPlatformIdentity.isPlaylist(platform.liveType) }
-
-    var body: some View {
-        ZStack {
-            Image("platform-bg")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-
-            VStack(spacing: isPlaylist ? AppConstants.Spacing.sm : AppConstants.Spacing.md) {
-                if isPlaylist {
-                    playlistContent
-                } else if let image = PlatformIconProvider.configCardImage(
-                    for: platform.liveType,
-                    isDarkMode: colorScheme == .dark
-                ) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 80)
-                } else {
-                    Image(systemName: "play.tv")
-                        .font(.system(size: 50))
-                        .foregroundStyle(AppConstants.Colors.primaryText)
+                    .accessibilityLabel(Text(verbatim: platform.title))
+                    .accessibilityIdentifier("platform.card.\(platform.pluginId)")
+                    .platformAppearanceGridSpan(appearance.spansTwoColumns)
                 }
             }
-            .padding(isPlaylist ? AppConstants.Spacing.sm : AppConstants.Spacing.lg)
+            .padding(.vertical, spacing)
         }
-        .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.xl))
-        .shadow(
-            color: AppConstants.Shadow.lg.color,
-            radius: AppConstants.Shadow.lg.radius,
-            x: AppConstants.Shadow.lg.x,
-            y: AppConstants.Shadow.lg.y
-        )
-        .contentShape(Rectangle())
-    }
-
-    /// 播放列表平台没有插件提供的字标图，显示用户设置的图标（或首字）与平台名称。
-    @ViewBuilder
-    private var playlistContent: some View {
-        Group {
-            if let image = PlatformIconProvider.configCardImage(for: platform.liveType, isDarkMode: colorScheme == .dark) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                Text(PlaylistIconCache.monogram(for: platform.title))
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(AppConstants.Colors.secondaryBackground)
-            }
-        }
-        // 尺寸按卡片可用高度收敛(卡片高 = 宽 × 0.6),不撑开格子。
-        .frame(width: 40, height: 40)
-        .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.sm, style: .continuous))
-        .accessibilityHidden(true)
-
-        Text(platform.title)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(AppConstants.Colors.primaryText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 
-/// 平台卡片按钮样式 - 提供按压缩放效果
-struct PlatformCardButtonStyle: ButtonStyle {
+private struct PlatformCardButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.bouncy(duration: 0.3), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.95 : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.8 : 1)
+            .animation(reduceMotion ? nil : .bouncy(duration: 0.3), value: configuration.isPressed)
     }
 }
 
@@ -173,8 +77,4 @@ extension Platformdescription: @retroactive Identifiable {
 
 extension Notification.Name {
     static let switchToSettings = Notification.Name("switchToSettings")
-}
-
-#Preview {
-    PlatformView()
 }

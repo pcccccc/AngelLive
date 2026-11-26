@@ -57,6 +57,9 @@ struct ContentView: View {
 
     // 创建全局 ViewModels
     @State private var platformViewModel = PlatformViewModel()
+    @State private var platformSidebarIcons = PlatformAppearanceSidebarIcons()
+    @Environment(\.colorScheme) private var platformColorScheme
+    @Environment(\.displayScale) private var platformDisplayScale
     @Environment(AppFavoriteModel.self) private var favoriteViewModel
     @State private var searchViewModel = SearchViewModel()
 
@@ -475,7 +478,11 @@ struct ContentView: View {
 
     @available(iOS 18.0, *)
     private var iPadTabView: some View {
-        TabView(selection: tabSelection) {
+        let appearanceRequest = pluginAvailability.hasAvailablePlugins
+            ? platformSidebarIcons.request(platforms: platformViewModel.platformInfo,
+                                           catalogRevision: pluginAvailability.catalogRevision, dark: platformColorScheme == .dark)
+            : nil
+        return TabView(selection: tabSelection) {
             if pluginAvailability.hasAvailablePlugins {
                 Tab("首页", systemImage: "house.fill", value: TabSelection.home) {
                     HomeView(usesPersistedPlatformSelection: false)
@@ -509,30 +516,21 @@ struct ContentView: View {
                     }
                 }
 
-                ForEach(platformViewModel.platformInfo, id: \.pluginId) { platform in
-                    Tab(value: TabSelection.platform(platform.pluginId)) {
-                        PlatformDetailTabContainer(platform: platform)
-                            .apiCredentialContentIdentity(pluginId: platform.pluginId)
-                            .fullUITabBarSelection(
-                                tab: .platform(platform.pluginId),
-                                selection: tabSelection
-                            )
-                    } label: {
-                        Label {
-                            Text(platform.title)
-                        } icon: {
-                            if let image = PlatformIconProvider.tabImage(for: platform.liveType) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 25, height: 25)
-                            } else {
-                                Image(systemName: "play.tv")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 25, height: 25)
+                if pluginAvailability.hasAvailablePlugins {
+                    ForEach(PlatformAppearanceStore.shared.orderedPlatforms(platformViewModel.platformInfo), id: \.pluginId) { platform in
+                        Tab(value: TabSelection.platform(platform.pluginId)) {
+                            PlatformDetailTabContainer(platform: platform)
+                                .apiCredentialContentIdentity(pluginId: platform.pluginId)
+                                .fullUITabBarSelection(
+                                    tab: .platform(platform.pluginId),
+                                    selection: tabSelection
+                                )
+                        } label: {
+                            Label {
+                                Text(platform.title)
+                            } icon: {
+                                platformSidebarIcons.image(for: platform, side: 25, displayScale: platformDisplayScale)
                             }
-
                         }
                     }
                 }
@@ -561,6 +559,11 @@ struct ContentView: View {
             }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .task(id: appearanceRequest) {
+            if let appearanceRequest {
+                await platformSidebarIcons.load(appearanceRequest, side: 25, displayScale: platformDisplayScale)
+            }
+        }
     }
 
     // MARK: - iPhone TabView (iOS 18+)

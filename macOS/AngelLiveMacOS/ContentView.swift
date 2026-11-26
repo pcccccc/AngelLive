@@ -125,6 +125,9 @@ struct ContentView: View {
     @State private var consentService = PluginInstallConsentService()
     // 创建局部 ViewModels
     @State private var platformViewModel = PlatformViewModel()
+    @State private var platformSidebarIcons = PlatformAppearanceSidebarIcons()
+    @Environment(\.colorScheme) private var platformColorScheme
+    @Environment(\.displayScale) private var platformDisplayScale
     @State private var searchViewModel = SearchViewModel()
 
     private var shouldShowHomeTab: Bool {
@@ -149,6 +152,10 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var manager = welcomeManager
+        let appearanceRequest = pluginAvailability.hasAvailablePlugins
+            ? platformSidebarIcons.request(platforms: platformViewModel.platformInfo,
+                                           catalogRevision: pluginAvailability.catalogRevision, dark: platformColorScheme == .dark)
+            : nil
 
         ZStack {
                 // 保留浏览页面身份，返回时仍处于原来的分区、滚动位置和导航层级。
@@ -187,7 +194,13 @@ struct ContentView: View {
                             }
 
                             if pluginAvailability.hasAvailablePlugins {
-                                ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
+                                Tab(value: TabSelection.allPlatforms) {
+                                    PlatformView { selectedTab = .platform($0) }
+                                } label: {
+                                    Label("全部配置", systemImage: "square.grid.2x2.fill")
+                                }
+
+                                ForEach(PlatformAppearanceStore.shared.orderedPlatforms(platformViewModel.platformInfo), id: \.pluginId) { platform in
                                     Tab(value: TabSelection.platform(platform)) {
                                         PlatformDetailTab(platform: platform)
                                             .apiCredentialContentIdentity(pluginId: platform.pluginId)
@@ -195,11 +208,7 @@ struct ContentView: View {
                                         Label {
                                             Text(platform.title)
                                         } icon: {
-                                            if let icon = MacPlatformIconProvider.tabImage(for: platform.liveType) {
-                                                Image(nsImage: icon)
-                                            } else {
-                                                Image(systemName: "puzzlepiece.extension")
-                                            }
+                                            platformSidebarIcons.image(for: platform, side: 18, displayScale: platformDisplayScale)
                                         }
                                     }
                                 }
@@ -269,6 +278,11 @@ struct ContentView: View {
             fullscreenPlayerManager.mainWindow = window
         }
         .environment(platformViewModel)
+        .task(id: appearanceRequest) {
+            if let appearanceRequest {
+                await platformSidebarIcons.load(appearanceRequest, side: 18, displayScale: platformDisplayScale)
+            }
+        }
         .environment(favoriteViewModel)
         .environment(searchViewModel)
         .environment(\.usesFullUI, pluginAvailability.hasAvailablePlugins)

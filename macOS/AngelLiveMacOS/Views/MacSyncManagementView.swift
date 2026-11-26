@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct MacSyncManagementView: View {
     @Environment(AppFavoriteModel.self) private var favoriteModel
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability: PluginAvailabilityService?
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
     @State private var showUploadConfirm = false
@@ -101,6 +102,10 @@ struct MacSyncManagementView: View {
             }
 
             favoriteBackupSection
+
+            if pluginAvailability?.hasAvailablePlugins == true {
+                Section("配置页外观同步") { MacPlatformAppearanceSyncRows() }
+            }
 
             if syncService.iCloudSyncEnabled {
                 Section {

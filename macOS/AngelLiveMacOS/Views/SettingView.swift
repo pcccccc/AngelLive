@@ -32,6 +32,8 @@ struct SettingView: View {
     @State private var showAccountManagement = false
     @State private var showSyncManagement = false
     @State private var showTranslationSetting = false
+    @State private var showPlatformAppearance = false
+    @State private var platformAppearanceWidth: CGFloat = 0
     @State private var showSupportDiagnostics = false
     @State private var cacheSizeText: String = "计算中..."
     @State private var isClearingCache = false
@@ -50,7 +52,7 @@ struct SettingView: View {
 
             if pluginAvailability.hasAvailablePlugins {
                 Section {
-                    syncManagementRow
+                    MacSettingsSyncLink { showSyncManagement = true }
                         .disabled(isVodDemo)
                 } header: {
                     Text("同步")
@@ -71,7 +73,11 @@ struct SettingView: View {
                     .disabled(isVodDemo)
                 if pluginAvailability.hasAvailablePlugins {
                     homeRecommendationRow
-                    translationSettingRow
+                    MacSettingsAppearanceLinks(
+                        appearanceDisabled: isVodDemo,
+                        showAppearance: { showPlatformAppearance = true },
+                        showTranslation: { showTranslationSetting = true }
+                    )
                 }
             }
 
@@ -109,6 +115,7 @@ struct SettingView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { platformAppearanceWidth = $0 }
         .formStyle(.grouped)
         .navigationTitle("设置")
         .sheet(isPresented: $showAccountManagement) {
@@ -136,6 +143,11 @@ struct SettingView: View {
             .macSettingsSheetPresentation()
             .labelStyle(MacTranslationSettingLabelStyle())
             .frame(minWidth: 600, minHeight: 480)
+        }
+        .sheet(isPresented: $showPlatformAppearance) {
+            if pluginAvailability.hasAvailablePlugins, !isVodDemo {
+                MacPlatformAppearanceSettingsSheet(gridWidth: platformAppearanceWidth)
+            }
         }
         .sheet(isPresented: $showPluginManagement) {
             MacPluginManagementView()
@@ -231,6 +243,7 @@ struct SettingView: View {
             if !hasPlugins {
                 showTranslationSetting = false
                 showSponsorAcknowledgements = false
+                showPlatformAppearance = false
             }
         }
         .alert(
@@ -333,22 +346,6 @@ struct SettingView: View {
         }
     }
 
-    private var translationSettingRow: some View {
-        Button {
-            showTranslationSetting = true
-        } label: {
-            PanelNavigationRow(
-                title: "翻译与字幕",
-                subtitle: "翻译标题、弹幕和实时字幕"
-            ) {
-                Image(systemName: "character.book.closed.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.indigo.gradient)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
     private func refreshCacheSize() async {
         let total = await CacheMaintenanceService.currentTotalSize(imageCache: Self.kingfisherBridge)
         await MainActor.run {
@@ -397,22 +394,6 @@ struct SettingView: View {
                 Image(systemName: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.blue.gradient)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var syncManagementRow: some View {
-        Button {
-            showSyncManagement = true
-        } label: {
-            PanelNavigationRow(
-                title: "同步管理",
-                subtitle: "iCloud 自动同步、手动上传/下载"
-            ) {
-                Image(systemName: "icloud.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.cyan.gradient)
             }
         }
         .buttonStyle(.plain)
@@ -1396,4 +1377,68 @@ private struct DanmakuSettingDescriptor: View {
     #else
     SettingView()
     #endif
+}
+
+
+// MARK: - Settings Navigation
+
+struct MacSettingsAppearanceLinks: View {
+    let appearanceDisabled: Bool
+    let showAppearance: () -> Void
+    let showTranslation: () -> Void
+
+    var body: some View {
+        platformAppearanceRow.disabled(appearanceDisabled)
+        translationSettingRow
+    }
+
+    private var translationSettingRow: some View {
+        Button {
+            showTranslation()
+        } label: {
+            PanelNavigationRow(
+                title: "翻译与字幕",
+                subtitle: "翻译标题、弹幕和实时字幕"
+            ) {
+                Image(systemName: "character.book.closed.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.indigo.gradient)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var platformAppearanceRow: some View {
+        Button {
+            showAppearance()
+        } label: {
+            PanelNavigationRow(title: "配置页外观", subtitle: "调整平台卡片、背景与顺序") {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.teal.gradient)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("settings.platformAppearance")
+    }
+}
+
+struct MacSettingsSyncLink: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            PanelNavigationRow(
+                title: "同步管理",
+                subtitle: "iCloud 自动同步、手动上传/下载"
+            ) {
+                Image(systemName: "icloud.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.cyan.gradient)
+            }
+        }
+        .buttonStyle(.plain)
+    }
 }

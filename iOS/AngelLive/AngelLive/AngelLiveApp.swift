@@ -33,6 +33,20 @@ struct AngelLiveApp: App {
             case .production(let models):
                 ProductionAppRoot(models: models)
             #if DEBUG
+            case .appearance:
+                PlatformAppearanceDemoRoot { page, width in
+                    NavigationStack {
+                        switch page {
+                        case .grid:
+                            IOSPlatformPage(open: { _ in }, addContent: {})
+                        case .card(let platform):
+                            IOSPlatformAppearanceCardEditor(platform: platform, gridWidth: width)
+                        case .settings:
+                            AppearanceInspectionSettings(gridWidth: width)
+                        }
+                    }
+                }
+                .tint(SharedAssets.Colors.appAccent)
             case .history(let context):
                 NavigationStack {
                     HistoryListView(progressStore: context.progress)
@@ -53,6 +67,43 @@ struct AngelLiveApp: App {
     }
 }
 
+#if DEBUG
+private struct AppearanceInspectionSettings: View {
+    let gridWidth: CGFloat
+
+    var body: some View {
+        List {
+            IOSSettingsSections(hasPlatforms: true)
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.large)
+        .navigationDestination(for: IOSSettingsRoute.self) { route in
+            switch route {
+            case .appearance:
+                IOSPlatformAppearancePage(gridWidth: gridWidth)
+            case .sync:
+                ScrollView {
+                    IOSPlatformAppearanceSyncRows(
+                        usesSyncCardLayout: true,
+                        enabled: .constant(false),
+                        masterEnabled: false,
+                        isSyncing: false,
+                        message: Text("iCloud 总开关已关闭"),
+                        syncNow: {}
+                    )
+                    .padding()
+                }
+                .navigationTitle("数据同步")
+                .navigationBarTitleDisplayMode(.inline)
+            case .general, .danmaku, .translation:
+                ContentUnavailableView("此设置未载入演示环境", systemImage: "gearshape")
+            }
+        }
+    }
+}
+#endif
+
 /// One instance belongs to App state; each window keeps its original scene-local history.
 private final class ProductionAppModels {
     let playerManager = PlayerCoordinatorManager()
@@ -64,6 +115,7 @@ private final class ProductionAppModels {
 private enum AppLaunch {
     case production(ProductionAppModels)
     #if DEBUG
+    case appearance
     case history(UITestHistoryContext)
     #if canImport(KSPlayer)
     case vodDemo(VodDemoSandbox)
@@ -74,6 +126,7 @@ private enum AppLaunch {
     /// Resolve once before creating any production dependency or preparing fixture storage.
     static let current: AppLaunch = {
         #if DEBUG
+        if PlatformAppearanceDemo.isEnabled { return .appearance }
         do {
             if let configuration = try UITestLaunchConfiguration.current() {
                 return .history(try UITestHistoryContext.prepare(configuration: configuration))
@@ -110,6 +163,9 @@ private struct ProductionAppRoot: View {
                 GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
             }
             .fullUIArcLoadingStyle(isEnabled: models.pluginAvailability.hasAvailablePlugins)
+            .task(id: models.pluginAvailability.hasAvailablePlugins) {
+                await PlatformAppearanceSyncService.shared.setFullUIAvailable(models.pluginAvailability.hasAvailablePlugins)
+            }
     }
 }
 
@@ -127,7 +183,9 @@ private extension View {
     /// 始终编译 DevConsoleOverlay,运行时是否显示由 GeneralSettingModel.developerModeEnabled 控制。
     /// App Store 构建只是常驻一个未激活的 overlay 容器,用户不开"开发者模式"就完全感知不到。
     func developerModeConsoleOverlay() -> some View {
-        self.overlay { DevConsoleOverlay() }
+        self.overlay {
+            DevConsoleOverlay()
+        }
     }
 }
 
@@ -139,7 +197,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         #if DEBUG
         // Match all reserved test arguments, including malformed configurations.
         // This gate runs before analytics, image cleanup, plugin and credential services.
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-test") }) {
+        if PlatformAppearanceDemo.isEnabled || ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--ui-test") }) {
             return true
         }
         #if canImport(KSPlayer)
@@ -153,6 +211,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         MediaTransformSupport.registerHostCapability()
         DualStreamSupport.registerHostCapability()
         Task { await PlaylistSyncService.shared.start() }
+        Task { await PlatformAppearanceSyncService.shared.start() }
         BugsnagBootstrap.start(platform: .iOS)
         // 仅预配置播放类别，避免应用启动时立刻打断其他 App 的音频。
         configureAudioSessionForPlayback()
