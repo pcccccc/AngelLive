@@ -14,6 +14,7 @@ import Combine
 struct DetailPlayerView: View {
     @Environment(\.fullUIRoomPlayerPushed) private var isPushed
     @State private var routedOnDemandRoom: LiveModel?
+    let opensShortDramaHistory: Bool
     let viewModel: RoomInfoViewModel
     let categoryRooms: [LiveModel]
     let canLoadMoreCategoryRooms: () -> Bool
@@ -30,8 +31,10 @@ struct DetailPlayerView: View {
         categoryRooms: [LiveModel] = [],
         canLoadMoreCategoryRooms: @escaping () -> Bool = { false },
         onLoadMoreCategoryRooms: (() async -> [LiveModel])? = nil,
-        entryRoomSource: RoomSwitchSource? = nil
+        entryRoomSource: RoomSwitchSource? = nil,
+        opensShortDramaHistory: Bool = false
     ) {
+        self.opensShortDramaHistory = opensShortDramaHistory
         self.viewModel = viewModel
         self.categoryRooms = categoryRooms
         self.canLoadMoreCategoryRooms = canLoadMoreCategoryRooms
@@ -42,10 +45,10 @@ struct DetailPlayerView: View {
     var body: some View {
         let room = routedOnDemandRoom ?? viewModel.currentRoom
         Group {
-            if VodRouting.usesDirectPlayer(room) {
+            if !opensShortDramaHistory && VodRouting.usesDirectPlayer(room) {
                 VodDirectPlayerView(room: room)
                     .id(room.id)
-            } else if VodRouting.declaresVod(room) {
+            } else if !opensShortDramaHistory && VodRouting.declaresVod(room) {
                 let detail = VodWorkDetailView(room: room, presentsOverSource: presentsOverRoomList)
                     .id(room.id)
                     .interactivePopGestureEnabled(false, edgeOnly: true)
@@ -55,7 +58,7 @@ struct DetailPlayerView: View {
                 } else {
                     detail
                 }
-            } else if ShortDramaRouting.isShortDrama(room) {
+            } else if opensShortDramaHistory || ShortDramaRouting.isShortDrama(room) {
                 let player = ShortDramaPlayerView(room: room, presentsOverSource: presentsOverRoomList)
                     .id(room.id)
                     .interactivePopGestureEnabled(false, edgeOnly: true)
@@ -82,6 +85,8 @@ struct DetailPlayerView: View {
                 }
             }
         }
+        .preferredColorScheme(.dark)
+        .environment(\.usesFullUIPlayerSheets, true)
         .fullUIWindowContext()
     }
 }
@@ -183,7 +188,8 @@ struct LiveDetailPlayerView: View {
 
     @State private var isRoomSwitcherPresented = false
     @State private var isPortraitRoomSwitcherPresented = false
-    @State private var portraitRoomSwitcherDetent = Self.portraitRoomSwitcherHalfDetent
+    @State private var portraitRoomSwitcherExpanded = false
+    private static let roomSwitcherDetent = PresentationDetent.fraction(0.58)
     @State private var pendingPortraitRoom: LiveModel?
     @State private var selectedRoomSource: RoomSwitchSource
     @State private var switchingRoom: LiveModel?
@@ -202,7 +208,6 @@ struct LiveDetailPlayerView: View {
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
     @Environment(\.presentToast) private var presentToast
 
-    private static let portraitRoomSwitcherHalfDetent = PresentationDetent.fraction(0.52)
 
     init(
         viewModel: RoomInfoViewModel,
@@ -499,7 +504,7 @@ struct LiveDetailPlayerView: View {
         .accessibilityHidden(isRoomSwitcherPresented || isPortraitRoomSwitcherPresented)
         .overlay {
             let showsPortraitBackdrop = isPortraitRoomSwitcherPresented
-                && portraitRoomSwitcherDetent == Self.portraitRoomSwitcherHalfDetent
+                && !portraitRoomSwitcherExpanded
             roomSwitcherOverlay(
                 showsPortraitBackdrop: showsPortraitBackdrop,
                 showsDrawer: !showsPortraitBackdrop && isRoomSwitcherPresented && !showInfoPanel && !usesPortraitRoomSwitcher,
@@ -521,7 +526,8 @@ struct LiveDetailPlayerView: View {
                 : $isRoomSwitcherPresented.animation(roomSwitcherDrawerAnimation)
         )
         .environment(\.fullUILandscapePlayerLayout, landscapeLayout)
-        .environment(\.presentsQualityAsSheet, !isLandscape)
+        .environment(\.requestPlayerOrientation, requestPhoneOrientation)
+        .environment(\.presentsPlayerPanelsAsSheets, !isLandscape)
         .environment(\.fullUIPlayerShowsRoomBanner, roomBannerID == viewModel.currentRoom.id)
         .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true && streamAvailable
             && !isRoomSwitcherPresented ? .all : [])
@@ -571,7 +577,12 @@ struct LiveDetailPlayerView: View {
                 closeFullscreenRoomSwitchers()
             }
         }
-        .sheet(isPresented: $isPortraitRoomSwitcherPresented, onDismiss: switchToPendingPortraitRoom) {
+        .roomPlayerSheet(
+            isPresented: $isPortraitRoomSwitcherPresented, initialDetent: Self.roomSwitcherDetent,
+            selection: Binding(get: { portraitRoomSwitcherExpanded ? .large : Self.roomSwitcherDetent },
+                               set: { portraitRoomSwitcherExpanded = $0 == .large }),
+            onDismiss: switchToPendingPortraitRoom
+        ) {
             portraitRoomSwitcherSheet
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
@@ -746,7 +757,7 @@ struct LiveDetailPlayerView: View {
                 if let rootVC = windowContext?.hostViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
                 }
-                // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+                guard windowScene.interfaceOrientation != .portrait else { return }
                 DispatchQueue.main.async {
                     let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
                         interfaceOrientations: .portrait
@@ -758,7 +769,7 @@ struct LiveDetailPlayerView: View {
                 }
             }
         }
-        .sheet(item: $authenticationRecoveryRequest) { request in
+        .roomPlayerSheet(item: $authenticationRecoveryRequest) { request in
             NavigationStack {
                 PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
             }
@@ -783,6 +794,7 @@ struct LiveDetailPlayerView: View {
             guard pluginId == currentPluginID else { return }
             viewModel.refreshPlayback()
         }
+        .modifier(RoomPlayerSheetHost(viewModel: viewModel))
     }
 
     private var entryInformationTransition: AnyTransition {
@@ -962,6 +974,7 @@ struct LiveDetailPlayerView: View {
     private var informationArea: some View {
         VStack(spacing: 0) {
             StreamerInfoView()
+                .modifier(RoomHeaderSheetVisibility())
                 .padding(.bottom, 20)
 
             RoomActionDock(
@@ -970,6 +983,7 @@ struct LiveDetailPlayerView: View {
                 onClearChat: clearChat,
                 onJumpToLatestChat: showJumpToLatest ? { scrollToBottomRequest = true } : nil
             )
+            .modifier(RoomHeaderSheetVisibility())
             chatListView.id(viewModel.currentRoom.id)
         }
         .environment(viewModel)
@@ -1076,18 +1090,14 @@ struct LiveDetailPlayerView: View {
         RoomSwitcherPanel(
             content: roomSwitcherContent,
             selectedSource: $selectedRoomSource,
+            isSheet: true,
             onSelect: selectPortraitRoom,
             onDismiss: { isPortraitRoomSwitcherPresented = false }
         )
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape) { isPortraitRoomSwitcherPresented = false }
-        .padding(.top, FullUIPlayerDetailChrome.inset)
-        .preferredColorScheme(.dark)
-        .presentationDetents([Self.portraitRoomSwitcherHalfDetent, .large], selection: $portraitRoomSwitcherDetent)
-        .presentationDragIndicator(.visible)
-        .presentationBackground { backgroundView }
         // Route taps on the exposed portion of the player to the dismiss backdrop.
-        .presentationBackgroundInteraction(.enabled(upThrough: Self.portraitRoomSwitcherHalfDetent))
+        .presentationBackgroundInteraction(.enabled(upThrough: Self.roomSwitcherDetent))
     }
 
     private func selectPortraitRoom(_ room: LiveModel) {
@@ -1097,7 +1107,7 @@ struct LiveDetailPlayerView: View {
     }
 
     private func switchToPendingPortraitRoom() {
-        portraitRoomSwitcherDetent = Self.portraitRoomSwitcherHalfDetent
+        portraitRoomSwitcherExpanded = false
         guard let room = pendingPortraitRoom else { return }
         pendingPortraitRoom = nil
         switchRoom(room, showsConfirmation: true)
@@ -1189,10 +1199,7 @@ struct LiveDetailPlayerView: View {
             return
         }
 
-        // The swipe already handled the visual movement. Complete the navigation in place.
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { dismiss() }
+        dismiss()
     }
 
     private func drawerSwipeAction(start: CGPoint, in window: UIWindow, geometry: GeometryProxy) -> PlayerPanAction? {

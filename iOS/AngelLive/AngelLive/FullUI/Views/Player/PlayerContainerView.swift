@@ -277,10 +277,8 @@ struct PlayerContentView: View {
             showVideoSetting = false
             showVLCUnsupportedHint = true
         }
-        .sheet(isPresented: $showDanmakuSettings) {
+        .roomPlayerSheet(isPresented: $showDanmakuSettings) {
             DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
         }
         .alert("提示", isPresented: $showVLCUnsupportedHint) {
             Button("知道了", role: .cancel) {}
@@ -414,23 +412,12 @@ struct PlayerContentView: View {
             )
             #endif
 
-            #if canImport(KSPlayer)
-            if useKSPlayer && showVideoSetting {
-                VideoSettingHUDView(model: playerModel, isShowing: $showVideoSetting)
-                    .padding(.trailing, 0)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .background(
-                        Color.black.opacity(0.001)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                showVideoSetting = false
-                            }
-                    )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-            #endif
         }
-        .animation(.easeInOut(duration: 0.3), value: showVideoSetting)
+        #if canImport(KSPlayer)
+        .modifier(VideoStatisticsPresentation(model: playerModel, isShowing: Binding(
+            get: { useKSPlayer && showVideoSetting }, set: { showVideoSetting = $0 }
+        )))
+        #endif
     }
 
     private func configuredPlayerSurface(playURL: URL) -> some View {

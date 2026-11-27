@@ -15,68 +15,60 @@ struct LiveRoomCategoryContext: Equatable {
     let subCategoryIndex: Int
 }
 
-/// 直播间导航状态管理器
-/// 将导航状态从视图的 @State 移到外部可观察对象，确保在 PiP 背景/前台切换时不会丢失
+/// Each presentation owns its destination and source until the container releases it.
+struct RoomPlayerRoute: Identifiable, Hashable {
+    let id = UUID()
+    let room: LiveModel
+    let animation: RoomEntryAnimation
+    let opensShortDramaHistory: Bool
+    let sourceID: String
+    let categoryRooms: [LiveModel]
+    let categoryContext: LiveRoomCategoryContext?
+    let returnPreview: RoomPlayerReturnPreview?
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
 @Observable
-class LiveRoomNavigationState {
-    /// 是否显示播放器
-    private(set) var showPlayer = false
-    private var entryAnimation: RoomEntryAnimation = .zoom
+final class LiveRoomNavigationState {
+    private var route: RoomPlayerRoute?
     let returnSource = RoomPlayerReturnSource()
-    @ObservationIgnored fileprivate private(set) var returnPreview: RoomPlayerReturnPreview?
 
-    /// 当前选中的房间
-    var currentRoom: LiveModel?
-
-    /// Identifies a particular card when the same room appears in several home sections.
-    var transitionSourceID: String?
-
-    /// 从分区列表进入时保留当时的房间快照，供播放页连续换台。
-    var categoryRooms: [LiveModel] = []
-
-    /// 房间快照对应的分区位置，用于播放页换台面板继续上拉分页。
-    var categoryContext: LiveRoomCategoryContext?
-
-    /// 导航到指定房间
     func navigate(
         to room: LiveModel,
         categoryRooms: [LiveModel] = [],
         categoryContext: LiveRoomCategoryContext? = nil,
-        transitionSourceID: String? = nil
+        transitionSourceID: String? = nil,
+        opensShortDramaHistory: Bool = false,
+        hasNavigationStack: Bool = true
     ) {
+        let animation: RoomEntryAnimation
         if #available(iOS 18.0, *) {
-            entryAnimation = GeneralSettingModel().roomEntryAnimation
+            animation = hasNavigationStack ? GeneralSettingModel().roomEntryAnimation : .zoom
         } else {
-            entryAnimation = .push
+            animation = hasNavigationStack ? .push : .zoom
         }
-        if !showPlayer {
-            // Capture the rendered source before the player covers it or the stack detaches it.
-            returnPreview = returnSource.capture()
-        }
-        currentRoom = room
-        self.categoryRooms = categoryRooms
-        self.categoryContext = categoryContext
-        self.transitionSourceID = transitionSourceID
-        showPlayer = true
-    }
-
-    func playerBinding(for animation: RoomEntryAnimation) -> Binding<Bool> {
-        Binding(
-            get: { self.showPlayer && self.entryAnimation == animation },
-            set: { isPresented in
-                if !isPresented, self.entryAnimation == animation { self.dismiss() }
-            }
+        route = RoomPlayerRoute(
+            room: room, animation: animation, opensShortDramaHistory: opensShortDramaHistory,
+            sourceID: transitionSourceID ?? room.roomId,
+            categoryRooms: categoryRooms, categoryContext: categoryContext,
+            returnPreview: route?.returnPreview ?? returnSource.capture()
         )
     }
 
-    /// 关闭播放器
-    func dismiss() {
-        showPlayer = false
-        returnPreview = nil
-        currentRoom = nil
-        categoryRooms = []
-        categoryContext = nil
-        transitionSourceID = nil
+    fileprivate func binding(for animation: RoomEntryAnimation) -> Binding<RoomPlayerRoute?> {
+        let presented = route?.animation == animation ? route : nil
+        return Binding(get: { presented }, set: { selection in
+            if selection == nil, let route = presented {
+                self.finish(route)
+            }
+        })
+    }
+
+    fileprivate func finish(_ completed: RoomPlayerRoute) {
+        guard route?.id == completed.id else { return }
+        route = nil
     }
 }
 
@@ -128,22 +120,25 @@ extension View {
 
     func roomPlayerPushDestination<Destination: View>(
         _ navigationState: LiveRoomNavigationState,
-        @ViewBuilder destination: @escaping () -> Destination
+        @ViewBuilder destination: @escaping (RoomPlayerRoute) -> Destination
     ) -> some View {
         roomPlayerReturnSource(navigationState.returnSource)
-            .navigationDestination(isPresented: navigationState.playerBinding(for: .push)) {
-                destination()
-                    .environment(\.fullUIRoomPlayerReturnPreview, navigationState.returnPreview)
+            .navigationDestination(item: navigationState.binding(for: .push)) { route in
+                destination(route)
+                    .environment(\.fullUIRoomPlayerPushed, true)
+                    .environment(\.fullUIRoomPlayerReturnPreview, route.returnPreview)
+                    .environment(\.finishRoomPlayerSwipe, { navigationState.finish(route) })
             }
     }
 
     func roomPlayerZoomCover<Destination: View>(
         _ navigationState: LiveRoomNavigationState,
-        @ViewBuilder destination: @escaping () -> Destination
+        @ViewBuilder destination: @escaping (RoomPlayerRoute) -> Destination
     ) -> some View {
-        fullScreenCover(isPresented: navigationState.playerBinding(for: .zoom)) {
-            destination()
-                .environment(\.fullUIRoomPlayerReturnPreview, navigationState.returnPreview)
+        fullScreenCover(item: navigationState.binding(for: .zoom)) { route in
+            destination(route)
+                .environment(\.fullUIRoomPlayerReturnPreview, route.returnPreview)
+                .environment(\.finishRoomPlayerSwipe, { navigationState.finish(route) })
         }
     }
 }
@@ -169,6 +164,7 @@ private struct LiveRoomNavigationStateKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
+    @Entry var finishRoomPlayerSwipe: (@MainActor () -> Void)?
     @Entry var fullUIRoomPlayerPushed = false
     @Entry var fullUIRoomPlayerReturnPreview: RoomPlayerReturnPreview?
 

@@ -145,28 +145,18 @@ struct MoreActionsButton: View {
             .accessibilityLabel("更多直播间操作")
             .accessibilityValue(danmakuIssue == nil ? Text("") : Text("弹幕连接异常"))
         }
-        .sheet(item: $presentedSheet) { sheet in
+        .roomPlayerSheet(item: $presentedSheet) { sheet in
             switch sheet {
             case .streamerInfo:
                 StreamerInfoSheet(room: room)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             case .subtitleTranslation:
                 NavigationStack {
                     TranslationSettingView()
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") {
-                                    presentedSheet = nil
-                                }
-                            }
-                        }
+                        .playerSheetNavigation(Text("翻译与字幕")) { presentedSheet = nil }
                 }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
             }
         }
-        .sheet(isPresented: $showSubtitleLanguages) {
+        .roomPlayerSheet(isPresented: $showSubtitleLanguages, initialDetent: .medium) {
             LiveSubtitleLanguageSelectionSheet(
                 playback: viewModel.subtitlePlayback,
                 activationID: subtitleActivationID
@@ -183,7 +173,6 @@ struct MoreActionsButton: View {
         .onChange(of: presentedSheet != nil || showSubtitleLanguages || presentedDanmakuIssue != nil) { _, presented in
             popupPresented?.wrappedValue = presented
         }
-        .tint(.primary)
     }
 
     private var menuGlyph: some View {

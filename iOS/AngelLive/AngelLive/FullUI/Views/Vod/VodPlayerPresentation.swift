@@ -26,6 +26,7 @@ final class VodPlayerPresentation: UIHostingController<VodPlayerViewport> {
         super.init(rootView: viewport)
         viewport.onExit = { [weak self] in self?.close() }
         rootView = viewport
+        overrideUserInterfaceStyle = .dark
         modalPresentationStyle = .fullScreen
         isModalInPresentation = true
         view.backgroundColor = .black

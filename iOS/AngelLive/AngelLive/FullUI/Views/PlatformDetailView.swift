@@ -13,6 +13,8 @@ struct PlatformDetailView: View {
     @Environment(PlatformDetailViewModel.self) private var viewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var dragProgress: CGFloat = 0.0  // 拖动进度
+    @State private var navigationState = LiveRoomNavigationState()
+    @Namespace private var roomNamespace
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
 
     /// 根据平台类型生成登录相关的错误标题
@@ -86,6 +88,8 @@ struct PlatformDetailView: View {
                 }
             }
         }
+        .roomPlayerPushDestination(navigationState, destination: player)
+        .roomPlayerZoomCover(navigationState, destination: player)
         .navigationTitle(viewModel.platform.title)
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -96,6 +100,12 @@ struct PlatformDetailView: View {
                 PlatformAccountLoginView(recoveryPluginIDs: request.pluginIDs)
             }
         }
+    }
+
+    private func player(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(viewModel: RoomInfoViewModel(room: route.room))
+            .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: roomNamespace)
+            .fullUITabBarHidden()
     }
 
     // MARK: - 房间列表页面（用于 PageView）
@@ -274,6 +284,8 @@ struct PlatformDetailView: View {
             ) {
                 ForEach(rooms, id: \.id) { room in
                     LiveRoomCard(room: room, liveCheckMode: .none)
+                        .environment(\.liveRoomNavigationState, navigationState)
+                        .environment(\.roomTransitionNamespace, roomNamespace)
                         .frame(width: cardWidth, height: cardHeight)
                         .onAppear {
                             guard viewModel.selectedSubCategoryIndex == pageIndex,

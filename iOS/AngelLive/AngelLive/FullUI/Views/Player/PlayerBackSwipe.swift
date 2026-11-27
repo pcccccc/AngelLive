@@ -12,6 +12,9 @@ struct PlayerBackSwipe: ViewModifier {
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.fullUIRoomPlayerReturnPreview) private var returnPreview
     @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
+    @Environment(\.finishRoomPlayerSwipe) private var finishPresentation
+    @State private var dismissalTarget: RoomPlayerDismissalTarget?
     @State private var motion: Motion = .idle
 
     private enum Motion {
@@ -37,9 +40,9 @@ struct PlayerBackSwipe: ViewModifier {
         return spring
     }
 
-    private var canStart: Bool {
-        if case .dismissing = motion { return false }
-        return enabled
+    private var isDismissing: Bool {
+        if case .dismissing = motion { return true }
+        return false
     }
 
     func body(content: Content) -> some View {
@@ -81,7 +84,8 @@ struct PlayerBackSwipe: ViewModifier {
                     if finished { finishSettlement() }
                 }
         }
-        .environment(\.playerBackAction, canStart ? PlayerPanAction(
+        .allowsHitTesting(!isDismissing)
+        .environment(\.playerBackAction, enabled && !isDismissing ? PlayerPanAction(
             kind: .back, axis: .horizontal, sign: direction,
             begin: begin, update: update, end: end, cancel: cancel
         ) : nil)
@@ -109,15 +113,23 @@ struct PlayerBackSwipe: ViewModifier {
     }
 
     private func begin(_ travel: CGFloat) {
+        if !exitsFullscreen, finishPresentation != nil {
+            dismissalTarget = RoomPlayerDismissalTarget(host: windowContext?.hostViewController, isPushed: isPushed)
+        }
         let current = position(at: .now)
         // Subtract the recognition slop when regrabbing so the page doesn't jump.
         let origin = spring == nil ? 0 : current - travel
-        motion = .dragging(origin: origin, position: reduceMotion ? 0 : clamped(origin + travel))
+        motion = .dragging(origin: origin, position: tracksPage ? clamped(origin + travel) : 0)
     }
 
     private func update(_ travel: CGFloat) {
-        guard !reduceMotion, case let .dragging(origin, _) = motion else { return }
+        guard tracksPage, case let .dragging(origin, _) = motion else { return }
         motion = .dragging(origin: origin, position: clamped(origin + travel))
+    }
+
+    // If UIKit cannot identify the owning container, leave the whole return to SwiftUI.
+    private var tracksPage: Bool {
+        !reduceMotion && (exitsFullscreen || (dismissalTarget != nil && showsSource))
     }
 
     private func end(_ travel: CGFloat, _ velocity: CGFloat) {
@@ -133,9 +145,8 @@ struct PlayerBackSwipe: ViewModifier {
     }
 
     private func settle(from position: CGFloat, velocity: CGFloat, returns: Bool) {
-        // Without a visible source, commit at the current position instead of sliding to a blank page.
-        if returns && !exitsFullscreen && !showsSource {
-            finish(returns: true, position: reduceMotion ? 0 : position)
+        if !tracksPage {
+            finish(returns: returns, position: 0)
             return
         }
 
@@ -166,7 +177,53 @@ struct PlayerBackSwipe: ViewModifier {
         #if DEBUG
         PlayerPagePan.trace(returns ? (exitsFullscreen ? "exit fullscreen" : "return") : "rebound")
         #endif
-        if returns { onReturn() }
+        guard returns else {
+            dismissalTarget = nil
+            return
+        }
+        if position > 0, !exitsFullscreen, let dismissalTarget, let finishPresentation {
+            // The custom transition has already reached the source. Retire only its actual controller.
+            dismissalTarget.finish(completion: finishPresentation)
+        } else {
+            onReturn()
+        }
+    }
+}
+
+@MainActor
+private final class RoomPlayerDismissalTarget {
+    private weak var controller: UIViewController?
+    private let isPushed: Bool
+
+    init?(host: UIViewController?, isPushed: Bool) {
+        self.isPushed = isPushed
+        var ancestor = host
+        while let current = ancestor {
+            if isPushed, let navigation = current.parent as? UINavigationController,
+               navigation.topViewController === current, navigation.viewControllers.first !== current {
+                controller = current
+                return
+            }
+            if !isPushed, current.parent == nil,
+               current.presentingViewController?.presentedViewController === current {
+                controller = current
+                return
+            }
+            ancestor = current.parent
+        }
+        return nil
+    }
+
+    func finish(completion: @escaping @MainActor () -> Void) {
+        if let controller, isPushed, let navigation = controller.navigationController,
+           navigation.topViewController === controller {
+            navigation.popViewController(animated: false)
+        } else if let controller, !isPushed,
+                  controller.presentingViewController?.presentedViewController === controller {
+            controller.dismiss(animated: false, completion: completion)
+            return
+        }
+        completion()
     }
 }
 

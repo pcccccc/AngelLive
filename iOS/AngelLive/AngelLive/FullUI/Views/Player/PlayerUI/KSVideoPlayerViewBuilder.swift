@@ -293,7 +293,7 @@ public enum KSVideoPlayerViewBuilder {
         isIPadFullscreen: Binding<Bool>,
         usesInPlaceFullscreen: Bool,
         isFullscreen: Bool,
-        windowContext: FullUIWindowContext?
+        requestOrientation: (@MainActor (UIInterfaceOrientationMask) -> Void)?
     ) -> some View {
         let iconName = isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
 
@@ -301,7 +301,7 @@ public enum KSVideoPlayerViewBuilder {
             isIPadFullscreen.wrappedValue = !isFullscreen
             if !usesInPlaceFullscreen {
                 // iPhone: 切换屏幕方向
-                toggleOrientation(isFullscreen: isFullscreen, windowContext: windowContext)
+                requestOrientation?(isFullscreen ? .portrait : .landscapeRight)
             }
         } label: {
             Image(systemName: iconName)
@@ -312,96 +312,15 @@ public enum KSVideoPlayerViewBuilder {
         .ksBorderlessButton()
     }
 
-    // 使用 iOS 16+ GeometryPreferences API 切换屏幕方向
-    private static func toggleOrientation(isFullscreen: Bool, windowContext: FullUIWindowContext?) {
-        let targetOrientation: UIInterfaceOrientationMask = isFullscreen ? .portrait : .landscapeRight
-
-        // 获取当前的 WindowScene
-        guard let windowScene = windowContext?.windowScene else {
-            Logger.warning("无法获取 WindowScene", category: .ui)
-            return
-        }
-        
-        // 更新 KSOptions
-        KSOptions.supportedInterfaceOrientations = targetOrientation
-
-        // 先通知 ViewController 刷新支持的方向
-        if let rootVC = windowContext?.hostViewController {
-            rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
-        // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
-        DispatchQueue.main.async {
-            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                interfaceOrientations: targetOrientation
-            )
-            windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
-                Logger.warning("方向更新失败: \(error)", category: .ui)
-            }
-            // 旋转完成后恢复自由旋转
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                if let rootVC = windowContext?.hostViewController {
-                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                }
-            }
-        }
-    }
-
     @ViewBuilder
-    static func portraitButton(windowContext: FullUIWindowContext?) -> some View {
-        Button {
-            forcePortraitOrientation(windowContext: windowContext)
-        } label: {
+    static func portraitButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Image(systemName: "arrow.up.and.down")
                 .frame(width: 30, height: 30)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
         }
         .ksBorderlessButton()
-    }
-
-    // 强制切换到竖屏
-    private static func forcePortraitOrientation(windowContext: FullUIWindowContext?) {
-        // iOS 16+ 使用 GeometryPreferences
-        if #available(iOS 16.0, *) {
-            // 获取当前的 WindowScene
-            guard let windowScene = windowContext?.windowScene else {
-                Logger.warning("无法获取 WindowScene", category: .ui)
-                return
-            }
-
-            // 更新 KSOptions
-            KSOptions.supportedInterfaceOrientations = .portrait
-
-            // 先通知 ViewController 刷新支持的方向
-            if let rootVC = windowContext?.hostViewController {
-                rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-            }
-            // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
-            DispatchQueue.main.async {
-                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                    interfaceOrientations: .portrait
-                )
-                windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
-                    Logger.warning("方向更新失败: \(error)", category: .ui)
-                }
-                // 旋转完成后恢复自由旋转
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                    if let rootVC = windowContext?.hostViewController {
-                        rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                    }
-                }
-            }
-
-        } else {
-            // iOS 16 以下使用传统方式
-            KSOptions.supportedInterfaceOrientations = .portrait
-
-            // 使用私有 API（仅用于 iOS 16 以下）
-            UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
-            UIViewController.attemptRotationToDeviceOrientation()
-        }
     }
 
     @ViewBuilder

@@ -40,10 +40,9 @@ struct LiveRoomCard: View {
     /// 在 UIHostingController-in-cell 这种场景下 SwiftUI 经常输,导致两个都不触发。
     /// cell-based 路径(RoomList/Favorite/History)由 UICollectionView 的 didSelectItemAt 接管 tap。
     var disableTapGesture: Bool = false
+    var hasNavigationStack = true
     /// 本地导航状态 - 仅在没有外部导航状态时使用
-    @State private var localShowPlayer = false
-    @State private var localShortDramaReturnSource = RoomPlayerReturnSource()
-    @State private var localShortDramaReturnPreview: RoomPlayerReturnPreview?
+    @State private var localNavigationState = LiveRoomNavigationState()
     /// 本地 Namespace - 仅在没有外部 Namespace 时使用
     @Namespace private var localNamespace
     /// 正在查询直播状态中
@@ -71,22 +70,10 @@ struct LiveRoomCard: View {
         externalNavigationState != nil
     }
 
-    /// 导航绑定 - 使用外部状态或本地状态
-    private var showPlayerBinding: Binding<Bool> {
-        if let state = externalNavigationState {
-            return Binding(
-                get: { state.showPlayer && state.currentRoom?.roomId == room.roomId },
-                set: { newValue in
-                    if newValue {
-                        state.navigate(to: room)
-                    } else if state.currentRoom?.roomId == room.roomId {
-                        state.dismiss()
-                    }
-                }
-            )
-        } else {
-            return $localShowPlayer
-        }
+    private func openPlayer() {
+        (externalNavigationState ?? localNavigationState).navigate(
+            to: room, transitionSourceID: resolvedTransitionSourceID, hasNavigationStack: hasNavigationStack
+        )
     }
 
     private var coverURL: URL? {
@@ -194,60 +181,32 @@ struct LiveRoomCard: View {
             if disableTapGesture || useExternalNavigation {
                 tappable
             } else {
-                let returnSource = ShortDramaRouting.isShortDrama(room) ? localShortDramaReturnSource : nil
-                let baseTappable = tappable.roomPlayerReturnSource(returnSource)
-                // A standalone card can also be hosted in a UIKit cell without a NavigationStack.
-                if #available(iOS 18.0, *) {
-                    baseTappable
-                        .fullScreenCover(isPresented: showPlayerBinding, onDismiss: clearLocalShortDramaReturnPreview) {
-                            localPlayer
-                        }
-                } else {
-                    baseTappable
-                        .navigationDestination(isPresented: showPlayerBinding) {
-                            localPlayer
-                        }
-                        .onChange(of: localShowPlayer) { _, isPresented in
-                            if !isPresented { clearLocalShortDramaReturnPreview() }
-                        }
-                }
+                tappable
+                    .roomPlayerPushDestination(localNavigationState, destination: localPlayer)
+                    .roomPlayerZoomCover(localNavigationState, destination: localPlayer)
             }
         }
     }
 
-    private var localPlayer: some View {
-        DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
-            .modifier(ZoomTransitionModifier(sourceID: resolvedTransitionSourceID, namespace: namespace))
+    private func localPlayer(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(viewModel: RoomInfoViewModel(room: route.room))
+            .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: namespace)
             .fullUITabBarHidden()
-            .transformEnvironment(\.fullUIRoomPlayerReturnPreview) { preview in
-                if ShortDramaRouting.isShortDrama(room) { preview = localShortDramaReturnPreview }
-            }
-    }
-
-    private func clearLocalShortDramaReturnPreview() {
-        localShortDramaReturnPreview = nil
     }
 
     private func handleTap() {
-        if VodRouting.declaresVod(room) {
-            showPlayerBinding.wrappedValue = true
-            return
-        }
-        if ShortDramaRouting.isShortDrama(room) {
-            if !useExternalNavigation && !localShowPlayer {
-                localShortDramaReturnPreview = localShortDramaReturnSource.capture()
-            }
-            showPlayerBinding.wrappedValue = true
+        if VodRouting.declaresVod(room) || ShortDramaRouting.isShortDrama(room) {
+            openPlayer()
             return
         }
         switch liveCheckMode {
         case .none:
             // 房间列表：直接进入，不判断
-            showPlayerBinding.wrappedValue = true
+            openPlayer()
         case .local:
             // 收藏/搜索：用本地 liveState 判断
             if isLive {
-                showPlayerBinding.wrappedValue = true
+                openPlayer()
             } else {
                 presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
             }
@@ -264,13 +223,13 @@ struct LiveRoomCard: View {
                         liveType: room.liveType
                     )
                     if state == .live {
-                        showPlayerBinding.wrappedValue = true
+                        openPlayer()
                     } else {
                         presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
                     }
                 } catch {
                     // 查询失败仍放行，让播放页自行处理
-                    showPlayerBinding.wrappedValue = true
+                    openPlayer()
                 }
             }
         }

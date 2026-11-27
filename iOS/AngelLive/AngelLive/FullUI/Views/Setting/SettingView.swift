@@ -334,6 +334,7 @@ struct TranslationSettingView: View {
         TargetLanguage(code: "ko", name: "韩语")
     ]
 
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.scenePhase) private var scenePhase
     @State private var settings = RoomTranslationSettings.shared
     @State private var translationService = RoomTitleTranslationService.shared
@@ -545,6 +546,7 @@ struct TranslationSettingView: View {
                     } label: {
                         HStack {
                             Text("保存配置")
+                                .foregroundStyle(usesPlayerSheets ? Color.primary : Color.accentColor)
                             Spacer()
                             if isSaving {
                                 ProgressView()
@@ -575,6 +577,7 @@ struct TranslationSettingView: View {
                 } label: {
                     HStack {
                         Text("测试翻译")
+                            .foregroundStyle(usesPlayerSheets ? Color.primary : Color.accentColor)
                         Spacer()
                         if isTesting {
                             ProgressView()
@@ -804,6 +807,7 @@ struct TranslationSettingView: View {
 }
 
 private struct TranslationSettingLabel: View {
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     let title: String
     let systemImage: String
     let tint: Color
@@ -812,7 +816,7 @@ private struct TranslationSettingLabel: View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
                 .font(.title3)
-                .foregroundStyle(tint.gradient)
+                .foregroundStyle((usesPlayerSheets ? Color.secondary : tint).gradient)
                 .frame(width: 30, height: 30)
 
             Text(title)

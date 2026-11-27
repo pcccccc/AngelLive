@@ -49,20 +49,24 @@ private struct PlatformLoginQRCodeSheet: View {
     @State private var backgroundTimeoutTask: Task<Void, Never>?
     @State private var backgroundedAt: Date?
     @State private var verificationCode = ""
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @FocusState private var verificationFieldFocused: Bool
 
     var body: some View {
         NavigationStack {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(24)
+                .padding(usesPlayerSheets ? 0 : 24)
                 .navigationTitle("\(entry.displayName) 扫码登录")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("关闭") { dismiss() }
+                    if !usesPlayerSheets {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("关闭") { dismiss() }
+                        }
                     }
                 }
+                .playerSheetNavigationWhenPresented(Text("\(entry.displayName) 扫码登录"))
         }
         .task {
             service.start(entry: entry, platform: .iOS)
@@ -113,59 +117,89 @@ private struct PlatformLoginQRCodeSheet: View {
         _ presentation: LoginChallengeVerificationPresentation,
         isWorking: Bool
     ) -> some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                Image(systemName: "message.badge.waveform.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(.tint)
-                Text("需要短信验证")
-                    .font(.title2.bold())
-                Text(presentation.prompt)
-                    .multilineTextAlignment(.center)
-                if let destination = presentation.maskedDestination {
-                    Text("验证码已发送至 \(destination)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                SecureField("短信验证码", text: $verificationCode)
-                    .textContentType(.oneTimeCode)
-                    .keyboardType(.numberPad)
-                    .focused($verificationFieldFocused)
-                    .multilineTextAlignment(.center)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(maxWidth: 300)
-                    .submitLabel(.done)
-                    .onSubmit { submitVerificationCode(presentation) }
-                    .onChange(of: verificationCode) { _, value in
-                        verificationCode = String(value.prefix(presentation.codeLength))
+        Group {
+            if usesPlayerSheets {
+                Form {
+                    Section {
+                        verificationField(presentation)
+                    } header: {
+                        Text("短信验证")
+                    } footer: {
+                        Text(presentation.prompt)
+                        if let destination = presentation.maskedDestination {
+                            Text("验证码已发送至 \(destination)")
+                        }
                     }
-
-                if let errorMessage = presentation.errorMessage {
-                    Text(errorMessage)
-                        .font(.subheadline)
-                        .foregroundStyle(errorMessage == "验证码已重新发送" ? Color.secondary : Color.red)
-                        .multilineTextAlignment(.center)
-                }
-
-                Button {
-                    submitVerificationCode(presentation)
-                } label: {
-                    if isWorking {
-                        ProgressView()
-                    } else {
-                        Text("验证并继续")
+                    Section {
+                        if let message = presentation.errorMessage {
+                            Text(message).foregroundStyle(.secondary)
+                        }
+                        Button("验证并继续") { submitVerificationCode(presentation) }
+                            .disabled(isWorking || verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).count != presentation.codeLength)
+                        resendButton(presentation, isWorking: isWorking)
+                        if isWorking { ProgressView() }
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isWorking || verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).count != presentation.codeLength)
+            } else {
+                ScrollView {
+                    VStack(spacing: 18) {
+                        Image(systemName: "message.badge.waveform.fill")
+                            .font(.system(size: 52))
+                            .foregroundStyle(.tint)
+                        Text("需要短信验证")
+                            .font(.title2.bold())
+                        Text(presentation.prompt)
+                            .multilineTextAlignment(.center)
+                        if let destination = presentation.maskedDestination {
+                            Text("验证码已发送至 \(destination)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
 
-                resendButton(presentation, isWorking: isWorking)
+                        verificationField(presentation)
+                            .multilineTextAlignment(.center)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 300)
+
+                        if let errorMessage = presentation.errorMessage {
+                            Text(errorMessage)
+                                .font(.subheadline)
+                                .foregroundStyle(errorMessage == "验证码已重新发送" ? Color.secondary : Color.red)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        Button {
+                            submitVerificationCode(presentation)
+                        } label: {
+                            if isWorking {
+                                ProgressView()
+                            } else {
+                                Text("验证并继续")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isWorking || verificationCode.trimmingCharacters(in: .whitespacesAndNewlines).count != presentation.codeLength)
+
+                        resendButton(presentation, isWorking: isWorking)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
         }
         .onAppear { verificationFieldFocused = !isWorking }
+    }
+
+    private func verificationField(_ presentation: LoginChallengeVerificationPresentation) -> some View {
+        SecureField("短信验证码", text: $verificationCode)
+            .textContentType(.oneTimeCode)
+            .keyboardType(.numberPad)
+            .focused($verificationFieldFocused)
+            .submitLabel(.done)
+            .onSubmit { submitVerificationCode(presentation) }
+            .onChange(of: verificationCode) { _, value in
+                verificationCode = String(value.prefix(presentation.codeLength))
+            }
     }
 
     @ViewBuilder
@@ -243,8 +277,10 @@ private struct PlatformLoginQRCodeSheet: View {
                 Text(userName)
                     .foregroundStyle(.secondary)
             }
-            Button("完成") { dismiss() }
-                .buttonStyle(.borderedProminent)
+            if !usesPlayerSheets {
+                Button("完成") { dismiss() }
+                    .buttonStyle(.borderedProminent)
+            }
         }
     }
 

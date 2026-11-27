@@ -12,7 +12,7 @@ import AngelLiveDependencies
 @Observable
 final class FullUIPlaybackMenuState {
     enum Action: Equatable {
-        case danmaku, subtitles, timer, cancelTimer, airPlay, dlna, settings, statistics
+        case danmaku, subtitles, timer, airPlay, dlna, settings, statistics
     }
 
     var isPresented = false
@@ -33,13 +33,13 @@ struct SettingsButton: View {
     var fullscreenMenu: FullUIPlaybackMenuState?
     var playbackTimer: TimerManager?
 
-    @State private var showActionSheet = false
     @State private var showAirPlayPicker = false
     @State private var showDLNAPicker = false
     @State private var showTimerPicker = false
     @State private var showPlayerSettings = false
     @State private var showSubtitleSettings = false
     @State private var subtitleActivationID = UUID()
+    @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
     @State private var localTimer = TimerManager()
     @State private var playerSettingModel = PlayerSettingModel()
     @Environment(RoomInfoViewModel.self) private var viewModel
@@ -49,127 +49,99 @@ struct SettingsButton: View {
 
     /// 是否有任何弹窗展开
     private var isAnyPopupOpen: Bool {
-        showActionSheet || showAirPlayPicker || showDLNAPicker || showTimerPicker || showPlayerSettings || showSubtitleSettings
+        showAirPlayPicker || showDLNAPicker || showTimerPicker || showPlayerSettings || showSubtitleSettings
     }
 
-    private var trigger: some View {
+    private var gearLabel: some View {
         let size: CGFloat = usesFullscreenChrome ? FullUIPlayerChrome.controlSize : 30
-        return ZStack {
-            Button(action: {
-                if let fullscreenMenu {
-                    fullscreenMenu.isPresented = true
-                } else {
-                    showActionSheet = true
+        return Image(systemName: "gearshape")
+            .frame(width: size, height: size)
+            .font(FullUIPlayerChrome.symbolFont)
+            .foregroundStyle(.white)
+            .contentShape(Rectangle())
+            .overlay {
+                if timerManager.isTimerActive {
+                    Text(timerManager.formattedTime)
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.red, in: Capsule())
+                        .offset(y: -18)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
-            }) {
-                Image(systemName: "gearshape")
-                    .frame(width: size, height: size)
-                    .font(FullUIPlayerChrome.symbolFont)
-                    .foregroundStyle(.white)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("播放器设置")
-
-            // 定时器激活时显示倒计时
-            if timerManager.isTimerActive {
-                Text(timerManager.formattedTime)
-                    .font(.system(size: 8, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(.red)
-                    )
-                    .offset(y: -18)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
     }
 
     @ViewBuilder private var settingsTrigger: some View {
-        if usesFullscreenChrome {
-            trigger
+        if isFullscreen, let fullscreenMenu {
+            Button { fullscreenMenu.isPresented = true } label: { gearLabel }
+                .buttonStyle(.plain)
         } else {
-            trigger.confirmationDialog("播放器设置", isPresented: $showActionSheet, titleVisibility: .visible) {
-                legacyActions
+            Menu {
+                Section("常用") {
+                    if viewModel.supportsDanmu {
+                        Button("弹幕设置", systemImage: "captions.bubble") { perform(.danmaku) }
+                    }
+                    Button("字幕与翻译", systemImage: "captions.bubble.fill") { perform(.subtitles) }
+                    Button(timerManager.isTimerActive ? "定时关闭 (\(timerManager.formattedTime))" : "定时关闭", systemImage: "timer") {
+                        perform(.timer)
+                    }
+                }
+                if viewModel.canUseAirPlay || viewModel.dlnaCastResource != nil {
+                    Section("投屏") {
+                        if viewModel.canUseAirPlay {
+                            Button("AirPlay 投屏", systemImage: "airplay.video") { perform(.airPlay) }
+                        }
+                        if viewModel.dlnaCastResource != nil {
+                            Button("DLNA 投屏", systemImage: "tv") { perform(.dlna) }
+                        }
+                    }
+                }
+                Section("更多") {
+                    Button("播放设置", systemImage: "gearshape") { perform(.settings) }
+                    Button("视频信息统计", systemImage: "info.circle") { perform(.statistics) }
+                }
+            } label: {
+                gearLabel
             }
+            .menuIndicator(.hidden)
         }
-    }
-
-    @ViewBuilder private var legacyActions: some View {
-        if viewModel.supportsDanmu {
-            Button("弹幕设置") { perform(.danmaku) }
-        }
-
-        LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
-            perform(.subtitles)
-        }
-
-        Button("翻译与字幕设置…") { perform(.subtitles) }
-
-        if viewModel.canUseAirPlay {
-            Button("AirPlay 投屏") { perform(.airPlay) }
-        }
-        if viewModel.dlnaCastResource != nil {
-            Button("DLNA 投屏") { perform(.dlna) }
-        }
-
-        if timerManager.isTimerActive {
-            Button("取消定时关闭 (\(timerManager.formattedTime))") { perform(.cancelTimer) }
-        } else {
-            Button("定时关闭") { perform(.timer) }
-        }
-
-        Button("播放设置") { perform(.settings) }
-        Button("视频信息统计") { perform(.statistics) }
-        Button("取消", role: .cancel) { showActionSheet = false }
     }
 
     var body: some View {
         settingsTrigger
-        .tint(.primary)
-        .sheet(isPresented: $showAirPlayPicker) {
+        .accessibilityLabel("播放器设置")
+        .roomPlayerSheet(isPresented: $showAirPlayPicker, initialDetent: .height(200)) {
             AirPlayPickerSheet()
-                .presentationDetents([.height(200)])
-                .presentationDragIndicator(.visible)
-                .tint(.primary)
         }
-        .sheet(isPresented: $showDLNAPicker) {
+        .roomPlayerSheet(isPresented: $showDLNAPicker, initialDetent: .medium) {
             if let resource = viewModel.dlnaCastResource {
-                DLNADevicePickerSheet(resource: resource)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .tint(.primary)
+                DLNADevicePickerSheet(resource: resource, usesFullUI: true)
             }
         }
-        .sheet(isPresented: $showTimerPicker) {
-            TimerPickerView { minutes in
+        .roomPlayerSheet(isPresented: $showTimerPicker, initialDetent: .height(timerManager.isTimerActive ? 565 : 470)) {
+            TimerPickerView(timerManager: timerManager) { minutes in
                 timerManager.startTimer(minutes: minutes) {
                     onDismiss()
                 }
             }
-            .tint(.primary)
         }
-        .sheet(isPresented: $showPlayerSettings) {
+        .roomPlayerSheet(isPresented: $showPlayerSettings, initialDetent: .height(320)) {
             PlayerSettingsSheet(
                 playerSettingModel: playerSettingModel,
                 onAutoPiPChanged: viewModel.updateAutoPictureInPicture
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showSubtitleSettings) {
+        .roomPlayerSheet(isPresented: $showSubtitleSettings, initialDetent: .height(310)) {
             NavigationStack {
                 Form {
-                    if usesFullscreenChrome {
-                        Section {
-                            LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
-                                subtitleActivationID = viewModel.subtitlePlayback.activationID
-                            }
+                    Section {
+                        LiveSubtitleQuickControls(playback: viewModel.subtitlePlayback) {
+                            subtitleActivationID = viewModel.subtitlePlayback.activationID
                         }
+                        .foregroundStyle(.primary)
                     }
                     if viewModel.subtitlePlayback.phase == .manualSelectionRequired {
                         Section {
@@ -192,19 +164,10 @@ struct SettingsButton: View {
                         }
                     }
                 }
-                .navigationTitle("字幕设置")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("完成") {
-                            showSubtitleSettings = false
-                        }
-                    }
+                .playerSheetNavigation(Text("字幕设置")) {
+                    showSubtitleSettings = false
                 }
             }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .tint(.primary)
         }
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)
@@ -226,7 +189,6 @@ struct SettingsButton: View {
             subtitleActivationID = viewModel.subtitlePlayback.activationID
             showSubtitleSettings = true
         case .timer: showTimerPicker = true
-        case .cancelTimer: timerManager.cancelTimer()
         case .airPlay: showAirPlayPicker = true
         case .dlna: showDLNAPicker = true
         case .settings: showPlayerSettings = true
@@ -284,12 +246,8 @@ struct FullUIPlaybackMenu: View {
                         menuRow("弹幕", symbol: "captions.bubble") { state.select(.danmaku) }
                     }
                     menuRow("字幕与翻译", symbol: "captions.bubble.fill") { state.select(.subtitles) }
-                    if timer.isTimerActive {
-                        menuRow("取消定时关闭 (\(timer.formattedTime))", symbol: "timer", showsChevron: false) {
-                            state.select(.cancelTimer)
-                        }
-                    } else {
-                        menuRow("定时关闭", symbol: "timer") { state.select(.timer) }
+                    menuRow(timer.isTimerActive ? "定时关闭 (\(timer.formattedTime))" : "定时关闭", symbol: "timer") {
+                        state.select(.timer)
                     }
                 }
                 if hasCastOptions {
@@ -365,97 +323,48 @@ private struct PlayerSettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: AppConstants.Spacing.lg) {
-                    // 播放设置
-                    settingSection(title: "播放设置") {
-                        VStack(spacing: 0) {
-                            settingRow {
-                                HStack {
-                                    Text("播放器内核")
-                                    Spacer()
-                                    if PlayerKernelSupport.availableKernels.isEmpty {
-                                        Text("不可用")
-                                            .foregroundStyle(.secondary)
-                                    } else {
-                                        Picker("播放器内核", selection: $playerSettingModel.playerKernel) {
-                                            ForEach(PlayerKernelSupport.availableKernels, id: \.self) { kernel in
-                                                Text(kernel.title).tag(kernel)
-                                            }
-                                        }
-                                        .labelsHidden()
-                                        .pickerStyle(.menu)
-                                        .onChange(of: playerSettingModel.playerKernel) { _, newKernel in
-                                            // 切到不支持 PiP 的内核时关掉自动 PiP，避免悬空状态
-                                            if newKernel != .ksplayer && playerSettingModel.enableAutoPiPOnBackground {
-                                                playerSettingModel.enableAutoPiPOnBackground = false
-                                                onAutoPiPChanged()
-                                            }
-                                        }
-                                    }
-                                }
+            Form {
+                Section {
+                    if PlayerKernelSupport.availableKernels.isEmpty {
+                        LabeledContent("播放器内核", value: "不可用")
+                    } else {
+                        Picker("播放器内核", selection: $playerSettingModel.playerKernel) {
+                            ForEach(PlayerKernelSupport.availableKernels, id: \.self) { kernel in
+                                Text(kernel.title).tag(kernel)
                             }
-
-                            Divider()
-                                .padding(.leading)
-
-                            settingRow {
-                                Toggle("后台播放", isOn: $playerSettingModel.enableBackgroundAudio)
-                                    .tint(AppConstants.Colors.accent)
-                                    .onChange(of: playerSettingModel.enableBackgroundAudio) { _, newValue in
-                                        KSOptions.canBackgroundPlay = newValue
-                                        // 关后台播放时，自动 PiP 必然失效，一起关掉
-                                        if !newValue && playerSettingModel.enableAutoPiPOnBackground {
-                                            playerSettingModel.enableAutoPiPOnBackground = false
-                                            onAutoPiPChanged()
-                                        }
-                                    }
-                            }
-
-                            Divider()
-                                .padding(.leading)
-
-                            settingRow {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Toggle("自动画中画", isOn: $playerSettingModel.enableAutoPiPOnBackground)
-                                        .tint(AppConstants.Colors.accent)
-                                        .disabled(!pipSupported)
-                                        .onChange(of: playerSettingModel.enableAutoPiPOnBackground) { _, newValue in
-                                            if newValue && !playerSettingModel.enableBackgroundAudio {
-                                                playerSettingModel.enableBackgroundAudio = true
-                                                KSOptions.canBackgroundPlay = true
-                                            }
-                                            onAutoPiPChanged()
-                                        }
-
-                                    Text(pipSupported
-                                         ? "开启后会自动启用后台播放"
-                                         : "当前内核（VLC4）暂不支持画中画")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
+                        }
+                        .onChange(of: playerSettingModel.playerKernel) { _, kernel in
+                            if kernel != .ksplayer && playerSettingModel.enableAutoPiPOnBackground {
+                                playerSettingModel.enableAutoPiPOnBackground = false
+                                onAutoPiPChanged()
                             }
                         }
                     }
-
-                    Spacer(minLength: AppConstants.Spacing.xl)
+                    Toggle("后台播放", isOn: $playerSettingModel.enableBackgroundAudio)
+                        .onChange(of: playerSettingModel.enableBackgroundAudio) { _, enabled in
+                            KSOptions.canBackgroundPlay = enabled
+                            if !enabled && playerSettingModel.enableAutoPiPOnBackground {
+                                playerSettingModel.enableAutoPiPOnBackground = false
+                                onAutoPiPChanged()
+                            }
+                        }
+                    Toggle("自动画中画", isOn: $playerSettingModel.enableAutoPiPOnBackground)
+                        .disabled(!pipSupported)
+                        .onChange(of: playerSettingModel.enableAutoPiPOnBackground) { _, enabled in
+                            if enabled && !playerSettingModel.enableBackgroundAudio {
+                                playerSettingModel.enableBackgroundAudio = true
+                                KSOptions.canBackgroundPlay = true
+                            }
+                            onAutoPiPChanged()
+                        }
+                } footer: {
+                    Text(pipSupported ? "开启自动画中画会同时启用后台播放" : "当前内核暂不支持画中画")
                 }
-                .padding()
             }
-            .background(.ultraThinMaterial)
-            .navigationTitle("播放设置")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        KSOptions.canBackgroundPlay = playerSettingModel.enableBackgroundAudio
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-                    }
-                }
+            .tint(AppConstants.Colors.accent)
+            .playerSheetNavigation(Text("播放设置")) {
+                KSOptions.canBackgroundPlay = playerSettingModel.enableBackgroundAudio
+                dismiss()
             }
         }
         .onAppear {
@@ -467,34 +376,6 @@ private struct PlayerSettingsSheet: View {
         }
     }
 
-    // MARK: - Helper Views
-
-    /// 设置分组
-    @ViewBuilder
-    private func settingSection<Content: View>(
-        title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AppConstants.Spacing.sm) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(AppConstants.Colors.secondaryText)
-                .padding(.horizontal)
-
-            content()
-                .background(AppConstants.Colors.materialBackground)
-                .cornerRadius(AppConstants.CornerRadius.lg)
-        }
-    }
-
-    /// 设置行
-    @ViewBuilder
-    private func settingRow<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        content()
-            .padding()
-    }
 }
 
 // MARK: - AirPlay Picker Sheet
@@ -505,28 +386,19 @@ private struct AirPlayPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("选择投屏设备")
-                    .font(.headline)
-                    .padding(.top)
-
-                AirPlayView()
-                    .frame(width: 60, height: 60)
-
-                Text("点击上方按钮选择 AirPlay 设备")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-            }
-            .navigationTitle("投屏")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") {
-                        dismiss()
-                    }
+            ScrollView {
+                VStack(spacing: 8) {
+                    AirPlayView()
+                        .frame(width: 60, height: 60)
+                    Text("点击上方按钮选择 AirPlay 设备")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity)
+                .padding()
+            }
+            .playerSheetNavigation(Text("投屏")) {
+                dismiss()
             }
         }
     }

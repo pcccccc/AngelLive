@@ -13,6 +13,7 @@ struct PlatformAccountLoginView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     private let recoveryPluginIDs: [String]?
     @State private var platforms: [LoginPlatformEntry] = []
     @State private var platformsLoaded = false
@@ -122,12 +123,13 @@ struct PlatformAccountLoginView: View {
         .navigationTitle(recoveryPluginIDs == nil ? "平台账号登录" : "登录平台")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if recoveryPluginIDs != nil {
+            if recoveryPluginIDs != nil && !usesPlayerSheets {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
                 }
             }
         }
+        .playerSheetNavigationWhenPresented(Text("登录平台"))
         .task {
             await loadPlatforms()
             guard let recoveryPluginIDs else {
@@ -242,17 +244,44 @@ struct PlatformAccountLoginView: View {
 private struct LoginMethodSelectionSheet: View {
     let entry: LoginPlatformEntry
     let onSelect: (PlatformLoginMethod) -> Void
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.dismiss) private var dismiss
     @ScaledMetric private var rowHeight: CGFloat = 56
     @ScaledMetric private var surroundingHeight: CGFloat = 208
 
     var body: some View {
+        if usesPlayerSheets {
+            NavigationStack {
+                List {
+                    Section(entry.displayName) {
+                        ForEach(entry.methods(for: .iOS)) { method in
+                            Button {
+                                onSelect(method)
+                            } label: {
+                                Label(method == .deviceCode ? "登录 \(entry.displayName)" : method.iOSDisplayTitle, systemImage: symbol(for: method))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .playerSheetNavigation(Text("选择登录方式")) { dismiss() }
+            }
+            .playerSheetSurface()
+            .playerSheetDetents(initial: .height(surroundingHeight + rowHeight * CGFloat(entry.methods(for: .iOS).count)))
+        } else {
+            settingsSheet
+        }
+    }
+
+    private var settingsSheet: some View {
         let methods = entry.methods(for: .iOS)
-        ScrollView {
+        return ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("选择登录方式")
-                        .font(.title2.bold())
+                    Text("选择登录方式").font(.title2.bold())
                     Text(entry.displayName)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

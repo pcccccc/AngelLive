@@ -244,11 +244,23 @@ private struct PlayerPagePanAnchor: UIViewRepresentable {
             _ gestureRecognizer: UIGestureRecognizer,
             shouldBeRequiredToFailBy other: UIGestureRecognizer
         ) -> Bool {
-            // Give direction filtering one decision before a competing content pan starts.
-            // The presentation guard and system screen-edge gestures have their own policies.
-            guard configuration.enabled, other is UIPanGestureRecognizer, !(other is UIScreenEdgePanGestureRecognizer),
+            guard configuration.enabled, other is UIPanGestureRecognizer,
                   !(other is PlayerPagePanGestureRecognizer), let host = pan.view, let view = other.view
             else { return false }
+
+            // Zoom may install its dismissal pan above the content host. Let the player's
+            // direction router decide first, only inside this presentation's own container.
+            if host.isDescendant(of: view) {
+                var owner = controller
+                while let parent = owner?.parent { owner = parent }
+                if let owner, owner.presentingViewController != nil,
+                   let container = owner.presentationController?.containerView,
+                   view === container || view.isDescendant(of: container) {
+                    return true
+                }
+            }
+
+            guard !(other is UIScreenEdgePanGestureRecognizer) else { return false }
             return view === host || view.isDescendant(of: host)
         }
 

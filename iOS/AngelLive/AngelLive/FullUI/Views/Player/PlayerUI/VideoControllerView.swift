@@ -25,7 +25,7 @@ struct VideoControllerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
-    @Environment(\.fullUIWindowContext) private var windowContext
+    @Environment(\.requestPlayerOrientation) private var requestOrientation
     @Environment(\.fullUIPlayerIsFullscreen) private var isFullscreen
     @Environment(\.fullUIPlayerUsesExpandedLayout) private var usesExpandedLayout
     @Environment(\.fullUIPlayerUsesInPlaceFullscreen) private var usesInPlaceFullscreen
@@ -164,46 +164,9 @@ struct VideoControllerView: View {
     private func handleBackButton() {
         if isIPadFullscreen.wrappedValue || verticalSizeClass == .compact {
             isIPadFullscreen.wrappedValue = false
-            if usesInPlaceFullscreen { return }
-            // 请求竖屏，旋转完成后恢复自由旋转。
-            KSOptions.supportedInterfaceOrientations = .portrait
-
-            // 使用 iOS 16+ API
-            if #available(iOS 16.0, *) {
-                guard let windowScene = windowContext?.windowScene else {
-                    return
-                }
-
-                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                    interfaceOrientations: .portrait
-                )
-
-                // 先通知 ViewController 刷新支持的方向
-                if let rootVC = windowContext?.hostViewController {
-                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                }
-                // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
-                DispatchQueue.main.async {
-                    windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
-                        Logger.warning("退出全屏失败: \(error)", category: .ui)
-                    }
-                    // 旋转完成后恢复自由旋转
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                        if let rootVC = windowContext?.hostViewController {
-                            rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                        }
-                    }
-                }
-            } else {
-                // iOS 16 以下降级方案
-                UIDevice.current.setValue(UIInterfaceOrientation.portrait.rawValue, forKey: "orientation")
-                UIViewController.attemptRotationToDeviceOrientation()
-            }
+            if !usesInPlaceFullscreen { requestOrientation?(.portrait) }
         } else {
-            // 竖屏，返回上一页
             dismiss()
-            KSOptions.supportedInterfaceOrientations = .portrait
         }
     }
 
@@ -385,7 +348,7 @@ struct VideoControllerView: View {
                                     // 竖屏按钮（仅在视频为竖屏时显示）
                                     if let naturalSize = model.config.playerLayer?.player.naturalSize,
                                        !naturalSize.isHorizonal {
-                                        KSVideoPlayerViewBuilder.portraitButton(windowContext: windowContext)
+                                        KSVideoPlayerViewBuilder.portraitButton { requestOrientation?(.portrait) }
                                     }
 
                                     // 全屏按钮
@@ -393,7 +356,7 @@ struct VideoControllerView: View {
                                         isIPadFullscreen: isIPadFullscreen,
                                         usesInPlaceFullscreen: usesInPlaceFullscreen,
                                         isFullscreen: isFullscreen,
-                                        windowContext: windowContext
+                                        requestOrientation: requestOrientation
                                     )
                                 }
                                 .padding(.horizontal, 8)
@@ -417,33 +380,15 @@ struct VideoControllerView: View {
                         }
                 )
 
-                // HUD 设置面板（右侧滑入，无 padding）
-                if model.showVideoSetting {
-                    VideoSettingHUDView(model: model, isShowing: $model.showVideoSetting)
-                        .padding(.top, 0)
-                        .padding(.bottom, 0)
-                        .padding(.trailing, 0)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                        .background(
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    model.showVideoSetting = false
-                                }
-                        )
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
 
             }
             .ksIsFocused($model.focusableView, equals: .controller)
             .font(.body)
             .buttonStyle(.borderless)
-            .animation(.easeInOut(duration: 0.3), value: model.showVideoSetting)
+            .modifier(VideoStatisticsPresentation(model: model, isShowing: $model.showVideoSetting))
             .modifier(QualitySelectionPresentation(isShowing: $showQualityPanel))
-            .sheet(isPresented: $showDanmakuSettings) {
+            .roomPlayerSheet(isPresented: $showDanmakuSettings) {
                 DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             }
             // 控制层显示时启动自动隐藏计时器
             .onChange(of: model.config.isMaskShow) { _, isMaskShow in
@@ -494,11 +439,36 @@ struct VideoTimeShowView: View {
     }
 }
 
+struct VideoStatisticsPresentation: ViewModifier {
+    let model: KSVideoPlayerModel
+    @Binding var isShowing: Bool
+    @Environment(\.presentsPlayerPanelsAsSheets) private var asSheet
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .trailing) {
+                if isShowing && !asSheet {
+                    ZStack(alignment: .trailing) {
+                        Color.black.opacity(0.001)
+                            .onTapGesture { isShowing = false }
+                        VideoSettingHUDView(model: model, isShowing: $isShowing)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: isShowing && !asSheet)
+            .roomPlayerSheet(isPresented: Binding(get: { asSheet && isShowing }, set: { isShowing = $0 })) {
+                VideoSettingHUDView(model: model, isShowing: $isShowing, isSheet: true)
+            }
+    }
+}
+
 // HUD 样式的设置视图
 struct VideoSettingHUDView: View {
     @ObservedObject
     var model: KSVideoPlayerModel
     @Binding var isShowing: Bool
+    var isSheet = false
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -517,25 +487,31 @@ struct VideoSettingHUDView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            header
-
-            TimelineView(.periodic(from: .now, by: 1.0)) { _ in
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 20) {
+        if isSheet {
+            NavigationStack {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    List {
                         streamInfoSection
-
-                        if let playerLayer = model.config.playerLayer {
-                            videoInfoSection(playerLayer: playerLayer)
-                            performanceInfoSection(playerLayer: playerLayer)
+                        if let layer = model.config.playerLayer {
+                            videoInfoSection(playerLayer: layer)
+                            performanceInfoSection(playerLayer: layer)
                         } else {
-                            loadingState
+                            ProgressView("正在读取播放器统计信息…")
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listStyle(.insetGrouped)
                 }
+                .playerSheetNavigation(Text("视频信息统计")) { isShowing = false }
             }
+        } else {
+            hud
+        }
+    }
 
+    private var hud: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            header
+            statistics
             Spacer(minLength: 0)
         }
         .padding(24)
@@ -548,6 +524,23 @@ struct VideoSettingHUDView: View {
                 .allowsHitTesting(false)
         }
         .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+    }
+
+    private var statistics: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
+                    streamInfoSection
+                    if let playerLayer = model.config.playerLayer {
+                        videoInfoSection(playerLayer: playerLayer)
+                        performanceInfoSection(playerLayer: playerLayer)
+                    } else {
+                        loadingState
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 
     private var header: some View {
@@ -587,15 +580,15 @@ struct VideoSettingHUDView: View {
 
     private var streamInfoSection: some View {
         sectionCard(title: "当前流", systemImage: "dot.radiowaves.left.and.right") {
-            InfoRow(title: "播放方案", value: Self.playerDisplayName(for: currentPlayerType))
+            statistic(title: "播放方案", value: Self.playerDisplayName(for: currentPlayerType))
 
             if let normalizedQualityTitle {
-                InfoRow(title: "当前清晰度", value: normalizedQualityTitle)
+                statistic(title: "当前清晰度", value: normalizedQualityTitle)
             }
 
             if let currentStreamURL {
-                InfoRow(title: "流协议", value: Self.streamProtocol(for: currentStreamURL))
-                InfoRow(title: "流地址", value: Self.formatStreamURL(currentStreamURL))
+                statistic(title: "流协议", value: Self.streamProtocol(for: currentStreamURL))
+                statistic(title: "流地址", value: Self.formatStreamURL(currentStreamURL))
             }
         }
     }
@@ -624,10 +617,10 @@ struct VideoSettingHUDView: View {
             : nil
 
         sectionCard(title: "视频信息", systemImage: "film") {
-            InfoRow(title: "视频类型", value: videoType)
-            InfoRow(title: "解码方式", value: decodeType)
+            statistic(title: "视频类型", value: videoType)
+            statistic(title: "解码方式", value: decodeType)
             if let sizeText {
-                InfoRow(title: "视频尺寸", value: sizeText)
+                statistic(title: "视频尺寸", value: sizeText)
             }
         }
     }
@@ -643,32 +636,46 @@ struct VideoSettingHUDView: View {
         let audioBitrate = Self.formatBytes(Int64(dynamicInfo.audioBitrate)) + "ps"
 
         sectionCard(title: "性能信息", systemImage: "speedometer") {
-            InfoRow(title: "显示帧率", value: fpsText)
-            InfoRow(title: "丢帧数", value: "\(droppedFrames)")
-            InfoRow(title: "音视频同步", value: syncText)
-            InfoRow(title: "网络速度", value: networkSpeed)
-            InfoRow(title: "视频码率", value: videoBitrate)
-            InfoRow(title: "音频码率", value: audioBitrate)
+            statistic(title: "显示帧率", value: fpsText)
+            statistic(title: "丢帧数", value: "\(droppedFrames)")
+            statistic(title: "音视频同步", value: syncText)
+            statistic(title: "网络速度", value: networkSpeed)
+            statistic(title: "视频码率", value: videoBitrate)
+            statistic(title: "音频码率", value: audioBitrate)
         }
     }
 
+    @ViewBuilder
+    private func statistic(title: String, value: String) -> some View {
+        if isSheet {
+            LabeledContent(title) { Text(value).monospacedDigit() }
+        } else {
+            InfoRow(title: title, value: value)
+        }
+    }
+
+    @ViewBuilder
     private func sectionCard<Content: View>(
         title: String,
         systemImage: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+        if isSheet {
+            Section(title, content: content)
+        } else {
+            VStack(alignment: .leading, spacing: 16) {
+                Label(title, systemImage: systemImage)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
 
-            VStack(alignment: .leading, spacing: 12) {
-                content()
+                VStack(alignment: .leading, spacing: 12) {
+                    content()
+                }
             }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adaptiveRoundedRectGlassEffect(cornerRadius: 22)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adaptiveRoundedRectGlassEffect(cornerRadius: 22)
     }
 
     private static func playerDisplayName(for playerType: MediaPlayerProtocol.Type) -> String {

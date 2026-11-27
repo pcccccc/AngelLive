@@ -18,9 +18,10 @@ struct DanmakuKeywordBlocklistView: View {
                     Button(action: addKeyword) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundStyle(AppConstants.Colors.link)
                             .frame(minWidth: 44, minHeight: 44)
                     }
+                    .buttonStyle(.borderless)
+                    .tint(AppConstants.Colors.accent)
                     .disabled(!canAddKeyword)
                     .accessibilityLabel("添加屏蔽关键词")
                 }

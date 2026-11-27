@@ -5,6 +5,7 @@ import CoreImage.CIFilterBuiltins
 public struct PlatformDeviceLoginView: View {
     private let entry: LoginPlatformEntry
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -19,6 +20,7 @@ public struct PlatformDeviceLoginView: View {
     @State private var account = PlatformAPITokenService.shared
     #if os(iOS)
     @State private var selectedDetent: PresentationDetent = .large
+    private var offersCompactDetent: Bool { connected && !dynamicTypeSize.isAccessibilitySize }
     #endif
 
     public init(entry: LoginPlatformEntry) { self.entry = entry }
@@ -32,7 +34,7 @@ public struct PlatformDeviceLoginView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 20) {
-                            if !usesSettingsPresentation {
+                            if !usesSettingsPresentation && !usesPlayerSheets {
                                 Text("登录 \(entry.displayName)").font(.title2.bold())
                             }
                             PlatformAPITokenStatusLabel(pluginId: entry.pluginId)
@@ -66,7 +68,7 @@ public struct PlatformDeviceLoginView: View {
                                 Button("退出 API 登录", role: .destructive, action: clearAccount)
                                     .disabled(clearing)
                             }
-                            if !usesSettingsPresentation {
+                            if !usesSettingsPresentation && !usesPlayerSheets {
                                 Button(connected ? "完成" : "关闭") { dismiss() }
                             }
                         }
@@ -75,11 +77,12 @@ public struct PlatformDeviceLoginView: View {
                 }
             }
             .macSettingsPage("\(entry.displayName) 登录", closeTitle: connected ? "完成" : "关闭", closeDisabled: clearing)
+            .playerSheetNavigationWhenPresented(Text("\(entry.displayName) 登录"), closeDisabled: clearing)
         }
         #if os(iOS)
-        .presentationDetents(connected && !dynamicTypeSize.isAccessibilitySize ? [.height(400), .large] : [.large], selection: $selectedDetent)
-        .presentationDragIndicator(connected ? .visible : .automatic)
-        .onChange(of: connected && !dynamicTypeSize.isAccessibilitySize) { _, compact in
+        .presentationDetents(offersCompactDetent ? [.height(400), .large] : [.large], selection: $selectedDetent)
+        .presentationDragIndicator(usesPlayerSheets || connected ? .visible : .automatic)
+        .onChange(of: offersCompactDetent) { _, compact in
             selectedDetent = compact ? .height(400) : .large
         }
         #endif
@@ -165,6 +168,7 @@ public struct PlatformDeviceLoginView: View {
 }
 
 private struct DeviceLoginSuccessContent: View {
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     let displayName: String
     let clearing: Bool
@@ -188,7 +192,7 @@ private struct DeviceLoginSuccessContent: View {
                     }
                 }
                 VStack(spacing: 12) {
-                    if !usesSettingsPresentation {
+                    if !usesSettingsPresentation && !usesPlayerSheets {
                         Button(action: onDone) {
                             Text("完成").fontWeight(.semibold)
                                 .frame(maxWidth: .infinity, minHeight: 32)

@@ -73,20 +73,18 @@ struct PlatformDetailViewControllerWrapper: View {
     }
 
     @ViewBuilder
-    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(
-                viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms,
-                canLoadMoreCategoryRooms: canLoadMoreCategoryRooms,
-                onLoadMoreCategoryRooms: loadMoreCategoryRooms
-            )
-                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
-        }
+    private func playerDestination(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(
+            viewModel: RoomInfoViewModel(room: route.room),
+            categoryRooms: route.categoryRooms,
+            canLoadMoreCategoryRooms: { canLoadMoreCategoryRooms(in: route) },
+            onLoadMoreCategoryRooms: { await loadMoreCategoryRooms(in: route) }
+        )
+            .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: roomTransitionNamespace)
     }
 
-    private func canLoadMoreCategoryRooms() -> Bool {
-        guard let context = navigationState.categoryContext else { return false }
+    private func canLoadMoreCategoryRooms(in route: RoomPlayerRoute) -> Bool {
+        guard let context = route.categoryContext else { return false }
         return viewModel.canLoadMoreRooms(
             mainCategoryIndex: context.mainCategoryIndex,
             subCategoryIndex: context.subCategoryIndex
@@ -94,26 +92,24 @@ struct PlatformDetailViewControllerWrapper: View {
     }
 
     @MainActor
-    private func loadMoreCategoryRooms() async -> [LiveModel] {
-        guard let context = navigationState.categoryContext else {
-            return navigationState.categoryRooms
+    private func loadMoreCategoryRooms(in route: RoomPlayerRoute) async -> [LiveModel] {
+        guard let context = route.categoryContext else {
+            return route.categoryRooms
         }
 
-        let rooms = await viewModel.loadMoreRooms(
+        return await viewModel.loadMoreRooms(
             mainCategoryIndex: context.mainCategoryIndex,
             subCategoryIndex: context.subCategoryIndex
         )
-        navigationState.categoryRooms = rooms
-        return rooms
     }
 
     private var playerPresentation: some View {
         baseView
-            .roomPlayerPushDestination(navigationState) {
-                playerDestination(.push).fullUITabBarHidden()
+            .roomPlayerPushDestination(navigationState) { route in
+                playerDestination(route).fullUITabBarHidden()
             }
-            .roomPlayerZoomCover(navigationState) {
-                playerDestination(.zoom)
+            .roomPlayerZoomCover(navigationState) { route in
+                playerDestination(route)
             }
     }
 }

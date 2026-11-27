@@ -4,6 +4,7 @@ import SwiftUI
 public struct PlatformAPIAccountView: View {
     public let entry: LoginPlatformEntry
     public let onChangeLogin: () -> Void
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.dismiss) private var dismiss
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @State private var service = PlatformAPITokenService.shared
@@ -68,12 +69,13 @@ public struct PlatformAPIAccountView: View {
             .navigationTitle("\(entry.displayName) 账号")
             .macSettingsPage("\(entry.displayName) 账号", closeTitle: "完成", closeDisabled: working)
             .toolbar {
-                if !usesSettingsPresentation {
+                if !usesSettingsPresentation && !usesPlayerSheets {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("完成") { dismiss() }.disabled(working)
                     }
                 }
             }
+            .playerSheetNavigationWhenPresented(Text("\(entry.displayName) 账号"), closeDisabled: working)
             .task { await service.load(pluginId: entry.pluginId) }
             .alert("退出登录？", isPresented: $showLogout) {
                 Button("取消", role: .cancel) {}

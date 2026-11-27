@@ -15,6 +15,7 @@ enum ErrorViewPresentationStyle {
 
 /// 全局错误提示视图
 struct ErrorView: View {
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     let style: ErrorViewPresentationStyle
     let title: String
     let message: String
@@ -97,7 +98,7 @@ struct ErrorView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingDetailSheet) {
+        .roomPlayerSheet(isPresented: $showingDetailSheet) {
             ErrorDetailSheet(
                 title: title,
                 message: message,
@@ -105,20 +106,23 @@ struct ErrorView: View {
                 curlCommand: curlCommand
             )
         }
-        .sheet(isPresented: $showingCookieDebugView) {
+        .roomPlayerSheet(isPresented: $showingCookieDebugView) {
             // 调试视图已随旧服务删除
             Text("调试视图不可用")
         }
-        .sheet(isPresented: $showingSupportDiagnostics) {
+        .roomPlayerSheet(isPresented: $showingSupportDiagnostics) {
             NavigationStack {
                 SupportDiagnosticsView()
                     .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
-                                showingSupportDiagnostics = false
+                        if !usesPlayerSheets {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("关闭") {
+                                    showingSupportDiagnostics = false
+                                }
                             }
                         }
                     }
+                    .playerSheetNavigationWhenPresented(Text("问题诊断与反馈"))
             }
         }
     }
@@ -127,6 +131,7 @@ struct ErrorView: View {
 // MARK: - 错误详情弹窗
 
 struct ErrorDetailSheet: View {
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     let title: String
     let message: String
     let detailMessage: String
@@ -137,102 +142,133 @@ struct ErrorDetailSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // 错误标题
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("错误信息")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Text(title)
-                            .font(.title3.bold())
-                        Text(message)
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
-
-                    // CURL 命令（如果有）
-                    if let curlCommand = curlCommand, !curlCommand.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("CURL 调试命令")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-
-                                Spacer()
-
-                                Button(action: {
+            Group {
+                if usesPlayerSheets {
+                    List {
+                        Section("错误信息") {
+                            Text(title).font(.headline)
+                            Text(message)
+                        }
+                        if let curlCommand, !curlCommand.isEmpty {
+                            Section("CURL 调试命令") {
+                                Text(curlCommand).font(.caption.monospaced()).textSelection(.enabled)
+                                Button("复制", systemImage: "doc.on.doc") {
                                     UIPasteboard.general.string = curlCommand
                                     showCopiedAlert = true
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "doc.on.doc")
-                                            .font(.system(size: 13))
-                                        Text("复制")
-                                            .font(.system(size: 14, weight: .medium))
-                                    }
-                                    .foregroundColor(.accentColor)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(Color.accentColor.opacity(0.1))
-                                    .cornerRadius(8)
                                 }
                             }
-
-                            Text(curlCommand)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
-                                .background(Color(.tertiarySystemBackground))
-                                .cornerRadius(8)
-
-                            Text("提示：复制此命令到终端执行可以复现请求")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
+                        Section("详细信息") {
+                            Text(detailMessage).font(.caption.monospaced()).textSelection(.enabled)
+                        }
                     }
-
-                    // 详细信息
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("详细信息")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        Text(detailMessage)
-                            .font(.system(.caption, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
+                    .listStyle(.insetGrouped)
+                } else {
+                    legacyDetails
                 }
-                .padding()
             }
             .navigationTitle("错误详情")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") {
-                        dismiss()
+                if !usesPlayerSheets {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") {
+                            dismiss()
+                        }
                     }
                 }
             }
+            .playerSheetNavigationWhenPresented(Text("错误详情"))
             .alert("已复制", isPresented: $showCopiedAlert) {
                 Button("好的", role: .cancel) {}
             } message: {
                 Text("CURL 命令已复制到剪贴板")
             }
+        }
+    }
+
+    private var legacyDetails: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // 错误标题
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("错误信息")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text(title)
+                        .font(.title3.bold())
+                    Text(message)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+
+                // CURL 命令（如果有）
+                if let curlCommand = curlCommand, !curlCommand.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("CURL 调试命令")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            Spacer()
+
+                            Button(action: {
+                                UIPasteboard.general.string = curlCommand
+                                showCopiedAlert = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.system(size: 13))
+                                    Text("复制")
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                                .foregroundColor(.accentColor)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.accentColor.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                        }
+
+                        Text(curlCommand)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color(.tertiarySystemBackground))
+                            .cornerRadius(8)
+
+                        Text("提示：复制此命令到终端执行可以复现请求")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(12)
+                }
+
+                // 详细信息
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("详细信息")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    Text(detailMessage)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
+            }
+            .padding()
         }
     }
 }

@@ -8,164 +8,101 @@
 import SwiftUI
 import AngelLiveCore
 
-/// 定时关闭选择器
 struct TimerPickerView: View {
+    let timerManager: TimerManager
+    let onSelectTimer: (Int) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var showCustomPicker = false
-    @State private var customHours: Int = 0
-    @State private var customMinutes: Int = 30
-
-    var onSelectTimer: (Int) -> Void
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach([TimerPreset.minutes10, .minutes30, .hour1, .hour2, .hour5], id: \.self) { preset in
-                        Button(action: {
-                            onSelectTimer(preset.minutes)
-                            dismiss()
-                        }) {
-                            HStack {
-                                Text(preset.title)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "clock")
-                                    .foregroundStyle(.secondary)
+                if timerManager.isTimerActive {
+                    Section {
+                        LabeledContent {
+                            Button("取消", role: .destructive) {
+                                timerManager.cancelTimer()
+                                dismiss()
                             }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("取消定时关闭")
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("剩余时间")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(timerManager.formattedTime)
+                                    .font(.title2.weight(.semibold))
+                                    .monospacedDigit()
+                            }
+                            .accessibilityElement(children: .combine)
                         }
                     }
-                } header: {
-                    Text("预设时间")
                 }
-
-                Section {
-                    Button(action: {
-                        showCustomPicker = true
-                    }) {
-                        HStack {
-                            Text("自定义时间")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "slider.horizontal.3")
-                                .foregroundStyle(.secondary)
+                Section("预设时间") {
+                    ForEach([TimerPreset.minutes10, .minutes30, .hour1, .hour2, .hour5], id: \.self) { preset in
+                        let selected = timerManager.scheduledMinutes == preset.minutes
+                        Button { select(preset.minutes) } label: {
+                            HStack {
+                                Text(preset.title).foregroundStyle(.primary)
+                                Spacer()
+                                if selected { Image(systemName: "checkmark").foregroundStyle(AppConstants.Colors.accent) }
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
                     }
-                } header: {
-                    Text("自定义")
-                }
-            }
-            .navigationTitle("定时关闭")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        dismiss()
+                    NavigationLink("自定义时间") {
+                        CustomTimerPickerView(onConfirm: select)
                     }
                 }
             }
-            .sheet(isPresented: $showCustomPicker) {
-                CustomTimerPickerView(
-                    hours: $customHours,
-                    minutes: $customMinutes,
-                    onConfirm: { totalMinutes in
-                        onSelectTimer(totalMinutes)
-                        dismiss()
-                    }
-                )
-            }
+            .listStyle(.insetGrouped)
+            .playerSheetNavigation(Text("定时关闭")) { dismiss() }
         }
+    }
+
+    private func select(_ minutes: Int) {
+        onSelectTimer(minutes)
+        dismiss()
     }
 }
 
-/// 自定义时间选择器
 private struct CustomTimerPickerView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Binding var hours: Int
-    @Binding var minutes: Int
+    let onConfirm: (Int) -> Void
+    @State private var hours = 0
+    @State private var minutes = 30
 
-    var onConfirm: (Int) -> Void
+    private var total: Int { hours * 60 + minutes }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Text("选择定时时长")
-                    .font(.headline)
-                    .padding(.top)
-
+        Form {
+            Section {
                 HStack(spacing: 0) {
-                    // 小时选择器
                     Picker("小时", selection: $hours) {
-                        ForEach(0..<24, id: \.self) { hour in
-                            Text("\(hour)")
-                                .tag(hour)
-                        }
+                        ForEach(0..<24, id: \.self) { Text("\($0) 小时").tag($0) }
                     }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-
-                    Text("时")
-                        .font(.title2)
-                        .frame(width: 40)
-
-                    // 分钟选择器
                     Picker("分钟", selection: $minutes) {
-                        ForEach(0..<60, id: \.self) { minute in
-                            Text("\(minute)")
-                                .tag(minute)
-                        }
+                        ForEach(0..<60, id: \.self) { Text("\($0) 分钟").tag($0) }
                     }
-                    .pickerStyle(.wheel)
-                    .frame(maxWidth: .infinity)
-
-                    Text("分")
-                        .font(.title2)
-                        .frame(width: 40)
                 }
-                .frame(height: 200)
-
-                Text("总计: \(formatTotalTime())")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
+                .pickerStyle(.wheel)
+                .labelsHidden()
+                LabeledContent("总计", value: "\(total) 分钟")
             }
-            .navigationTitle("自定义时间")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("确定") {
-                        let totalMinutes = hours * 60 + minutes
-                        if totalMinutes > 0 {
-                            onConfirm(totalMinutes)
-                        }
-                    }
-                    .disabled(hours == 0 && minutes == 0)
+        }
+        .navigationTitle("自定义时间")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                if #available(iOS 26.0, *) {
+                    Button(role: .confirm) { onConfirm(total) }
+                        .disabled(total == 0)
+                } else {
+                    Button("确定") { onConfirm(total) }
+                        .disabled(total == 0)
                 }
             }
         }
-        .presentationDetents([.height(400)])
-    }
-
-    private func formatTotalTime() -> String {
-        let totalMinutes = hours * 60 + minutes
-        if totalMinutes == 0 {
-            return "请选择时间"
-        } else if hours > 0 {
-            return "\(hours) 小时 \(minutes) 分钟"
-        } else {
-            return "\(minutes) 分钟"
-        }
-    }
-}
-
-#Preview {
-    TimerPickerView { minutes in
-        Logger.debug("选择了 \(minutes) 分钟", category: .ui)
     }
 }

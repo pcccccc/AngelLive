@@ -13,7 +13,6 @@ struct ShortDramaEpisodesPanelContent: View {
     let availableWidth: CGFloat
     let presentationSettled: Bool
     let animateCurrentEpisode: Bool
-    @AccessibilityFocusState.Binding var accessibilityFocus: ShortDramaAccessibilityFocus?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var browseGroupID: String?
     @State private var positionedLayout: EpisodeGridLayout?
@@ -160,7 +159,6 @@ struct ShortDramaEpisodesPanelContent: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
-                    .accessibilityFocused($accessibilityFocus, equals: .episodesTitle)
                 Text("可播 \(model.episodes.count) 集")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.68))
@@ -183,9 +181,7 @@ struct ShortDramaEpisodesPanelContent: View {
                 onCancelled: onHeaderDragCancelled
             )
         }
-        .padding(.leading, 20)
-        .padding(.trailing, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, 20)
         .padding(.bottom, 20)
     }
 
@@ -260,28 +256,8 @@ struct ShortDramaSettingsPanelContent: View {
     @Binding var playbackRate: Float
     @Binding var autoplay: Bool
     let availableWidth: CGFloat
-    let onHeaderDragChanged: (DragGesture.Value) -> Void
-    let onHeaderDragEnded: (DragGesture.Value) -> Void
-    let onHeaderDragCancelled: () -> Void
-    @AccessibilityFocusState.Binding var accessibilityFocus: ShortDramaAccessibilityFocus?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("播放设置")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityFocused($accessibilityFocus, equals: .settingsTitle)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .shortDramaPanelDragRegion(
-                    onChanged: onHeaderDragChanged,
-                    onEnded: onHeaderDragEnded,
-                    onCancelled: onHeaderDragCancelled
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 20)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     VStack(alignment: .leading, spacing: 12) {

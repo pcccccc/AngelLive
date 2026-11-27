@@ -263,7 +263,10 @@ struct DLNADevicePickerSheet: View {
     @State private var coordinator: DLNACastCoordinator
     @Environment(\.dismiss) private var dismiss
 
-    init(resource: DLNAMediaResource) {
+    private let usesFullUI: Bool
+
+    init(resource: DLNAMediaResource, usesFullUI: Bool = false) {
+        self.usesFullUI = usesFullUI
         self.resource = resource
         _coordinator = State(initialValue: DLNACastCoordinator())
     }
@@ -271,48 +274,42 @@ struct DLNADevicePickerSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if coordinator.devices.isEmpty && coordinator.state == .discovering {
-                    ProgressView("正在搜索局域网设备…")
-                } else if case .failed(let message) = coordinator.state {
-                    ContentUnavailableView {
-                        Label(
-                            coordinator.devices.isEmpty ? "无法发现设备" : "投屏失败",
-                            systemImage: "wifi.exclamationmark"
-                        )
-                    } description: {
-                        Text(message)
-                    } actions: {
-                        Button(coordinator.devices.isEmpty ? "重新搜索" : "选择其他设备") {
-                            coordinator.recoverFromFailure()
+                if usesFullUI {
+                    List {
+                        if showsDeviceList {
+                            deviceRows
+                        } else {
+                            discoveryStatus
+                                .frame(maxWidth: .infinity)
+                                .listRowBackground(Color.clear)
                         }
                     }
-                } else if coordinator.devices.isEmpty {
-                    ContentUnavailableView {
-                        Label("没有找到 DLNA 设备", systemImage: "tv")
-                    } description: {
-                        Text("请确认手机和电视连接到同一个 Wi‑Fi，并在设置中允许 AngelLive 访问本地网络。")
-                    } actions: {
-                        Button("重新搜索") { coordinator.discover() }
+                    .listStyle(.insetGrouped)
+                    .playerSheetNavigation(Text("DLNA 投屏")) { dismiss() }
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("重新搜索设备", systemImage: "arrow.clockwise") { coordinator.discover() }
+                                .disabled(coordinator.state.isBusy)
+                        }
                     }
                 } else {
-                    deviceList
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("DLNA 投屏")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("完成") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        coordinator.discover()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .disabled(coordinator.state.isBusy)
-                    .accessibilityLabel("重新搜索设备")
+                    pickerContent
+                        .navigationTitle("DLNA 投屏")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("完成") { dismiss() }
+                            }
+                            ToolbarItem(placement: .primaryAction) {
+                                Button {
+                                    coordinator.discover()
+                                } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .disabled(coordinator.state.isBusy)
+                                .accessibilityLabel("重新搜索设备")
+                            }
+                        }
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -341,8 +338,51 @@ struct DLNADevicePickerSheet: View {
         .onDisappear { coordinator.cancel() }
     }
 
-    private var deviceList: some View {
-        List(coordinator.devices) { device in
+    private var showsDeviceList: Bool {
+        if case .failed = coordinator.state { return false }
+        return !coordinator.devices.isEmpty
+    }
+
+    private var pickerContent: some View {
+        Group {
+            if showsDeviceList {
+                List { deviceRows }.listStyle(.insetGrouped)
+            } else {
+                discoveryStatus
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder private var discoveryStatus: some View {
+        if coordinator.devices.isEmpty && coordinator.state == .discovering {
+            ProgressView("正在搜索局域网设备…")
+        } else if case .failed(let message) = coordinator.state {
+            ContentUnavailableView {
+                Label(
+                    coordinator.devices.isEmpty ? "无法发现设备" : "投屏失败",
+                    systemImage: "wifi.exclamationmark"
+                )
+            } description: {
+                Text(message)
+            } actions: {
+                Button(coordinator.devices.isEmpty ? "重新搜索" : "选择其他设备") {
+                    coordinator.recoverFromFailure()
+                }
+            }
+        } else if coordinator.devices.isEmpty {
+            ContentUnavailableView {
+                Label("没有找到 DLNA 设备", systemImage: "tv")
+            } description: {
+                Text("请确认手机和电视连接到同一个 Wi‑Fi，并在设置中允许 AngelLive 访问本地网络。")
+            } actions: {
+                Button("重新搜索") { coordinator.discover() }
+            }
+        }
+    }
+
+    private var deviceRows: some View {
+        ForEach(coordinator.devices) { device in
             Button {
                 coordinator.cast(resource: resource, to: device)
             } label: {
@@ -375,6 +415,5 @@ struct DLNADevicePickerSheet: View {
             .buttonStyle(.plain)
             .disabled(coordinator.state.isBusy)
         }
-        .listStyle(.insetGrouped)
     }
 }

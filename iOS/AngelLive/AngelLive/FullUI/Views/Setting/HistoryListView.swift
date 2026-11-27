@@ -16,8 +16,6 @@ struct HistoryListView: View {
     @State private var showClearAlert = false
     @State private var selectedType = 0
     @State private var progressStore: ShortDramaProgressStore
-    @State private var shortDramaRoom: LiveModel?
-    @State private var shortDramaReturnPreview: RoomPlayerReturnPreview?
     @State private var historyError: String?
     @State private var liveRooms: [LiveModel] = []
     @State private var classification: ShortDramaHistoryClassification?
@@ -68,16 +66,15 @@ struct HistoryListView: View {
     }
 
     @ViewBuilder
-    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(
-                viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms,
-                entryRoomSource: .history
-            )
-                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
-                .fullUITabBarHidden()
-        }
+    private func playerDestination(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(
+            viewModel: RoomInfoViewModel(room: route.room),
+            categoryRooms: route.categoryRooms,
+            entryRoomSource: .history,
+            opensShortDramaHistory: route.opensShortDramaHistory
+        )
+            .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: roomTransitionNamespace)
+            .fullUITabBarHidden()
     }
 
     @ViewBuilder
@@ -91,8 +88,7 @@ struct HistoryListView: View {
             selectedType: $selectedType,
             onOpenShortDrama: { room in
                 #if canImport(KSPlayer)
-                shortDramaReturnPreview = navigationState.returnSource.capture()
-                shortDramaRoom = room
+                navigationState.navigate(to: room, opensShortDramaHistory: true)
                 #else
                 historyError = "当前播放器不支持短剧播放。"
                 #endif
@@ -138,23 +134,13 @@ struct HistoryListView: View {
         } message: {
             Text(historyError ?? "")
         }
-        #if canImport(KSPlayer)
-        .fullScreenCover(item: $shortDramaRoom, onDismiss: { shortDramaReturnPreview = nil }) { room in
-            ShortDramaPlayerView(room: room, presentsOverSource: true)
-                .presentationBackground(.clear)
-                .environment(\.fullUIRoomPlayerReturnPreview, shortDramaReturnPreview)
-                .fullUIWindowContext()
-                .fullUITabBarHidden()
-                .fullUIArcLoadingStyle()
-        }
-        #endif
 
         baseView
-            .roomPlayerPushDestination(navigationState) {
-                playerDestination(.push)
+            .roomPlayerPushDestination(navigationState) { route in
+                playerDestination(route)
             }
-            .roomPlayerZoomCover(navigationState) {
-                playerDestination(.zoom)
+            .roomPlayerZoomCover(navigationState) { route in
+                playerDestination(route)
             }
     }
 }

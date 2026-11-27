@@ -31,7 +31,8 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
     }
 
     func configure(with room: LiveModel, favoriteModel: AppFavoriteModel, liveCheckMode: LiveCheckMode = .local, showsCoverBadge: Bool = false) {
-        let roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
+        var roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
+        roomCard.hasNavigationStack = false
         // 每个 hosting controller 都是独立的 SwiftUI 根，必须显式注入宿主模型。
         applyRootView(AnyView(roomCard.environment(favoriteModel)), interactive: true)
     }

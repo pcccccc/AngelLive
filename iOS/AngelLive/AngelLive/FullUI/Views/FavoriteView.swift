@@ -61,8 +61,8 @@ struct FavoriteView: View {
                 }
             }
         }
-        .roomPlayerZoomCover(navigationState) {
-            playerDestination(.zoom)
+        .roomPlayerZoomCover(navigationState) { route in
+            playerDestination(route)
         }
     }
 
@@ -117,21 +117,19 @@ struct FavoriteView: View {
         .onChange(of: viewModel.cloudKitReady) { _, isReady in
             if isReady { showsCloudSyncDetails = false }
         }
-        .roomPlayerPushDestination(navigationState) {
-            playerDestination(.push)
+        .roomPlayerPushDestination(navigationState) { route in
+            playerDestination(route)
         }
     }
 
     @ViewBuilder
-    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(
-                viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
-            )
-                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
-                .fullUITabBarHidden()
-        }
+    private func playerDestination(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(
+            viewModel: RoomInfoViewModel(room: route.room),
+            categoryRooms: route.categoryRooms
+        )
+            .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: roomTransitionNamespace)
+            .fullUITabBarHidden()
     }
 
     @MainActor

@@ -20,7 +20,7 @@ struct UnifiedPlayerControlOverlay: View {
     @Environment(\.fullUILandscapePlayerLayout) private var landscapeLayout
     @Environment(\.fullUIPlayerShowsRoomBanner) private var showsRoomBanner
     @Environment(\.fullUIPlayerUsesInPlaceFullscreen) private var usesInPlaceFullscreen
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.requestPlayerOrientation) private var requestOrientation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
@@ -564,74 +564,18 @@ struct UnifiedPlayerControlOverlay: View {
     /// - 显式全屏或紧凑高度时：先退出全屏；需要旋转时请求竖屏
     /// - 其他情况：dismiss 返回上一页
     private func handleBackButton() {
-        if isIPadFullscreen.wrappedValue || verticalSizeClass == .compact {
+        if isFullscreen {
             isIPadFullscreen.wrappedValue = false
-            if usesInPlaceFullscreen { return }
-            // 请求竖屏，旋转完成后恢复自由旋转。
-            KSOptions.supportedInterfaceOrientations = .portrait
-
-            guard let windowScene = windowContext?.windowScene else { return }
-
-            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                interfaceOrientations: .portrait
-            )
-
-            // 先通知 ViewController 刷新支持的方向
-            if let rootVC = windowContext?.hostViewController {
-                rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-            }
-            // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
-            DispatchQueue.main.async {
-                windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
-                    Logger.warning("退出全屏失败: \(error)", category: .ui)
-                }
-                // 旋转完成后恢复自由旋转，允许再次横屏自动全屏
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                    if let rootVC = windowContext?.hostViewController {
-                        rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                    }
-                }
-            }
+            if !usesInPlaceFullscreen { requestOrientation?(.portrait) }
         } else {
-            // 竖屏：返回上一页
             dismiss()
-            KSOptions.supportedInterfaceOrientations = .portrait
         }
     }
 
     private func toggleOrientationOrFullscreen() {
         let entersFullscreen = !isFullscreen
         isIPadFullscreen.wrappedValue = entersFullscreen
-        if usesInPlaceFullscreen { return }
-
-        let targetOrientation: UIInterfaceOrientationMask = entersFullscreen ? .landscapeRight : .portrait
-        KSOptions.supportedInterfaceOrientations = targetOrientation
-
-        guard let windowScene = windowContext?.windowScene else {
-            return
-        }
-
-        // 先通知 ViewController 刷新支持的方向
-        if let rootVC = windowContext?.hostViewController {
-            rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
-        // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
-        DispatchQueue.main.async {
-            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                interfaceOrientations: targetOrientation
-            )
-            windowScene.requestGeometryUpdate(geometryPreferences) { @Sendable error in
-                Logger.warning("方向更新失败: \(error)", category: .ui)
-            }
-            // 旋转完成后恢复自由旋转
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
-                if let rootVC = windowContext?.hostViewController {
-                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
-                }
-            }
-        }
+        if !usesInPlaceFullscreen { requestOrientation?(entersFullscreen ? .landscapeRight : .portrait) }
     }
 
     // MARK: - Auto Hide Timer

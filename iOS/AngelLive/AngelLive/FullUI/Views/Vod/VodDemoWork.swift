@@ -65,6 +65,9 @@ private struct VodDemoRoot: View {
                         .environment(\.fullUIRoomPlayerPushed, true)
                 } else {
                     VodWorkDetailView(room: work.room, presentsOverSource: false)
+                        .environment(\.fullUIRoomPlayerPushed, true)
+                        .environment(\.finishRoomPlayerSwipe, { if path.last == work { path.removeLast() } })
+                        .fullUIWindowContext()
                         .interactivePopGestureEnabled(false, edgeOnly: true)
                         .interactiveDismissDisabled()
                 }

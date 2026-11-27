@@ -840,9 +840,7 @@ struct ShortDramaPlayerView: View {
             return
         }
 
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
-        withTransaction(transaction) { dismiss() }
+        dismiss()
     }
 
     private func topControls(metrics: ShortDramaPanelMetrics, centersBackSymbol: Bool = false) -> some View {
@@ -1314,6 +1312,30 @@ struct ShortDramaPlayerView: View {
     @ViewBuilder
     private func panelContent(metrics: ShortDramaPanelMetrics) -> some View {
         if let selectedPanel = panel {
+            HStack(spacing: 8) {
+                Text(selectedPanel == .episodes ? "选集" : "播放设置")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityFocused($accessibilityFocus, equals: selectedPanel == .episodes ? .episodesTitle : .settingsTitle)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .shortDramaPanelDragRegion(
+                        onChanged: { updatePanelDetentDrag($0, metrics: metrics) },
+                        onEnded: { finishPanelDetentDrag($0, metrics: metrics) },
+                        onCancelled: { cancelActivePanelDetentDrag(using: metrics) }
+                    )
+                if #available(iOS 26.0, *) {
+                    Button(role: .close, action: dismissPanel)
+                        .buttonStyle(.glass)
+                        .buttonBorderShape(.circle)
+                        .controlSize(.large)
+                } else {
+                    Button("关闭", systemImage: "xmark", action: dismissPanel)
+                        .labelStyle(.iconOnly)
+                        .frame(width: 44, height: 44)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
             switch selectedPanel {
             case .episodes:
                 ShortDramaEpisodesPanelContent(
@@ -1328,19 +1350,14 @@ struct ShortDramaPlayerView: View {
                     animateCurrentEpisode: resumeAfterPanel
                         && !model.hasFinished
                         && scenePhase == .active
-                        && !reduceMotion,
-                    accessibilityFocus: $accessibilityFocus
+                        && !reduceMotion
                 )
                 .padding(.bottom, 24)
             case .settings:
                 ShortDramaSettingsPanelContent(
                     playbackRate: $playbackRate,
                     autoplay: Binding(get: { model.autoplay }, set: { model.autoplay = $0 }),
-                    availableWidth: metrics.panelWidth,
-                    onHeaderDragChanged: { updatePanelDetentDrag($0, metrics: metrics) },
-                    onHeaderDragEnded: { finishPanelDetentDrag($0, metrics: metrics) },
-                    onHeaderDragCancelled: { cancelActivePanelDetentDrag(using: metrics) },
-                    accessibilityFocus: $accessibilityFocus
+                    availableWidth: metrics.panelWidth
                 )
                 .padding(.bottom, 24)
             }
@@ -1358,14 +1375,13 @@ struct ShortDramaPlayerView: View {
             width: metrics.panelWidth,
             bottomInset: bottomInset,
             dimOpacity: dimOpacity,
-            closeAccessibilityLabel: panel?.closeAccessibilityLabel ?? "关闭面板",
             onDismiss: dismissPanel,
             onToggleDetent: { togglePanelDetent(using: metrics) },
             onDragChanged: { updatePanelDetentDrag($0, metrics: metrics) },
             onDragEnded: { finishPanelDetentDrag($0, metrics: metrics) },
             onDragCancelled: { cancelActivePanelDetentDrag(using: metrics) }
         ) {
-            panelContent(metrics: metrics)
+            VStack(spacing: 0) { panelContent(metrics: metrics) }
         }
     }
 
@@ -1730,13 +1746,6 @@ enum ShortDramaPanel: String, Identifiable, Equatable {
     case settings
 
     var id: String { rawValue }
-
-    var closeAccessibilityLabel: String {
-        switch self {
-        case .episodes: "关闭选集"
-        case .settings: "关闭播放设置"
-        }
-    }
 }
 
 private struct PlaybackObservationKey: Equatable {

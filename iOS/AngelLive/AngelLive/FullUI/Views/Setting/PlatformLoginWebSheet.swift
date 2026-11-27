@@ -14,6 +14,7 @@ struct PlatformLoginWebSheet: View {
     let pluginId: String
     let startsWithLogin: Bool
 
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
@@ -39,33 +40,32 @@ struct PlatformLoginWebSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if loginLifecycle.isInitialStatusLoaded, let entry {
-                    if let attemptID = loginLifecycle.attemptID {
-                        loginContent(entry: entry, attemptID: attemptID)
-                    } else {
-                        statusContent(entry: entry)
-                    }
-                } else {
-                    ProgressView("加载中...")
-                }
-            }
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭") {
-                        stopCookiePolling()
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if isLoggedIn && !showWebView {
-                        Button("退出登录", role: .destructive) {
-                            logout()
+            if usesPlayerSheets {
+                loginPage
+                    .playerSheetNavigation(Text(verbatim: navigationTitle), close: close)
+                    .toolbar {
+                        if isLoggedIn && !showWebView {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("退出登录", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive, action: logout)
+                            }
                         }
                     }
-                }
+            } else {
+                loginPage
+                    .navigationTitle(navigationTitle)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("关闭", action: close)
+                        }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            if isLoggedIn && !showWebView {
+                                Button("退出登录", role: .destructive) {
+                                    logout()
+                                }
+                            }
+                        }
+                    }
             }
         }
         .task {
@@ -85,6 +85,25 @@ struct PlatformLoginWebSheet: View {
         }
         .onDisappear {
             stopCookiePolling()
+        }
+    }
+
+    private func close() {
+        stopCookiePolling()
+        dismiss()
+    }
+
+    private var loginPage: some View {
+        Group {
+            if loginLifecycle.isInitialStatusLoaded, let entry {
+                if let attemptID = loginLifecycle.attemptID {
+                    loginContent(entry: entry, attemptID: attemptID)
+                } else {
+                    statusContent(entry: entry)
+                }
+            } else {
+                ProgressView("加载中...")
+            }
         }
     }
 
@@ -236,7 +255,9 @@ struct PlatformLoginWebSheet: View {
                 }
             }
             .padding(16)
-            .background(.ultraThinMaterial)
+            .background {
+                if !usesPlayerSheets { Rectangle().fill(.ultraThinMaterial) }
+            }
         }
         }
     }

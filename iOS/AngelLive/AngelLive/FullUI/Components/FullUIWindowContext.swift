@@ -45,6 +45,8 @@ private struct FullUIPlayerUsesInPlaceFullscreenKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
+    @Entry var requestPlayerOrientation: (@MainActor (UIInterfaceOrientationMask) -> Void)?
+
     var fullUIWindowContext: FullUIWindowContext? {
         get { self[FullUIWindowContextKey.self] }
         set { self[FullUIWindowContextKey.self] = newValue }

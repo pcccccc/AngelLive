@@ -5,10 +5,36 @@ import AngelLiveDependencies
 struct RoomSwitcherPanel: View {
     let content: RoomSwitcherListContent
     @Binding var selectedSource: RoomSwitchSource
+    var isSheet = false
     let onSelect: (LiveModel) -> Void
     let onDismiss: () -> Void
 
     var body: some View {
+        if isSheet {
+            NavigationStack {
+                List {
+                    Picker("换台来源", selection: $selectedSource) {
+                        ForEach(RoomSwitchSource.allCases, id: \.self) { source in
+                            Text(source.title).tag(source)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    Section {
+                        RoomSwitcherRows(content: content, coverWidth: 84, isSheet: true, onSelect: onSelect)
+                    }
+                }
+                .id(selectedSource)
+                .listStyle(.insetGrouped)
+                .playerSheetNavigation(Text("换台"), close: onDismiss)
+            }
+        } else {
+            drawer
+        }
+    }
+
+    private var drawer: some View {
         VStack(spacing: 0) {
             RoomSwitcherHeader(title: "换台", selectedSource: $selectedSource) {
                 Button(action: onDismiss) {
@@ -76,43 +102,50 @@ struct RoomSwitcherListContent {
 struct RoomSwitcherRows: View {
     let content: RoomSwitcherListContent
     let coverWidth: CGFloat
+    var isSheet = false
     let onSelect: (LiveModel) -> Void
 
     var body: some View {
+        if isSheet {
+            rows
+        } else {
+            LazyVStack(spacing: 8) { rows }
+        }
+    }
+
+    @ViewBuilder private var rows: some View {
         let rooms = content.rooms
+        if rooms.isEmpty {
+            emptyState
+        }
 
-        LazyVStack(spacing: 8) {
-            if rooms.isEmpty {
-                emptyState
+        ForEach(rooms) { room in
+            let row = RoomSwitcherRow(
+                room: room,
+                coverWidth: coverWidth,
+                isSheet: isSheet,
+                isCurrent: room == content.currentRoom,
+                isSwitching: room.id == content.switchingRoomID,
+                failureMessage: room.id == content.failedRoomID ? content.failureMessage : nil
+            )
+            if room == content.currentRoom {
+                row
+            } else {
+                Button { onSelect(room) } label: { row }
+                    .buttonStyle(.plain)
+                    .disabled(room.id == content.switchingRoomID)
             }
+        }
 
-            ForEach(rooms) { room in
-                let row = RoomSwitcherRow(
-                    room: room,
-                    coverWidth: coverWidth,
-                    isCurrent: room == content.currentRoom,
-                    isSwitching: room.id == content.switchingRoomID,
-                    failureMessage: room.id == content.failedRoomID ? content.failureMessage : nil
-                )
-                if room == content.currentRoom {
-                    row
-                } else {
-                    Button { onSelect(room) } label: { row }
-                        .buttonStyle(.plain)
-                        .disabled(room.id == content.switchingRoomID)
+        if content.source == .category, content.canLoadMoreCategory(), let onLoadMoreCategory = content.onLoadMoreCategory {
+            ProgressView()
+                .controlSize(.small)
+                .padding(8)
+                .accessibilityLabel("正在加载更多直播间")
+                .task {
+                    guard !content.isLoadingMoreCategory else { return }
+                    _ = await onLoadMoreCategory()
                 }
-            }
-
-            if content.source == .category, content.canLoadMoreCategory(), let onLoadMoreCategory = content.onLoadMoreCategory {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(8)
-                    .accessibilityLabel("正在加载更多直播间")
-                    .task {
-                        guard !content.isLoadingMoreCategory else { return }
-                        _ = await onLoadMoreCategory()
-                    }
-            }
         }
     }
 
@@ -142,6 +175,7 @@ struct RoomSwitcherRows: View {
 private struct RoomSwitcherRow: View {
     let room: LiveModel
     let coverWidth: CGFloat
+    let isSheet: Bool
     let isCurrent: Bool
     let isSwitching: Bool
     let failureMessage: String?
@@ -150,6 +184,24 @@ private struct RoomSwitcherRow: View {
     private let selectionColor = Color(red: 131 / 255, green: 196 / 255, blue: 1)
 
     var body: some View {
+        if isSheet {
+            row.accessibilityElement(children: .combine)
+        } else {
+            row
+                .padding(8)
+                .frame(minHeight: 76)
+                .background(isCurrent ? selectionColor.opacity(0.09) : Color.primary.opacity(0.04), in: shape)
+                .overlay {
+                    if isCurrent {
+                        shape.strokeBorder(selectionColor.opacity(0.32), lineWidth: 1)
+                    }
+                }
+                .contentShape(shape)
+                .accessibilityElement(children: .combine)
+        }
+    }
+
+    private var row: some View {
         HStack(spacing: 12) {
             cover
 
@@ -164,7 +216,7 @@ private struct RoomSwitcherRow: View {
                     if isCurrent {
                         Label("正在看", systemImage: "checkmark")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(FullUIPlayerDetailChrome.accent)
+                            .foregroundStyle(isSheet ? Color.accentColor : FullUIPlayerDetailChrome.accent)
                             .fixedSize()
                     } else if isSwitching {
                         ProgressView()
@@ -191,16 +243,7 @@ private struct RoomSwitcherRow: View {
             }
             .frame(maxWidth: .infinity, minHeight: 60, alignment: .topLeading)
         }
-        .padding(8)
-        .frame(minHeight: 76)
-        .background(isCurrent ? selectionColor.opacity(0.09) : Color.primary.opacity(0.04), in: shape)
-        .overlay {
-            if isCurrent {
-                shape.strokeBorder(selectionColor.opacity(0.32), lineWidth: 1)
-            }
-        }
-        .contentShape(shape)
-        .accessibilityElement(children: .combine)
+        .contentShape(Rectangle())
     }
 
     private var cover: some View {

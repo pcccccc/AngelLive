@@ -79,6 +79,9 @@ struct VerticalLiveControllerView: View {
             }
             .clipped()
         }
+        .roomPlayerSheet(isPresented: $showStreamerInfo) {
+            StreamerInfoSheet(room: viewModel.currentRoom)
+        }
         .modifier(QualitySelectionPresentation(isShowing: $showQualityPanel))
         .environment(\.colorScheme, .dark)
         .onChange(of: showQualityPanel || showStreamerInfo || moreActionSheetPresented, initial: true) { _, presented in
@@ -105,11 +108,6 @@ struct VerticalLiveControllerView: View {
 
                 FullUIPlayerGlassGroup {
                     streamerControls(maximumWidth: maximumStreamerWidth)
-                }
-                .sheet(isPresented: $showStreamerInfo) {
-                    StreamerInfoSheet(room: viewModel.currentRoom)
-                        .presentationDetents([.medium, .large])
-                        .presentationDragIndicator(.visible)
                 }
 
                 Spacer(minLength: 0)

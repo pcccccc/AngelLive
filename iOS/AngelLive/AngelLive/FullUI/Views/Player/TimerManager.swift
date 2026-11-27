@@ -15,6 +15,8 @@ class TimerManager {
     /// 是否已设置定时器
     var isTimerActive: Bool = false
 
+    private(set) var scheduledMinutes: Int?
+
     /// 剩余秒数
     var remainingSeconds: Int = 0
 
@@ -41,6 +43,7 @@ class TimerManager {
     func startTimer(minutes: Int, onEnd: @escaping () -> Void) {
         cancelTimer()
 
+        scheduledMinutes = minutes
         remainingSeconds = minutes * 60
         isTimerActive = true
         onTimerEnd = onEnd
@@ -67,6 +70,7 @@ class TimerManager {
         let wasActive = timer != nil || isTimerActive || remainingSeconds > 0
         timer?.invalidate()
         timer = nil
+        scheduledMinutes = nil
         isTimerActive = false
         remainingSeconds = 0
         onTimerEnd = nil

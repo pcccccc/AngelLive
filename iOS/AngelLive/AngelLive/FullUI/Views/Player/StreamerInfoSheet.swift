@@ -21,35 +21,24 @@ struct StreamerInfoSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // 主播头像和基本信息
+            List {
+                Section {
                     headerSection
-
-                    // 直播间信息
-                    roomInfoSection
-
-                    // 操作按钮
-                    actionButtons
-
-                    Spacer(minLength: 20)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
                 }
-                .padding()
-            }
-            .background(.ultraThinMaterial)
-            .navigationTitle("主播信息")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
+                roomInfoSection
+                Section {
+                    Button("复制直播间链接", systemImage: "doc.on.doc", action: copyLink)
+                        .foregroundStyle(.primary)
+                    Button("在浏览器中打开", systemImage: "safari", action: openInBrowser)
+                        .foregroundStyle(.primary)
+                        .disabled(room.liveType.roomURL(roomId: room.roomId, userId: room.userId) == nil)
                 }
             }
+            .listStyle(.insetGrouped)
+            .roomTitleTranslationTask(room.roomTitle)
+            .playerSheetNavigation(Text("主播信息")) { dismiss() }
         }
     }
 
@@ -112,29 +101,16 @@ struct StreamerInfoSheet: View {
     // MARK: - Room Info Section
 
     private var roomInfoSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // 原始标题始终保留，便于核对翻译结果。
-            infoRow(icon: "tv", title: "原始标题", value: room.roomTitle.orDash)
-
-            if let translatedTitle {
-                Divider()
-                translatedTitleRow
+        Section("直播间信息") {
+            LabeledContent("原始标题", value: room.roomTitle.orDash)
+            if translatedTitle != nil {
+                LabeledContent("译文") { TranslatedRoomTitle(room.roomTitle.orDash) }
             }
-
-            Divider()
-
-            // 房间号
-            infoRow(icon: "number", title: "房间号", value: room.roomId)
-
-            if let watchedCount = room.liveWatchedCount, !watchedCount.isEmpty {
-                Divider()
-                // 观看人数
-                infoRow(icon: "eye", title: "观看人数", value: watchedCount)
+            LabeledContent("房间号", value: room.roomId)
+            if let count = room.liveWatchedCount, !count.isEmpty {
+                LabeledContent("观看人数", value: count)
             }
         }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .roomTitleTranslationTask(room.roomTitle)
     }
 
     private var translatedTitle: String? {
@@ -142,67 +118,6 @@ struct StreamerInfoSheet: View {
         let translated = translationService.displayTitle(for: room.roomTitle)
         guard translated != room.roomTitle else { return nil }
         return translated
-    }
-
-    private func infoRow(icon: String, title: String, value: String) -> some View {
-        HStack {
-            Label(title, systemImage: icon)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            Text(value)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-
-    private var translatedTitleRow: some View {
-        HStack {
-            Label("译文", systemImage: "character.book.closed")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-
-            TranslatedRoomTitle(room.roomTitle.orDash)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        VStack(spacing: 12) {
-            // 复制链接按钮
-            Button {
-                copyLink()
-            } label: {
-                Label("复制直播间链接", systemImage: "doc.on.doc")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-            .buttonStyle(.bordered)
-            .tint(.blue)
-
-            // 跳转到原平台
-            Button {
-                openInBrowser()
-            } label: {
-                Label("在浏览器中打开", systemImage: "safari")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(room.liveType.platformColor)
-            .disabled(room.liveType.roomURL(roomId: room.roomId, userId: room.userId) == nil)
-        }
     }
 
     // MARK: - Actions

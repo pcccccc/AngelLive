@@ -41,7 +41,6 @@ struct ShortDramaDetentPanel<Content: View>: View {
     let width: CGFloat
     let bottomInset: CGFloat
     let dimOpacity: Double
-    let closeAccessibilityLabel: String
     let onDismiss: () -> Void
     let onToggleDetent: () -> Void
     let onDragChanged: (DragGesture.Value) -> Void
@@ -67,7 +66,6 @@ struct ShortDramaDetentPanel<Content: View>: View {
         width: CGFloat,
         bottomInset: CGFloat,
         dimOpacity: Double,
-        closeAccessibilityLabel: String,
         onDismiss: @escaping () -> Void,
         onToggleDetent: @escaping () -> Void,
         onDragChanged: @escaping (DragGesture.Value) -> Void,
@@ -82,7 +80,6 @@ struct ShortDramaDetentPanel<Content: View>: View {
         self.bottomInset = bottomInset
         self.width = width
         self.dimOpacity = dimOpacity
-        self.closeAccessibilityLabel = closeAccessibilityLabel
         self.onDismiss = onDismiss
         self.onToggleDetent = onToggleDetent
         self.onDragChanged = onDragChanged
@@ -103,11 +100,16 @@ struct ShortDramaDetentPanel<Content: View>: View {
                 .allowsHitTesting(isPresented && visibleHeight > 0)
                 .accessibilityHidden(true)
 
-            VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                content
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 20)
+
                 Capsule()
                     .fill(.white.opacity(0.34))
                     .frame(width: 36, height: 4)
-                    .frame(width: 44, height: 44)
+                    .padding(.top, 6)
+                    .frame(width: 44, height: 44, alignment: .top)
                     .contentShape(Rectangle())
                     .shortDramaPanelDragRegion(
                         onChanged: onDragChanged,
@@ -115,25 +117,9 @@ struct ShortDramaDetentPanel<Content: View>: View {
                         onCancelled: onDragCancelled
                     )
                     .accessibilityHidden(true)
-
-                content.frame(maxHeight: .infinity, alignment: .top)
             }
             .frame(width: width, height: max(0, visibleHeight), alignment: .top)
             .padding(.bottom, visibleHeight > 0 ? bottomInset : 0)
-            .overlay(alignment: .topTrailing) {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.86))
-                        .frame(width: 44, height: 44)
-                        .background(.white.opacity(0.08), in: Circle())
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(closeAccessibilityLabel)
-                .padding(.top, 20)
-                .padding(.trailing, 16)
-            }
             .contentShape(shape)
             .background {
                 if #available(iOS 26.0, *) {

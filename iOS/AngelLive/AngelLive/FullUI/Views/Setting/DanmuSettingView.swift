@@ -10,17 +10,23 @@ import AngelLiveCore
 
 struct DanmuSettingView: View {
     @State private var danmuModel = DanmuSettingModel()
-    @State private var alphaText = ""
+    var body: some View {
+        DanmakuSettingsList(danmuModel: danmuModel)
+            .navigationTitle("弹幕")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct DanmakuSettingsList: View {
+    @Bindable var danmuModel: DanmuSettingModel
 
     var body: some View {
         List {
             // 基本设置
             Section {
                 Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
-                    .tint(AppConstants.Colors.accent)
 
                 Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
-                    .tint(AppConstants.Colors.accent)
             } header: {
                 Text("基本设置")
             }
@@ -28,16 +34,25 @@ struct DanmuSettingView: View {
             // 字体设置
             Section {
                 VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
-                    HStack {
-                        Text("字体大小")
-                            .foregroundStyle(AppConstants.Colors.primaryText)
-                        Spacer()
-                        Text("\(danmuModel.danmuFontSize)")
+                    LabeledContent("字体大小") {
+                        Text("\(danmuModel.danmuFontSize) pt")
                             .monospacedDigit()
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
+                            .foregroundStyle(.secondary)
                     }
-
-                    DanmakuFontControls(settings: danmuModel)
+                    HStack(spacing: 12) {
+                        Image(systemName: "textformat.size.smaller")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Slider(value: Binding(
+                            get: { Double(min(100, max(10, danmuModel.danmuFontSize))) },
+                            set: { danmuModel.danmuFontSize = Int($0.rounded()) }
+                        ), in: 10...100, step: 1)
+                        .accessibilityLabel("字体大小")
+                        .accessibilityValue("\(danmuModel.danmuFontSize) 点")
+                        Image(systemName: "textformat.size.larger")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .padding(.vertical, AppConstants.Spacing.sm)
             } header: {
@@ -56,7 +71,7 @@ struct DanmuSettingView: View {
                     }
 
                     Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
-                        .tint(AppConstants.Colors.link)
+                        .accessibilityLabel("透明度")
                 }
 
                 Picker("弹幕速度", selection: $danmuModel.danmuSpeedIndex) {
@@ -84,7 +99,11 @@ struct DanmuSettingView: View {
                     DanmakuKeywordBlocklistView(settings: danmuModel)
                 } label: {
                     HStack {
-                        Label("管理屏蔽关键词", systemImage: "text.badge.xmark")
+                        Image(systemName: "text.badge.xmark")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        Text("管理屏蔽关键词")
+                            .foregroundStyle(.primary)
                         Spacer()
                         Text("\(danmuModel.blockedKeywords.count)")
                             .monospacedDigit()
@@ -94,42 +113,6 @@ struct DanmuSettingView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("弹幕")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            alphaText = String(format: "%.1f", danmuModel.danmuAlpha)
-        }
-    }
-}
-
-struct DanmakuFontControls: View {
-    let settings: DanmuSettingModel
-
-    var body: some View {
-        VStack(spacing: AppConstants.Spacing.sm) {
-            Text("这是测试弹幕")
-                .font(.system(size: CGFloat(settings.danmuFontSize)))
-                .frame(maxWidth: .infinity)
-
-            HStack {
-                ForEach([-5, -1, 1, 5], id: \.self) { step in
-                    Button {
-                        settings.danmuFontSize += step
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: (step < 0 ? "minus.circle" : "plus.circle") + (abs(step) == 5 ? ".fill" : ""))
-                            Text(verbatim: step > 0 ? "+\(step)" : "\(step)")
-                                .font(.caption)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.borderless)
-                    .tint(AppConstants.Colors.link)
-                    .accessibilityLabel(step < 0 ? "字号减 \(abs(step))" : "字号加 \(step)")
-                    .disabled(!(10...100).contains(settings.danmuFontSize + step))
-                }
-            }
-        }
+        .tint(AppConstants.Colors.accent)
     }
 }

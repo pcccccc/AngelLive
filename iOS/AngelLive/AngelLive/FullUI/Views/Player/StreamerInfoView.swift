@@ -129,10 +129,8 @@ struct StreamerInfoView: View {
         }
         .padding(.horizontal, FullUIPlayerDetailChrome.inset)
         .padding(.top, FullUIPlayerDetailChrome.inset)
-        .sheet(isPresented: $showStreamerInfo) {
+        .roomPlayerSheet(isPresented: $showStreamerInfo) {
             StreamerInfoSheet(room: viewModel.currentRoom)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
         }
     }
 

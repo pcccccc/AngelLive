@@ -26,7 +26,7 @@ struct QualitySelectionPanel: View {
     var body: some View {
         Group {
             if isSheet {
-                panelContent
+                sheet
             } else {
                 panelContent
                     .frame(width: panelWidth)
@@ -65,6 +65,69 @@ struct QualitySelectionPanel: View {
         }
         .padding(20)
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var sheet: some View {
+        NavigationStack {
+            List {
+                if let title = normalizedQualityTitle {
+                    LabeledContent("当前清晰度", value: title)
+                }
+                if let lines = viewModel.currentRoomPlayArgs {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { lineIndex, line in
+                        let title = PlaybackDisplay.lineTitle(for: line, index: lineIndex)
+                        if canCollapse {
+                            Section {
+                                DisclosureGroup(title, isExpanded: expansion(for: lineIndex)) {
+                                    qualityRows(line, at: lineIndex, in: lines)
+                                }
+                            }
+                        } else {
+                            Section(title) {
+                                qualityRows(line, at: lineIndex, in: lines)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .playerSheetNavigation(Text("清晰度")) { isShowing = false }
+        }
+    }
+
+    private func expansion(for index: Int) -> Binding<Bool> {
+        Binding {
+            expandedSections.contains(index)
+        } set: { expanded in
+            if expanded {
+                expandedSections.insert(index)
+            } else {
+                expandedSections.remove(index)
+            }
+        }
+    }
+
+    private func qualityRows(_ line: LiveQualityModel, at lineIndex: Int, in lines: [LiveQualityModel]) -> some View {
+        ForEach(Array(line.qualitys.enumerated()), id: \.offset) { index, quality in
+            let selected = lineIndex == viewModel.currentCdnIndex && index == viewModel.currentQualityIndex
+            Button {
+                viewModel.changePlayUrl(cdnIndex: lineIndex, urlIndex: index, selectionOrigin: .user)
+                isShowing = false
+            } label: {
+                HStack {
+                    Text(PlaybackDisplay.qualityTitle(quality, in: lines))
+                    if let reason = RoomPlaybackResolver.lockBadgeTitle(for: quality) {
+                        RequiresLoginTag(reason)
+                    }
+                    Spacer()
+                    if selected { Image(systemName: "checkmark").foregroundStyle(AppConstants.Colors.accent) }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        }
     }
 
     // MARK: - Header
@@ -227,12 +290,12 @@ struct QualitySelectionPanel: View {
 }
 
 extension EnvironmentValues {
-    @Entry var presentsQualityAsSheet = false
+    @Entry var presentsPlayerPanelsAsSheets = false
 }
 
 struct QualitySelectionPresentation: ViewModifier {
     @Binding var isShowing: Bool
-    @Environment(\.presentsQualityAsSheet) private var asSheet
+    @Environment(\.presentsPlayerPanelsAsSheets) private var asSheet
 
     func body(content: Content) -> some View {
         content
@@ -247,11 +310,8 @@ struct QualitySelectionPresentation: ViewModifier {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: isShowing && !asSheet)
-            .sheet(isPresented: Binding(get: { asSheet && isShowing }, set: { isShowing = $0 })) {
+            .roomPlayerSheet(isPresented: Binding(get: { asSheet && isShowing }, set: { isShowing = $0 }), initialDetent: .fraction(0.58)) {
                 QualitySelectionPanel(isShowing: $isShowing, isSheet: true)
-                    .preferredColorScheme(.dark)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             }
     }
 }

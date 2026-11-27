@@ -55,6 +55,7 @@ public struct LiveSubtitleLanguageOptions: View {
     private let playback: LiveSubtitlePlaybackState
     private let activationID: UUID
     private let onSelection: () -> Void
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @State private var languages: [Locale] = []
     @State private var isLoading = true
 
@@ -73,9 +74,21 @@ public struct LiveSubtitleLanguageOptions: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(languages, id: \.identifier) { language in
-                    Button(Locale.current.localizedString(forIdentifier: language.identifier) ?? language.identifier) {
+                    let title = Locale.current.localizedString(forIdentifier: language.identifier) ?? language.identifier
+                    let select = {
                         guard playback.chooseLanguage(language.identifier, activationID: activationID) else { return }
                         onSelection()
+                    }
+                    if usesPlayerSheets {
+                        Button(action: select) {
+                            Text(title)
+                                .foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button(title, action: select)
                     }
                 }
             }
@@ -94,6 +107,7 @@ public struct LiveSubtitleLanguageOptions: View {
 public struct LiveSubtitleLanguageSelectionSheet: View {
     private let playback: LiveSubtitlePlaybackState
     private let activationID: UUID
+    @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.dismiss) private var dismiss
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
 
@@ -103,7 +117,7 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
     }
 
     public var body: some View {
-        NavigationStack {
+        let stack = NavigationStack {
             Form {
                 Section {
                     LiveSubtitleLanguageOptions(playback: playback, activationID: activationID) {
@@ -127,7 +141,7 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
             .macSettingsPage("选择主播语言", closeTitle: "取消")
             #if !os(tvOS)
             .toolbar {
-                if !usesSettingsPresentation {
+                if !usesSettingsPresentation && !usesPlayerSheets {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("取消", role: .cancel) { dismiss() }
                             .keyboardShortcut(.cancelAction)
@@ -135,12 +149,18 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
                 }
             }
             #endif
+            .playerSheetNavigationWhenPresented(Text("选择主播语言"))
         }
         #if os(macOS)
-        .frame(minWidth: 380, minHeight: 420)
+        stack.frame(minWidth: 380, minHeight: 420)
         #elseif os(iOS)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        if usesPlayerSheets {
+            stack
+        } else {
+            stack.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+        #else
+        stack
         #endif
     }
 }

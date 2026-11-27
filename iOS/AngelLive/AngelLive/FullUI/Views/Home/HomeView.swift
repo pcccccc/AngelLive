@@ -99,8 +99,8 @@ private extension HomeView {
 
     var playerPresentation: some View {
         homeNavigation
-            .roomPlayerZoomCover(navigationState) {
-                playerDestination(.zoom)
+            .roomPlayerZoomCover(navigationState) { route in
+                playerDestination(route)
             }
     }
 
@@ -135,8 +135,8 @@ private extension HomeView {
             // the scroll offset used to decide visibility.
             .toolbar(.visible, for: .navigationBar)
             .homeNavigationEdgeEffect(isScrolled: showsNavigationTitle)
-            .roomPlayerPushDestination(navigationState) {
-                playerDestination(.push)
+            .roomPlayerPushDestination(navigationState) { route in
+                playerDestination(route)
                     .toolbar(.hidden, for: .navigationBar)
             }
     }
@@ -314,19 +314,17 @@ private extension HomeView {
     }
 
     @ViewBuilder
-    func playerDestination(_ animation: RoomEntryAnimation) -> some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(
-                viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
-            )
-            .roomEntryTransition(
-                animation,
-                sourceID: navigationState.transitionSourceID ?? room.roomId,
-                namespace: roomTransitionNamespace
-            )
-            .fullUITabBarHidden()
-        }
+    func playerDestination(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(
+            viewModel: RoomInfoViewModel(room: route.room),
+            categoryRooms: route.categoryRooms
+        )
+        .roomEntryTransition(
+            route.animation,
+            sourceID: route.sourceID,
+            namespace: roomTransitionNamespace
+        )
+        .fullUITabBarHidden()
     }
 
     func openRoom(_ room: LiveModel, rooms: [LiveModel], mode: HomeRoomOpenMode, transitionSourceID: String? = nil) {
@@ -1995,25 +1993,23 @@ private struct HomeCategoryView: View {
             guard model.rooms.isEmpty else { return }
             await model.load(refresh: true)
         }
-        .roomPlayerPushDestination(navigationState) {
-            playerDestination(.push)
+        .roomPlayerPushDestination(navigationState) { route in
+            playerDestination(route)
                 .toolbar(.hidden, for: .navigationBar)
         }
-        .roomPlayerZoomCover(navigationState) {
-            playerDestination(.zoom)
+        .roomPlayerZoomCover(navigationState) { route in
+            playerDestination(route)
         }
     }
 
     @ViewBuilder
-    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(
-                viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
-            )
-            .roomEntryTransition(animation, sourceID: room.roomId, namespace: namespace)
-            .fullUITabBarHidden()
-        }
+    private func playerDestination(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(
+            viewModel: RoomInfoViewModel(room: route.room),
+            categoryRooms: route.categoryRooms
+        )
+        .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: namespace)
+        .fullUITabBarHidden()
     }
 
     private func roomList(containerWidth: CGFloat) -> some View {

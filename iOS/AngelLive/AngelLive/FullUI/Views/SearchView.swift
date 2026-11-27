@@ -59,23 +59,21 @@ struct SearchView: View {
 
     var body: some View {
         searchPage
-            .roomPlayerZoomCover(navigationState) {
-                playerDestination(.zoom)
+            .roomPlayerZoomCover(navigationState) { route in
+                playerDestination(route)
             }
     }
 
     // MARK: - 播放器导航
 
     @ViewBuilder
-    private func playerDestination(_ animation: RoomEntryAnimation) -> some View {
-        if let room = navigationState.currentRoom {
-            DetailPlayerView(
-                viewModel: RoomInfoViewModel(room: room),
-                categoryRooms: navigationState.categoryRooms
-            )
-                .roomEntryTransition(animation, sourceID: room.roomId, namespace: roomTransitionNamespace)
-                .fullUITabBarHidden()
-        }
+    private func playerDestination(_ route: RoomPlayerRoute) -> some View {
+        DetailPlayerView(
+            viewModel: RoomInfoViewModel(room: route.room),
+            categoryRooms: route.categoryRooms
+        )
+            .roomEntryTransition(route.animation, sourceID: route.sourceID, namespace: roomTransitionNamespace)
+            .fullUITabBarHidden()
     }
 
     private var searchTitle: String {
@@ -225,8 +223,8 @@ struct SearchView: View {
             }
         }
 
-        content.roomPlayerPushDestination(navigationState) {
-            playerDestination(.push)
+        content.roomPlayerPushDestination(navigationState) { route in
+            playerDestination(route)
         }
     }
 

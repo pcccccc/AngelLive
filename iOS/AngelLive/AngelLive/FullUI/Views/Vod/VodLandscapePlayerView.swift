@@ -11,9 +11,11 @@ struct VodLandscapePlayerView: View {
     let sourceID: String?
 
     let requiresLandscape: Bool
+    var isRoomDestination = false
     let onExit: () -> Void
     @Environment(\.scenePhase) var scenePhase
     @Environment(\.fullUIWindowContext) var windowContext
+    @Environment(\.fullUIRoomPlayerPushed) private var isPushed
     @Environment(\.layoutDirection) var layoutDirection
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) var voiceOverEnabled
@@ -77,7 +79,7 @@ struct VodLandscapePlayerView: View {
                 geometry: geometry, window: windowContext?.window, direction: layoutDirection
             )
             let canShowPlayer = !requiresLandscape || geometry.size.width > geometry.size.height
-            ZStack {
+            let page = ZStack {
                 Color.black
                 surface(bottomInset: layout.insets.bottom)
                     .padding(.trailing, drawer == nil ? 0 : drawerWidth(in: geometry) + geometry.safeAreaInsets.trailing + 12)
@@ -91,7 +93,29 @@ struct VodLandscapePlayerView: View {
             .ignoresSafeArea(.container)
             .defersSystemGestures(on: isLocked && layout.defersSystemGestures ? .all : [])
             .modifier(FullUIPlayerStatusBar(isLandscapeFullscreen: true))
+
+            if isRoomDestination {
+                page
+                    .modifier(PlayerPagePan(route: roomBackSwipe))
+                    .modifier(PlayerBackSwipe(
+                        enabled: !isLocked && drawer == nil && seek == nil && !boosted && !isLeaving && scenePhase == .active,
+                        width: geometry.size.width + geometry.safeAreaInsets.leading + geometry.safeAreaInsets.trailing,
+                        exitsFullscreen: false, revealsRoomList: !isPushed, onReturn: exit
+                    ))
+            } else {
+                page
+            }
         }
+    }
+
+    private func roomBackSwipe(
+        _ direction: PlayerPagePan.Direction, _ start: CGPoint, _ window: UIWindow, _ back: PlayerPanAction?
+    ) -> PlayerPanAction? {
+        guard direction == .back else { return nil }
+        // A seekable movie owns horizontal drags on the picture. Its leading edge stays available for Back.
+        let leadingDistance = layoutDirection == .leftToRight
+            ? start.x - window.bounds.minX : window.bounds.maxX - start.x
+        return !canSeek || leadingDistance <= 44 ? back : nil
     }
 
     private var playbackLifecycle: some View {
@@ -501,6 +525,7 @@ struct VodDirectPlayerView: View {
         VodLandscapePlayerView(
             model: model, sourceID: nil,
             requiresLandscape: isPhone && orientation == .landscape && !geometryUpdateFailed,
+            isRoomDestination: true,
             onExit: {
                 restorePortrait()
                 dismiss()
