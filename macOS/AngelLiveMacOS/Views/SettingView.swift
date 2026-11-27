@@ -138,11 +138,11 @@ struct SettingView: View {
         }
         .sheet(isPresented: $showTranslationSetting) {
             NavigationStack {
-                TranslationSettingView()
+                TranslationSettingView(usesFullUI: pluginAvailability.hasAvailablePlugins)
             }
             .macSettingsSheetPresentation()
             .labelStyle(MacTranslationSettingLabelStyle())
-            .frame(minWidth: 600, minHeight: 480)
+            .frame(minWidth: 600, minHeight: 480, idealHeight: pluginAvailability.hasAvailablePlugins ? 580 : nil)
         }
         .sheet(isPresented: $showPlatformAppearance) {
             if pluginAvailability.hasAvailablePlugins, !isVodDemo {
@@ -235,6 +235,7 @@ struct SettingView: View {
                 .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 560)
             }
         }
+        .environment(\.showsMacSettingsHeaderDivider, pluginAvailability.hasAvailablePlugins)
         .task {
             guard !isVodDemo else { return }
             await refreshCacheSize()
@@ -331,19 +332,8 @@ struct SettingView: View {
     }
 
     private var vodAutoplayRow: some View {
-        PanelNavigationRow(
-            title: "剧集自动连播",
-            subtitle: "进入片尾时提示并自动播放下一集",
-            showsChevron: false
-        ) {
-            Image(systemName: "play.square.stack.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.blue.gradient)
-        } trailing: {
-            Toggle("剧集自动连播", isOn: $generalSettingModel.vodAutoplayEnabled)
-                .labelsHidden()
-                .toggleStyle(.switch)
-        }
+        MacSettingsSwitchRow(title: "剧集自动连播", subtitle: "进入片尾时提示并自动播放下一集",
+                               symbol: "play.square.stack.fill", color: .blue, isOn: $generalSettingModel.vodAutoplayEnabled)
     }
 
     private func refreshCacheSize() async {
@@ -418,36 +408,14 @@ struct SettingView: View {
     }
 
     private var homeRecommendationRow: some View {
-        PanelNavigationRow(
-            title: "显示推荐首页",
-            subtitle: "关闭后隐藏首页，默认进入收藏。",
-            showsChevron: false
-        ) {
-            Image(systemName: "house.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.blue.gradient)
-        } trailing: {
-            Toggle("显示推荐首页", isOn: $showHomeRecommendation)
-                .labelsHidden()
-                .toggleStyle(.switch)
-        }
+        MacSettingsSwitchRow(title: "显示推荐首页", subtitle: "关闭后隐藏首页，默认进入收藏。",
+                               symbol: "house.fill", color: .blue, isOn: $showHomeRecommendation)
     }
 
     private var singlePagePlaybackRow: some View {
-        PanelNavigationRow(
-            title: "单页模式",
-            subtitle: "在主窗口内播放，关闭后返回浏览页面。",
-            showsChevron: false
-        ) {
-            Image(systemName: "rectangle.on.rectangle")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.blue.gradient)
-        } trailing: {
-            Toggle("单页模式", isOn: $singlePagePlayback)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .help("关闭时使用独立播放窗口；主窗口全屏时仍在原窗口播放。")
-        }
+        MacSettingsSwitchRow(title: "单页模式", subtitle: "在主窗口内播放，关闭后返回浏览页面。",
+                               symbol: "rectangle.on.rectangle", color: .blue, isOn: $singlePagePlayback)
+            .help("关闭时使用独立播放窗口；主窗口全屏时仍在原窗口播放。")
     }
 
     private var defaultPlaybackQualityRow: some View {
@@ -594,6 +562,7 @@ struct SettingView: View {
 // MARK: - Room title translation
 
 struct TranslationSettingView: View {
+    var usesFullUI = false
     private struct TargetLanguage: Identifiable {
         let code: String
         let name: String
@@ -682,7 +651,7 @@ struct TranslationSettingView: View {
                 Text("自动识别标题和弹幕的语言，翻译不成功时显示原文。")
             }
 
-            LiveSubtitleSettingsSection {
+            LiveSubtitleSettingsSection(usesFullUI: usesFullUI) {
                 MacTranslationSettingLabel(title: "实时字幕", systemImage: "waveform")
             } sourceLanguageLabel: {
                 MacTranslationSettingLabel(title: "系统语音包", systemImage: "globe")
@@ -706,6 +675,10 @@ struct TranslationSettingView: View {
 
             if settings.engine == .apple {
                 Section {
+                    if usesFullUI && nativeLanguagePairs.isEmpty {
+                        Text(settings.availabilityError?.localizedDescription ?? "当前目标语言没有可用语言包")
+                            .foregroundStyle(.secondary)
+                    }
                     ForEach(nativeLanguagePairs) { pair in
                         HStack {
                             MacTranslationSettingLabel(title: pair.displayName, systemImage: "globe")
@@ -732,7 +705,7 @@ struct TranslationSettingView: View {
                                     }
                                     .accessibilityElement(children: .combine)
                                 case .notDownloaded:
-                                    Button("下载") {
+                                    SubtitleDownloadButton(usesFullUI: usesFullUI) {
                                         prepareNativeLanguages(pair)
                                     }
                                     .accessibilityLabel("下载 \(pair.displayName)")
@@ -854,6 +827,7 @@ struct TranslationSettingView: View {
             }
         }
         .formStyle(.grouped)
+        .modifier(MacFullUIFormControls(usesFullUI: usesFullUI))
         .navigationTitle("翻译与字幕")
         .macSettingsPage("翻译与字幕")
         .onAppear {
@@ -1304,18 +1278,7 @@ private struct MacDanmakuToggleRow: View {
 
     var body: some View {
         if usesSettingsLayout {
-            PanelNavigationRow(title: title, subtitle: subtitle, showsChevron: false) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(tint.gradient)
-            } trailing: {
-                Toggle(title, isOn: $isOn)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(AppConstants.Colors.accent)
-                    .accessibilityLabel(title)
-                    .accessibilityHint(subtitle)
-            }
+            MacSettingsSwitchRow(title: title, subtitle: subtitle, symbol: systemImage, color: tint, isOn: $isOn)
         } else {
             Toggle(isOn: $isOn) {
                 DanmakuSettingDescriptor(

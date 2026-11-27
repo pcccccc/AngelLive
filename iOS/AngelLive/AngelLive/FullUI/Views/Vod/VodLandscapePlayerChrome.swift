@@ -290,11 +290,17 @@ extension VodLandscapePlayerView {
             .allowsHitTesting(false)
     }
 
-    func drawerOverlay(_ kind: VodPlayerDrawer.Kind, geometry: GeometryProxy) -> some View {
+    func drawerWidth(in geometry: GeometryProxy) -> CGFloat {
         let safeArea = geometry.safeAreaInsets
         let fullWidth = geometry.size.width + safeArea.leading + safeArea.trailing
         let minimumWidth = min(300, fullWidth * 0.88)
         let width = min(360, max(minimumWidth, fullWidth * 0.37))
+        return min(width, max(0, geometry.size.width - 24))
+    }
+
+    func drawerOverlay(_ kind: VodPlayerDrawer.Kind, geometry: GeometryProxy) -> some View {
+        let safeArea = geometry.safeAreaInsets
+        let width = drawerWidth(in: geometry)
         return ZStack(alignment: .trailing) {
             Color.clear
                 .contentShape(.rect)
@@ -310,7 +316,7 @@ extension VodLandscapePlayerView {
                 },
                 onTracks: { openDrawer(.tracks(.subtitles)) }, onClose: closeDrawer
             )
-            .frame(width: min(width, max(0, geometry.size.width - 24)))
+            .frame(width: width)
             .modifier(RoomSwitcherDrawerSwipe(width: width, trailingSafeArea: 0, onDismiss: closeDrawer))
             .padding(.top, safeArea.top + 12)
             .padding(.bottom, safeArea.bottom + 12)

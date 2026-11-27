@@ -113,7 +113,9 @@ struct MacVodPlayerDrawer: View {
     private var settings: some View {
         VStack(alignment: .leading, spacing: 16) {
             if model.detail?.kind == .series {
-                Toggle("剧集自动连播", isOn: $autoplayEnabled).toggleStyle(.switch)
+                Toggle("剧集自动连播", isOn: $autoplayEnabled)
+                    .toggleStyle(.switch)
+                    .tint(AppConstants.Colors.accent)
             }
             Picker("画面比例", selection: $pictureMode) {
                 ForEach(MacVodPictureMode.allCases, id: \.self) { mode in

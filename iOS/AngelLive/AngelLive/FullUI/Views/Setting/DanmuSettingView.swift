@@ -33,62 +33,11 @@ struct DanmuSettingView: View {
                             .foregroundStyle(AppConstants.Colors.primaryText)
                         Spacer()
                         Text("\(danmuModel.danmuFontSize)")
+                            .monospacedDigit()
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
 
-                    HStack(spacing: AppConstants.Spacing.md) {
-                        Button {
-                            if danmuModel.danmuFontSize > 15 {
-                                danmuModel.danmuFontSize -= 5
-                            }
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppConstants.Colors.error.gradient)
-                        }
-                        .buttonStyle(.borderless)
-
-                        Button {
-                            if danmuModel.danmuFontSize > 10 {
-                                danmuModel.danmuFontSize -= 1
-                            }
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .font(.title3)
-                                .foregroundStyle(AppConstants.Colors.warning.gradient)
-                        }
-                        .buttonStyle(.borderless)
-
-                        Spacer()
-
-                        Text("这是测试弹幕")
-                            .font(.system(size: CGFloat(danmuModel.danmuFontSize)))
-                            .foregroundStyle(AppConstants.Colors.primaryText)
-
-                        Spacer()
-
-                        Button {
-                            if danmuModel.danmuFontSize < 100 {
-                                danmuModel.danmuFontSize += 1
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle")
-                                .font(.title3)
-                                .foregroundStyle(AppConstants.Colors.success.gradient)
-                        }
-                        .buttonStyle(.borderless)
-
-                        Button {
-                            if danmuModel.danmuFontSize < 95 {
-                                danmuModel.danmuFontSize += 5
-                            }
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(AppConstants.Colors.link.gradient)
-                        }
-                        .buttonStyle(.borderless)
-                    }
+                    DanmakuFontControls(settings: danmuModel)
                 }
                 .padding(.vertical, AppConstants.Spacing.sm)
             } header: {
@@ -102,6 +51,7 @@ struct DanmuSettingView: View {
                         Text("透明度")
                         Spacer()
                         Text(String(format: "%.1f", danmuModel.danmuAlpha))
+                            .monospacedDigit()
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
 
@@ -137,6 +87,7 @@ struct DanmuSettingView: View {
                         Label("管理屏蔽关键词", systemImage: "text.badge.xmark")
                         Spacer()
                         Text("\(danmuModel.blockedKeywords.count)")
+                            .monospacedDigit()
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
                 }
@@ -147,6 +98,38 @@ struct DanmuSettingView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             alphaText = String(format: "%.1f", danmuModel.danmuAlpha)
+        }
+    }
+}
+
+struct DanmakuFontControls: View {
+    let settings: DanmuSettingModel
+
+    var body: some View {
+        VStack(spacing: AppConstants.Spacing.sm) {
+            Text("这是测试弹幕")
+                .font(.system(size: CGFloat(settings.danmuFontSize)))
+                .frame(maxWidth: .infinity)
+
+            HStack {
+                ForEach([-5, -1, 1, 5], id: \.self) { step in
+                    Button {
+                        settings.danmuFontSize += step
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: (step < 0 ? "minus.circle" : "plus.circle") + (abs(step) == 5 ? ".fill" : ""))
+                            Text(verbatim: step > 0 ? "+\(step)" : "\(step)")
+                                .font(.caption)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(AppConstants.Colors.link)
+                    .accessibilityLabel(step < 0 ? "字号减 \(abs(step))" : "字号加 \(step)")
+                    .disabled(!(10...100).contains(settings.danmuFontSize + step))
+                }
+            }
         }
     }
 }

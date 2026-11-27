@@ -4,6 +4,7 @@ extension EnvironmentValues {
     /// Opted into by the macOS FullUI sheet host, never by a shared view itself.
     @Entry public var usesMacSettingsPresentation = false
     #if os(macOS)
+    @Entry public var showsMacSettingsHeaderDivider = false
     @Entry var macSettingsCloseSheet: (@MainActor () -> Void)? = nil
     #endif
 }
@@ -28,6 +29,7 @@ private struct MacSettingsSheetPresentation: ViewModifier {
 
 private struct MacSettingsPageModifier<Actions: View>: ViewModifier {
     @Environment(\.usesMacSettingsPresentation) private var enabled
+    @Environment(\.showsMacSettingsHeaderDivider) private var showsHeaderDivider
     @Environment(\.macSettingsCloseSheet) private var closeSheet
     @Environment(\.dismiss) private var dismiss
     let title: String
@@ -49,6 +51,9 @@ private struct MacSettingsPageModifier<Actions: View>: ViewModifier {
                     .padding(.horizontal, 30)
                     .padding(.top, 20)
                     .padding(.bottom, 16)
+                    .overlay(alignment: .bottom) {
+                        if showsHeaderDivider { Divider().accessibilityHidden(true) }
+                    }
 
                 content
                     .scrollContentBackground(.hidden)

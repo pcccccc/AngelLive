@@ -434,20 +434,12 @@ struct VideoControllerView: View {
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
 
-                // 清晰度选择面板（右侧滑入）
-                if showQualityPanel {
-                    Color.black.opacity(0.001)
-                        .onTapGesture { showQualityPanel = false }
-                    QualitySelectionPanel(isShowing: $showQualityPanel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
             }
             .ksIsFocused($model.focusableView, equals: .controller)
             .font(.body)
             .buttonStyle(.borderless)
             .animation(.easeInOut(duration: 0.3), value: model.showVideoSetting)
-            .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
+            .modifier(QualitySelectionPresentation(isShowing: $showQualityPanel))
             .sheet(isPresented: $showDanmakuSettings) {
                 DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
                     .presentationDetents([.medium, .large])

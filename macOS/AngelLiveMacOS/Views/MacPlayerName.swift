@@ -15,11 +15,12 @@ struct MacPlayerName: View {
 
     var body: some View {
         let text = BracketSafeName(name)
+        let intrinsicWidth = ceil((text.fullTitle as NSString).size(withAttributes: [.font: font]).width)
         Text(verbatim: text.fullTitle)
             .font(Font(font))
             .lineLimit(1)
             .hidden()
-            .frame(maxWidth: maximumWidth)
+            .frame(maxWidth: maximumWidth.map { min($0, intrinsicWidth) })
             .overlay(alignment: .leading) {
                 GeometryReader { proxy in
                     let title = text.title { value in

@@ -86,7 +86,7 @@
 | Button Hierarchy（按钮层级） | 一组按钮里只有一个主按钮（`.borderedProminent`），其余用 `.bordered` 或纯文字 |
 | Tabs vs. Segmented（标签栏还是分段控件） | 切换整个页面用 TabView；同一页面内切换视图用 `Picker(.segmented)` |
 | Modal vs. Drawer（模态还是抽屉） | iOS 用 sheet 配合 `presentationDetents`；macOS 用 sheet 或 inspector；tvOS 用 `fullScreenCover` 或 sheet，沿用同类页面 |
-| Switch vs. Checkbox（开关还是复选框） | iOS/tvOS 设置项用 `Toggle`；macOS 表单内用复选框样式 |
+| Switch vs. Checkbox（开关还是复选框） | 即时生效的卡片行与弹层设置项三端统一用 `Toggle`（macOS 用 `.switch` 并配珊瑚橙强调色）；多项勾选集合才用 `.checkbox` |
 | Popover vs. Tooltip（弹出框还是提示） | 可交互内容用 `.popover`；macOS 纯说明用 `.help()` |
 | Progressive Disclosure（渐进披露） | 低频能力放进更多菜单或二级页（见 `PRODUCT.md`「高频直达」） |
 | Floating Bar（悬浮控制条） | 播放器控制层；自动隐藏后不能拦截底层手势 |

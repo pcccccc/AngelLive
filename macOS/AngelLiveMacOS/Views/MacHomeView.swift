@@ -457,12 +457,13 @@ private struct MacHomeHeroCarousel: View {
 
             if entries.count > 1 {
                 HStack {
-                    carouselButton(systemImage: "chevron.left", action: showPrevious)
+                    carouselButton("上一张推荐", systemImage: "chevron.left", action: showPrevious)
                     Spacer()
-                    carouselButton(systemImage: "chevron.right", action: showNext)
+                    carouselButton("下一张推荐", systemImage: "chevron.right", action: showNext)
                 }
-                .frame(width: width >= 850 ? width + 80 : width)
-                .padding(.horizontal, width >= 850 ? 0 : 14)
+                .padding(.horizontal, 14)
+                .frame(width: indicatorRegionWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 MacHomeHeroPageIndicator(
                     entries: entries,
@@ -513,14 +514,18 @@ private struct MacHomeHeroCarousel: View {
         showNext()
     }
 
-    private func carouselButton(systemImage: String, action: @escaping () -> Void) -> some View {
+    private func carouselButton(_ title: LocalizedStringKey, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.title3.bold())
                 .frame(width: 34, height: 34)
                 .background(.ultraThinMaterial, in: Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(title))
+        .help(Text(title))
     }
 
     @ViewBuilder

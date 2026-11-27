@@ -247,8 +247,9 @@ struct MacPluginAddSourceView: View {
                 Spacer()
                 Button("取消") { dismiss() }.disabled(isAdding)
                 Button("添加", action: add).buttonStyle(.borderedProminent)
-                    .disabled(isAdding || manager.isManagementBusy)
+                    .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isAdding || manager.isManagementBusy)
             }
+            .controlSize(.large)
         }
         .padding(16)
         .onAppear { inputFocused = true }

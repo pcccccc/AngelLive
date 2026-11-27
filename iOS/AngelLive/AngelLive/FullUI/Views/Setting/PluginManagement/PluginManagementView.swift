@@ -119,7 +119,6 @@ struct PluginManagementView: View {
         .tint(PluginManagementLayout.primaryAction)
         .environment(feedback)
         .environment(\.pluginConsentButtonID, consentButtonID)
-        .contentMargins(.horizontal, PluginManagementLayout.pageInset, for: .scrollContent)
         .contentMargins(.top, PluginManagementLayout.itemSpacing, for: .scrollContent)
         .contentMargins(.bottom, max(44, undoTextLineHeight * 2) + 8 + PluginManagementLayout.itemSpacing,
                         for: .scrollContent)

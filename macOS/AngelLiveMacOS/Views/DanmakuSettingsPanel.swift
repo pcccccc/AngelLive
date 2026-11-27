@@ -10,7 +10,16 @@ import AngelLiveCore
 
 struct DanmakuSettingsPanel: View {
     @Bindable var viewModel: RoomInfoViewModel
+    var usesFullUI = false
     @Environment(\.dismiss) private var dismiss
+
+    @ViewBuilder private func numericValue(_ text: Text) -> some View {
+        if usesFullUI {
+            text.monospacedDigit()
+        } else {
+            text
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,10 +29,16 @@ struct DanmakuSettingsPanel: View {
                 Text("弹幕设置")
                     .font(.headline)
 
-                // 关闭按钮在左边
                 HStack {
-                    PanelCloseButton { dismiss() }
-                    Spacer()
+                    if usesFullUI {
+                        Spacer()
+                        PanelCloseButton(expandsHitTarget: true) { dismiss() }
+                            .accessibilityLabel("关闭")
+                            .help("关闭")
+                    } else {
+                        PanelCloseButton { dismiss() }
+                        Spacer()
+                    }
                 }
             }
             .padding()
@@ -42,7 +57,7 @@ struct DanmakuSettingsPanel: View {
                         HStack {
                             Text("字号")
                             Spacer()
-                            Text("\(viewModel.danmuSettings.danmuFontSize) pt")
+                            numericValue(Text("\(viewModel.danmuSettings.danmuFontSize) pt"))
                                 .foregroundColor(.secondary)
                         }
                         Slider(value: Binding(
@@ -61,7 +76,7 @@ struct DanmakuSettingsPanel: View {
                         HStack {
                             Text("透明度")
                             Spacer()
-                            Text(String(format: "%.1f", viewModel.danmuSettings.danmuAlpha))
+                            numericValue(Text(String(format: "%.1f", viewModel.danmuSettings.danmuAlpha)))
                                 .foregroundColor(.secondary)
                         }
                         Slider(value: $viewModel.danmuSettings.danmuAlpha, in: 0.1...1.0, step: 0.1)
@@ -99,6 +114,7 @@ struct DanmakuSettingsPanel: View {
                 }
             }
             .formStyle(.grouped)
+            .modifier(MacFullUIFormControls(usesFullUI: usesFullUI))
         }
         .frame(minWidth: 380, minHeight: 420)
     }

@@ -48,75 +48,10 @@ struct DanmakuSettingsSheet: View {
                                 Spacer()
                                 Text("\(viewModel.danmuSettings.danmuFontSize)")
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
-                                    .font(.system(.body, design: .monospaced))
+                                    .monospacedDigit()
                             }
 
-                            // 字体大小调节按钮
-                            HStack(spacing: AppConstants.Spacing.md) {
-                                Button {
-                                    if viewModel.danmuSettings.danmuFontSize > 15 {
-                                        viewModel.danmuSettings.danmuFontSize -= 5
-                                    }
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Image(systemName: "minus.circle.fill")
-                                            .font(.title2)
-                                        Text("-5")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundStyle(AppConstants.Colors.link)
-                                }
-
-                                Button {
-                                    if viewModel.danmuSettings.danmuFontSize > 10 {
-                                        viewModel.danmuSettings.danmuFontSize -= 1
-                                    }
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Image(systemName: "minus.circle")
-                                            .font(.title3)
-                                        Text("-1")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundStyle(AppConstants.Colors.link)
-                                }
-
-                                Spacer()
-
-                                Text("这是测试弹幕")
-                                    .font(.system(size: CGFloat(viewModel.danmuSettings.danmuFontSize)))
-                                    .foregroundStyle(AppConstants.Colors.primaryText)
-
-                                Spacer()
-
-                                Button {
-                                    if viewModel.danmuSettings.danmuFontSize < 100 {
-                                        viewModel.danmuSettings.danmuFontSize += 1
-                                    }
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Image(systemName: "plus.circle")
-                                            .font(.title3)
-                                        Text("+1")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundStyle(AppConstants.Colors.link)
-                                }
-
-                                Button {
-                                    if viewModel.danmuSettings.danmuFontSize < 95 {
-                                        viewModel.danmuSettings.danmuFontSize += 5
-                                    }
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        Image(systemName: "plus.circle.fill")
-                                            .font(.title2)
-                                        Text("+5")
-                                            .font(.caption2)
-                                    }
-                                    .foregroundStyle(AppConstants.Colors.link)
-                                }
-                            }
+                            DanmakuFontControls(settings: viewModel.danmuSettings)
                         }
                         .padding()
                     }
@@ -133,7 +68,7 @@ struct DanmakuSettingsSheet: View {
                                         Spacer()
                                         Text(String(format: "%.1f", viewModel.danmuSettings.danmuAlpha))
                                             .foregroundStyle(AppConstants.Colors.secondaryText)
-                                            .font(.system(.body, design: .monospaced))
+                                            .monospacedDigit()
                                     }
 
                                     Slider(value: $viewModel.danmuSettings.danmuAlpha, in: 0.1...1.0, step: 0.1)
@@ -189,6 +124,7 @@ struct DanmakuSettingsSheet: View {
                     settingSection(title: "关键词屏蔽") {
                         NavigationLink {
                             DanmakuKeywordBlocklistView(settings: viewModel.danmuSettings)
+                                .toolbar(.visible, for: .navigationBar)
                         } label: {
                             HStack(spacing: AppConstants.Spacing.md) {
                                 Image(systemName: "text.badge.xmark")
@@ -213,20 +149,14 @@ struct DanmakuSettingsSheet: View {
                 }
                 .padding()
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                FullUISheetHeader(title: Text("弹幕设置")) { isPresented = false }
+                    .background(.regularMaterial)
+            }
             .background(.ultraThinMaterial)
             .navigationTitle("弹幕设置")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 

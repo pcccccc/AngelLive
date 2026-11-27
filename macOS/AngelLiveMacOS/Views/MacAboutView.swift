@@ -102,6 +102,7 @@ private struct MacAboutQRCodeCard: View {
                 .frame(width: 140, height: 140)
                 .background(Color.white)
                 .clipShape(.rect(cornerRadius: 8))
+                .accessibilityLabel("\(Text(title)) 二维码")
 
             Text(title)
                 .font(.subheadline.weight(.semibold))

@@ -65,6 +65,7 @@ struct IOSPlatformAppearancePage: View {
                 Button("恢复全部默认", role: .destructive) { confirmsReset = true }
             }
         }
+        .tint(AppConstants.Colors.accent)
         .disabled(!store.isReady)
         .listStyle(.insetGrouped)
         .navigationTitle("配置页外观")
@@ -207,6 +208,7 @@ struct IOSPlatformAppearanceSyncRows: View {
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
         }
+        .tint(AppConstants.Colors.accent)
         .disabled(!masterEnabled)
         .accessibilityIdentifier("platform.appearance.sync.toggle")
         if usesSyncCardLayout { Divider() }

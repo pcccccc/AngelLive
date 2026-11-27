@@ -76,18 +76,10 @@ struct VerticalLiveControllerView: View {
                 FullUIPlayerDanmakuStatus(status: viewModel.danmakuConnectionStatus, controlsVisible: visible)
                     .animation(FullUIPlayerChrome.visibilityAnimation(visible, reduceMotion: reduceMotion), value: visible)
 
-                // 面板独立于清屏动画；展开时不接收底层清屏手势。
-                if showQualityPanel {
-                    Color.black.opacity(0.001)
-                        .onTapGesture { showQualityPanel = false }
-                    QualitySelectionPanel(isShowing: $showQualityPanel)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
             }
             .clipped()
         }
-        .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
+        .modifier(QualitySelectionPresentation(isShowing: $showQualityPanel))
         .environment(\.colorScheme, .dark)
         .onChange(of: showQualityPanel || showStreamerInfo || moreActionSheetPresented, initial: true) { _, presented in
             controlPopupPresented.wrappedValue = presented

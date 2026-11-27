@@ -528,17 +528,17 @@ struct MacFullUIRoomControls: View {
     private func panelContent(_ panel: Panel) -> some View {
         switch panel {
         case .danmaku:
-            DanmakuSettingsPanel(viewModel: viewModel)
+            DanmakuSettingsPanel(viewModel: viewModel, usesFullUI: true)
         case .subtitles:
             NavigationStack {
-                TranslationSettingView()
+                TranslationSettingView(usesFullUI: true)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("关闭") { self.panel = nil }
                         }
                     }
             }
-            .frame(minWidth: 600, minHeight: 480)
+            .frame(minWidth: 600, minHeight: 480, idealHeight: 580)
         case .languages:
             LiveSubtitleLanguageSelectionSheet(playback: viewModel.subtitlePlayback, activationID: subtitleActivationID)
         case .airPlay:

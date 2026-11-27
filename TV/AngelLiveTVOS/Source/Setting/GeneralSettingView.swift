@@ -16,6 +16,8 @@ struct GeneralSettingView: View {
     @StateObject var settingStore = SettingStore()
     @State private var appIconSettings = TVAppIconSettingsModel()
     @AppStorage("SimpleLive.Setting.ShowHomeRecommendation") private var showHomeRecommendation = true
+    // Match the leading content inset of the native tvOS buttons in this column.
+    private let pickerTitleInset: CGFloat = 30
 
     private var isVodDemo: Bool {
         #if DEBUG
@@ -82,23 +84,42 @@ struct GeneralSettingView: View {
                 .frame(height: 45)
                 .accessibilityHint("进入片尾时提示并自动播放下一集。")
 
-                Picker("默认画质", selection: $playerSettingModel.defaultPlaybackQuality) {
-                    ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
-                        Text(quality.title)
-                            .tag(quality)
+                HStack {
+                    Text("默认画质")
+                        .padding(.leading, pickerTitleInset)
+                    Spacer()
+                    Picker("默认画质", selection: $playerSettingModel.defaultPlaybackQuality) {
+                        ForEach(DefaultPlaybackQuality.allCases, id: \.self) { quality in
+                            Text(quality.title)
+                                .tag(quality)
+                        }
                     }
+                    .labelsHidden()
                 }
                 .frame(height: 45)
                 .accessibilityHint("进入直播间时按可用画质尽量匹配；网络较慢可选省流。")
             }
 
-            Toggle(isOn: $generalSettingModel.generalDisableMaterialBackground) {
-                Text("禁用渐变背景")
-                    .foregroundColor(.primary)
-            }
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                Toggle(isOn: $generalSettingModel.generalDisableMaterialBackground) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("禁用渐变背景")
+                            .foregroundColor(.primary)
+                        Text("如果您的页面部分背景不正常（如页面背景透明），请尝试打开这个选项。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(minHeight: 72)
+            } else {
+                Toggle(isOn: $generalSettingModel.generalDisableMaterialBackground) {
+                    Text("禁用渐变背景")
+                        .foregroundColor(.primary)
+                }
                 .frame(height: 45)
+            }
 
-            Picker(
+            let iconPicker = Picker(
                 selection: Binding(
                     get: { appIconSettings.selection },
                     set: { choice in
@@ -133,10 +154,20 @@ struct GeneralSettingView: View {
             .frame(height: 45)
             .disabled(isVodDemo || appIconSettings.applyingChoice != nil)
 
-            Text("如果您的页面部分背景不正常（如页面背景透明）,请尝试打开这个选项。")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .frame(height: 45)
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                HStack {
+                    Text("应用图标")
+                        .padding(.leading, pickerTitleInset)
+                    Spacer()
+                    iconPicker.labelsHidden()
+                }
+            } else {
+                iconPicker
+                Text("如果您的页面部分背景不正常（如页面背景透明）,请尝试打开这个选项。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(height: 45)
+            }
 
                 Toggle(isOn: $generalSettingModel.developerModeEnabled) {
                     VStack(alignment: .leading, spacing: 8) {
@@ -149,6 +180,7 @@ struct GeneralSettingView: View {
                 }
                 .frame(minHeight: 72)
             }
+            .modifier(GeneralTogglePresentation(usesFullUI: appViewModel.pluginAvailability.hasAvailablePlugins))
             .padding(.vertical, 50)
         }
         // FullUI 的原生聚焦胶囊会超出滚动区域，保留两端放大后的完整轮廓。
@@ -158,5 +190,32 @@ struct GeneralSettingView: View {
         } message: {
             Text(appIconSettings.errorMessage)
         }
+    }
+}
+
+private struct GeneralTogglePresentation: ViewModifier {
+    let usesFullUI: Bool
+
+    func body(content: Content) -> some View {
+        if usesFullUI {
+            content.toggleStyle(GeneralSettingsToggleStyle())
+        } else {
+            content
+        }
+    }
+}
+
+private struct GeneralSettingsToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack {
+                configuration.label
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(configuration.isOn ? "已开启" : "已关闭")
+                    .fixedSize()
+            }
+        }
+        .accessibilityAddTraits(.isToggle)
     }
 }

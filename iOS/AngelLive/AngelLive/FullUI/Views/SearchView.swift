@@ -42,7 +42,8 @@ struct SearchView: View {
     @State private var selectedSearchPluginID: String?
     @State private var searchPlatformOptions: [LiveParseJSPlatform] = []
     @State private var authenticationRecoveryRequest: AuthenticationRecoveryRequest?
-    @State private var isSearchPresented: Bool
+    @FocusState private var platformFieldFocused: Bool
+    private var horizontalPadding: CGFloat { horizontalSizeClass == .regular ? 20 : 16 }
     @State private var platformSearchKind: RoomSearchKind = .keyword
 
     private let platform: Platformdescription?
@@ -54,7 +55,6 @@ struct SearchView: View {
 
     init(platform: Platformdescription? = nil) {
         self.platform = platform
-        _isSearchPresented = State(initialValue: platform != nil)
     }
 
     var body: some View {
@@ -135,6 +135,7 @@ struct SearchView: View {
     private var searchPage: some View {
         if platform != nil {
             searchContent
+                .toolbar(.visible, for: .navigationBar)
         } else {
             NavigationStack {
                 searchContent
@@ -147,15 +148,42 @@ struct SearchView: View {
     private var searchContent: some View {
         @Bindable var viewModel = viewModel
         let content = Group {
-            if platform == nil || activePlatformSearchKind != nil {
+            if platform == nil {
                 searchLayout
                     .searchable(
                         text: $viewModel.searchText,
-                        isPresented: $isSearchPresented,
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: searchPrompt
                     )
                     .onSubmit(of: .search) { performSearch() }
+            } else if activePlatformSearchKind != nil {
+                VStack(spacing: 0) {
+                    HStack {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField(searchPrompt, text: $viewModel.searchText)
+                            .focused($platformFieldFocused)
+                            .submitLabel(.search)
+                            .onSubmit { performSearch() }
+                        if !viewModel.searchText.isEmpty {
+                            Button {
+                                viewModel.searchText = ""
+                                platformFieldFocused = true
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .accessibilityLabel("清除搜索内容")
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 44)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, horizontalPadding)
+                    searchLayout
+                }
+                .onAppear { platformFieldFocused = !searchRequest.hasSearched }
             } else {
                 ErrorView.empty(
                     title: "暂时无法搜索",
@@ -186,7 +214,7 @@ struct SearchView: View {
                 selectPlatformSearchKind(kind)
             } else {
                 resetPlatformSearch()
-                isSearchPresented = false
+                platformFieldFocused = false
             }
         }
         .onAppear { refreshSearchPlatformOptions() }
@@ -217,6 +245,7 @@ struct SearchView: View {
                         platforms: searchPlatformOptions,
                         selection: searchPlatformSelection
                     )
+                    .padding(.horizontal, horizontalPadding)
                 } else if platformSearchKinds.count > 1 {
                     searchTypePicker(selection: platformSearchKindSelection) {
                         ForEach(platformSearchKinds, id: \.self) { kind in
@@ -254,7 +283,7 @@ struct SearchView: View {
     ) -> some View {
         Picker("搜索类型", selection: selection, content: options)
             .pickerStyle(.segmented)
-            .padding(.horizontal)
+            .padding(.horizontal, horizontalPadding)
             .padding(.top, AppConstants.Spacing.sm)
             .padding(.bottom, AppConstants.Spacing.md)
     }
@@ -314,7 +343,6 @@ struct SearchView: View {
         let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
-        let horizontalPadding: CGFloat = 20
         let screenWidth = geometry.size.width
         let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
         let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
@@ -378,7 +406,6 @@ struct SearchView: View {
         let columns = horizontalSizeClass == .regular ? 3 : 2
         let horizontalSpacing: CGFloat = 15
         let verticalSpacing: CGFloat = 24
-        let horizontalPadding: CGFloat = 20
         let screenWidth = geometry.size.width
         let totalHorizontalSpacing = horizontalPadding * 2 + horizontalSpacing * CGFloat(columns - 1)
         let cardWidth = (screenWidth - totalHorizontalSpacing) / CGFloat(columns)
@@ -579,7 +606,6 @@ private struct SearchPlatformFilter: View {
             .accessibilityValue(selectedPlatformAccessibilityValue)
             .accessibilityHint("选择搜索平台")
         }
-        .padding(.horizontal, 16)
         .frame(minHeight: 44)
     }
 }

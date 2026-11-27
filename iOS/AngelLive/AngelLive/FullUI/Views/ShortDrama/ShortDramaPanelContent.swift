@@ -109,33 +109,13 @@ struct ShortDramaEpisodesPanelContent: View {
     @ViewBuilder
     private var episodeListHeader: some View {
         if episodeGroups.count > 1 {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    episodeGroupMenu.fixedSize(horizontal: true, vertical: false)
-                    Spacer(minLength: 8)
-                    episodeCount.fixedSize()
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    episodeGroupMenu
-                    episodeCount
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            episodeGroupMenu.frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            HStack(spacing: 8) {
-                Text("剧集列表")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Spacer()
-                episodeCount
-            }
+            Text("剧集列表")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private var episodeCount: some View {
-        Text("可播 \(model.episodes.count) 集")
-            .font(.caption)
-            .foregroundStyle(.white.opacity(0.58))
     }
 
     private var episodeGroupMenu: some View {
@@ -326,6 +306,7 @@ struct ShortDramaSettingsPanelContent: View {
                         }
                     }
                     .frame(minHeight: 52)
+                    .tint(AppConstants.Colors.accent)
                     .accessibilityHint("控制本集结束后是否自动播放下一集")
                 }
                 .padding(.horizontal, 20)

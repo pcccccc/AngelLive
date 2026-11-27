@@ -573,7 +573,8 @@ private extension RoomPlayerView {
     func danmuOverlay(for containerSize: CGSize) -> some View {
         let settings = viewModel.danmuSettings
         if viewModel.supportsDanmu, settings.showDanmu, viewModel.currentPlayURL != nil {
-            let config = danmuConfig(for: containerSize.height, index: settings.danmuAreaIndex)
+            let topInset = usesFullUI ? MacPlayerChrome.inset + MacPlayerChrome.controlSize : 0
+            let config = danmuConfig(for: max(0, containerSize.height - topInset), index: settings.danmuAreaIndex)
             VStack(spacing: 0) {
                 if config.position == .bottom {
                     Spacer()
@@ -594,6 +595,7 @@ private extension RoomPlayerView {
                     Spacer()
                 }
             }
+            .padding(.top, topInset)
             .frame(width: containerSize.width, height: containerSize.height)
             .allowsHitTesting(false)
             .animation(.easeInOut(duration: 0.25), value: settings.danmuAreaIndex)

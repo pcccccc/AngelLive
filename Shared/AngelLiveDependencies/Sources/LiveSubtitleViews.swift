@@ -149,6 +149,7 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
 @MainActor
 public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLabel: View, ResourceLabel: View>: View {
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
+    private let usesFullUI: Bool
     private let subtitleLabel: SubtitleLabel
     private let sourceLanguageLabel: SourceLanguageLabel
     private let resourceLabel: ResourceLabel
@@ -161,10 +162,12 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
     @State private var showSpeechResources = false
 
     public init(
+        usesFullUI: Bool = false,
         @ViewBuilder subtitleLabel: () -> SubtitleLabel,
         @ViewBuilder sourceLanguageLabel: () -> SourceLanguageLabel,
         @ViewBuilder resourceLabel: () -> ResourceLabel
     ) {
+        self.usesFullUI = usesFullUI
         self.subtitleLabel = subtitleLabel()
         self.sourceLanguageLabel = sourceLanguageLabel()
         self.resourceLabel = resourceLabel()
@@ -231,7 +234,7 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
                 }
                 modelResourceRow
                 NavigationLink {
-                    Form { LiveSubtitleSpeechResourcesSection() }
+                    Form { LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI) }
                         #if os(macOS)
                         .formStyle(.grouped)
                         #endif
@@ -269,12 +272,12 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
             NavigationStack {
                 #if os(tvOS)
                 ScrollView {
-                    LiveSubtitleSpeechResourcesSection()
+                    LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI)
                         .padding(60)
                     Button("关闭") { showSpeechResources = false }
                 }
                 #else
-                Form { LiveSubtitleSpeechResourcesSection() }
+                Form { LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI) }
                     #if os(macOS)
                     .formStyle(.grouped)
                     .macSettingsPage("系统语音包")
@@ -312,7 +315,7 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
                     Text("已下载").foregroundStyle(.secondary)
                 case .needsDownload:
                     Text("未下载").foregroundStyle(.secondary)
-                    Button("下载") { beginModelDownload() }
+                    SubtitleDownloadButton(usesFullUI: usesFullUI, action: beginModelDownload)
                         .accessibilityLabel("下载字幕识别文件，约79 MB")
                 case .downloading:
                     ProgressView().controlSize(.small)
@@ -358,9 +361,39 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
     }
 }
 
+@MainActor
+public struct SubtitleDownloadButton: View {
+    private let usesFullUI: Bool
+    private let action: () -> Void
+
+    public init(usesFullUI: Bool, action: @escaping () -> Void) {
+        self.usesFullUI = usesFullUI
+        self.action = action
+    }
+
+    public var body: some View {
+        if usesFullUI {
+            Button(action: action) {
+                Text("下载")
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            // The row supplies vertical insets around the compact label.
+            .padding(.vertical, -11)
+        } else {
+            Button("下载", action: action)
+        }
+    }
+}
+
 /// Shared settings rows for on-device live speech subtitles.
 @MainActor
 private struct LiveSubtitleSpeechResourcesSection: View {
+    let usesFullUI: Bool
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @Bindable private var settings = LiveSubtitleSettings.shared
     @State private var resourceStatus: LiveSubtitleResourceStatus?
@@ -512,10 +545,8 @@ private struct LiveSubtitleSpeechResourcesSection: View {
                 case .needsDownload:
                     Text("未下载")
                         .foregroundStyle(.secondary)
-                    Button("下载") {
-                        beginDownload()
-                    }
-                    .accessibilityLabel("下载系统语音包")
+                    SubtitleDownloadButton(usesFullUI: usesFullUI, action: beginDownload)
+                        .accessibilityLabel("下载系统语音包")
                 case .downloading:
                     HStack(spacing: 8) {
                         ProgressView()

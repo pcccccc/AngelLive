@@ -523,6 +523,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
 
         var latestDate: Date?
         var platformNames: [String] = []
+        let names = SessionPlatformNames()
 
         let knownIds = await knownCloudPluginIds()
         for pluginId in knownIds {
@@ -537,7 +538,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
                         latestDate = date
                     }
                 }
-                platformNames.append(displayName(for: pluginId))
+                platformNames.append(names.displayName(for: pluginId))
             }
         }
 
@@ -592,9 +593,10 @@ public final class PlatformCredentialSyncService: ObservableObject {
     /// 获取本地已登录的平台名称列表
     public func getLocalAuthenticatedPlatformNames() async -> [String] {
         let sessions = await PlatformSessionManager.shared.allSessions()
+        let names = SessionPlatformNames()
         return sessions
             .filter { $0.state == .authenticated && $0.cookie?.isEmpty == false }
-            .map { displayName(for: $0.pluginId) }
+            .map { names.displayName(for: $0.pluginId) }
     }
 
     /// 格式化同步时间
@@ -954,18 +956,6 @@ public final class PlatformCredentialSyncService: ObservableObject {
         return ids
     }
 
-    /// 平台显示名（优先走 LiveParseTools，fallback 到 pluginId）
-    private func displayName(for pluginId: String) -> String {
-        // 尝试通过 liveType 获取平台名称
-        if let liveType = LiveType(rawValue: pluginId) {
-            return LiveParseTools.getLivePlatformName(liveType)
-        }
-        if let platform = LiveParseJSPlatformManager.platform(forPluginId: pluginId) {
-            return LiveParseTools.getLivePlatformName(platform.liveType)
-        }
-        return pluginId
-    }
-
     private func getDeviceName() -> String {
         #if os(tvOS)
         return UIDevice.current.name
@@ -1099,5 +1089,28 @@ public final class PlatformCredentialSyncService: ObservableObject {
             platform.sessionMigration?.userDefaultsCookieKeys?.isEmpty == false ||
             platform.sessionMigration?.legacyCloudRecordNames?.isEmpty == false
         }?.pluginId
+    }
+}
+
+struct SessionPlatformNames {
+    private let runtime: [String: String]
+    private let installed: [String: SandboxPluginMetadata]
+
+    init(platforms: [LiveParseJSPlatform] = LiveParseJSPlatformManager.availablePlatforms,
+         installed: [String: SandboxPluginMetadata] = SandboxPluginCatalog.installedPluginMap()) {
+        self.installed = installed
+        runtime = platforms.reduce(into: [:]) { names, platform in
+            names[platform.pluginId] = platform.platformName ?? ""
+        }
+    }
+
+    func displayName(for pluginID: String) -> String {
+        for candidate in [runtime[pluginID], installed[pluginID]?.displayName] {
+            if let name = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !name.isEmpty, name != pluginID {
+                return name
+            }
+        }
+        return runtime[pluginID] == nil && installed[pluginID] == nil ? "未安装插件" : "未命名插件"
     }
 }

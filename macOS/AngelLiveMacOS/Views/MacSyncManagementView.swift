@@ -39,22 +39,8 @@ struct MacSyncManagementView: View {
     var body: some View {
         Form {
             Section {
-                PanelNavigationRow(
-                    title: "iCloud 自动同步",
-                    subtitle: "登录信息自动同步到其他设备",
-                    showsChevron: false
-                ) {
-                    Image(systemName: "icloud.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.cyan.gradient)
-                } trailing: {
-                    Toggle("iCloud 自动同步", isOn: $syncService.iCloudSyncEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .tint(AppConstants.Colors.accent)
-                        .accessibilityLabel("iCloud 自动同步")
-                        .accessibilityHint("登录信息自动同步到其他设备")
-                }
+                MacSettingsSwitchRow(title: "iCloud 自动同步", subtitle: "登录信息自动同步到其他设备",
+                                       symbol: "icloud.fill", color: .cyan, isOn: $syncService.iCloudSyncEnabled)
             } header: {
                 Text("登录信息同步")
             } footer: {
@@ -64,28 +50,14 @@ struct MacSyncManagementView: View {
             }
 
             Section {
-                PanelNavigationRow(
-                    title: "收藏 iCloud 同步",
-                    subtitle: "关闭后收藏仅保存在本机",
-                    showsChevron: false
-                ) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.orange.gradient)
-                } trailing: {
-                    Toggle("收藏 iCloud 同步", isOn: Binding(
-                        get: { favoriteModel.favoriteICloudSyncEnabled },
-                        set: { newValue in
-                            favoriteModel.favoriteICloudSyncEnabled = newValue
-                            if newValue { Task { await favoriteModel.pullToRefresh() } }
-                        }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(AppConstants.Colors.accent)
-                    .accessibilityLabel("收藏 iCloud 同步")
-                    .accessibilityHint("关闭后收藏仅保存在本机")
-                }
+                MacSettingsSwitchRow(title: "收藏 iCloud 同步", subtitle: "关闭后收藏仅保存在本机",
+                                       symbol: "star.fill", color: .orange, isOn: Binding(
+                                           get: { favoriteModel.favoriteICloudSyncEnabled },
+                                           set: { enabled in
+                                               favoriteModel.favoriteICloudSyncEnabled = enabled
+                                               if enabled { Task { await favoriteModel.pullToRefresh() } }
+                                           }
+                                       ))
 
                 if let syncError = favoriteModel.lastSyncError {
                     HStack(spacing: 8) {

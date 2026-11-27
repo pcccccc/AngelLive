@@ -1,26 +1,34 @@
 import SwiftUI
 
-/// 弹窗/面板统一的关闭按钮:小圆底 `xmark`,放在标题栏左侧。
+/// 弹窗与面板标题栏共用的小圆底关闭按钮。
 /// 所有弹窗共用此组件,避免样式各自漂移。
 struct PanelCloseButton: View {
     let action: () -> Void
     /// 是否绑定 Esc 快捷键关闭(自带 dismiss 的 sheet/popover 无需开启)。
-    var closesOnEscape: Bool = false
+    private let closesOnEscape: Bool
+    private let expandsHitTarget: Bool
 
-    init(closesOnEscape: Bool = false, action: @escaping () -> Void) {
+    init(closesOnEscape: Bool = false, expandsHitTarget: Bool = false, action: @escaping () -> Void) {
+        self.expandsHitTarget = expandsHitTarget
         self.closesOnEscape = closesOnEscape
         self.action = action
     }
 
     var body: some View {
+        let glyph = Image(systemName: "xmark")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 22, height: 22)
+            .background(Color.primary.opacity(0.06), in: Circle())
         Button(action: action) {
-            Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .background(Color.primary.opacity(0.06), in: Circle())
+            if expandsHitTarget {
+                glyph.frame(width: 44, height: 44).contentShape(Rectangle())
+            } else {
+                glyph
+            }
         }
         .buttonStyle(.plain)
+        .padding(expandsHitTarget ? -11 : 0)
         .modifier(EscapeShortcut(enabled: closesOnEscape))
     }
 
@@ -72,6 +80,43 @@ struct PanelStatusBadge: View {
                 Capsule(style: .continuous)
                     .fill(tint.opacity(0.12))
             )
+    }
+}
+
+struct MacFullUIFormControls: ViewModifier {
+    let usesFullUI: Bool
+
+    func body(content: Content) -> some View {
+        if usesFullUI {
+            content.toggleStyle(.switch)
+                .tint(AppConstants.Colors.accent)
+        } else {
+            content
+        }
+    }
+}
+
+struct MacSettingsSwitchRow: View {
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let color: Color
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            PanelNavigationRow(title: title, subtitle: subtitle, showsChevron: false) {
+                Image(systemName: symbol)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(color.gradient)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .toggleStyle(.switch)
+        .tint(AppConstants.Colors.accent)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
     }
 }
 

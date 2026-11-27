@@ -15,7 +15,10 @@ struct PlatformCapabilitySheet: View {
     @State private var hasRefreshedUpdates = false
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            FullUISheetHeader(title: Text(verbatim: LiveParseTools.getLivePlatformName(liveType))) {
+                dismiss()
+            }
             List {
                 pluginInfoSection
 
@@ -60,24 +63,13 @@ struct PlatformCapabilitySheet: View {
                     .padding(.vertical, 2)
                 }
             }
-            .navigationTitle(LiveParseTools.getLivePlatformName(liveType))
-            .navigationBarTitleDisplayMode(.inline)
             .task {
                 guard !hasRefreshedUpdates else { return }
                 hasRefreshedUpdates = true
                 await pluginSourceManager.refreshAvailableUpdates()
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
         }
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     @ViewBuilder
@@ -189,6 +181,35 @@ struct PlatformCapabilitySheet: View {
                     .foregroundStyle(.gray)
             }
         }
+    }
+}
+
+struct FullUISheetHeader: View {
+    let title: Text
+    let close: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            title
+                .font(.headline)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 48)
+                .frame(maxWidth: .infinity)
+                .accessibilityAddTraits(.isHeader)
+
+            Button(action: close) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
     }
 }
 

@@ -385,20 +385,26 @@ private struct TVFullPluginDetailView: View {
         let phase = phase
         let activity = consent.isPresenting ? nil : TVPluginInstallationActivity(phase: phase, manager: manager, pluginID: pluginID)
         let canStop = manager.isPendingInstallation(for: pluginID)
+        let showsInstalledStatus = installed && !canStop && !consent.isPresenting && (phase == .idle || phase == .success)
         TVFullDualColumnLayout {
             TVPluginDetailInformation(pluginID: pluginID, manager: manager, availability: availability,
                 loggedIn: credentials.isLoggedIn(pluginId: pluginID))
         } right: {
             VStack(alignment: .leading, spacing: TVPluginLayout.actionSpacing) {
-                TVPluginConfirmRow(title: activity.map { canStop ? "\($0.title) · 停止" : $0.title } ?? primaryTitle,
-                    symbol: primarySymbol,
-                    confirmation: consent.isPresenting || (!installed && needsLogin && (phase == .install || isInstallFailure))
-                        ? "需要登录 · 再按一次继续安装" : nil,
-                    installation: activity, showsInstallationStop: canStop,
-                    cancel: { if consent.isPresenting { consent.resolve(false) } },
-                    action: primaryAction)
-                    .focused($focus, equals: .detailAction)
-                    .accessibilityIdentifier("plugins.detail.primary")
+                if showsInstalledStatus {
+                    Label("已安装", systemImage: "checkmark")
+                        .foregroundStyle(.secondary)
+                } else {
+                    TVPluginConfirmRow(title: activity.map { canStop ? "\($0.title) · 停止" : $0.title } ?? primaryTitle,
+                        symbol: primarySymbol,
+                        confirmation: consent.isPresenting || (!installed && needsLogin && (phase == .install || isInstallFailure))
+                            ? "需要登录 · 再按一次继续安装" : nil,
+                        installation: activity, showsInstallationStop: canStop,
+                        cancel: { if consent.isPresenting { consent.resolve(false) } },
+                        action: primaryAction)
+                        .focused($focus, equals: .detailAction)
+                        .accessibilityIdentifier("plugins.detail.primary")
+                }
                 if installed && needsLogin && !credentials.isLoggedIn(pluginId: pluginID) {
                     TVFullOperationRow(title: "登录账号", symbol: "person.crop.circle") { showLogin = true }
                         .focused($focus, equals: .detailLogin)
@@ -417,7 +423,7 @@ private struct TVFullPluginDetailView: View {
             }
             .focusSection()
         }
-        .defaultFocus($focus, initialFocus)
+        .defaultFocus($focus, showsInstalledStatus && initialFocus == .detailAction ? .detailBack : initialFocus)
         .onExitCommand {
             guard !showLogin else { return }
             close()

@@ -521,6 +521,7 @@ struct LiveDetailPlayerView: View {
                 : $isRoomSwitcherPresented.animation(roomSwitcherDrawerAnimation)
         )
         .environment(\.fullUILandscapePlayerLayout, landscapeLayout)
+        .environment(\.presentsQualityAsSheet, !isLandscape)
         .environment(\.fullUIPlayerShowsRoomBanner, roomBannerID == viewModel.currentRoom.id)
         .defersSystemGestures(on: landscapeLayout?.defersSystemGestures == true && streamAvailable
             && !isRoomSwitcherPresented ? .all : [])

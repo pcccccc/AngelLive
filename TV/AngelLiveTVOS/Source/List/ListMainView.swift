@@ -150,6 +150,13 @@ struct ListMainView: View {
                 .bold()
             Spacer()
         }
+        .overlay(alignment: .leading) {
+            if appViewModel.pluginAvailability.hasAvailablePlugins, !liveViewModel.roomList.isEmpty, !liveViewModel.isSidebarExpanded {
+                Label("刷新", systemImage: "playpause.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
         .overlay(alignment: .trailing) {
             platformHeaderActions
         }
@@ -639,7 +646,7 @@ struct ListMainView: View {
             }
         }
         .overlay {
-            if !liveViewModel.roomList.isEmpty && !liveViewModel.isSidebarExpanded {
+            if !appViewModel.pluginAvailability.hasAvailablePlugins && !liveViewModel.roomList.isEmpty && !liveViewModel.isSidebarExpanded {
                 VStack {
                     Spacer()
                     HStack {

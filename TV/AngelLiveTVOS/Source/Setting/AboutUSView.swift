@@ -115,7 +115,7 @@ private struct TVAboutQRCodeCard: View {
                 .frame(width: 250, height: 250)
                 .background(Color.white)
                 .clipShape(.rect(cornerRadius: 12))
-                .accessibilityLabel("二维码")
+                .accessibilityLabel("\(Text(title)) 二维码")
 
             Text(title)
                 .font(.headline)

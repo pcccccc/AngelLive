@@ -58,6 +58,7 @@ class SubCategoryViewController: UIViewController {
         let button = UIButton(type: .system)
         let config = UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)
         let image = UIImage(systemName: "square.grid.2x2.fill", withConfiguration: config)
+        button.accessibilityLabel = "分类管理"
         button.setImage(image, for: .normal)
         button.tintColor = UIColor(AppConstants.Colors.accent)
         button.addTarget(self, action: #selector(manageButtonTapped), for: .touchUpInside)
@@ -115,8 +116,8 @@ class SubCategoryViewController: UIViewController {
             // 管理按钮
             manageButton.centerYAnchor.constraint(equalTo: subCategorySegmentedView.centerYAnchor),
             manageButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            manageButton.widthAnchor.constraint(equalToConstant: 30),
-            manageButton.heightAnchor.constraint(equalToConstant: 30),
+            manageButton.widthAnchor.constraint(equalToConstant: 44),
+            manageButton.heightAnchor.constraint(equalToConstant: 44),
 
             // 房间列表容器
             listContainerView.topAnchor.constraint(equalTo: subCategorySegmentedView.bottomAnchor),

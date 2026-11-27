@@ -30,6 +30,7 @@ struct MacPlatformAppearancePopover: View {
             Button("平台排序与完整设置…", action: openSettings)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .modifier(MacFullUIFormControls(usesFullUI: true))
         .padding(14)
         .frame(width: 348)
     }
@@ -96,6 +97,7 @@ struct MacPlatformAppearancePage: View {
             }
         }
         .formStyle(.grouped)
+        .modifier(MacFullUIFormControls(usesFullUI: true))
         .disabled(!store.isReady)
         .overlay {
             if !store.isReady {
@@ -200,6 +202,7 @@ struct MacPlatformAppearanceCardEditor: View {
                 )
             }
             .formStyle(.grouped)
+            .modifier(MacFullUIFormControls(usesFullUI: true))
             .contentMargins(
                 .all,
                 16,
@@ -235,18 +238,18 @@ struct MacPlatformAppearanceSyncContent: View {
     let syncNow: () -> Void
 
     var body: some View {
-        PanelNavigationRow(title: "配置页外观 iCloud 同步", showsChevron: false) {
-            Image(systemName: "icloud.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.cyan.gradient)
-        } trailing: {
-            Toggle("配置页外观 iCloud 同步", isOn: $enabled)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(AppConstants.Colors.accent)
-                .disabled(!masterEnabled)
-                .accessibilityIdentifier("platform.appearance.sync.toggle")
+        Toggle(isOn: $enabled) {
+            PanelNavigationRow(title: "配置页外观 iCloud 同步", showsChevron: false) {
+                Image(systemName: "icloud.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.cyan.gradient)
+            }
         }
+        .toggleStyle(.switch)
+        .tint(AppConstants.Colors.accent)
+        .disabled(!masterEnabled)
+        .accessibilityIdentifier("platform.appearance.sync.toggle")
+
         Button(action: syncNow) {
             PanelNavigationRow(title: "立即同步外观") {
                 Image(systemName: "arrow.clockwise")

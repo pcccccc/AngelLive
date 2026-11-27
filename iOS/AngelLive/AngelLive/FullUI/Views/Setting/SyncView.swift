@@ -212,6 +212,7 @@ struct SyncView: View {
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
             }
+            .tint(AppConstants.Colors.accent)
 
             if favoriteModel.favoriteICloudSyncEnabled, let syncError = favoriteModel.lastSyncError {
                 HStack(spacing: 6) {

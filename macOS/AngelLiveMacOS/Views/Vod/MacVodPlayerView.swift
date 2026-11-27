@@ -126,9 +126,11 @@ struct MacVodPlayerView: View {
                 if let playback = model.playback {
                     MacVodPlayerSurface(playback: playback, model: model, controller: controller,
                                         playbackSession: playbackSession, rate: playbackRate, volume: volume,
-                                        pictureMode: pictureMode, hidesSubtitles: seek != nil,
+                                        pictureMode: drawer == nil ? pictureMode : .fit, hidesSubtitles: seek != nil,
                                         subtitleBottomOffset: subtitleBottomOffset(in: geometry.size), onState: refreshPlaybackStatus)
                     .id(playback.id)
+                    .padding(.trailing, drawer == nil ? 0 : drawerWidth(in: geometry.size) + inset)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: drawer == nil)
                 }
                 Color.clear.contentShape(Rectangle()).onTapGesture(perform: togglePlayback)
                     .allowsHitTesting(!hasPanel && seek == nil)
@@ -552,6 +554,10 @@ struct MacVodPlayerView: View {
         return max(size.height - videoRect(in: size).maxY + inset, timeline)
     }
 
+    private func drawerWidth(in size: CGSize) -> CGFloat {
+        min(max(size.width * 0.36, 340), min(420, max(0, size.width - 2 * inset)))
+    }
+
     @ViewBuilder
     private func panels(size: CGSize) -> some View {
         if let drawer {
@@ -565,7 +571,7 @@ struct MacVodPlayerView: View {
                 onVideoInfo: { showVideoInfo = true; self.drawer = nil }
             )
             .id(drawer)
-            .frame(width: min(max(size.width * 0.36, 340), min(420, max(0, size.width - 2 * inset))))
+            .frame(width: drawerWidth(in: size))
             .padding(inset)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }

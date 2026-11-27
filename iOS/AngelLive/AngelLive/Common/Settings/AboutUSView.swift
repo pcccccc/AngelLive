@@ -98,7 +98,7 @@ struct AboutUSView: View {
 
                 // 版权信息
                 VStack(spacing: AppConstants.Spacing.xs) {
-                    Text("© \(Calendar.current.component(.year, from: Date())) AngelLive")
+                    Text("© \(String(Calendar.current.component(.year, from: Date()))) AngelLive")
                         .font(.caption2)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
 
@@ -134,7 +134,7 @@ private struct AboutQRCodeCard: View {
                 .background(Color.white)
                 .clipShape(.rect(cornerRadius: AppConstants.CornerRadius.md))
                 .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
-                .accessibilityLabel("二维码")
+                .accessibilityLabel("\(Text(title)) 二维码")
 
             Text(title)
                 .font(.caption.bold())

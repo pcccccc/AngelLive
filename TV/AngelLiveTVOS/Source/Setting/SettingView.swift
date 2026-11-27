@@ -158,7 +158,22 @@ struct SettingView: View {
         return fullUIOrder
     }
 
-    private var menuListView: some View {
+    @ViewBuilder private var menuListView: some View {
+        if appViewModel.pluginAvailability.hasAvailablePlugins {
+            menuScrollView.mask {
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: 20)
+                    Rectangle()
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 20)
+                }
+                .padding(.horizontal, -40)
+            }
+        } else {
+            menuScrollView
+        }
+    }
+
+    private var menuScrollView: some View {
         ScrollView(.vertical) {
             VStack(spacing: 15) {
                 ForEach(menuItemIndices, id: \.self) { index in
@@ -182,6 +197,7 @@ struct SettingView: View {
                                 menuTitle(for: index).foregroundColor(.primary)
                                 Spacer()
                                 menuTrailingStatus(for: index)
+                                    .lineLimit(appViewModel.pluginAvailability.hasAvailablePlugins ? 1 : nil)
                                 if index != 7 {
                                     Image(systemName: "chevron.right")
                                         .foregroundStyle(.secondary)
@@ -193,6 +209,7 @@ struct SettingView: View {
                     }
                 }
             }
+            .padding(.vertical, appViewModel.pluginAvailability.hasAvailablePlugins ? 32 : 0)
         }
         // FullUI 的原生聚焦胶囊会超出滚动区域，保留两端放大后的完整轮廓。
         .scrollClipDisabled(appViewModel.pluginAvailability.hasAvailablePlugins)
@@ -204,35 +221,49 @@ struct SettingView: View {
         return Text(titles[index])
     }
 
+    private var syncSummary: String {
+        let model = appViewModel.favoriteViewModel
+        guard appViewModel.pluginAvailability.hasAvailablePlugins else { return model.syncStatusDisplayText }
+        guard model.favoriteICloudSyncEnabled else { return "已关闭" }
+        switch model.syncStatus {
+        case .syncing: return "同步中"
+        case .success: return "已同步"
+        case .error: return "同步失败"
+        case .notLoggedIn: return "未登录"
+        }
+    }
+
     /// 菜单行尾部状态文案。抽成独立 @ViewBuilder,避免 menuListView 整体表达式过大导致编译器 type-check 超时。
     @ViewBuilder
     private func menuTrailingStatus(for index: Int) -> some View {
+        let usesFullUI = appViewModel.pluginAvailability.hasAvailablePlugins
+        let focused = usesFullUI && focusedIndex == index
+        let statusColor: Color = usesFullUI ? (focused ? .black : .primary) : .gray
         if index == 0 {
             Text(syncService.loggedInByPluginId.values.contains(true) ? "已登录" : "未登录")
                 .font(.system(size: 30))
-                .foregroundStyle(.gray)
+                .foregroundStyle(statusColor)
         } else if index == 4 {
-            // 三端统一文案,见 AppFavoriteModel.syncStatusDisplayText。
-            Text(appViewModel.favoriteViewModel.syncStatusDisplayText)
+            Text(syncSummary)
                 .font(.system(size: 30))
-                .foregroundStyle(.gray)
+                .foregroundStyle(statusColor)
         } else if index == 7 {
             if isClearingCache {
                 HStack(spacing: 8) {
                     ProgressView()
                     Text("清理中...")
                         .font(.system(size: 30))
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(statusColor)
                 }
             } else {
                 Text(cacheSizeText)
                     .font(.system(size: 30))
-                    .foregroundStyle(.gray)
+                    .foregroundStyle(statusColor)
             }
         } else if index == 9, supportDiagnosticsService.isRecording {
             Text("录制中")
                 .font(.system(size: 30))
-                .foregroundStyle(.red)
+                .foregroundStyle(focused ? Color.black : .red)
         }
     }
 
@@ -346,14 +377,21 @@ struct SettingView: View {
                     fullScreenIndex = nil
                 }
         case 6: // 开源许可
-            NavigationStack {
-                OpenSourceListView()
+            Group {
+                if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    NavigationStack {
+                        OpenSourceListView(usesFullUI: true)
+                            .onExitCommand { fullScreenIndex = nil }
+                    }
+                } else {
+                    NavigationStack {
+                        OpenSourceListView()
+                    }
+                    .onExitCommand { fullScreenIndex = nil }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
-            .onExitCommand {
-                fullScreenIndex = nil
-            }
         case 8: // 关于
             AboutUSView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

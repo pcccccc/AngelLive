@@ -39,6 +39,7 @@ struct ShortDramaDetentPanel<Content: View>: View {
     let visibleHeight: CGFloat
     let presentationOpacity: Double
     let width: CGFloat
+    let bottomInset: CGFloat
     let dimOpacity: Double
     let closeAccessibilityLabel: String
     let onDismiss: () -> Void
@@ -64,6 +65,7 @@ struct ShortDramaDetentPanel<Content: View>: View {
         visibleHeight: CGFloat,
         presentationOpacity: Double,
         width: CGFloat,
+        bottomInset: CGFloat,
         dimOpacity: Double,
         closeAccessibilityLabel: String,
         onDismiss: @escaping () -> Void,
@@ -77,6 +79,7 @@ struct ShortDramaDetentPanel<Content: View>: View {
         self.isInteractive = isInteractive
         self.visibleHeight = visibleHeight
         self.presentationOpacity = presentationOpacity
+        self.bottomInset = bottomInset
         self.width = width
         self.dimOpacity = dimOpacity
         self.closeAccessibilityLabel = closeAccessibilityLabel
@@ -116,6 +119,7 @@ struct ShortDramaDetentPanel<Content: View>: View {
                 content.frame(maxHeight: .infinity, alignment: .top)
             }
             .frame(width: width, height: max(0, visibleHeight), alignment: .top)
+            .padding(.bottom, visibleHeight > 0 ? bottomInset : 0)
             .overlay(alignment: .topTrailing) {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")

@@ -148,8 +148,9 @@ struct ShortDramaPlayerView: View {
                         .padding([.top, .horizontal], overlayInset)
                 }
 
-                panelOverlay(metrics: panelMetrics)
-                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+                panelOverlay(metrics: panelMetrics, bottomInset: geometry.safeAreaInsets.bottom)
+                    .frame(width: geometry.size.width, height: geometry.size.height + geometry.safeAreaInsets.bottom, alignment: .bottom)
+                    .frame(height: geometry.size.height, alignment: .top)
                     .zIndex(10)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
@@ -1346,7 +1347,7 @@ struct ShortDramaPlayerView: View {
         }
     }
 
-    private func panelOverlay(metrics: ShortDramaPanelMetrics) -> some View {
+    private func panelOverlay(metrics: ShortDramaPanelMetrics, bottomInset: CGFloat) -> some View {
         let dimOpacity = panel == nil ? 0 : 0.28 * panelPresentationOpacity
 
         return ShortDramaDetentPanel(
@@ -1355,6 +1356,7 @@ struct ShortDramaPlayerView: View {
             visibleHeight: panelVisibleHeight,
             presentationOpacity: panelPresentationOpacity,
             width: metrics.panelWidth,
+            bottomInset: bottomInset,
             dimOpacity: dimOpacity,
             closeAccessibilityLabel: panel?.closeAccessibilityLabel ?? "关闭面板",
             onDismiss: dismissPanel,

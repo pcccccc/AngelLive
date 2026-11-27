@@ -15,6 +15,8 @@ struct PluginSourceAddView: View {
     @State private var detent: PresentationDetent = .medium
     @State private var addTask: Task<Void, Never>?
     let onAdded: ([String]) -> Void
+    private var inputIsEmpty: Bool { input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
     var body: some View {
         let shouldReduceMotion = reduceMotion
         return Group {
@@ -80,7 +82,8 @@ struct PluginSourceAddView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PluginPressButtonStyle())
-        .disabled(processing || manager.isManagementBusy)
+        .opacity(inputIsEmpty && !processing && !completed ? 0.45 : 1)
+        .disabled(inputIsEmpty || processing || manager.isManagementBusy)
         .accessibilityLabel(completed ? "来源已添加" : processing ? "正在读取来源" : "添加来源")
         .animation(reduceMotion ? .easeOut(duration: 0.2) : .spring(duration: 0.42), value: processing)
         .animation(.easeOut(duration: 0.2), value: completed)

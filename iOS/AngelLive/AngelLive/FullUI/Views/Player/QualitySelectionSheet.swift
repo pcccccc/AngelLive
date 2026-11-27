@@ -9,6 +9,7 @@ import AngelLiveCore
 /// 播放器内嵌清晰度/线路选择面板，右侧滑入覆盖，不离开播放画面即可切换
 struct QualitySelectionPanel: View {
     @Binding var isShowing: Bool
+    var isSheet = false
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var expandedSections: Set<Int> = []
@@ -23,6 +24,31 @@ struct QualitySelectionPanel: View {
     }
 
     var body: some View {
+        Group {
+            if isSheet {
+                panelContent
+            } else {
+                panelContent
+                    .frame(width: panelWidth)
+                    .adaptivePanelGlassEffect(cornerRadius: 26)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .stroke(.white.opacity(0.12), lineWidth: 1)
+                            .allowsHitTesting(false)
+                    }
+                    .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+            }
+        }
+        .onAppear {
+            if canCollapse {
+                expandedSections = [viewModel.currentCdnIndex]
+            } else if let count = viewModel.currentRoomPlayArgs?.count {
+                expandedSections = Set(0..<count)
+            }
+        }
+    }
+
+    private var panelContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             header
 
@@ -36,26 +62,9 @@ struct QualitySelectionPanel: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            Spacer(minLength: 0)
         }
         .padding(20)
-        .frame(width: panelWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .adaptivePanelGlassEffect(cornerRadius: 26)
-        .overlay {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
-        .onAppear {
-            if canCollapse {
-                expandedSections = [viewModel.currentCdnIndex]
-            } else if let count = viewModel.currentRoomPlayArgs?.count {
-                expandedSections = Set(0..<count)
-            }
-        }
     }
 
     // MARK: - Header
@@ -85,8 +94,11 @@ struct QualitySelectionPanel: View {
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
                     .adaptivePanelCircleGlassEffect()
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("关闭")
         }
     }
 
@@ -146,7 +158,8 @@ struct QualitySelectionPanel: View {
                                 }
                             }
                             .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 10)
+                            .frame(minHeight: 44)
                             .contentShape(Rectangle())
                             .background(selected ? Color.accentColor.opacity(0.2) : .clear)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -210,6 +223,36 @@ struct QualitySelectionPanel: View {
         let trimmed = viewModel.currentPlayQualityString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != "清晰度" else { return nil }
         return trimmed
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var presentsQualityAsSheet = false
+}
+
+struct QualitySelectionPresentation: ViewModifier {
+    @Binding var isShowing: Bool
+    @Environment(\.presentsQualityAsSheet) private var asSheet
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .trailing) {
+                if isShowing && !asSheet {
+                    ZStack(alignment: .trailing) {
+                        Color.black.opacity(0.001)
+                            .onTapGesture { isShowing = false }
+                        QualitySelectionPanel(isShowing: $isShowing)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: isShowing && !asSheet)
+            .sheet(isPresented: Binding(get: { asSheet && isShowing }, set: { isShowing = $0 })) {
+                QualitySelectionPanel(isShowing: $isShowing, isSheet: true)
+                    .preferredColorScheme(.dark)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
     }
 }
 

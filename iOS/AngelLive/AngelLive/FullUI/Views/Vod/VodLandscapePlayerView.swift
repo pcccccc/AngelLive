@@ -79,7 +79,9 @@ struct VodLandscapePlayerView: View {
             let canShowPlayer = !requiresLandscape || geometry.size.width > geometry.size.height
             ZStack {
                 Color.black
-                surface(bottomInset: layout.insets.bottom).opacity(canShowPlayer ? 1 : 0)
+                surface(bottomInset: layout.insets.bottom)
+                    .padding(.trailing, drawer == nil ? 0 : drawerWidth(in: geometry) + geometry.safeAreaInsets.trailing + 12)
+                    .opacity(canShowPlayer ? 1 : 0)
                 if canShowPlayer {
                     gestureSurface
                     chrome(layout: layout)
@@ -200,7 +202,7 @@ struct VodLandscapePlayerView: View {
         if let playback = model.playback, scenePhase != .background || playback.id == controller.playbackID {
             VodPlayerSurface(
                 playback: playback, model: model, controller: controller, playbackSession: playbackSession,
-                rate: boosted ? 2 : rate, pictureMode: pictureMode, hidesSubtitles: seek != nil || model.hasFinished,
+                rate: boosted ? 2 : rate, pictureMode: drawer == nil ? pictureMode : .fit, hidesSubtitles: seek != nil || model.hasFinished,
                 subtitleBottomOffset: (showsChrome ? 2 * FullUIPlayerChrome.controlSize + bottomInset : 0)
                     + (countdownOffer == nil ? 0 : creditsHeight + 8 + (showsChrome ? 0 : bottomInset)),
                 onState: refreshPlaybackStatus

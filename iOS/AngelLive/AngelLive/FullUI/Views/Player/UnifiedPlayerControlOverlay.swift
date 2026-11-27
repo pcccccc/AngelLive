@@ -134,14 +134,6 @@ struct UnifiedPlayerControlOverlay: View {
                                                             bottom: 0, trailing: controlInset))
                 }
             }
-            // 清晰度选择面板（右侧滑入）
-            if showQualityPanel {
-                Color.black.opacity(0.001)
-                    .onTapGesture { showQualityPanel = false }
-                QualitySelectionPanel(isShowing: $showQualityPanel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
         }
         .environment(\.colorScheme, .dark)
         .alert("弹幕连接", isPresented: $showDanmakuIssue) {
@@ -152,7 +144,7 @@ struct UnifiedPlayerControlOverlay: View {
         } message: {
             Text(viewModel.danmakuConnectionIssue ?? "弹幕连接状态已更新")
         }
-        .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
+        .modifier(QualitySelectionPresentation(isShowing: $showQualityPanel))
         // 双向同步 bridge.isMaskShow ↔ isMaskVisible
         .onChange(of: bridge.isMaskShow.wrappedValue) { _, newValue in
             if isMaskVisible != newValue {

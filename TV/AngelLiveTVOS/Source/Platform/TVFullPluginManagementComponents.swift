@@ -8,7 +8,7 @@ nonisolated enum TVPluginLayout {
     static let headingSpacing: CGFloat = 20
     static let titleSpacing: CGFloat = 30
     static let cardSpacing: CGFloat = 44
-    static let cardWidth: CGFloat = 160
+    static let cardWidth: CGFloat = 260
     static let cardHeight: CGFloat = 160
     /// 128px artwork draws 1:1 at 2x. Smaller bitmaps stay at pixel size / scale.
     static let iconSide: CGFloat = 64
@@ -258,8 +258,9 @@ struct TVPluginShelf: View {
                     }
                     .padding(.vertical, TVPluginLayout.focusBleed / 2)
                 }
+                .contentMargins(.horizontal, TVPluginLayout.focusBleed / 2, for: .scrollContent)
+                .padding(.horizontal, -TVPluginLayout.focusBleed / 2)
                 .padding(.vertical, -TVPluginLayout.focusBleed / 2)
-                .scrollClipDisabled()
             }
         }
         .padding(.bottom, installed && !ids.isEmpty ? -TVPluginLayout.captionBottomInset : 0)
@@ -292,7 +293,7 @@ private struct TVPluginShelfCard: View {
                     revision: availability.catalogRevision, phase: phase, activity: activity,
                     showsCompletion: showsCompletion)
                     .hoverEffect(.highlight)
-                Text(name).font(.headline).lineLimit(1)
+                Text(name).font(.headline).lineLimit(2, reservesSpace: true)
                     .frame(width: TVPluginLayout.cardWidth, alignment: .leading)
                 Text(subtitle).font(.caption).foregroundStyle(captionColor(phase)).lineLimit(1)
                     .frame(width: TVPluginLayout.cardWidth, alignment: .leading)

@@ -423,7 +423,7 @@ struct TranslationSettingView: View {
                     .foregroundStyle(AppConstants.Colors.secondaryText)
             }
 
-            LiveSubtitleSettingsSection {
+            LiveSubtitleSettingsSection(usesFullUI: true) {
                 TranslationSettingLabel(
                     title: "实时字幕",
                     systemImage: "waveform",
@@ -493,7 +493,7 @@ struct TranslationSettingView: View {
                                     }
                                     .accessibilityElement(children: .combine)
                                 case .notDownloaded:
-                                    Button("下载") {
+                                    SubtitleDownloadButton(usesFullUI: true) {
                                         prepareNativeLanguages(pair)
                                     }
                                     .accessibilityLabel("下载 \(pair.displayName)")
