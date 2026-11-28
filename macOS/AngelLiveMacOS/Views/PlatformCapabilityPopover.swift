@@ -16,8 +16,8 @@ struct PlatformCapabilityPopover: View {
             Text(LiveParseTools.getLivePlatformName(liveType))
                 .font(.headline)
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.top, 14)
+                .padding(.bottom, 10)
 
             Divider()
 
@@ -56,42 +56,22 @@ struct PlatformCapabilityPopover: View {
                         .padding(.vertical, 8)
                     }
                 }
+                .padding(.vertical, 8)
             }
         }
         .frame(width: 280)
-        .frame(maxHeight: 360)
+        .frame(maxHeight: 440)
     }
 
     @ViewBuilder
     private func statusBadge(_ status: FeatureStatus) -> some View {
         switch status {
         case .available:
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(.green)
-                    .frame(width: 7, height: 7)
-                Text("可用")
-                    .font(.subheadline)
-                    .foregroundStyle(.green)
-            }
+            PanelStatusBadge("可用", tint: AppConstants.Colors.success)
         case .partial(let reason):
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(.orange)
-                    .frame(width: 7, height: 7)
-                Text(reason)
-                    .font(.subheadline)
-                    .foregroundStyle(.orange)
-            }
+            PanelStatusBadge(reason, tint: .orange)
         case .unavailable:
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(.gray)
-                    .frame(width: 7, height: 7)
-                Text("不可用")
-                    .font(.subheadline)
-                    .foregroundStyle(.gray)
-            }
+            PanelStatusBadge("不可用")
         }
     }
 }

@@ -126,25 +126,23 @@ struct MacPlatformAppearanceSettingsSheet: View {
     @State private var selected: Platformdescription?
 
     var body: some View {
-        VStack(spacing: 0) {
-            MacAppearanceSheetHeader(title: "配置页外观")
-            MacPlatformAppearancePage { selected = $0 }
-                .sheet(
-                    isPresented: Binding(
-                        get: { selected != nil },
-                        set: { if !$0 { selected = nil } }
-                    )
-                ) {
-                    if let selected { MacPlatformAppearanceCardSheet(platform: selected, gridWidth: gridWidth) }
-                }
-        }
-        .frame(
-            minWidth: 520,
-            idealWidth: 580,
-            minHeight: 460,
-            idealHeight: 580
-        )
-        .macSettingsSheetPresentation()
+        MacPlatformAppearancePage { selected = $0 }
+            .sheet(
+                isPresented: Binding(
+                    get: { selected != nil },
+                    set: { if !$0 { selected = nil } }
+                )
+            ) {
+                if let selected { MacPlatformAppearanceCardSheet(platform: selected, gridWidth: gridWidth) }
+            }
+            .macSettingsPage("配置页外观")
+            .frame(
+                minWidth: 520,
+                idealWidth: 580,
+                minHeight: 460,
+                idealHeight: 580
+            )
+            .macSettingsSheetPresentation()
     }
 }
 
@@ -155,17 +153,15 @@ struct MacPlatformAppearanceCardSheet: View {
     let gridWidth: CGFloat
 
     var body: some View {
-        VStack(spacing: 0) {
-            MacAppearanceSheetHeader(title: platform.title)
-            MacPlatformAppearanceCardEditor(platform: platform, gridWidth: gridWidth)
-        }
-        .frame(
-            minWidth: 600,
-            idealWidth: 640,
-            minHeight: 460,
-            idealHeight: 520
-        )
-        .macSettingsSheetPresentation()
+        MacPlatformAppearanceCardEditor(platform: platform, gridWidth: gridWidth)
+            .macSettingsPage(platform.title)
+            .frame(
+                minWidth: 600,
+                idealWidth: 640,
+                minHeight: 460,
+                idealHeight: 520
+            )
+            .macSettingsSheetPresentation()
     }
 }
 
@@ -264,30 +260,5 @@ struct MacPlatformAppearanceSyncContent: View {
         .buttonStyle(.plain)
         .disabled(!masterEnabled || !enabled || isSyncing)
         .accessibilityIdentifier("platform.appearance.sync.now")
-    }
-}
-
-private struct MacAppearanceSheetHeader: View {
-    let title: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        HStack {
-            PanelCloseButton(closesOnEscape: true) { dismiss() }
-                .accessibilityLabel("关闭")
-            Spacer()
-            Button("完成") { dismiss() }
-                .keyboardShortcut(.defaultAction)
-        }
-        .overlay {
-            Text(verbatim: title)
-                .font(.headline)
-                .lineLimit(1)
-                .padding(.horizontal, 60)
-                .accessibilityAddTraits(.isHeader)
-                .allowsHitTesting(false)
-        }
-        .padding(14)
-        Divider()
     }
 }

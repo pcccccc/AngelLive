@@ -12,21 +12,16 @@ import AngelLiveDependencies
 
 struct MacPlatformSearchView: View {
     let platform: Platformdescription
-    @Environment(\.dismiss) private var dismiss
     @State private var viewModel = SearchViewModel()
 
     var body: some View {
         NavigationStack {
             SearchView(platform: platform)
                 .environment(viewModel)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("关闭") { dismiss() }
-                            .keyboardShortcut(.cancelAction)
-                    }
-                }
+                .macSettingsPage("在\(platform.title)中搜索")
         }
-        .frame(minWidth: 600, idealWidth: 680, minHeight: 400, idealHeight: 480)
+        .macSettingsSheetPresentation()
+        .frame(minWidth: 640, idealWidth: 720, minHeight: 460, idealHeight: 540)
     }
 }
 
@@ -77,8 +72,9 @@ struct SearchView: View {
         .sheet(item: $authenticationRecoveryRequest) { request in
             NavigationStack {
                 MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
-                    .frame(minWidth: 620, minHeight: 420)
             }
+            .macSettingsSheetPresentation()
+            .frame(minWidth: 600, minHeight: 480)
         }
     }
 

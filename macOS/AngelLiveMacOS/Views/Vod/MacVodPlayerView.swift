@@ -257,7 +257,7 @@ struct MacVodPlayerView: View {
             .focusEffectDisabled()
             .focused($hasKeyboardFocus)
             .onAppear(perform: restoreKeyboardFocus)
-            .focusedSceneValue(\.macPlayerCommands, acceptsCommands ? commands : nil)
+            .focusedSceneValue(\.macPlayerCommands, acceptsCommands && !showAirPlay ? commands : nil)
             .onKeyPress(.return) {
                 guard acceptsCommands, commands.canControlPlayback else { return .ignored }
                 toggleFullscreen()
@@ -571,15 +571,13 @@ struct MacVodPlayerView: View {
                 onVideoInfo: { showVideoInfo = true; self.drawer = nil }
             )
             .id(drawer)
-            .frame(width: drawerWidth(in: size))
-            .padding(inset)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .macPlayerDrawerPlacement(in: size, width: drawerWidth(in: size))
         }
         if showVideoInfo, let coordinator = controller.coordinator {
-            VideoSettingsPanel(coordinator: coordinator, qualityTitle: model.playback?.quality.title,
-                               streamURL: model.playback?.url, isShowing: $showVideoInfo)
-                .frame(width: min(380, size.width))
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            MacPlayerVideoInfoDrawer(
+                coordinator: coordinator, qualityTitle: model.playback?.quality.title,
+                streamURL: model.playback?.url, onClose: { showVideoInfo = false }
+            )
         }
         if let notice {
             Text(verbatim: notice)

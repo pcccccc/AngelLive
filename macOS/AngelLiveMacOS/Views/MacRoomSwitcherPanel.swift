@@ -18,9 +18,6 @@ struct MacRoomSwitcherPanel: View {
     @State private var liveHistory: [LiveModel] = []
     @State private var historyClassification: ShortDramaHistoryClassification?
 
-    private let inset: CGFloat = 16
-    private let shape = RoundedRectangle(cornerRadius: 24)
-
     private var activeSource: RoomSwitchSource {
         category == nil && source == .category ? .favorite : source
     }
@@ -37,36 +34,25 @@ struct MacRoomSwitcherPanel: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-
-            GeometryReader { geometry in
-                let rowWidth = max(0, geometry.size.width - 2 * inset)
-                let coverWidth = min(104, max(0, rowWidth - 16) * 0.28)
-                let candidates = rooms
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        if candidates.isEmpty { emptyState }
-                        ForEach(candidates) { room in
-                            candidateRow(room, coverWidth: coverWidth)
-                        }
-                        if activeSource == .category, let category {
-                            pagination(for: category)
-                        }
+        MacPlayerDrawer(title: "快速换台", onClose: onClose) {
+            Text(sourceTitle)
+        } content: {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("换台来源", selection: $source) {
+                    Text("收藏").tag(RoomSwitchSource.favorite)
+                    Text("历史").tag(RoomSwitchSource.history)
+                    if category != nil {
+                        Text("分区").tag(RoomSwitchSource.category)
                     }
-                    .padding(.horizontal, inset)
-                    .padding(.vertical, 8)
                 }
-                .id(activeSource)
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .tint(AppConstants.Colors.accent)
+                .accessibilityLabel("换台来源")
+
+                roomList
             }
         }
-        .background(Color(red: 25 / 255, green: 26 / 255, blue: 32 / 255), in: shape)
-        .clipShape(shape)
-        .overlay {
-            shape.strokeBorder(.white.opacity(0.12), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("快速换台")
         .onChange(of: activeSource) { _, newSource in
@@ -83,43 +69,24 @@ struct MacRoomSwitcherPanel: View {
         .onDisappear { loadMoreTask?.cancel() }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Menu {
-                Picker("换台来源", selection: $source) {
-                    Text("收藏").tag(RoomSwitchSource.favorite)
-                    Text("历史").tag(RoomSwitchSource.history)
-                    if category != nil {
-                        Text("分区").tag(RoomSwitchSource.category)
+    private var roomList: some View {
+        GeometryReader { geometry in
+            let coverWidth = min(104, max(0, geometry.size.width - 16) * 0.28)
+            let candidates = rooms
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    if candidates.isEmpty { emptyState }
+                    ForEach(candidates) { room in
+                        candidateRow(room, coverWidth: coverWidth)
+                    }
+                    if activeSource == .category, let category {
+                        pagination(for: category)
                     }
                 }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("换台")
-                        .font(.subheadline.weight(.semibold))
-                    Text("· \(sourceTitle)")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .lineLimit(1)
-                .frame(minHeight: MacPlayerChrome.controlSize)
-                .contentShape(Rectangle())
+                .padding(.vertical, 8)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("换台来源")
-            .accessibilityValue(sourceTitle)
-
-            Spacer(minLength: 0)
-            PanelCloseButton(closesOnEscape: true, action: onClose)
-                .accessibilityLabel("关闭换台")
+            .id(activeSource)
         }
-        .frame(minHeight: MacPlayerChrome.controlSize)
-        .padding(.horizontal, inset)
     }
 
     private var sourceTitle: String {
@@ -215,7 +182,7 @@ private struct MacRoomSwitcherRow: View {
 
     @State private var isHovered = false
     private let shape = RoundedRectangle(cornerRadius: 12)
-    private let selectionColor = Color(red: 131 / 255, green: 196 / 255, blue: 1)
+    private let selectionColor = AppConstants.Colors.accent
 
     var body: some View {
         HStack(spacing: 12) {

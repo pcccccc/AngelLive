@@ -137,7 +137,7 @@ struct RoomPlayerView: View {
                             onSelect: switchRoom,
                             onClose: { showRoomSwitcher = false }
                         )
-                        .frame(width: min(380, geometry.size.width))
+                        .macPlayerDrawerPlacement(in: geometry.size)
                     }
                 }
             }
@@ -280,9 +280,17 @@ struct RoomPlayerView: View {
             viewModel.recoveryCoordinator.start()
         }
         .sheet(item: $authenticationRecoveryRequest) { request in
-            NavigationStack {
-                MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
-                    .frame(minWidth: 620, minHeight: 420)
+            if usesFullUI {
+                NavigationStack {
+                    MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                }
+                .macSettingsSheetPresentation()
+                .frame(minWidth: 600, minHeight: 480)
+            } else {
+                NavigationStack {
+                    MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
+                        .frame(minWidth: 620, minHeight: 420)
+                }
             }
         }
         // 画质菜单点击「登录后可用」档位：复用登录恢复 sheet

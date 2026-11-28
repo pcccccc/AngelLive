@@ -4,7 +4,7 @@ extension EnvironmentValues {
     /// Opted into by the macOS FullUI sheet host, never by a shared view itself.
     @Entry public var usesMacSettingsPresentation = false
     #if os(macOS)
-    @Entry public var showsMacSettingsHeaderDivider = false
+    @Entry public var showsMacSettingsHeaderDivider = true
     @Entry var macSettingsCloseSheet: (@MainActor () -> Void)? = nil
     #endif
 }

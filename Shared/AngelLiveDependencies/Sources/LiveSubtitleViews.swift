@@ -56,6 +56,11 @@ public struct LiveSubtitleLanguageOptions: View {
     private let activationID: UUID
     private let onSelection: () -> Void
     @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
+    #if os(macOS)
+    @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
+    #else
+    private let usesSettingsPresentation = false
+    #endif
     @State private var languages: [Locale] = []
     @State private var isLoading = true
 
@@ -79,11 +84,11 @@ public struct LiveSubtitleLanguageOptions: View {
                         guard playback.chooseLanguage(language.identifier, activationID: activationID) else { return }
                         onSelection()
                     }
-                    if usesPlayerSheets {
+                    if usesSettingsPresentation || usesPlayerSheets {
                         Button(action: select) {
                             Text(title)
                                 .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .frame(maxWidth: .infinity, minHeight: usesSettingsPresentation ? 36 : nil, alignment: .leading)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -152,7 +157,11 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
             .playerSheetNavigationWhenPresented(Text("选择主播语言"))
         }
         #if os(macOS)
-        stack.frame(minWidth: 380, minHeight: 420)
+        if usesSettingsPresentation {
+            stack.frame(minWidth: 420, idealWidth: 460, minHeight: 420, idealHeight: 480)
+        } else {
+            stack.frame(minWidth: 380, minHeight: 420)
+        }
         #elseif os(iOS)
         if usesPlayerSheets {
             stack

@@ -33,20 +33,11 @@ struct MacVodPlayerDrawer: View {
     let onVideoInfo: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(kind.title).font(.system(size: 20, weight: .bold))
-                        .accessibilityAddTraits(.isHeader)
-                    if kind == .episodes, let detail = model.detail {
-                        Text("可播 \(detail.episodes.count) 集")
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 8)
-                PanelCloseButton(action: onClose).accessibilityLabel("关闭面板")
+        MacPlayerDrawer(title: kind.title, onClose: onClose) {
+            if kind == .episodes, let detail = model.detail {
+                Text("可播 \(detail.episodes.count) 集")
             }
+        } content: {
             if kind == .episodes, let detail = model.detail {
                 MacVodEpisodeList(detail: detail, snapshot: model.progressSnapshot,
                                   selectedEpisodeID: model.selectedEpisodeID, locatesCurrentEpisode: true,
@@ -60,10 +51,6 @@ struct MacVodPlayerDrawer: View {
                 }
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 24)
-        .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(.white.opacity(0.12)).allowsHitTesting(false) }
     }
 
     private var tracks: some View {

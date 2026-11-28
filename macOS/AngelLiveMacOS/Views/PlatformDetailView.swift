@@ -180,36 +180,12 @@ struct PlatformDetailView: View {
         .sheet(isPresented: $showPlatformSearch) {
             MacPlatformSearchView(platform: viewModel.platform)
         }
-        .overlay {
-            if showCategorySheet {
-                ZStack {
-                    Color.black.opacity(0.25)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showCategorySheet = false
-                            }
-                        }
-
-                    CategoryManagementView(onDismiss: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showCategorySheet = false
-                        }
-                    })
-                    .environment(viewModel)
-                    .frame(width: 620, height: 480)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                    )
-                    .shadow(radius: 20)
-                    .transition(.scale(scale: 0.95).combined(with: .opacity))
-                }
-            }
+        .sheet(isPresented: $showCategorySheet) {
+            CategoryManagementView { showCategorySheet = false }
+                .environment(viewModel)
+                .macSettingsSheetPresentation()
+                .frame(minWidth: 620, idealWidth: 680, minHeight: 460, idealHeight: 520)
         }
-        .animation(.easeInOut(duration: 0.2), value: showCategorySheet)
         .task {
             if viewModel.categories.isEmpty {
                 await viewModel.loadCategories()
@@ -218,8 +194,9 @@ struct PlatformDetailView: View {
         .sheet(item: $authenticationRecoveryRequest) { request in
             NavigationStack {
                 MacAccountManagementView(recoveryPluginIDs: request.pluginIDs)
-                    .frame(minWidth: 620, minHeight: 420)
             }
+            .macSettingsSheetPresentation()
+            .frame(minWidth: 600, minHeight: 480)
         }
     }
 

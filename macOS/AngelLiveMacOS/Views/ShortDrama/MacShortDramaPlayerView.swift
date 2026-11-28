@@ -165,12 +165,10 @@ struct MacShortDramaPlayerView: View {
                     episodeOverlay(size: geometry.size)
                 }
                 if showVideoInfo, let coordinator = controller.coordinator {
-                    VideoSettingsPanel(
+                    MacPlayerVideoInfoDrawer(
                         coordinator: coordinator, qualityTitle: model.playback?.quality.title,
-                        streamURL: model.playback?.url, isShowing: $showVideoInfo
+                        streamURL: model.playback?.url, onClose: { showVideoInfo = false }
                     )
-                    .frame(width: min(380, geometry.size.width))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .coordinateSpace(name: MacPlayerChrome.hoverSpace)
@@ -288,7 +286,7 @@ struct MacShortDramaPlayerView: View {
         }
         .focusable()
         .focusEffectDisabled()
-        .focusedSceneValue(\.macPlayerCommands, acceptsCommands ? commandActions : nil)
+        .focusedSceneValue(\.macPlayerCommands, acceptsCommands && !showAirPlay ? commandActions : nil)
         .onKeyPress(.return) {
             guard commandActions.canControlPlayback else { return .ignored }
             toggleFullscreen()
@@ -469,9 +467,7 @@ struct MacShortDramaPlayerView: View {
                 .onTapGesture { closeEpisodes() }
                 .accessibilityHidden(true)
             MacShortDramaEpisodesPanel(room: room, model: model, onSelect: selectEpisode, onClose: closeEpisodes)
-                .frame(width: min(380, size.width))
-                .padding(.vertical, 16)
-                .padding(.trailing, min(16, max(0, size.width - 380)))
+                .macPlayerDrawerPlacement(in: size)
         }
     }
 
@@ -887,15 +883,9 @@ private struct MacShortDramaEpisodesPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(alignment: .top, spacing: 16) {
-                PanelCloseButton(closesOnEscape: true, action: onClose).accessibilityLabel("关闭选集")
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("选集").font(.system(size: 24, weight: .bold)).foregroundStyle(.white)
-                    Text("可播 \(model.episodes.count) 集").font(.system(size: 15, weight: .medium)).foregroundStyle(.white.opacity(0.72))
-                }
-                Spacer(minLength: 12)
-            }
+        MacPlayerDrawer(title: "选集", onClose: onClose) {
+            Text("可播 \(model.episodes.count) 集")
+        } content: {
             if groups.count > 1 {
                 HStack(spacing: 8) {
                     Text("剧集区间").accessibilityHidden(true)
@@ -965,11 +955,6 @@ private struct MacShortDramaEpisodesPanel: View {
                 }
             }
         }
-        .padding(24)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 24)
-        .overlay { RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.12), lineWidth: 1) }
-        .shadow(color: .black.opacity(0.22), radius: 22, y: 12)
         .onChange(of: model.episodes.map(\.id)) { _, _ in
             guard !groups.contains(where: { $0.id == browseGroupID }) else { return }
             browseGroupID = groups.first { $0.contains(episodeID: model.selectedEpisodeID) }?.id

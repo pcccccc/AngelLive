@@ -6,19 +6,20 @@ struct MacDLNADevicePickerSheet: View {
     let session: DLNACastingSession
     let resource: DLNAMediaResource?
 
-    @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
             deviceContent
             if session.state == .settingURI || session.activeDevice != nil {
                 Divider()
                 castStatus
             }
         }
-        .frame(minWidth: 380, idealWidth: 440, minHeight: 280, idealHeight: 340)
+        .macSettingsPage("DLNA 投屏") {
+            Button("重新搜索", systemImage: "arrow.clockwise") { session.discover() }
+                .disabled(session.state.isBusy)
+        }
+        .macSettingsSheetPresentation()
+        .frame(minWidth: 440, idealWidth: 480, minHeight: 340, idealHeight: 400)
         .task {
             if session.state == .idle || session.state == .ready || session.state == .playing {
                 session.discover()
@@ -27,31 +28,17 @@ struct MacDLNADevicePickerSheet: View {
         .onDisappear { session.cancelDiscovery() }
     }
 
-    private var header: some View {
-        HStack {
-            Text("DLNA 投屏")
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            Button("重新搜索", systemImage: "arrow.clockwise") { session.discover() }
-                .disabled(session.state.isBusy)
-            Button("关闭") { dismiss() }
-                .keyboardShortcut(.cancelAction)
-        }
-        .padding(16)
-    }
-
     private var deviceContent: some View {
         VStack(spacing: 0) {
-            if case .failed(let message) = session.state {
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-            }
-
             if !session.devices.isEmpty {
+                if case .failed(let message) = session.state {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 16)
+                }
                 List(session.devices) { device in
                     deviceRow(device)
                 }
@@ -59,8 +46,9 @@ struct MacDLNADevicePickerSheet: View {
             } else if session.state == .idle || session.state == .discovering {
                 ProgressView("正在搜索局域网设备…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if case .failed = session.state {
-                Spacer()
+            } else if case .failed(let message) = session.state {
+                ContentUnavailableView("未找到 DLNA 设备", systemImage: "tv.slash", description: Text(message))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if session.state != .settingURI {
                 ContentUnavailableView(
                     "没有找到 DLNA 设备",
@@ -86,11 +74,11 @@ struct MacDLNADevicePickerSheet: View {
                 Spacer(minLength: 0)
                 if isActive {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(AppConstants.Colors.accent)
                         .accessibilityLabel("正在投屏")
                 }
             }
-            .padding(.vertical, 6)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

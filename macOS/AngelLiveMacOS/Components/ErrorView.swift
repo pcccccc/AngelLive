@@ -72,6 +72,7 @@ struct ErrorView: View {
     let onLogin: (() -> Void)?
 
     @State private var showCopiedAlert = false
+    @Environment(\.usesFullUI) private var usesFullUI
     @State private var showingSupportDiagnostics = false
     @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
 
@@ -136,18 +137,25 @@ struct ErrorView: View {
             Text("CURL 命令已复制到剪贴板")
         }
         .sheet(isPresented: $showingSupportDiagnostics) {
-            NavigationStack {
-                SupportDiagnosticsView()
-                    .toolbar {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button("关闭", systemImage: "xmark") {
-                                showingSupportDiagnostics = false
+            Group {
+                if usesFullUI {
+                    NavigationStack { SupportDiagnosticsView() }
+                        .macSettingsSheetPresentation()
+                } else {
+                    NavigationStack {
+                        SupportDiagnosticsView()
+                            .toolbar {
+                                ToolbarItem(placement: .primaryAction) {
+                                    Button("关闭", systemImage: "xmark") {
+                                        showingSupportDiagnostics = false
+                                    }
+                                    .labelStyle(.iconOnly)
+                                    .help("关闭问题诊断")
+                                    .keyboardShortcut(.cancelAction)
+                                }
                             }
-                            .labelStyle(.iconOnly)
-                            .help("关闭问题诊断")
-                            .keyboardShortcut(.cancelAction)
-                        }
                     }
+                }
             }
             .frame(minWidth: 600, idealWidth: 640, minHeight: 520, idealHeight: 560)
         }
@@ -220,6 +228,7 @@ struct ErrorView: View {
                 HStack(spacing: 10) {
                     actionButtons
                 }
+                .controlSize(usesFullUI ? .regular : .large)
                 .padding(.top, 4)
             }
         }
@@ -300,7 +309,6 @@ struct ErrorView: View {
                 Label("返回", systemImage: "arrow.left")
             }
             .buttonStyle(.bordered)
-            .controlSize(.large)
         }
 
         if showLoginButton, let onLogin {
@@ -311,8 +319,7 @@ struct ErrorView: View {
                 )
             }
             .buttonStyle(.borderedProminent)
-            .tint(.green)
-            .controlSize(.large)
+            .tint(usesFullUI ? AppConstants.Colors.accent : .green)
         }
 
         if supportDiagnosticsEnabled, isErrorStyle {
@@ -320,13 +327,12 @@ struct ErrorView: View {
                 Label("诊断与反馈", systemImage: "waveform.path.ecg")
             }
             .buttonStyle(.bordered)
-            .controlSize(.large)
             .accessibilityLabel("诊断与反馈")
             .accessibilityHint("记录并预览当前错误信息")
         }
 
         if showRetry, let onRetry {
-            Button(action: {
+            let retryButton = Button(action: {
                 guard !isRetrying else { return }
                 onRetry()
             }) {
@@ -337,9 +343,16 @@ struct ErrorView: View {
                     Label("重试", systemImage: "arrow.clockwise")
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
             .accessibilityLabel(isRetrying ? "正在加载" : "重试")
+
+            if usesFullUI && showLoginButton && onLogin != nil {
+                retryButton.buttonStyle(.bordered)
+            } else if usesFullUI {
+                retryButton.buttonStyle(.borderedProminent)
+                    .tint(AppConstants.Colors.accent)
+            } else {
+                retryButton.buttonStyle(.borderedProminent)
+            }
         }
     }
 

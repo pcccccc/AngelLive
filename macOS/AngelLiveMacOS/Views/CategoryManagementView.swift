@@ -22,32 +22,15 @@ struct CategoryManagementView: View {
     private let gridColumns = [GridItem(.adaptive(minimum: 96, maximum: 132), spacing: 12)]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            HStack(spacing: 0) {
-                mainCategorySidebar
-                subCategoryGrid
-            }
+        HStack(spacing: 0) {
+            mainCategorySidebar
+            Divider()
+            subCategoryGrid
         }
+        .macSettingsPage("选择分类")
         .onAppear {
             browsingMainIndex = viewModel.selectedMainCategoryIndex
         }
-    }
-
-    // MARK: - 顶部标题栏
-
-    private var header: some View {
-        ZStack {
-            Text("选择分类")
-                .font(.headline)
-
-            HStack {
-                PanelCloseButton(closesOnEscape: true, action: onDismiss)
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     // MARK: - 左侧一级分类
@@ -75,20 +58,18 @@ struct CategoryManagementView: View {
     @ViewBuilder
     private var subCategoryGrid: some View {
         if currentSubCategories.isEmpty {
-            ContentUnavailableViewCompat()
+            ContentUnavailableView("该分类下暂无子分类", systemImage: "square.grid.2x2")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 12) {
                     ForEach(Array(currentSubCategories.enumerated()), id: \.offset) { index, subCategory in
-                        CategoryCard(
-                            category: subCategory,
-                            isSelected: isCommitted(subIndex: index),
-                            platformIcon: platformIcon
-                        )
-                        .onTapGesture {
-                            commit(subIndex: index)
+                        Button { commit(subIndex: index) } label: {
+                            CategoryCard(category: subCategory, isSelected: isCommitted(subIndex: index),
+                                         platformIcon: platformIcon)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(isCommitted(subIndex: index) ? .isSelected : [])
                     }
                 }
                 .padding(16)
@@ -138,28 +119,29 @@ private struct MainCategoryRow: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isSelected ? Color.accentColor : .clear)
+                    .fill(isSelected ? AppConstants.Colors.accent : .clear)
                     .frame(width: 3, height: 15)
 
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? Color.primary : Color.secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 7)
+            .frame(minHeight: 44)
             .padding(.trailing, 6)
             .contentShape(Rectangle())
             .background(rowBackground, in: RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .onHover { isHovering = $0 }
     }
 
     private var rowBackground: Color {
         if isSelected {
-            return Color.accentColor.opacity(0.14)
+            return AppConstants.Colors.accent.opacity(0.14)
         }
         return isHovering ? Color.primary.opacity(0.06) : .clear
     }
@@ -188,8 +170,8 @@ struct CategoryCard: View {
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
 
             Text(category.title)
-                .font(.system(size: 11))
-                .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+                .font(.caption)
+                .foregroundStyle(isSelected ? AppConstants.Colors.accent : Color.primary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
@@ -197,7 +179,7 @@ struct CategoryCard: View {
         .background(cardBackground, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 1.5)
+                .stroke(isSelected ? AppConstants.Colors.accent : .clear, lineWidth: 1.5)
         )
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .onHover { isHovering = $0 }
@@ -231,23 +213,8 @@ struct CategoryCard: View {
 
     private var cardBackground: Color {
         if isSelected {
-            return Color.accentColor.opacity(0.10)
+            return AppConstants.Colors.accent.opacity(0.10)
         }
         return isHovering ? Color.primary.opacity(0.05) : .clear
-    }
-}
-
-// MARK: - 空态
-
-private struct ContentUnavailableViewCompat: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 28))
-                .foregroundStyle(.tertiary)
-            Text("该分类下暂无子分类")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
     }
 }

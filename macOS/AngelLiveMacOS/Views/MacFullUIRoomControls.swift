@@ -127,6 +127,17 @@ private struct FullUIPlayerCursor: NSViewRepresentable {
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func playerPopoverBackground(for colorScheme: ColorScheme) -> some View {
+        if colorScheme == .light {
+            presentationBackground(Color(.sRGB, red: 246 / 255, green: 246 / 255, blue: 248 / 255))
+        } else {
+            presentationBackground(Color(.sRGB, red: 28 / 255, green: 28 / 255, blue: 30 / 255))
+        }
+    }
+}
+
 struct MacFullUIRoomControls: View {
     @Bindable var viewModel: RoomInfoViewModel
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
@@ -138,6 +149,7 @@ struct MacFullUIRoomControls: View {
     let onClose: (() -> Void)?
     let onExitFullscreen: (() -> Bool)?
 
+    @Environment(\.colorScheme) private var hostColorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
@@ -280,12 +292,10 @@ struct MacFullUIRoomControls: View {
                 }
                 #endif
                 if showVideoInfo {
-                    VideoSettingsPanel(
+                    MacPlayerVideoInfoDrawer(
                         coordinator: coordinator, qualityTitle: qualityTitle,
-                        streamURL: viewModel.currentPlayURL, isShowing: $showVideoInfo
+                        streamURL: viewModel.currentPlayURL, onClose: { showVideoInfo = false }
                     )
-                    .frame(width: min(380, geometry.size.width))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .coordinateSpace(name: MacPlayerChrome.hoverSpace)
@@ -311,7 +321,7 @@ struct MacFullUIRoomControls: View {
             isFullscreen = window?.styleMask.contains(.fullScreen) == true
             isPinned = window?.level == .floating
         }
-        .focusedSceneValue(\.macPlayerCommands, acceptsCommands ? commandActions : nil)
+        .focusedSceneValue(\.macPlayerCommands, acceptsCommands && panel == nil ? commandActions : nil)
         .macPlayerEscapeKey(isEnabled: acceptsCommands && menusTracking == 0, action: handleEscape)
         .onAppear { revealControls() }
         .onDisappear {
@@ -341,7 +351,7 @@ struct MacFullUIRoomControls: View {
             menusTracking = max(0, menusTracking - 1)
         }
         .sheet(item: $panel) { selection in
-            panelContent(selection).onExitCommand { panel = nil }
+            panelContent(selection)
         }
         .task(id: closeDeadline) {
             guard let closeDeadline else { return }
@@ -390,7 +400,10 @@ struct MacFullUIRoomControls: View {
                 .buttonStyle(.plain)
                 .help("查看主播信息")
                 .popover(isPresented: $showStreamer, arrowEdge: .bottom) {
-                    StreamerInfoPopover(room: room).environment(\.colorScheme, .light)
+                    StreamerInfoPopover(room: room)
+                        .playerPopoverBackground(for: hostColorScheme)
+                        .foregroundStyle(Color.primary)
+                        .environment(\.colorScheme, hostColorScheme)
                 }
             }
             Spacer(minLength: 0)
@@ -532,14 +545,28 @@ struct MacFullUIRoomControls: View {
             ? (viewModel.danmuSettings.showDanmu ? "隐藏弹幕" : "显示弹幕") : "弹幕连接状态")
         .popover(isPresented: $showDanmakuIssue) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(viewModel.danmakuConnectionIssue ?? "").font(.callout)
-                Button(viewModel.danmuSettings.showDanmu ? "隐藏弹幕" : "显示弹幕") {
-                    showDanmakuIssue = false
-                    viewModel.toggleDanmuDisplay()
+                Text("弹幕连接状态")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                Text(viewModel.danmakuConnectionIssue ?? "")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button(viewModel.danmuSettings.showDanmu ? "隐藏弹幕" : "显示弹幕") {
+                        showDanmakuIssue = false
+                        viewModel.toggleDanmuDisplay()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.regular)
                 }
             }
             .padding(16)
-            .frame(width: 240)
+            .frame(width: 280)
+            .playerPopoverBackground(for: hostColorScheme)
+            .foregroundStyle(Color.primary)
+            .environment(\.colorScheme, hostColorScheme)
         }
     }
 
@@ -653,15 +680,13 @@ struct MacFullUIRoomControls: View {
         case .subtitles:
             NavigationStack {
                 TranslationSettingView(usesFullUI: true)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { self.panel = nil }
-                        }
-                    }
             }
+            .macSettingsSheetPresentation()
+            .labelStyle(MacTranslationSettingLabelStyle())
             .frame(minWidth: 600, minHeight: 480, idealHeight: 580)
         case .languages:
             LiveSubtitleLanguageSelectionSheet(playback: viewModel.subtitlePlayback, activationID: subtitleActivationID)
+                .macSettingsSheetPresentation()
         case .airPlay:
             MacPlayerAirPlaySheet(player: airPlayPlayer)
         case .dlna:

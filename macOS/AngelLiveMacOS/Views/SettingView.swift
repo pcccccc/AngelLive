@@ -1029,7 +1029,7 @@ private struct MacTranslationSettingLabel: View {
     }
 }
 
-private struct MacTranslationSettingLabelStyle: LabelStyle {
+struct MacTranslationSettingLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 12) {
             PanelIconTile {

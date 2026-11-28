@@ -668,6 +668,8 @@ private struct MacPluginConsentPopover: ViewModifier {
 }
 
 private struct MacPluginConsentPanel: View {
+    @Environment(\.usesFullUI) private var usesFullUI
+    @Environment(\.controlSize) private var inheritedControlSize
     @Environment(PluginInstallConsentService.self) private var consent
     let resolve: (Bool) -> Void
 
@@ -678,10 +680,12 @@ private struct MacPluginConsentPanel: View {
             HStack {
                 Spacer()
                 Button("取消安装") { resolve(false) }
+                    .keyboardShortcut(usesFullUI ? .cancelAction : nil)
                 Button(consent.continueButtonTitle) { resolve(true) }
                     .buttonStyle(.borderedProminent)
             }
         }
+        .controlSize(usesFullUI ? .regular : inheritedControlSize)
         .padding(16).frame(width: 320)
         .onExitCommand { resolve(false) }
     }

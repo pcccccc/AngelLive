@@ -414,19 +414,25 @@ struct MacPlayerSleepTimerMenu: View {
 
 struct MacPlayerAirPlaySheet: View {
     let player: AVPlayer?
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("AirPlay 投屏").font(.headline)
+        Group {
             if let player {
-                MacPlayerAirPlayPicker(player: player).frame(width: 44, height: 44)
+                VStack(spacing: 12) {
+                    Text("选择 AirPlay 设备以开始投屏。")
+                        .foregroundStyle(.secondary)
+                    MacPlayerAirPlayPicker(player: player)
+                        .frame(width: 44, height: 44)
+                        .accessibilityLabel("选择 AirPlay 设备")
+                }
             } else {
-                Text("当前播放源暂不支持 AirPlay").font(.callout)
+                ContentUnavailableView("当前播放源暂不支持 AirPlay", systemImage: "airplayvideo",
+                                       description: Text("请尝试切换其他线路或清晰度。"))
             }
-            Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
         }
-        .padding(20)
+        .macSettingsPage("AirPlay 投屏")
+        .macSettingsSheetPresentation()
+        .frame(minWidth: 380, idealWidth: 420, minHeight: 240, idealHeight: 260)
     }
 }
 

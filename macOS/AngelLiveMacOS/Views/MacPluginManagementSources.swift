@@ -220,6 +220,7 @@ private struct MacPluginSourceHealthText: View {
 }
 
 struct MacPluginAddSourceView: View {
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(PluginSourceManager.self) private var manager
     @Environment(\.dismiss) private var dismiss
     let reloadCatalog: () async -> Void
@@ -245,11 +246,13 @@ struct MacPluginAddSourceView: View {
             HStack {
                 if isAdding { ProgressView().controlSize(.small); Text("正在读取来源…").foregroundStyle(.secondary) }
                 Spacer()
-                Button("取消") { dismiss() }.disabled(isAdding)
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(usesFullUI ? .cancelAction : nil)
+                    .disabled(isAdding)
                 Button("添加", action: add).buttonStyle(.borderedProminent)
                     .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isAdding || manager.isManagementBusy)
             }
-            .controlSize(.large)
+            .controlSize(usesFullUI ? .regular : .large)
         }
         .padding(16)
         .onAppear { inputFocused = true }

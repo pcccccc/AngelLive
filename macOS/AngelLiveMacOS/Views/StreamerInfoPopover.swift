@@ -16,6 +16,7 @@ struct StreamerInfoPopover: View {
     @Environment(\.openURL) private var openURL
     @Environment(ToastManager.self) private var toastManager: ToastManager?
     @Environment(\.usesFullUI) private var usesFullUI
+    @Environment(\.colorScheme) private var colorScheme
     @State private var translationSettings = RoomTranslationSettings.shared
     @State private var translationService = RoomTitleTranslationService.shared
 
@@ -27,7 +28,7 @@ struct StreamerInfoPopover: View {
 
             actionButtons
         }
-        .padding(20)
+        .padding(usesFullUI ? 16 : 20)
         .frame(width: 340)
     }
 
@@ -62,13 +63,19 @@ struct StreamerInfoPopover: View {
     private var platformBadge: some View {
         Text(room.liveType.platformName)
             .font(.caption.bold())
-            .foregroundStyle(.white)
+            .foregroundStyle(usesFullUI ? Color.primary : .white)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(room.liveType.platformColor, in: Capsule())
+            .background(usesFullUI ? AnyShapeStyle(.background.secondary) : AnyShapeStyle(room.liveType.platformColor), in: Capsule())
     }
 
     // MARK: - Room Info
+
+    private var infoLabelStyle: AnyShapeStyle {
+        usesFullUI && colorScheme == .light
+            ? AnyShapeStyle(Color.primary.opacity(0.78))
+            : AnyShapeStyle(.secondary)
+    }
 
     private var roomInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -85,15 +92,18 @@ struct StreamerInfoPopover: View {
 
             Divider()
 
-            infoRow(icon: "number", title: "房间号", value: room.roomId.orDash)
+            infoRow(icon: "number", title: "房间号", value: room.roomId.orDash, numeric: true)
 
             if let watched = watchedTitle {
                 Divider()
-                infoRow(icon: "eye", title: "观看人数", value: watched)
+                infoRow(icon: "eye", title: "观看人数", value: watched, numeric: true)
             }
         }
         .padding(14)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(
+            usesFullUI ? AnyShapeStyle(.background.secondary) : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
         .roomTitleTranslationTask(room.roomTitle, enabled: usesFullUI)
     }
 
@@ -113,7 +123,7 @@ struct StreamerInfoPopover: View {
         HStack(alignment: .top, spacing: 12) {
             Label("译文", systemImage: "character.book.closed")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(infoLabelStyle)
                 .layoutPriority(0)
 
             Spacer(minLength: 8)
@@ -127,17 +137,17 @@ struct StreamerInfoPopover: View {
         }
     }
 
-    private func infoRow(icon: String, title: String, value: String) -> some View {
+    private func infoRow(icon: String, title: String, value: String, numeric: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Label(title, systemImage: icon)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(infoLabelStyle)
                 .layoutPriority(0)
 
             Spacer(minLength: 8)
 
             Text(value)
-                .font(.subheadline)
+                .font(usesFullUI && numeric ? .subheadline.monospacedDigit() : .subheadline)
                 .foregroundStyle(.primary)
                 .lineLimit(3)
                 .multilineTextAlignment(.trailing)
@@ -156,9 +166,9 @@ struct StreamerInfoPopover: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
-            .controlSize(.large)
+            .controlSize(usesFullUI ? .regular : .large)
             .buttonStyle(.bordered)
-            .tint(.blue)
+            .tint(usesFullUI ? nil : Color.blue)
             .disabled(externalURL == nil)
 
             Button {
@@ -168,9 +178,9 @@ struct StreamerInfoPopover: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
-            .controlSize(.large)
+            .controlSize(usesFullUI ? .regular : .large)
             .buttonStyle(.borderedProminent)
-            .tint(room.liveType.platformColor)
+            .tint(usesFullUI ? AppConstants.Colors.accent : room.liveType.platformColor)
             .disabled(externalURL == nil)
         }
     }
