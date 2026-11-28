@@ -4,6 +4,23 @@ import CoreGraphics
 /// 把展示协议转换成可发射 CellModel。图片并发加载，输出顺序始终与 segments 一致。
 @MainActor
 public enum DanmakuDisplayModelFactory {
+    public static func makeImmediateModelIfAvailable(
+        for message: DanmakuDisplayMessage,
+        showColorDanmu: Bool,
+        alpha: CGFloat,
+        fontSize: CGFloat
+    ) -> (any DanmakuCellModel)? {
+        var text = ""
+        for segment in message.segments {
+            guard case .text(let fragment) = segment else { return nil }
+            text += fragment
+        }
+        return makeModel(
+            segments: text.isEmpty ? [] : [.text(text)], for: message,
+            showColorDanmu: showColorDanmu, alpha: alpha, fontSize: fontSize
+        )
+    }
+
     public static func makeModel(
         for message: DanmakuDisplayMessage,
         showColorDanmu: Bool,
@@ -19,8 +36,20 @@ public enum DanmakuDisplayModelFactory {
                 DanmakuMixedCellSegment.image(image, pixelSize: pixelSize)
             }
         }
-        let fallback: [DanmakuMixedCellSegment] = message.text.isEmpty ? [] : [.text(message.text)]
-        let content = renderSegments.isEmpty ? fallback : renderSegments
+        return makeModel(
+            segments: renderSegments, for: message,
+            showColorDanmu: showColorDanmu, alpha: alpha, fontSize: fontSize
+        )
+    }
+
+    private static func makeModel(
+        segments: [DanmakuMixedCellSegment],
+        for message: DanmakuDisplayMessage,
+        showColorDanmu: Bool,
+        alpha: CGFloat,
+        fontSize: CGFloat
+    ) -> any DanmakuCellModel {
+        let content = segments.isEmpty && !message.text.isEmpty ? [.text(message.text)] : segments
         let font = DanmakuFont.systemFont(ofSize: fontSize)
 
         let model: any DanmakuCellModel

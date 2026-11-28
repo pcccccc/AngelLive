@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import AngelLiveCore
 
@@ -49,6 +50,58 @@ struct DanmakuMixedCellModelTests {
             return
         }
         #expect(text == "hello world")
+    }
+
+    @MainActor
+    @Test("immediate text matches resolved content and style")
+    func immediateTextModel() async throws {
+        for (segments, expected) in [
+            ([DanmakuDisplaySegment.text("hello"), .text(""), .text(" "), .text("world")], "hello world"),
+            ([.text("")], "fallback"),
+            ([], "fallback")
+        ] {
+            let message = DanmakuDisplayMessage(text: "fallback", nickname: "", color: 0x2277AA, segments: segments)
+            let immediate = try #require(DanmakuDisplayModelFactory.makeImmediateModelIfAvailable(
+                for: message, showColorDanmu: true, alpha: 0.6, fontSize: 20
+            ) as? DanmakuTextCellModel)
+            let resolved = await DanmakuDisplayModelFactory.makeModel(
+                for: message, showColorDanmu: true, alpha: 0.6, fontSize: 20
+            )
+            let text = try #require(resolved as? DanmakuTextCellModel)
+            #expect(immediate.text == expected)
+            #expect(immediate.text == text.text)
+            #expect(immediate.color == text.color)
+            #expect(immediate.size == text.size)
+            #expect(immediate.font.pointSize == 20)
+            #expect((8.5...11.5).contains(immediate.displayTime))
+        }
+    }
+
+    @MainActor
+    @Test("image segments use deferred decoding and retain their position")
+    func imageModelRequiresResolution() async throws {
+        // A one-pixel GIF exercises the image loader without a network request.
+        let url = try #require(URL(string: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="))
+        let message = DanmakuDisplayMessage(
+            text: "fallback", nickname: "", color: 0xFFFFFF,
+            segments: [.text("left"), .image(.init(url: url, pixelSize: nil)), .text("right")]
+        )
+        let immediate = DanmakuDisplayModelFactory.makeImmediateModelIfAvailable(
+            for: message, showColorDanmu: false, alpha: 1, fontSize: 20
+        )
+        #expect(immediate == nil)
+        let resolved = await DanmakuDisplayModelFactory.makeModel(
+            for: message, showColorDanmu: false, alpha: 1, fontSize: 20
+        )
+        let mixed = try #require(resolved as? DanmakuMixedCellModel)
+        try #require(mixed.segments.count == 3)
+        guard case .text("left") = mixed.segments[0],
+              case .image(let image, _) = mixed.segments[1],
+              case .text("right") = mixed.segments[2] else {
+            Issue.record("Expected the decoded image between the original text segments")
+            return
+        }
+        #expect(image.width == 1 && image.height == 1)
     }
 
     private func makeImage(width: Int, height: Int) -> CGImage? {

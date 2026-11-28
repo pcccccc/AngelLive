@@ -198,13 +198,38 @@ private struct AppearanceInspectionSettings: View {
 }
 #endif
 
+private struct MacRefreshCommands: Commands {
+    let isDisabled: Bool
+    let production: MacProductionServices
+    @FocusedValue(\.macHomeRefreshAction) private var macHomeRefreshAction
+
+    var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            #if !APPSTORE
+            if !isDisabled {
+                MacUpdateButton(updater: production.updater)
+                Divider()
+            }
+            #endif
+            Button("刷新") {
+                if let macHomeRefreshAction {
+                    macHomeRefreshAction()
+                } else {
+                    NotificationCenter.default.post(name: NSNotification.Name("RefreshContent"), object: nil)
+                }
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(isDisabled)
+        }
+    }
+}
+
 #if !DEBUG
 @main
 #endif
 struct AngelLiveMacOSApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
-    @FocusedValue(\.macHomeRefreshAction) private var macHomeRefreshAction
     @State private var production = MacProductionServices()
 
     private var isUITesting: Bool {
@@ -276,24 +301,7 @@ struct AngelLiveMacOSApp: App {
                 }
                 .disabled(isUITesting || isVodDemo)
             }
-            CommandGroup(after: .appInfo) {
-                #if !APPSTORE
-                if !isUITesting && !isVodDemo {
-                    MacUpdateButton(updater: production.updater)
-                    Divider()
-                }
-                #endif
-
-                Button("刷新") {
-                    if let macHomeRefreshAction {
-                        macHomeRefreshAction()
-                    } else {
-                        NotificationCenter.default.post(name: NSNotification.Name("RefreshContent"), object: nil)
-                    }
-                }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(isUITesting || isVodDemo)
-            }
+            MacRefreshCommands(isDisabled: isUITesting || isVodDemo, production: production)
             #if DEBUG
             // Debug 菜单 + ⌘⇧D 召出插件控制台,仅 DEBUG 构建可见。
             DevConsoleCommands(isEnabled: !isUITesting && !isVodDemo)

@@ -11,8 +11,11 @@ import Kingfisher
 import SwiftUI
 internal import Shimmer
 
-struct MacHomeRefreshAction {
+struct MacHomeRefreshAction: Equatable {
+    let id: ObjectIdentifier
     let perform: @MainActor () -> Void
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
 
     @MainActor
     func callAsFunction() {
@@ -47,6 +50,7 @@ private struct MacHomeRefreshRegistration: ViewModifier {
 
 struct MacHomeView: View {
     let isSelected: Bool
+    let window: NSWindow?
     let onShowFavorites: () -> Void
 
     @Environment(AppFavoriteModel.self) private var favoriteModel
@@ -57,6 +61,7 @@ struct MacHomeView: View {
 
     @State private var model = PluginHomeFeedModel()
     @State private var credentialRevision = 0
+    @State private var windowIsKeyAndVisible = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -131,9 +136,15 @@ struct MacHomeView: View {
         .modifier(
             MacHomeRefreshRegistration(
                 isSelected: isSelected,
-                action: MacHomeRefreshAction(perform: refreshAll)
+                action: MacHomeRefreshAction(id: ObjectIdentifier(model), perform: refreshAll)
             )
         )
+        .onChange(of: window, initial: true) { updateWindowActivity() }
+        .onReceive(Publishers.Merge3(
+            NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification, object: window),
+            NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification, object: window),
+            NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification, object: window)
+        )) { _ in updateWindowActivity() }
         .task(id: MacHomeRefreshTrigger(
             installedPluginIds: pluginAvailability.installedPluginIds,
             availabilityConfirmed: pluginAvailability.hasCheckedAvailability,
@@ -178,7 +189,8 @@ struct MacHomeView: View {
         let heroHeight = MacHomeHeroMetrics.height(for: heroWidth)
 
         if !model.bannerEntries.isEmpty {
-            MacHomeHeroCarousel(entries: model.bannerEntries, width: heroWidth)
+            MacHomeHeroCarousel(entries: model.bannerEntries, width: heroWidth,
+                                allowsAutoplay: isSelected && windowIsKeyAndVisible && !fullscreenPlayerManager.showFullscreenPlayer)
                 .frame(width: contentWidth, alignment: .center)
         } else if isAwaitingFirstContent {
             RoundedRectangle(
@@ -190,6 +202,10 @@ struct MacHomeView: View {
                 .frame(width: contentWidth, alignment: .center)
                 .shimmering()
         }
+    }
+
+    private func updateWindowActivity() {
+        windowIsKeyAndVisible = window?.isKeyWindow == true && window?.occlusionState.contains(.visible) == true
     }
 
     private var isAwaitingFirstContent: Bool {
@@ -424,6 +440,7 @@ private struct MacHomeRoomTile: View {
 private struct MacHomeHeroCarousel: View {
     let entries: [HomeBannerEntry]
     let width: CGFloat
+    let allowsAutoplay: Bool
 
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @Environment(\.openWindow) private var openWindow
@@ -468,8 +485,9 @@ private struct MacHomeHeroCarousel: View {
                 MacHomeHeroPageIndicator(
                     entries: entries,
                     selectedID: activeID,
-                    progress: autoplayProgress
+                    progress: canAutoplay ? autoplayProgress : 1
                 )
+                .id(canAutoplay)
                 .padding(.trailing, 22)
                 .padding(.bottom, 18)
                 .frame(width: indicatorRegionWidth, height: height, alignment: .bottomTrailing)
@@ -486,12 +504,15 @@ private struct MacHomeHeroCarousel: View {
     }
 
     private var autoplayTaskID: String {
-        "\(entries.map(\.id).joined(separator: "|"))::\(selectedID ?? "")::\(scenePhase)::\(reduceMotion)"
+        "\(entries.map(\.id).joined(separator: "|"))::\(selectedID ?? "")::\(canAutoplay)"
+    }
+
+    private var canAutoplay: Bool {
+        allowsAutoplay && entries.count > 1 && scenePhase == .active && !reduceMotion
     }
 
     @MainActor
     private func runAutoplayIfNeeded() async {
-        let canAutoplay = entries.count > 1 && scenePhase == .active && !reduceMotion
         var resetTransaction = Transaction()
         resetTransaction.disablesAnimations = true
         withTransaction(resetTransaction) {

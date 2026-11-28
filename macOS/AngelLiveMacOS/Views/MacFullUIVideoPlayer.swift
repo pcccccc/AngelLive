@@ -9,12 +9,16 @@ import KSPlayerUI
 /// FullUI keeps window geometry under the host and user's control across player lifetimes.
 /// This follows KSVideoPlayer's make/update/reset path without its teardown aspect-ratio write.
 @MainActor
-struct MacFullUIVideoPlayer: NSViewRepresentable {
+struct MacFullUIVideoPlayer: NSViewRepresentable, @MainActor Equatable {
     typealias Coordinator = KSVideoPlayer.Coordinator
 
     @ObservedObject var coordinator: Coordinator
     let url: URL
     let options: KSOptions
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.url == rhs.url && lhs.coordinator === rhs.coordinator && lhs.options === rhs.options
+    }
 
     func makeCoordinator() -> Coordinator { coordinator }
 

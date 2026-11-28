@@ -37,6 +37,9 @@ public class DanmakuAsyncLayer: CALayer {
     
     /// When true, it is drawn asynchronously and is ture by default.
     public var displayAsync = true
+    #if os(macOS)
+    var usesBitmapRendering = false
+    #endif
     
     public var willDisplay: ((_ layer: DanmakuAsyncLayer) -> Void)?
     
@@ -105,6 +108,9 @@ public class DanmakuAsyncLayer: CALayer {
             let size = bounds.size
             let scale = contentsScale
             let opaque = isOpaque
+            #if os(macOS)
+            let usesBitmapRendering = self.usesBitmapRendering
+            #endif
             let backgroundColor = (opaque && self.backgroundColor != nil) ? self.backgroundColor : nil
             let displaying = self.displaying
             let queue = self.queue
@@ -123,51 +129,33 @@ public class DanmakuAsyncLayer: CALayer {
             }
             queue.async {
                 guard !isCancelled() else { return }
+                func draw(in context: CGContext) {
+                    if opaque {
+                        context.saveGState()
+                        let rect = CGRect(origin: .zero, size: size)
+                        if backgroundColor == nil || (backgroundColor?.alpha ?? 0) < 1 {
+                            context.setFillColor(DanmakuColor.white.cgColor)
+                            context.fill(rect)
+                        }
+                        if let backgroundColor {
+                            context.setFillColor(backgroundColor)
+                            context.fill(rect)
+                        }
+                        context.restoreGState()
+                    }
+                    displaying?(context, size, isCancelled)
+                }
 #if os(iOS) || os(tvOS)
                 UIGraphicsBeginImageContextWithOptions(size, opaque, scale)
                 guard let context = UIGraphicsGetCurrentContext() else {
                     UIGraphicsEndImageContext()
                     return
                 }
-#elseif os(macOS)
-                // macOS: 创建离屏 NSImage 并获取 context
-                let image = NSImage(size: size)
-                image.lockFocus()
-                guard let context = NSGraphicsContext.current?.cgContext else {
-                    image.unlockFocus()
-                    return
-                }
-#endif
-                if opaque {
-                    context.saveGState()
-                    if backgroundColor == nil || (backgroundColor?.alpha ?? 0) < 1 {
-                        context.setFillColor(DanmakuColor.white.cgColor)
-                        context.addRect(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
-                        context.fillPath()
-                    }
-                    if let backgroundColor = backgroundColor {
-                        context.setFillColor(backgroundColor)
-                        context.addRect(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
-                        context.fillPath()
-                    }
-                    context.restoreGState()
-                }
-                displaying?(context, size, isCancelled)
-                if isCancelled() {
-#if os(iOS) || os(tvOS)
-                    UIGraphicsEndImageContext()
-#elseif os(macOS)
-                    image.unlockFocus()
-#endif
-                    DispatchQueue.main.async { finish(nil, false) }
-                    return
-                }
-#if os(iOS) || os(tvOS)
-                let cgImage = UIGraphicsGetImageFromCurrentImageContext()?.danmakuCGImage
+                draw(in: context)
+                let cgImage = isCancelled() ? nil : UIGraphicsGetImageFromCurrentImageContext()?.danmakuCGImage
                 UIGraphicsEndImageContext()
 #elseif os(macOS)
-                image.unlockFocus()
-                let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                let cgImage = Self.macImage(size: size, scale: scale, usesBitmap: usesBitmapRendering, draw: draw)
 #endif
                 if isCancelled() {
                     DispatchQueue.main.async { finish(nil, false) }
@@ -190,18 +178,37 @@ public class DanmakuAsyncLayer: CALayer {
             UIGraphicsEndImageContext()
             contents = image?.danmakuCGImage
 #elseif os(macOS)
-            let image = NSImage(size: bounds.size)
-            image.lockFocus()
-            if let context = NSGraphicsContext.current?.cgContext {
+            contents = Self.macImage(size: bounds.size, scale: contentsScale, usesBitmap: usesBitmapRendering) { context in
                 displaying?(context, bounds.size, {() -> Bool in return false})
             }
-            image.unlockFocus()
-            contents = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
 #endif
             didDisplay?(self, true)
         }
     }
     
+    #if os(macOS)
+    private static func macImage(size: CGSize, scale: CGFloat, usesBitmap: Bool, draw: (CGContext) -> Void) -> CGImage? {
+        guard usesBitmap else {
+            let image = NSImage(size: size)
+            image.lockFocus()
+            if let context = NSGraphicsContext.current?.cgContext { draw(context) }
+            image.unlockFocus()
+            return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        }
+        guard let width = Int(exactly: ceil(size.width * scale)), width > 0,
+              let height = Int(exactly: ceil(size.height * scale)), height > 0,
+              let context = CGContext(data: nil, width: width, height: height,
+                                      bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.scaleBy(x: scale, y: scale)
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        draw(context)
+        return context.makeImage()
+    }
+    #endif
+
     /// 跨隔离域携带 layer 弱引用的转移盒。仅限本文件内、且仅在 `@MainActor` 闭包中解包,
     /// 禁止外移或在后台队列解包——安全依据是 CALayer 状态只在主线程读写的既有契约。
     private struct WeakLayerRef: @unchecked Sendable {

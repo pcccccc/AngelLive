@@ -1,9 +1,14 @@
 import Foundation
 import CoreMedia
 import AngelLiveCore
+#if os(macOS) && canImport(KSPlayer)
+import KSPlayer
+import QuartzCore
+#endif
 
 public class PlayerOptions: KSOptions, @unchecked Sendable {
     public var syncSystemRate: Bool = false
+    public var enablesMacOSHighFrameRateClockTolerance: Bool = false
 
     /// Set per resolved resource by the FullUI session configurator.
     @MainActor public internal(set) var mediaTransform: LiveMediaTransform?
@@ -18,6 +23,28 @@ public class PlayerOptions: KSOptions, @unchecked Sendable {
     nonisolated required public init() {
         super.init()
     }
+
+    #if os(macOS) && canImport(KSPlayer)
+    open override func preferredFrame(fps: Float) -> Bool {
+        guard enablesMacOSHighFrameRateClockTolerance else {
+            return super.preferredFrame(fps: fps)
+        }
+        return fps.isFinite && (15...240).contains(fps)
+    }
+
+    open override func videoClockSync(main: KSClock, nextVideoTime: TimeInterval, fps: Double, frameCount: UInt) -> ClockProcessType {
+        var presentationTime = nextVideoTime
+        if enablesMacOSHighFrameRateClockTolerance, fps >= 50 {
+            let desire = main.time.seconds + (CACurrentMediaTime() - main.lastMediaTime) * main.rate - videoDelay
+            let lead = nextVideoTime - desire
+            if lead > 1 / (2 * fps), lead <= 1.0 / 60 {
+                // Present on this display tick and let KSOptions reset its consecutive-delay count.
+                presentationTime = desire
+            }
+        }
+        return super.videoClockSync(main: main, nextVideoTime: presentationTime, fps: fps, frameCount: frameCount)
+    }
+    #endif
 
     override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
         guard syncSystemRate else { return }
@@ -49,6 +76,7 @@ extension PlayerOptions {
 
     @MainActor private func sessionSnapshot(into copy: PlayerOptions) -> PlayerOptions {
         copy.syncSystemRate = syncSystemRate
+        copy.enablesMacOSHighFrameRateClockTolerance = enablesMacOSHighFrameRateClockTolerance
         copy.mediaTransform = mediaTransform
         copy.dualStreamAudio = dualStreamAudio
         copy.dualStreamClock = dualStreamClock

@@ -582,6 +582,7 @@ private extension RoomPlayerView {
 
                 DanmuView(
                     coordinator: viewModel.danmuCoordinator,
+                    usesBitmapRendering: usesFullUI,
                     size: CGSize(width: containerSize.width, height: config.height),
                     fontSize: CGFloat(settings.danmuFontSize),
                     speed: CGFloat(settings.danmuSpeed),

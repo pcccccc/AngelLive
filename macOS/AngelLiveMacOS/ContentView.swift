@@ -82,7 +82,7 @@ enum TabSelection: Hashable {
     case home
     case favorite
     case allPlatforms
-    case platform(Platformdescription)
+    case platform(String)
     case history
     case settings
     case search
@@ -163,7 +163,7 @@ struct ContentView: View {
                     TabView(selection: tabSelection) {
                         if shouldShowHomeTab {
                             Tab(value: TabSelection.home) {
-                                MacHomeView(isSelected: selectedTab == .home) {
+                                MacHomeView(isSelected: selectedTab == .home, window: mainWindow) {
                                     selectedTab = .favorite
                                 }
                                 .apiCredentialContentIdentity()
@@ -195,14 +195,15 @@ struct ContentView: View {
 
                             if pluginAvailability.hasAvailablePlugins {
                                 Tab(value: TabSelection.allPlatforms) {
-                                    PlatformView { selectedTab = .platform($0) }
+                                    PlatformView { selectedTab = .platform($0.pluginId) }
                                 } label: {
                                     Label("全部配置", systemImage: "square.grid.2x2.fill")
                                 }
 
                                 ForEach(PlatformAppearanceStore.shared.orderedPlatforms(platformViewModel.platformInfo), id: \.pluginId) { platform in
-                                    Tab(value: TabSelection.platform(platform)) {
-                                        PlatformDetailTab(platform: platform)
+                                    Tab(value: TabSelection.platform(platform.pluginId)) {
+                                        PlatformDetailTab(platform: platform, isSelected: selectedTab == .platform(platform.pluginId))
+                                            .id(platform)
                                             .apiCredentialContentIdentity(pluginId: platform.pluginId)
                                     } label: {
                                         Label {
@@ -233,7 +234,8 @@ struct ContentView: View {
                         }
                     }
                     .tabViewStyle(.sidebarAdaptable)
-                    .background(SidebarWidthEnforcer(min: 180, ideal: 200, max: 260))
+                    .background(SidebarWidthEnforcer(min: 180, ideal: 200, max: 260,
+                                                     skipsUnchangedUpdates: pluginAvailability.hasAvailablePlugins))
                     .navigationDestination(for: LiveModel.self) { room in
                         MacRoomPlaybackDestination(room: room, presentation: .navigation)
                             .toolbarVisibility(
@@ -304,10 +306,14 @@ struct ContentView: View {
                 SupportDiagnosticsService.shared.recordAction(.openedFavorites)
             case .allPlatforms:
                 SupportDiagnosticsService.shared.recordAction(.openedPlatform)
-            case .platform(let platform):
-                let context = LiveParseJSPlatformManager.platform(forPluginId: platform.pluginId).map {
+            case .platform(let pluginId):
+                let context = LiveParseJSPlatformManager.platform(forPluginId: pluginId).map {
                     SupportDiagnosticActionContext.platform($0, additional: ["entryPoint": "tab"])
-                } ?? ["pluginID": platform.pluginId, "platform": platform.title, "entryPoint": "tab"]
+                } ?? [
+                    "pluginID": pluginId,
+                    "platform": platformViewModel.platformInfo.first { $0.pluginId == pluginId }?.title ?? pluginId,
+                    "entryPoint": "tab"
+                ]
                 SupportDiagnosticsService.shared.recordAction(.openedPlatform, context: context)
             case .history:
                 SupportDiagnosticsService.shared.recordAction(.openedHistory)
@@ -425,7 +431,7 @@ struct ContentView: View {
                 }
             } else if selectedTab == .allPlatforms,
                       let firstPlatform = platformViewModel.platformInfo.first {
-                selectedTab = .platform(firstPlatform)
+                selectedTab = .platform(firstPlatform.pluginId)
             }
         }
         // 播放列表增删改(含 iCloud 同步带来的变更)后重建平台目录。
@@ -448,12 +454,9 @@ struct ContentView: View {
             }
         }
         .onChange(of: platformViewModel.platformInfo) { _, newPlatforms in
-            // 平台列表刷新后,选中平台可能已不存在(被移除,或元数据变更致
-            // Platformdescription 合成 Hashable 不匹配旧值)。此时 sidebarAdaptable
-            // TabView 的 selection 指向无效 tab,会 fatal error "invalid selection value"。
-            // 按稳定身份 pluginId 兜底,回退到恒存在的 .favorite。
-            if case .platform(let selected) = selectedTab,
-               !newPlatforms.contains(where: { $0.pluginId == selected.pluginId }) {
+            // 元数据更新保留选中的插件；移除插件时回到收藏。
+            if case .platform(let pluginId) = selectedTab,
+               !newPlatforms.contains(where: { $0.pluginId == pluginId }) {
                 selectedTab = .favorite
             }
         }
@@ -557,16 +560,20 @@ struct ContentView: View {
 
 struct PlatformDetailTab: View {
     let platform: Platformdescription
-    @State private var viewModel: PlatformDetailViewModel
-
-    init(platform: Platformdescription) {
-        self.platform = platform
-        _viewModel = State(initialValue: PlatformDetailViewModel(platform: platform))
-    }
+    let isSelected: Bool
+    @State private var viewModel: PlatformDetailViewModel?
 
     var body: some View {
-        PlatformDetailView()
-            .environment(viewModel)
+        if let viewModel {
+            PlatformDetailView()
+                .environment(viewModel)
+        } else {
+            Color.clear.task(id: isSelected) {
+                if isSelected, !Task.isCancelled, viewModel == nil {
+                    viewModel = PlatformDetailViewModel(platform: platform)
+                }
+            }
+        }
     }
 }
 
@@ -583,6 +590,7 @@ private struct SidebarWidthEnforcer: NSViewRepresentable {
     let min: CGFloat
     let ideal: CGFloat
     let max: CGFloat
+    let skipsUnchangedUpdates: Bool
 
     func makeNSView(context: Context) -> NSView {
         let view = ProbeView()
@@ -594,6 +602,8 @@ private struct SidebarWidthEnforcer: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         guard let probe = nsView as? ProbeView else { return }
+        // viewDidMoveToWindow schedules the initial pass for every new window.
+        if skipsUnchangedUpdates, (probe.min, probe.ideal, probe.max) == (min, ideal, max) { return }
         probe.min = min
         probe.ideal = ideal
         probe.max = max

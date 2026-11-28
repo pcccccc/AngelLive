@@ -7,6 +7,126 @@ import AngelLiveDependencies
 import KSPlayer
 #endif
 
+/// The sleeper checks the latest deadline on waking. Moving the pointer only updates the deadline.
+@MainActor
+private final class PlayerIdleWait {
+    private var deadline = ContinuousClock.now
+    private var task: Task<Void, Never>?
+
+    func extend(onIdle: @escaping @MainActor () -> Void) {
+        deadline = .now + .seconds(3)
+        guard task == nil else { return }
+        task = Task {
+            while deadline > .now {
+                do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
+            }
+            guard !Task.isCancelled else { return }
+            task = nil
+            onIdle()
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+    }
+}
+
+private struct FullUIPlayerCursor: NSViewRepresentable {
+    let keepsVisible: Bool
+
+    func makeNSView(context: Context) -> CursorView { CursorView() }
+    func updateNSView(_ view: CursorView, context: Context) { view.keepsVisible = keepsVisible }
+
+    final class CursorView: NSView {
+        var keepsVisible = false {
+            didSet { if oldValue != keepsVisible { activity() } }
+        }
+        private let idleWait = PlayerIdleWait()
+        private var monitor: Any?
+        private var pointerTrackingArea: NSTrackingArea?
+        private var didHide = false
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if window !== newWindow {
+                restoreCursor()
+                if let monitor { NSEvent.removeMonitor(monitor) }
+                monitor = nil
+                NotificationCenter.default.removeObserver(self)
+            }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window, monitor == nil else { return }
+            NotificationCenter.default.addObserver(self, selector: #selector(windowResignedKey(_:)),
+                                                   name: NSWindow.didResignKeyNotification, object: window)
+            NotificationCenter.default.addObserver(self, selector: #selector(windowBecameKey(_:)),
+                                                   name: NSWindow.didBecomeKeyNotification, object: window)
+            window.acceptsMouseMovedEvents = true
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [
+                .mouseMoved, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel, .keyDown,
+                .leftMouseDragged, .rightMouseDragged, .otherMouseDragged
+            ]) { [weak self] event in
+                if let self, event.window === self.window { self.activity() }
+                return event
+            }
+            activity()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let pointerTrackingArea { removeTrackingArea(pointerTrackingArea) }
+            let area = NSTrackingArea(rect: .zero, options: [.activeInKeyWindow, .inVisibleRect,
+                .mouseEnteredAndExited, .enabledDuringMouseDrag], owner: self, userInfo: nil)
+            addTrackingArea(area)
+            pointerTrackingArea = area
+        }
+
+        override func mouseEntered(with event: NSEvent) { activity() }
+        override func mouseExited(with event: NSEvent) { restoreCursor() }
+
+        private func activity() {
+            showCursor()
+            guard !keepsVisible, window?.isKeyWindow == true else {
+                idleWait.cancel()
+                return
+            }
+            idleWait.extend { [weak self] in
+                guard let self, !keepsVisible, let window, window.isKeyWindow, window.isVisible,
+                      bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil)),
+                      NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0) == window.windowNumber
+                else { return }
+                NSCursor.hide()
+                didHide = true
+            }
+        }
+
+        @objc private func windowResignedKey(_ notification: Notification) { restoreCursor() }
+        @objc private func windowBecameKey(_ notification: Notification) { activity() }
+
+        private func restoreCursor() {
+            idleWait.cancel()
+            showCursor()
+        }
+
+        private func showCursor() {
+            if didHide {
+                NSCursor.unhide()
+                didHide = false
+            }
+        }
+
+        isolated deinit {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            restoreCursor()
+        }
+    }
+}
+
 struct MacFullUIRoomControls: View {
     @Bindable var viewModel: RoomInfoViewModel
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
@@ -25,7 +145,7 @@ struct MacFullUIRoomControls: View {
     @Environment(AppFavoriteModel.self) private var favorites
     @Environment(ToastManager.self) private var toastManager: ToastManager?
     @State private var controlsVisible = true
-    @State private var hideTask: Task<Void, Never>?
+    @State private var controlsIdleWait = PlayerIdleWait()
     @State private var pointerOverControls = false
     @State private var bottomControlsFrame = CGRect.null
     @State private var panel: Panel?
@@ -172,20 +292,21 @@ struct MacFullUIRoomControls: View {
             .onContinuousHover(coordinateSpace: .named(MacPlayerChrome.hoverSpace)) { phase in
                 switch phase {
                 case .active(let point):
-                    pointerOverControls = MacPlayerChrome.isPointerOverControls(
+                    let overControls = MacPlayerChrome.isPointerOverControls(
                         point, inset: inset, bottomFrame: bottomControlsFrame
                     )
+                    if pointerOverControls != overControls { pointerOverControls = overControls }
                     revealControls()
                 case .ended:
                     pointerOverControls = false
-                    hideTask?.cancel()
+                    controlsIdleWait.cancel()
                     if !holdsControls { controlsVisible = false }
                 }
             }
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .background(PlayerCursorAutoHide(hideDelay: 3, keepsCursorVisible: holdsControls || pointerOverControls))
+        .background(FullUIPlayerCursor(keepsVisible: holdsControls || pointerOverControls))
         .macPlayerWindowState(window) {
             isFullscreen = window?.styleMask.contains(.fullScreen) == true
             isPinned = window?.level == .floating
@@ -194,7 +315,7 @@ struct MacFullUIRoomControls: View {
         .macPlayerEscapeKey(isEnabled: acceptsCommands && menusTracking == 0, action: handleEscape)
         .onAppear { revealControls() }
         .onDisappear {
-            hideTask?.cancel()
+            controlsIdleWait.cancel()
             resetTimeline()
             if let dlnaSession {
                 dlnaSession.cancelDiscovery()
@@ -553,7 +674,7 @@ struct MacFullUIRoomControls: View {
     private func toggleControls() {
         guard !holdsControls else { return }
         if controlsVisible {
-            hideTask?.cancel()
+            controlsIdleWait.cancel()
             controlsVisible = false
         } else {
             revealControls()
@@ -659,13 +780,11 @@ struct MacFullUIRoomControls: View {
     #endif
 
     private func revealControls() {
-        controlsVisible = true
-        hideTask?.cancel()
-        guard !holdsControls, !pointerOverControls else { return }
-        hideTask = Task { @MainActor in
-            do { try await Task.sleep(for: .seconds(3)) } catch { return }
-            guard !Task.isCancelled else { return }
-            controlsVisible = false
+        if !controlsVisible { controlsVisible = true }
+        if holdsControls || pointerOverControls {
+            controlsIdleWait.cancel()
+        } else {
+            controlsIdleWait.extend { controlsVisible = false }
         }
     }
 

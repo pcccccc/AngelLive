@@ -44,7 +44,13 @@ private enum PlayerConstants {
 final class RoomInfoViewModel {
     let subtitlePlayback = LiveSubtitlePlaybackState()
     var currentRoom: LiveModel
-    var usesFullUI: Bool
+    var usesFullUI: Bool {
+        didSet {
+            if usesFullUI != oldValue {
+                playerOption.enablesMacOSHighFrameRateClockTolerance = usesFullUI
+            }
+        }
+    }
     var currentPlayURL: URL?
     var isLoading = false
     var playError: Error?
@@ -193,6 +199,9 @@ final class RoomInfoViewModel {
         // 关闭双路自动重开，避免在弱网/失败时频繁重连导致 stop 循环
         KSOptions.isSecondOpen = false
         let option = PlayerOptions()
+        if usesFullUI {
+            option.enablesMacOSHighFrameRateClockTolerance = true
+        }
         option.userAgent = PlayerConstants.defaultUserAgent
         option.registerRemoteControll = false
         #if canImport(KSPlayer)
@@ -929,6 +938,7 @@ final class RoomInfoViewModel {
     /// 添加系统消息到聊天列表
     @MainActor
     func addSystemMessage(_ message: String) {
+        guard !usesFullUI else { return }
         let systemMsg = ChatMessage(
             userName: "系统",
             message: message,
@@ -1111,6 +1121,7 @@ final class RoomInfoViewModel {
     /// 添加弹幕消息到聊天列表
     @MainActor
     func addDanmuMessage(text: String, userName: String = "观众") {
+        guard !usesFullUI else { return }
         let message = ChatMessage(
             userName: userName,
             message: text

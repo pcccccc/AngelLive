@@ -46,6 +46,8 @@ enum DanmakuTextDrawing {
         )
 
         context.saveGState()
+        context.setLineJoin(.round)
+        context.setLineCap(.round)
         if alpha < 1 {
             context.setAlpha(alpha)
             context.beginTransparencyLayer(auxiliaryInfo: nil)

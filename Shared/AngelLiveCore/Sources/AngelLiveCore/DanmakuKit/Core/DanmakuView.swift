@@ -82,6 +82,11 @@ public class DanmakuView: DanmakuBaseView {
     /// If this property is false, the danmaku will not be reused and danmakuView(_:dequeueReusable danmaku:) methods will not be called.
     public var enableCellReusable = false
 
+#if os(macOS)
+    /// Opt in to rendering each cell at its layer's contentsScale.
+    public var usesBitmapRendering = false
+#endif
+
     /// 滚动弹幕的选轨策略。
     public enum FloatingTrackPolicy: Sendable {
         /// 错落感优先:在所有可发轨道里挑弹幕最少的,并在并列者中随机。
@@ -669,6 +674,9 @@ private extension DanmakuView {
             cell?.model = danmaku
             delegate?.danmakuView(self, dequeueReusable: cell!)
         }
+        #if os(macOS)
+        (cell?.layer as? DanmakuAsyncLayer)?.usesBitmapRendering = usesBitmapRendering
+        #endif
         return cell
     }
     

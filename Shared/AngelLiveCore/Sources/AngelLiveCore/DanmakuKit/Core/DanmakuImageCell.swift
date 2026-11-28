@@ -36,7 +36,7 @@ public class DanmakuImageCell: DanmakuCell {
         guard rect.width > 0, rect.height > 0 else { return }
 
 #if canImport(AppKit) && !canImport(UIKit)
-        // macOS: DanmakuAsyncLayer 走 NSImage.lockFocus,context 为 CG 原生未翻转坐标系,直绘方向正确
+        // macOS 的绘制上下文保留 CG 原生未翻转坐标系。
         context.draw(model.image, in: rect)
 #else
         // iOS/tvOS: context 由 UIGraphicsBeginImageContextWithOptions 创建,已按 UIKit 约定翻转;

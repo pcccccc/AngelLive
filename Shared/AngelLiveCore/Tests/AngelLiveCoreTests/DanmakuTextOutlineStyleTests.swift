@@ -80,13 +80,47 @@ struct DanmakuTextDrawingTests {
         #expect(hasOpaqueRedPixel)
     }
 
-    private func drawText(in context: CGContext, color: DanmakuColor) {
+    @Test("bounds the outline of pointed glyphs and restores stroke geometry")
+    func pointedGlyphOutline() throws {
+        let bitmap = try #require(Bitmap(width: 360, height: 128))
+        let context = bitmap.context
+        context.setLineJoin(.miter)
+        context.setLineCap(.square)
+        context.setLineWidth(8)
+        let originalStroke = try #require(strokeProbe(in: context))
+        drawText("2VWM2vWm", in: context, color: .white)
+        #expect(strokeProbe(in: context) == originalStroke)
+
+        let pixels = bitmap.pixels()
+        let core = pixels.indices.filter { pixels[$0].alpha > 0.8 && pixels[$0].red > 0.8 }
+        let outline = pixels.indices.filter { pixels[$0].alpha > 0.2 && pixels[$0].red < 0.1 }
+        let coreTop = try #require(core.first) / bitmap.width
+        let coreBottom = try #require(core.last) / bitmap.width
+        let outlineTop = try #require(outline.first) / bitmap.width
+        let outlineBottom = try #require(outline.last) / bitmap.width
+        #expect(coreTop - outlineTop <= 4)
+        #expect(outlineBottom - coreBottom <= 4)
+    }
+
+    // CGContext exposes stroke geometry through the stroked path, with no join/cap getters.
+    private func strokeProbe(in context: CGContext) -> CGPath? {
+        context.beginPath()
+        context.move(to: CGPoint(x: 0, y: 0))
+        context.addLine(to: CGPoint(x: 8, y: 12))
+        context.addLine(to: CGPoint(x: 16, y: 0))
+        context.replacePathWithStrokedPath()
+        let path = context.path
+        context.beginPath()
+        return path
+    }
+
+    private func drawText(_ text: String = "H", in context: CGContext, color: DanmakuColor) {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
         defer { NSGraphicsContext.restoreGraphicsState() }
 
         DanmakuTextDrawing.draw(
-            "H",
+            text,
             font: .systemFont(ofSize: 32),
             color: color,
             at: CGPoint(x: 20, y: 20),
