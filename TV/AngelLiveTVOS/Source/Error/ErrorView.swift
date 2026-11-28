@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 
 struct ErrorView: View {
     let title: String
@@ -14,7 +15,7 @@ struct ErrorView: View {
     let errorCode: String?
     let detailMessage: String?
     let curlCommand: String?
-    let qrCodeURL: String
+    let qrCodeURL: String?
     let showDismiss: Bool
     let showRetry: Bool
     let showLoginButton: Bool
@@ -25,13 +26,9 @@ struct ErrorView: View {
 
     @State private var showDetailView = false
     @State private var showingSupportDiagnostics = false
-    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @FocusState private var detailButtonFocused: Bool
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
-
-    /// 是否有任何平台已登录
-    private var isAnyPlatformLoggedIn: Bool {
-        syncService.loggedInByPluginId.values.contains(true)
-    }
 
     // 是否有详情可显示
     private var hasDetail: Bool {
@@ -44,7 +41,7 @@ struct ErrorView: View {
         errorCode: String? = nil,
         detailMessage: String? = nil,
         curlCommand: String? = nil,
-        qrCodeURL: String = "https://github.com/pcccccc/SimpleLiveTVOS",
+        qrCodeURL: String? = nil,
         showDismiss: Bool = true,
         showRetry: Bool = false,
         showLoginButton: Bool = false,
@@ -69,6 +66,16 @@ struct ErrorView: View {
     }
 
     var body: some View {
+        Group {
+            if showLoginButton && onLogin == nil {
+                ErrorAccountState { content(isAnyPlatformLoggedIn: $0) }
+            } else {
+                content(isAnyPlatformLoggedIn: false)
+            }
+        }
+    }
+
+    private func content(isAnyPlatformLoggedIn: Bool) -> some View {
         ZStack {
             Color.clear
                 .background(.thinMaterial)
@@ -151,6 +158,7 @@ struct ErrorView: View {
                                 Label("查看详情", systemImage: "doc.text.magnifyingglass")
                                     .font(.caption)
                             }
+                            .focused($detailButtonFocused)
                         }
 
                         if supportDiagnosticsEnabled {
@@ -167,7 +175,7 @@ struct ErrorView: View {
 
                 VStack(spacing: 16) {
                     Spacer()
-                    Image(uiImage: Common.generateQRCode(from: qrCodeURL))
+                    Image(uiImage: Common.generateQRCode(from: qrCodeURL ?? (usesFullUI ? "https://github.com/pcccccc/AngelLive" : "https://github.com/pcccccc/SimpleLiveTVOS")))
                         .interpolation(.none)
                         .resizable()
                         .scaledToFit()
@@ -190,16 +198,26 @@ struct ErrorView: View {
             }
             .padding(80)
             .safeAreaPadding()
+            .disabled(usesFullUI && showDetailView)
+            .accessibilityHidden(usesFullUI && showDetailView)
 
-            // 错误详情 Overlay
-            if showDetailView {
-                ErrorDetailOverlay(
-                    detailMessage: detailMessage,
-                    curlCommand: curlCommand,
-                    onClose: { showDetailView = false }
-                )
+            if !usesFullUI, showDetailView {
+                ErrorDetailOverlay(detailMessage: detailMessage, curlCommand: curlCommand) {
+                    showDetailView = false
+                }
             }
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { usesFullUI && showDetailView },
+            set: { showDetailView = $0 }
+        ), onDismiss: { detailButtonFocused = true }) {
+            FullUIErrorDetailOverlay(detailMessage: detailMessage, curlCommand: curlCommand) {
+                showDetailView = false
+            }
+            .presentationBackground(.clear)
+            .interactiveDismissDisabled()
+        }
+        .tvFullUIBackCommand(enabled: usesFullUI && !showDetailView && !showingSupportDiagnostics, perform: onDismiss)
         .fullScreenCover(isPresented: $showingSupportDiagnostics) {
             NavigationStack {
                 SupportDiagnosticsView()
@@ -303,5 +321,83 @@ struct ErrorDetailOverlay: View {
         .onAppear {
             isCloseButtonFocused = true
         }
+    }
+}
+
+private struct ErrorAccountState<Content: View>: View {
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @ViewBuilder var content: (Bool) -> Content
+
+    var body: some View { content(syncService.loggedInByPluginId.values.contains(true)) }
+}
+
+private struct FullUIErrorDetailOverlay: View {
+    let detailMessage: String?
+    let curlCommand: String?
+    let onClose: () -> Void
+    @FocusState private var closeFocused: Bool
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 28) {
+                TVPlayerPanelHeader(title: Text("错误详情")) {
+                    TVPlayerPanelCloseButton(isFocused: closeFocused, action: onClose)
+                        .focused($closeFocused)
+                }
+                HStack(alignment: .top, spacing: 32) {
+                    if let detailMessage, !detailMessage.isEmpty {
+                        ScrollView(showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(Array(readingSections(detailMessage).enumerated()), id: \.offset) { _, section in
+                                    TVReadableCard {
+                                        Text(verbatim: section)
+                                            .font(.system(size: 24, design: .monospaced))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                        }
+                        .clipped()
+                    }
+                    if let curlCommand, !curlCommand.isEmpty {
+                        VStack(spacing: 16) {
+                            Image(uiImage: Common.generateQRCode(from: curlCommand))
+                                .interpolation(.none).resizable().scaledToFit()
+                                .frame(maxWidth: 240, maxHeight: 240)
+                            Text("扫码获取 CURL 命令").font(.callout)
+                        }
+                    }
+                }
+            }
+            .padding(40)
+            .frame(maxWidth: 1120, maxHeight: 640)
+            .adaptiveGlassEffectRoundedRect(cornerRadius: 28)
+            .foregroundStyle(.white)
+            .environment(\.colorScheme, .dark)
+            .focusSection()
+        }
+        .onAppear { closeFocused = true }
+        .tvFullUIBackCommand(perform: onClose)
+    }
+
+    // Each remote focus stop also fits unbroken diagnostic strings.
+    private func readingSections(_ text: String) -> [String] {
+        var result: [String] = []
+        var block = ""
+        var lines = 1
+        for character in text {
+            block.append(character)
+            if character.isNewline { lines += 1 }
+            if block.count >= 240 || lines > 4 {
+                result.append(block)
+                block = ""
+                lines = 1
+            }
+        }
+        if !block.isEmpty { result.append(block) }
+        return result
     }
 }

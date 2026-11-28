@@ -11,11 +11,23 @@ struct TVQualitySelectionPanel: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(\.usesFullUI) private var usesFullUI
 
-    let onSelect: (_ cdnIndex: Int, _ urlIndex: Int) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var reducesPanelMotion: Bool { usesFullUI && reduceMotion }
+
+    let accountRecoveryIsActive: Bool
+    @Binding var loginReturnQuality: QualityIdentity?
+    let onSelect: (_ cdnIndex: Int, _ urlIndex: Int) -> RoomInfoViewModel.PlaybackQualitySelectionResult
     let onClose: () -> Void
 
     @FocusState private var focusedItem: FocusItem?
     @State private var expandedSections: Set<Int> = []
+    @State private var hasInitializedFocus = false
+    struct QualityIdentity: Equatable {
+        let cdn: String
+        let lineName: String?
+        let qualityNumber: Int
+        let qualityTitle: String
+    }
 
     private enum FocusItem: Hashable {
         case close
@@ -29,8 +41,87 @@ struct TVQualitySelectionPanel: View {
     }
 
     var body: some View {
+        Group {
+            if usesFullUI {
+                panelContent.tvPlayerPanelSurface()
+            } else {
+                panelContent
+                .padding(32)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .adaptiveGlassEffectRoundedRect(cornerRadius: 28)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
+            }
+        }
+        .disabled(accountRecoveryIsActive)
+        .onAppear {
+            guard !usesFullUI || !hasInitializedFocus else { return }
+            hasInitializedFocus = true
+            let cdnIdx = viewModel.currentCdnIndex
+
+            // 默认展开当前选中的线路；只有一个 CDN 时全部展开
+            if canCollapse {
+                expandedSections = [cdnIdx]
+            } else if let count = viewModel.currentRoomPlayArgs?.count {
+                expandedSections = Set(0..<count)
+            }
+
+            if !usesFullUI || (!accountRecoveryIsActive && loginReturnQuality == nil) {
+                focusedItem = currentQualityFocus
+            }
+        }
+        .task(id: accountRecoveryIsActive) {
+            guard usesFullUI else { return }
+            if accountRecoveryIsActive {
+                focusedItem = nil
+                return
+            }
+            guard let target = loginReturnQuality else { return }
+            await Task.yield()
+            guard !Task.isCancelled, loginReturnQuality == target else { return }
+            let focus = matchingQualityFocus(target) ?? currentQualityFocus
+            if case .quality(let cdnIndex, _) = focus, expandedSections.insert(cdnIndex).inserted {
+                await Task.yield()
+                guard !Task.isCancelled, loginReturnQuality == target else { return }
+            }
+            focusedItem = focus
+            loginReturnQuality = nil
+        }
+    }
+
+    private var currentQualityFocus: FocusItem {
+        let cdnIndex = viewModel.currentCdnIndex
+        let urlIndex = viewModel.currentQualityIndex
+        guard RoomPlaybackResolver.selection(in: viewModel.currentRoomPlayArgs, cdnIndex: cdnIndex, qualityIndex: urlIndex) != nil else {
+            return .close
+        }
+        return .quality(cdnIndex: cdnIndex, urlIndex: urlIndex)
+    }
+
+    private func matchingQualityFocus(_ target: QualityIdentity) -> FocusItem? {
+        guard let playArgs = viewModel.currentRoomPlayArgs else { return nil }
+        for (cdnIndex, cdn) in playArgs.enumerated() where cdn.cdn == target.cdn && cdn.displayName == target.lineName {
+            if let urlIndex = cdn.qualitys.firstIndex(where: { $0.qn == target.qualityNumber && $0.title == target.qualityTitle }) {
+                return .quality(cdnIndex: cdnIndex, urlIndex: urlIndex)
+            }
+        }
+        return nil
+    }
+
+    private var panelContent: some View {
         VStack(alignment: .leading, spacing: 28) {
-            header
+            if usesFullUI {
+                TVPlayerPanelHeader(title: Text("清晰度"), subtitle: normalizedQualityTitle.map { Text("当前：\($0)") }) {
+                    TVPlayerPanelCloseButton(isFocused: focusedItem == .close, action: onClose)
+                        .focused($focusedItem, equals: .close)
+                }
+            } else {
+                header
+            }
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
@@ -41,38 +132,11 @@ struct TVQualitySelectionPanel: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, usesFullUI ? 12 : 0)
+                .padding(.vertical, usesFullUI ? 6 : 0)
             }
 
             Spacer(minLength: 0)
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 28)
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
-        .onAppear {
-            let cdnIdx = viewModel.currentCdnIndex
-            let qualIdx = viewModel.currentQualityIndex
-
-            // 默认展开当前选中的线路；只有一个 CDN 时全部展开
-            if canCollapse {
-                expandedSections = [cdnIdx]
-            } else if let count = viewModel.currentRoomPlayArgs?.count {
-                expandedSections = Set(0..<count)
-            }
-
-            // 聚焦到当前选中项
-            if let playArgs = viewModel.currentRoomPlayArgs,
-               cdnIdx < playArgs.count,
-               qualIdx < playArgs[cdnIdx].qualitys.count {
-                focusedItem = .quality(cdnIndex: cdnIdx, urlIndex: qualIdx)
-            } else {
-                focusedItem = .close
-            }
         }
     }
 
@@ -119,7 +183,7 @@ struct TVQualitySelectionPanel: View {
             // Section 标题（可折叠时变为按钮）
             if canCollapse {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                    withAnimation(reducesPanelMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82)) {
                         if isExpanded {
                             expandedSections.remove(cdnIndex)
                         } else {
@@ -129,7 +193,7 @@ struct TVQualitySelectionPanel: View {
                 } label: {
                     cdnHeaderContent(cdnIndex: cdnIndex, cdn: cdn, isExpanded: isExpanded, isCurrentCdn: isCurrentCdn)
                 }
-                .buttonStyle(TVCdnHeaderButtonStyle(isFocused: headerFocused))
+                .buttonStyle(TVCdnHeaderButtonStyle(isFocused: headerFocused, reduceMotion: reducesPanelMotion))
                 .focused($focusedItem, equals: .cdnHeader(cdnIndex))
             } else {
                 cdnHeaderContent(cdnIndex: cdnIndex, cdn: cdn, isExpanded: true, isCurrentCdn: isCurrentCdn)
@@ -143,7 +207,15 @@ struct TVQualitySelectionPanel: View {
                         let selected = viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex
                         let isFocused = focusedItem == .quality(cdnIndex: cdnIndex, urlIndex: urlIndex)
                         Button {
-                            onSelect(cdnIndex, urlIndex)
+                            let result = onSelect(cdnIndex, urlIndex)
+                            if usesFullUI && result == .loginRecovery {
+                                loginReturnQuality = QualityIdentity(
+                                    cdn: cdn.cdn,
+                                    lineName: cdn.displayName,
+                                    qualityNumber: quality.qn,
+                                    qualityTitle: quality.title
+                                )
+                            }
                         } label: {
                             HStack(spacing: 14) {
                                 Text(usesFullUI
@@ -154,8 +226,11 @@ struct TVQualitySelectionPanel: View {
 
                                 // 插件标记当前账号拿不到的档位（登录 / 会员）
                                 if let lockTitle = RoomPlaybackResolver.lockBadgeTitle(for: quality) {
-                                    RequiresLoginTag(lockTitle, size: .regular)
-                                        .lineLimit(1)
+                                    if usesFullUI {
+                                        TVPlayerLockBadge(title: lockTitle)
+                                    } else {
+                                        RequiresLoginTag(lockTitle, size: .regular).lineLimit(1)
+                                    }
                                 }
 
                                 Spacer()
@@ -163,20 +238,24 @@ struct TVQualitySelectionPanel: View {
                                 if selected {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 20, weight: .bold))
-                                        .foregroundStyle(Color.accentColor)
+                                        .foregroundStyle(usesFullUI && isFocused ? .white : Color.accentColor)
                                 }
                             }
                             .padding(.horizontal, 20)
                             .padding(.vertical, 16)
                             .contentShape(Rectangle())
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(selected ? Color.accentColor.opacity(0.2)
-                                          : isFocused ? .white.opacity(0.25)
-                                          : .clear)
-                            )
+                            .background {
+                                if usesFullUI && isFocused {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(.black.opacity(0.8))
+                                        .overlay { RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.25)) }
+                                } else {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(selected ? Color.accentColor.opacity(0.2) : isFocused ? .white.opacity(0.25) : .clear)
+                                }
+                            }
                         }
-                        .buttonStyle(TVQualityItemButtonStyle(isFocused: isFocused))
+                        .buttonStyle(TVQualityItemButtonStyle(isFocused: isFocused, reduceMotion: reducesPanelMotion))
                         .focused($focusedItem, equals: .quality(cdnIndex: cdnIndex, urlIndex: urlIndex))
                     }
                 }
@@ -209,7 +288,7 @@ struct TVQualitySelectionPanel: View {
             if isCurrentCdn {
                 Text("当前")
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(usesFullUI ? Color.white : Color.accentColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
                     .background(Color.accentColor.opacity(0.15), in: Capsule())
@@ -220,15 +299,15 @@ struct TVQualitySelectionPanel: View {
             if canCollapse {
                 Text("\(cdn.qualitys.count) 个清晰度")
                     .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(usesFullUI ? 0.85 : 0.4))
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.white.opacity(usesFullUI ? 0.85 : 0.4))
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
         }
-        .foregroundStyle(.white.opacity(0.5))
+        .foregroundStyle(.white.opacity(usesFullUI ? 0.9 : 0.5))
         .padding(.horizontal, canCollapse ? 16 : 0)
         .padding(.vertical, canCollapse ? 14 : 0)
         .contentShape(Rectangle())
@@ -266,6 +345,7 @@ struct TVQualityItemButtonStyle: ButtonStyle {
 
 /// 关闭按钮样式：圆形 glass 背景 + 聚焦缩放
 struct TVPanelCloseButtonStyle: ButtonStyle {
+    @Environment(\.usesFullUI) private var usesFullUI
     let isFocused: Bool
     let reduceMotion: Bool
 
@@ -279,6 +359,7 @@ struct TVPanelCloseButtonStyle: ButtonStyle {
             .background {
                 Circle()
                     .fill(.white.opacity(isFocused ? 0.3 : 0.1))
+                    .background(.black.opacity(usesFullUI && isFocused ? 0.8 : 0), in: Circle())
             }
             .scaleEffect(!reduceMotion && isFocused ? 1.1 : 1.0)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
@@ -287,7 +368,9 @@ struct TVPanelCloseButtonStyle: ButtonStyle {
 
 /// CDN 线路标题按钮样式：聚焦时高亮背景
 private struct TVCdnHeaderButtonStyle: ButtonStyle {
+    @Environment(\.usesFullUI) private var usesFullUI
     let isFocused: Bool
+    let reduceMotion: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -295,8 +378,9 @@ private struct TVCdnHeaderButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(isFocused ? .white.opacity(0.15) : .clear)
             )
-            .scaleEffect(isFocused ? 1.02 : 1.0)
-            .animation(.easeInOut(duration: 0.18), value: isFocused)
+            .background(.black.opacity(usesFullUI && isFocused ? 0.8 : 0), in: .rect(cornerRadius: 14))
+            .scaleEffect(!reduceMotion && isFocused ? 1.02 : 1.0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
     }
 }
 
@@ -371,7 +455,6 @@ private struct TVFullUIPlayerControlButtonStyle: ButtonStyle {
     let shape: TVPlayerControlShape
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.tvPlayerControlsAreCovered) private var isCovered
 
     func makeBody(configuration: Configuration) -> some View {
         let focusOutset = isFocused ? TVFullUIPlayerControlMetrics.focusOutset : 0
@@ -385,7 +468,7 @@ private struct TVFullUIPlayerControlButtonStyle: ButtonStyle {
                     .padding(-focusOutset)
             }
             .contentShape(Capsule())
-            .opacity(isEnabled || isCovered ? (configuration.isPressed ? 0.8 : 1) : 0.35)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: isFocused)
     }
 }

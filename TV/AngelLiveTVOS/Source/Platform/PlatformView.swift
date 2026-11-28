@@ -101,8 +101,7 @@ struct TVFullPlatformGrid: View {
                     }
                     .presentationBackground(.clear)
                     .environment(\.platformAppearanceLibrary, library)
-                    .onExitCommand(perform: closeDrawer)
-                    .onKeyPress(.escape, phases: .all, action: handleEscape)
+                    .interactiveDismissDisabled()
                 }
         }
         .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
@@ -122,12 +121,6 @@ struct TVFullPlatformGrid: View {
         .adaptiveGlassEffectRoundedRect(cornerRadius: 36)
         .padding(.vertical, 36)
         .padding(.trailing, horizontalInset)
-    }
-
-    private func handleEscape(_ press: KeyPress) -> KeyPress.Result {
-        guard drawer != nil else { return .ignored }
-        if press.phase == .up { closeDrawer() }
-        return .handled
     }
 
     private func restoreFocus() {

@@ -49,9 +49,10 @@ struct DeepLinkPlayerView: View {
         .task {
             await loadRoomInfo()
         }
-        .onExitCommand {
+        .onExitCommand(perform: usesFullUI ? nil : {
             if shortDramaRoom == nil && vodRoom == nil { cleanupAndDismiss() }
-        }
+        })
+        .tvFullUIBackCommand(enabled: usesFullUI && (isLoading || errorMessage != nil)) { cleanupAndDismiss() }
     }
 
     private var loadingView: some View {

@@ -10,14 +10,20 @@ import AngelLiveCore
 import AngelLiveDependencies
 
 struct GeneralSettingView: View {
-    
+    private let onClose: (() -> Void)?
+
     @Environment(AppState.self) var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @FocusState var focused: Bool
     @StateObject var settingStore = SettingStore()
     @State private var appIconSettings = TVAppIconSettingsModel()
     @AppStorage("SimpleLive.Setting.ShowHomeRecommendation") private var showHomeRecommendation = true
     // Match the leading content inset of the native tvOS buttons in this column.
     private let pickerTitleInset: CGFloat = 30
+
+    init(onClose: (() -> Void)? = nil) {
+        self.onClose = onClose
+    }
 
     private var isVodDemo: Bool {
         #if DEBUG
@@ -185,6 +191,10 @@ struct GeneralSettingView: View {
         }
         // FullUI 的原生聚焦胶囊会超出滚动区域，保留两端放大后的完整轮廓。
         .scrollClipDisabled(appViewModel.pluginAvailability.hasAvailablePlugins)
+        .onExitCommand(perform: usesFullUI ? nil : onClose)
+        .tvFullUIBackCommand(enabled: usesFullUI && onClose != nil && !appIconSettings.isShowingError) {
+            onClose?()
+        }
         .alert("无法更换应用图标", isPresented: $appIconSettings.isShowingError) {
             Button("好", role: .cancel) {}
         } message: {

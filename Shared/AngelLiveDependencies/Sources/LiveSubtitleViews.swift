@@ -1,6 +1,195 @@
 import SwiftUI
 import AngelLiveCore
 
+#if os(tvOS)
+public extension EnvironmentValues {
+    @Entry var tvFullUISubtitlePresentation = false
+    #if DEBUG
+    @Entry var tvUIAuditSubtitleLanguages: [Locale]? = nil
+    @Entry var tvUIAuditSpeechSettings: LiveSubtitleSettings? = nil
+    #endif
+}
+
+#endif
+
+#if os(tvOS)
+private extension EnvironmentValues {
+    @Entry var tvModalBackSource: UUID?
+}
+
+/// A presenter can disappear temporarily beneath its own full-screen cover.
+/// Tying the registration to its SwiftUI identity also handles permanent removal.
+@MainActor
+private final class TVModalBackSource: ObservableObject {
+    let id = UUID()
+
+    isolated deinit { TVBackCommandInput.endModal(id) }
+}
+
+private struct TVModalPresenter<Modal: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let onDismiss: () -> Void
+    @ViewBuilder var modal: () -> Modal
+    @StateObject private var source = TVModalBackSource()
+
+    private func registerModal() {
+        let presentation = $isPresented
+        TVBackCommandInput.beginModal(source.id) { presentation.wrappedValue = false }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(isPresented: $isPresented, onDismiss: {
+                TVBackCommandInput.endModal(source.id)
+                onDismiss()
+            }) {
+                modal()
+                    .environment(\.tvModalBackSource, source.id)
+                    .presentationBackground(.clear)
+                    .interactiveDismissDisabled()
+                    .onAppear {
+                        if isPresented { registerModal() }
+                    }
+            }
+            .onChange(of: isPresented, initial: true) { _, presented in
+                if presented {
+                    registerModal()
+                } else {
+                    TVBackCommandInput.markModalClosing(source.id)
+                }
+            }
+    }
+}
+
+public extension View {
+    @ViewBuilder
+    func tvFullUIModalPresentation<Modal: View>(
+        fullUI: Bool, isPresented: Binding<Bool>, onDismiss: @escaping () -> Void,
+        @ViewBuilder modal: @escaping () -> Modal
+    ) -> some View {
+        if fullUI {
+            modifier(TVModalPresenter(isPresented: isPresented, onDismiss: onDismiss, modal: modal))
+        } else {
+            sheet(isPresented: isPresented, onDismiss: onDismiss, content: modal)
+        }
+    }
+}
+
+/// One clipped reading area beneath a fixed header for tvOS FullUI dialogs.
+public struct TVFullUIModalCard<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let closeIdentifier: String
+    let onClose: () -> Void
+    let content: Content
+    @Environment(\.tvModalBackSource) private var modalSource
+    @FocusState private var closeFocused: Bool
+    @State private var contentHeight: CGFloat?
+
+    public init(title: String, subtitle: String, closeIdentifier: String, onClose: @escaping () -> Void,
+                @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.subtitle = subtitle
+        self.closeIdentifier = closeIdentifier
+        self.onClose = onClose
+        self.content = content()
+    }
+
+    public var body: some View {
+        ZStack {
+            Color.black.opacity(0.6).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(alignment: .center, spacing: 20) {
+                    Text(title)
+                        .font(.system(size: 38, weight: .bold))
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 8)
+                    Button {
+                        if let modalSource { TVBackCommandInput.markModalClosing(modalSource) }
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 22, weight: .bold))
+                            .frame(width: 50, height: 50)
+                    }
+                    .buttonStyle(TVModalControlStyle(isFocused: closeFocused, circular: true))
+                    .focused($closeFocused)
+                    .accessibilityLabel("关闭")
+                    .accessibilityIdentifier(closeIdentifier)
+                }
+                Text(subtitle)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 12) { content }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 6)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                }
+                .frame(maxHeight: contentHeight)
+                .scrollBounceBehavior(.basedOnSize)
+            }
+            .font(.system(size: 26))
+            .foregroundStyle(.white)
+            .padding(36)
+            .frame(maxWidth: 920)
+            .background(.black.opacity(0.65), in: .rect(cornerRadius: 28))
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 28))
+            .overlay { RoundedRectangle(cornerRadius: 28).strokeBorder(.white.opacity(0.2)).allowsHitTesting(false) }
+            .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
+            .padding(48)
+            .focusSection()
+        }
+        .environment(\.colorScheme, .dark)
+        .defaultFocus($closeFocused, true)
+        .onAppear { closeFocused = true }
+        .tvFullUIBackCommand(source: modalSource, perform: onClose)
+    }
+}
+
+private struct TVModalControlStyle: ButtonStyle {
+    let isFocused: Bool
+    var circular = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isFocused ? Color.black : .white)
+            .background {
+                RoundedRectangle(cornerRadius: circular ? 25 : 14)
+                    .fill(isFocused ? Color.white : .white.opacity(configuration.isPressed ? 0.22 : 0.12))
+            }
+    }
+}
+
+public struct TVFullUIModalRow<Label: View>: View {
+    let action: () -> Void
+    let label: Label
+    @FocusState private var focused: Bool
+    @Environment(\.isEnabled) private var enabled
+
+    public init(action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
+        self.action = action
+        self.label = label()
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            label
+                .font(.system(size: 26, weight: .medium))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
+                .contentShape(.rect)
+        }
+        .buttonStyle(TVModalControlStyle(isFocused: focused))
+        .opacity(enabled ? 1 : 0.77)
+        .focused($focused)
+    }
+}
+#endif
+
 /// Room controls expose a language choice only after audio detection was inconclusive.
 @MainActor
 public struct LiveSubtitleQuickControls: View {
@@ -61,6 +250,12 @@ public struct LiveSubtitleLanguageOptions: View {
     #else
     private let usesSettingsPresentation = false
     #endif
+    #if os(tvOS)
+    @Environment(\.tvFullUISubtitlePresentation) private var tvFullUI
+    #if DEBUG
+    @Environment(\.tvUIAuditSubtitleLanguages) private var auditLanguages
+    #endif
+    #endif
     @State private var languages: [Locale] = []
     @State private var isLoading = true
 
@@ -76,7 +271,11 @@ public struct LiveSubtitleLanguageOptions: View {
                 ProgressView("正在读取可用语言…")
             } else if languages.isEmpty {
                 Text("这台设备暂不支持字幕识别。")
+                    #if os(tvOS)
+                    .foregroundStyle(tvFullUI ? AnyShapeStyle(.white.opacity(0.85)) : AnyShapeStyle(.secondary))
+                    #else
                     .foregroundStyle(.secondary)
+                    #endif
             } else {
                 ForEach(languages, id: \.identifier) { language in
                     let title = Locale.current.localizedString(forIdentifier: language.identifier) ?? language.identifier
@@ -84,21 +283,39 @@ public struct LiveSubtitleLanguageOptions: View {
                         guard playback.chooseLanguage(language.identifier, activationID: activationID) else { return }
                         onSelection()
                     }
-                    if usesSettingsPresentation || usesPlayerSheets {
-                        Button(action: select) {
-                            Text(title)
-                                .foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, minHeight: usesSettingsPresentation ? 36 : nil, alignment: .leading)
-                                .contentShape(Rectangle())
+                    let standardButton = Group {
+                        if usesSettingsPresentation || usesPlayerSheets {
+                            Button(action: select) {
+                                Text(title)
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, minHeight: usesSettingsPresentation ? 36 : nil, alignment: .leading)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button(title, action: select)
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        Button(title, action: select)
                     }
+                    #if os(tvOS)
+                    if tvFullUI {
+                        TVFullUIModalRow(action: select) { Text(title) }
+                    } else {
+                        standardButton
+                    }
+                    #else
+                    standardButton
+                    #endif
                 }
             }
         }
         .task {
+            #if os(tvOS) && DEBUG
+            if let auditLanguages {
+                languages = auditLanguages
+                isLoading = false
+                return
+            }
+            #endif
             let available = await LiveSubtitleSession.supportedLanguages()
             guard !Task.isCancelled else { return }
             languages = available
@@ -112,6 +329,9 @@ public struct LiveSubtitleLanguageOptions: View {
 public struct LiveSubtitleLanguageSelectionSheet: View {
     private let playback: LiveSubtitlePlaybackState
     private let activationID: UUID
+    #if os(tvOS)
+    @Environment(\.tvFullUISubtitlePresentation) private var tvFullUI
+    #endif
     @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.dismiss) private var dismiss
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
@@ -168,6 +388,15 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
         } else {
             stack.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
+        #elseif os(tvOS)
+        if tvFullUI {
+            TVFullUIModalCard(title: "选择主播语言", subtitle: "没能自动识别，请选择主播正在说的语言。",
+                              closeIdentifier: "tv.subtitles.language.close", onClose: { dismiss() }) {
+                LiveSubtitleLanguageOptions(playback: playback, activationID: activationID) { dismiss() }
+            }
+        } else {
+            stack
+        }
         #else
         stack
         #endif
@@ -179,6 +408,9 @@ public struct LiveSubtitleLanguageSelectionSheet: View {
 public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLabel: View, ResourceLabel: View>: View {
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     private let usesFullUI: Bool
+    #if os(tvOS)
+    @Environment(\.tvFullUISubtitlePresentation) private var tvFullUI
+    #endif
     private let subtitleLabel: SubtitleLabel
     private let sourceLanguageLabel: SourceLanguageLabel
     private let resourceLabel: ResourceLabel
@@ -189,6 +421,13 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
     @State private var downloadGeneration = UUID()
     @State private var isDownloading = false
     @State private var showSpeechResources = false
+    #if os(tvOS)
+    @FocusState private var speechButtonFocused: Bool
+    #if DEBUG
+    @Environment(\.tvUIAuditSpeechSettings) private var auditSpeechSettings
+    @Environment(\.tvUIAuditSubtitleLanguages) private var auditLanguages
+    #endif
+    #endif
 
     public init(
         usesFullUI: Bool = false,
@@ -214,7 +453,7 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
 
     private var explanation: String {
         #if os(tvOS)
-        let entry = "看直播时，选中画面里的播放/暂停按钮，长按遥控器中键，在菜单里开启字幕。"
+        let entry = tvFullUI ? "看直播时，打开播放器的设置按钮，在“字幕与翻译”中开启字幕。" : "看直播时，选中画面里的播放/暂停按钮，长按遥控器中键，在菜单里开启字幕。"
         #elseif os(macOS)
         let entry = "看直播时，点播放器的齿轮按钮开启字幕。"
         #else
@@ -224,7 +463,7 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
     }
 
     public var body: some View {
-        Group {
+        let section = Group {
             #if os(tvOS)
             VStack(alignment: .leading, spacing: 18) {
                 Text("实时字幕")
@@ -239,7 +478,13 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
                 .frame(minHeight: 55)
                 modelResourceRow
                     .frame(minHeight: 55)
-                Button("系统语音包") { showSpeechResources = true }
+                if tvFullUI {
+                    Button("系统语音包") { showSpeechResources = true }
+                        .focused($speechButtonFocused)
+                        .accessibilityIdentifier("tv.subtitles.resources.open")
+                } else {
+                    Button("系统语音包") { showSpeechResources = true }
+                }
                 if let downloadError {
                     Text(downloadError)
                         .font(.system(size: 22))
@@ -290,42 +535,71 @@ public struct LiveSubtitleSettingsSection<SubtitleLabel: View, SourceLanguageLab
             }
             #endif
         }
-        .task { modelStatus = await LiveLanguageDetectionResources.shared.status() }
+        .task {
+            #if os(tvOS) && DEBUG
+            if auditLanguages != nil {
+                modelStatus = .ready
+                return
+            }
+            #endif
+            modelStatus = await LiveLanguageDetectionResources.shared.status()
+        }
         .onDisappear {
             downloadGeneration = UUID()
             downloadTask?.cancel()
             downloadTask = nil
             isDownloading = false
         }
-        .sheet(isPresented: $showSpeechResources) {
-            NavigationStack {
-                #if os(tvOS)
-                ScrollView {
-                    LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI)
-                        .padding(60)
-                    Button("关闭") { showSpeechResources = false }
-                }
-                #else
-                Form { LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI) }
-                    #if os(macOS)
-                    .formStyle(.grouped)
-                    .macSettingsPage("系统语音包")
+        #if os(tvOS)
+        section.tvFullUIModalPresentation(fullUI: tvFullUI, isPresented: $showSpeechResources, onDismiss: {
+            if tvFullUI { speechButtonFocused = true }
+        }) {
+            if tvFullUI {
+                TVFullUIModalCard(title: "系统语音包", subtitle: "提前下载语音包，开启字幕时仍会自动识别语言。字幕需要系统 26 或更高版本。",
+                                  closeIdentifier: "tv.subtitles.resources.close", onClose: { showSpeechResources = false }) {
+                    #if DEBUG
+                    LiveSubtitleSpeechResourcesSection(usesFullUI: true, settings: auditSpeechSettings ?? .shared)
+                    #else
+                    LiveSubtitleSpeechResourcesSection(usesFullUI: true)
                     #endif
-                    .toolbar {
-                        if !usesSettingsPresentation {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("关闭") { showSpeechResources = false }
-                            }
+                }
+            } else {
+                speechResourcesSheet
+            }
+        }
+        #else
+        section.sheet(isPresented: $showSpeechResources) { speechResourcesSheet }
+        #endif
+    }
+
+    private var speechResourcesSheet: some View {
+        NavigationStack {
+            #if os(tvOS)
+            ScrollView {
+                LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI)
+                    .padding(60)
+                Button("关闭") { showSpeechResources = false }
+            }
+            #else
+            Form { LiveSubtitleSpeechResourcesSection(usesFullUI: usesFullUI) }
+                #if os(macOS)
+                .formStyle(.grouped)
+                .macSettingsPage("系统语音包")
+                #endif
+                .toolbar {
+                    if !usesSettingsPresentation {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { showSpeechResources = false }
                         }
                     }
-                #endif
-            }
-            .navigationTitle("系统语音包")
-            .macSettingsSheetPresentation(inheriting: true)
-            #if os(macOS)
-            .frame(minWidth: 480, minHeight: 320)
+                }
             #endif
         }
+        .navigationTitle("系统语音包")
+        .macSettingsSheetPresentation(inheriting: true)
+        #if os(macOS)
+        .frame(minWidth: 480, minHeight: 320)
+        #endif
     }
 
     private var modelResourceRow: some View {
@@ -424,7 +698,19 @@ public struct SubtitleDownloadButton: View {
 private struct LiveSubtitleSpeechResourcesSection: View {
     let usesFullUI: Bool
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
+    #if os(tvOS)
+    @Bindable private var settings: LiveSubtitleSettings
+    #if DEBUG
+    @Environment(\.tvUIAuditSubtitleLanguages) private var auditLanguages
+    #endif
+
+    init(usesFullUI: Bool, settings: LiveSubtitleSettings = .shared) {
+        self.usesFullUI = usesFullUI
+        self.settings = settings
+    }
+    #else
     @Bindable private var settings = LiveSubtitleSettings.shared
+    #endif
     @State private var resourceStatus: LiveSubtitleResourceStatus?
     @State private var unavailableReason: LiveSubtitleUnavailableReason?
     @State private var isDownloading = false
@@ -452,6 +738,55 @@ private struct LiveSubtitleSpeechResourcesSection: View {
 
     #if os(tvOS)
     public var body: some View {
+        Group {
+            if usesFullUI { fullUIResources } else { legacyResources }
+        }
+        .task(id: settings.sourceLanguage.rawValue) { await refreshResourceStatus() }
+        .onChange(of: settings.sourceLanguage) { _, _ in downloadError = nil }
+        .onDisappear(perform: cancelDownload)
+    }
+
+    private var fullUIResources: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(LiveSubtitleLanguage.allCases) { language in
+                TVFullUIModalRow(action: { settings.sourceLanguage = language }) {
+                    HStack {
+                        Text(language.displayName)
+                        Spacer()
+                        if language == settings.sourceLanguage { Image(systemName: "checkmark") }
+                    }
+                }
+                .accessibilityAddTraits(language == settings.sourceLanguage ? .isSelected : [])
+                .disabled(isDownloading)
+            }
+            if isDownloading {
+                ProgressView(value: downloadProgress) {
+                    Text("正在下载 \(Int(downloadProgress * 100))%").monospacedDigit()
+                }
+            } else if needsDownload {
+                TVFullUIModalRow(action: beginDownload) {
+                    Label("下载\(settings.sourceLanguage.displayName)语音包", systemImage: "arrow.down.circle")
+                }
+            } else {
+                Text(fullUIResourceMessage)
+            }
+            if let downloadError { Text(downloadError) }
+        }
+        .foregroundStyle(.white)
+    }
+
+    private var fullUIResourceMessage: String {
+        switch resourceStatus {
+        case .ready: "已下载\(settings.sourceLanguage.displayName)语音包"
+        case .unsupported: unavailableReason?.message ?? "当前设备不支持实时字幕。"
+        case .unavailable: unavailableResourceMessage ?? "系统语音包暂时无法使用。"
+        case .downloading: "下载中"
+        case .needsDownload: "未下载"
+        case nil: "正在检查系统语音包…"
+        }
+    }
+
+    private var legacyResources: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("系统语音包")
                 .font(.system(size: 30, weight: .semibold))
@@ -489,13 +824,6 @@ private struct LiveSubtitleSpeechResourcesSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .focusSection()
-        .task(id: settings.sourceLanguage.rawValue) {
-            await refreshResourceStatus()
-        }
-        .onChange(of: settings.sourceLanguage) { _, _ in
-            downloadError = nil
-        }
-        .onDisappear(perform: cancelDownload)
     }
     #else
     public var body: some View {
@@ -601,6 +929,12 @@ private struct LiveSubtitleSpeechResourcesSection: View {
     }
 
     private func refreshResourceStatus() async {
+        #if os(tvOS) && DEBUG
+        if auditLanguages != nil {
+            resourceStatus = .ready
+            return
+        }
+        #endif
         let sourceLanguage = settings.sourceLanguage.rawValue
         let availability = await LiveSubtitleSession.availability(sourceLanguage: sourceLanguage)
         guard !Task.isCancelled, settings.sourceLanguage.rawValue == sourceLanguage else { return }

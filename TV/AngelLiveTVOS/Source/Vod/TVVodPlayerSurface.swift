@@ -48,6 +48,7 @@ struct TVVodPlayerSurface: View {
         self.shouldPlay = shouldPlay
         self.onState = onState
         let options = PlayerOptions()
+        options.syncSystemRate = SettingStore().syncSystemRate
         options.isAutoPlay = shouldPlay && playback.resumePosition == nil
         options.isLoopPlay = false
         options.registerRemoteControll = false

@@ -11,7 +11,16 @@ public struct PlaybackTimelineView: View {
     @State private var selectedEntry: PlaybackEventEntry?
     @State private var exportError: String?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    #if !os(tvOS)
+    #if os(tvOS)
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
+    @FocusState private var focusedControl: TimelineFocus?
+    @State private var returnEntryID: UUID?
+
+    private enum TimelineFocus: Hashable {
+        case event(UUID), clear
+    }
+    #else
     @State private var exportDocument: PlaybackTimelineDocument?
     @State private var isExporting = false
     #endif
@@ -22,6 +31,27 @@ public struct PlaybackTimelineView: View {
     }
 
     public var body: some View {
+        #if os(tvOS)
+        if usesFullUIBackNavigation {
+            timelineContent.tvFullUIBackCommand(enabled: selectedEntry == nil && exportError == nil) {
+                if let onClose { onClose() }
+                else { dismiss() }
+            }
+        } else {
+            timelineContent.onExitCommand {
+                if selectedEntry != nil {
+                    selectedEntry = nil
+                } else {
+                    onClose?()
+                }
+            }
+        }
+        #else
+        timelineContent
+        #endif
+    }
+
+    private var timelineContent: some View {
         Group {
             #if os(iOS)
             List {
@@ -75,9 +105,7 @@ public struct PlaybackTimelineView: View {
                         .padding(.bottom, 8)
 
                     List(visibleEntries) { entry in
-                        Button { selectedEntry = entry } label: {
-                            PlaybackEventRow(entry: entry)
-                        }
+                        eventButton(entry)
                         .buttonStyle(.plain)
                         .frame(minHeight: rowHeight)
                     }
@@ -86,9 +114,15 @@ public struct PlaybackTimelineView: View {
             }
             #endif
         }
+        #if os(tvOS)
+        .sheet(item: $selectedEntry, onDismiss: restoreEntryFocus) { entry in
+            PlaybackEventDetailView(entry: entry)
+        }
+        #else
         .sheet(item: $selectedEntry) { entry in
             PlaybackEventDetailView(entry: entry)
         }
+        #endif
         .alert("无法导出播放时间轴", isPresented: exportErrorBinding) {
             Button("好", role: .cancel) {}
         } message: {
@@ -105,16 +139,42 @@ public struct PlaybackTimelineView: View {
             exportDocument = nil
         }
         #endif
-        #if os(tvOS)
-        .onExitCommand {
-            if selectedEntry != nil {
-                selectedEntry = nil
-            } else {
-                onClose?()
-            }
+    }
+
+    #if !os(iOS)
+    @ViewBuilder
+    private func eventButton(_ entry: PlaybackEventEntry) -> some View {
+        let button = Button {
+            #if os(tvOS)
+            if usesFullUIBackNavigation { returnEntryID = entry.id }
+            #endif
+            selectedEntry = entry
+        } label: {
+            PlaybackEventRow(entry: entry)
         }
+        #if os(tvOS)
+        if usesFullUIBackNavigation {
+            button.focused($focusedControl, equals: .event(entry.id))
+        } else {
+            button
+        }
+        #else
+        button
         #endif
     }
+    #endif
+
+    #if os(tvOS)
+    private func restoreEntryFocus() {
+        guard usesFullUIBackNavigation, let returnEntryID else { return }
+        if visibleEntries.contains(where: { $0.id == returnEntryID }) {
+            focusedControl = .event(returnEntryID)
+        } else {
+            focusedControl = .clear
+        }
+        self.returnEntryID = nil
+    }
+    #endif
 
     private var controls: some View {
         Group {
@@ -186,13 +246,23 @@ public struct PlaybackTimelineView: View {
         }
     }
 
+    @ViewBuilder
     private var clearButton: some View {
-        Button(role: .destructive) {
+        let button = Button(role: .destructive) {
             log.clear()
             selectedSessionID = nil
         } label: {
             Label("清空", systemImage: "trash")
         }
+        #if os(tvOS)
+        if usesFullUIBackNavigation {
+            button.focused($focusedControl, equals: .clear)
+        } else {
+            button
+        }
+        #else
+        button
+        #endif
     }
 
     #if !os(tvOS)
@@ -456,8 +526,28 @@ private struct PlaybackEventDetailView: View {
     let entry: PlaybackEventEntry
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #if os(tvOS)
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
+    @FocusState private var isCloseFocused: Bool
+    #endif
 
     var body: some View {
+        #if os(tvOS)
+        if usesFullUIBackNavigation {
+            navigationContent
+                .defaultFocus($isCloseFocused, true)
+                .onAppear { isCloseFocused = true }
+                .interactiveDismissDisabled()
+                .tvFullUIBackCommand { dismiss() }
+        } else {
+            navigationContent
+        }
+        #else
+        navigationContent
+        #endif
+    }
+
+    private var navigationContent: some View {
         NavigationStack {
             List {
                 Section("基本信息") {
@@ -471,11 +561,25 @@ private struct PlaybackEventDetailView: View {
                 }
             }
             .navigationTitle("播放事件")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { closeButton } }
             #if os(tvOS)
-            .onExitCommand { dismiss() }
+            .onExitCommand(perform: usesFullUIBackNavigation ? nil : { dismiss() })
             #endif
         }
+    }
+
+    @ViewBuilder
+    private var closeButton: some View {
+        let button = Button("关闭") { dismiss() }
+        #if os(tvOS)
+        if usesFullUIBackNavigation {
+            button.focused($isCloseFocused)
+        } else {
+            button
+        }
+        #else
+        button
+        #endif
     }
 
     private func row(_ title: String, _ value: String) -> some View {

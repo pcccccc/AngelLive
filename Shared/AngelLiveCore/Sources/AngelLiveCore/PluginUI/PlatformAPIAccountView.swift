@@ -7,6 +7,10 @@ public struct PlatformAPIAccountView: View {
     @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.dismiss) private var dismiss
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
+    #if os(tvOS)
+    @Environment(\.tvFullUIBackNavigation) private var tvFullUIBackNavigation
+    private var onTVDismiss: (() -> Void)?
+    #endif
     @State private var service = PlatformAPITokenService.shared
     @State private var working = false
     @State private var validationCompleted = false
@@ -17,6 +21,13 @@ public struct PlatformAPIAccountView: View {
         self.entry = entry
         self.onChangeLogin = onChangeLogin
     }
+
+    #if os(tvOS)
+    public init(entry: LoginPlatformEntry, onClose: @escaping () -> Void, onChangeLogin: @escaping () -> Void) {
+        self.init(entry: entry, onChangeLogin: onChangeLogin)
+        onTVDismiss = onClose
+    }
+    #endif
 
     public var body: some View {
         NavigationStack {
@@ -71,12 +82,18 @@ public struct PlatformAPIAccountView: View {
             .toolbar {
                 if !usesSettingsPresentation && !usesPlayerSheets {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完成") { dismiss() }.disabled(working)
+                        Button("完成") { close() }.disabled(working)
                     }
                 }
             }
             .playerSheetNavigationWhenPresented(Text("\(entry.displayName) 账号"), closeDisabled: working)
             .task { await service.load(pluginId: entry.pluginId) }
+            #if os(tvOS)
+            .tvFullUIBackCommand(enabled: tvFullUIBackNavigation && !working && !showLogout) {
+                guard !working, !showLogout else { return }
+                close()
+            }
+            #endif
             .alert("退出登录？", isPresented: $showLogout) {
                 Button("取消", role: .cancel) {}
                 Button("退出登录", role: .destructive) {
@@ -84,7 +101,7 @@ public struct PlatformAPIAccountView: View {
                     Task {
                         do {
                             try await service.clear(pluginId: entry.pluginId)
-                            dismiss()
+                            close()
                         } catch {
                             errorMessage = "退出失败，请稍后重试。"
                         }
@@ -95,6 +112,20 @@ public struct PlatformAPIAccountView: View {
                 Text("将移除此平台在本机保存的 API 登录凭据。")
             }
         }
+        #if os(tvOS)
+        .interactiveDismissDisabled(working || tvFullUIBackNavigation)
+        #else
         .interactiveDismissDisabled(working)
+        #endif
+    }
+
+    private func close() {
+        #if os(tvOS)
+        if tvFullUIBackNavigation, let onTVDismiss {
+            onTVDismiss()
+            return
+        }
+        #endif
+        dismiss()
     }
 }

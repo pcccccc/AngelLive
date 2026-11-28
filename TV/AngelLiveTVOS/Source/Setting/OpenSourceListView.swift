@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AngelLiveCore
 import AngelLiveDependencies
 
 struct OpenSourceListView: View {
@@ -70,7 +71,7 @@ private struct TVLicenseDetail: View {
             request?.cancel()
             request = nil
         }
-        .onExitCommand { dismiss() }
+        .tvFullUIBackCommand { dismiss() }
     }
 
     private func loadLicense() {

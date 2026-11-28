@@ -13,16 +13,42 @@ import AngelLiveDependencies
 // MARK: - 账号管理主视图
 
 struct AccountManagementView: View {
-    var recoveryPluginIDs: [String]? = nil
+    let recoveryPluginIDs: [String]?
+    private let onBack: () -> Void
+    private let isAuditFixture: Bool
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @Environment(\.usesFullUI) private var usesFullUI
 
     @State private var platforms: [LoginPlatformEntry] = []
     @State private var currentPage: AccountPage = .main
     @State private var didLoadRecovery = false
+    @State private var detailPresentation = TVAccountDetailPresentation()
+    @State private var returnPlatformID: String?
+    @FocusState private var focusedPlatformID: String?
     /// 手动输入 Cookie 走全屏 cover,盖住 SettingView 半屏容器外侧的平台 logo,
     /// 让获取 Cookie 的步骤说明能完整铺开。
     @State private var manualInputEntry: LoginPlatformEntry?
+
+    init(recoveryPluginIDs: [String]? = nil, onBack: @escaping () -> Void = {}) {
+        self.recoveryPluginIDs = recoveryPluginIDs
+        self.onBack = onBack
+        isAuditFixture = false
+    }
+
+    #if DEBUG
+    init(auditRecoveryPlatforms: [LoginPlatformEntry]) {
+        recoveryPluginIDs = auditRecoveryPlatforms.map(\.pluginId)
+        onBack = {}
+        isAuditFixture = true
+        _platforms = State(initialValue: auditRecoveryPlatforms)
+        _didLoadRecovery = State(initialValue: true)
+        if auditRecoveryPlatforms.count == 1, let entry = auditRecoveryPlatforms.first {
+            _currentPage = State(initialValue: .platformDetail(entry))
+        }
+    }
+    #endif
+
+    private var usesFullUIBack: Bool { usesFullUI || isAuditFixture }
 
     enum AccountPage: Equatable {
         case main
@@ -43,10 +69,16 @@ struct AccountManagementView: View {
                 HStack {
                     Text(recoveryTitle).font(.title2.bold())
                     Spacer()
-                    Button("返回") { dismiss() }
+                    Button("返回") {
+                        if usesFullUIBack { goBack() } else { dismiss() }
+                    }
                 }
             }
             accountContent
+        }
+        .interactiveDismissDisabled(usesFullUIBack && recoveryPluginIDs != nil)
+        .tvFullUIBackCommand(enabled: usesFullUIBack && manualInputEntry == nil && !detailPresentation.isActive) {
+            goBack()
         }
         .task {
             guard let recoveryPluginIDs, !didLoadRecovery else { return }
@@ -59,7 +91,19 @@ struct AccountManagementView: View {
             if recoveryPluginIDs.count == 1, let entry = platforms.first {
                 currentPage = .platformDetail(entry)
             }
-            await syncService.refreshAllLoginStatus()
+            await PlatformCredentialSyncService.shared.refreshAllLoginStatus()
+        }
+    }
+
+    private func goBack() {
+        if usesFullUIBack && (manualInputEntry != nil || detailPresentation.isActive) { return }
+        if case .platformDetail(let entry) = currentPage, recoveryPluginIDs?.count != 1 {
+            if usesFullUIBack { returnPlatformID = entry.pluginId }
+            currentPage = .main
+        } else if recoveryPluginIDs != nil {
+            dismiss()
+        } else {
+            onBack()
         }
     }
 
@@ -79,16 +123,12 @@ struct AccountManagementView: View {
             case .platformDetail(let entry):
                 PlatformDetailPageView(
                     entry: entry,
-                    onBack: {
-                        if recoveryPluginIDs?.count == 1 {
-                            dismiss()
-                        } else {
-                            currentPage = .main
-                        }
-                    },
+                    onBack: { goBack() },
                     onManualInput: { e in
                         manualInputEntry = e
-                    }
+                    },
+                    isAuditFixture: isAuditFixture,
+                    presentation: $detailPresentation
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
@@ -106,7 +146,7 @@ struct AccountManagementView: View {
 
     private var accountMainView: some View {
         // 平台列表在半屏容器里可能溢出,套 ScrollView 让 tvOS 焦点引擎自动滚动。
-        // scrollClipDisabled: tvOS Button 聚焦时会放大,默认 ScrollView 会裁掉左右溢出部分,关掉裁剪让放大动画完整显示。
+        // FullUI 在滚动区域内预留聚焦放大空间，列表上方的返回栏保持固定。
         ScrollView {
             VStack(spacing: 15) {
                 sectionHeader("平台账号")
@@ -120,53 +160,59 @@ struct AccountManagementView: View {
                     }
                 }
 
-                // 平台列表
-                ForEach(platforms) { entry in
-                    Button {
-                        currentPage = .platformDetail(entry)
-                    } label: {
-                        HStack(spacing: 15) {
-                            Text(entry.displayName)
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if entry.loginChallenge?.isSupportedByCurrentHost == true {
-                                Image(systemName: "qrcode")
-                                    .foregroundStyle(.secondary)
-                                    .accessibilityLabel("支持扫码登录")
-                            }
-                            if entry.supportsAPICredentials {
-                                PlatformAPITokenStatusLabel(pluginId: entry.pluginId)
-                            } else {
-                            Text(loginStatusText(for: entry))
-                                .font(.system(size: 30))
-                                .foregroundStyle(loginStatusColor(for: entry))
-                            }
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                if isAuditFixture {
+                    accountRows([:])
+                } else {
+                    TVAccountStatusContent(content: accountRows)
                 }
 
                 Spacer(minLength: 200)
             }
+            .padding(.horizontal, usesFullUIBack ? 24 : 0)
+            .padding(.vertical, usesFullUIBack ? 8 : 0)
         }
-        .scrollClipDisabled()
-        .onExitCommand(perform: recoveryPluginIDs == nil ? nil : { dismiss() })
+        .scrollClipDisabled(!usesFullUIBack)
+        .defaultFocus($focusedPlatformID, returnPlatformID)
+        .onAppear {
+            if usesFullUIBack, let returnPlatformID { focusedPlatformID = returnPlatformID }
+        }
+        .onExitCommand(perform: !usesFullUIBack && recoveryPluginIDs != nil ? { dismiss() } : nil)
         .task {
             guard recoveryPluginIDs == nil else { return }
             platforms = await PlatformLoginRegistry.shared.availablePlatforms()
-            await syncService.refreshAllLoginStatus()
+            await PlatformCredentialSyncService.shared.refreshAllLoginStatus()
         }
     }
 
-    // MARK: - 登录状态辅助方法
-
-    private func loginStatusText(for entry: LoginPlatformEntry) -> String {
-        syncService.isLoggedIn(pluginId: entry.pluginId) ? "已登录" : "未登录"
-    }
-
-    private func loginStatusColor(for entry: LoginPlatformEntry) -> Color {
-        syncService.isLoggedIn(pluginId: entry.pluginId) ? .green : .gray
+    private func accountRows(_ statuses: [String: Bool]) -> some View {
+        ForEach(platforms) { entry in
+            Button {
+                currentPage = .platformDetail(entry)
+            } label: {
+                HStack(spacing: 15) {
+                    Text(entry.displayName)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if entry.loginChallenge?.isSupportedByCurrentHost == true {
+                        Image(systemName: "qrcode")
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("支持扫码登录")
+                    }
+                    if entry.supportsAPICredentials && !isAuditFixture {
+                        PlatformAPITokenStatusLabel(pluginId: entry.pluginId)
+                    } else {
+                        let isLoggedIn = statuses[entry.pluginId] == true
+                        Text(isLoggedIn ? "已登录" : "未登录")
+                            .font(.system(size: 30))
+                            .foregroundStyle(isLoggedIn ? Color.green : Color.gray)
+                    }
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+                .colorMultiply(usesFullUIBack && focusedPlatformID == entry.pluginId ? .black : .white)
+            }
+            .focused($focusedPlatformID, equals: entry.pluginId)
+        }
     }
 
     // MARK: - 分组标题
@@ -183,23 +229,50 @@ struct AccountManagementView: View {
     }
 }
 
+private struct TVAccountStatusContent<Content: View>: View {
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    let content: ([String: Bool]) -> Content
+
+    var body: some View {
+        content(syncService.loggedInByPluginId)
+    }
+}
+
 // MARK: - 平台详情页面
 
-struct PlatformDetailPageView: View {
+private struct TVAccountDetailPresentation {
+    var showLogoutConfirm = false
+    var showQRCodeLogin = false
+    var showAPIToken = false
+    var showDeviceLogin = false
+    var showAPIAccount = false
+
+    var isActive: Bool {
+        showLogoutConfirm || showQRCodeLogin || showAPIToken || showDeviceLogin || showAPIAccount
+    }
+}
+
+private struct PlatformDetailPageView: View {
     let entry: LoginPlatformEntry
     let onBack: () -> Void
     let onManualInput: (LoginPlatformEntry) -> Void
+    let isAuditFixture: Bool
+    @Binding var presentation: TVAccountDetailPresentation
 
-    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
+    @Environment(\.usesFullUI) private var usesFullUI
     @State private var isLoggedIn = false
     @State private var isValidating = false
     @State private var validationMessage: String?
-    @State private var showLogoutConfirm = false
-    @State private var showQRCodeLogin = false
-    @State private var showAPIToken = false
-    @State private var showDeviceLogin = false
-    @State private var showAPIAccount = false
-    @State private var apiService = PlatformAPITokenService.shared
+    @FocusState private var credentialFocus: CredentialFocus?
+
+    private enum CredentialFocus: Hashable {
+        case account, token, deviceLogin, qrCode
+    }
+
+    private var usesScrollableDetail: Bool { usesFullUI || isAuditFixture }
+    private var hasAPIAccount: Bool {
+        !isAuditFixture && entry.supportsAPICredentials && PlatformAPITokenService.shared.statuses[entry.pluginId] != nil
+    }
 
     /// 是否支持服务端 Cookie 验证
     private var supportsValidation: Bool {
@@ -207,20 +280,88 @@ struct PlatformDetailPageView: View {
     }
 
     var body: some View {
+        detailPage
+            .onExitCommand(perform: usesScrollableDetail ? nil : onBack)
+            .fullScreenCover(isPresented: $presentation.showAPIAccount, onDismiss: { restoreAccountFocus() }) {
+                let closeAccount: () -> Void = { presentation.showAPIAccount = false }
+                PlatformAPIAccountView(entry: entry, onClose: closeAccount, onChangeLogin: closeAccount)
+            }
+            .fullScreenCover(isPresented: $presentation.showAPIToken, onDismiss: { restoreFocus(.token) }) {
+                PlatformAPITokenView(entry: entry, onClose: { presentation.showAPIToken = false })
+            }
+            .fullScreenCover(isPresented: $presentation.showDeviceLogin, onDismiss: { restoreFocus(.deviceLogin) }) {
+                PlatformDeviceLoginView(entry: entry, onClose: { presentation.showDeviceLogin = false })
+            }
+            .alert("退出登录", isPresented: $presentation.showLogoutConfirm) {
+                Button("取消", role: .cancel) {}
+                Button("确定", role: .destructive) { logout() }
+            } message: {
+                Text("确定要退出\(entry.displayName)登录吗？")
+            }
+            .fullScreenCover(isPresented: $presentation.showQRCodeLogin, onDismiss: { restoreFocus(.qrCode) }) {
+                TVPlatformLoginQRCodePageView(
+                    entry: entry,
+                    onBack: { presentation.showQRCodeLogin = false },
+                    onSucceeded: {
+                        presentation.showQRCodeLogin = false
+                        Task { await refreshStatus() }
+                    }
+                )
+            }
+            .task {
+                guard !isAuditFixture else { return }
+                await refreshStatus()
+            }
+    }
+
+    private func restoreFocus(_ target: CredentialFocus) {
+        if usesFullUI { credentialFocus = target }
+    }
+
+    private func restoreAccountFocus() {
+        guard usesFullUI else { return }
+        if hasAPIAccount {
+            credentialFocus = .account
+        } else if entry.supportsDeviceCode {
+            credentialFocus = .deviceLogin
+        } else if entry.supportsAPIToken {
+            credentialFocus = .token
+        }
+    }
+
+    @ViewBuilder
+    private var detailPage: some View {
+        if usesScrollableDetail {
+            GeometryReader { viewport in
+                ScrollView {
+                    detailContent
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: viewport.size.height)
+                }
+                .clipped()
+            }
+        } else {
+            detailContent
+        }
+    }
+
+    private var detailContent: some View {
         VStack(spacing: 15) {
             Spacer()
 
             // 状态显示区域
             Group {
-                if entry.supportsAPICredentials { PlatformAPITokenStatusLabel(pluginId: entry.pluginId) }
+                if entry.supportsAPICredentials && !isAuditFixture { PlatformAPITokenStatusLabel(pluginId: entry.pluginId) }
                 else { statusSection }
             }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
 
             // 已登录时的操作
-            if entry.supportsAPICredentials, apiService.statuses[entry.pluginId] != nil {
-                Button("账号信息与凭证验证") { showAPIAccount = true }
+            if hasAPIAccount {
+                Button("账号信息与凭证验证") { presentation.showAPIAccount = true }
+                    .focused($credentialFocus, equals: .account)
             }
             if isLoggedIn && entry.loginFlow != nil {
                 // 支持验证的平台：验证 Cookie
@@ -242,7 +383,7 @@ struct PlatformDetailPageView: View {
 
                 // 退出登录
                 Button {
-                    showLogoutConfirm = true
+                    presentation.showLogoutConfirm = true
                 } label: {
                     HStack {
                         Text("退出登录")
@@ -253,14 +394,16 @@ struct PlatformDetailPageView: View {
             }
 
             if entry.methods(for: .tvOS).contains(.deviceCode) {
-                Button("登录 \(entry.displayName)") { showDeviceLogin = true }
+                Button("登录 \(entry.displayName)") { if !isAuditFixture { presentation.showDeviceLogin = true } }
+                    .focused($credentialFocus, equals: .deviceLogin)
             }
             if entry.methods(for: .tvOS).contains(.apiToken) {
-                Button(PlatformLoginMethod.apiToken.title) { showAPIToken = true }
+                Button(PlatformLoginMethod.apiToken.title) { if !isAuditFixture { presentation.showAPIToken = true } }
+                    .focused($credentialFocus, equals: .token)
             }
             if entry.methods(for: .tvOS).contains(.qrCode) {
                 Button {
-                    showQRCodeLogin = true
+                    if !isAuditFixture { presentation.showQRCodeLogin = true }
                 } label: {
                     HStack {
                         Text(isLoggedIn ? "扫码重新登录" : "扫码登录")
@@ -270,52 +413,24 @@ struct PlatformDetailPageView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                .focused($credentialFocus, equals: .qrCode)
             }
 
             if entry.methods(for: .tvOS).contains(.manualCookie) {
-            Button {
-                onManualInput(entry)
-            } label: {
-                HStack {
-                    Text("手动输入 Cookie")
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
+                Button {
+                    if !isAuditFixture { onManualInput(entry) }
+                } label: {
+                    HStack {
+                        Text("手动输入 Cookie")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }
             }
 
             Spacer(minLength: 200)
-        }
-        .onExitCommand { onBack() }
-        .fullScreenCover(isPresented: $showAPIAccount) {
-            PlatformAPIAccountView(entry: entry) { showAPIAccount = false }
-        }
-        .fullScreenCover(isPresented: $showAPIToken) {
-            PlatformAPITokenView(entry: entry)
-        }
-        .fullScreenCover(isPresented: $showDeviceLogin) {
-            PlatformDeviceLoginView(entry: entry)
-        }
-        .alert("退出登录", isPresented: $showLogoutConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确定", role: .destructive) { logout() }
-        } message: {
-            Text("确定要退出\(entry.displayName)登录吗？")
-        }
-        .fullScreenCover(isPresented: $showQRCodeLogin) {
-            TVPlatformLoginQRCodePageView(
-                entry: entry,
-                onBack: { showQRCodeLogin = false },
-                onSucceeded: {
-                    showQRCodeLogin = false
-                    Task { await refreshStatus() }
-                }
-            )
-        }
-        .task {
-            await refreshStatus()
         }
     }
 
@@ -357,6 +472,7 @@ struct PlatformDetailPageView: View {
     // MARK: - 状态刷新
 
     private func refreshStatus() async {
+        let syncService = PlatformCredentialSyncService.shared
         await syncService.refreshLoginStatus(pluginId: entry.pluginId)
         isLoggedIn = syncService.isLoggedIn(pluginId: entry.pluginId)
         if isLoggedIn && supportsValidation {
@@ -390,7 +506,7 @@ struct PlatformDetailPageView: View {
 
     private func logout() {
         Task {
-            await syncService.clearSession(pluginId: entry.pluginId)
+            await PlatformCredentialSyncService.shared.clearSession(pluginId: entry.pluginId)
         }
         isLoggedIn = false
         validationMessage = nil
@@ -405,6 +521,7 @@ private struct TVPlatformLoginQRCodePageView: View {
     let onSucceeded: () -> Void
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.usesFullUI) private var usesFullUI
     @State private var service = PlatformLoginChallengeService()
     @State private var backgroundTimeoutTask: Task<Void, Never>?
     @State private var backgroundedAt: Date?
@@ -412,6 +529,14 @@ private struct TVPlatformLoginQRCodePageView: View {
     @FocusState private var verificationFieldFocused: Bool
 
     var body: some View {
+        let cancelChallenge: () -> Void = { cancelChallengeAndGoBack() }
+        return challengeLifecycle
+            .interactiveDismissDisabled(usesFullUI)
+            .onExitCommand(perform: usesFullUI ? nil : cancelChallenge)
+            .tvFullUIBackCommand(enabled: usesFullUI, perform: cancelChallenge)
+    }
+
+    private var challengeLifecycle: some View {
         content
             .padding(80)
             .safeAreaPadding()
@@ -433,9 +558,6 @@ private struct TVPlatformLoginQRCodePageView: View {
                 cancelBackgroundTimeout()
                 verificationCode = ""
                 service.cancel()
-            }
-            .onExitCommand {
-                cancelChallengeAndGoBack()
             }
     }
 
@@ -729,6 +851,7 @@ struct PlatformManualInputPageView: View {
     let onBack: () -> Void
 
     @Environment(AppState.self) private var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var cookieInput = ""
     @State private var isValidating = false
@@ -841,9 +964,9 @@ struct PlatformManualInputPageView: View {
         // 撑满整个 cover 再贴材质,否则 HStack 只会包到内容自身的宽度,两侧会漏出底层视图。
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.thinMaterial)
-        .onExitCommand {
-            onBack()
-        }
+        .interactiveDismissDisabled(usesFullUI)
+        .onExitCommand(perform: usesFullUI ? nil : onBack)
+        .tvFullUIBackCommand(enabled: usesFullUI, perform: onBack)
         .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
             guard let event = appViewModel.remoteInputService.lastEvent,
                   event.field == .cookie else { return }
@@ -921,6 +1044,7 @@ struct PlatformManualInputPageView: View {
 struct LANSyncPageView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     let onBack: () -> Void
+    @Environment(\.usesFullUI) private var usesFullUI
 
     @State private var isSuccess = false
     @State private var syncedPlatformSummary = ""
@@ -985,9 +1109,8 @@ struct LANSyncPageView: View {
 
             Spacer(minLength: 200)
         }
-        .onExitCommand {
-            onBack()
-        }
+        .onExitCommand(perform: usesFullUI ? nil : onBack)
+        .tvFullUIBackCommand(enabled: usesFullUI, perform: onBack)
         .task {
             syncService.startBonjourListener()
         }

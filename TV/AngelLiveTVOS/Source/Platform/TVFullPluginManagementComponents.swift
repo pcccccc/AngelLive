@@ -778,6 +778,5 @@ struct TVPluginConsentSurface: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: TVPluginLayout.cornerRadius))
         .defaultFocus($focusContinue, true)
         .onAppear { focusContinue = true }
-        .onExitCommand { consent.resolve(false) }
     }
 }

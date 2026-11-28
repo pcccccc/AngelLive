@@ -9,6 +9,10 @@ public struct PlatformDeviceLoginView: View {
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #if os(tvOS)
+    @Environment(\.tvFullUIBackNavigation) private var tvFullUIBackNavigation
+    private var onTVDismiss: (() -> Void)?
+    #endif
     @State private var loginId = UUID().uuidString
     @State private var challenge: DeviceLoginChallenge?
     @State private var qrImage: CGImage?
@@ -25,12 +29,19 @@ public struct PlatformDeviceLoginView: View {
 
     public init(entry: LoginPlatformEntry) { self.entry = entry }
 
+    #if os(tvOS)
+    public init(entry: LoginPlatformEntry, onClose: @escaping () -> Void) {
+        self.init(entry: entry)
+        onTVDismiss = onClose
+    }
+    #endif
+
     public var body: some View {
         NavigationStack {
             Group {
                 if connected {
                     DeviceLoginSuccessContent(displayName: entry.displayName, clearing: clearing,
-                        error: clearError, onDone: { dismiss() }, onDisconnect: clearAccount)
+                        error: clearError, onDone: { close() }, onDisconnect: clearAccount)
                 } else {
                     ScrollView {
                         VStack(spacing: 20) {
@@ -69,7 +80,10 @@ public struct PlatformDeviceLoginView: View {
                                     .disabled(clearing)
                             }
                             if !usesSettingsPresentation && !usesPlayerSheets {
-                                Button(connected ? "完成" : "关闭") { dismiss() }
+                                Button(connected ? "完成" : "关闭") { close() }
+                                    #if os(tvOS)
+                                    .disabled(tvFullUIBackNavigation && clearing)
+                                    #endif
                             }
                         }
                         .padding(24).frame(maxWidth: 640).frame(maxWidth: .infinity)
@@ -78,7 +92,13 @@ public struct PlatformDeviceLoginView: View {
             }
             .macSettingsPage("\(entry.displayName) 登录", closeTitle: connected ? "完成" : "关闭", closeDisabled: clearing)
             .playerSheetNavigationWhenPresented(Text("\(entry.displayName) 登录"), closeDisabled: clearing)
+            #if os(tvOS)
+            .tvFullUIBackCommand(enabled: tvFullUIBackNavigation && !clearing) { close() }
+            #endif
         }
+        #if os(tvOS)
+        .interactiveDismissDisabled(tvFullUIBackNavigation)
+        #endif
         #if os(iOS)
         .presentationDetents(offersCompactDetent ? [.height(400), .large] : [.large], selection: $selectedDetent)
         .presentationDragIndicator(usesPlayerSheets || connected ? .visible : .automatic)
@@ -96,6 +116,19 @@ public struct PlatformDeviceLoginView: View {
             qrImage = nil
             Task { await LiveParsePlugins.shared.deviceAuth.cancel(pluginId: entry.pluginId, loginId: id, manager: LiveParsePlugins.shared) }
         }
+    }
+
+    private func close() {
+        #if os(tvOS)
+        if tvFullUIBackNavigation {
+            guard !clearing else { return }
+            if let onTVDismiss {
+                onTVDismiss()
+                return
+            }
+        }
+        #endif
+        dismiss()
     }
 
     @MainActor private func clearAccount() {

@@ -18,7 +18,9 @@ import AngelLiveDependencies
 // MARK: - 同步管理主视图
 
 struct SyncManagementView: View {
+    private let onBack: (() -> Void)?
     @Environment(AppState.self) private var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @AppStorage(PlatformAppearanceSyncService.settingKey) private var platformAppearanceSyncEnabled = true
     @FocusState private var appearanceRowFocused: Bool
@@ -28,6 +30,10 @@ struct SyncManagementView: View {
     /// Simple Live 老扫码同步页内部硬编码了 1920×1080,半屏宽度容不下,
     /// 走 fullScreenCover 让它盖掉半屏容器和左侧 logo。
     @State private var showSimpleLiveCover = false
+
+    init(onBack: (() -> Void)? = nil) {
+        self.onBack = onBack
+    }
 
     enum SyncPage: Equatable {
         case main
@@ -61,12 +67,17 @@ struct SyncManagementView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: currentPage)
+        .tvFullUIBackCommand(enabled: usesFullUI && currentPage == .main && !showSimpleLiveCover && onBack != nil) {
+            onBack?()
+        }
         .fullScreenCover(isPresented: $showSimpleLiveCover) {
             SyncView()
                 .environment(appViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
-                .onExitCommand { showSimpleLiveCover = false }
+                .interactiveDismissDisabled(usesFullUI)
+                .onExitCommand(perform: usesFullUI ? nil : { showSimpleLiveCover = false })
+                .tvFullUIBackCommand(enabled: usesFullUI) { showSimpleLiveCover = false }
         }
     }
 
@@ -194,6 +205,7 @@ struct SyncManagementView: View {
 struct ICloudSyncDetailView: View {
     let onBack: () -> Void
 
+    @Environment(\.usesFullUI) private var usesFullUI
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
     @State private var showUploadConfirm = false
@@ -295,7 +307,11 @@ struct ICloudSyncDetailView: View {
             }
         }
         .scrollClipDisabled()
-        .onExitCommand { onBack() }
+        .onExitCommand(perform: usesFullUI ? nil : onBack)
+        .tvFullUIBackCommand(
+            enabled: usesFullUI && !showUploadConfirm && !showDownloadConfirm && !showClearCloudConfirm,
+            perform: onBack
+        )
         .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
             Button("取消", role: .cancel) {}
             Button("确定上传") {
@@ -452,6 +468,7 @@ struct FavoriteSyncDetailView: View {
     let onBack: () -> Void
 
     @Environment(AppState.self) private var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
 
     var body: some View {
         VStack(spacing: 15) {
@@ -488,7 +505,8 @@ struct FavoriteSyncDetailView: View {
 
             Spacer(minLength: 200)
         }
-        .onExitCommand { onBack() }
+        .onExitCommand(perform: usesFullUI ? nil : onBack)
+        .tvFullUIBackCommand(enabled: usesFullUI, perform: onBack)
     }
 
     @ViewBuilder

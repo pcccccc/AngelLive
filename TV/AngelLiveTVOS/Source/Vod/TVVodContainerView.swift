@@ -1,4 +1,5 @@
 import AngelLiveCore
+import AngelLiveDependencies
 import SwiftUI
 
 struct TVVodContainerView: View {
@@ -9,7 +10,6 @@ struct TVVodContainerView: View {
     @State private var model: VodPlaybackModel
     @State private var launch: Launch?
     @State private var returnEpisodeID: String?
-    @State private var backInput = TVVodBackInput()
 
     private struct Launch {
         let episode: VodEpisode
@@ -27,12 +27,12 @@ struct TVVodContainerView: View {
         Group {
             #if canImport(KSPlayer)
             if VodHostRouting.usesDirectPlayer(room) {
-                TVVodPlayerView(model: model, sourceID: nil, settings: settings, backInput: backInput) { _ in
+                TVVodPlayerView(model: model, sourceID: nil, settings: settings) { _ in
                     onExit()
                 }
             } else if let launch {
                 TVVodPlayerView(model: model, episode: launch.episode, sourceID: launch.sourceID,
-                                settings: settings, backInput: backInput) { episodeID in
+                                settings: settings) { episodeID in
                     returnEpisodeID = episodeID
                     self.launch = nil
                 }
@@ -53,50 +53,6 @@ struct TVVodContainerView: View {
         TVVodWorkDetailView(room: room, model: model, returnEpisodeID: returnEpisodeID, onExit: onExit) {
             launch = Launch(episode: $0, sourceID: $1)
         }
-        .modifier(TVVodBackModifier(input: backInput, onBack: onExit))
-    }
-}
-
-/// The same input state survives replacement of the detail and player views.
-@MainActor
-final class TVVodBackInput {
-    private enum Source { case menu, escape }
-    private var lastEvent: (Source, ContinuousClock.Instant)?
-    private var escapeIsDown = false
-
-    func menu(_ action: () -> Void) {
-        guard !escapeIsDown else { return }
-        perform(.menu, action)
-    }
-
-    func escape(_ press: KeyPress, action: () -> Void) -> KeyPress.Result {
-        if press.phase == .down {
-            escapeIsDown = true
-        } else if press.phase == .up {
-            escapeIsDown = false
-            perform(.escape, action)
-        }
-        return .handled
-    }
-
-    private func perform(_ source: Source, _ action: () -> Void) {
-        let now = ContinuousClock.now
-        // A single native Escape can also arrive as Exit Command during a focus transition.
-        if let (previous, time) = lastEvent, previous != source, time.duration(to: now) < .milliseconds(100) {
-            return
-        }
-        lastEvent = (source, now)
-        action()
-    }
-}
-
-struct TVVodBackModifier: ViewModifier {
-    let input: TVVodBackInput
-    let onBack: () -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .onExitCommand { input.menu(onBack) }
-            .onKeyPress(.escape, phases: .all) { input.escape($0, action: onBack) }
+        .tvFullUIBackCommand(perform: onExit)
     }
 }

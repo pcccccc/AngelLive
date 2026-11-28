@@ -7,6 +7,10 @@ public struct PlatformAPITokenView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.usesFullUIPlayerSheets) private var usesPlayerSheets
     @Environment(\.usesMacSettingsPresentation) private var usesSettingsPresentation
+    #if os(tvOS)
+    @Environment(\.tvFullUIBackNavigation) private var tvFullUIBackNavigation
+    private var onTVDismiss: (() -> Void)?
+    #endif
     @State private var service = PlatformAPITokenService.shared
     @State private var token = ""
     @State private var clientId = ""
@@ -19,6 +23,13 @@ public struct PlatformAPITokenView: View {
         self.entry = entry
         self.kind = kind
     }
+
+    #if os(tvOS)
+    public init(entry: LoginPlatformEntry, kind: PlatformAPICredentialKind = .token, onClose: @escaping () -> Void) {
+        self.init(entry: entry, kind: kind)
+        onTVDismiss = onClose
+    }
+    #endif
 
     public var body: some View {
         NavigationStack {
@@ -36,7 +47,13 @@ public struct PlatformAPITokenView: View {
             .navigationTitle("\(entry.displayName) API 凭据")
             .macSettingsPage("\(entry.displayName) API 凭据")
             .playerSheetNavigationWhenPresented(Text("\(entry.displayName) API 凭据"))
+            #if os(tvOS)
+            .tvFullUIBackCommand(enabled: tvFullUIBackNavigation && !isWorking) { close() }
+            #endif
         }
+        #if os(tvOS)
+        .interactiveDismissDisabled(tvFullUIBackNavigation)
+        #endif
         .task { await service.load(pluginId: entry.pluginId) }
         #if os(macOS)
         .frame(minWidth: 500, minHeight: 440)
@@ -101,7 +118,10 @@ public struct PlatformAPITokenView: View {
                 .disabled(isWorking)
         }
         if !usesSettingsPresentation && !usesPlayerSheets {
-            Button("关闭") { dismiss() }
+            Button("关闭") { close() }
+                #if os(tvOS)
+                .disabled(tvFullUIBackNavigation && isWorking)
+                #endif
         }
     }
 
@@ -133,6 +153,19 @@ public struct PlatformAPITokenView: View {
     }
 
     private func resetInput() { token = ""; clientId = ""; clientSecret = "" }
+
+    private func close() {
+        #if os(tvOS)
+        if tvFullUIBackNavigation {
+            guard !isWorking else { return }
+            if let onTVDismiss {
+                onTVDismiss()
+                return
+            }
+        }
+        #endif
+        dismiss()
+    }
 
     private func save() {
         let candidate = token

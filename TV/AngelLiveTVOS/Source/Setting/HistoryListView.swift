@@ -16,12 +16,14 @@ enum HistoryFocusField: Hashable {
 
 struct HistoryListView: View {
     let appViewModel: AppState
+    let onClose: () -> Void
 
     var body: some View {
         if appViewModel.pluginAvailability.hasAvailablePlugins {
-            TVFullUIHistoryListView(appViewModel: appViewModel)
+            TVFullUIHistoryListView(appViewModel: appViewModel, onClose: onClose)
         } else {
             LegacyHistoryListView(appViewModel: appViewModel)
+                .onExitCommand(perform: onClose)
         }
     }
 }
@@ -146,6 +148,7 @@ private struct TVHistoryPendingRemoval {
 /// FullUI keeps the original history grid and card geometry; only the source changes.
 struct TVFullUIHistoryListView: View {
     let appViewModel: AppState
+    let onClose: (() -> Void)?
     @State private var liveViewModel: LiveViewModel
     @State private var progressStore: ShortDramaProgressStore
     @State private var liveRooms: [LiveModel] = []
@@ -159,8 +162,9 @@ struct TVFullUIHistoryListView: View {
     @FocusState private var headerFocus: TVHistoryHeaderFocus?
     @FocusState private var cardFocus: FocusableField?
 
-    init(appViewModel: AppState, progressStore: ShortDramaProgressStore = .shared) {
+    init(appViewModel: AppState, progressStore: ShortDramaProgressStore = .shared, onClose: (() -> Void)? = nil) {
         self.appViewModel = appViewModel
+        self.onClose = onClose
         _progressStore = State(initialValue: progressStore)
         _liveViewModel = State(initialValue: LiveViewModel(
             roomListType: .history, liveType: .placeholder,
@@ -239,6 +243,10 @@ struct TVFullUIHistoryListView: View {
             pendingHistoryRemoval = nil
         }
         .onPlayPauseCommand { }
+        .interactiveDismissDisabled(onClose != nil)
+        .tvFullUIBackCommand(enabled: onClose != nil && playingDrama == nil && !showClearAlert && feedbackMessage == nil) {
+            onClose?()
+        }
         .alert("清空\(selectedKind.rawValue)历史记录", isPresented: $showClearAlert) {
             Button("取消", role: .cancel) { }
                 .accessibilityIdentifier("history.clear.cancel")

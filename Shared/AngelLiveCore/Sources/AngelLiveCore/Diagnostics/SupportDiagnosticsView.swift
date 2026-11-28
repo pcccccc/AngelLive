@@ -86,6 +86,12 @@ public struct SupportDiagnosticsView: View {
     @State private var showRestartConfirmation = false
     @State private var showDiscardConfirmation = false
 
+    #if os(tvOS)
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
+    @State private var isDescriptionEditorPresented = false
+    @FocusState private var focusedReportAction: SupportDiagnosticsTVFocus?
+    #endif
+
     public init() {
         let initialDescription = SupportDiagnosticsService.shared.lastReport?.userDescription ?? ""
         _description = State(initialValue: initialDescription)
@@ -180,6 +186,8 @@ public struct SupportDiagnosticsView: View {
                             isErrorSnapshot: isErrorSnapshot(report),
                             description: $description,
                             savedDescription: savedDescription,
+                            isDescriptionEditorPresented: $isDescriptionEditorPresented,
+                            focusedAction: $focusedReportAction,
                             onSaveDescription: { draft in
                                 guard !service.isRecording,
                                       service.lastReport?.sessionID == report.sessionID else {
@@ -228,13 +236,16 @@ public struct SupportDiagnosticsView: View {
         }
         #if os(tvOS)
         .focusSection()
-        .onExitCommand {
+        .modifier(SupportDiagnosticsTVBackNavigation(
+            enabled: !isPreviewPresented && !isDescriptionEditorPresented &&
+                !showRestartConfirmation && !showDiscardConfirmation
+        ) {
             if isPreviewPresented {
                 isPreviewPresented = false
             } else {
                 dismiss()
             }
-        }
+        })
         #endif
         .navigationTitle("问题诊断与反馈")
         .macSettingsPage("问题诊断与反馈")
@@ -249,11 +260,14 @@ public struct SupportDiagnosticsView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         #if os(tvOS)
-        .fullScreenCover(isPresented: $isPreviewPresented) {
+        .fullScreenCover(isPresented: $isPreviewPresented, onDismiss: {
+            if usesFullUIBackNavigation { focusedReportAction = .reportPreview }
+        }) {
             NavigationStack {
                 SupportDiagnosticsReportPreviewView(service: service)
             }
             .preferredColorScheme(.dark)
+            .interactiveDismissDisabled(usesFullUIBackNavigation)
         }
         #else
         .navigationDestination(isPresented: $isPreviewPresented) {
@@ -269,6 +283,9 @@ public struct SupportDiagnosticsView: View {
             description = service.lastReport?.userDescription ?? ""
             savedDescription = description
             notice = nil
+            #if os(tvOS)
+            isDescriptionEditorPresented = false
+            #endif
         }
         .onChange(of: service.errorMessage) { _, newErrorMessage in
             guard let newErrorMessage, !newErrorMessage.isEmpty else { return }
@@ -290,6 +307,21 @@ public struct SupportDiagnosticsView: View {
         } message: {
             Text("清除后，本机保存的诊断报告将被删除。")
         }
+        #if os(tvOS)
+        .onChange(of: service.isRecording) { _, isRecording in
+            if isRecording { isDescriptionEditorPresented = false }
+        }
+        .onChange(of: showRestartConfirmation) { _, isPresented in
+            if usesFullUIBackNavigation && !isPresented && phase == .report {
+                focusedReportAction = .reportRestart
+            }
+        }
+        .onChange(of: showDiscardConfirmation) { _, isPresented in
+            if usesFullUIBackNavigation && !isPresented && phase == .report {
+                focusedReportAction = .reportClear
+            }
+        }
+        #endif
     }
 
     private func startRecording() {
@@ -1131,6 +1163,7 @@ private struct SupportDiagnosticsReportPreviewView: View {
     @State private var exportErrorMessage: String?
     @State private var notice: SupportDiagnosticsNotice?
     #if os(tvOS)
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
     @State private var reportSharingService = SupportReportSharingService()
     @State private var showLANShare = false
     @State private var previewSessionID: UUID?
@@ -1234,13 +1267,13 @@ private struct SupportDiagnosticsReportPreviewView: View {
         #if os(tvOS)
         .focusSection()
         .defaultFocus($focusedAction, .previewDownload)
-        .onExitCommand {
+        .modifier(SupportDiagnosticsTVBackNavigation(enabled: true) {
             if showLANShare {
                 closeLANShare()
             } else {
                 dismiss()
             }
-        }
+        })
         .onDisappear {
             showLANShare = false
             reportSharingService.stop()
@@ -1346,6 +1379,7 @@ private struct SupportDiagnosticsReportPreviewView: View {
     private func closeLANShare() {
         showLANShare = false
         reportSharingService.stop()
+        if usesFullUIBackNavigation { focusedAction = .previewDownload }
     }
     #endif
 }
@@ -1510,6 +1544,20 @@ private struct SupportDiagnosticsDuration {
 }
 
 #if os(tvOS)
+private struct SupportDiagnosticsTVBackNavigation: ViewModifier {
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
+    let enabled: Bool
+    let perform: () -> Void
+
+    func body(content: Content) -> some View {
+        if usesFullUIBackNavigation {
+            content.tvFullUIBackCommand(enabled: enabled, perform: perform)
+        } else {
+            content.onExitCommand(perform: perform)
+        }
+    }
+}
+
 private enum SupportDiagnosticsTVFocus: Hashable {
     case start
     case recordReturn
@@ -1738,6 +1786,7 @@ private struct SupportDiagnosticsTVGuidanceView: View {
 }
 
 private struct SupportDiagnosticsTVReportPhase: View {
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
     let startedAt: Date
     let endedAt: Date
     let sessionID: UUID
@@ -1748,13 +1797,12 @@ private struct SupportDiagnosticsTVReportPhase: View {
     let isErrorSnapshot: Bool
     @Binding var description: String
     let savedDescription: String
+    @Binding var isDescriptionEditorPresented: Bool
+    let focusedAction: FocusState<SupportDiagnosticsTVFocus?>.Binding
     let onSaveDescription: (String) -> String?
     let onOpenPreview: () -> Void
     let onRestart: () -> Void
     let onClear: () -> Void
-
-    @FocusState private var focusedAction: SupportDiagnosticsTVFocus?
-    @State private var isDescriptionEditorPresented = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -1788,7 +1836,7 @@ private struct SupportDiagnosticsTVReportPhase: View {
                     title: "检查并分享报告",
                     systemImage: "doc.text.magnifyingglass",
                     action: onOpenPreview,
-                    focusedAction: $focusedAction,
+                    focusedAction: focusedAction,
                     focusTarget: .reportPreview,
                     accessibilityHint: "打开完整报告预览"
                 )
@@ -1796,7 +1844,7 @@ private struct SupportDiagnosticsTVReportPhase: View {
                     title: description.isEmpty ? "补充问题描述" : "编辑问题描述",
                     systemImage: "pencil",
                     action: { isDescriptionEditorPresented = true },
-                    focusedAction: $focusedAction,
+                    focusedAction: focusedAction,
                     focusTarget: .reportDescription,
                     accessibilityHint: "补充发生时间、操作路径和实际现象"
                 )
@@ -1804,7 +1852,7 @@ private struct SupportDiagnosticsTVReportPhase: View {
                     title: "重新记录",
                     systemImage: "arrow.clockwise",
                     action: onRestart,
-                    focusedAction: $focusedAction,
+                    focusedAction: focusedAction,
                     focusTarget: .reportRestart,
                     accessibilityHint: "重新开始一次诊断记录"
                 )
@@ -1812,7 +1860,7 @@ private struct SupportDiagnosticsTVReportPhase: View {
                     title: "清除报告",
                     systemImage: "trash",
                     action: onClear,
-                    focusedAction: $focusedAction,
+                    focusedAction: focusedAction,
                     focusTarget: .reportClear,
                     accessibilityHint: "清除本机保存的诊断报告"
                 )
@@ -1833,16 +1881,18 @@ private struct SupportDiagnosticsTVReportPhase: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .focusSection()
-        .defaultFocus($focusedAction, .reportPreview)
+        .defaultFocus(focusedAction, .reportPreview)
         .onAppear {
-            focusedAction = .reportPreview
+            focusedAction.wrappedValue = .reportPreview
         }
         .onChange(of: isDescriptionEditorPresented) { _, isPresented in
-            if !isPresented {
-                focusedAction = .reportDescription
+            if !usesFullUIBackNavigation && !isPresented {
+                focusedAction.wrappedValue = .reportDescription
             }
         }
-        .fullScreenCover(isPresented: $isDescriptionEditorPresented) {
+        .fullScreenCover(isPresented: $isDescriptionEditorPresented, onDismiss: {
+            if usesFullUIBackNavigation { focusedAction.wrappedValue = .reportDescription }
+        }) {
             SupportDiagnosticsTVDescriptionEditor(
                 initialText: description,
                 onSave: onSaveDescription
@@ -1965,6 +2015,7 @@ private struct SupportDiagnosticsTVDescriptionSummary: View {
 
 private struct SupportDiagnosticsTVDescriptionEditor: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.tvFullUIBackNavigation) private var usesFullUIBackNavigation
 
     let onSave: (String) -> String?
     @State private var draft: String
@@ -2056,6 +2107,8 @@ private struct SupportDiagnosticsTVDescriptionEditor: View {
             }
         }
         .preferredColorScheme(.dark)
+        .interactiveDismissDisabled(usesFullUIBackNavigation)
+        .tvFullUIBackCommand(enabled: usesFullUIBackNavigation) { dismiss() }
         .focusSection()
         .defaultFocus($focusedAction, .descriptionInput)
         .onAppear {
@@ -2246,6 +2299,8 @@ private struct SupportDiagnosticsCapturePreview: View {
 #if os(tvOS)
 private struct SupportDiagnosticsTVReportPreview: View {
     @State private var description = "进入直播间后一直加载，重新打开后仍然如此。"
+    @State private var isDescriptionEditorPresented = false
+    @FocusState private var focusedAction: SupportDiagnosticsTVFocus?
 
     var body: some View {
         NavigationStack {
@@ -2261,6 +2316,8 @@ private struct SupportDiagnosticsTVReportPreview: View {
                     isErrorSnapshot: false,
                     description: $description,
                     savedDescription: description,
+                    isDescriptionEditorPresented: $isDescriptionEditorPresented,
+                    focusedAction: $focusedAction,
                     onSaveDescription: { _ in nil },
                     onOpenPreview: {},
                     onRestart: {},

@@ -78,8 +78,7 @@ struct TVShortDramaPlayerView: View {
     var body: some View {
         playbackContent
             .onChange(of: scenePhase) { _, phase in updateScenePhase(phase) }
-            .onExitCommand(perform: handleBackCommand)
-            .onKeyPress(.escape, phases: .all, action: handleEscapePress)
+            .tvFullUIBackCommand(perform: handleBackCommand)
             .onPlayPauseCommand {
                 guard panel == nil, !isClosingPanel else { return }
                 togglePlayback()
@@ -145,9 +144,7 @@ struct TVShortDramaPlayerView: View {
                             showsEpisodeGroups: $showsEpisodeGroups,
                             onSelect: selectEpisode, onClose: closePanel
                         )
-                        .frame(width: min(geometry.size.width * 0.4, 640), height: max(0, geometry.size.height - 80))
-                        .padding(.vertical, 40)
-                        .padding(.trailing, 48)
+                        .tvPlayerPanelFrame(in: geometry.size)
                         .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                     }
                     .zIndex(2)
@@ -253,12 +250,6 @@ struct TVShortDramaPlayerView: View {
             }
             scheduleHide()
         }
-    }
-
-    private func handleEscapePress(_ press: KeyPress) -> KeyPress.Result {
-        // Consume down/repeat as well, so one native key cannot return twice.
-        if press.phase == .up { handleBackCommand() }
-        return .handled
     }
 
     private var controls: some View {
@@ -761,23 +752,10 @@ private struct TVShortDramaSelectionPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(kind == .episodes ? "选集" : "播放设置")
-                        .font(.system(size: 38, weight: .bold)).foregroundStyle(.white)
-                    Text(subtitle)
-                        .font(.system(size: 24, weight: .medium)).foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Button(action: onClose) {
-                    Image(systemName: "xmark").font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(.white).frame(width: 50, height: 50)
-                }
-                .buttonStyle(TVPanelCloseButtonStyle(isFocused: focus == .close, reduceMotion: reduceMotion))
-                .focused($focus, equals: .close)
-                .accessibilityLabel("关闭\(kind == .episodes ? "选集" : "播放设置")")
+            TVPlayerPanelHeader(title: Text(kind == .episodes ? "选集" : "播放设置"), subtitle: Text(subtitle)) {
+                TVPlayerPanelCloseButton(isFocused: focus == .close, action: onClose)
+                    .focused($focus, equals: .close)
+                    .accessibilityLabel("关闭\(kind == .episodes ? "选集" : "播放设置")")
             }
             if kind == .episodes, groups.count > 1, !showsEpisodeGroups, let group = selectedGroup {
                 option("区间：\(group.title)", item: .groupPicker, selected: false) {
@@ -840,15 +818,7 @@ private struct TVShortDramaSelectionPanel: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 28)
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(.white.opacity(0.12), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
-        .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
-        .focusSection()
+        .tvPlayerPanelSurface()
         .onChange(of: showsEpisodeGroups) { _, presented in
             if presented, let id = selectedGroup?.id { requestFocus(.group(id)) }
             else {
@@ -886,7 +856,7 @@ private struct TVShortDramaSelectionPanel: View {
                 Text(title).font(.system(size: 28, weight: selected || focused ? .semibold : .regular))
                     .foregroundStyle(selected ? .white : .white.opacity(focused ? 0.95 : 0.8))
                     .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                if let lockTitle { RequiresLoginTag(lockTitle, size: .regular).lineLimit(1) }
+                if let lockTitle { TVPlayerLockBadge(title: lockTitle) }
                 if selected {
                     Image(systemName: "checkmark").font(.system(size: 20, weight: .bold))
                         .foregroundStyle(Color.accentColor)
@@ -926,6 +896,7 @@ private struct TVShortDramaPlayerSurface: View {
         self.onReady = onReady
         self.onCompleted = onCompleted
         let options = PlayerOptions()
+        options.syncSystemRate = SettingStore().syncSystemRate
         options.isAutoPlay = desiredPlayback && playback.resumePosition == nil
         options.isLoopPlay = false
         options.registerRemoteControll = false

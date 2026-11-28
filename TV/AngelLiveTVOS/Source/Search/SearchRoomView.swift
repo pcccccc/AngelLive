@@ -39,13 +39,7 @@ struct TVPlatformSearchView: View {
                     .ignoresSafeArea()
             }
             .interactiveDismissDisabled()
-            .onExitCommand { dismiss() }
-            .onKeyPress(.escape, phases: .all) { press in
-                if press.phase == .up {
-                    dismiss()
-                }
-                return .handled
-            }
+            .tvFullUIBackCommand(enabled: liveViewModel.searchRequest.error == nil) { dismiss() }
     }
 }
 

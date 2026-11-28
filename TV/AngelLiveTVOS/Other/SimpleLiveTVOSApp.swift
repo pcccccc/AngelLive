@@ -33,6 +33,10 @@ private enum SimpleLiveTVOSAppLauncher {
             AppearanceDemoApp.main()
             return
         }
+        if TVUIAuditDemoApp.isEnabled, !VodDemoSandbox.isEnabled {
+            TVUIAuditDemoApp.main()
+            return
+        }
         SimpleLiveTVOSApp.main()
     }
 }
@@ -131,6 +135,7 @@ struct SimpleLiveTVOSApp: App {
         if let vodDemoSandbox {
             TVVodDemoRootView(appViewModel: appViewModel, sandbox: vodDemoSandbox)
                 .environment(\.usesFullUI, true)
+                .environment(\.tvFullUIBackNavigation, true)
         } else if let historyTestContext {
             TVFullUIHistoryListView(appViewModel: appViewModel, progressStore: historyTestContext.progress)
         } else {
@@ -161,6 +166,7 @@ struct SimpleLiveTVOSApp: App {
                     DeepLinkPlayerView(appViewModel: appViewModel)
                 }
                 .environment(\.usesFullUI, appViewModel.pluginAvailability.hasAvailablePlugins)
+                .environment(\.tvFullUIBackNavigation, appViewModel.pluginAvailability.hasAvailablePlugins)
                 .task(id: appViewModel.pluginAvailability.hasAvailablePlugins) {
                     await PlatformAppearanceSyncService.shared.setFullUIAvailable(appViewModel.pluginAvailability.hasAvailablePlugins)
                 }

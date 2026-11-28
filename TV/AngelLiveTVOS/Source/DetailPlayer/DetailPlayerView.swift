@@ -18,11 +18,13 @@ struct DetailPlayerView: View {
     @StateObject private var playerCoordinator = KSVideoPlayer.Coordinator()
     @State private var didCleanup = false
     @State private var authenticationRecovery: AuthenticationRecoveryRequest?
+    @State private var accountRecoveryIsActive = false
     @State private var visibleRecoveryNotice: PlaybackRecoveryNotice?
     @State private var roomBannerID: String?
     @State private var lastBannerRoomID: String?
     @State private var roomBannerTask: Task<Void, Never>?
     @State private var showsBottomControls = false
+    @State private var mountedControlsRoomID: String?
     @State private var sleepTimer: TVPlaybackSleepTimer?
     @State private var routedOnDemandRoom: LiveModel?
     @Environment(RoomInfoViewModel.self) var roomInfoViewModel
@@ -53,7 +55,7 @@ struct DetailPlayerView: View {
 
     private var livePlayer: some View {
         playerContent
-            .fullScreenCover(item: $authenticationRecovery) { request in
+            .fullScreenCover(item: $authenticationRecovery, onDismiss: { accountRecoveryIsActive = false }) { request in
                 AccountManagementView(recoveryPluginIDs: request.pluginIDs)
                     .frame(maxWidth: 1000)
                     .padding(80)
@@ -97,6 +99,7 @@ struct DetailPlayerView: View {
             .onChange(of: roomInfoViewModel.pendingLoginRequest?.id) { _, _ in
                 guard let request = roomInfoViewModel.pendingLoginRequest else { return }
                 roomInfoViewModel.pendingLoginRequest = nil
+                accountRecoveryIsActive = true
                 authenticationRecovery = request
             }
             // 当前平台登录状态变化后重新取流，让被锁定的画质解锁
@@ -124,7 +127,7 @@ struct DetailPlayerView: View {
                 cancelRoomBanner()
                 sleepTimer = nil
                 // Presenting account recovery keeps this room alive for a manual retry.
-                guard authenticationRecovery == nil else { return }
+                guard !accountRecoveryIsActive else { return }
                 cleanupPlayer()
             }
     }
@@ -177,6 +180,7 @@ struct DetailPlayerView: View {
             .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
             .frame(maxWidth: usesFullUI ? .infinity : nil, maxHeight: usesFullUI ? .infinity : nil)
             .background(.black)
+            .tvFullUIBackCommand(enabled: usesFullUI) { endPlay() }
         } else if roomInfoViewModel.hasError, let error = roomInfoViewModel.currentError {
             ErrorView(
                 title: error.isAuthRequired ? "播放失败-请登录\(LiveParseTools.getLivePlatformName(roomInfoViewModel.currentRoom.liveType))账号" : "播放失败",
@@ -199,6 +203,7 @@ struct DetailPlayerView: View {
                 },
                 onLogin: {
                     let pluginIDs = SandboxPluginCatalog.platform(for: roomInfoViewModel.currentRoom.liveType).map { [$0.pluginId] } ?? []
+                    accountRecoveryIsActive = true
                     authenticationRecovery = AuthenticationRecoveryRequest(pluginIDs: pluginIDs)
                 }
             )
@@ -234,9 +239,13 @@ struct DetailPlayerView: View {
 
     private func playbackSurface(url: URL?) -> some View {
         let exitWhileLoading: (() -> Void)? = url == nil ? { endPlay() } : nil
+        let showsControls = url != nil || (usesFullUILiveLoading && mountedControlsRoomID == roomInfoViewModel.currentRoom.id)
         return ZStack {
             if let url {
-                playerLayers(url: url)
+                playerEngine(url: url)
+            }
+            if showsControls {
+                playerControlLayers
             }
             if usesFullUILiveLoading, !roomInfoViewModel.hasObservedPlaybackProgress {
                 TVPlayerLoadingScreen(
@@ -256,7 +265,8 @@ struct DetailPlayerView: View {
             }
         }
         .background { if usesFullUILiveLoading { Color.black.ignoresSafeArea() } }
-        .onExitCommand(perform: exitWhileLoading)
+        .onExitCommand(perform: usesFullUI ? nil : exitWhileLoading)
+        .tvFullUIBackCommand(enabled: usesFullUI && !showsControls && !accountRecoveryIsActive) { endPlay() }
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
             endPlay()
         }
@@ -266,11 +276,11 @@ struct DetailPlayerView: View {
         .frame(width: usesFullUI ? nil : 1920, height: usesFullUI ? nil : 1080)
     }
 
-    @ViewBuilder
-    private func playerLayers(url: URL) -> some View {
+    private func playerEngine(url: URL) -> some View {
         KSVideoPlayer(coordinator: playerCoordinator, url: url, options: roomInfoViewModel.playerOption)
             .background(Color.black)
             .onAppear {
+                if usesFullUILiveLoading { mountedControlsRoomID = roomInfoViewModel.currentRoom.id }
                 playerCoordinator.playerLayer?.play()
                 roomInfoViewModel.setPlayerDelegate(playerCoordinator: playerCoordinator)
                 // 起播超时、卡顿和结束由恢复协调器的采样处理。
@@ -285,10 +295,14 @@ struct DetailPlayerView: View {
             }
             .safeAreaPadding(.all)
             .zIndex(1)
+    }
 
+    @ViewBuilder
+    private var playerControlLayers: some View {
         PlayerControlView(playerCoordinator: playerCoordinator,
                           showsRoomBanner: roomBannerID == roomInfoViewModel.currentRoom.id,
                           sleepTimer: sleepTimer,
+                          accountRecoveryIsActive: accountRecoveryIsActive,
                           onSetSleepTimer: setSleepTimer,
                           onBottomControlVisibilityChange: { showsBottomControls = $0 },
                           onRouteOnDemandRoom: { routedOnDemandRoom = $0 })
@@ -318,7 +332,7 @@ struct DetailPlayerView: View {
         }
 
         #if canImport(KSPlayer)
-        if appViewModel.pluginAvailability.hasAvailablePlugins {
+        if appViewModel.pluginAvailability.hasAvailablePlugins, let url = roomInfoViewModel.currentPlayURL {
             Color.clear
                 .allowsHitTesting(false)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

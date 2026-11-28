@@ -1,5 +1,6 @@
 import SwiftUI
 import AngelLiveCore
+import AngelLiveDependencies
 
 /// FullUI owns its shelf navigation and leaves the ShellUI entry points intact.
 struct TVFullPluginManagementView: View {
@@ -12,6 +13,7 @@ struct TVFullPluginManagementView: View {
     @State private var selectedPlugin: TVFullPluginSelection?
     @State private var showSources = false
     @State private var focusToRestore: TVFullPluginFocus = .summary
+    @State private var lastManagementFocus: TVFullPluginFocus = .summary
     @FocusState private var focusedAction: TVFullPluginFocus?
     @State private var operation: Task<Void, Never>?
     @State private var deferredUninstall: PluginDeferredUninstall
@@ -48,6 +50,8 @@ struct TVFullPluginManagementView: View {
     var body: some View {
         let completingIDs = Set(completionDeadlines.keys)
         let nextCompletionDeadline = completionDeadlines.values.min()
+        let managementIsVisible = selectedPlugin == nil && !showSources
+        let showsConsent = consentService.isPresenting && managementIsVisible
         ScrollView {
             VStack(alignment: .leading, spacing: TVPluginLayout.sectionSpacing) {
                 TVPluginManagementHeader(manager: pluginSourceManager, ids: installedIDs,
@@ -73,10 +77,9 @@ struct TVFullPluginManagementView: View {
         .scrollClipDisabled()
         .toolbar(.hidden, for: .navigationBar)
         .defaultFocus($focusedAction, .summary)
-        .onExitCommand {
-            guard selectedPlugin == nil, !showSources else { return }
-            closeManagement()
-        }
+        .disabled(showsConsent)
+        .allowsHitTesting(!showsConsent)
+        .accessibilityHidden(showsConsent)
         .ignoresSafeArea()
         .background(.background)
         .overlay(alignment: .topTrailing) {
@@ -87,11 +90,28 @@ struct TVFullPluginManagementView: View {
             }
         }
         .overlay {
-            if consentService.isPresenting && selectedPlugin == nil && !showSources {
+            if showsConsent {
                 TVPluginConsentSurface(consent: consentService)
             }
         }
-        .onPlayPauseCommand(perform: undoUninstall)
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand(enabled: managementIsVisible) {
+            guard selectedPlugin == nil, !showSources else { return }
+            if consentService.isPresenting { consentService.resolve(false) } else { closeManagement() }
+        }
+        .onChange(of: focusedAction) { _, focus in
+            if !showsConsent, let focus { lastManagementFocus = focus }
+        }
+        .onChange(of: showsConsent) { wasShowing, isShowing in
+            if isShowing {
+                focusToRestore = lastManagementFocus
+            } else if wasShowing && managementIsVisible {
+                restoreManagementFocus(focusToRestore)
+            }
+        }
+        .onPlayPauseCommand {
+            if !showsConsent { undoUninstall() }
+        }
         .task {
             seenInstallSuccesses = installSuccesses
             seenUpdateSuccesses = updateSuccesses
@@ -119,7 +139,7 @@ struct TVFullPluginManagementView: View {
         .onChange(of: deferredUninstall.pendingUninstallPluginId) {
             rebuildShelves()
         }
-        .fullScreenCover(item: $selectedPlugin, onDismiss: restoreManagementFocus) { selection in
+        .fullScreenCover(item: $selectedPlugin, onDismiss: { restoreManagementFocus(focusToRestore) }) { selection in
             TVFullPluginDetailView(pluginID: selection.id, manager: pluginSourceManager,
                 availability: pluginAvailability, initialFocus: selection.focus,
                 performAction: performPluginAction, install: installPlugin, uninstall: stageUninstall,
@@ -128,7 +148,7 @@ struct TVFullPluginManagementView: View {
                 .environment(appViewModel)
                 .environment(consentService)
         }
-        .fullScreenCover(isPresented: $showSources, onDismiss: restoreManagementFocus) {
+        .fullScreenCover(isPresented: $showSources, onDismiss: { restoreManagementFocus(focusToRestore) }) {
             TVFullPluginSourcesView(manager: pluginSourceManager,
                 onClose: { showSources = false }, refreshCatalog: reloadCatalog,
                 refreshAfterMutation: refreshAfterMutation, commitUninstall: commitUninstall)
@@ -186,12 +206,12 @@ struct TVFullPluginManagementView: View {
         selectedPlugin = TVFullPluginSelection(id: id, focus: focus)
     }
 
-    private func restoreManagementFocus() {
-        switch focusToRestore {
+    private func restoreManagementFocus(_ target: TVFullPluginFocus) {
+        switch target {
         case .installed(let id) where !installedIDs.contains(id): focusedAction = .summary
         case .available(let id) where installedIDs.contains(id): focusedAction = .installed(id)
         case .available(let id) where !availableIDs.contains(id): focusedAction = .summary
-        default: focusedAction = focusToRestore
+        default: focusedAction = target
         }
     }
 
@@ -409,7 +429,7 @@ private struct TVFullPluginDetailView: View {
                     TVFullOperationRow(title: "登录账号", symbol: "person.crop.circle") { showLogin = true }
                         .focused($focus, equals: .detailLogin)
                 }
-                TVFullOperationRow(title: consent.isPresenting ? "取消安装并返回" : "返回",
+                TVFullOperationRow(title: consent.isPresenting ? "取消安装" : "返回",
                     symbol: "chevron.left", action: close)
                     .focused($focus, equals: .detailBack)
                 if installed {
@@ -424,10 +444,8 @@ private struct TVFullPluginDetailView: View {
             .focusSection()
         }
         .defaultFocus($focus, showsInstalledStatus && initialFocus == .detailAction ? .detailBack : initialFocus)
-        .onExitCommand {
-            guard !showLogin else { return }
-            close()
-        }
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand(enabled: !showLogin, perform: close)
         .onChange(of: consent.isPresenting) { _, presenting in
             if presenting { focus = .detailAction }
         }
@@ -485,7 +503,11 @@ private struct TVFullPluginDetailView: View {
     }
 
     private func close() {
-        if consent.isPresenting { consent.resolve(false) }
+        if consent.isPresenting {
+            consent.resolve(false)
+            focus = .detailAction
+            return
+        }
         onClose()
     }
 }
@@ -670,10 +692,8 @@ private struct TVFullPluginSourcesView: View {
         .scrollClipDisabled()
         .toolbar(.hidden, for: .navigationBar)
         .defaultFocus($focus, .sourceAdd)
-        .onExitCommand {
-            guard selectedSource == nil, selectedPlaylist == nil, !showAddSource else { return }
-            onClose()
-        }
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand(enabled: selectedSource == nil && selectedPlaylist == nil && !showAddSource, perform: onClose)
         .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: .playlistInstancesDidChange)) { _ in
             playlists = PlaylistInstanceStore.shared.all()
@@ -770,7 +790,8 @@ private struct TVFullSourceDetailView: View {
             }.focusSection()
         }
         .defaultFocus($focus, .sourceRefresh)
-        .onExitCommand(perform: onClose)
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand(perform: onClose)
     }
 }
 
@@ -814,7 +835,8 @@ private struct TVPlaylistDetailView: View {
             }.focusSection()
         }
         .defaultFocus($focus, .sourceRefresh)
-        .onExitCommand { if !isEditing { onClose() } }
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand(enabled: !isEditing, perform: onClose)
         .task { status = await PlaylistPlatformService.shared.status(instanceID: instance.id) }
         .fullScreenCover(isPresented: $isEditing, onDismiss: { focus = .sourceEdit }) {
             TVPlaylistEditView(instance: instance, onSaved: onClose).environment(appViewModel).background(.background)
@@ -881,7 +903,8 @@ private struct TVPlaylistEditView: View {
             }.focusSection()
         }
         .defaultFocus($focus, .playlistName)
-        .onExitCommand { dismiss() }
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand { dismiss() }
         .task { name = instance.name; icon = instance.iconURL ?? ""; source = instance.sourceURL }
         .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
             guard let event = appViewModel.remoteInputService.lastEvent else { return }
@@ -939,7 +962,8 @@ private struct TVFullPluginSourceInputView: View {
             inputColumn
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onExitCommand { dismiss() }
+        .interactiveDismissDisabled()
+        .tvFullUIBackCommand { dismiss() }
         .defaultFocus($focusedField, .inputField)
         .onChange(of: appViewModel.remoteInputService.lastEvent?.id) {
             guard let event = appViewModel.remoteInputService.lastEvent else { return }

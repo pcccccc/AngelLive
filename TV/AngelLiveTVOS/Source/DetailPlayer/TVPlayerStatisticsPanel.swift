@@ -7,6 +7,10 @@ struct TVPlayerStatisticsPanel: View {
     let streamURL: URL?
     let onClose: () -> Void
 
+    @Environment(\.usesFullUI) private var usesFullUI
+    #if DEBUG
+    @Environment(\.tvUIAuditStatistics) private var usesSampleMetrics
+    #endif
     @FocusState private var isCloseButtonFocused: Bool
 
     init(
@@ -22,22 +26,58 @@ struct TVPlayerStatisticsPanel: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            header
+        Group {
+            if usesFullUI {
+                VStack(alignment: .leading, spacing: 24) {
+                    TVPlayerPanelHeader(title: Text("视频信息统计"), subtitle: Text("实时查看当前解码、码率和播放性能。")) {
+                        TVPlayerPanelCloseButton(isFocused: isCloseButtonFocused, action: onClose)
+                            .focused($isCloseButtonFocused)
+                    }
+                    ScrollView(showsIndicators: false) {
+                        information.padding(.horizontal, 12).padding(.vertical, 6)
+                    }
+                    .clipped()
+                    .padding(.horizontal, -12)
+                }
+                .tvPlayerPanelSurface()
+            } else {
+                legacyPanel
+            }
+        }
+        .onAppear { isCloseButtonFocused = true }
+    }
 
-            TimelineView(.periodic(from: .now, by: 1.0)) { _ in
-                VStack(alignment: .leading, spacing: 20) {
-                    streamInfoSection
+    private var information: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
+            VStack(alignment: .leading, spacing: 20) {
+                streamInfoSection
 
-                    if let playerLayer = playerCoordinator.playerLayer {
-                        videoInfoSection(playerLayer: playerLayer)
-                        performanceInfoSection(playerLayer: playerLayer)
+                if let playerLayer = playerCoordinator.playerLayer {
+                    videoInfoSection(playerLayer: playerLayer)
+                    performanceInfoSection(playerLayer: playerLayer)
+                } else {
+                    #if DEBUG
+                    if usesSampleMetrics {
+                        videoSection(type: "SDR", decoder: "硬件解码", size: "1920 x 1080")
+                        performanceSection(fps: "60.0 fps", dropped: "0", sync: "0.003 s", speed: "1.5M/s",
+                                           videoRate: "8.0Mps", audioRate: "192.0Kps")
                     } else {
                         loadingState
                     }
+                    #else
+                    loadingState
+                    #endif
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var legacyPanel: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            header
+
+            information
 
             Spacer(minLength: 0)
         }
@@ -49,9 +89,6 @@ struct TVPlayerStatisticsPanel: View {
                 .stroke(.white.opacity(0.12), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
-        .onAppear {
-            isCloseButtonFocused = true
-        }
     }
 
     private var header: some View {
@@ -74,7 +111,7 @@ struct TVPlayerStatisticsPanel: View {
                     .foregroundStyle(.white)
                     .frame(width: 50, height: 50)
             }
-            .buttonStyle(TVStatsPanelCloseButtonStyle(isFocused: isCloseButtonFocused))
+            .buttonStyle(TVPanelCloseButtonStyle(isFocused: isCloseButtonFocused))
             .focused($isCloseButtonFocused)
             .accessibilityLabel("关闭统计信息")
         }
@@ -125,11 +162,15 @@ struct TVPlayerStatisticsPanel: View {
             ? "\(Int(naturalSize.width)) x \(Int(naturalSize.height))"
             : nil
 
+        videoSection(type: videoType, decoder: decodeType, size: sizeText)
+    }
+
+    private func videoSection(type: String, decoder: String, size: String?) -> some View {
         sectionCard(title: "视频信息", systemImage: "film") {
-            StatisticsRow(title: "视频类型", value: videoType)
-            StatisticsRow(title: "解码方式", value: decodeType)
-            if let sizeText {
-                StatisticsRow(title: "视频尺寸", value: sizeText)
+            StatisticsRow(title: "视频类型", value: type)
+            StatisticsRow(title: "解码方式", value: decoder)
+            if let size {
+                StatisticsRow(title: "视频尺寸", value: size)
             }
         }
     }
@@ -144,13 +185,19 @@ struct TVPlayerStatisticsPanel: View {
         let videoBitrate = Self.formatBytes(Int64(dynamicInfo.videoBitrate)) + "ps"
         let audioBitrate = Self.formatBytes(Int64(dynamicInfo.audioBitrate)) + "ps"
 
+        performanceSection(fps: fpsText, dropped: "\(droppedFrames)", sync: syncText, speed: networkSpeed,
+                           videoRate: videoBitrate, audioRate: audioBitrate)
+    }
+
+    private func performanceSection(fps: String, dropped: String, sync: String, speed: String,
+                                    videoRate: String, audioRate: String) -> some View {
         sectionCard(title: "性能信息", systemImage: "speedometer") {
-            StatisticsRow(title: "显示帧率", value: fpsText)
-            StatisticsRow(title: "丢帧数", value: "\(droppedFrames)")
-            StatisticsRow(title: "音视频同步", value: syncText)
-            StatisticsRow(title: "网络速度", value: networkSpeed)
-            StatisticsRow(title: "视频码率", value: videoBitrate)
-            StatisticsRow(title: "音频码率", value: audioBitrate)
+            StatisticsRow(title: "显示帧率", value: fps)
+            StatisticsRow(title: "丢帧数", value: dropped)
+            StatisticsRow(title: "音视频同步", value: sync)
+            StatisticsRow(title: "网络速度", value: speed)
+            StatisticsRow(title: "视频码率", value: videoRate)
+            StatisticsRow(title: "音频码率", value: audioRate)
         }
     }
 
@@ -159,7 +206,7 @@ struct TVPlayerStatisticsPanel: View {
         systemImage: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        let card = VStack(alignment: .leading, spacing: 18) {
             Label(title, systemImage: systemImage)
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
@@ -171,6 +218,13 @@ struct TVPlayerStatisticsPanel: View {
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
         .adaptiveGlassEffectRoundedRect(cornerRadius: 22)
+        return Group {
+            if usesFullUI {
+                card.modifier(TVReadingFocus(cornerRadius: 22))
+            } else {
+                card
+            }
+        }
     }
 
     private static func playerDisplayName(for playerType: MediaPlayerProtocol.Type) -> String {
@@ -218,7 +272,6 @@ struct TVPlayerStatisticsPanel: View {
         return String(format: "%.1fG", gb)
     }
 }
-
 private struct StatisticsRow: View {
     let title: String
     let value: String
@@ -240,17 +293,8 @@ private struct StatisticsRow: View {
     }
 }
 
-/// 关闭按钮样式：圆形 glass 背景 + 聚焦缩放，与清晰度面板对齐
-private struct TVStatsPanelCloseButtonStyle: ButtonStyle {
-    let isFocused: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background {
-                Circle()
-                    .fill(.white.opacity(isFocused ? 0.3 : 0.1))
-            }
-            .scaleEffect(isFocused ? 1.1 : 1.0)
-            .animation(.easeInOut(duration: 0.18), value: isFocused)
-    }
+#if DEBUG
+extension EnvironmentValues {
+    @Entry var tvUIAuditStatistics = false
 }
+#endif

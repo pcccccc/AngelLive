@@ -30,7 +30,6 @@ final class RoomInfoViewModel {
     var currentRoomIsLiked = false
     var currentRoomLikeLoading = false
 
-    let settingModel = SettingStore()
     var playerOption: PlayerOptions
     var currentRoomPlayArgs: [LiveQualityModel]?
     var currentPlayURL: URL?
@@ -137,7 +136,7 @@ final class RoomInfoViewModel {
     var httpPollingConnection: HTTPPollingDanmakuConnection?  // HTTP 轮询连接
     var danmuCoordinator = DanmuView.Coordinator()
     let danmuShootScheduler = DanmakuShootScheduler() // §6.2 去突发:把批量弹幕摊开逐条发射
-    private let danmakuTranslationPipeline = DanmakuTranslationPipeline()
+    private let danmakuTranslationPipeline: DanmakuTranslationPipeline?
     private var isDanmakuTranslationSuspended = false
     
     var roomType: LiveRoomListType
@@ -196,10 +195,50 @@ final class RoomInfoViewModel {
     /// 每次观看最多显示三次断开/重连提示；自动重连和手动重试不重置额度。
     private var danmuFailureHintCount = 0
     var supportsDanmu: Bool {
-        PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
+        isTVUIAuditFixture || PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
     }
 
-    private var usesFullUI: Bool { appViewModel.pluginAvailability.hasAvailablePlugins }
+    var isTVUIAuditFixture: Bool {
+#if DEBUG
+        tvUIAuditSettings != nil
+#else
+        false
+#endif
+    }
+
+    private var usesFullUI: Bool { isTVUIAuditFixture || appViewModel.pluginAvailability.hasAvailablePlugins }
+
+#if DEBUG
+    @ObservationIgnored private(set) var tvUIAuditSettings: TVUIAuditSettings?
+
+    @MainActor
+    init(tvUIAuditRoom room: LiveModel, appViewModel: AppState, playArgs: [LiveQualityModel]) {
+        self.currentRoom = room
+        self.appViewModel = appViewModel
+        self.roomType = .live
+        self.playerOption = PlayerOptions()
+        self.danmakuTranslationPipeline = nil
+        self.tvUIAuditSettings = TVUIAuditSettings()
+        self.currentRoomPlayArgs = playArgs
+        self.userPaused = true
+        self.isPlaying = true
+        self.displayState = .playing
+        subtitlePlayback.startAutomatically(activationID: subtitlePlayback.activationID)
+        changePlayUrl(cdnIndex: 0, urlIndex: 0, selectionOrigin: .automatic)
+    }
+
+    @MainActor
+    private func selectTVUIAuditQuality(cdnIndex: Int, qualityIndex: Int) {
+        guard let selection = RoomPlaybackResolver.selection(
+            in: currentRoomPlayArgs, cdnIndex: cdnIndex, qualityIndex: qualityIndex
+        ) else { return }
+        currentCdnIndex = cdnIndex
+        currentQualityIndex = qualityIndex
+        currentPlayQualityQn = selection.quality.qn
+        currentPlayQualityString = selection.quality.title
+        currentPlayURL = URL(string: selection.quality.url)
+    }
+#endif
     
     @MainActor
     init(currentRoom: LiveModel, appViewModel: AppState, enterFromLive: Bool, roomType: LiveRoomListType) {
@@ -208,41 +247,54 @@ final class RoomInfoViewModel {
         let option = PlayerOptions()
         option.userAgent = "libmpv"
         option.registerRemoteControll = false
-        option.syncSystemRate = settingModel.syncSystemRate
+        option.syncSystemRate = SettingStore().syncSystemRate
         self.playerOption = option
         self.currentRoom = currentRoom
         self.appViewModel = appViewModel
         let list = appViewModel.favoriteViewModel.roomList
         self.currentRoomIsLiked = list.contains { $0.roomId == currentRoom.roomId }
         self.roomType = roomType
+        self.danmakuTranslationPipeline = DanmakuTranslationPipeline()
         getPlayArgs()
     }
     
     /**
      切换清晰度
     */
-    /// 用户点击被插件标记 authLimit 的档位：login_required 请求登录，其余只提示。
-    /// - Returns: true 表示已拦截，调用方不再切换。
+    enum PlaybackQualitySelectionResult: Equatable {
+        case accepted
+        case loginRecovery
+        case unchanged
+    }
+
     @MainActor
-    private func interceptLockedQualitySelection(cdnIndex: Int, urlIndex: Int) -> Bool {
+    func selectPlaybackQuality(cdnIndex: Int, urlIndex: Int) -> PlaybackQualitySelectionResult {
         guard let selection = RoomPlaybackResolver.selection(
             in: currentRoomPlayArgs,
             cdnIndex: cdnIndex,
             qualityIndex: urlIndex
-        ), let action = RoomPlaybackResolver.lockAction(for: selection.quality) else {
-            return false
+        ) else { return .unchanged }
+        guard let action = RoomPlaybackResolver.lockAction(for: selection.quality) else {
+            changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex, selectionOrigin: .user)
+            return .accepted
         }
         switch action {
         case .requestLogin(let message):
+            #if DEBUG
+            if isTVUIAuditFixture {
+                pendingLoginRequest = AuthenticationRecoveryRequest(pluginIDs: TVUIAuditFixtures.loginPluginIDs)
+                return .loginRecovery
+            }
+            #endif
             if let pluginId = SandboxPluginCatalog.platform(for: currentRoom.liveType)?.pluginId {
                 pendingLoginRequest = AuthenticationRecoveryRequest(pluginIDs: [pluginId])
-            } else {
-                showToast(false, title: message)
+                return .loginRecovery
             }
+            showToast(false, title: message)
         case .showMessage(let message):
             showToast(false, title: message)
         }
-        return true
+        return .unchanged
     }
 
     @MainActor
@@ -260,15 +312,17 @@ final class RoomInfoViewModel {
     }
 
     @MainActor
-    func changePlayUrl(
+    private func changePlayUrl(
         cdnIndex: Int,
         urlIndex: Int,
         selectionOrigin: PlaybackSelectionOrigin
     ) {
-        // 用户点击被锁定的档位：引导登录或提示，不切换
-        if selectionOrigin == .user, interceptLockedQualitySelection(cdnIndex: cdnIndex, urlIndex: urlIndex) {
+#if DEBUG
+        if isTVUIAuditFixture {
+            selectTVUIAuditQuality(cdnIndex: cdnIndex, qualityIndex: urlIndex)
             return
         }
+#endif
         playbackSelectionGeneration = UUID()
         playbackDiagnostics.interruptStartup()
         guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
@@ -620,6 +674,7 @@ final class RoomInfoViewModel {
     */
     @MainActor
     func getPlayArgs(silent: Bool = false, diagnosticAction: SupportDiagnosticAction = .openedRoom) {
+        guard !isTVUIAuditFixture else { return }
         guard !playbackDiagnosticsEnded else { return }
         let requestGeneration = UUID()
         playbackRequestGeneration = requestGeneration
@@ -790,6 +845,7 @@ final class RoomInfoViewModel {
 
     
     func getDanmuInfo() {
+        guard !isTVUIAuditFixture else { return }
         guard supportsDanmu else {
             danmuServerIsConnected = false
             danmuServerIsLoading = false
@@ -881,7 +937,7 @@ final class RoomInfoViewModel {
 
         // §6.2 清空去突发缓冲,避免陈旧弹幕在切房/断流后继续飞出
         danmuShootScheduler.reset()
-        danmakuTranslationPipeline.reset()
+        danmakuTranslationPipeline?.reset()
 
         danmuServerIsConnected = false
         danmuServerIsLoading = false
@@ -898,7 +954,7 @@ final class RoomInfoViewModel {
     func suspendDanmakuTranslationForBackground() {
         interruptPlaybackDiagnostics()
         isDanmakuTranslationSuspended = true
-        danmakuTranslationPipeline.reset()
+        danmakuTranslationPipeline?.reset()
     }
 
     @MainActor
@@ -909,6 +965,7 @@ final class RoomInfoViewModel {
 
     @MainActor
     func refreshPlayback() {
+        guard !isTVUIAuditFixture else { return }
         // 续播重取播放参数:不重连弹幕、尽量静默
         let silent = currentPlayURL != nil
         if !silent, appViewModel.danmuSettingsViewModel.showDanmu {
@@ -940,6 +997,7 @@ final class RoomInfoViewModel {
 
 extension RoomInfoViewModel: WebSocketConnectionDelegate {
     func webSocketDidReceiveMessage(_ message: DanmakuDisplayMessage) {
+        guard let danmakuTranslationPipeline else { return }
         let settings = appViewModel.danmuSettingsViewModel
         let originalText = message.text
         guard settings.showDanmu, !settings.shouldBlockDanmu(originalText) else { return }

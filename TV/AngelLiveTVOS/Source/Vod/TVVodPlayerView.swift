@@ -10,7 +10,6 @@ struct TVVodPlayerView: View {
     var episode: VodEpisode? = nil
     let sourceID: String?
     let settings: GeneralSettingModel
-    let backInput: TVVodBackInput
     let onExit: (String?) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
@@ -109,7 +108,7 @@ struct TVVodPlayerView: View {
 
     var body: some View {
         playerLifecycle
-            .modifier(TVVodBackModifier(input: backInput, onBack: handleBack))
+            .tvFullUIBackCommand(enabled: panel == nil, perform: handleBack)
             .onPlayPauseCommand {
                 if panel == nil { togglePlayback() }
             }
@@ -489,9 +488,10 @@ struct TVVodPlayerView: View {
                                 onSource: { source in
                                     if let id = model.selectedEpisodeID { selectEpisode(id, sourceID: source) }
                                 }, onClose: closePanel)
-                .frame(width: min(size.width * 0.4, 640), height: max(0, size.height - 80))
-                .padding(.vertical, 40)
-                .padding(.trailing, 48)
+                .tvFullUIBackCommand {
+                    if panel == kind { handleBack() }
+                }
+                .tvPlayerPanelFrame(in: size)
         }
         .transition(reduceMotion ? .opacity : .move(edge: .trailing).combined(with: .opacity))
         .zIndex(2)

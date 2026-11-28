@@ -79,18 +79,7 @@ struct TVVodSelectionPanel: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 28)
-        .clipShape(.rect(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-        .shadow(color: .black.opacity(0.25), radius: 24, y: 12)
-        .focusSection()
+        .tvPlayerPanelSurface()
         .onAppear(perform: prepare)
         .onChange(of: page) { previous, current in
             switch current {
@@ -103,28 +92,11 @@ struct TVVodSelectionPanel: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 38, weight: .bold))
-                    .accessibilityAddTraits(.isHeader)
-                if let subtitle {
-                    Text(verbatim: subtitle)
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(2)
-                }
-            }
-            Spacer(minLength: 8)
-            Button(action: onClose) {
-                Image(systemName: "xmark").font(.system(size: 22, weight: .bold))
-                    .frame(width: 50, height: 50)
-            }
-            .buttonStyle(TVPanelCloseButtonStyle(isFocused: focus == .close, reduceMotion: reduceMotion))
-            .focused($focus, equals: .close)
-            .accessibilityLabel("关闭\(kind.title)")
+        TVPlayerPanelHeader(title: Text(title), subtitle: subtitle.map { Text(verbatim: $0) }) {
+            TVPlayerPanelCloseButton(isFocused: focus == .close, action: onClose)
+                .focused($focus, equals: .close)
+                .accessibilityLabel("关闭\(kind.title)")
         }
-        .foregroundStyle(.white)
     }
 
     private var title: String {

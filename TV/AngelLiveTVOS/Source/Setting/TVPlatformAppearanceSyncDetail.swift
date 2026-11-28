@@ -1,8 +1,10 @@
 import AngelLiveCore
+import AngelLiveDependencies
 import SwiftUI
 
 struct TVPlatformAppearanceSyncDetail: View {
     let onBack: () -> Void
+    @Environment(\.usesFullUI) private var usesFullUI
     @ObservedObject private var master = PlatformCredentialSyncService.shared
     @AppStorage(PlatformAppearanceSyncService.settingKey) private var enabled = true
     private let status = PlatformAppearanceSyncService.status
@@ -37,6 +39,7 @@ struct TVPlatformAppearanceSyncDetail: View {
             .padding(.bottom, 24)
         }
         .scrollClipDisabled()
-        .onExitCommand(perform: onBack)
+        .onExitCommand(perform: usesFullUI ? nil : onBack)
+        .tvFullUIBackCommand(enabled: usesFullUI, perform: onBack)
     }
 }

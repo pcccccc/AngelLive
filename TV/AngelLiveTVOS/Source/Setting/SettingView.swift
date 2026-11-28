@@ -27,6 +27,7 @@ struct SettingView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var supportDiagnosticsService = SupportDiagnosticsService.shared
     @Environment(AppState.self) var appViewModel
+    @Environment(\.usesFullUI) private var usesFullUI
     @Environment(\.supportDiagnosticsEnabled) private var supportDiagnosticsEnabled
     @FocusState private var focusedIndex: Int?
     @State private var cacheSizeText: String = "计算中..."
@@ -296,49 +297,52 @@ struct SettingView: View {
     private func halfScreenContentView(for index: Int) -> some View {
         switch index {
         case 0: // 账号管理
-            AccountManagementView()
-                .environmentObject(settingStore)
-                .environment(appViewModel)
-                .environment(appViewModel.pluginAvailability)
-                .onAppear {
-                    guard supportDiagnosticsEnabled else { return }
-                    supportDiagnosticsService.recordAction(.openedAccountManagement)
-                }
-                .onExitCommand {
-                    selectedIndex = nil
-                }
+            accountSettings
         case 2: // 通用设置
-            GeneralSettingView()
+            GeneralSettingView(onClose: { closeHalfScreen() })
                 .environment(appViewModel)
-                .onExitCommand {
-                    selectedIndex = nil
-                }
         case 3: // 弹幕设置
-            DanmuSettingMainView()
-                .environment(appViewModel)
-                .onExitCommand {
-                    selectedIndex = nil
-                }
+            if usesFullUI {
+                TVFullUIDanmakuSettingsPage(onClose: { closeHalfScreen() })
+                    .environment(appViewModel)
+            } else {
+                DanmuSettingMainView()
+                    .environment(appViewModel)
+                    .onExitCommand { closeHalfScreen() }
+            }
         case 4: // 数据同步
             // 三端对齐:聚合 iCloud 同步 / 局域网同步 / Simple Live 老扫码同步入口。
-            SyncManagementView()
+            SyncManagementView(onBack: { closeHalfScreen() })
                 .environment(appViewModel)
-                .onExitCommand {
-                    selectedIndex = nil
-                }
+                .onExitCommand(perform: usesFullUI ? nil : { closeHalfScreen() })
         case 10: // 翻译与字幕
             TranslationSettingView()
-                .onExitCommand {
-                    selectedIndex = nil
-                }
+                .tvFullUIBackCommand { closeHalfScreen() }
         case Self.platformAppearanceIndex where appViewModel.pluginAvailability.hasAvailablePlugins:
-            TVSettingsPlatformAppearance {
-                selectedIndex = nil
-            }
-            .onExitCommand { selectedIndex = nil }
+            TVSettingsPlatformAppearance { closeHalfScreen() }
         default:
             EmptyView()
         }
+    }
+
+    private var accountSettings: some View {
+        AccountManagementView(onBack: { closeHalfScreen() })
+            .environmentObject(settingStore)
+            .environment(appViewModel)
+            .environment(appViewModel.pluginAvailability)
+            .onAppear {
+                guard supportDiagnosticsEnabled else { return }
+                supportDiagnosticsService.recordAction(.openedAccountManagement)
+            }
+            .onExitCommand(perform: usesFullUI ? nil : { closeHalfScreen() })
+    }
+
+    private func closeHalfScreen() {
+        selectedIndex = nil
+    }
+
+    private func closeFullScreen() {
+        fullScreenIndex = nil
     }
 
     // MARK: - 全屏内容视图
@@ -346,59 +350,20 @@ struct SettingView: View {
     private func fullScreenContentView(for index: Int) -> some View {
         switch index {
         case 1: // 插件管理
-            Group {
-                if appViewModel.pluginAvailability.hasAvailablePlugins {
-                    TVFullPluginManagementView(
-                        pluginSourceManager: appViewModel.pluginSourceManager,
-                        pluginAvailability: appViewModel.pluginAvailability,
-                        onClose: { fullScreenIndex = nil }
-                    )
-                } else {
-                    TVPluginManagementView(
-                        pluginSourceManager: appViewModel.pluginSourceManager,
-                        pluginAvailability: appViewModel.pluginAvailability
-                    )
-                    .onExitCommand {
-                        fullScreenIndex = nil
-                    }
-                }
-            }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.ultraThinMaterial)
-                .onAppear {
-                    guard supportDiagnosticsEnabled else { return }
-                    supportDiagnosticsService.recordAction(.openedPluginManagement)
-                }
+            pluginSettings
         case 5: // 历史记录
-            HistoryListView(appViewModel: appViewModel)
+            HistoryListView(appViewModel: appViewModel, onClose: { closeFullScreen() })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
-                .onExitCommand {
-                    fullScreenIndex = nil
-                }
         case 6: // 开源许可
-            Group {
-                if appViewModel.pluginAvailability.hasAvailablePlugins {
-                    NavigationStack {
-                        OpenSourceListView(usesFullUI: true)
-                            .onExitCommand { fullScreenIndex = nil }
-                    }
-                } else {
-                    NavigationStack {
-                        OpenSourceListView()
-                    }
-                    .onExitCommand { fullScreenIndex = nil }
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
+            openSourceSettings
         case 8: // 关于
             AboutUSView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
-                .onExitCommand {
-                    fullScreenIndex = nil
-                }
+                .interactiveDismissDisabled(usesFullUI)
+                .onExitCommand(perform: usesFullUI ? nil : { closeFullScreen() })
+                .tvFullUIBackCommand(enabled: usesFullUI) { closeFullScreen() }
         case 9: // 问题诊断与反馈
             NavigationStack {
                 SupportDiagnosticsView()
@@ -408,26 +373,68 @@ struct SettingView: View {
             .background(.ultraThinMaterial)
         case 11: // 播放时间轴
             NavigationStack {
-                PlaybackTimelineView(onClose: { fullScreenIndex = nil })
+                PlaybackTimelineView(onClose: { closeFullScreen() })
                     .navigationTitle("播放时间轴")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial)
         case Self.sponsorsIndex:
             if appViewModel.pluginAvailability.hasAvailablePlugins {
-                TVSponsorAcknowledgementsView(onClose: { fullScreenIndex = nil })
+                TVSponsorAcknowledgementsView(onClose: { closeFullScreen() })
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background {
                         Color.shared("sl-background")
                             .ignoresSafeArea()
                     }
-                    .onExitCommand {
-                        fullScreenIndex = nil
-                    }
+                    .interactiveDismissDisabled()
+                    .tvFullUIBackCommand { closeFullScreen() }
             }
         default:
             EmptyView()
         }
+    }
+
+    private var pluginSettings: some View {
+        Group {
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                TVFullPluginManagementView(
+                    pluginSourceManager: appViewModel.pluginSourceManager,
+                    pluginAvailability: appViewModel.pluginAvailability,
+                    onClose: { closeFullScreen() }
+                )
+            } else {
+                TVPluginManagementView(
+                    pluginSourceManager: appViewModel.pluginSourceManager,
+                    pluginAvailability: appViewModel.pluginAvailability
+                )
+                .onExitCommand { closeFullScreen() }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.ultraThinMaterial)
+        .onAppear {
+            guard supportDiagnosticsEnabled else { return }
+            supportDiagnosticsService.recordAction(.openedPluginManagement)
+        }
+    }
+
+    private var openSourceSettings: some View {
+        Group {
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                NavigationStack {
+                    OpenSourceListView(usesFullUI: true)
+                        .tvFullUIBackCommand { closeFullScreen() }
+                }
+                .interactiveDismissDisabled()
+            } else {
+                NavigationStack {
+                    OpenSourceListView()
+                }
+                .onExitCommand { closeFullScreen() }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - 缓存维护
@@ -473,6 +480,29 @@ struct SettingView: View {
 
 // MARK: - Room title translation
 
+@MainActor
+private protocol TVRoomTranslationSettings: AnyObject {
+    var isEnabled: Bool { get set }
+    var isDanmakuEnabled: Bool { get set }
+    var engine: RoomTranslationEngine { get set }
+    var targetLanguage: String { get set }
+    var cloudBaseURL: String { get }
+    var cloudModel: String { get }
+    var hasAPIKey: Bool { get }
+    func saveCloudConfiguration(baseURL: String, model: String, apiKey: String) throws
+    func deleteAPIKey() throws
+}
+
+@MainActor
+private protocol TVRoomTranslationService: AnyObject {
+    var lastErrorMessage: String? { get }
+    func clearError()
+    func testTranslation() async throws -> String
+}
+
+extension RoomTranslationSettings: TVRoomTranslationSettings {}
+extension RoomTitleTranslationService: TVRoomTranslationService {}
+
 struct TranslationSettingView: View {
     private struct TargetLanguage: Identifiable {
         let code: String
@@ -490,8 +520,9 @@ struct TranslationSettingView: View {
     ]
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var settings = RoomTranslationSettings.shared
-    @State private var translationService = RoomTitleTranslationService.shared
+    @Environment(\.usesFullUI) private var usesFullUI
+    @State private var settings: any TVRoomTranslationSettings
+    @State private var translationService: any TVRoomTranslationService
     @State private var baseURL = ""
     @State private var model = ""
     @State private var apiKey = ""
@@ -503,6 +534,18 @@ struct TranslationSettingView: View {
     @State private var activeTask: Task<Void, Never>?
     @State private var testGeneration = UUID()
     @FocusState private var focusedField: Field?
+
+    init() {
+        _settings = State(initialValue: RoomTranslationSettings.shared)
+        _translationService = State(initialValue: RoomTitleTranslationService.shared)
+    }
+
+#if DEBUG
+    init(auditFixture: TVUIAuditTranslationFixture) {
+        _settings = State(initialValue: auditFixture)
+        _translationService = State(initialValue: auditFixture)
+    }
+#endif
 
     private enum Field: Hashable {
         case enabled
@@ -537,18 +580,22 @@ struct TranslationSettingView: View {
     }
 
     var body: some View {
-        @Bindable var settings = settings
-
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                Toggle(isOn: $settings.isEnabled) {
+                Toggle(isOn: Binding(
+                    get: { settings.isEnabled },
+                    set: { settings.isEnabled = $0 }
+                )) {
                     Text("自动翻译房间标题")
                         .font(.system(size: 30, weight: .semibold))
                 }
                 .focused($focusedField, equals: .enabled)
                 .frame(height: 55)
 
-                Toggle(isOn: $settings.isDanmakuEnabled) {
+                Toggle(isOn: Binding(
+                    get: { settings.isDanmakuEnabled },
+                    set: { settings.isDanmakuEnabled = $0 }
+                )) {
                     Text("自动翻译弹幕")
                         .font(.system(size: 30, weight: .semibold))
                 }
@@ -560,7 +607,10 @@ struct TranslationSettingView: View {
                         .font(.system(size: 24, weight: .medium))
                         .foregroundStyle(.secondary)
 
-                    Picker("翻译成", selection: $settings.targetLanguage) {
+                    Picker("翻译成", selection: Binding(
+                        get: { settings.targetLanguage },
+                        set: { settings.targetLanguage = $0 }
+                    )) {
                         ForEach(targetLanguages) { language in
                             Text(language.name)
                                 .tag(language.code)
@@ -576,6 +626,7 @@ struct TranslationSettingView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 LiveSubtitleSettingsSection()
+                    .environment(\.tvFullUISubtitlePresentation, usesFullUI)
 
                 VStack(alignment: .leading, spacing: 12) {
                     Text("大模型翻译")
@@ -793,6 +844,54 @@ struct TranslationSettingView: View {
         translationService.clearError()
     }
 }
+
+#if DEBUG
+@MainActor @Observable
+final class TVUIAuditTranslationFixture: TVRoomTranslationSettings, TVRoomTranslationService {
+    var isEnabled = true
+    var isDanmakuEnabled = false
+    var engine: RoomTranslationEngine = .llm
+    var targetLanguage = "zh-Hans"
+    private(set) var cloudBaseURL = "https://api.example.invalid/v1"
+    private(set) var cloudModel = "fixture-model"
+    private(set) var hasAPIKey = true
+    var lastErrorMessage: String? { nil }
+
+    func saveCloudConfiguration(baseURL: String, model: String, apiKey: String) throws {
+        let address = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: address),
+              components.scheme?.lowercased() == "https",
+              components.host?.isEmpty == false,
+              components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil else {
+            throw RoomTranslationError.invalidBaseURL
+        }
+        let name = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw RoomTranslationError.invalidModel }
+        let hasReplacement = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasReplacement || (hasAPIKey && cloudBaseURL == address) else {
+            throw RoomTranslationError.apiKeyRequired
+        }
+        cloudBaseURL = address
+        cloudModel = name
+        hasAPIKey = true
+    }
+
+    func deleteAPIKey() throws { hasAPIKey = false }
+
+    func clearError() {}
+
+    func testTranslation() async throws -> String {
+        switch targetLanguage {
+        case "zh-Hant": "海岸自然觀察與潮汐記錄"
+        case "en": "Coastal wildlife and tide observations"
+        case "ja": "海岸の自然観察と潮汐の記録"
+        case "ko": "해안 자연 관찰과 조석 기록"
+        default: "海岸自然观察与潮汐记录"
+        }
+    }
+}
+#endif
 
 #Preview {
     SettingView()

@@ -572,7 +572,7 @@ struct ListMainView: View {
             }
 
             // 菜单真正接到焦点前保留入口，不能在展开瞬间删掉当前焦点源。
-            if !liveViewModel.categories.isEmpty &&
+            if blockingError == nil && !liveViewModel.categories.isEmpty &&
                 (!liveViewModel.isSidebarExpanded || focusState == .leftTrigger) {
                 HStack(spacing: 0) {
                     leftSidebarTrigger
@@ -589,19 +589,10 @@ struct ListMainView: View {
             hasStartedInitialLoad = true
             await liveViewModel.getCategoryList()
         }
-        .onExitCommand {
+        .tvFullUIBackCommand(enabled: blockingError == nil && !showPlatformSearch && !showCapabilitySheet
+                             && authenticationRecovery == nil) {
             logNavigation("exitCommand")
             handleBackCommand()
-        }
-        .onKeyPress(.escape, phases: .all) { press in
-            guard !showPlatformSearch else { return .ignored }
-            logNavigation("escape phase=\(press.phase)")
-            // Escape 不一定转换为遥控器的 Exit 命令。消费整个按键，
-            // 松开时只返回一层，避免按下时收起菜单、松开时又退出页面。
-            if press.phase == .up {
-                handleBackCommand()
-            }
-            return .handled
         }
         .onChange(of: focusState) { oldValue, newValue in
             logNavigation("focusChanged from=\(String(describing: oldValue)) to=\(String(describing: newValue))")
@@ -673,14 +664,11 @@ struct ListMainView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
         }
-        .fullScreenCover(isPresented: $showCapabilitySheet) {
+        .fullScreenCover(isPresented: $showCapabilitySheet, onDismiss: { focusState = .platformInfo }) {
             TVPlatformCapabilitySheet(liveType: liveType)
                 .environment(appViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
-                .onExitCommand {
-                    showCapabilitySheet = false
-                }
         }
         .fullScreenCover(isPresented: $showPlatformSearch, onDismiss: {
             if canSearchPlatform {

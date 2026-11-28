@@ -3,10 +3,6 @@ import Kingfisher
 import SwiftUI
 import UIKit
 
-extension EnvironmentValues {
-    @Entry var tvPlayerControlsAreCovered = false
-}
-
 extension View {
     func tvPlayerGlass(in shape: some Shape, interactive: Bool = true) -> some View {
         modifier(TVPlayerGlassModifier(shape: shape, interactive: interactive))
@@ -19,25 +15,36 @@ extension View {
 
 struct TVLivePlayerRoomIdentity: View {
     let room: LiveModel
+    var translatesTitle = true
 
     var body: some View {
+        if translatesTitle {
+            identity.roomTitleTranslationTask(room.roomTitle)
+        } else {
+            identity
+        }
+    }
+
+    private var identity: some View {
         HStack(spacing: 14) {
-            KFImage(URL(string: room.userHeadImg))
-                .placeholder {
-                    Image(systemName: "person.crop.circle.fill")
+            Group {
+                if room.userHeadImg.isEmpty {
+                    avatarPlaceholder
+                } else {
+                    KFImage(URL(string: room.userHeadImg))
+                        .placeholder { avatarPlaceholder }
                         .resizable()
-                        .foregroundStyle(.white.opacity(0.7))
                 }
-                .resizable()
-                .scaledToFill()
-                .frame(width: 48, height: 48)
-                .clipShape(Circle())
-                .accessibilityHidden(true)
+            }
+            .scaledToFill()
+            .frame(width: 48, height: 48)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 if !room.userName.isEmpty {
                     TVPlayerName(name: room.userName, font: .systemFont(ofSize: 38, weight: .semibold))
                 }
-                let title = RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle)
+                let title = translatesTitle ? RoomTitleTranslationService.shared.displayTitle(for: room.roomTitle) : room.roomTitle
                 if !title.isEmpty {
                     Text(verbatim: title)
                         .font(.system(size: 24))
@@ -48,7 +55,11 @@ struct TVLivePlayerRoomIdentity: View {
         }
         .foregroundStyle(.white)
         .accessibilityElement(children: .combine)
-        .roomTitleTranslationTask(room.roomTitle)
+    }
+    private var avatarPlaceholder: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .foregroundStyle(.white.opacity(0.7))
     }
 }
 

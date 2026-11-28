@@ -1,4 +1,5 @@
 import AngelLiveCore
+import AngelLiveDependencies
 import SwiftUI
 
 struct TVPlatformAppearanceControls: View {
@@ -81,6 +82,7 @@ struct TVPlatformAppearanceControls: View {
         .onChange(of: focus) { _, focus in
             if focus != nil { onInitialFocus() }
         }
+        .tvFullUIBackCommand(enabled: !confirmsReset, perform: onClose)
         .confirmationDialog(
             "恢复配置页默认外观？",
             isPresented: $confirmsReset,

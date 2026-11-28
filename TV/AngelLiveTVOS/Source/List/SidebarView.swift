@@ -97,7 +97,7 @@ struct SidebarView: View {
         .frame(minHeight: 30, maxHeight: .infinity, alignment: .top)
         .background(.thinMaterial)
         .focusSection()
-        .onExitCommand {
+        .tvFullUIBackCommand {
             onExitSidebar()
         }
     }
